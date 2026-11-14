@@ -3,6 +3,8 @@
 //! Tests that exercise one mechanic or contract across many cards follow at the
 //! end.
 
+use crate::support::game::move_card;
+use crate::support::inspect::{current_object, now, permanent_of};
 use crate::support::{
     game::{
         animate, clear_hand, clear_summoning_sickness, deck, enter_battlefield,
@@ -121,9 +123,7 @@ fn aangs_journey_finds_a_basic_land_and_kicked_also_a_shrine() {
         pass_until(&mut s, ActionSpaceKind::LookAndSelect);
         let offered = offered_cards(&s);
         assert_eq!(offered.len(), 80, "every basic land, no Gray Ogre");
-        assert!(offered
-            .iter()
-            .all(|c| s.game().state.objects[*c].types.is_land()));
+        assert!(offered.iter().all(|c| s.game().state[*c].types.is_land()));
         choose(
             &mut s,
             |a| matches!(a, Action::SelectCard { object, .. } if *object == offered[0]),
@@ -162,10 +162,7 @@ fn aang_airbends_another_permanent_and_gains_lifelink_from_lessons() {
         .any(|a| matches!(a, Action::Decline { .. })));
     assert!(s.choose_target(Target::Permanent(ogre)));
     settle(&mut s);
-    assert_eq!(
-        s.game().state.zones.zone_of(ogre_card),
-        Some(ZoneType::Exile)
-    );
+    assert_eq!(zone_of(&s, ogre_card), Some(ZoneType::Exile));
 
     assert!(!keywords(&s, aang).has(Keyword::Lifelink));
     let blocker = s.force_permanent_on_battlefield(1, "Gray Ogre");
@@ -182,7 +179,7 @@ fn hybrid_discard_is_optional_at_resolution_and_draws_exactly_two() {
     for discard in [false, true] {
         let mut s = five_color_setup(&["Abandon Attachments"]);
         let fodder = library_card(&s, 0, "Plains");
-        s.game_mut().move_object(fodder, ZoneType::Hand);
+        let fodder = move_card(&mut s, fodder, ZoneType::Hand);
         s.set_player_mana_pool(0, "1R");
         cast(&mut s, "Abandon Attachments");
         s.pass_priority();
@@ -211,7 +208,7 @@ fn hybrid_discard_is_optional_at_resolution_and_draws_exactly_two() {
         settle(&mut s);
         assert_eq!(s.zone_size(0, ZoneType::Hand), if discard { 2 } else { 1 });
         assert_eq!(
-            s.game().state.zones.zone_of(fodder),
+            zone_of(&s, fodder),
             Some(if discard {
                 ZoneType::Graveyard
             } else {
@@ -253,7 +250,7 @@ fn accumulate_wisdom_look_three_pick_one_rest_to_bottom() {
         .expect("picked card should be selectable");
     s.step_action(index);
 
-    assert_eq!(s.game().state.zones.zone_of(picked), Some(ZoneType::Hand));
+    assert_eq!(zone_of(&s, picked), Some(ZoneType::Hand));
     // The owner must choose both possible remainder orders through Commands.
     assert_eq!(s.action_space().actions.len(), 2);
     assert_choice_contract(&s);
@@ -296,7 +293,7 @@ fn accumulate_wisdom_with_three_lessons_takes_all_three_without_decision() {
             .zone_objects(ZoneType::Library, PlayerId(0))
             .iter()
             .copied()
-            .find(|object| s.game().state.objects[object].name == "Accumulate Wisdom")
+            .find(|object| s.game().state[object].name == "Accumulate Wisdom")
             .expect("library should contain Accumulate Wisdom");
         s.game_mut()
             .state
@@ -312,7 +309,7 @@ fn accumulate_wisdom_with_three_lessons_takes_all_three_without_decision() {
     assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
     assert_eq!(hand(&s, 0).len(), hand_before - 1 + 3);
     for object in top3 {
-        assert_eq!(s.game().state.zones.zone_of(object), Some(ZoneType::Hand));
+        assert_eq!(zone_of(&s, object), Some(ZoneType::Hand));
     }
     // The resolving Lesson did not count itself (3 in graveyard, not 4,
     // at check time); it is in the graveyard afterwards.
@@ -352,10 +349,7 @@ fn airbenders_reversal_destroys_an_attacker_or_airbends_your_creature() {
     choose_mode(&mut s, 1);
     assert!(s.choose_target(Target::Permanent(idle)));
     settle(&mut s);
-    assert_eq!(
-        s.game().state.zones.zone_of(idle_card),
-        Some(ZoneType::Exile)
-    );
+    assert_eq!(zone_of(&s, idle_card), Some(ZoneType::Exile));
     s.advance_to_active_step(0, StepKind::Main);
     s.set_player_mana_pool(0, "2");
     s.game_mut().scenario_refresh_priority().unwrap();
@@ -380,10 +374,7 @@ fn airbending_lesson_exiles_and_owner_recasts_for_two() {
     assert!(!offered_targets(&s).contains(&Target::Permanent(land)));
     assert!(s.choose_target(Target::Permanent(ogre)));
     settle(&mut s);
-    assert_eq!(
-        s.game().state.zones.zone_of(ogre_card),
-        Some(ZoneType::Exile)
-    );
+    assert_eq!(zone_of(&s, ogre_card), Some(ZoneType::Exile));
     assert_eq!(
         s.game()
             .state
@@ -392,10 +383,7 @@ fn airbending_lesson_exiles_and_owner_recasts_for_two() {
             .len(),
         hand + 1
     );
-    assert_eq!(
-        s.game().state.zones.zone_of(lesson),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, lesson), Some(ZoneType::Graveyard));
     // The airbender's controller cannot cast the opponent's card.
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(!can_cast(&s, ogre_card));
@@ -424,8 +412,8 @@ fn airbend_permission_ends_when_the_card_leaves_exile() {
     s.set_player_mana_pool(0, "2");
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(can_cast(&s, ogre_card));
-    s.game_mut().move_object(ogre_card, ZoneType::Graveyard);
-    s.game_mut().move_object(ogre_card, ZoneType::Exile);
+    let ogre_card = move_card(&mut s, ogre_card, ZoneType::Graveyard);
+    let ogre_card = move_card(&mut s, ogre_card, ZoneType::Exile);
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(!can_cast(&s, ogre_card));
 }
@@ -459,7 +447,7 @@ fn draw_lands_enter_tapped_supply_either_color_and_sacrifice_for_one_card() {
             assert!(tapped(&s, land), "{name} enters tapped");
             s.set_player_mana_pool(0, if color == 'U' { "2" } else { "0" });
             let id = library_card(&s, 0, spell);
-            s.game_mut().move_object(id, ZoneType::Hand);
+            let id = move_card(&mut s, id, ZoneType::Hand);
             s.game_mut().scenario_refresh_priority().unwrap();
             assert!(!can_cast(&s, id));
             s.game_mut().state.permanents[land].as_mut().unwrap().tapped = false;
@@ -590,7 +578,7 @@ fn allies_at_last_respects_source_and_victim_legality_and_lifelink() {
         }
         if remove_hawk {
             let object = s.game().state.permanents[hawk].as_ref().unwrap().object;
-            s.game_mut().move_object(object, ZoneType::Hand);
+            move_card(&mut s, object, ZoneType::Hand);
         }
         settle(&mut s);
         let damage = if protect_victim {
@@ -649,8 +637,8 @@ fn jasmine_dragon_tea_shop_mana_pays_only_ally_spells_and_ally_abilities() {
     s.game_mut().state.players[0].mana_pool.mana = [0, 0, 0, 1, 0, 1];
     let captives = library_card(&s, 0, "Rebellious Captives");
     let ogre = library_card(&s, 0, "Gray Ogre");
-    s.game_mut().move_object(captives, ZoneType::Hand);
-    s.game_mut().move_object(ogre, ZoneType::Hand);
+    let captives = move_card(&mut s, captives, ZoneType::Hand);
+    let ogre = move_card(&mut s, ogre, ZoneType::Hand);
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(
         !can_cast(&s, ogre),
@@ -741,15 +729,9 @@ fn avatars_wrath_spares_one_and_restricts_opponents_until_your_next_turn() {
     settle(&mut s);
     assert!(s.game().state.permanents[spared].is_some());
     assert!(s.game().state.permanents[land].is_some());
-    assert_eq!(
-        s.game().state.zones.zone_of(own_card),
-        Some(ZoneType::Exile)
-    );
-    assert_eq!(
-        s.game().state.zones.zone_of(wurm_card),
-        Some(ZoneType::Exile)
-    );
-    assert_eq!(s.game().state.zones.zone_of(wrath), Some(ZoneType::Exile));
+    assert_eq!(zone_of(&s, own_card), Some(ZoneType::Exile));
+    assert_eq!(zone_of(&s, wurm_card), Some(ZoneType::Exile));
+    assert_eq!(zone_of(&s, wrath), Some(ZoneType::Exile));
 
     s.set_player_mana_pool(0, "2");
     s.game_mut().scenario_refresh_priority().unwrap();
@@ -777,7 +759,7 @@ fn azula_has_the_opponent_exile_and_casts_with_any_mana() {
     let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
     let ogre_card = s.game().state.permanents[ogre].as_ref().unwrap().object;
     let strike = library_card(&s, 1, "Lightning Strike");
-    s.game_mut().move_object(strike, ZoneType::Graveyard);
+    let strike = move_card(&mut s, strike, ZoneType::Graveyard);
     cast(&mut s, "Azula, Cunning Usurper");
     spend_colorless(&mut s);
     advance_targeting_opponent(&mut s, ActionSpaceKind::LookAndSelect);
@@ -797,11 +779,8 @@ fn azula_has_the_opponent_exile_and_casts_with_any_mana() {
         |a| matches!(a, Action::SelectCard { object, .. } if *object == strike),
     );
     settle(&mut s);
-    assert_eq!(
-        s.game().state.zones.zone_of(ogre_card),
-        Some(ZoneType::Exile)
-    );
-    assert_eq!(s.game().state.zones.zone_of(strike), Some(ZoneType::Exile));
+    assert_eq!(zone_of(&s, ogre_card), Some(ZoneType::Exile));
+    assert_eq!(zone_of(&s, strike), Some(ZoneType::Exile));
 
     s.set_player_mana_pool(0, "2");
     s.game_mut().scenario_refresh_priority().unwrap();
@@ -819,10 +798,11 @@ fn azula_has_the_opponent_exile_and_casts_with_any_mana() {
     assert!(can_cast(&s, ogre_card));
     cast_card(&mut s, ogre_card);
     settle(&mut s);
-    let stolen = s.game().state.object_to_permanent[ogre_card].expect("Ogre on battlefield");
+    let ogre_card = now(&s, ogre_card);
+    let stolen = permanent_of(&s, ogre_card).expect("Ogre on battlefield");
     let permanent = s.game().state.permanents[stolen].as_ref().unwrap();
     assert_eq!(permanent.controller, PlayerId(0));
-    assert_eq!(s.game().state.objects[ogre_card].owner, PlayerId(1));
+    assert_eq!(s.game().state[ogre_card].owner, PlayerId(1));
     assert!(s
         .game()
         .state
@@ -830,7 +810,7 @@ fn azula_has_the_opponent_exile_and_casts_with_any_mana() {
         .zone_objects(ZoneType::Battlefield, PlayerId(0))
         .contains(ogre_card));
     let observation = Observation::for_player(s.game(), PlayerId(0));
-    let id = s.game().state.objects[ogre_card].id.0 as i32;
+    let id = s.game().state[ogre_card].id.0 as i32;
     assert!(observation
         .agent_permanents
         .iter()
@@ -849,7 +829,7 @@ fn azula_has_the_opponent_exile_and_casts_with_any_mana() {
         .game()
         .state
         .zones
-        .contains(ogre_card, ZoneType::Graveyard, PlayerId(1)));
+        .contains(now(&s, ogre_card), ZoneType::Graveyard, PlayerId(1)));
 }
 
 /// Badgermole Cub earthbends 1 on entering; tapping a creature for mana adds
@@ -938,7 +918,7 @@ fn barrels_of_blasting_jelly_sacrifices_to_deal_five_to_a_creature() {
 }
 
 fn cycling_index(s: &Scenario, object: ObjectId) -> usize {
-    s.game().state.objects[object]
+    s.game().state[object]
         .activated_abilities
         .iter()
         .position(|ability| ability.discard_source)
@@ -982,17 +962,16 @@ fn landcyclers_discard_for_two_and_find_their_basic_type() {
             })
             .collect();
         assert_eq!(offered.len(), 16, "{name}: every {subtype} in the library");
-        assert!(offered.iter().all(|c| s.game().state.objects[*c]
-            .subtypes
+        assert!(offered
             .iter()
-            .any(|t| t == subtype)));
+            .all(|c| s.game().state[*c].subtypes.iter().any(|t| t == subtype)));
         choose(
             &mut s,
             |a| matches!(a, Action::SelectCard { object, .. } if *object == offered[0]),
         );
         assert_eq!(zone_of(&s, offered[0]), Some(ZoneType::Hand));
         assert_eq!(s.zone_size(0, ZoneType::Library), library - 1);
-        let definition = s.game().state.objects[offered[0]].definition_id;
+        let definition = current_object(&s, offered[0]).definition_id;
         assert_eq!(
             s.game().state.players[0].known_hand.get(&definition),
             Some(&1)
@@ -1023,7 +1002,7 @@ fn canyon_crawler_has_deathtouch_and_makes_food_on_entering() {
     let food = s.battlefield_permanents_named(0, "Food");
     assert_eq!(food.len(), 1);
     let food_card = s.game().state.permanents[food[0]].as_ref().unwrap().object;
-    assert!(s.game().state.objects[food_card].types.is_artifact());
+    assert!(s.game().state[food_card].types.is_artifact());
 }
 
 /// Dai Li Indoctrination's first mode reveals the opponent's hand (public
@@ -1058,7 +1037,7 @@ fn dai_li_indoctrination_reveals_a_hand_and_discards_your_pick_or_earthbends_two
     let view = managym::agent::observation::Observation::for_player(s.game(), PlayerId(0));
     let seen: Vec<i32> = view.opponent_cards.iter().map(|c| c.id).collect();
     for object in [ogre, iceberg] {
-        assert!(seen.contains(&(s.game().state.objects[object].id.0 as i32)));
+        assert!(seen.contains(&(s.game().state[object].id.0 as i32)));
     }
     choose(
         &mut s,
@@ -1136,10 +1115,7 @@ fn earthbending_lesson_animates_only_an_own_land_with_four_counters() {
     assert_eq!(counters(&s, forest), 4);
     assert_eq!(s.game().characteristics(forest).pt(), (4, 4));
     let land = s.game().state.permanents[forest].as_ref().unwrap().object;
-    assert_eq!(
-        s.game().state.zones.zone_of(land),
-        Some(ZoneType::Battlefield)
-    );
+    assert_eq!(zone_of(&s, land), Some(ZoneType::Battlefield));
 }
 
 /// CR 205.3: Cave is a land type, so an earthbent Secret Tunnel is a creature
@@ -1182,13 +1158,11 @@ fn elemental_teachings_finds_distinct_lands_and_the_opponent_bins_two() {
         assert!(chosen.iter().all(|c| !offered.contains(c)));
         let object = *offered
             .iter()
-            .find(|c| s.game().state.objects[**c].name == name)
+            .find(|c| s.game().state[**c].name == name)
             .unwrap();
         if name == "Island" {
             // A second Forest is no longer offered.
-            assert!(!offered
-                .iter()
-                .any(|c| s.game().state.objects[*c].name == "Forest"));
+            assert!(!offered.iter().any(|c| s.game().state[*c].name == "Forest"));
         }
         choose(
             &mut s,
@@ -1211,7 +1185,7 @@ fn elemental_teachings_finds_distinct_lands_and_the_opponent_bins_two() {
     }
     for object in &chosen[2..] {
         assert_eq!(zone_of(&s, *object), Some(ZoneType::Battlefield));
-        let id = s.game().state.object_to_permanent[*object].unwrap();
+        let id = permanent_of(&s, *object).unwrap();
         assert!(s.game().state.permanents[id].as_ref().unwrap().tapped);
     }
 
@@ -1245,10 +1219,7 @@ fn fire_nation_attacks_makes_firebending_soldiers_and_flashes_back_once() {
     let soldiers = s.battlefield_permanents_named(0, "Soldier");
     assert_eq!(soldiers.len(), 2);
     assert_eq!(s.game().characteristics(soldiers[0]).pt(), (2, 2));
-    assert_eq!(
-        s.game().state.zones.zone_of(spell),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, spell), Some(ZoneType::Graveyard));
 
     // {4}{R} pays the printed cost but not the flashback cost.
     s.set_player_mana_pool(0, "4R");
@@ -1266,7 +1237,7 @@ fn fire_nation_attacks_makes_firebending_soldiers_and_flashes_back_once() {
     assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
     settle(&mut s);
     assert_eq!(s.battlefield_permanents_named(0, "Soldier").len(), 4);
-    assert_eq!(s.game().state.zones.zone_of(spell), Some(ZoneType::Exile));
+    assert_eq!(zone_of(&s, spell), Some(ZoneType::Exile));
 }
 
 /// Soldier tokens attack for firebending 1: one red mana until end of combat.
@@ -1450,12 +1421,13 @@ fn hama_exiles_a_milled_spell_and_casts_it_by_waterbending() {
         .actions
         .iter()
         .any(|a| matches!(a, Action::Decline { .. })));
+    let strike = now(&s, strike);
     choose(
         &mut s,
         |a| matches!(a, Action::SelectCard { object, .. } if *object == strike),
     );
     settle(&mut s);
-    assert_eq!(s.game().state.zones.zone_of(strike), Some(ZoneType::Exile));
+    assert_eq!(zone_of(&s, strike), Some(ZoneType::Exile));
 
     // Waterbend {2}: both Ogres tap; no mana is spent.
     s.set_player_mana_pool(0, "");
@@ -1472,11 +1444,8 @@ fn hama_exiles_a_milled_spell_and_casts_it_by_waterbending() {
     }
     settle(&mut s);
     s.assert_life(1, 17);
-    assert_eq!(
-        s.game().state.zones.zone_of(strike),
-        Some(ZoneType::Graveyard)
-    );
-    assert_eq!(s.game().state.objects[strike].owner, PlayerId(1));
+    assert_eq!(zone_of(&s, strike), Some(ZoneType::Graveyard));
+    assert_eq!(current_object(&s, strike).owner, PlayerId(1));
 }
 
 /// Hama can exile an opposing noncreature permanent card: cast by
@@ -1496,12 +1465,13 @@ fn hama_casts_an_opponents_artifact_under_your_control() {
     }
     spend_colorless(&mut s);
     advance_targeting_opponent(&mut s, ActionSpaceKind::LookAndSelect);
+    let prism = now(&s, prism);
     choose(
         &mut s,
         |a| matches!(a, Action::SelectCard { object, .. } if *object == prism),
     );
     settle(&mut s);
-    assert_eq!(s.game().state.zones.zone_of(prism), Some(ZoneType::Exile));
+    assert_eq!(zone_of(&s, prism), Some(ZoneType::Exile));
 
     s.set_player_mana_pool(0, "");
     let hands = (
@@ -1519,7 +1489,7 @@ fn hama_casts_an_opponents_artifact_under_your_control() {
         );
     }
     settle(&mut s);
-    let artifact = s.game().state.object_to_permanent[prism].expect("Prism on battlefield");
+    let artifact = permanent_of(&s, prism).expect("Prism on battlefield");
     assert_eq!(
         s.game().state.permanents[artifact]
             .as_ref()
@@ -1626,8 +1596,8 @@ fn hog_monkey_exhausts_once_for_two_counters() {
     assert!(!can_activate(&s, monkey));
 
     let object = s.game().state.permanents[monkey].as_ref().unwrap().object;
-    s.game_mut().move_object(object, ZoneType::Hand);
-    s.game_mut().move_object(object, ZoneType::Battlefield);
+    let object = move_card(&mut s, object, ZoneType::Hand);
+    move_card(&mut s, object, ZoneType::Battlefield);
     let again = s.battlefield_permanents_named(0, "Hog-Monkey")[0];
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(can_activate(&s, again));
@@ -1717,6 +1687,7 @@ fn lost_days_owner_puts_it_second_from_top_or_on_the_bottom_and_caster_gets_a_cl
             .zone_objects(ZoneType::Library, PlayerId(1))
             .to_vec();
         let expected = if second { library.len() - 2 } else { 0 };
+        let ogre_card = now(&s, ogre_card);
         assert_eq!(library[expected], ogre_card);
         assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 1);
     }
@@ -1731,7 +1702,7 @@ fn merchant_of_many_hats_returns_itself_from_the_graveyard() {
     s.set_player_mana_pool(0, "2B");
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(!can_activate_card(&s, merchant));
-    s.game_mut().move_object(merchant, ZoneType::Graveyard);
+    let merchant = move_card(&mut s, merchant, ZoneType::Graveyard);
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(can_activate_card(&s, merchant));
     s.set_player_mana_pool(0, "2");
@@ -1742,23 +1713,23 @@ fn merchant_of_many_hats_returns_itself_from_the_graveyard() {
     assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
     settle(&mut s);
     assert_eq!(zone_of(&s, merchant), Some(ZoneType::Hand));
-    let definition = s.game().state.objects[merchant].definition_id;
+    let definition = current_object(&s, merchant).definition_id;
     assert_eq!(
         s.game().state.players[0].known_hand.get(&definition),
         Some(&1)
     );
 
     // Leaving the graveyard in response makes the ability's object stale.
-    s.game_mut().move_object(merchant, ZoneType::Graveyard);
+    let merchant = move_card(&mut s, merchant, ZoneType::Graveyard);
     s.set_player_mana_pool(0, "2B");
     activate_card(&mut s, merchant, 0);
-    s.game_mut().move_object(merchant, ZoneType::Exile);
-    s.game_mut().move_object(merchant, ZoneType::Graveyard);
+    let merchant = move_card(&mut s, merchant, ZoneType::Exile);
+    let merchant = move_card(&mut s, merchant, ZoneType::Graveyard);
     settle(&mut s);
     assert_eq!(zone_of(&s, merchant), Some(ZoneType::Graveyard));
 
     let permanent = s.force_permanent_on_battlefield(0, "Merchant of Many Hats");
-    assert!(s.game().state.objects[s.game().state.permanents[permanent]
+    assert!(s.game().state[s.game().state.permanents[permanent]
         .as_ref()
         .unwrap()
         .object]
@@ -1932,10 +1903,7 @@ fn rockalanche_earthbends_by_forests_you_control_and_flashes_back() {
     settle(&mut s);
     assert!(is_land_creature(&s, forest));
     assert_eq!(counters(&s, forest), 3);
-    assert_eq!(
-        s.game().state.zones.zone_of(spell),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, spell), Some(ZoneType::Graveyard));
 
     let plains = s.battlefield_permanents_named(0, "Plains")[0];
     s.set_player_mana_pool(0, "5G");
@@ -1945,7 +1913,7 @@ fn rockalanche_earthbends_by_forests_you_control_and_flashes_back() {
     assert!(s.choose_target(Target::Permanent(plains)));
     settle(&mut s);
     assert_eq!(counters(&s, plains), 3);
-    assert_eq!(s.game().state.zones.zone_of(spell), Some(ZoneType::Exile));
+    assert_eq!(zone_of(&s, spell), Some(ZoneType::Exile));
 }
 
 #[test]
@@ -2065,6 +2033,8 @@ fn seismic_sense_looks_at_cards_equal_to_your_lands_and_takes_a_creature_or_land
         2,
         "the Ogre and the Island, not the Strike"
     );
+    let ogre = now(&s, ogre);
+    let below = now(&s, below);
     assert!(selectable.contains(&ogre) && selectable.contains(&below));
     choose(
         &mut s,
@@ -2078,6 +2048,7 @@ fn seismic_sense_looks_at_cards_equal_to_your_lands_and_takes_a_creature_or_land
         .zones
         .zone_objects(ZoneType::Library, PlayerId(0))
         .to_vec();
+    let (strike, below) = (now(&s, strike), now(&s, below));
     assert!(library[..2].contains(&strike) && library[..2].contains(&below));
 }
 
@@ -2199,8 +2170,8 @@ fn solstice_revelations_casts_cheap_spells_free_and_keeps_the_rest() {
     // Two Mountains: Strike's mana value 2 is not less, so it goes to hand.
     cast(&mut s, "Solstice Revelations");
     settle(&mut s);
-    assert_eq!(s.game().state.zones.zone_of(land), Some(ZoneType::Exile));
-    assert_eq!(s.game().state.zones.zone_of(strike), Some(ZoneType::Hand));
+    assert_eq!(zone_of(&s, land), Some(ZoneType::Exile));
+    assert_eq!(zone_of(&s, strike), Some(ZoneType::Hand));
 
     // Three Mountains: the exiled Strike is offered and cast for free.
     on_top(&mut s, strike);
@@ -2209,24 +2180,19 @@ fn solstice_revelations_casts_cheap_spells_free_and_keeps_the_rest() {
     spend_colorless(&mut s);
     resolve_top(&mut s);
     assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
+    let strike = now(&s, strike);
     choose(
         &mut s,
         |a| matches!(a, Action::SelectCard { object, .. } if *object == strike),
     );
-    assert_eq!(
-        s.game().state.zones.zone_of(solstice),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, solstice), Some(ZoneType::Graveyard));
     assert!(s.choose_target(Target::Player(PlayerId(1))));
     if s.action_space().kind == ActionSpaceKind::PayOrNot {
         choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     }
     settle(&mut s);
     s.assert_life(1, 17);
-    assert_eq!(
-        s.game().state.zones.zone_of(strike),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, strike), Some(ZoneType::Graveyard));
 
     // Flashback from the graveyard for {6}{R}, then it is exiled.
     s.set_player_mana_pool(0, "6R");
@@ -2234,11 +2200,8 @@ fn solstice_revelations_casts_cheap_spells_free_and_keeps_the_rest() {
     cast_card(&mut s, solstice);
     resolve_top(&mut s);
     choose(&mut s, |a| matches!(a, Action::Decline { .. }));
-    assert_eq!(s.game().state.zones.zone_of(strike), Some(ZoneType::Hand));
-    assert_eq!(
-        s.game().state.zones.zone_of(solstice),
-        Some(ZoneType::Exile)
-    );
+    assert_eq!(zone_of(&s, strike), Some(ZoneType::Hand));
+    assert_eq!(zone_of(&s, solstice), Some(ZoneType::Exile));
 }
 
 /// ...nor when an opponent's Ally enters...
@@ -2286,7 +2249,7 @@ fn azula_announces_both_modes_then_binds_independent_targets_including_same_obje
             s.force_permanent_on_battlefield(1, "Gnarled Professor")
         };
         let spell = cast(&mut s, "Azula Always Lies");
-        assert_eq!(s.game().state.zones.zone_of(spell), Some(ZoneType::Hand));
+        assert_eq!(zone_of(&s, spell), Some(ZoneType::Hand));
         assert_eq!(s.action_space().actions.len(), 3);
         choose_mode(&mut s, 2);
         assert!(s.choose_target(Target::Permanent(first)));
@@ -2346,7 +2309,7 @@ fn earthbend_animates_land_with_counter() {
     // 0/0 creature with one +1/+1 counter — a 1/1 that's still a land.
     assert_eq!(s.game().characteristics(land).power, 1);
     assert_eq!(s.game().characteristics(land).toughness, 1);
-    let object = &s.game().state.objects[perm.object];
+    let object = &s.game().state[perm.object];
     assert!(object.types.is_land(), "still a land");
     assert!(!object.types.is_creature(), "printed types unchanged");
 }
@@ -2377,7 +2340,7 @@ fn earthbend_trigger_removed_without_lands() {
     s.advance_to_active_step(0, StepKind::Main);
     // Enter the battlefield through the event path so the ETB fires.
     let cub = find_owned_card(&s, 0, "Badgermole Cub");
-    s.game_mut().move_object(cub, ZoneType::Battlefield);
+    move_card(&mut s, cub, ZoneType::Battlefield);
     s.pass_priority();
     // No land to target: the trigger is removed (CR 603.3d); play goes on.
     assert!(s.game().state.pending_triggers.is_empty());
@@ -2448,11 +2411,11 @@ fn animated_land_dies_and_returns_tapped_as_plain_land() {
     s.pass_priority(); // return trigger resolves
 
     assert_eq!(
-        s.game().state.zones.zone_of(land_card),
+        zone_of(&s, land_card),
         Some(ZoneType::Battlefield),
         "land should be returned to the battlefield"
     );
-    let new_perm_id = s.game().state.object_to_permanent[land_card].expect("re-entered");
+    let new_perm_id = permanent_of(&s, land_card).expect("re-entered");
     let new_perm = permanent(&s, new_perm_id);
     assert!(new_perm.tapped, "returns tapped");
     assert!(
@@ -2482,14 +2445,11 @@ fn animated_land_exiled_returns_tapped() {
 
     // Exile it directly (no Milestone-1 card exiles a land; the delayed
     // trigger must still see it).
-    s.game_mut().move_object(land_card, ZoneType::Exile);
+    let land_card = move_card(&mut s, land_card, ZoneType::Exile);
     resolve_everything(&mut s); // return trigger resolves
 
-    assert_eq!(
-        s.game().state.zones.zone_of(land_card),
-        Some(ZoneType::Battlefield)
-    );
-    let new_perm_id = s.game().state.object_to_permanent[land_card].expect("re-entered");
+    assert_eq!(zone_of(&s, land_card), Some(ZoneType::Battlefield));
+    let new_perm_id = permanent_of(&s, land_card).expect("re-entered");
     assert!(permanent(&s, new_perm_id).tapped);
 }
 
@@ -2506,13 +2466,10 @@ fn animated_land_bounced_drops_the_delayed_trigger() {
 
     // To hand is neither "dies" nor "is exiled": the delayed trigger is
     // dropped, not fired.
-    s.game_mut().move_object(land_card, ZoneType::Hand);
+    let land_card = move_card(&mut s, land_card, ZoneType::Hand);
     assert!(s.game().state.delayed_triggers.is_empty());
     assert!(s.game().state.pending_triggers.is_empty());
-    assert_eq!(
-        s.game().state.zones.zone_of(land_card),
-        Some(ZoneType::Hand)
-    );
+    assert_eq!(zone_of(&s, land_card), Some(ZoneType::Hand));
 }
 
 #[test]
@@ -2531,11 +2488,8 @@ fn zero_toughness_animated_land_dies_by_sba_and_returns() {
     s.pass_priority(); // any action: SBAs run, the 0/0 dies
     resolve_everything(&mut s); // return trigger resolves
 
-    assert_eq!(
-        s.game().state.zones.zone_of(land_card),
-        Some(ZoneType::Battlefield)
-    );
-    let new_perm_id = s.game().state.object_to_permanent[land_card].expect("re-entered");
+    assert_eq!(zone_of(&s, land_card), Some(ZoneType::Battlefield));
+    let new_perm_id = permanent_of(&s, land_card).expect("re-entered");
     assert!(permanent(&s, new_perm_id).tapped);
     assert!(!s.game().characteristics(new_perm_id).is_animated);
 }
@@ -2549,10 +2503,7 @@ fn boomerang_draws_only_when_its_target_was_controlled_by_the_caster() {
         cast(&mut s, "Boomerang Basics");
         assert!(s.choose_target(Target::Permanent(target)));
         settle(&mut s);
-        assert_eq!(
-            s.game().state.zones.zone_of(target_card),
-            Some(ZoneType::Hand)
-        );
+        assert_eq!(zone_of(&s, target_card), Some(ZoneType::Hand));
         assert_eq!(
             s.zone_size(0, ZoneType::Hand),
             if player == 0 { 2 } else { 0 }
@@ -2661,7 +2612,7 @@ fn cat_owl_attack_untaps_artifacts_or_creatures_in_either_control() {
 fn plant_lessons(s: &mut Scenario, player: usize, n: usize) {
     for _ in 0..n {
         let object = find_owned_card(s, player, "Accumulate Wisdom");
-        s.game_mut().move_object(object, ZoneType::Graveyard);
+        move_card(s, object, ZoneType::Graveyard);
     }
 }
 
@@ -2689,18 +2640,15 @@ fn combustion_damage_counts_own_lessons_excludes_resolving_spell_and_exiles_late
         let object = permanent.object;
         assert_eq!(permanent.damage, 2 + lessons as i32);
         assert!(s.game().exiled_if_it_would_die(victim));
-        assert_eq!(
-            s.game().state.zones.zone_of(spell),
-            Some(ZoneType::Graveyard)
-        );
+        assert_eq!(zone_of(&s, spell), Some(ZoneType::Graveyard));
         let obs = Observation::new(s.game(), &[]);
         assert!(obs
             .opponent_permanents
             .iter()
             .any(|p| p.exile_if_dies_this_turn));
         // Any death, including sacrifice, is replaced (CR 614.1a).
-        s.game_mut().move_object(object, ZoneType::Graveyard);
-        assert_eq!(s.game().state.zones.zone_of(object), Some(ZoneType::Exile));
+        let object = move_card(&mut s, object, ZoneType::Graveyard);
+        assert_eq!(zone_of(&s, object), Some(ZoneType::Exile));
     }
 }
 
@@ -2714,7 +2662,7 @@ fn combustion_lethal_damage_exiles_without_a_graveyard_move() {
     cast_owned(&mut s, "Combustion Technique");
     assert!(s.choose_target(Target::Permanent(victim)));
     resolve_top(&mut s);
-    assert_eq!(s.game().state.zones.zone_of(object), Some(ZoneType::Exile));
+    assert_eq!(zone_of(&s, object), Some(ZoneType::Exile));
 }
 
 #[test]
@@ -2723,18 +2671,15 @@ fn combustion_replacement_expires_at_cleanup_and_does_not_follow_reentry() {
         let (mut s, _, victim) = combustion(0);
         let object = card_of(&s, victim);
         if bounce {
-            s.game_mut().move_object(object, ZoneType::Hand);
-            s.game_mut().move_object(object, ZoneType::Battlefield);
+            let object = move_card(&mut s, object, ZoneType::Hand);
+            move_card(&mut s, object, ZoneType::Battlefield);
         } else {
             s.advance_to_active_step(1, StepKind::Upkeep);
         }
-        let current = s.game().state.object_to_permanent[object].unwrap();
+        let current = permanent_of(&s, object).unwrap();
         assert!(!s.game().exiled_if_it_would_die(current));
-        s.game_mut().move_object(object, ZoneType::Graveyard);
-        assert_eq!(
-            s.game().state.zones.zone_of(object),
-            Some(ZoneType::Graveyard)
-        );
+        let object = move_card(&mut s, object, ZoneType::Graveyard);
+        assert_eq!(zone_of(&s, object), Some(ZoneType::Graveyard));
     }
 }
 
@@ -2764,9 +2709,12 @@ fn combustion_is_an_owned_learn_candidate() {
             _ => None,
         })
         .unwrap();
-    assert_eq!(s.game().state.objects[object].name, "Combustion Technique");
+    assert_eq!(
+        s.game().state.objects.retained_base(object).unwrap().1.name,
+        "Combustion Technique"
+    );
     s.step_action(index);
-    assert_eq!(s.game().state.zones.zone_of(object), Some(ZoneType::Hand));
+    assert_eq!(zone_of(&s, object), Some(ZoneType::Hand));
 }
 
 #[test]
@@ -2778,14 +2726,11 @@ fn combustion_invalid_target_does_not_damage_or_mark_new_incarnation() {
     let spell = cast_owned(&mut s, "Combustion Technique");
     assert!(s.choose_target(Target::Permanent(gran)));
     let object = card_of(&s, gran);
-    s.game_mut().move_object(object, ZoneType::Hand);
-    s.game_mut().move_object(object, ZoneType::Battlefield);
-    let new = s.game().state.object_to_permanent[object].unwrap();
+    let object = move_card(&mut s, object, ZoneType::Hand);
+    let object = move_card(&mut s, object, ZoneType::Battlefield);
+    let new = permanent_of(&s, object).unwrap();
     resolve_top(&mut s);
-    assert_eq!(
-        s.game().state.zones.zone_of(spell),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, spell), Some(ZoneType::Graveyard));
     let permanent = s.game().state.permanents[new].as_ref().unwrap();
     assert_eq!(permanent.damage, 0);
     assert!(!s.game().exiled_if_it_would_die(new));
@@ -2878,7 +2823,7 @@ fn cunning_maneuver_buffs_and_investigates_but_all_invalid_targets_stop_it() {
         assert!(s.choose_target(Target::Permanent(creature)));
         if remove {
             let id = s.game().state.permanents[creature].as_ref().unwrap().object;
-            s.game_mut().move_object(id, ZoneType::Graveyard);
+            move_card(&mut s, id, ZoneType::Graveyard);
         }
         settle(&mut s);
         assert_eq!(
@@ -2948,13 +2893,10 @@ fn cycle_sacrifices_during_resolution_and_searches_two_distinct_basics() {
     select_card(&mut s, two);
     settle(&mut s);
     for found in [one, two] {
-        let id = s.game().state.object_to_permanent[found].unwrap();
+        let id = permanent_of(&s, found).unwrap();
         assert!(s.game().state.permanents[id].as_ref().unwrap().tapped);
     }
-    assert_eq!(
-        s.game().state.zones.zone_of(sacrificed),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, sacrificed), Some(ZoneType::Graveyard));
 }
 
 #[test]
@@ -2998,16 +2940,10 @@ fn precision_has_a_real_four_mana_alternative() {
         |a| matches!(a,Action::ChooseTarget {target:Target::Permanent(p),..} if *p==id),
     );
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
-    assert_eq!(
-        s.game().state.zones.zone_of(victim),
-        Some(ZoneType::Battlefield)
-    );
+    assert_eq!(zone_of(&s, victim), Some(ZoneType::Battlefield));
     assert_eq!(s.game().state.players[0].mana_pool.mana, [0; 6]);
     settle(&mut s);
-    assert_eq!(
-        s.game().state.zones.zone_of(victim),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, victim), Some(ZoneType::Graveyard));
 }
 
 #[test]
@@ -3030,7 +2966,7 @@ fn treasure_completes_an_announced_cost_without_a_priority_window() {
     assert_eq!(context.mana_cost.0.as_deref(), Some("{B}"));
     assert_eq!(
         context.reserved_sacrifice.0.unwrap().entity_id,
-        victim.0 as u32
+        victim.slot() as u32
     );
     assert_eq!(context.targets[0].clause, 0);
     let public = s.game().decision_context(PlayerId(1)).unwrap();
@@ -3051,10 +2987,7 @@ fn treasure_completes_an_announced_cost_without_a_priority_window() {
     assert_choice_contract(&s);
     choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 2, .. }));
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
-    assert_eq!(
-        s.game().state.zones.zone_of(victim),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, victim), Some(ZoneType::Graveyard));
     assert!(s.battlefield_permanents_named(0, "Treasure").is_empty());
 }
 
@@ -3082,10 +3015,7 @@ fn deadly_precision_sacrifices_artifact_before_destroying_a_different_creature()
     assert!(s.game().state.permanents[victim].is_some());
     assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
     settle(&mut s);
-    assert_eq!(
-        s.game().state.zones.zone_of(victim_card),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, victim_card), Some(ZoneType::Graveyard));
 }
 
 #[test]
@@ -3116,7 +3046,7 @@ fn disciple_targets_another_small_creature_pays_tap_and_survives_source_departur
     assert!(s.choose_target(Target::Permanent(small)));
     let source = s.game().state.permanents[disciple].as_ref().unwrap().object;
     assert!(s.game().state.permanents[disciple].as_ref().unwrap().tapped);
-    s.game_mut().move_object(source, ZoneType::Graveyard);
+    move_card(&mut s, source, ZoneType::Graveyard);
     // Resolve on exact forks as well: the independent target mutation stays
     // in the source while each fork resolves.
     assert_choice_contract(&s);
@@ -3221,7 +3151,7 @@ fn dragonfly_swarm_death_trigger_needs_lesson_at_fire_time() {
     let swarm = s.force_permanent_on_battlefield(0, "Dragonfly Swarm");
     let swarm_card = permanent(&s, swarm).object;
     let hand_before = s.zone_size(0, ZoneType::Hand);
-    s.game_mut().move_object(swarm_card, ZoneType::Graveyard);
+    move_card(&mut s, swarm_card, ZoneType::Graveyard);
     assert!(s.game().state.pending_triggers.is_empty());
     assert_eq!(s.zone_size(0, ZoneType::Hand), hand_before);
 
@@ -3230,7 +3160,7 @@ fn dragonfly_swarm_death_trigger_needs_lesson_at_fire_time() {
     let swarm2 = s.force_permanent_on_battlefield(0, "Dragonfly Swarm");
     let swarm2_card = permanent(&s, swarm2).object;
     let hand_before = s.zone_size(0, ZoneType::Hand);
-    s.game_mut().move_object(swarm2_card, ZoneType::Graveyard);
+    move_card(&mut s, swarm2_card, ZoneType::Graveyard);
     resolve_everything(&mut s); // death trigger resolves
     assert_eq!(s.zone_size(0, ZoneType::Hand), hand_before + 1);
 }
@@ -3268,23 +3198,47 @@ fn jailer_exiles_and_returns_on_leaving() {
     s.pass_priority();
     s.pass_priority(); // trigger resolves
 
-    assert_eq!(
-        s.game().state.zones.zone_of(ogre_card),
-        Some(ZoneType::Exile)
-    );
+    assert_eq!(zone_of(&s, ogre_card), Some(ZoneType::Exile));
     assert_eq!(s.game().state.exile_links.len(), 1);
 
     // Kill the Jailer: the Ogre returns immediately, under its owner.
     let jailer = s.battlefield_permanents_named(0, "Earth Kingdom Jailer")[0];
     let jailer_card = permanent(&s, jailer).object;
-    s.game_mut().move_object(jailer_card, ZoneType::Graveyard);
+    move_card(&mut s, jailer_card, ZoneType::Graveyard);
 
-    assert_eq!(
-        s.game().state.zones.zone_of(ogre_card),
-        Some(ZoneType::Battlefield)
-    );
-    let returned = s.game().state.object_to_permanent[ogre_card].expect("re-entered");
+    assert_eq!(zone_of(&s, ogre_card), Some(ZoneType::Battlefield));
+    let returned = permanent_of(&s, ogre_card).expect("re-entered");
     assert_eq!(permanent(&s, returned).controller, PlayerId(1));
+    assert!(s.game().state.exile_links.is_empty());
+}
+
+/// CR 400.7j lets the original effect find only the appearance it exiled.
+#[test]
+fn jailer_does_not_return_a_card_that_left_exile_and_was_exiled_again() {
+    let mut s = jailer_scenario(316);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let object = permanent(&s, ogre).object;
+    s.advance_to_active_step(0, StepKind::Main);
+    cast_and_resolve(&mut s);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    s.pass_priority();
+    s.pass_priority();
+    assert_eq!(zone_of(&s, object), Some(ZoneType::Exile));
+    let exiled = s.game().state.live(now(&s, object)).unwrap();
+    assert_eq!(s.game().state.exile_links[0].exiled_object, exiled);
+    // Retained v16 link bytes still name the old numeric row.
+    let link = serde_json::to_value(&s.game().state.exile_links[0]).unwrap();
+    assert_eq!(link["exiled_card"], serde_json::to_value(object).unwrap());
+
+    let object = move_card(&mut s, object, ZoneType::Hand);
+    let object = move_card(&mut s, object, ZoneType::Exile);
+    assert_ne!(s.game().state.live(now(&s, object)), Some(exiled));
+    let jailer = s.battlefield_permanents_named(0, "Earth Kingdom Jailer")[0];
+    let source = permanent(&s, jailer).object;
+    move_card(&mut s, source, ZoneType::Graveyard);
+
+    assert_eq!(zone_of(&s, object), Some(ZoneType::Exile));
+    assert!(s.battlefield_permanents_named(1, "Gray Ogre").is_empty());
     assert!(s.game().state.exile_links.is_empty());
 }
 
@@ -3347,7 +3301,7 @@ fn jailer_killed_in_response_exiles_nothing() {
     s.pass_priority(); // exile trigger resolves — source gone, no exile
 
     assert_eq!(
-        s.game().state.zones.zone_of(ogre_card),
+        zone_of(&s, ogre_card),
         Some(ZoneType::Battlefield),
         "nothing is exiled when the Jailer left first (CR 603.6e)"
     );
@@ -3367,26 +3321,31 @@ fn jailer_old_trigger_does_not_follow_reentered_source() {
     let jailer_card = permanent(&s, jailer).object;
     let old_ref = s
         .game()
-        .current_object_ref(jailer_card)
+        .state
+        .live(now(&s, jailer_card))
         .expect("old Jailer ref");
 
-    s.game_mut().move_object(jailer_card, ZoneType::Hand);
-    s.game_mut().move_object(jailer_card, ZoneType::Battlefield);
+    let jailer_card = move_card(&mut s, jailer_card, ZoneType::Hand);
+    let jailer_card = move_card(&mut s, jailer_card, ZoneType::Battlefield);
     // Ignore the later incarnation's ETB trigger and resolve only the old
     // trigger already on the stack.
     s.game_mut().state.pending_triggers.clear();
     let new_ref = s
         .game()
-        .current_object_ref(jailer_card)
+        .state
+        .live(now(&s, jailer_card))
         .expect("new Jailer ref");
-    assert_eq!(old_ref.entity, new_ref.entity);
-    assert_ne!(old_ref.incarnation, new_ref.incarnation);
+    assert_ne!(old_ref, new_ref);
+    assert_eq!(
+        s.game().state.card_id(old_ref),
+        s.game().state.card_id(new_ref)
+    );
 
     s.pass_priority();
     s.pass_priority();
 
     assert_eq!(
-        s.game().state.zones.zone_of(ogre_card),
+        zone_of(&s, ogre_card),
         Some(ZoneType::Battlefield),
         "the old trigger must not attach its duration to the new Jailer object"
     );
@@ -3563,9 +3522,9 @@ fn avatar_state_grants_a_visible_incarnation_local_subtype_and_cleans_up() {
     );
     let mut branch = s.game().clone();
     let object_id = branch.state.permanents[target].as_ref().unwrap().object;
-    branch.move_object(object_id, ZoneType::Hand);
-    branch.move_object(object_id, ZoneType::Battlefield);
-    let reentered = branch.state.object_to_permanent[object_id].unwrap();
+    let object_id = branch.move_object(object_id, ZoneType::Hand);
+    let object_id = branch.move_object(object_id, ZoneType::Battlefield);
+    let reentered = branch.state.permanent_of(object_id).unwrap();
     assert!(branch.characteristics(reentered).added_subtypes.is_empty());
     assert_eq!(
         s.game().characteristics(target).added_subtypes,
@@ -3704,7 +3663,7 @@ fn fancy_footwork_one_target_or_one_remaining_target_expires() {
         if two {
             assert!(s.choose_target(Target::Permanent(own)));
             let id = s.game().state.permanents[own].as_ref().unwrap().object;
-            s.game_mut().move_object(id, ZoneType::Hand);
+            move_card(&mut s, id, ZoneType::Hand);
         } else {
             choose(&mut s, |a| matches!(a, Action::Decline { .. }));
         }
@@ -3808,7 +3767,7 @@ fn cadets_keep_announced_firebending_after_last_lesson_leaves() {
     let mut s = five_color_setup(&["Fire Nation Cadets", "Firebending Lesson"]);
     let cadets = s.force_permanent_on_battlefield(0, "Fire Nation Cadets");
     let lesson = library_card(&s, 0, "Firebending Lesson");
-    s.game_mut().move_object(lesson, ZoneType::Graveyard);
+    let lesson = move_card(&mut s, lesson, ZoneType::Graveyard);
     s.game_mut().state.permanents[cadets]
         .as_mut()
         .unwrap()
@@ -3819,7 +3778,7 @@ fn cadets_keep_announced_firebending_after_last_lesson_leaves() {
         |a| matches!(a, Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == cadets),
     );
     pass_until(&mut s, ActionSpaceKind::Priority);
-    s.game_mut().move_object(lesson, ZoneType::Exile);
+    move_card(&mut s, lesson, ZoneType::Exile);
     settle(&mut s);
     // The ability existed when attacking. Losing it cannot remove its trigger.
     assert_eq!(s.game().state.players[0].combat_mana_pool.total(), 2);
@@ -3974,8 +3933,8 @@ fn fortune_teller_clue_sacrifices_to_draw_and_ceases_to_exist() {
     let clues = s.battlefield_permanents_named(0, "Clue");
     assert_eq!(clues.len(), 1, "Clue token should be created");
     let clue_card = permanent(&s, clues[0]).object;
-    assert!(s.game().state.objects[clue_card].kind() == ObjectKind::Token);
-    assert!(s.game().state.objects[clue_card].types.is_artifact());
+    assert!(s.game().state[clue_card].kind() == ObjectKind::Token);
+    assert!(s.game().state[clue_card].types.is_artifact());
 
     // "{2}, Sacrifice this token: Draw a card."
     let hand_before = s.zone_size(0, ZoneType::Hand);
@@ -3988,7 +3947,7 @@ fn fortune_teller_clue_sacrifices_to_draw_and_ceases_to_exist() {
     assert_eq!(s.zone_size(0, ZoneType::Hand), hand_before + 1);
 
     // CR 704.5d — the token ceased to exist instead of staying in a zone.
-    assert_eq!(s.game().state.zones.zone_of(clue_card), None);
+    assert_eq!(zone_of(&s, clue_card), None);
     assert_eq!(s.zone_size(0, ZoneType::Graveyard), 0);
 }
 
@@ -4141,7 +4100,7 @@ fn glider_kids_flies_over_ground_blockers() {
 fn scry_revealed_card_is_observation_encodable() {
     let mut s = glider_kids_scry_setup(24);
     let top = library_top(&s, 0);
-    let top_object_id = s.game().state.objects[top].id.0 as i32;
+    let top_object_id = s.game().state[top].id.0 as i32;
 
     let events = s.drain_events();
     let obs = Observation::new(s.game(), &events);
@@ -4199,6 +4158,7 @@ fn gran_gran_taps_to_loot_mandatorily_and_can_discard_the_drawn_card() {
         .actions
         .iter()
         .all(|a| matches!(a, Action::SelectCard { .. })));
+    let top = now(&s, top);
     let index = s
         .action_space()
         .actions
@@ -4206,7 +4166,7 @@ fn gran_gran_taps_to_loot_mandatorily_and_can_discard_the_drawn_card() {
         .position(|a| matches!(a, Action::SelectCard { object, .. } if *object == top))
         .unwrap();
     s.step_action(index);
-    assert_eq!(s.game().state.zones.zone_of(top), Some(ZoneType::Graveyard));
+    assert_eq!(zone_of(&s, top), Some(ZoneType::Graveyard));
     assert_eq!(s.zone_size(0, ZoneType::Hand), before);
 }
 
@@ -4217,7 +4177,7 @@ fn gran_gran_reduction_threshold_noncreature_and_generic_floor() {
     let proft = find_owned_card(&s, 0, "Proft's Eidetic Memory");
     let tiger = find_owned_card(&s, 0, "Otter-Penguin");
     for object in [proft, tiger] {
-        s.game_mut().move_object(object, ZoneType::Hand);
+        move_card(&mut s, object, ZoneType::Hand);
     }
     put_onto_battlefield(&mut s, 0, "Island");
     plant_lessons(&mut s, 0, 2);
@@ -4231,13 +4191,14 @@ fn gran_gran_reduction_threshold_noncreature_and_generic_floor() {
     assert!(!offered(&s, proft));
     plant_lessons(&mut s, 0, 1);
     let wisdom = find_owned_card(&s, 0, "Accumulate Wisdom");
-    s.game_mut().move_object(wisdom, ZoneType::Hand);
+    let wisdom = move_card(&mut s, wisdom, ZoneType::Hand);
     s.game_mut().scenario_refresh_priority().unwrap();
+    let proft = now(&s, proft);
     assert!(offered(&s, proft));
     assert!(!offered(&s, tiger)); // {1}{U} creature is never reduced.
     assert!(offered(&s, wisdom)); // {U} is still {U}.
     let gran_card = card_of(&s, gran);
-    s.game_mut().move_object(gran_card, ZoneType::Hand);
+    move_card(&mut s, gran_card, ZoneType::Hand);
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(!offered(&s, proft));
 }
@@ -4264,10 +4225,7 @@ fn legend_choice_and_lethal_damage_share_one_sba_batch() {
         .unwrap();
     s.step_action(i);
     for object in [first_card, doomed_card] {
-        assert_eq!(
-            s.game().state.zones.zone_of(object),
-            Some(ZoneType::Graveyard)
-        );
+        assert_eq!(zone_of(&s, object), Some(ZoneType::Graveyard));
     }
 }
 
@@ -4288,13 +4246,13 @@ fn guide_grants_tap_mana_with_sickness_and_removes_it_on_departure() {
     choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 4, .. }));
     assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("G"));
     let forest = enter_and_settle(&mut s, "Forest");
-    let land = s.game().state.object_to_permanent[forest].unwrap();
+    let land = permanent_of(&s, forest).unwrap();
     assert!(s
         .action_space()
         .actions
         .iter()
         .any(|a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == land)));
-    s.game_mut().move_object(guide, ZoneType::Graveyard);
+    move_card(&mut s, guide, ZoneType::Graveyard);
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(!s
         .action_space()
@@ -4347,7 +4305,7 @@ fn foretell_offered(s: &mut Scenario, object: ObjectId) -> bool {
 fn sozins_comet_foretells_face_down_and_casts_on_a_later_turn() {
     let mut s = five_color_setup(&["Sozin's Comet"]);
     let comet = library_card(&s, 0, "Sozin's Comet");
-    s.game_mut().move_object(comet, ZoneType::Hand);
+    let comet = move_card(&mut s, comet, ZoneType::Hand);
     s.set_player_mana_pool(0, "3");
     assert!(foretell_offered(&mut s, comet));
     s.drain_events();
@@ -4355,13 +4313,14 @@ fn sozins_comet_foretells_face_down_and_casts_on_a_later_turn() {
         &mut s,
         |a| matches!(a, Action::Foretell { object, .. } if *object == comet),
     );
-    assert_eq!(s.game().state.zones.zone_of(comet), Some(ZoneType::Exile));
+    assert_eq!(zone_of(&s, comet), Some(ZoneType::Exile));
     assert!(s.game().state.stack_objects.is_empty());
     assert_eq!(s.game().state.players[0].mana_pool.total(), 1);
     assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
 
     // The arrival is public but names no card.
     let events = s.drain_events();
+    let comet = now(&s, comet);
     assert!(events.iter().any(
         |e| matches!(e, GameEvent::CardMoved { object_id: object, face_down: true, .. } if *object == comet)
     ));
@@ -4372,13 +4331,13 @@ fn sozins_comet_foretells_face_down_and_casts_on_a_later_turn() {
         .expect("exile arrival");
     assert_eq!(arrival.source_kind, EventEntityKind::None as i32);
 
-    let id = s.game().state.objects[comet].id.0 as i32;
+    let id = s.game().state[comet].id.0 as i32;
     let owner = Observation::for_player(s.game(), PlayerId(0));
     assert!(owner.agent_cards.iter().any(|c| c.id == id && c.face_down));
     let opponent = Observation::for_player(s.game(), PlayerId(1));
     assert!(opponent.opponent_cards.iter().all(|c| c.id != id));
     assert_eq!(opponent.opponent.zone_counts[ZoneType::Exile as usize], 1);
-    let definition = s.game().state.objects[comet].definition_id.0;
+    let definition = s.game().state[comet].definition_id.0;
     assert!(opponent.policy_history.iter().all(|row| !matches!(
         row.source,
         HistoryReference::Card { definition: d, .. } if d == definition
@@ -4395,10 +4354,7 @@ fn sozins_comet_foretells_face_down_and_casts_on_a_later_turn() {
     assert!(can_cast(&s, comet));
     cast_card(&mut s, comet);
     settle(&mut s);
-    assert_eq!(
-        s.game().state.zones.zone_of(comet),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, comet), Some(ZoneType::Graveyard));
     assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
 }
 
@@ -4408,7 +4364,7 @@ fn sozins_comet_foretells_face_down_and_casts_on_a_later_turn() {
 fn foretell_is_unavailable_on_an_opponents_turn() {
     let mut s = five_color_setup(&["Sozin's Comet"]);
     let comet = library_card(&s, 1, "Sozin's Comet");
-    s.game_mut().move_object(comet, ZoneType::Hand);
+    let comet = move_card(&mut s, comet, ZoneType::Hand);
     s.set_player_mana_pool(1, "20");
     s.pass_priority();
     assert_eq!(s.action_space().player, Some(PlayerId(1)));
@@ -4422,9 +4378,9 @@ fn foretell_is_unavailable_on_an_opponents_turn() {
 fn determinize_fills_two_foretold_slots_with_distinct_cards() {
     let mut s = five_color_setup(&["Sozin's Comet"]);
     let a = library_card(&s, 0, "Sozin's Comet");
-    s.game_mut().move_object(a, ZoneType::Hand);
+    let a = move_card(&mut s, a, ZoneType::Hand);
     let b = library_card(&s, 0, "Sozin's Comet");
-    s.game_mut().move_object(b, ZoneType::Hand);
+    let b = move_card(&mut s, b, ZoneType::Hand);
     let comets = [a, b];
     s.set_player_mana_pool(0, "4");
     for comet in comets {
@@ -4452,7 +4408,7 @@ fn determinize_fills_two_foretold_slots_with_distinct_cards() {
             for zone in zones {
                 for &object_id in game.state.zones.zone_objects(zone, player).iter() {
                     assert_eq!(game.state.zones.zone_of(object_id), Some(zone));
-                    *seen.entry(object_id.0).or_insert(0) += 1;
+                    *seen.entry(object_id.slot()).or_insert(0) += 1;
                 }
             }
         }
@@ -4468,8 +4424,8 @@ fn determinize_fills_two_foretold_slots_with_distinct_cards() {
         let grants = &game.state.cast_permissions.exile_grants;
         assert_eq!(grants.iter().filter(|grant| grant.foretold).count(), 2);
         for object_id in &foretold {
-            assert_eq!(game.state.objects[*object_id].name, "Sozin's Comet");
-            let object = game.current_object_ref(*object_id);
+            assert_eq!(game.state[*object_id].name, "Sozin's Comet");
+            let object = game.state.live(*object_id);
             assert_eq!(
                 grants
                     .iter()
@@ -4531,10 +4487,7 @@ fn locations_tap_for_their_color() {
         let id = cast(&mut s, spell);
         settle(&mut s);
         assert!(tapped(&s, land), "{name} pays for {spell}");
-        assert_eq!(
-            s.game().state.zones.zone_of(id),
-            Some(ZoneType::Battlefield)
-        );
+        assert_eq!(zone_of(&s, id), Some(ZoneType::Battlefield));
     }
 }
 
@@ -4573,8 +4526,9 @@ fn agna_qel_a_draws_then_discards() {
     s.set_player_mana_pool(0, "2U");
     activate(&mut s, agna, 0);
     pass_until(&mut s, ActionSpaceKind::Discard);
-    assert_eq!(s.game().state.zones.zone_of(top), Some(ZoneType::Hand));
+    assert_eq!(zone_of(&s, top), Some(ZoneType::Hand));
     // The drawn card is itself a legal discard; discard the older card.
+    let top = now(&s, top);
     assert!(has_action(
         &s,
         |a| matches!(a, Action::SelectCard { object, .. } if *object == top)
@@ -4585,10 +4539,7 @@ fn agna_qel_a_draws_then_discards() {
         |a| matches!(a, Action::SelectCard { object, .. } if *object == kept),
     );
     settle(&mut s);
-    assert_eq!(
-        s.game().state.zones.zone_of(kept),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, kept), Some(ZoneType::Graveyard));
     assert_eq!(s.zone_size(0, ZoneType::Hand), 1);
 }
 
@@ -4730,22 +4681,16 @@ fn the_walls_of_ba_sing_se_protect_other_permanents_you_control() {
     mark_damage(&mut s, ogre, 5);
     mark_damage(&mut s, theirs, 5);
     s.pass_priority();
-    assert_eq!(
-        s.game().state.zones.zone_of(ogre_card),
-        Some(ZoneType::Battlefield)
-    );
-    assert_eq!(
-        s.game().state.zones.zone_of(theirs_card),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, ogre_card), Some(ZoneType::Battlefield));
+    assert_eq!(zone_of(&s, theirs_card), Some(ZoneType::Graveyard));
 
     let walls_card = card_of(&s, walls);
-    s.game_mut().move_object(walls_card, ZoneType::Graveyard);
+    move_card(&mut s, walls_card, ZoneType::Graveyard);
     mark_damage(&mut s, ogre, 5);
     s.game_mut().scenario_refresh_priority().unwrap();
     s.pass_priority();
     assert_eq!(
-        s.game().state.zones.zone_of(ogre_card),
+        zone_of(&s, ogre_card),
         Some(ZoneType::Graveyard),
         "the grant ends with its source"
     );
@@ -4794,7 +4739,7 @@ fn badgermole_earthbends_and_grants_trample_to_countered_creatures() {
         s.pass_priority();
     }
     settle(&mut s);
-    let badgermole = s.game().state.object_to_permanent[object].unwrap();
+    let badgermole = permanent_of(&s, object).unwrap();
     assert_eq!(counters(&s, forest), 2);
     assert!(s.game().characteristics(forest).is_animated);
     assert!(observed_keywords(&s, forest).trample);
@@ -5050,8 +4995,8 @@ fn battlefield_token(s: &Scenario, player: usize) -> PermanentId {
         .zones
         .zone_objects(ZoneType::Battlefield, PlayerId(player))
         .iter()
-        .find(|object| s.game().state.objects[**object].kind() == ObjectKind::Token)
-        .and_then(|object| s.game().state.object_to_permanent[*object])
+        .find(|object| s.game().state[**object].kind() == ObjectKind::Token)
+        .and_then(|object| permanent_of(s, *object))
         .expect("a token")
 }
 
@@ -5062,7 +5007,7 @@ fn kyoshi_battle_fan_attaches_to_its_ally_token_then_equips_at_sorcery_speed() {
     s.set_player_mana_pool(0, "2");
     let fan = cast(&mut s, "Kyoshi Battle Fan");
     settle(&mut s);
-    let fan = s.game().state.object_to_permanent[fan].expect("fan entered");
+    let fan = permanent_of(&s, fan).expect("fan entered");
     let ally = battlefield_token(&s, 0);
     assert_eq!(s.game().characteristics(ally).pt(), (2, 1));
 
@@ -5090,7 +5035,7 @@ fn meteor_sword_destroys_a_permanent_and_stays_when_its_creature_dies() {
     assert!(s.choose_target(Target::Permanent(theirs)));
     settle(&mut s);
     assert!(s.game().state.permanents[theirs].is_none());
-    let sword = s.game().state.object_to_permanent[sword].expect("sword entered");
+    let sword = permanent_of(&s, sword).expect("sword entered");
 
     s.set_player_mana_pool(0, "3");
     equip(&mut s, sword, ours);
@@ -5152,11 +5097,8 @@ fn glider_staff_airbends_a_creature_and_gives_its_bearer_flying() {
         .any(|a| matches!(a, Action::Decline { .. })));
     assert!(s.choose_target(Target::Permanent(theirs)));
     settle(&mut s);
-    assert_eq!(
-        s.game().state.zones.zone_of(their_card),
-        Some(ZoneType::Exile)
-    );
-    let staff = s.game().state.object_to_permanent[staff].expect("staff entered");
+    assert_eq!(zone_of(&s, their_card), Some(ZoneType::Exile));
+    let staff = permanent_of(&s, staff).expect("staff entered");
     assert_eq!(s.game().characteristics(ours).pt(), (2, 2));
     assert!(!observed_keywords(&s, ours).flying);
 
@@ -5181,13 +5123,13 @@ fn enchant(s: &mut Scenario, name: &str, mana: &str, creature: PermanentId) -> P
     pass_until(s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Permanent(creature)));
     settle(s);
-    let aura = s.game().state.object_to_permanent[aura].expect("aura entered");
+    let aura = permanent_of(s, aura).expect("aura entered");
     assert_eq!(
         s.game().state.permanents[aura]
             .as_ref()
             .unwrap()
             .attached_to,
-        s.game().permanent_object_ref(creature),
+        s.game().permanent_object(creature),
         "CR 303.4f: the Aura enters attached to its target"
     );
     aura
@@ -5237,6 +5179,7 @@ fn path_to_redemption_pacifies_then_exiles_for_an_ally_on_your_turn() {
     activate(&mut s, path, 0);
     settle(&mut s);
     let zones = &s.game().state.zones;
+    let (theirs_card, path_card) = (now(&s, theirs_card), now(&s, path_card));
     assert_eq!(zones.zone_of(theirs_card), Some(ZoneType::Exile));
     assert_eq!(zones.zone_of(path_card), Some(ZoneType::Graveyard));
     let ally = battlefield_token(&s, 0);
@@ -5252,10 +5195,7 @@ fn path_to_redemption_follows_its_creature_to_the_graveyard() {
     mark_damage(&mut s, theirs, 2);
     s.pass_priority();
     assert!(s.game().state.permanents[theirs].is_none(), "lethal damage");
-    assert_eq!(
-        s.game().state.zones.zone_of(path_card),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, path_card), Some(ZoneType::Graveyard));
 }
 
 #[test]
@@ -5266,14 +5206,13 @@ fn path_to_redemption_without_its_target_does_not_resolve() {
     let spell = cast(&mut s, "Path to Redemption");
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Permanent(theirs)));
+    // The countered object is the spell on the stack.
+    let spell = now(&s, spell);
     mark_damage(&mut s, theirs, 2);
     s.drain_events();
     settle(&mut s);
     assert!(s.game().state.permanents[theirs].is_none(), "lethal damage");
-    assert_eq!(
-        s.game().state.zones.zone_of(spell),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, spell), Some(ZoneType::Graveyard));
     assert!(s.drain_events().iter().any(
         |event| matches!(event, GameEvent::SpellCountered { object_id: object, .. } if *object == spell)
     ));
@@ -5308,15 +5247,9 @@ fn watery_grasp_holds_a_creature_tapped_then_shuffles_it_away() {
     }
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     settle(&mut s);
-    assert_eq!(
-        s.game().state.zones.zone_of(theirs_card),
-        Some(ZoneType::Library)
-    );
+    assert_eq!(zone_of(&s, theirs_card), Some(ZoneType::Library));
     assert_eq!(s.zone_size(1, ZoneType::Library), library + 1);
-    assert_eq!(
-        s.game().state.zones.zone_of(grasp_card),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, grasp_card), Some(ZoneType::Graveyard));
 }
 
 #[test]
@@ -5346,10 +5279,7 @@ fn swampsnare_trap_costs_less_onto_a_flier_and_shrinks_its_creature() {
     assert!(s.choose_target(Target::Permanent(drake)));
     settle(&mut s);
     assert!(s.game().state.permanents[drake].is_none(), "2/2 gets -5/-3");
-    assert_eq!(
-        s.game().state.zones.zone_of(trap),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, trap), Some(ZoneType::Graveyard));
 
     enchant(&mut s, "Swampsnare Trap", "2B", wurm);
     assert_eq!(s.game().characteristics(wurm).pt(), (1, 1));
@@ -5410,12 +5340,9 @@ fn fire_nation_warship_crews_until_end_of_turn_and_leaves_a_clue() {
     mark_damage(&mut s, ship, 4);
     s.pass_priority();
     settle(&mut s);
-    assert_eq!(
-        s.game().state.zones.zone_of(ship_card),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, ship_card), Some(ZoneType::Graveyard));
     let clue = battlefield_token(&s, 0);
-    assert_eq!(s.game().state.objects[card_of(&s, clue)].name, "Clue");
+    assert_eq!(s.game().state[card_of(&s, clue)].name, "Clue");
 }
 
 #[test]
@@ -5427,7 +5354,7 @@ fn tundra_tank_protects_on_entry_and_firebends_once_crewed() {
     s.set_player_mana_pool(0, "2B");
     let tank = cast(&mut s, "Tundra Tank");
     settle(&mut s);
-    let tank = s.game().state.object_to_permanent[tank].expect("tank entered");
+    let tank = permanent_of(&s, tank).expect("tank entered");
     assert!(observed_keywords(&s, ogre).indestructible);
 
     activate(&mut s, tank, 0);
@@ -5482,14 +5409,11 @@ fn invasion_submersible_bounces_another_permanent_then_surfaces_once() {
     s.set_player_mana_pool(0, "2U");
     let sub = cast(&mut s, "Invasion Submersible");
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
-    let sub = s.game().state.object_to_permanent[sub].expect("entered");
+    let sub = permanent_of(&s, sub).expect("entered");
     assert!(!s.choose_target(Target::Permanent(sub)), "another target");
     assert!(s.choose_target(Target::Permanent(theirs)));
     settle(&mut s);
-    assert_eq!(
-        s.game().state.zones.zone_of(theirs_card),
-        Some(ZoneType::Hand)
-    );
+    assert_eq!(zone_of(&s, theirs_card), Some(ZoneType::Hand));
     assert!(!is_creature(&s, sub));
 
     s.set_player_mana_pool(0, "1");
@@ -5530,7 +5454,7 @@ fn great_divide_guide_grants_lands_and_allies_any_color() {
     assert!(offers_ability(&mut s, guide, 0));
     untap(&mut s, forest);
     let guide_card = card_of(&s, guide);
-    s.game_mut().move_object(guide_card, ZoneType::Graveyard);
+    move_card(&mut s, guide_card, ZoneType::Graveyard);
     assert!(
         !offers_ability(&mut s, forest, 0),
         "the grant ends with its source"
@@ -5615,7 +5539,7 @@ fn white_lotus_tile_adds_one_color_for_the_largest_shared_type() {
     s.set_player_mana_pool(0, "4");
     let tile = cast(&mut s, "White Lotus Tile");
     settle(&mut s);
-    let tile = s.game().state.object_to_permanent[tile].expect("entered");
+    let tile = permanent_of(&s, tile).expect("entered");
     assert!(tapped(&s, tile));
 
     untap(&mut s, tile);
@@ -5656,7 +5580,7 @@ fn the_lion_turtle_waits_for_three_lessons_to_fight() {
     s.set_player_mana_pool(0, "1GU");
     let turtle = cast(&mut s, "The Lion-Turtle");
     settle(&mut s);
-    let turtle = s.game().state.object_to_permanent[turtle].expect("entered");
+    let turtle = permanent_of(&s, turtle).expect("entered");
     assert_eq!(s.game().state.players[0].life, 23);
     clear_summoning_sickness(&mut s, turtle);
     activate(&mut s, turtle, 0);
@@ -5679,7 +5603,7 @@ fn the_lion_turtle_waits_for_three_lessons_to_fight() {
 
     for _ in 0..3 {
         let lesson = library_card(&s, 0, "Waterbending Lesson");
-        s.game_mut().move_object(lesson, ZoneType::Graveyard);
+        move_card(&mut s, lesson, ZoneType::Graveyard);
     }
     s.advance_to_active_step(1, StepKind::Main);
     s.advance_until(
@@ -5759,7 +5683,7 @@ fn flopsie_counters_your_team_and_limits_big_attackers_to_one_blocker() {
     s.set_player_mana_pool(0, "4GG");
     let flopsie = cast(&mut s, "Flopsie, Bumi's Buddy");
     settle(&mut s);
-    let flopsie = s.game().state.object_to_permanent[flopsie].expect("entered");
+    let flopsie = permanent_of(&s, flopsie).expect("entered");
     assert_eq!(counters(&s, flopsie), 1);
     assert_eq!(counters(&s, ogre), 1);
     assert_eq!(counters(&s, theirs), 0);
@@ -5808,7 +5732,7 @@ fn platypus_bear_mills_two_and_attacks_once_a_lesson_is_in_your_graveyard() {
     let bear = cast(&mut s, "Platypus-Bear");
     let library = s.game().state.zones.size(ZoneType::Library, PlayerId(0));
     settle(&mut s);
-    let bear = s.game().state.object_to_permanent[bear].expect("entered");
+    let bear = permanent_of(&s, bear).expect("entered");
     assert_eq!(
         s.game().state.zones.size(ZoneType::Library, PlayerId(0)),
         library - 2
@@ -5821,14 +5745,14 @@ fn platypus_bear_mills_two_and_attacks_once_a_lesson_is_in_your_graveyard() {
         .to_vec();
     assert_eq!(graveyard.len(), 2);
     for object in graveyard {
-        s.game_mut().move_object(object, ZoneType::Exile);
+        move_card(&mut s, object, ZoneType::Exile);
     }
     clear_summoning_sickness(&mut s, bear);
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     assert!(!offered_in_combat(&s, bear), "defender");
 
     let lesson = library_card(&s, 0, "Abandon Attachments");
-    s.game_mut().move_object(lesson, ZoneType::Graveyard);
+    move_card(&mut s, lesson, ZoneType::Graveyard);
     s.advance_to_active_step(1, StepKind::Main);
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     assert!(offered_in_combat(&s, bear));
@@ -5984,7 +5908,7 @@ fn ozai_keeps_unspent_mana_as_red_and_flies_on_six() {
     s.set_player_mana_pool(0, "RRRRR");
     assert!(!observed_keywords(&s, ozai).flying, "five unspent");
     let object = card_of(&s, ozai);
-    s.game_mut().move_object(object, ZoneType::Graveyard);
+    move_card(&mut s, object, ZoneType::Graveyard);
     s.advance_to_active_step(1, StepKind::Main);
     assert_eq!(pool(&s).total(), 0);
 }
@@ -6228,7 +6152,7 @@ fn the_last_agni_kai_without_its_victim_deals_no_damage() {
     assert!(s.choose_target(Target::Permanent(ogre)));
     assert!(s.choose_target(Target::Permanent(drake)));
     let object = card_of(&s, drake);
-    s.game_mut().move_object(object, ZoneType::Hand);
+    move_card(&mut s, object, ZoneType::Hand);
     settle(&mut s);
     s.assert_life(1, 20);
     assert_eq!(pool(&s).total(), 0);
@@ -6251,7 +6175,7 @@ fn lo_and_li_tutor_a_lesson_or_noble_and_grant_lifelink() {
         .actions
         .iter()
         .filter_map(|a| match a {
-            Action::SelectCard { object, .. } => Some(s.game().state.objects[*object].name.clone()),
+            Action::SelectCard { object, .. } => Some(s.game().state[*object].name.clone()),
             _ => None,
         })
         .collect();
@@ -6265,9 +6189,7 @@ fn lo_and_li_tutor_a_lesson_or_noble_and_grant_lifelink() {
         .actions
         .iter()
         .find_map(|a| match a {
-            Action::SelectCard { object, .. }
-                if s.game().state.objects[*object].name == "Uncle Iroh" =>
-            {
+            Action::SelectCard { object, .. } if s.game().state[*object].name == "Uncle Iroh" => {
                 Some(*object)
             }
             _ => None,
@@ -6284,7 +6206,7 @@ fn lo_and_li_tutor_a_lesson_or_noble_and_grant_lifelink() {
         .zones
         .zone_objects(ZoneType::Hand, PlayerId(0));
     assert_eq!(hand.len(), 1);
-    assert_eq!(s.game().state.objects[hand[0]].name, "Uncle Iroh");
+    assert_eq!(s.game().state[hand[0]].name, "Uncle Iroh");
 
     let iroh = s.force_permanent_on_battlefield(0, "Uncle Iroh");
     assert!(observed_keywords(&s, iroh).lifelink);
@@ -6308,14 +6230,14 @@ fn lo_and_li_tutor_a_lesson_or_noble_and_grant_lifelink() {
 
 fn library_to_top(s: &mut Scenario, player: usize, name: &str) -> ObjectId {
     let id = library_card(s, player, name);
-    s.game_mut().move_object(id, ZoneType::Exile);
-    s.game_mut().move_object(id, ZoneType::Library);
+    let id = move_card(s, id, ZoneType::Exile);
+    let id = move_card(s, id, ZoneType::Library);
     s.game_mut().scenario_refresh_priority().unwrap();
     id
 }
 
 fn sees_library_card(s: &Scenario, player: usize, object: ObjectId) -> bool {
-    let id = s.game().state.objects[object].id.0 as i32;
+    let id = s.game().state[object].id.0 as i32;
     let observation = Observation::for_player(s.game(), PlayerId(player));
     observation
         .agent_cards
@@ -6346,10 +6268,7 @@ fn hakoda_reveals_the_top_card_to_you_and_casts_allies_from_it() {
         |a| matches!(a, Action::CastSpell { object, .. } if *object == ally),
     );
     settle(&mut s);
-    assert_eq!(
-        s.game().state.zones.zone_of(ally),
-        Some(ZoneType::Battlefield)
-    );
+    assert_eq!(zone_of(&s, ally), Some(ZoneType::Battlefield));
 
     let ogre = library_to_top(&mut s, 0, "Gray Ogre");
     s.set_player_mana_pool(0, "2W");
@@ -6419,7 +6338,7 @@ fn trusty_boomerang_grants_its_creature_a_tap_ability_that_returns_it() {
     assert!(s.choose_target(Target::Permanent(theirs)));
     settle(&mut s);
     assert!(tapped(&s, first) && tapped(&s, theirs));
-    assert_eq!(s.game().state.zones.zone_of(object), Some(ZoneType::Hand));
+    assert_eq!(zone_of(&s, object), Some(ZoneType::Hand));
     assert!(!offers_ability(&mut s, first, 0));
 }
 
@@ -6437,13 +6356,10 @@ fn trusty_boomerang_that_left_the_battlefield_does_not_return() {
     s.set_player_mana_pool(0, "1");
     activate(&mut s, ogre, 0);
     assert!(s.choose_target(Target::Permanent(theirs)));
-    s.game_mut().move_object(object, ZoneType::Graveyard);
+    let object = move_card(&mut s, object, ZoneType::Graveyard);
     settle(&mut s);
     assert!(tapped(&s, theirs));
-    assert_eq!(
-        s.game().state.zones.zone_of(object),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, object), Some(ZoneType::Graveyard));
 }
 
 #[test]
@@ -6451,7 +6367,7 @@ fn honest_work_turns_the_creature_into_a_humble_merchant() {
     let mut s = five_color_unfunded_setup(&["Honest Work", "Wind Drake", "Trusty Boomerang"]);
     let drake = s.force_permanent_on_battlefield(1, "Wind Drake");
     let boomerang = s.force_permanent_on_battlefield(1, "Trusty Boomerang");
-    let attached = s.game().permanent_object_ref(drake);
+    let attached = s.game().permanent_object(drake);
     let game = s.game_mut();
     game.state.permanents[boomerang]
         .as_mut()
@@ -6521,7 +6437,7 @@ fn honest_work_replaces_a_printed_mana_ability_until_it_leaves() {
     assert!(!s.game().characteristics(elves).has_subtype("Elf"));
 
     let aura = card_of(&s, aura);
-    s.game_mut().move_object(aura, ZoneType::Graveyard);
+    move_card(&mut s, aura, ZoneType::Graveyard);
     assert_eq!(green(&mut s), Mana::parse("G"));
     assert_eq!(s.game().characteristics(elves).name, "Llanowar Elves");
     assert!(s.game().characteristics(elves).has_subtype("Elf"));
@@ -6593,7 +6509,7 @@ fn a_static_haste_grant_lets_a_creature_tap_the_turn_it_enters() {
     let mut s = five_color_unfunded_setup(&["Badgermole", "Llanowar Elves"]);
     let badgermole = s.force_permanent_on_battlefield(0, "Badgermole");
     let object = card_of(&s, badgermole);
-    let statics = &mut s.game_mut().state.objects[object].statics;
+    let statics = &mut s.game_mut().state[object].statics;
     let Some(StaticAbility::KeywordGrant(grant)) = statics
         .iter_mut()
         .find(|ability| matches!(ability, StaticAbility::KeywordGrant(_)))
@@ -6676,7 +6592,7 @@ fn secret_tunnel_survivor_shares_with_the_departed_target() {
     assert_eq!(s.game().state.stack_objects.len(), 1);
 
     let object = card_of(&s, disciple);
-    s.game_mut().move_object(object, ZoneType::Graveyard);
+    move_card(&mut s, object, ZoneType::Graveyard);
     settle(&mut s);
     assert!(unblockable(&s, soldier));
 }
@@ -6711,9 +6627,9 @@ fn possible_worlds_resample_an_opponents_foretold_card() {
     let foretell_one = |first: bool| {
         let mut s = five_color_setup(&["Sozin's Comet"]);
         let a = library_card(&s, 0, "Sozin's Comet");
-        s.game_mut().move_object(a, ZoneType::Hand);
+        let a = move_card(&mut s, a, ZoneType::Hand);
         let b = library_card(&s, 0, "Sozin's Comet");
-        s.game_mut().move_object(b, ZoneType::Hand);
+        let b = move_card(&mut s, b, ZoneType::Hand);
         let foretold = if first { a } else { b };
         assert!(foretell_offered(&mut s, foretold));
         choose(
@@ -6757,9 +6673,9 @@ fn possible_worlds_resample_an_opponents_foretold_card() {
             .to_vec();
         assert_eq!(exiled.len(), 1);
         let foretold = exiled[0];
-        assert_eq!(branch.state.objects[foretold].name, "Sozin's Comet");
+        assert_eq!(branch.state[foretold].name, "Sozin's Comet");
         let grant = &branch.state.cast_permissions.exile_grants[0];
-        assert_eq!(Some(grant.object), branch.current_object_ref(foretold));
+        assert_eq!(Some(grant.object), branch.state.live(foretold));
         resampled |= foretold != comet;
     }
     assert!(resampled);
@@ -6773,14 +6689,13 @@ fn sparring_dummy_mills_a_land_to_hand_or_a_lesson_for_two_life() {
     let dummy = s.force_permanent_on_battlefield(0, "Sparring Dummy");
     clear_summoning_sickness(&mut s, dummy);
     let object = s.game().state.permanents[dummy].as_ref().unwrap().object;
-    assert!(s.game().state.objects[object]
-        .keywords
-        .has(Keyword::Defender));
+    assert!(s.game().state[object].keywords.has(Keyword::Defender));
 
     let forest = library_card(&s, 0, "Forest");
     put_on_top(&mut s, forest);
     activate(&mut s, dummy, 0);
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    let forest = now(&s, forest);
     choose(
         &mut s,
         |a| matches!(a, Action::SelectCard { object, .. } if *object == forest),
@@ -6815,7 +6730,7 @@ fn spirit_water_revival_waterbends_its_additional_cost() {
         .map(|name| s.force_permanent_on_battlefield(0, name))
         .collect();
     let binned = library_card(&s, 0, "Gray Ogre");
-    s.game_mut().move_object(binned, ZoneType::Graveyard);
+    let binned = move_card(&mut s, binned, ZoneType::Graveyard);
 
     // Unkicked: with {1}{U}{U} and no untapped helpers, no choice is offered.
     for ogre in &ogres {
@@ -6831,7 +6746,7 @@ fn spirit_water_revival_waterbends_its_additional_cost() {
     assert_eq!(s.game().state.stack_objects.len(), 1);
     settle(&mut s);
     assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 2);
-    assert_eq!(s.game().state.zones.zone_of(first), Some(ZoneType::Exile));
+    assert_eq!(zone_of(&s, first), Some(ZoneType::Exile));
     assert!(!s.game().has_no_maximum_hand_size_effect(PlayerId(0)));
 
     // Kicked: five creatures and {1} more mana pay the {6}.
@@ -6859,11 +6774,8 @@ fn spirit_water_revival_waterbends_its_additional_cost() {
     settle(&mut s);
     assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 7);
     assert_eq!(s.zone_size(0, ZoneType::Graveyard), 0);
-    assert_ne!(
-        s.game().state.zones.zone_of(binned),
-        Some(ZoneType::Graveyard)
-    );
-    assert_eq!(s.game().state.zones.zone_of(second), Some(ZoneType::Exile));
+    assert_ne!(zone_of(&s, binned), Some(ZoneType::Graveyard));
+    assert_eq!(zone_of(&s, second), Some(ZoneType::Exile));
     assert!(s.game().has_no_maximum_hand_size_effect(PlayerId(0)));
 }
 
@@ -6901,11 +6813,7 @@ fn crashing_wave_waterbends_x_taps_up_to_x_and_distributes_three_stun_counters()
         .collect();
     assert_eq!(offered, vec![0, 1, 2]);
     assert_eq!(
-        s.game().state.objects[wave]
-            .mana_cost
-            .as_ref()
-            .unwrap()
-            .mana_value,
+        s.game().state[wave].mana_cost.as_ref().unwrap().mana_value,
         2
     );
     choose_mode(&mut s, 2);
@@ -6950,10 +6858,7 @@ fn crashing_wave_waterbends_x_taps_up_to_x_and_distributes_three_stun_counters()
     assert_eq!(counters_of(&s, first, CounterKind::Stun), 2);
     assert_eq!(counters_of(&s, second, CounterKind::Stun), 0);
     assert_eq!(counters_of(&s, tapped_already, CounterKind::Stun), 1);
-    assert_eq!(
-        s.game().state.zones.zone_of(wave),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, wave), Some(ZoneType::Graveyard));
 }
 
 #[test]
@@ -7137,8 +7042,8 @@ fn herbalist_restriction_survives_color_selection_and_cannot_pay_abilities() {
     );
     let lesson = library_card(&s, 0, "Firebending Lesson");
     let strike = library_card(&s, 0, "Lightning Strike");
-    s.game_mut().move_object(lesson, ZoneType::Hand);
-    s.game_mut().move_object(strike, ZoneType::Hand);
+    let lesson = move_card(&mut s, lesson, ZoneType::Hand);
+    let strike = move_card(&mut s, strike, ZoneType::Hand);
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(can_cast(&s, lesson));
     assert!(!can_cast(&s, strike));
@@ -7239,7 +7144,7 @@ fn iroh_casts_lessons_for_one_and_exiles_on_resolution_or_bounce() {
         let mut s = five_color_setup(&["Iroh, Grand Lotus", "Waterbending Lesson"]);
         enter_and_settle(&mut s, "Iroh, Grand Lotus");
         let lesson = library_card(&s, 0, "Waterbending Lesson");
-        s.game_mut().move_object(lesson, ZoneType::Graveyard);
+        let lesson = move_card(&mut s, lesson, ZoneType::Graveyard);
         s.set_player_mana_pool(0, "1");
         s.game_mut().scenario_refresh_priority().unwrap();
         assert!(can_cast(&s, lesson));
@@ -7250,13 +7155,13 @@ fn iroh_casts_lessons_for_one_and_exiles_on_resolution_or_bounce() {
         );
         assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
         if bounce {
-            s.game_mut().move_object(lesson, ZoneType::Hand);
+            move_card(&mut s, lesson, ZoneType::Hand);
         } else {
             pass_until(&mut s, ActionSpaceKind::Waterbend);
             choose(&mut s, |a| matches!(a, Action::Decline { .. }));
             settle(&mut s);
         }
-        assert_eq!(s.game().state.zones.zone_of(lesson), Some(ZoneType::Exile));
+        assert_eq!(zone_of(&s, lesson), Some(ZoneType::Exile));
     }
 }
 
@@ -7270,8 +7175,8 @@ fn iroh_preserves_sorcery_timing_and_nonlesson_printed_cost() {
     enter_and_settle(&mut s, "Iroh, Grand Lotus");
     let strike = library_card(&s, 0, "Lightning Strike");
     let lesson = library_card(&s, 0, "Waterbending Lesson");
-    s.game_mut().move_object(strike, ZoneType::Graveyard);
-    s.game_mut().move_object(lesson, ZoneType::Graveyard);
+    let strike = move_card(&mut s, strike, ZoneType::Graveyard);
+    let lesson = move_card(&mut s, lesson, ZoneType::Graveyard);
     s.set_player_mana_pool(0, "1");
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(!can_cast(&s, strike));
@@ -7290,28 +7195,29 @@ fn flashback_is_exiled_when_countered_after_iroh_leaves() {
     let mut s = five_color_setup(&["Iroh, Grand Lotus", "Waterbending Lesson", "Counterspell"]);
     let iroh = enter_and_settle(&mut s, "Iroh, Grand Lotus");
     let lesson = library_card(&s, 0, "Waterbending Lesson");
-    s.game_mut().move_object(lesson, ZoneType::Graveyard);
+    let lesson = move_card(&mut s, lesson, ZoneType::Graveyard);
     s.game_mut().scenario_refresh_priority().unwrap();
     choose(
         &mut s,
         |a| matches!(a, Action::CastSpell { object, .. } if *object == lesson),
     );
     spend_colorless(&mut s);
-    s.game_mut().move_object(iroh, ZoneType::Graveyard);
+    move_card(&mut s, iroh, ZoneType::Graveyard);
     let counter = library_card(&s, 1, "Counterspell");
-    s.game_mut().move_object(counter, ZoneType::Hand);
+    let counter = move_card(&mut s, counter, ZoneType::Hand);
     s.pass_priority();
     s.game_mut().scenario_refresh_priority().unwrap();
     choose(
         &mut s,
         |a| matches!(a, Action::CastSpell { object, .. } if *object == counter),
     );
+    let lesson = now(&s, lesson);
     choose(
         &mut s,
         |a| matches!(a, Action::ChooseTarget { target: managym::state::game_object::Target::StackSpell(id), .. } if *id == lesson),
     );
     settle(&mut s);
-    assert_eq!(s.game().state.zones.zone_of(lesson), Some(ZoneType::Exile));
+    assert_eq!(zone_of(&s, lesson), Some(ZoneType::Exile));
 }
 
 #[test]
@@ -7363,7 +7269,7 @@ fn quench_setup(seed: u64, p1_mountains: usize) -> Scenario {
     cast_only(&mut s); // P0 casts It'll Quench Ya!
     assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
     let ogre = stack_spell_card(&s, "Gray Ogre");
-    assert!(s.choose_target(Target::StackSpell(ogre)));
+    assert!(s.choose_target(Target::StackSpell(now(&s, ogre))));
     s.pass_priority();
     s.pass_priority(); // It'll Quench Ya! resolves -> pay-or-not for P1
     s
@@ -7524,7 +7430,7 @@ fn joo_dee_surveils_copies_its_copiable_values_then_sacrifices_a_chosen_creature
     assert!(tapped(&s, joo_dee));
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     assert_eq!(offered_cards(&s), [top]);
-    let top_id = s.game().state.objects[top].id.0 as i32;
+    let top_id = s.game().state[top].id.0 as i32;
     let seen = |viewer: usize| {
         let observation = Observation::for_player(s.game(), PlayerId(viewer));
         observation
@@ -7557,14 +7463,12 @@ fn joo_dee_surveils_copies_its_copiable_values_then_sacrifices_a_chosen_creature
 
     assert_eq!(joo_dees(&s), [token]);
     let copy = permanent(&s, token);
-    assert!(s.game().state.objects[copy.object].kind() == ObjectKind::Token);
+    assert!(s.game().state[copy.object].kind() == ObjectKind::Token);
     assert!(!copy.tapped);
     assert_eq!(counters(&s, token), 0);
     assert_eq!(s.game().characteristics(token).pt(), (2, 2));
     assert_eq!(
-        s.game().state.objects[copy.object]
-            .activated_abilities
-            .len(),
+        s.game().state[copy.object].activated_abilities.len(),
         1,
         "the token has Joo Dee's ability"
     );
@@ -7601,11 +7505,11 @@ fn joo_dee_declined_surveil_keeps_the_card_and_a_token_copies_itself() {
     let remaining = joo_dees(&s);
     assert_eq!(remaining.len(), 2);
     let newest = *remaining.iter().find(|id| **id != joo_dee).unwrap();
-    let object = &s.game().state.objects[card_of(&s, newest)];
+    let object = &s.game().state[card_of(&s, newest)];
     assert!(object.kind() == ObjectKind::Token);
     assert_eq!(object.name, "Joo Dee, One of Many");
     assert_eq!(object.mana_cost.as_ref().unwrap().mana_value, 2);
-    let printed = s.game().state.objects[card_of(&s, joo_dee)].definition_id;
+    let printed = s.game().state[card_of(&s, joo_dee)].definition_id;
     assert_eq!(
         object.copy,
         Some(CopyEffect {
@@ -7620,7 +7524,7 @@ fn joo_dee_declined_surveil_keeps_the_card_and_a_token_copies_itself() {
 fn joo_dee_surveil_choices_name_what_they_do() {
     let (mut s, joo_dee) = joo_dee_setup();
     let top = library_top(&s, 0);
-    let name = s.game().state.objects[top].name.clone();
+    let name = s.game().state[top].name.clone();
     activate(&mut s, joo_dee, 0);
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     let observation = Observation::for_player(s.game(), PlayerId(0));
@@ -7751,7 +7655,7 @@ fn kyoshi_warriors_etb_creates_ally_token_via_stack() {
     let tokens = s.battlefield_permanents_named(0, "Ally");
     assert_eq!(tokens.len(), 1, "one Ally token should have been created");
     let token = permanent(&s, tokens[0]);
-    let token_card = &s.game().state.objects[token.object];
+    let token_card = &s.game().state[token.object];
     assert!(token_card.kind() == ObjectKind::Token);
     assert!(token_card.has_subtype("Ally"));
     assert!(token_card.types.is_creature());
@@ -7808,8 +7712,8 @@ fn master_piandao_reveals_a_selected_ally_and_bottoms_the_rest() {
         .unwrap();
     s.step_action(index);
     settle(&mut s);
-    assert_eq!(s.game().state.zones.zone_of(ally), Some(ZoneType::Hand));
-    let definition = s.game().state.objects[ally].definition_id.0;
+    assert_eq!(zone_of(&s, ally), Some(ZoneType::Hand));
+    let definition = current_object(&s, ally).definition_id.0;
     let other = Observation::for_player(s.game(), PlayerId(1));
     assert_eq!(other.opponent.known_hand.get(&definition), Some(&1));
     assert!(other
@@ -7833,9 +7737,7 @@ fn piandao_can_take_a_lesson_or_equipment_or_decline_without_revealing_remainder
         );
         // A controlled Equipment fixture isolates that subtype branch without
         // implementing a later batch's equip/attachment mechanics.
-        s.game_mut().state.objects[top[1]]
-            .subtypes
-            .push("Equipment".into());
+        s.game_mut().state[top[1]].subtypes.push("Equipment".into());
         s.advance_to_active_step(0, StepKind::DeclareAttackers);
         s.declare_attack();
         pass_until(&mut s, ActionSpaceKind::LookAndSelect);
@@ -7852,7 +7754,7 @@ fn piandao_can_take_a_lesson_or_equipment_or_decline_without_revealing_remainder
             .zones
             .zone_objects(ZoneType::Library, PlayerId(0));
         for (index, id) in top.iter().enumerate() {
-            let definition = s.game().state.objects[*id].definition_id.0;
+            let definition = current_object(&s, *id).definition_id.0;
             assert_eq!(
                 view.opponent
                     .known_hand
@@ -7928,7 +7830,7 @@ fn momo_reduces_first_matching_spell_only_and_grows_when_another_flier_enters() 
     let mut s = five_color_setup(&["Momo, Friendly Flier", "Messenger Hawk"]);
     let momo = s.force_permanent_on_battlefield(0, "Momo, Friendly Flier");
     let hawk = library_card(&s, 0, "Messenger Hawk");
-    s.game_mut().move_object(hawk, ZoneType::Hand);
+    let hawk = move_card(&mut s, hawk, ZoneType::Hand);
     s.set_player_mana_pool(0, "1U");
     s.game_mut().scenario_refresh_priority().unwrap();
     let index = s
@@ -7941,7 +7843,7 @@ fn momo_reduces_first_matching_spell_only_and_grows_when_another_flier_enters() 
     settle(&mut s);
     assert_eq!(s.game().characteristics(momo).power, 2);
     let next = library_card(&s, 0, "Messenger Hawk");
-    s.game_mut().move_object(next, ZoneType::Hand);
+    let next = move_card(&mut s, next, ZoneType::Hand);
     s.set_player_mana_pool(0, "1U");
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(!s
@@ -7958,7 +7860,7 @@ fn momo_counts_earlier_matching_casts_before_it_entered_and_resets_next_turn() {
     settle(&mut s);
     s.force_permanent_on_battlefield(0, "Momo, Friendly Flier");
     let next = library_card(&s, 0, "Messenger Hawk");
-    s.game_mut().move_object(next, ZoneType::Hand);
+    let next = move_card(&mut s, next, ZoneType::Hand);
     s.set_player_mana_pool(0, "1U");
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(!s
@@ -7984,23 +7886,19 @@ fn momo_excludes_lemurs_and_opponents_turn_and_its_pump_expires() {
     let other = s.force_permanent_on_battlefield(1, "Momo, Friendly Flier");
     let lemur = library_card(&s, 0, "Momo, Friendly Flier");
     let hawk = library_card(&s, 0, "Messenger Hawk");
-    s.game_mut().move_object(lemur, ZoneType::Hand);
-    s.game_mut().move_object(hawk, ZoneType::Hand);
+    let lemur = move_card(&mut s, lemur, ZoneType::Hand);
+    let hawk = move_card(&mut s, hawk, ZoneType::Hand);
     s.set_player_mana_pool(0, "1");
     s.game_mut().scenario_refresh_priority().unwrap();
     // A generic reduction must never remove white.
     assert!(!can_cast(&s, lemur));
     // Give the more expensive flier a Lemur subtype so exclusion has a
     // measurable generic component instead of being hidden by Momo's {W}.
-    s.game_mut().state.objects[hawk]
-        .subtypes
-        .push("Lemur".into());
+    s.game_mut().state[hawk].subtypes.push("Lemur".into());
     s.set_player_mana_pool(0, "1U");
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(!can_cast(&s, hawk));
-    s.game_mut().state.objects[hawk]
-        .subtypes
-        .retain(|t| t != "Lemur");
+    s.game_mut().state[hawk].subtypes.retain(|t| t != "Lemur");
     s.game_mut().scenario_refresh_priority().unwrap();
     choose(
         &mut s,
@@ -8012,10 +7910,8 @@ fn momo_excludes_lemurs_and_opponents_turn_and_its_pump_expires() {
     s.advance_to_active_step(1, StepKind::Main);
     assert_eq!(s.game().characteristics(momo).power, 1);
     let next = library_card(&s, 0, "Messenger Hawk");
-    s.game_mut().move_object(next, ZoneType::Hand);
-    s.game_mut().state.objects[next]
-        .keywords
-        .insert(Keyword::Flash);
+    let next = move_card(&mut s, next, ZoneType::Hand);
+    s.game_mut().state[next].keywords.insert(Keyword::Flash);
     s.set_player_mana_pool(0, "1U");
     s.game_mut().scenario_refresh_priority().unwrap();
     s.pass_priority();
@@ -8097,14 +7993,14 @@ fn ostrich_mills_then_selects_only_a_milled_land_or_grows_when_declined() {
         assert_eq!(s.action_space().actions.len(), 3);
         assert!(top
             .iter()
-            .all(|object| s.game().state.zones.zone_of(*object) == Some(ZoneType::Graveyard)));
+            .all(|object| zone_of(&s, *object) == Some(ZoneType::Graveyard)));
         let index = s
             .action_space()
             .actions
             .iter()
             .position(|a| {
                 if take {
-                    matches!(a, Action::SelectCard { object, .. } if *object == top[1])
+                    matches!(a, Action::SelectCard { object, .. } if *object == now(&s, top[1]))
                 } else {
                     matches!(a, Action::Decline { .. })
                 }
@@ -8117,7 +8013,7 @@ fn ostrich_mills_then_selects_only_a_milled_land_or_grows_when_declined() {
             if take { 0 } else { 1 }
         );
         assert_eq!(
-            s.game().state.zones.zone_of(top[1]),
+            zone_of(&s, top[1]),
             Some(if take {
                 ZoneType::Hand
             } else {
@@ -8195,7 +8091,7 @@ fn court_official_and_ozai_make_the_target_player_choose_discards() {
         let mut s = five_color_setup(&[name]);
         for _ in 0..3 {
             let id = library_card(&s, 1, "Plains");
-            s.game_mut().move_object(id, ZoneType::Hand);
+            move_card(&mut s, id, ZoneType::Hand);
         }
         cast(&mut s, name);
         if name == "Corrupt Court Official" {
@@ -8284,12 +8180,12 @@ fn phoenix_fleet_airship_copies_itself_at_your_end_step_only_after_a_sacrifice()
     let fleet = airships(&s);
     assert_eq!(fleet.len(), 2);
     let token = *fleet.iter().find(|id| **id != airship).unwrap();
-    let object = &s.game().state.objects[card_of(&s, token)];
+    let object = &s.game().state[card_of(&s, token)];
     assert!(object.kind() == ObjectKind::Token);
     assert_eq!(
         object.copy,
         Some(CopyEffect {
-            of: s.game().state.objects[card_of(&s, airship)].definition_id,
+            of: s.game().state[card_of(&s, airship)].definition_id,
             exceptions: vec![],
         })
     );
@@ -8309,11 +8205,11 @@ fn phoenix_fleet_airship_copies_itself_as_it_last_existed_after_leaving() {
         "the trigger waits on the stack"
     );
     let object = card_of(&s, airship);
-    s.game_mut().move_object(object, ZoneType::Graveyard);
+    move_card(&mut s, object, ZoneType::Graveyard);
     settle(&mut s);
     let fleet = airships(&s);
     assert_eq!(fleet.len(), 1, "the copy of the departed Airship");
-    let token = &s.game().state.objects[card_of(&s, fleet[0])];
+    let token = &s.game().state[card_of(&s, fleet[0])];
     assert!(token.kind() == ObjectKind::Token);
     assert!(token.keywords.has(Keyword::Flying));
     assert_eq!(
@@ -8355,7 +8251,7 @@ fn phoenix_fleet_airship_is_a_creature_while_you_control_eight() {
         "ability loss keeps the name"
     );
     let eighth = card_of(&s, fleet[7]);
-    s.game_mut().move_object(eighth, ZoneType::Graveyard);
+    move_card(&mut s, eighth, ZoneType::Graveyard);
     assert!(fleet[..7].iter().all(|id| !observed(&s, *id).is_animated));
 }
 
@@ -8399,7 +8295,7 @@ fn ran_and_shaw_setup() -> Scenario {
     let mut s = five_color_setup(&["Ran and Shaw", "Waterbending Lesson"]);
     for _ in 0..3 {
         let lesson = library_card(&s, 0, "Waterbending Lesson");
-        s.game_mut().move_object(lesson, ZoneType::Graveyard);
+        move_card(&mut s, lesson, ZoneType::Graveyard);
     }
     s
 }
@@ -8415,11 +8311,11 @@ fn ran_and_shaw_copy_is_nonlegendary_uncast_and_has_printed_abilities() {
         .iter()
         .find_map(|id| {
             let p = s.game().state.permanents[*id].as_ref().unwrap();
-            (s.game().state.objects[p.object].kind() == ObjectKind::Token).then_some(p)
+            (s.game().state[p.object].kind() == ObjectKind::Token).then_some(p)
         })
         .unwrap();
     assert!(!token.was_cast);
-    let definition = &s.game().state.objects[token.object];
+    let definition = &s.game().state[token.object];
     assert!(definition.supertypes.is_empty());
     assert!(definition.keywords.has(Keyword::Flying));
     assert_eq!(definition.abilities.len(), 2);
@@ -8439,7 +8335,7 @@ fn ran_and_shaw_copy_records_its_copy_effect_and_exception() {
     settle(&mut s);
     let dragons = s.battlefield_permanents_named(0, "Ran and Shaw");
     assert_eq!(dragons.len(), 2);
-    let objects = &s.game().state.objects;
+    let objects = &s.game().state;
     let pair: [ObjectId; 2] = [card_of(&s, dragons[0]), card_of(&s, dragons[1])];
     let (copy, source) = match pair {
         [a, b] if objects[a].kind() == ObjectKind::Token => (a, b),
@@ -8466,7 +8362,7 @@ fn ran_and_shaw_copy_records_its_copy_effect_and_exception() {
             .chain(&observation.opponent_permanents)
             .collect();
         let row = |object: ObjectId| {
-            let id = s.game().state.permanents[s.game().state.object_to_permanent[object].unwrap()]
+            let id = s.game().state.permanents[permanent_of(&s, object).unwrap()]
                 .as_ref()
                 .unwrap()
                 .id
@@ -8493,7 +8389,7 @@ fn ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution() {
         let mut lessons = Vec::new();
         for _ in 0..3 {
             let lesson = library_card(&s, 0, "Waterbending Lesson");
-            s.game_mut().move_object(lesson, ZoneType::Graveyard);
+            let lesson = move_card(&mut s, lesson, ZoneType::Graveyard);
             lessons.push(lesson);
         }
         if mode == 0 {
@@ -8511,13 +8407,13 @@ fn ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution() {
             assert_eq!(s.battlefield_permanents_named(0, "Ran and Shaw").len(), 1);
             assert_choice_contract(&s);
             if mode == 1 {
-                s.game_mut().move_object(lessons[0], ZoneType::Exile);
+                move_card(&mut s, lessons[0], ZoneType::Exile);
             }
             if mode == 2 {
                 let source = permanent_named(&s, "Ran and Shaw");
                 set_counters(&mut s, source, CounterKind::PlusOnePlusOne, 3);
                 let source_object = s.game().state.permanents[source].as_ref().unwrap().object;
-                s.game_mut().move_object(source_object, ZoneType::Graveyard);
+                move_card(&mut s, source_object, ZoneType::Graveyard);
             }
             settle(&mut s);
         }
@@ -8525,7 +8421,7 @@ fn ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution() {
         assert_eq!(dragons.len(), 1);
         let dragon = s.game().state.permanents[dragons[0]].as_ref().unwrap();
         assert_eq!(
-            s.game().state.objects[dragon.object].kind() == ObjectKind::Token,
+            s.game().state[dragon.object].kind() == ObjectKind::Token,
             mode == 2
         );
         assert_eq!(s.game().characteristics(dragons[0]).power, 4);
@@ -8710,10 +8606,10 @@ fn sokka_binds_spell_and_land_separately_and_resolves_with_one_illegal_target() 
     assert!(s.choose_target(Target::Player(PlayerId(1))));
     spend_colorless(&mut s);
     cast(&mut s, "Sokka's Haiku");
-    assert!(s.choose_target(Target::StackSpell(strike)));
+    assert!(s.choose_target(Target::StackSpell(now(&s, strike))));
     assert!(s.choose_target(Target::Permanent(land)));
     // Remove one target in response: draw/mill and the other clause still resolve.
-    s.game_mut().move_object(strike, ZoneType::Graveyard);
+    let strike = move_card(&mut s, strike, ZoneType::Graveyard);
     s.game_mut().state.stack_objects.retain(|object| !matches!(object, managym::state::stack_object::StackObject::Spell(spell) if spell.object == strike));
     let library = s.zone_size(0, ZoneType::Library);
     settle(&mut s);
@@ -8732,12 +8628,12 @@ fn sokkas_haiku_counters_draws_mills_and_untaps_and_needs_a_legal_target() {
         assert!(s.choose_target(Target::Player(PlayerId(1))));
         spend_colorless(&mut s);
         cast(&mut s, "Sokka's Haiku");
-        assert!(s.choose_target(Target::StackSpell(strike)));
+        assert!(s.choose_target(Target::StackSpell(now(&s, strike))));
         assert!(s.choose_target(Target::Permanent(land)));
         let library = s.zone_size(0, ZoneType::Library);
         if invalid {
-            s.game_mut().move_object(land_card, ZoneType::Hand);
-            s.game_mut().move_object(strike, ZoneType::Graveyard);
+            move_card(&mut s, land_card, ZoneType::Hand);
+            let strike = move_card(&mut s, strike, ZoneType::Graveyard);
             s.game_mut().state.stack_objects.retain(|o| !matches!(o, managym::state::stack_object::StackObject::Spell(spell) if spell.object == strike));
         }
         settle(&mut s);
@@ -8746,10 +8642,7 @@ fn sokkas_haiku_counters_draws_mills_and_untaps_and_needs_a_legal_target() {
             s.zone_size(0, ZoneType::Library),
             library - if invalid { 0 } else { 4 }
         );
-        assert_eq!(
-            s.game().state.zones.zone_of(strike),
-            Some(ZoneType::Graveyard)
-        );
+        assert_eq!(zone_of(&s, strike), Some(ZoneType::Graveyard));
         if !invalid {
             assert!(!tapped(&s, land));
         }
@@ -8940,14 +8833,8 @@ fn legend_rule_recognizes_existing_lowercase_supertypes() {
         )
         .unwrap();
     s.step_action(index);
-    assert_eq!(
-        s.game().state.zones.zone_of(first_card),
-        Some(ZoneType::Graveyard)
-    );
-    assert_eq!(
-        s.game().state.zones.zone_of(second_card),
-        Some(ZoneType::Battlefield)
-    );
+    assert_eq!(zone_of(&s, first_card), Some(ZoneType::Graveyard));
+    assert_eq!(zone_of(&s, second_card), Some(ZoneType::Battlefield));
 }
 
 #[test]
@@ -9141,9 +9028,9 @@ fn true_ancestry_returns_only_a_current_permanent_card_and_can_decline() {
         let mut s = five_color_setup(&["True Ancestry", "Lightning Strike"]);
         let land = library_card(&s, 0, "Forest");
         let instant = library_card(&s, 0, "Lightning Strike");
-        s.game_mut().move_object(land, ZoneType::Graveyard);
-        s.game_mut().move_object(instant, ZoneType::Graveyard);
-        let object = s.game().current_object_ref(land).unwrap();
+        let land = move_card(&mut s, land, ZoneType::Graveyard);
+        move_card(&mut s, instant, ZoneType::Graveyard);
+        let object = s.game().state.live(now(&s, land)).unwrap();
         cast(&mut s, "True Ancestry");
         assert_eq!(s.action_space().actions.len(), 2);
         if take {
@@ -9159,7 +9046,7 @@ fn true_ancestry_returns_only_a_current_permanent_card_and_can_decline() {
         }
         settle(&mut s);
         assert_eq!(
-            s.game().state.zones.zone_of(land),
+            zone_of(&s, land),
             Some(if take {
                 ZoneType::Hand
             } else {
@@ -9174,18 +9061,15 @@ fn true_ancestry_returns_only_a_current_permanent_card_and_can_decline() {
 fn ancestry_does_not_follow_a_graveyard_target_into_a_new_incarnation() {
     let mut s = five_color_setup(&["True Ancestry"]);
     let land = library_card(&s, 0, "Forest");
-    s.game_mut().move_object(land, ZoneType::Graveyard);
-    let old = s.game().current_object_ref(land).unwrap();
+    let land = move_card(&mut s, land, ZoneType::Graveyard);
+    let old = s.game().state.live(now(&s, land)).unwrap();
     cast(&mut s, "True Ancestry");
     assert!(s.choose_target(Target::GraveyardCard(old)));
-    s.game_mut().move_object(land, ZoneType::Exile);
-    s.game_mut().move_object(land, ZoneType::Graveyard);
-    assert_ne!(s.game().current_object_ref(land), Some(old));
+    let land = move_card(&mut s, land, ZoneType::Exile);
+    let land = move_card(&mut s, land, ZoneType::Graveyard);
+    assert_ne!(s.game().state.live(now(&s, land)), Some(old));
     settle(&mut s);
-    assert_eq!(
-        s.game().state.zones.zone_of(land),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, land), Some(ZoneType::Graveyard));
     assert!(
         s.battlefield_permanents_named(0, "Clue").is_empty(),
         "all targets illegal: the entire spell fails to resolve"
@@ -9198,8 +9082,8 @@ fn uncle_iroh_reduces_lesson_spells_without_reducing_ordinary_spells() {
     s.force_permanent_on_battlefield(0, "Uncle Iroh");
     let lesson = library_card(&s, 0, "Abandon Attachments");
     let ordinary = library_card(&s, 0, "Lightning Strike");
-    s.game_mut().move_object(lesson, ZoneType::Hand);
-    s.game_mut().move_object(ordinary, ZoneType::Hand);
+    let lesson = move_card(&mut s, lesson, ZoneType::Hand);
+    let ordinary = move_card(&mut s, ordinary, ZoneType::Hand);
     s.set_player_mana_pool(0, "R");
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(s
@@ -9265,7 +9149,7 @@ fn merchant_search_returns_the_exact_source_even_on_failure_to_find() {
         }
         settle(&mut s);
         assert_eq!(
-            s.game().state.zones.zone_of(merchant),
+            zone_of(&s, merchant),
             Some(if search {
                 ZoneType::Library
             } else {
@@ -9294,6 +9178,7 @@ fn merchant_returns_to_its_owners_bottom_while_its_controller_shuffles() {
     choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
     choose(&mut s, |a| matches!(a, Action::Decline { .. }));
     settle(&mut s);
+    let merchant = now(&s, merchant);
     assert_eq!(
         s.game()
             .state
@@ -9323,11 +9208,8 @@ fn merchant_successful_search_is_optional_and_returns_source_before_shuffle() {
         |a| matches!(a, Action::SelectCard { object, .. } if *object == forest),
     );
     settle(&mut s);
-    assert_eq!(
-        s.game().state.zones.zone_of(merchant_card),
-        Some(ZoneType::Library)
-    );
-    let land = s.game().state.object_to_permanent[forest].unwrap();
+    assert_eq!(zone_of(&s, merchant_card), Some(ZoneType::Library));
+    let land = permanent_of(&s, forest).unwrap();
     assert!(tapped(&s, land));
     assert_eq!(s.life(0), 23);
     assert!(s.battlefield_permanents_named(0, "Food").is_empty());
@@ -9343,15 +9225,16 @@ fn walltop_intervening_lesson_condition_is_checked_at_death_and_resolution() {
             assert!(key.has(Keyword::Reach) && key.has(Keyword::Deathtouch));
             let lesson = library_card(&s, 0, "Firebending Lesson");
             if lesson_at_death {
-                s.game_mut().move_object(lesson, ZoneType::Graveyard);
+                move_card(&mut s, lesson, ZoneType::Graveyard);
             }
             let before = s.life(0);
             let source = s.game().state.permanents[sentries].as_ref().unwrap().object;
-            s.game_mut().move_object(source, ZoneType::Graveyard);
+            move_card(&mut s, source, ZoneType::Graveyard);
             s.game_mut().scenario_refresh_priority().unwrap();
             // No retroactive trigger if the Lesson arrives after death. An
             // intervening-if trigger also checks again when it resolves.
-            s.game_mut().move_object(
+            move_card(
+                &mut s,
                 lesson,
                 if remove_lesson {
                     ZoneType::Exile
@@ -9568,7 +9451,7 @@ fn waterbend_pays_entirely_with_creature_taps() {
     let matching = top4
         .iter()
         .filter(|object| {
-            let object = &s.game().state.objects[**object];
+            let object = &s.game().state[**object];
             object.types.is_creature() && object.power.unwrap_or(0) <= 3
         })
         .count();
@@ -9650,7 +9533,7 @@ fn rallier_reveals_only_the_selected_card_and_can_decline() {
         });
         settle(&mut s);
         let other = Observation::for_player(s.game(), PlayerId(1));
-        let definition = s.game().state.objects[top[1]].definition_id.0;
+        let definition = current_object(&s, top[1]).definition_id.0;
         assert_eq!(
             other
                 .opponent
@@ -9726,10 +9609,7 @@ fn waterbend_lesson_draws_before_optional_payment_and_taps_without_mana() {
         );
     }
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
-    assert_eq!(
-        s.game().state.zones.zone_of(spell),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, spell), Some(ZoneType::Graveyard));
     assert_eq!(
         s.game().state.zones.size(ZoneType::Hand, PlayerId(0)),
         before + 3
@@ -9781,10 +9661,7 @@ fn optional_lesson_all_mana_mixed_and_all_taps_keep_the_same_continuation() {
         }
         choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
         assert_eq!(s.zone_size(0, ZoneType::Hand), before + 3);
-        assert_eq!(
-            s.game().state.zones.zone_of(spell),
-            Some(ZoneType::Graveyard)
-        );
+        assert_eq!(zone_of(&s, spell), Some(ZoneType::Graveyard));
         assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
     }
 }
@@ -9808,10 +9685,7 @@ fn optional_lesson_without_resources_only_declines_then_discards_one_drawn_card(
         .any(|c| c.zone == ZoneType::Hand));
     choose(&mut s, |a| matches!(a, Action::SelectCard { .. }));
     assert_eq!(s.zone_size(0, ZoneType::Hand), before + 2);
-    assert_eq!(
-        s.game().state.zones.zone_of(spell),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, spell), Some(ZoneType::Graveyard));
 }
 
 #[test]
@@ -9853,10 +9727,7 @@ fn committed_optional_payment_resumes_after_granted_chosen_color_mana() {
     assert_choice_contract(&s);
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     assert_eq!(s.zone_size(0, ZoneType::Hand), before + 3);
-    assert_eq!(
-        s.game().state.zones.zone_of(spell),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, spell), Some(ZoneType::Graveyard));
     for name in ["Prophetic Prism", "Great Divide Guide"] {
         assert!(
             s.game().state.permanents[permanent_named(&s, name)]
@@ -9914,7 +9785,7 @@ fn waterbend_and_mana_taps_have_distinct_bonus_accounting() {
             .as_ref()
             .unwrap()
             .object;
-        s.game_mut().state.objects[source_object]
+        s.game_mut().state[source_object]
             .triggered_mana_abilities
             .push(TriggeredManaAbility {
                 who: Actor::You,
@@ -10011,10 +9882,7 @@ fn committed_optional_payment_resumes_after_two_nested_mana_decisions() {
         .any(|a| matches!(a, Action::Decline { .. })));
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     assert_eq!(s.zone_size(0, ZoneType::Hand), drawn + 3);
-    assert_eq!(
-        s.game().state.zones.zone_of(lesson),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, lesson), Some(ZoneType::Graveyard));
     assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
 }
 
@@ -10075,8 +9943,8 @@ fn white_lotus_hideout_restricts_to_lessons_and_shrines_and_filters_for_one() {
     assert!(pool(&s).can_pay(&shrine));
     let lesson = library_card(&s, 0, "Firebending Lesson");
     let strike = library_card(&s, 0, "Lightning Strike");
-    s.game_mut().move_object(lesson, ZoneType::Hand);
-    s.game_mut().move_object(strike, ZoneType::Hand);
+    let lesson = move_card(&mut s, lesson, ZoneType::Hand);
+    let strike = move_card(&mut s, strike, ZoneType::Hand);
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(can_cast(&s, lesson));
     assert!(!can_cast(&s, strike));
@@ -10249,8 +10117,8 @@ fn yue_casts_a_noncreature_spell_from_hand_for_free() {
     clear_summoning_sickness(&mut s, yue);
     let strike = library_card(&s, 0, "Lightning Strike");
     let ogre = library_card(&s, 0, "Gray Ogre");
-    s.game_mut().move_object(strike, ZoneType::Hand);
-    s.game_mut().move_object(ogre, ZoneType::Hand);
+    let strike = move_card(&mut s, strike, ZoneType::Hand);
+    let ogre = move_card(&mut s, ogre, ZoneType::Hand);
     s.set_player_mana_pool(0, "5");
     activate(&mut s, yue, 0);
     assert_eq!(s.action_space().kind, ActionSpaceKind::Waterbend);
@@ -10273,7 +10141,7 @@ fn yue_casts_a_noncreature_spell_from_hand_for_free() {
     if s.action_space().kind == ActionSpaceKind::PayOrNot {
         choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     }
-    assert_eq!(s.game().state.zones.zone_of(strike), Some(ZoneType::Stack));
+    assert_eq!(zone_of(&s, strike), Some(ZoneType::Stack));
     settle(&mut s);
     s.assert_life(1, 17);
 }
@@ -10283,7 +10151,7 @@ fn yuyan_rummage_may_be_declined_or_discard_then_draw() {
     for discard in [false, true] {
         let mut s = five_color_setup(&["Yuyan Archers", "Gray Ogre"]);
         let chosen = library_card(&s, 0, "Gray Ogre");
-        s.game_mut().move_object(chosen, ZoneType::Hand);
+        let chosen = move_card(&mut s, chosen, ZoneType::Hand);
         cast(&mut s, "Yuyan Archers");
         spend_colorless(&mut s);
         pass_until(&mut s, ActionSpaceKind::LookAndSelect);
@@ -10304,7 +10172,7 @@ fn yuyan_rummage_may_be_declined_or_discard_then_draw() {
         }
         settle(&mut s);
         assert_eq!(
-            s.game().state.zones.zone_of(chosen),
+            zone_of(&s, chosen),
             Some(if discard {
                 ZoneType::Graveyard
             } else {
@@ -10312,7 +10180,7 @@ fn yuyan_rummage_may_be_declined_or_discard_then_draw() {
             })
         );
         assert_eq!(
-            s.game().state.zones.zone_of(top),
+            zone_of(&s, top),
             Some(if discard {
                 ZoneType::Hand
             } else {
@@ -10325,8 +10193,8 @@ fn yuyan_rummage_may_be_declined_or_discard_then_draw() {
 
 /// Put the library copy `card` on top of its owner's library.
 fn put_on_top(s: &mut Scenario, object: ObjectId) {
-    s.game_mut().move_object(object, ZoneType::Hand);
-    s.game_mut().move_object(object, ZoneType::Library);
+    let object = move_card(s, object, ZoneType::Hand);
+    move_card(s, object, ZoneType::Library);
 }
 
 /// Zuko's {3} exiles the top card; that exact card may be played this turn —
@@ -10340,18 +10208,13 @@ fn zuko_exiles_the_top_card_and_may_play_it_this_turn() {
     put_on_top(&mut s, mountain);
     activate(&mut s, zuko, 0);
     settle(&mut s);
-    assert_eq!(
-        s.game().state.zones.zone_of(mountain),
-        Some(ZoneType::Exile)
-    );
+    assert_eq!(zone_of(&s, mountain), Some(ZoneType::Exile));
+    let mountain = now(&s, mountain);
     choose(
         &mut s,
         |a| matches!(a, Action::PlayLand { object, .. } if *object == mountain),
     );
-    assert_eq!(
-        s.game().state.zones.zone_of(mountain),
-        Some(ZoneType::Battlefield)
-    );
+    assert_eq!(zone_of(&s, mountain), Some(ZoneType::Battlefield));
 
     let ogre = library_card(&s, 0, "Gray Ogre");
     put_on_top(&mut s, ogre);
@@ -10369,7 +10232,7 @@ fn zuko_exiles_the_top_card_and_may_play_it_this_turn() {
     s.advance_to_active_step(1, StepKind::Main);
     s.advance_to_active_step(0, StepKind::Main);
     s.set_player_mana_pool(0, "20RRRR");
-    assert_eq!(s.game().state.zones.zone_of(ogre), Some(ZoneType::Exile));
+    assert_eq!(zone_of(&s, ogre), Some(ZoneType::Exile));
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(!can_cast(&s, ogre));
 }
@@ -10393,10 +10256,10 @@ fn zukos_conviction_returns_a_creature_to_hand_or_kicked_onto_the_battlefield() 
         let targets = offered_targets(&s);
         assert!(!targets
             .iter()
-            .any(|t| matches!(t, Target::GraveyardCard(o) if ObjectId::from(o.entity) == strike)));
+            .any(|t| matches!(t, Target::GraveyardCard(o) if *o == strike)));
         choose(&mut s, |a| {
             matches!(a, Action::ChooseTarget { target: Target::GraveyardCard(o), .. }
-                if ObjectId::from(o.entity) == ogre)
+                if *o == ogre)
         });
         settle(&mut s);
         if kicked {
@@ -10417,7 +10280,7 @@ fn zuko_exiles_and_gives_clue_to_the_targets_current_controller() {
     cast(&mut s, "Zuko's Exile");
     assert!(s.choose_target(Target::Permanent(victim)));
     settle(&mut s);
-    assert_eq!(s.game().state.zones.zone_of(object), Some(ZoneType::Exile));
+    assert_eq!(zone_of(&s, object), Some(ZoneType::Exile));
     assert_eq!(s.battlefield_permanents_named(1, "Clue").len(), 1);
     assert!(s.battlefield_permanents_named(0, "Clue").is_empty());
 }
@@ -10450,7 +10313,7 @@ fn elemental_new_decisions_replay_reject_stale_commands_and_restore_exact_forks(
 
     let mut s = five_color_setup(&["True Ancestry"]);
     let land = library_card(&s, 0, "Forest");
-    s.game_mut().move_object(land, ZoneType::Graveyard);
+    move_card(&mut s, land, ZoneType::Graveyard);
     cast(&mut s, "True Ancestry");
     assert_choice_contract(&s);
 }
@@ -10634,7 +10497,7 @@ fn artifact_enchantment_removal_covers_both_types_and_excludes_lands() {
             assert!(s.game().state.permanents[target].is_none());
             if enchantment {
                 assert_eq!(
-                    s.game().state.zones.zone_of(target_card),
+                    zone_of(&s, target_card),
                     Some(if removal == "Zuko's Exile" {
                         ZoneType::Exile
                     } else {
@@ -10674,10 +10537,7 @@ fn cleanup_sba_grants_priority_and_then_repeats_mandatory_discard() {
         s.step_action(0);
     }
     assert_eq!(s.zone_size(0, ZoneType::Hand), 7);
-    assert_eq!(
-        s.game().state.zones.zone_of(object),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, object), Some(ZoneType::Graveyard));
     assert_eq!(s.game().state.turn.current_step_kind(), StepKind::Cleanup);
     assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
 
@@ -11080,7 +10940,7 @@ fn benevolent_river_spirit_requires_waterbend_five_and_scries_on_entry() {
     settle(&mut s);
     let permanent = permanent_named(&s, "Benevolent River Spirit");
     assert!(keywords(&s, permanent).has(Keyword::Flying));
-    assert!(s.game().state.objects[spirit].ward().is_some());
+    assert!(current_object(&s, spirit).ward().is_some());
 }
 
 /// "They" is the caster, whichever player that is; creature spells do not
@@ -11565,18 +11425,18 @@ fn fire_lord_zuko_counters_the_team_for_exile_casts_and_entries() {
     let zuko = s.force_permanent_on_battlefield(0, "Fire Lord Zuko");
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let exiled = find_owned_card_off_battlefield(&s, 0, "Gray Ogre");
-    s.game_mut().move_object(exiled, ZoneType::Exile);
-    s.game_mut().move_object(exiled, ZoneType::Battlefield);
+    let exiled = move_card(&mut s, exiled, ZoneType::Exile);
+    let exiled = move_card(&mut s, exiled, ZoneType::Battlefield);
     s.game_mut().scenario_refresh_priority().unwrap();
     s.pass_priority();
     settle(&mut s);
-    let entered = s.game().state.object_to_permanent[exiled].unwrap();
+    let entered = permanent_of(&s, exiled).unwrap();
     for creature in [zuko, ogre, entered] {
         assert_eq!(counters(&s, creature), 1, "entry from exile");
     }
 
     let in_hand = find_owned_card_off_battlefield(&s, 0, "Gray Ogre");
-    s.game_mut().move_object(in_hand, ZoneType::Hand);
+    let in_hand = move_card(&mut s, in_hand, ZoneType::Hand);
     s.set_player_mana_pool(0, "2R");
     cast_card(&mut s, in_hand);
     settle(&mut s);
@@ -11596,7 +11456,7 @@ fn wan_shi_tong_enters_with_x_counters_and_draws_half_x() {
     choose_mode(&mut s, 3);
     let hand = s.zone_size(0, ZoneType::Hand);
     settle(&mut s);
-    let wan = s.game().state.object_to_permanent[object].unwrap();
+    let wan = permanent_of(&s, object).unwrap();
     assert_eq!(counters(&s, wan), 3);
     assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 1, "half of 3");
     assert!(keywords(&s, wan).has(Keyword::Vigilance) && keywords(&s, wan).has(Keyword::Flying));
@@ -11675,7 +11535,7 @@ fn wan_shi_tong_rejects_unpayable_x_without_changing_state() {
         *s.game_mut() = root.clone();
         choose_mode(&mut s, x);
         settle(&mut s);
-        let wan = s.game().state.object_to_permanent[object].unwrap();
+        let wan = permanent_of(&s, object).unwrap();
         assert_eq!(counters(&s, wan), x as i32);
         assert_eq!(s.zone_size(0, ZoneType::Hand), hand - 1 + x / 2);
         assert_eq!(
@@ -11710,7 +11570,7 @@ fn wan_shi_tong_airbend_fixes_x_to_zero_and_pays_two() {
     );
     assert_unavailable_wan_x_unchanged(&mut s, &[1, 6, 255]);
     settle(&mut s);
-    let wan = s.game().state.object_to_permanent[object].unwrap();
+    let wan = permanent_of(&s, object).unwrap();
     assert_eq!(counters(&s, wan), 0);
     assert_eq!(s.zone_size(0, ZoneType::Hand), hand, "X zero draws nothing");
     assert_eq!(pool(&s).total(), 0, "the alternative cost was paid");
@@ -11749,7 +11609,7 @@ fn wan_shi_tong_any_type_mana_preserves_payable_x() {
     assert_unavailable_wan_x_unchanged(&mut s, &[6, 255, usize::MAX]);
     choose_mode(&mut s, 5);
     settle(&mut s);
-    let wan = s.game().state.object_to_permanent[object].unwrap();
+    let wan = permanent_of(&s, object).unwrap();
     assert_eq!(counters(&s, wan), 5);
     assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 2);
     assert_eq!(pool(&s).total(), 0);
@@ -11974,12 +11834,12 @@ fn long_feng_counters_a_creature_when_another_creature_or_a_land_dies() {
     let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
 
     let theirs_card = card_of(&s, theirs);
-    s.game_mut().move_object(theirs_card, ZoneType::Graveyard);
+    move_card(&mut s, theirs_card, ZoneType::Graveyard);
     assert!(s.game().state.pending_triggers.is_empty(), "not yours");
 
     let swamp_card = card_of(&s, swamp);
     animate(&mut s, swamp);
-    s.game_mut().move_object(swamp_card, ZoneType::Graveyard);
+    move_card(&mut s, swamp_card, ZoneType::Graveyard);
     assert_eq!(
         s.game().state.pending_triggers.len(),
         1,
@@ -11991,7 +11851,7 @@ fn long_feng_counters_a_creature_when_another_creature_or_a_land_dies() {
     assert_eq!(counters(&s, long_feng), 1);
 
     let ogre_card = card_of(&s, ogre);
-    s.game_mut().move_object(ogre_card, ZoneType::Graveyard);
+    move_card(&mut s, ogre_card, ZoneType::Graveyard);
     resolve_until_target(&mut s);
     assert_eq!(offered_targets(&s), vec![Target::Permanent(long_feng)]);
     assert!(s.choose_target(Target::Permanent(long_feng)));
@@ -12234,7 +12094,7 @@ fn suki_courageous_rescuer_makes_an_ally_once_when_another_permanent_leaves_on_y
     );
     s.advance_to_active_step(1, StepKind::Main);
     let ogre = card_of(&s, ogres[0]);
-    s.game_mut().move_object(ogre, ZoneType::Graveyard);
+    move_card(&mut s, ogre, ZoneType::Graveyard);
     resolve_until_priority(&mut s);
     assert!(
         s.battlefield_permanents_named(0, "Ally").is_empty(),
@@ -12244,7 +12104,7 @@ fn suki_courageous_rescuer_makes_an_ally_once_when_another_permanent_leaves_on_y
     s.advance_to_active_step(0, StepKind::Main);
     for ogre in &ogres[1..] {
         let object = card_of(&s, *ogre);
-        s.game_mut().move_object(object, ZoneType::Hand);
+        move_card(&mut s, object, ZoneType::Hand);
         resolve_until_priority(&mut s);
     }
     assert_eq!(
@@ -12262,7 +12122,7 @@ fn momo_chooses_its_mode_when_the_leave_trigger_is_put_on_the_stack() {
     let mut s = five_color_setup(&["Momo, Playful Pet", "Gray Ogre"]);
     let momo = s.force_permanent_on_battlefield(0, "Momo, Playful Pet");
     let momo = card_of(&s, momo);
-    s.game_mut().move_object(momo, ZoneType::Graveyard);
+    move_card(&mut s, momo, ZoneType::Graveyard);
     s.game_mut().scenario_refresh_priority().unwrap();
     pass_until(&mut s, ActionSpaceKind::Modal);
     let modes = |s: &Scenario| -> Vec<usize> {
@@ -12288,7 +12148,7 @@ fn momo_chooses_its_mode_when_the_leave_trigger_is_put_on_the_stack() {
     let momo = s.force_permanent_on_battlefield(0, "Momo, Playful Pet");
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let momo = card_of(&s, momo);
-    s.game_mut().move_object(momo, ZoneType::Hand);
+    move_card(&mut s, momo, ZoneType::Hand);
     s.game_mut().scenario_refresh_priority().unwrap();
     pass_until(&mut s, ActionSpaceKind::Modal);
     assert_eq!(modes(&s), vec![0, 1, 2]);
@@ -12344,14 +12204,14 @@ fn beifongs_bounty_hunters_earthbend_by_the_dead_creatures_last_power() {
         },
     );
     let ogre = card_of(&s, ogre);
-    s.game_mut().move_object(ogre, ZoneType::Graveyard);
+    move_card(&mut s, ogre, ZoneType::Graveyard);
     resolve_until_target(&mut s);
     assert!(s.choose_target(Target::Permanent(forest)));
     settle(&mut s);
     assert_eq!(counters(&s, forest), 3, "pumped power 3");
 
     let forest_card = card_of(&s, forest);
-    s.game_mut().move_object(forest_card, ZoneType::Graveyard);
+    move_card(&mut s, forest_card, ZoneType::Graveyard);
     resolve_until_priority(&mut s);
     let lands = s.battlefield_permanents_named(0, "Forest");
     assert!(
@@ -12380,7 +12240,7 @@ fn hei_bai_feeds_on_a_sacrifice_and_passes_its_counters_on_when_it_leaves() {
     assert_eq!(counters(&s, hei_bai), 2);
 
     let hei_bai_card = card_of(&s, hei_bai);
-    s.game_mut().move_object(hei_bai_card, ZoneType::Hand);
+    move_card(&mut s, hei_bai_card, ZoneType::Hand);
     resolve_until_target(&mut s);
     assert_eq!(offered_targets(&s), vec![Target::Permanent(heir)]);
     assert!(s.choose_target(Target::Permanent(heir)));
@@ -12419,7 +12279,7 @@ fn airbender_ascension_airbends_counts_creatures_and_blinks_at_four() {
     assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Permanent(ogre)));
     settle(&mut s);
-    let returned = s.game().state.object_to_permanent[ogre_card].expect("returned");
+    let returned = permanent_of(&s, ogre_card).expect("returned");
     assert_eq!(counters(&s, returned), 0, "a new object");
     assert_eq!(
         counters_of(&s, ascension, CounterKind::Quest),
@@ -12443,7 +12303,7 @@ fn earthbender_ascension_earthbends_fetches_and_rewards_landfall_at_four() {
     select_card(&mut s, land);
     settle(&mut s);
     assert_eq!(counters(&s, forest), 2);
-    let fetched = s.game().state.object_to_permanent[land].expect("fetched");
+    let fetched = permanent_of(&s, land).expect("fetched");
     assert!(tapped(&s, fetched));
     let ascension = s.battlefield_permanents_named(0, "Earthbender Ascension")[0];
     assert_eq!(
@@ -12584,9 +12444,9 @@ fn katara_the_fearless_makes_ally_triggers_trigger_an_additional_time() {
 fn raven_eagle_exiles_graveyard_cards_clues_creatures_and_drains_on_your_second_draw() {
     let mut s = five_color_setup(&["Raven Eagle", "Gray Ogre", "Lightning Strike"]);
     let ogre = plant_in_graveyard(&mut s, 1, "Gray Ogre");
-    let ogre_object = s.game().current_object_ref(ogre).unwrap();
+    let ogre_object = s.game().state.live(now(&s, ogre)).unwrap();
     let strike = plant_in_graveyard(&mut s, 0, "Lightning Strike");
-    let strike_object = s.game().current_object_ref(strike).unwrap();
+    let strike_object = s.game().state.live(now(&s, strike)).unwrap();
     enter_battlefield(&mut s, "Raven Eagle");
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::GraveyardCard(ogre_object)));
@@ -12627,7 +12487,7 @@ fn wolfbat_returns_from_your_graveyard_on_your_second_draw_with_a_finality_count
     pass_until(&mut s, ActionSpaceKind::PayOrNot);
     assert!(s.take_action_by_type(ActionType::PayCost));
     settle(&mut s);
-    let returned = s.game().state.object_to_permanent[wolfbat].expect("returned");
+    let returned = permanent_of(&s, wolfbat).expect("returned");
     assert_eq!(counters_of(&s, returned, CounterKind::Finality), 1);
 
     cast(&mut s, "Lightning Strike");
@@ -12800,7 +12660,7 @@ fn price_of_freedom_destroys_a_land_its_controller_may_replace_and_you_draw() {
             assert_eq!(s.action_space().player, Some(PlayerId(1)), "their library");
             let plains = offered_cards(&s)
                 .into_iter()
-                .find(|object| s.game().state.objects[*object].name == "Plains")
+                .find(|object| s.game().state[*object].name == "Plains")
                 .unwrap();
             select_card(&mut s, plains);
         } else {
@@ -12896,14 +12756,14 @@ fn ty_lee_chi_blocker_locks_a_creature_down_while_you_control_her() {
     settle(&mut s);
     assert!(tapped(&s, ogre));
     let ty_lee = permanent_named(&s, "Ty Lee, Chi Blocker");
-    let exact = s.game().permanent_object_ref(ty_lee).unwrap();
+    let exact = s.game().permanent_object(ty_lee).unwrap();
     let shared = managym::agent::shared_effects::project(s.game());
     let lock = shared
         .iter()
         .find(|record| record.effect.duration == "WhileYouControlSource")
         .unwrap();
     let source = lock.source.as_ref().unwrap();
-    assert_eq!(source.incarnation, Some(exact.incarnation.0));
+    assert_eq!(source.incarnation, Some(exact.generation()));
     assert_eq!(
         source.object_id,
         Some(s.game().state.permanents[ty_lee].as_ref().unwrap().id.0 as i32)
@@ -13003,7 +12863,7 @@ fn toph_hardheaded_teacher_rebuys_a_spell_and_earthbends_on_each_cast() {
     let fodder = move_to_hand(&mut s, "Gray Ogre");
     enter_battlefield(&mut s, "Toph, Hardheaded Teacher");
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
-    let object = s.game().current_object_ref(strike).unwrap();
+    let object = s.game().state.live(now(&s, strike)).unwrap();
     assert!(s.choose_target(Target::GraveyardCard(object)));
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     select_card(&mut s, fodder);
@@ -13055,8 +12915,8 @@ fn sandbender_scavengers_grows_on_sacrifice_and_reanimates_within_its_power() {
     pass_until(&mut s, ActionSpaceKind::PayOrNot);
     assert!(s.take_action_by_type(ActionType::PayCost));
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
-    let ogre_object = s.game().current_object_ref(ogre_card).unwrap();
-    let wurm_object = s.game().current_object_ref(wurm).unwrap();
+    let ogre_object = s.game().state.live(now(&s, ogre_card)).unwrap();
+    let wurm_object = s.game().state.live(now(&s, wurm)).unwrap();
     let offered = offered_targets(&s);
     assert!(
         offered.contains(&Target::GraveyardCard(ogre_object)),
@@ -13186,7 +13046,7 @@ fn zuko_conflicted_takes_each_mode_once_then_switches_sides() {
     assert_eq!(modes(&s), vec![0, 2, 3], "the counter mode was chosen");
     choose_mode(&mut s, 3);
     resolve_until_priority(&mut s);
-    let moved = s.game().state.object_to_permanent[zuko_card].expect("returned");
+    let moved = permanent_of(&s, zuko_card).expect("returned");
     assert_eq!(permanent(&s, moved).controller, PlayerId(1));
     assert_eq!(counters(&s, moved), 0, "a new object");
 }
@@ -13244,7 +13104,7 @@ fn redirect_lightning_moves_a_spell_to_another_target() {
         } else {
             choose(&mut s, |a| matches!(a, Action::Decline { .. }));
         }
-        assert!(s.choose_target(Target::StackSpell(strike)));
+        assert!(s.choose_target(Target::StackSpell(now(&s, strike))));
         assert_eq!(s.life(0), if pay_mana { life } else { life - 5 });
         spend_colorless(&mut s);
         resolve_top(&mut s);
@@ -13445,7 +13305,7 @@ fn zhao_land_type_candidates_follow_state_and_fork_changes() {
     assert!(!s.game().characteristics(zhao).abilities_lost);
     assert!(fork.characteristics(temple).has_subtype("Mountain"));
     let zhao_card = card_of(&s, zhao);
-    fork.move_object(zhao_card, ZoneType::Exile);
+    let zhao_card = fork.move_object(zhao_card, ZoneType::Exile);
     assert!(!fork.characteristics(temple).has_subtype("Mountain"));
     assert!(s.game().characteristics(temple).has_subtype("Mountain"));
 
@@ -13453,7 +13313,7 @@ fn zhao_land_type_candidates_follow_state_and_fork_changes() {
     assert!(!s.game().characteristics(temple).has_subtype("Mountain"));
     set_counters(&mut s, zhao, CounterKind::Conqueror, 1);
     assert!(s.game().characteristics(temple).has_subtype("Mountain"));
-    s.game_mut().move_object(zhao_card, ZoneType::Exile);
+    move_card(&mut s, zhao_card, ZoneType::Exile);
     assert!(!s.game().characteristics(temple).has_subtype("Mountain"));
 }
 
@@ -13471,7 +13331,7 @@ fn boiling_rock_rioter_exiles_with_itself_and_casts_your_exiled_allies() {
     let ty_lee = plant_in_graveyard(&mut s, 0, "Ty Lee, Chi Blocker");
     let theirs = plant_in_graveyard(&mut s, 1, "Gray Ogre");
     for (object_id, payer) in [(ty_lee, ally), (theirs, rioter)] {
-        let object = s.game().current_object_ref(object_id).unwrap();
+        let object = s.game().state.live(now(&s, object_id)).unwrap();
         activate(&mut s, rioter, 0);
         assert!(s.choose_target(Target::GraveyardCard(object)));
         assert_eq!(
@@ -13505,10 +13365,11 @@ fn boiling_rock_rioter_exiles_with_itself_and_casts_your_exiled_allies() {
     s.advance_until(
         |s| {
             s.action_space().kind == ActionSpaceKind::LookAndSelect
-                && offered_cards(s).contains(&ty_lee)
+                && offered_cards(s).contains(&now(s, ty_lee))
         },
         "the Rioter's cast offer".into(),
     );
+    let ty_lee = now(&s, ty_lee);
     assert_eq!(offered_cards(&s), vec![ty_lee], "only an Ally you own");
     select_card(&mut s, ty_lee);
     settle(&mut s);
@@ -13538,16 +13399,16 @@ fn enter_saga(s: &mut Scenario, name: &str) -> PermanentId {
 fn transformed_saga(s: &mut Scenario, name: &str) -> PermanentId {
     let saga = enter_saga(s, name);
     let object = card_of(s, saga);
-    if let Some(saga) = s.game().state.object_to_permanent[object] {
+    if let Some(saga) = permanent_of(s, object) {
         set_counters(s, saga, CounterKind::Lore, 2);
     }
     next_main_phase(s);
     settle(s);
     assert!(
-        s.game().state.objects[object].is_transformed(),
+        current_object(s, object).is_transformed(),
         "{name} transformed"
     );
-    s.game().state.object_to_permanent[object].unwrap()
+    permanent_of(s, object).unwrap()
 }
 
 /// I mills three and makes a Food as the Saga enters; II puts a counter on
@@ -13560,7 +13421,7 @@ fn leaves_from_the_vine_reads_one_chapter_per_lore_counter_then_is_sacrificed() 
     let saga_card = cast(&mut s, "Leaves from the Vine");
     spend_colorless(&mut s);
     resolve_top(&mut s);
-    let saga = s.game().state.object_to_permanent[saga_card].expect("on the battlefield");
+    let saga = permanent_of(&s, saga_card).expect("on the battlefield");
     assert_eq!(
         counters_of(&s, saga, CounterKind::Lore),
         1,
@@ -13586,7 +13447,7 @@ fn leaves_from_the_vine_reads_one_chapter_per_lore_counter_then_is_sacrificed() 
         .zone_objects(ZoneType::Graveyard, PlayerId(0))
         .to_vec()
     {
-        s.game_mut().move_object(object, ZoneType::Exile);
+        move_card(&mut s, object, ZoneType::Exile);
     }
     next_main_phase(&mut s);
     let hand_before = s.zone_size(0, ZoneType::Hand);
@@ -13710,14 +13571,14 @@ fn the_cave_of_two_lovers_is_sacrificed_only_after_its_final_chapter_resolves() 
         2,
         "I: two Allies"
     );
-    let cave = s.game().state.object_to_permanent[cave_card].unwrap();
+    let cave = permanent_of(&s, cave_card).unwrap();
 
     next_main_phase(&mut s);
     assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
     // II: the search offers Mountains (Cave is the other subtype it accepts).
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     let mountain = offered_cards(&s)[0];
-    assert_eq!(s.game().state.objects[mountain].name, "Mountain");
+    assert_eq!(s.game().state[mountain].name, "Mountain");
     select_card(&mut s, mountain);
     settle(&mut s);
     assert_eq!(zone_of(&s, mountain), Some(ZoneType::Hand));
@@ -13761,9 +13622,9 @@ fn the_legend_of_kuruk_returns_transformed_as_avatar_kuruk() {
     settle(&mut s);
     let kuruk_card = object;
     assert_eq!(zone_of(&s, kuruk_card), Some(ZoneType::Battlefield));
-    let kuruk = s.game().state.object_to_permanent[kuruk_card].unwrap();
+    let kuruk = permanent_of(&s, kuruk_card).unwrap();
     assert_ne!(kuruk, saga, "a new object (CR 400.7)");
-    let back = &s.game().state.objects[kuruk_card];
+    let back = current_object(&s, kuruk_card);
     assert!(back.is_transformed());
     assert_eq!(back.name, "Avatar Kuruk");
     let characteristics = s.game().characteristics(kuruk);
@@ -13781,12 +13642,9 @@ fn the_legend_of_kuruk_returns_transformed_as_avatar_kuruk() {
     );
 
     // Leaving the battlefield turns it front face up (CR 712.8a).
-    s.game_mut().move_object(kuruk_card, ZoneType::Hand);
-    assert!(!s.game().state.objects[kuruk_card].is_transformed());
-    assert_eq!(
-        s.game().state.objects[kuruk_card].name,
-        "The Legend of Kuruk"
-    );
+    let kuruk_card = move_card(&mut s, kuruk_card, ZoneType::Hand);
+    assert!(!s.game().state[kuruk_card].is_transformed());
+    assert_eq!(s.game().state[kuruk_card].name, "The Legend of Kuruk");
 }
 
 /// Avatar Kuruk makes a Spirit for each spell its controller casts, and its
@@ -13846,8 +13704,8 @@ fn the_legend_of_kyoshi_draws_by_power_earthbends_by_hand_size_and_returns_as_av
 
     next_main_phase(&mut s);
     settle(&mut s);
-    let kyoshi = s.game().state.object_to_permanent[object].unwrap();
-    assert_eq!(s.game().state.objects[object].name, "Avatar Kyoshi");
+    let kyoshi = permanent_of(&s, object).unwrap();
+    assert_eq!(current_object(&s, object).name, "Avatar Kyoshi");
     let land = s.game().characteristics(forest);
     assert!(
         land.keywords.has(Keyword::Trample) && land.keywords.has(Keyword::Hexproof),
@@ -13872,7 +13730,7 @@ fn the_legend_of_kyoshi_draws_by_power_earthbends_by_hand_size_and_returns_as_av
 
 /// Whether a permission to play this exact exiled card stands.
 fn may_play_exiled(s: &Scenario, object_id: ObjectId) -> bool {
-    let object = s.game().current_object_ref(object_id);
+    let object = s.game().state.live(now(s, object_id));
     s.game()
         .state
         .cast_permissions
@@ -13908,8 +13766,8 @@ fn the_legend_of_roku_lets_its_exiled_cards_be_played_through_your_next_turn() {
 
     next_main_phase(&mut s);
     settle(&mut s);
-    let roku = s.game().state.object_to_permanent[object].unwrap();
-    assert_eq!(s.game().state.objects[object].name, "Avatar Roku");
+    let roku = permanent_of(&s, object).unwrap();
+    assert_eq!(current_object(&s, object).name, "Avatar Roku");
     s.set_player_mana_pool(0, "8");
     activate(&mut s, roku, 0);
     settle(&mut s);
@@ -13944,8 +13802,8 @@ fn aang_swift_savior_airbends_a_spell_and_transforms_into_aang_and_la() {
     let aang_card = cast(&mut s, "Aang, Swift Savior");
     spend_colorless(&mut s);
     resolve_top(&mut s);
-    assert!(offered_targets(&s).contains(&Target::StackSpell(bolt)));
-    assert!(s.choose_target(Target::StackSpell(bolt)));
+    assert!(offered_targets(&s).contains(&Target::StackSpell(now(&s, bolt))));
+    assert!(s.choose_target(Target::StackSpell(now(&s, bolt))));
     settle(&mut s);
     assert_eq!(
         zone_of(&s, bolt),
@@ -13955,19 +13813,15 @@ fn aang_swift_savior_airbends_a_spell_and_transforms_into_aang_and_la() {
     assert!(may_play_exiled(&s, bolt));
     s.assert_life(1, 20);
 
-    let aang = s.game().state.object_to_permanent[aang_card].unwrap();
+    let aang = permanent_of(&s, aang_card).unwrap();
     set_counters(&mut s, aang, CounterKind::PlusOnePlusOne, 1);
     s.set_player_mana_pool(0, "8");
     activate(&mut s, aang, 0);
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     settle(&mut s);
+    assert_eq!(permanent_of(&s, aang_card), Some(aang), "same object");
     assert_eq!(
-        s.game().state.object_to_permanent[aang_card],
-        Some(aang),
-        "same object"
-    );
-    assert_eq!(
-        s.game().state.objects[aang_card].name,
+        current_object(&s, aang_card).name,
         "Aang and La, Ocean's Fury"
     );
     assert_eq!(
@@ -14011,12 +13865,12 @@ fn aang_swift_savior_entry_trigger_can_be_redirected_after_transforming() {
     let trigger = s.game().state.stack_objects.last().unwrap().as_target();
 
     // Transform while the front face's entry trigger is still on the stack.
-    let aang = s.game().state.object_to_permanent[aang_card].unwrap();
+    let aang = permanent_of(&s, aang_card).unwrap();
     s.set_player_mana_pool(0, "8");
     activate(&mut s, aang, 0);
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     resolve_top(&mut s);
-    assert!(s.game().state.objects[aang_card].is_transformed());
+    assert!(current_object(&s, aang_card).is_transformed());
 
     s.set_player_mana_pool(0, "3R");
     cast(&mut s, "Redirect Lightning");
@@ -14054,7 +13908,7 @@ fn ember_island_production_copies_either_side_with_its_exceptions() {
     settle(&mut s);
     let copies = s.battlefield_permanents_named(0, "Avatar Kuruk");
     let token = *copies.iter().find(|id| **id != kuruk).expect("a copy");
-    let object = &s.game().state.objects[card_of(&s, token)];
+    let object = &s.game().state[card_of(&s, token)];
     assert!(
         object.kind() == ObjectKind::Token && object.is_transformed(),
         "the face that's up, transformed"
@@ -14075,7 +13929,7 @@ fn ember_island_production_copies_either_side_with_its_exceptions() {
     assert!(s.choose_target(Target::Permanent(ogre)));
     settle(&mut s);
     let coward = s.battlefield_permanents_named(0, "Gray Ogre")[0];
-    assert!(s.game().state.objects[card_of(&s, coward)].has_subtype("Coward"));
+    assert!(s.game().state[card_of(&s, coward)].has_subtype("Coward"));
     assert_eq!(s.game().characteristics(coward).power, 2);
 }
 
@@ -14090,7 +13944,7 @@ fn foggy_swamp_visions_free_cast_still_announces_and_pays_additional_x() {
     let planetarium = s.force_permanent_on_battlefield(0, "Planetarium of Wan Shi Tong");
     let payer = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let target = library_card(&s, 1, "Gray Ogre");
-    s.game_mut().move_object(target, ZoneType::Graveyard);
+    move_card(&mut s, target, ZoneType::Graveyard);
     let top = pin_top(&mut s, &["Foggy Swamp Visions"]);
     planetarium_scry(&mut s, planetarium);
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
@@ -14116,7 +13970,7 @@ fn foggy_swamp_visions_copies_the_exiled_creature_cards_until_the_end_step() {
     cast(&mut s, "Foggy Swamp Visions");
     choose_mode(&mut s, 2);
     for object_id in [mine, theirs] {
-        let object = s.game().current_object_ref(object_id).unwrap();
+        let object = s.game().state.live(now(&s, object_id)).unwrap();
         assert!(s.choose_target(Target::GraveyardCard(object)));
     }
     if s.action_space().kind == ActionSpaceKind::Waterbend {
@@ -14142,7 +13996,7 @@ fn foggy_swamp_visions_copies_the_exiled_creature_cards_until_the_end_step() {
     );
     for name in ["Gray Ogre", "Craw Wurm"] {
         let token = s.battlefield_permanents_named(0, name)[0];
-        assert!(remembered.contains(&s.game().permanent_object_ref(token).unwrap()));
+        assert!(remembered.contains(&s.game().permanent_object(token).unwrap()));
     }
     s.advance_to_active_step(0, StepKind::End);
     settle(&mut s);
@@ -14165,7 +14019,7 @@ fn bumi_unleashed_adds_a_land_creature_only_combat_phase() {
     assert!(s.choose_target(Target::Permanent(land)));
     settle(&mut s);
     assert_eq!(counters_of(&s, land, CounterKind::PlusOnePlusOne), 4);
-    let bumi = s.game().state.object_to_permanent[bumi_card].unwrap();
+    let bumi = permanent_of(&s, bumi_card).unwrap();
     clear_summoning_sickness(&mut s, bumi);
     s.game_mut().state.permanents[land].as_mut().unwrap().tapped = true;
 
@@ -14224,7 +14078,7 @@ fn aang_at_the_crossroads_finds_a_creature_and_transforms_at_the_next_upkeep() {
     resolve_top(&mut s);
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     let offered = offered_cards(&s);
-    let (ogre, wurm) = if s.game().state.objects[top[0]].name == "Gray Ogre" {
+    let (ogre, wurm) = if s.game().state[top[0]].name == "Gray Ogre" {
         (top[0], top[1])
     } else {
         (top[1], top[0])
@@ -14238,20 +14092,17 @@ fn aang_at_the_crossroads_finds_a_creature_and_transforms_at_the_next_upkeep() {
     assert_eq!(zone_of(&s, ogre), Some(ZoneType::Battlefield));
     assert_eq!(zone_of(&s, wurm), Some(ZoneType::Library));
 
-    s.game_mut().move_object(ogre, ZoneType::Graveyard);
+    move_card(&mut s, ogre, ZoneType::Graveyard);
     s.game_mut().scenario_refresh_priority().unwrap();
     settle(&mut s);
     assert!(
-        !s.game().state.objects[aang_card].is_transformed(),
+        !current_object(&s, aang_card).is_transformed(),
         "waits for the upkeep"
     );
     s.advance_to_active_step(1, StepKind::Upkeep);
     settle(&mut s);
-    let aang = s.game().state.object_to_permanent[aang_card].unwrap();
-    assert_eq!(
-        s.game().state.objects[aang_card].name,
-        "Aang, Destined Savior"
-    );
+    let aang = permanent_of(&s, aang_card).unwrap();
+    assert_eq!(current_object(&s, aang_card).name, "Aang, Destined Savior");
 
     s.advance_to_active_step(0, StepKind::BeginningOfCombat);
     assert!(s.choose_target(Target::Permanent(land)));
@@ -14324,7 +14175,7 @@ fn the_legend_of_yangchen_exiles_chosen_permanents_and_airbends_on_the_second_sp
 
     next_main_phase(&mut s);
     settle(&mut s);
-    assert_eq!(s.game().state.objects[object].name, "Avatar Yangchen");
+    assert_eq!(current_object(&s, object).name, "Avatar Yangchen");
     let target = s.force_permanent_on_battlefield(1, "Gray Ogre");
     s.set_player_mana_pool(0, "RR");
     cast(&mut s, "Lightning Bolt");
@@ -14386,10 +14237,12 @@ fn fire_lord_azula_copies_spells_cast_while_she_attacks() {
         }
     }
     s.assert_life(1, 11);
-    let objects = &s.game().state.objects;
-    let copies: Vec<ObjectId> = (0..objects.len())
-        .map(ObjectId)
-        .filter(|object| objects[*object].kind() == ObjectKind::SpellCopy)
+    let copies: Vec<ObjectId> = s
+        .game()
+        .state
+        .latest_objects()
+        .filter(|(_, object)| object.kind() == ObjectKind::SpellCopy)
+        .map(|(id, _)| id)
         .collect();
     assert_eq!(
         copies.len(),
@@ -14436,15 +14289,15 @@ fn the_rise_of_sozin_destroys_names_and_reanimates_as_fire_lord_sozin() {
             .zones
             .zone_objects(ZoneType::Exile, PlayerId(1))
             .iter()
-            .filter(|c| s.game().state.objects[**c].name == "Gray Ogre")
+            .filter(|c| s.game().state[**c].name == "Gray Ogre")
             .count()
     };
     assert_eq!(exiled(&s), 4, "up to four, from hand and library");
 
     next_main_phase(&mut s);
     settle(&mut s);
-    let sozin = s.game().state.object_to_permanent[object_id].unwrap();
-    assert_eq!(s.game().state.objects[object_id].name, "Fire Lord Sozin");
+    let sozin = permanent_of(&s, object_id).unwrap();
+    assert_eq!(current_object(&s, object_id).name, "Fire Lord Sozin");
     clear_summoning_sickness(&mut s, sozin);
     force_lands(&mut s, 0, "Forest", 4);
     force_lands(&mut s, 0, "Island", 4);
@@ -14459,10 +14312,10 @@ fn the_rise_of_sozin_destroys_names_and_reanimates_as_fire_lord_sozin() {
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     spend_colorless(&mut s);
     assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
-    let object = s.game().current_object_ref(theirs_card).unwrap();
+    let object = s.game().state.live(now(&s, theirs_card)).unwrap();
     assert!(
         !offered_targets(&s).contains(&Target::GraveyardCard(
-            s.game().current_object_ref(mine_card).unwrap()
+            s.game().state.live(now(&s, mine_card)).unwrap()
         )),
         "that player's graveyard only"
     );
@@ -14478,7 +14331,7 @@ fn the_rise_of_sozin_destroys_names_and_reanimates_as_fire_lord_sozin() {
     assert_eq!(zone_of(&s, theirs_card), Some(ZoneType::Graveyard));
     settle(&mut s);
     assert_eq!(zone_of(&s, theirs_card), Some(ZoneType::Battlefield));
-    let wurm = s.game().state.object_to_permanent[theirs_card].unwrap();
+    let wurm = permanent_of(&s, theirs_card).unwrap();
     assert_eq!(
         permanent(&s, wurm).controller,
         PlayerId(0),
@@ -14511,10 +14364,7 @@ fn avatar_aang_draws_on_each_bending_and_transforms_after_all_four() {
         hand + 1,
         "draws for the waterbend"
     );
-    assert_eq!(
-        s.game().state.objects[aang_card].name,
-        "Aang, Master of Elements"
-    );
+    assert_eq!(s.game().state[aang_card].name, "Aang, Master of Elements");
 
     s.set_player_mana_pool(0, "");
     let ogre = force_new_card_in_hand(&mut s, 0, "Gray Ogre");
@@ -14528,7 +14378,7 @@ fn avatar_aang_draws_on_each_bending_and_transforms_after_all_four() {
     let (life, hand) = (s.life(0), s.zone_size(0, ZoneType::Hand));
     choose_mode(&mut s, 0);
     settle(&mut s);
-    assert_eq!(s.game().state.objects[aang_card].name, "Avatar Aang");
+    assert_eq!(s.game().state[aang_card].name, "Avatar Aang");
     assert_eq!(s.life(0), life + 4);
     assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 4);
     assert_eq!(counters_of(&s, aang, CounterKind::PlusOnePlusOne), 4);
@@ -14550,9 +14400,9 @@ fn koh_the_face_stealer_takes_the_abilities_of_the_last_chosen_card() {
     assert!(s.choose_target(Target::Permanent(duck)));
     settle(&mut s);
     assert_eq!(zone_of(&s, duck_card), Some(ZoneType::Exile));
-    let koh = s.game().state.object_to_permanent[koh_card].unwrap();
+    let koh = permanent_of(&s, koh_card).unwrap();
 
-    s.game_mut().move_object(ogre_card, ZoneType::Graveyard);
+    let ogre_card = move_card(&mut s, ogre_card, ZoneType::Graveyard);
     s.game_mut().scenario_refresh_priority().unwrap();
     pass_until(&mut s, ActionSpaceKind::Modal);
     choose_mode(&mut s, 0);
@@ -14599,7 +14449,7 @@ fn koh_the_face_stealer_has_the_chosen_cards_triggered_abilities() {
     resolve_top(&mut s);
     assert!(s.choose_target(Target::Permanent(azula)));
     settle(&mut s);
-    let koh = s.game().state.object_to_permanent[koh_card].unwrap();
+    let koh = permanent_of(&s, koh_card).unwrap();
     activate(&mut s, koh, 0);
     pass_until(&mut s, ActionSpaceKind::Modal);
     choose_mode(&mut s, 0);
@@ -14635,7 +14485,7 @@ fn a_token_copy_of_a_double_faced_creature_keeps_being_a_token_on_either_face() 
     activate(&mut s, token, 0);
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     settle(&mut s);
-    let object = &s.game().state.objects[token_card];
+    let object = &s.game().state[token_card];
     assert_eq!(object.name, "Aang and La, Ocean's Fury");
     assert!(
         object.kind() == ObjectKind::Token,
@@ -14645,9 +14495,12 @@ fn a_token_copy_of_a_double_faced_creature_keeps_being_a_token_on_either_face() 
     assert!(!object.supertypes.iter().any(|t| t == "Legendary"));
     assert_eq!(s.game().characteristics(token).power, 4);
 
-    s.game_mut().move_object(token_card, ZoneType::Graveyard);
+    let token_card = move_card(&mut s, token_card, ZoneType::Graveyard);
     s.advance_to_active_step(0, StepKind::End);
-    assert!(s.game().state.objects[token_card].kind() == ObjectKind::Token);
+    assert_eq!(
+        s.game().state.objects.provenance(token_card).unwrap().2,
+        ObjectKind::Token
+    );
     assert_eq!(zone_of(&s, token_card), None, "a token ceases to exist");
 }
 
@@ -14661,17 +14514,14 @@ fn aang_at_the_crossroads_transforms_once_for_two_delayed_triggers() {
     for _ in 0..2 {
         let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
         let ogre_card = card_of(&s, ogre);
-        s.game_mut().move_object(ogre_card, ZoneType::Graveyard);
+        move_card(&mut s, ogre_card, ZoneType::Graveyard);
     }
     s.game_mut().scenario_refresh_priority().unwrap();
     resolve_everything(&mut s);
     assert_eq!(s.game().state.delayed_triggers.len(), 2);
     s.advance_to_active_step(1, StepKind::Upkeep);
     resolve_everything(&mut s);
-    assert_eq!(
-        s.game().state.objects[aang_card].name,
-        "Aang, Destined Savior"
-    );
+    assert_eq!(s.game().state[aang_card].name, "Aang, Destined Savior");
 }
 
 /// An ability on the stack keeps the face it came from: Aang's enter trigger
@@ -14686,7 +14536,7 @@ fn abilities_on_the_stack_keep_the_face_they_came_from() {
     spend_colorless(&mut s);
     resolve_top(&mut s);
     assert!(s.choose_target(Target::Permanent(ogre)));
-    let aang = s.game().state.object_to_permanent[aang_card].unwrap();
+    let aang = permanent_of(&s, aang_card).unwrap();
     s.set_player_mana_pool(0, "16");
     for _ in 0..2 {
         activate(&mut s, aang, 0);
@@ -14694,7 +14544,7 @@ fn abilities_on_the_stack_keep_the_face_they_came_from() {
     }
     settle(&mut s);
     assert_eq!(
-        s.game().state.objects[aang_card].name,
+        current_object(&s, aang_card).name,
         "Aang and La, Ocean's Fury"
     );
     assert_eq!(
@@ -14721,7 +14571,7 @@ fn fire_lord_azula_copies_a_permanent_spell_into_a_token() {
     assert_eq!(reinforcements.len(), 2);
     let tokens = reinforcements
         .iter()
-        .filter(|id| s.game().state.objects[card_of(&s, **id)].kind() == ObjectKind::Token)
+        .filter(|id| s.game().state[card_of(&s, **id)].kind() == ObjectKind::Token)
         .count();
     assert_eq!(tokens, 1);
 }
@@ -14738,7 +14588,7 @@ fn the_legend_of_kyoshi_earthbend_zero_still_returns_the_land() {
     clear_hand(&mut s, 0);
     assert!(s.choose_target(Target::Permanent(forest)));
     resolve_everything(&mut s);
-    let returned = s.game().state.object_to_permanent[forest_card].expect("returned");
+    let returned = permanent_of(&s, forest_card).expect("returned");
     assert_ne!(returned, forest);
     assert!(tapped(&s, returned));
 }
@@ -14763,7 +14613,7 @@ fn foggy_swamp_visions_targets_exactly_x() {
         .collect();
     assert_eq!(offered, vec![0, 1, 2], "at most the two cards there are");
     choose_mode(&mut s, 2);
-    let object = s.game().current_object_ref(first).unwrap();
+    let object = s.game().state.live(now(&s, first)).unwrap();
     assert!(s.choose_target(Target::GraveyardCard(object)));
     assert!(
         !has_action(&s, |a| matches!(a, Action::Decline { .. })),
@@ -14811,7 +14661,7 @@ fn fire_lord_sozin_payment_precedes_targets_and_caps_their_total() {
         let mine = plant_in_graveyard(&mut s, 0, "Gray Ogre");
         let land = plant_in_graveyard(&mut s, 1, "Forest");
         let target = |s: &Scenario, object| {
-            Target::GraveyardCard(s.game().current_object_ref(object).unwrap())
+            Target::GraveyardCard(s.game().state.live(now(s, object)).unwrap())
         };
         choose_mode(&mut s, 6);
         assert_eq!(s.action_space().kind, ActionSpaceKind::PayOrNot);
@@ -14844,7 +14694,7 @@ fn fire_lord_sozin_payment_precedes_targets_and_caps_their_total() {
         assert_eq!(observation.continuation[0].x, 6, "paid X stays observable");
         // A target leaves during the response window. Only the remaining
         // legal target returns; payment is not refunded or recomputed.
-        s.game_mut().move_object(first, ZoneType::Exile);
+        let first = move_card(&mut s, first, ZoneType::Exile);
         settle(&mut s);
         assert_eq!(zone_of(&s, first), Some(ZoneType::Exile));
         assert_eq!(zone_of(&s, second), Some(ZoneType::Battlefield));
@@ -14920,7 +14770,7 @@ fn the_rise_of_sozin_search_chooses_zero_through_four_across_zones_privately() {
         let remaining: Vec<_> = library(&s, 1)
             .iter()
             .copied()
-            .filter(|c| s.game().state.objects[*c].name == "Gray Ogre")
+            .filter(|c| s.game().state[*c].name == "Gray Ogre")
             .collect();
         let choices = [remaining[0], grave, hand, remaining[1]];
         sozin_name(&mut s, "Gray Ogre");
@@ -14939,7 +14789,7 @@ fn the_rise_of_sozin_search_chooses_zero_through_four_across_zones_privately() {
         assert!(
             seen.opponent_cards
                 .iter()
-                .any(|c| c.id == s.game().state.objects[other].id.0 as i32),
+                .any(|c| c.id == s.game().state[other].id.0 as i32),
             "searcher sees searched hand, even nonmatches"
         );
         assert!(!offered_cards(&s).contains(&other));
@@ -14979,7 +14829,7 @@ fn the_rise_of_sozin_search_chooses_zero_through_four_across_zones_privately() {
             after
                 .opponent
                 .known_hand
-                .get(&s.game().state.objects[other].definition_id.0),
+                .get(&s.game().state[other].definition_id.0),
             Some(&1),
             "inspected hand knowledge survives the search"
         );
@@ -14987,7 +14837,7 @@ fn the_rise_of_sozin_search_chooses_zero_through_four_across_zones_privately() {
             !after
                 .opponent_cards
                 .iter()
-                .any(|c| c.id == s.game().state.objects[other].id.0 as i32),
+                .any(|c| c.id == s.game().state[other].id.0 as i32),
             "search visibility ends with resolution"
         );
     }
@@ -15016,10 +14866,10 @@ fn aang_swift_savior_does_not_transform_again_after_an_intervening_round_trip() 
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     s.game_mut().transform_permanent(aang);
     s.game_mut().transform_permanent(aang);
-    assert_eq!(s.game().state.objects[object].name, "Aang, Swift Savior");
+    assert_eq!(s.game().state[object].name, "Aang, Swift Savior");
     settle(&mut s);
     assert_eq!(
-        s.game().state.objects[object].name,
+        s.game().state[object].name,
         "Aang, Swift Savior",
         "same face does not mean unchanged since activation"
     );
@@ -15041,7 +14891,7 @@ fn koh_inherits(s: &mut Scenario, name: &str) -> PermanentId {
     resolve_top(s);
     assert!(s.choose_target(Target::Permanent(victim)));
     settle(s);
-    let koh = s.game().state.object_to_permanent[object].unwrap();
+    let koh = permanent_of(s, object).unwrap();
     activate(s, koh, 0);
     pass_until(s, ActionSpaceKind::Modal);
     choose_mode(s, 0);
@@ -15057,7 +14907,7 @@ fn koh_inherited_activation_survives_departure() {
     activate(&mut s, koh, 1);
     let object = card_of(&s, koh);
     let hand = s.zone_size(0, ZoneType::Hand);
-    s.game_mut().move_object(object, ZoneType::Exile);
+    move_card(&mut s, object, ZoneType::Exile);
     settle(&mut s);
     assert_eq!(
         s.zone_size(0, ZoneType::Hand),
@@ -15071,7 +14921,7 @@ fn koh_inherited_death_trigger_uses_last_known_abilities() {
     let mut s = five_color_setup(&["Koh, the Face Stealer", "Eyetwitch"]);
     let koh = koh_inherits(&mut s, "Eyetwitch");
     let object = card_of(&s, koh);
-    s.game_mut().move_object(object, ZoneType::Graveyard);
+    move_card(&mut s, object, ZoneType::Graveyard);
     s.game_mut().scenario_refresh_priority().unwrap();
     pass_until(&mut s, ActionSpaceKind::Learn);
     assert_eq!(
@@ -15088,7 +14938,7 @@ fn foggy_swamp_visions_waits_for_its_controllers_next_end_step() {
     cast(&mut s, "Foggy Swamp Visions");
     choose_mode(&mut s, 1);
     assert!(s.choose_target(Target::GraveyardCard(
-        s.game().current_object_ref(grave).unwrap()
+        s.game().state.live(now(&s, grave)).unwrap()
     )));
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     settle(&mut s);
@@ -15125,7 +14975,7 @@ fn suki_cda_power_applies_in_hand_library_graveyard_exile_stack_and_outside() {
             let row = obs
                 .agent_cards
                 .iter()
-                .find(|c| c.id == s.game().state.objects[suki].id.0 as i32)
+                .find(|c| c.id == s.game().state[suki].id.0 as i32)
                 .unwrap();
             assert_eq!(row.power, 2, "{zone:?}");
         }
@@ -15135,6 +14985,7 @@ fn suki_cda_power_applies_in_hand_library_graveyard_exile_stack_and_outside() {
         .place_object(suki, PlayerId(0), ZoneType::Hand);
     cast_card(&mut s, suki);
     spend_colorless(&mut s);
+    let suki = now(&s, suki);
     assert_eq!(s.game().object_power(suki), 2);
     // A control-changing effect changes the spell's "you", not its owner.
     if let managym::state::stack_object::StackObject::Spell(spell) =
@@ -15144,6 +14995,7 @@ fn suki_cda_power_applies_in_hand_library_graveyard_exile_stack_and_outside() {
     } else {
         panic!("Suki spell expected");
     }
+    let suki = now(&s, suki);
     assert_eq!(s.game().object_power(suki), 1);
 
     let outside = Scenario::with_sideboards(
@@ -15154,7 +15006,12 @@ fn suki_cda_power_applies_in_hand_library_graveyard_exile_stack_and_outside() {
         239,
     );
     let card = outside.game().state.players[0].sideboard[0];
-    assert_eq!(outside.game().object_power(card), 0);
+    assert_eq!(
+        outside
+            .game()
+            .object_power(outside.game().state.object_of(card)),
+        0
+    );
 }
 
 #[test]
@@ -15177,7 +15034,7 @@ fn water_tribe_rallier_filters_library_using_sukis_current_cda_power() {
         assert_eq!(
             obs.agent_cards
                 .iter()
-                .find(|c| c.id == s.game().state.objects[top[0]].id.0 as i32)
+                .find(|c| c.id == s.game().state[top[0]].id.0 as i32)
                 .unwrap()
                 .power,
             creatures
@@ -15205,7 +15062,7 @@ fn cat_gator_any_target_removes_loyalty_or_defense_and_gains_life() {
         let mut s = five_color_setup(&["Cat-Gator", "Wall of Stone"]);
         let victim = s.force_permanent_on_battlefield(1, "Wall of Stone");
         let object = card_of(&s, victim);
-        s.game_mut().state.objects[object].types = CardTypes::new([card_type]);
+        s.game_mut().state[object].types = CardTypes::new([card_type]);
         set_counters(&mut s, victim, counter, 5);
         force_lands(&mut s, 0, "Swamp", 2);
         cast(&mut s, "Cat-Gator");
@@ -15235,7 +15092,7 @@ fn suki_loses_its_cda_with_its_abilities_and_recovers_it_after_returning_to_hand
     assert!(s.choose_target(Target::Permanent(suki)));
     settle(&mut s);
     assert_eq!(zone_of(&s, object), Some(ZoneType::Hand));
-    assert_eq!(s.game().object_power(object), 1);
+    assert_eq!(s.game().object_power(now(&s, object)), 1);
 }
 
 fn bloodbending_setup(caster: usize, paid: bool) -> Scenario {
@@ -15569,7 +15426,7 @@ fn secret_of_bloodbending_foretold_cards_are_visible_only_during_control() {
         &mut s,
         |a| matches!(a, Action::Foretell { object: selected, .. } if *selected == object),
     );
-    let id = s.game().state.objects[object].id.0 as i32;
+    let id = current_object(&s, object).id.0 as i32;
     let obs = Observation::for_player(s.game(), PlayerId(0));
     assert!(obs
         .opponent_cards
@@ -15684,10 +15541,10 @@ fn fire_navy_trebuchet_delayed_sacrifice_outlives_source_and_uses_any_end_step()
     let boulder = s.battlefield_permanents_named(0, "Ballistic Boulder")[0];
     assert_eq!(
         s.game().state.delayed_triggers[0].remembered[0].object,
-        s.game().permanent_object_ref(boulder).unwrap()
+        s.game().permanent_object(boulder).unwrap()
     );
     s.advance_to_active_step(0, StepKind::Main);
-    s.game_mut().move_object(source, ZoneType::Graveyard);
+    move_card(&mut s, source, ZoneType::Graveyard);
     // Controlled clock isolates any-player timing from the usual own-turn attack.
     s.game_mut().state.turn.active_player = PlayerId(1);
     s.advance_to_active_step(1, StepKind::End);
@@ -15727,9 +15584,9 @@ fn combustion_man_uses_departed_source_power_across_a_choice_and_reentry() {
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Permanent(ogre)));
     pass_until(&mut s, ActionSpaceKind::PayOrNot);
-    s.game_mut().move_object(source, ZoneType::Graveyard);
-    s.game_mut().move_object(source, ZoneType::Battlefield);
-    let returned = s.game().state.object_to_permanent[source].unwrap();
+    let source = move_card(&mut s, source, ZoneType::Graveyard);
+    let source = move_card(&mut s, source, ZoneType::Battlefield);
+    let returned = permanent_of(&s, source).unwrap();
     assert_ne!(returned, man);
     assert_eq!(s.game().characteristics(returned).power, 4);
     let mut replay = s.game().clone();
@@ -15774,7 +15631,7 @@ fn cruel_administrator_entry_raid_reads_the_entering_controller() {
         };
         spell.controller = PlayerId(1);
         resolve_top(&mut s);
-        let permanent = s.game().state.object_to_permanent[object].unwrap();
+        let permanent = permanent_of(&s, object).unwrap();
         assert_eq!(
             s.game().state.permanents[permanent]
                 .as_ref()
@@ -15823,7 +15680,7 @@ fn doubled_battle_fan_tokens_offer_either_attachment_without_an_implicit_choice(
     let fan_card = cast(&mut s, "Kyoshi Battle Fan");
     spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
-    let fan = s.game().state.object_to_permanent[fan_card].unwrap();
+    let fan = permanent_of(&s, fan_card).unwrap();
     let allies = s.battlefield_permanents_named(0, "Ally");
     assert_eq!(allies.len(), 2);
     assert_eq!(permanent(&s, fan).attached_to, None);
@@ -15836,7 +15693,7 @@ fn doubled_battle_fan_tokens_offer_either_attachment_without_an_implicit_choice(
         ).unwrap();
         let frame = branch.semantic_decision_frame().unwrap();
         let command = Command {
-            command_id: format!("fan-attach-{}", object.0),
+            command_id: format!("fan-attach-{}", object.slot()),
             expected_revision: frame.revision,
             offer_id: frame.offers[action].id.0,
             answers: vec![],
@@ -15845,7 +15702,7 @@ fn doubled_battle_fan_tokens_offer_either_attachment_without_an_implicit_choice(
         branch.execute_semantic_command(&command).unwrap();
         assert_eq!(
             branch.state.permanents[fan].as_ref().unwrap().attached_to,
-            branch.permanent_object_ref(ally)
+            branch.permanent_object(ally)
         );
         assert_eq!(branch.characteristics(ally).pt(), (2, 1));
     }
@@ -15866,7 +15723,7 @@ fn doubled_trebuchet_tokens_keep_attack_terms_and_both_delayed_sacrifices() {
         assert!(s.game().state.delayed_triggers[0]
             .remembered
             .iter()
-            .any(|binding| Some(binding.object) == s.game().permanent_object_ref(*token)));
+            .any(|binding| Some(binding.object) == s.game().permanent_object(*token)));
     }
     s.advance_to_active_step(0, StepKind::End);
     settle(&mut s);
@@ -15879,7 +15736,7 @@ fn doubled_trebuchet_tokens_keep_attack_terms_and_both_delayed_sacrifices() {
 fn sozins_comet_foretell_spending_choices_preserve_color_and_private_identity() {
     let mut s = five_color_setup(&["Sozin's Comet"]);
     let comet = library_card(&s, 0, "Sozin's Comet");
-    s.game_mut().move_object(comet, ZoneType::Hand);
+    let comet = move_card(&mut s, comet, ZoneType::Hand);
     s.set_player_mana_pool(0, "1WU");
     assert!(foretell_offered(&mut s, comet));
     choose(
@@ -15887,12 +15744,12 @@ fn sozins_comet_foretell_spending_choices_preserve_color_and_private_identity() 
         |action| matches!(action, Action::Foretell { object, .. } if *object == comet),
     );
     crate::support::inspect::assert_choice_contract(&s);
-    assert_eq!(s.game().state.zones.zone_of(comet), Some(ZoneType::Hand));
+    assert_eq!(zone_of(&s, comet), Some(ZoneType::Hand));
     for color in ["{W}", "{U}"] {
         spend_named(&mut s, |label| label.contains(color));
     }
     assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("1"));
-    assert_eq!(s.game().state.zones.zone_of(comet), Some(ZoneType::Exile));
+    assert_eq!(zone_of(&s, comet), Some(ZoneType::Exile));
     let opponent = Observation::for_player(s.game(), PlayerId(1));
     assert!(!opponent
         .opponent_cards

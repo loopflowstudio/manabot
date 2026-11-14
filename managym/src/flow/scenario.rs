@@ -124,7 +124,7 @@ impl Game {
                 .zone_objects(zone, player)
                 .iter()
                 .copied()
-                .find(|object| self.state.objects[*object].name == name);
+                .find(|object| self.state[*object].name == name);
             if let Some(object) = found {
                 self.policy_history = Default::default();
                 self.state.place_object(object, player, ZoneType::Hand);
@@ -155,7 +155,7 @@ impl Game {
                     .zone_objects(zone, player)
                     .iter()
                     .copied()
-                    .find(|object| self.state.objects[*object].name == name)
+                    .find(|object| self.state[*object].name == name)
             });
         let Some(object_id) = found else {
             return Err(AgentError(format!(
@@ -172,17 +172,19 @@ impl Game {
         let mut permanent = Permanent::new(
             self.state.id_gen_mut().next_id(),
             object_id,
-            &self.state.objects[object_id],
+            &self.state[object_id],
         );
         if ready {
             permanent.summoning_sick = false;
             permanent.tapped = false;
         }
         self.state.permanents.push(Some(permanent));
-        if self.state.object_to_permanent.len() <= object_id.0 {
-            self.state.object_to_permanent.resize(object_id.0 + 1, None);
+        if self.state.object_to_permanent.len() <= object_id.slot() {
+            self.state
+                .object_to_permanent
+                .resize(object_id.slot() + 1, None);
         }
-        self.state.object_to_permanent[object_id] = Some(permanent_id);
+        self.state.object_to_permanent[(object_id).slot()] = Some(permanent_id);
         self.invalidate_mana_cache(player);
         Ok(permanent_id)
     }

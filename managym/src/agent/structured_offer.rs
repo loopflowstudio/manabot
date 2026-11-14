@@ -20,7 +20,7 @@ use crate::{
     state::{
         ability::TargetSpec,
         card::Restriction,
-        game_object::{ObjectId, ObjectRef, PermanentId, PlayerId, PublicId, Target},
+        game_object::{ObjectId, PermanentId, PlayerId, PublicId, Target},
         zone::ZoneType,
     },
 };
@@ -215,7 +215,7 @@ pub enum AtomicCommand {
     DeclareAttackers {
         binding: OfferSetBinding,
         player: PlayerId,
-        attackers: Vec<ObjectRef>,
+        attackers: Vec<ObjectId>,
     },
     DeclarationSequence {
         binding: OfferSetBinding,
@@ -231,10 +231,10 @@ pub enum AtomicCommand {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BoundTarget {
     Player(PlayerId),
-    Permanent(ObjectRef),
+    Permanent(ObjectId),
     StackSpell(ObjectId),
     StackAbility(PublicId),
-    GraveyardCard(ObjectRef),
+    GraveyardCard(ObjectId),
 }
 
 #[derive(Clone, Debug)]
@@ -251,8 +251,8 @@ enum InternalOffer {
     DeclareAttackers {
         player: PlayerId,
         role: RoleId,
-        attackers: BTreeMap<CandidateId, ObjectRef>,
-        declaration_order: Vec<ObjectRef>,
+        attackers: BTreeMap<CandidateId, ObjectId>,
+        declaration_order: Vec<ObjectId>,
     },
     DeclareBlockers {
         choices: Vec<BlockerChoice>,
@@ -291,7 +291,7 @@ impl StructuredOfferSet {
 
     pub(crate) fn object_candidate_bindings(
         &self,
-    ) -> Vec<(OfferId, RoleId, CandidateId, ObjectRef)> {
+    ) -> Vec<(OfferId, RoleId, CandidateId, ObjectId)> {
         let mut bindings = Vec::new();
         for (offer_id, offer) in &self.internal {
             match offer {
@@ -632,20 +632,20 @@ impl Game {
             let public_commitment = match (action_space.kind, action) {
                 (_, Action::PassPriority { .. }) => Some(PublicCommitment::PassPriority),
                 (_, Action::CastSpell { object, .. }) => Some(PublicCommitment::Cast {
-                    card: self.state.objects[*object].name.clone(),
+                    card: self.state[*object].name.clone(),
                 }),
                 (_, Action::PlayLand { object, .. }) => Some(PublicCommitment::PlayLand {
-                    card: self.state.objects[*object].name.clone(),
+                    card: self.state[*object].name.clone(),
                 }),
                 (ActionSpaceKind::Learn, Action::LearnDiscard { object, .. })
                 | (ActionSpaceKind::Discard, Action::SelectCard { object, .. }) => {
                     Some(PublicCommitment::Discard {
-                        card: self.state.objects[*object].name.clone(),
+                        card: self.state[*object].name.clone(),
                     })
                 }
                 (ActionSpaceKind::Learn, Action::LearnTakeLesson { object, .. }) => {
                     Some(PublicCommitment::LearnTakeLesson {
-                        card: self.state.objects[*object].name.clone(),
+                        card: self.state.source_base(*object).1.name.clone(),
                     })
                 }
                 (ActionSpaceKind::Learn, Action::Decline { .. }) => {
@@ -873,7 +873,7 @@ impl Game {
         };
         if !self.state.delayed_triggers.is_empty()
             || self.state.permanents.iter().flatten().any(|permanent| {
-                let object = &self.state.objects[permanent.object];
+                let object = &self.state[permanent.object];
                 !object.abilities.is_empty() || !object.triggered_mana_abilities.is_empty()
             })
         {
@@ -884,11 +884,7 @@ impl Game {
         if legal_taps.iter().any(|id| {
             self.state.permanents[*id]
                 .as_ref()
-                .is_some_and(|permanent| {
-                    !self.state.objects[permanent.object]
-                        .mana_abilities
-                        .is_empty()
-                })
+                .is_some_and(|permanent| !self.state[permanent.object].mana_abilities.is_empty())
         }) {
             return Ok(None);
         }
@@ -962,7 +958,7 @@ impl Game {
         id: CandidateId,
     ) -> Result<Candidate, StructuredOfferError> {
         let object = self
-            .permanent_object_ref(permanent)
+            .permanent_object(permanent)
             .ok_or(StructuredOfferError::InvalidCurrentTarget)?;
         let permanent = self.state.permanents[permanent]
             .as_ref()
@@ -971,10 +967,10 @@ impl Game {
             id,
             value: CandidateValue::Subject {
                 subject: SubjectRef::Object {
-                    id: object_render_id(permanent.id, object.incarnation.0),
+                    id: object_render_id(permanent.id, object.generation()),
                 },
             },
-            label: self.state.objects[permanent.object].name.clone(),
+            label: self.state[permanent.object].name.clone(),
             help: None,
             preview: None,
         })
@@ -1058,7 +1054,7 @@ impl Game {
                     internal.insert(id, InternalOffer::PassPriority { player: *player });
                 }
                 Action::CastSpell { player, object } => {
-                    let card_ref = &self.state.objects[*object];
+                    let card_ref = &self.state[*object];
                     if card_ref.optional_cost().is_some() {
                         continue;
                     }
@@ -1109,10 +1105,10 @@ impl Game {
                         source: Some(SubjectRef::Object {
                             id: object_render_id(
                                 card_ref.id,
-                                self.current_object_ref(*object)
+                                self.state
+                                    .live(*object)
                                     .ok_or(StructuredOfferError::InvalidCurrentTarget)?
-                                    .incarnation
-                                    .0,
+                                    .generation(),
                             ),
                         }),
                         label: format!("Cast {}", card_ref.name),
@@ -1187,16 +1183,16 @@ impl Game {
                 })?;
             let candidate_id = next_candidate_id(candidates.len())?;
             let object_ref = self
-                .permanent_object_ref(*attacker)
+                .permanent_object(*attacker)
                 .ok_or(StructuredOfferError::InvalidCurrentTarget)?;
             candidates.push(Candidate {
                 id: candidate_id,
                 value: CandidateValue::Subject {
                     subject: SubjectRef::Object {
-                        id: object_render_id(permanent.id, object_ref.incarnation.0),
+                        id: object_render_id(permanent.id, object_ref.generation()),
                     },
                 },
-                label: self.state.objects[permanent.object].name.clone(),
+                label: self.state[permanent.object].name.clone(),
                 help: None,
                 preview: None,
             });
@@ -1246,7 +1242,7 @@ impl Game {
                     declaration_order: declaration_order
                         .into_iter()
                         .map(|permanent| {
-                            self.permanent_object_ref(permanent)
+                            self.permanent_object(permanent)
                                 .ok_or(StructuredOfferError::InvalidCurrentTarget)
                         })
                         .collect::<Result<Vec<_>, _>>()?,
@@ -1403,7 +1399,8 @@ impl Game {
                         self.lookup_current_permanent(*object_ref).map_err(|_| {
                             StructuredOfferError::StaleOrIllegal(format!(
                                 "attacker object {}@{} is no longer current",
-                                object_ref.entity.0, object_ref.incarnation.0
+                                object_ref.slot(),
+                                object_ref.generation()
                             ))
                         })
                     })
@@ -1683,7 +1680,8 @@ impl Game {
                         self.lookup_current_permanent(*object_ref).map_err(|_| {
                             StructuredOfferError::StaleOrIllegal(format!(
                                 "attacker object {}@{} is no longer current",
-                                object_ref.entity.0, object_ref.incarnation.0
+                                object_ref.slot(),
+                                object_ref.generation()
                             ))
                         })
                     })
@@ -1814,7 +1812,7 @@ impl Game {
         match target {
             Target::Player(player) => Ok(BoundTarget::Player(player)),
             Target::Permanent(permanent) => self
-                .permanent_object_ref(permanent)
+                .permanent_object(permanent)
                 .map(BoundTarget::Permanent)
                 .ok_or(StructuredOfferError::InvalidCurrentTarget),
             Target::StackSpell(object_id) => Ok(BoundTarget::StackSpell(object_id)),
@@ -1832,7 +1830,8 @@ impl Game {
                 .map_err(|_| {
                     StructuredOfferError::StaleOrIllegal(format!(
                         "target object {}@{} is no longer current",
-                        object_ref.entity.0, object_ref.incarnation.0
+                        object_ref.slot(),
+                        object_ref.generation()
                     ))
                 }),
             BoundTarget::StackSpell(object_id) => Ok(Target::StackSpell(object_id)),
@@ -1841,9 +1840,8 @@ impl Game {
                 .map(|_| Target::StackAbility(id))
                 .ok_or(StructuredOfferError::InvalidCurrentTarget),
             BoundTarget::GraveyardCard(object) => {
-                let object_id = ObjectId::from(object.entity);
-                if self.current_object_ref(object_id) == Some(object)
-                    && self.state.zones.zone_of(object_id) == Some(ZoneType::Graveyard)
+                if self.state.live(object).is_some()
+                    && self.state.zones.zone_of(object) == Some(ZoneType::Graveyard)
                 {
                     Ok(Target::GraveyardCard(object))
                 } else {
@@ -1876,24 +1874,20 @@ impl Game {
                     .ok_or(StructuredOfferError::InvalidCurrentTarget)?;
                 Ok((
                     SubjectRef::Object {
-                        id: object_render_id(permanent_ref.id, object_ref.incarnation.0),
+                        id: object_render_id(permanent_ref.id, object_ref.generation()),
                     },
-                    self.state.objects[permanent_ref.object].name.clone(),
+                    self.state[permanent_ref.object].name.clone(),
                 ))
             }
             BoundTarget::GraveyardCard(object) => {
-                let object_id = ObjectId::from(object.entity);
-                if self.current_object_ref(object_id) != Some(object) {
+                if self.state.live(object).is_none() {
                     return Err(StructuredOfferError::InvalidCurrentTarget);
                 }
                 Ok((
                     SubjectRef::Object {
-                        id: object_render_id(
-                            self.state.objects[object_id].id,
-                            object.incarnation.0,
-                        ),
+                        id: object_render_id(self.state[object].id, object.generation()),
                     },
-                    self.state.objects[object_id].name.clone(),
+                    self.state[object].name.clone(),
                 ))
             }
             BoundTarget::StackSpell(_) | BoundTarget::StackAbility(_) => {

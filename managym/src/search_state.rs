@@ -180,10 +180,7 @@ mod tests {
     use super::*;
     use crate::{
         flow::event::GameEvent,
-        state::{
-            game_object::{ObjectId, PermanentId},
-            zone::ZoneType,
-        },
+        state::{game_object::PermanentId, zone::ZoneType},
     };
 
     fn assert_authority_change(baseline: &SearchStateWitness, changed: &Game, field: &str) {
@@ -205,10 +202,12 @@ mod tests {
         let baseline = witness(&game);
 
         let mut incarnation = game.clone();
-        incarnation.state.object_incarnations[ObjectId(0)] = incarnation.state.object_incarnations
-            [ObjectId(0)]
-        .checked_next()
-        .expect("next incarnation");
+        let object = incarnation.state.zones.latest().next().expect("first card");
+        let zone = incarnation.state.zones.zone_of(object).expect("in a zone");
+        let owner = incarnation.state[object].owner;
+        incarnation
+            .state
+            .mint_appearance(object, owner, zone, false);
         assert_authority_change(&baseline, &incarnation, "incarnation");
 
         let permanent = PermanentId(

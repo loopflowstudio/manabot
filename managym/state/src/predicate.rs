@@ -2,7 +2,7 @@
 // Reusable structural predicates over cards, shared by trigger subjects,
 // blocking restrictions, and zone counting (no scattered string compares).
 
-use super::card::{CardType, Keyword};
+use super::card::{CardType, Keyword, PrintedCharacteristics};
 
 use super::game_object::{Object, ObjectKind};
 use super::mana::Color;
@@ -132,6 +132,25 @@ impl CardPredicate {
     /// `added_types` are card types the object has in addition to its printed
     /// types (an animated land's creature type, a granted land type).
     pub fn matches(&self, object: &Object, power: i32, added_types: &[CardType]) -> bool {
+        self.matches_printing(
+            object,
+            object.kind(),
+            object.mana_value_cost().map_or(0, |cost| cost.mana_value),
+            power,
+            added_types,
+        )
+    }
+
+    /// Structural matching over retained printing provenance, without looking
+    /// up a departed object or borrowing a later appearance's copiable face.
+    pub fn matches_printing(
+        &self,
+        object: &PrintedCharacteristics,
+        kind: ObjectKind,
+        mana_value: u8,
+        power: i32,
+        added_types: &[CardType],
+    ) -> bool {
         if self.namesake
             || self.with_counter
             || self.attacking
@@ -143,11 +162,15 @@ impl CardPredicate {
         }
         if self
             .token
-            .is_some_and(|token| token != (object.kind() == ObjectKind::Token))
+            .is_some_and(|token| token != (kind == ObjectKind::Token))
         {
             return false;
         }
-        if !self.subtypes_any.is_empty() && !self.subtypes_any.iter().any(|s| object.has_subtype(s))
+        if !self.subtypes_any.is_empty()
+            && !self
+                .subtypes_any
+                .iter()
+                .any(|s| object.subtypes.iter().any(|value| value == s))
         {
             return false;
         }
@@ -158,14 +181,17 @@ impl CardPredicate {
             }
         }
         if !self.any_of.is_empty()
-            && !self
-                .any_of
-                .iter()
-                .any(|alternative| alternative.matches(object, power, added_types))
+            && !self.any_of.iter().any(|alternative| {
+                alternative.matches_printing(object, kind, mana_value, power, added_types)
+            })
         {
             return false;
         }
-        if self.not_subtypes.iter().any(|s| object.has_subtype(s)) {
+        if self
+            .not_subtypes
+            .iter()
+            .any(|s| object.subtypes.iter().any(|value| value == s))
+        {
             return false;
         }
         if self
@@ -201,7 +227,7 @@ impl CardPredicate {
             return false;
         }
         if let Some(subtype) = &self.subtype {
-            if !object.has_subtype(subtype) {
+            if !object.subtypes.contains(subtype) {
                 return false;
             }
         }
@@ -210,10 +236,6 @@ impl CardPredicate {
                 return false;
             }
         }
-        let mana_value = object
-            .mana_value_cost()
-            .map(|cost| cost.mana_value)
-            .unwrap_or(0);
         if self.min_mana_value.is_some_and(|min| mana_value < min)
             || self.max_mana_value.is_some_and(|max| mana_value > max)
         {

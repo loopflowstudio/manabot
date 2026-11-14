@@ -1191,9 +1191,7 @@ impl Env {
             .zone_objects(ZoneType::Hand, PlayerId(player))
             .iter()
         {
-            *counts
-                .entry(game.state.objects[*object].name.clone())
-                .or_insert(0) += 1;
+            *counts.entry(game.state[*object].name.clone()).or_insert(0) += 1;
         }
         Ok(counts)
     }

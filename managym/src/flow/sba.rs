@@ -70,7 +70,7 @@ impl Game {
         {
             let groups = self.legend_groups();
             if let Some(first) = groups.first() {
-                let id = self.state.object_to_permanent[first[0]].expect("legend");
+                let id = self.state.permanent_of(first[0]).expect("legend");
                 let player = self.state.permanents[id]
                     .as_ref()
                     .expect("legend")
@@ -157,7 +157,7 @@ impl Game {
             if !put_in_graveyard && !destroy {
                 continue;
             }
-            let Some(object_ref) = self.permanent_object_ref(permanent_id) else {
+            let Some(object_ref) = self.permanent_object(permanent_id) else {
                 continue;
             };
             candidates.push((object_ref, destroy));
@@ -170,18 +170,14 @@ impl Game {
                 if destroy {
                     ProposedEvent::Destroy { target }
                 } else {
-                    self.zone_move_proposal(
-                        ObjectId::from(target.entity),
-                        ZoneType::Graveyard,
-                        Default::default(),
-                    )
+                    self.zone_move_proposal(target, ZoneType::Graveyard, Default::default())
                 }
             })
             .collect();
         events.extend(
             self.finished_sagas()
                 .into_iter()
-                .filter_map(|id| self.permanent_object_ref(id))
+                .filter_map(|id| self.permanent_object(id))
                 .map(|target| ProposedEvent::Sacrifice { target }),
         );
         if !events.is_empty() {
@@ -240,7 +236,7 @@ impl Game {
             .filter(|&id| {
                 self.state.permanents[id].as_ref().is_some_and(|equipment| {
                     equipment.attached_to.is_some()
-                        && self.state.objects[equipment.object].enchant().is_none()
+                        && self.state[equipment.object].enchant().is_none()
                 }) && self.attached_creature(id).is_none()
             })
             .collect();
@@ -256,8 +252,7 @@ impl Game {
         // This runs after the move to the graveyard, so death triggers from
         // tokens have already been enqueued.
         let mut tokens_to_remove = Vec::new();
-        for (index, object) in self.state.objects.iter().enumerate() {
-            let object_id = ObjectId(index);
+        for (object_id, object) in self.state.latest_objects() {
             let zone = self.state.zones.zone_of(object_id);
             let ceases = match object.kind() {
                 ObjectKind::Card => false,
@@ -295,13 +290,13 @@ impl Game {
     /// Whether a chapter ability of this Saga has triggered and not yet left
     /// the stack: waiting to be put on it, or on it.
     fn chapter_ability_pending(&self, saga: ObjectId) -> bool {
-        let object = self.current_object_ref(saga);
+        let object = self.state.live(saga);
         let is_chapter = |object_id, source_ref, inline: &Option<_>, index: usize| {
             object_id == saga
                 && source_ref == object
                 && inline.is_none()
                 && matches!(
-                    self.state.objects[saga].abilities.get(index),
+                    self.state[saga].abilities.get(index),
                     Some(Ability::Triggered {
                         condition: TriggerCondition::Chapter { .. },
                         ..
@@ -310,15 +305,15 @@ impl Game {
         };
         self.state.pending_triggers.iter().any(|trigger| {
             is_chapter(
-                trigger.source_object,
-                trigger.source_ref,
+                trigger.source_object(),
+                trigger.source_ref(),
                 &trigger.inline_effects,
                 trigger.ability_index,
             )
         }) || self.state.stack_objects.iter().any(|item| {
             matches!(item, StackObject::TriggeredAbility(ability) if is_chapter(
-                ability.source_object,
-                ability.source_ref,
+                ability.source_object(),
+                ability.source_ref(),
                 &ability.inline_effects,
                 ability.ability_index,
             ))
@@ -331,7 +326,7 @@ impl Game {
         let Some(permanent) = self.state.permanents[aura].as_ref() else {
             return false;
         };
-        let Some(enchant) = self.state.objects[permanent.object].enchant() else {
+        let Some(enchant) = self.state[permanent.object].enchant() else {
             return false;
         };
         !self.attached_permanent(aura).is_some_and(|object| {

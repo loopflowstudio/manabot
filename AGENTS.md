@@ -450,6 +450,34 @@ or inspecting a newly cast spell. Call `spend_colorless` explicitly to preserve
 the colors in `five_color_setup`; tests of color, restriction, rider or expiry
 choices select their intended native offer.
 
+An `ObjectId` names one appearance of a card, token or copy in one zone (CR
+109) and goes stale when that object changes zones (CR 400.7), stack to
+battlefield included; a `CardId` names the physical `Card` (CR 108: owner and
+definition) for the whole game. `GameState::object_of(card)` and
+`card_of(object)` are the only bridges; a token or spell copy has no card.
+Hold an `ObjectId` for "that creature", a target or an event subject, a
+`CardId` for ownership or "that card", and read what a departed object was
+from `ObjectLkiLog`. A zone move is the one place an object is made from
+another and returns the new id; `ZoneManager::successor(old)` finds what an
+object became by its one next move (CR 400.7e, j). A fact crosses a zone
+change only as a `CarryOver` field citing its CR 400.7 sub-rule, never as a
+field copied by hand or an id that keeps working. Slots are private storage:
+never build an `ObjectId` from a number, in tests included. A test that
+follows one card through moves the engine made uses the support helpers
+`now`, `zone_of`, `permanent_of` and `move_card`; a pre-move id passed to
+`Game::move_object` or compared with an event's object does nothing or fails
+([objects and zones](docs/engine.md#objects-and-zones)).
+
+`GameState::object` and `state[object]` check appearance identity against the
+zone manager; `ObjectVec` has no object-id or card-id indexing. Zone-entry
+code alone uses `entry_object` before placement (new tokens and outside-game
+cards), still checking the allocated generation. Departed-source consumers
+read LKI and `source_base`/`source_face` definition provenance, never a later
+appearance's copy state. Recorded spell, mill and discard predicates use
+`recorded_object_matches_predicate` after their captured appearance departs.
+`AbilitySource` holds one id and the creator's exact
+reference presence; v16 serialization projects both historical source fields.
+
 A permanent's characteristics after continuous effects (name, types, colors,
 keywords, static/triggered/activated abilities, power/toughness) are one view,
 `Game::characteristics(id)`, which applies static abilities and effect records
@@ -481,7 +509,7 @@ sources are looked up per event kind through `TriggerIndex`
 (`flow/triggers.rs`), invalidated by trigger and layer dependencies; departed-object
 facts are an `ObjectLkiLog`. A cloned `Game` carries these caches.
 Layer rebuilds reuse immutable copiable source objects and static plans, bound to
-exact definition identity, incarnation and timestamp; copy/transform definition
+exact definition identity, appearance and timestamp; copy/transform definition
 changes invalidate that source. Intermediate layer objects detach on writes.
 Conservative characteristic read/write summaries skip impossible dependency
 probes; plausible pairs still compare instructions and generating-ability

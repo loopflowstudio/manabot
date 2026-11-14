@@ -89,7 +89,7 @@ fn open_decklists_show_both_lists_to_both_viewers() {
 fn a_revealed_hand_card_leaves_unseen_counts_but_stays_in_the_pool() {
     let mut game = Game::new(configs(DecklistDisclosure::Open), 7, true);
     let (viewer, opponent) = (PlayerId(0), PlayerId(1));
-    let revealed = &game.state.objects[game.state.zones.zone_objects(ZoneType::Hand, opponent)[0]];
+    let revealed = &game.state[game.state.zones.zone_objects(ZoneType::Hand, opponent)[0]];
     let (definition, name) = (revealed.definition_id, revealed.name.clone());
     game.state.players[opponent.0]
         .known_hand

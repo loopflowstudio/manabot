@@ -25,12 +25,12 @@ fn three_dreams_finds_up_to_three_differently_named_auras() {
     for name in auras {
         let offered = offered_cards(&s);
         assert!(offered.iter().all(|object| {
-            let object = &s.game().state.objects[*object];
+            let object = &s.game().state[*object];
             object.has_subtype("Aura") && !chosen.iter().any(|(_, n)| *n == object.name)
         }));
         let object = *offered
             .iter()
-            .find(|object| s.game().state.objects[**object].name == name)
+            .find(|object| s.game().state[**object].name == name)
             .unwrap();
         choose(
             &mut s,

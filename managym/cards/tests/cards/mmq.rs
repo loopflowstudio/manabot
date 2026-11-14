@@ -5,6 +5,8 @@ use managym::{
     state::{game_object::PlayerId, zone::ZoneType},
 };
 
+use crate::support::game::move_card;
+use crate::support::inspect::{permanent_of, zone_of};
 use crate::support::{
     game::five_color_setup,
     inspect::{card_of, library_card},
@@ -17,7 +19,7 @@ use crate::support::{
 fn bribery_puts_a_creature_from_the_opponents_library_under_your_control() {
     let mut s = five_color_setup(&["Bribery", "Gray Ogre"]);
     let held = library_card(&s, 1, "Island");
-    s.game_mut().move_object(held, ZoneType::Hand);
+    let held = move_card(&mut s, held, ZoneType::Hand);
     let ogre = library_card(&s, 1, "Gray Ogre");
     cast(&mut s, "Bribery");
     target_opponent(&mut s);
@@ -49,15 +51,12 @@ fn bribery_puts_a_creature_from_the_opponents_library_under_your_control() {
 
     select_card(&mut s, ogre);
     settle(&mut s);
-    let taken = s.game().state.object_to_permanent[ogre].expect("entered");
+    let taken = permanent_of(&s, ogre).expect("entered");
     let permanent = s.game().state.permanents[taken].as_ref().unwrap();
     assert_eq!(permanent.controller, PlayerId(0));
+    assert_eq!(s.game().state[card_of(&s, taken)].owner, PlayerId(1));
     assert_eq!(
-        s.game().state.objects[card_of(&s, taken)].owner,
-        PlayerId(1)
-    );
-    assert_eq!(
-        s.game().state.zones.zone_of(held),
+        zone_of(&s, held),
         Some(ZoneType::Hand),
         "only the library is searched"
     );

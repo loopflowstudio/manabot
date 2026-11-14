@@ -1,5 +1,6 @@
 //! Tests for cards filed in `src/chk.rs`, in card order.
 
+use crate::support::inspect::zone_of;
 use crate::support::{
     game::{clear_summoning_sickness, five_color_unfunded_setup, move_to_hand, Scenario},
     inspect::{card_of, permanent_named, tapped},
@@ -49,7 +50,7 @@ fn is_basic(name: &str) -> bool {
 /// shape no printed land has, to exercise several produced types.
 fn add_tap_ability(s: &mut Scenario, land: PermanentId, mana: &str, sacrifice: bool) -> usize {
     let card = card_of(s, land);
-    let abilities = &mut s.game_mut().state.objects[card].activated_abilities;
+    let abilities = &mut s.game_mut().state[card].activated_abilities;
     abilities.push(ActivatedAbilityDefinition {
         tap_source: true,
         sacrifice_source: sacrifice,
@@ -85,7 +86,7 @@ fn heartbeat_of_spring_adds_one_mana_of_a_produced_type_to_the_tapping_player() 
             choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
         }
         assert_eq!(
-            s.game().state.zones.zone_of(cub),
+            zone_of(&s, cub),
             Some(ZoneType::Stack),
             "controller {controller}"
         );
@@ -155,7 +156,7 @@ fn heartbeat_of_spring_sacrificed_by_the_mana_ability_adds_nothing() {
     let (mut s, lands) = heartbeat_setup(0, &["Forest"]);
     let heartbeat = card_of(&s, permanent_named(&s, "Heartbeat of Spring"));
     let card = card_of(&s, lands[0]);
-    let abilities = &mut s.game_mut().state.objects[card].activated_abilities;
+    let abilities = &mut s.game_mut().state[card].activated_abilities;
     abilities.push(ActivatedAbilityDefinition {
         tap_source: true,
         effects: vec![
@@ -171,10 +172,7 @@ fn heartbeat_of_spring_sacrificed_by_the_mana_ability_adds_nothing() {
     activate(&mut s, lands[0], ability);
     choose(&mut s, |a| matches!(a, Action::SelectCard { .. }));
     take_single_output(&mut s);
-    assert_eq!(
-        s.game().state.zones.zone_of(heartbeat),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, heartbeat), Some(ZoneType::Graveyard));
     assert_eq!(*pool(&s, 0), Mana::parse("G"));
 }
 
@@ -187,7 +185,7 @@ fn heartbeat_of_spring_type_choice_names_its_source_and_the_tapped_land() {
     activate(&mut s, lands[0], ability);
     take_single_output(&mut s);
     let heartbeat = card_of(&s, permanent_named(&s, "Heartbeat of Spring"));
-    let definition = |object: ObjectId| Some(s.game().state.objects[object].definition_id.0);
+    let definition = |object: ObjectId| Some(s.game().state[object].definition_id.0);
     let frames = s.game().continuation_frames(PlayerId(0));
     let frame = frames
         .iter()

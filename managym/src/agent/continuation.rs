@@ -16,7 +16,7 @@ use crate::{
     },
     state::{
         ability::{DelayedExpiry, DelayedFrequency, PaymentCost},
-        game_object::{ObjectId, ObjectRef, PlayerId, Target},
+        game_object::{ObjectId, PlayerId, Target},
         mana::{ManaCost, ManaSpent},
         stack_object::StackObject,
         zone::ZoneType,
@@ -223,9 +223,7 @@ impl Game {
         effects: &[crate::state::ability::Effect],
     ) -> bool {
         let definition = if let Some(grant) = grant {
-            self.state.objects[ObjectId::from(grant.grantor.entity)]
-                .attached_grants()
-                .nth(grant.index)
+            self.state[grant.grantor].attached_grants().nth(grant.index)
         } else {
             self.source_face(object, face).and_then(|source| {
                 source.activated_abilities.get(index).or_else(|| {
@@ -238,20 +236,15 @@ impl Game {
         };
         definition.is_some_and(|definition| definition.effects == effects)
     }
-    pub(crate) fn visible_reference(
-        &self,
-        object: ObjectRef,
-        viewer: PlayerId,
-    ) -> VisibleReference {
-        let object_id = ObjectId::from(object.entity);
-        if self.current_object_ref(object_id) != Some(object) {
+    pub(crate) fn visible_reference(&self, object: ObjectId, viewer: PlayerId) -> VisibleReference {
+        if self.state.live(object).is_none() {
             return VisibleReference {
                 definition: self.object_lki(object).map(|lki| lki.definition_id.0),
                 ..VisibleReference::default()
             };
         }
-        let record = &self.state.objects[object_id];
-        let zone = self.state.zones.zone_of(object_id);
+        let record = &self.state[object];
+        let zone = self.state.zones.zone_of(object);
         // Ordinary visibility needs no walk of retained event batches. Only
         // otherwise hidden objects need the prospective-entry permission.
         let visible = matches!(
@@ -267,10 +260,9 @@ impl Game {
             && self.shares_information(viewer, record.owner))
             || (matches!(zone, Some(ZoneType::Hand | ZoneType::Library))
                 && (self.searches_private_zones(viewer, record.owner)
-                    || self.decision_reveals(object_id, viewer)))
+                    || self.decision_reveals(object, viewer)))
             || self.pending_public_entries().contains(&object);
-        if !visible
-            || (self.is_foretold(object_id) && !self.shares_information(viewer, record.owner))
+        if !visible || (self.is_foretold(object) && !self.shares_information(viewer, record.owner))
         {
             return VisibleReference::default();
         }
@@ -294,10 +286,7 @@ impl Game {
         let Some(suspended) = &self.state.suspended_decision else {
             return false;
         };
-        let (owner, zone) = (
-            self.state.objects[object].owner,
-            self.state.zones.zone_of(object),
-        );
+        let (owner, zone) = (self.state[object].owner, self.state.zones.zone_of(object));
         suspended.decisions().any(|decision| {
             self.shares_information(viewer, decision.player())
                 && (decision.revealed_objects().contains(&object)
@@ -308,10 +297,11 @@ impl Game {
 
     pub(crate) fn object_reference(
         &self,
-        object_id: impl Into<ObjectId>,
+        object_id: ObjectId,
         viewer: PlayerId,
     ) -> VisibleReference {
-        self.current_object_ref(object_id)
+        self.state
+            .live(object_id)
             .map(|object| self.visible_reference(object, viewer))
             .unwrap_or_default()
     }
@@ -321,7 +311,9 @@ impl Game {
             ActivationSource::Permanent(permanent) => {
                 self.target_reference(Target::Permanent(permanent), viewer)
             }
-            ActivationSource::Card(card) => self.object_reference(card, viewer),
+            ActivationSource::Card(card) => {
+                self.object_reference(self.state.object_of(card), viewer)
+            }
         }
     }
 
@@ -332,7 +324,7 @@ impl Game {
                 ..VisibleReference::default()
             },
             Target::Permanent(id) => self
-                .permanent_object_ref(id)
+                .permanent_object(id)
                 .map(|object| self.visible_reference(object, viewer))
                 .unwrap_or_default(),
             Target::StackSpell(object_id) => {
@@ -472,10 +464,10 @@ impl Game {
         viewer: PlayerId,
     ) -> ContinuationFrame {
         let mut source = trigger
-            .source_ref
+            .source_ref()
             .map(|r| self.visible_reference(r, viewer))
             .unwrap_or_default();
-        source.definition = Some(self.state.objects[trigger.source_object].definition_id.0);
+        source.definition = Some(self.state.source_base(trigger.source_object()).0 .0);
         let context = match &trigger.event {
             DelayedTriggerEvent::Leaves { watched, .. } => {
                 Some(self.visible_reference(*watched, viewer))
@@ -535,11 +527,11 @@ impl Game {
                 .filter(|t| self.decision_controller(t.controller) == viewer)
             {
                 let mut source = trigger
-                    .source_ref
+                    .source_ref()
                     .map(|r| self.visible_reference(r, viewer))
                     .unwrap_or_default();
                 source.definition = Some(trigger.source_lki.as_ref().map_or(
-                    self.state.objects[trigger.source_object].definition_id.0,
+                    self.state.source_base(trigger.source_object()).0 .0,
                     |lki| lki.definition_id.0,
                 ));
                 let mut frame = ContinuationFrame {
@@ -626,7 +618,7 @@ impl Game {
                 if ability.program {
                     frame.program(&ability.effects);
                 }
-                frame.source = self.visible_reference(ability.source_ref, viewer);
+                frame.source = self.visible_reference(ability.source_object(), viewer);
                 frame.x = ability.x;
                 frame.inherited_from = ability.inherited_from.map(|id| VisibleReference {
                     definition: Some(id.0),
@@ -651,7 +643,7 @@ impl Game {
                 frame.x = ability.x;
                 frame.source_transforms = ability.source_transforms;
                 frame.source = ability
-                    .source_ref
+                    .source_ref()
                     .map(|r| self.visible_reference(r, viewer))
                     .unwrap_or_default();
                 frame.remembered = self.remembered_references(&ability.remembered, viewer);
@@ -819,11 +811,11 @@ impl Game {
             kind: 5,
             controller: effect.controller.0,
             source: effect
-                .source_ref
+                .source_ref()
                 .map(|r| self.visible_reference(r, viewer))
                 .unwrap_or_else(|| {
                     effect
-                        .source
+                        .source()
                         .map(|object| self.object_reference(object, viewer))
                         .unwrap_or_default()
                 }),
@@ -1245,13 +1237,13 @@ mod tests {
         let permanent = game
             .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
             .unwrap();
-        let reference = game.permanent_object_ref(permanent).unwrap();
+        let reference = game.permanent_object(permanent).unwrap();
         assert!(game
             .visible_reference(reference, PlayerId(0))
             .object
             .is_some());
-        let object_id = ObjectId::from(reference.entity);
-        game.move_object(object_id, ZoneType::Hand);
+        let object_id = reference;
+        let object_id = game.move_object(object_id, ZoneType::Hand);
         assert!(game
             .visible_reference(reference, PlayerId(0))
             .object
@@ -1331,9 +1323,7 @@ mod tests {
                 player,
                 cost: ManaCost::default(),
                 spent: crate::state::mana::ManaSpent::default(),
-                completion: Box::new(SpendCompletion::Foretell(
-                    game.state.card_id(ObjectId(0)).unwrap(),
-                )),
+                completion: Box::new(SpendCompletion::Foretell(game.state.players[0].deck[0])),
             },
             Decision::OrderReplacement {
                 player: PlayerId(0),
@@ -1500,7 +1490,7 @@ mod tests {
             },
             Decision::EnterAsCopy {
                 player,
-                object_id: ObjectId(0),
+                object_id: game.state.zones.latest().next().unwrap(),
                 candidates: vec![],
             },
         ];

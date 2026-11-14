@@ -388,9 +388,7 @@ pub struct HiddenHandConstraints {
 fn name_counts(game: &Game, objects: impl IntoIterator<Item = ObjectId>) -> BTreeMap<String, u32> {
     let mut counts = BTreeMap::new();
     for object in objects {
-        *counts
-            .entry(game.state.objects[object].name.clone())
-            .or_insert(0) += 1;
+        *counts.entry(game.state[object].name.clone()).or_insert(0) += 1;
     }
     counts
 }
@@ -410,8 +408,8 @@ impl HiddenHandConstraints {
         let unseen = commitments.unseen_objects(game, opponent);
         let foretell = unseen
             .iter()
-            .filter(|object| game.state.objects[**object].foretell().is_some())
-            .map(|object| game.state.objects[*object].name.clone())
+            .filter(|object| game.state[**object].foretell().is_some())
+            .map(|object| game.state[*object].name.clone())
             .collect();
         let pool = name_counts(game, unseen);
         let foretold = if game.shares_information(viewer, opponent) {
@@ -542,13 +540,14 @@ impl HiddenHandConstraints {
             let mut by_name: BTreeMap<String, Vec<ObjectId>> = BTreeMap::new();
             for object in commitments.unseen_objects(&branch, opponent) {
                 by_name
-                    .entry(branch.state.objects[object].name.clone())
+                    .entry(branch.state[object].name.clone())
                     .or_default()
                     .push(object);
             }
             for objects in by_name.values_mut() {
-                objects
-                    .sort_unstable_by_key(|object| (!commitments.pins_object(*object), object.0));
+                objects.sort_unstable_by_key(|object| {
+                    (!commitments.pins_object(*object), object.slot())
+                });
             }
 
             let mut new_hand: Vec<ObjectId> = Vec::with_capacity(self.hand_size as usize);
@@ -565,7 +564,7 @@ impl HiddenHandConstraints {
                 return Err(MaterializeError::InconsistentWorld);
             }
 
-            new_hand.sort_unstable_by_key(|c| c.0);
+            new_hand.sort_unstable_by_key(|c| c.slot());
             new_library.shuffle(&mut rng);
 
             if commitments.constrains()

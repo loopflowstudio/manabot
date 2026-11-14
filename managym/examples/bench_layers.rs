@@ -71,7 +71,7 @@ fn root() -> (Env, PermanentId) {
     ] {
         let game = env.benchmark_game_mut();
         let object_id = game.state.permanents[id].as_ref().unwrap().object;
-        let old = &game.state.objects[object_id];
+        let old = &game.state[object_id];
         let object = Object::from_definition(
             old.id,
             old.owner,
@@ -79,7 +79,7 @@ fn root() -> (Env, PermanentId) {
             Arc::new(definition),
             !old.is_card(),
         );
-        game.state.objects[object_id] = object;
+        game.state[object_id] = object;
     }
     env.scenario_refresh().unwrap();
     let view = env.benchmark_game_mut().characteristics(urborg);
@@ -203,8 +203,7 @@ fn payment_root(pool: bool) -> (Env, PermanentId) {
             .enumerate()
             .find_map(|(i, p)| {
                 let p = p.as_ref()?;
-                (game.state.objects[p.object].name == "Fire Nation Cadets")
-                    .then_some(PermanentId(i))
+                (game.state[p.object].name == "Fire Nation Cadets").then_some(PermanentId(i))
             })
             .unwrap()
     };

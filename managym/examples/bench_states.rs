@@ -280,22 +280,39 @@ fn build(recipe: &Recipe) -> Env {
                 .iter()
                 .flatten()
                 .filter(|p| {
-                    let card = &game.state.objects[p.object];
+                    let card = &game.state[p.object];
                     card.owner == PlayerId(i) && card.name == "Gray Ogre"
                 })
                 .map(|p| p.object)
                 .collect();
             let targets: Vec<_> = creatures
                 .iter()
-                .map(|card| game.current_object_ref(*card).unwrap())
+                .map(|card| game.state.live(*card).unwrap())
                 .collect();
             let mut index = 0;
             let state = &mut *game.state;
-            for p in state.permanents.iter_mut().flatten() {
-                if state.objects[p.object].owner == PlayerId(i) {
-                    if state.objects[p.object].name == "Gray Ogre" {
+            let roles: Vec<_> = state
+                .permanents
+                .iter()
+                .map(|p| {
+                    p.as_ref().map(|p| {
+                        let object = &state[p.object];
+                        (
+                            object.owner,
+                            object.name == "Gray Ogre",
+                            object.name == "Forest",
+                        )
+                    })
+                })
+                .collect();
+            for (p, role) in state.permanents.iter_mut().zip(roles) {
+                let (Some(p), Some((owner, ogre, forest))) = (p.as_mut(), role) else {
+                    continue;
+                };
+                if owner == PlayerId(i) {
+                    if ogre {
                         p.change_counters(CounterKind::PlusOnePlusOne, 1);
-                    } else if state.objects[p.object].name != "Forest" {
+                    } else if !forest {
                         p.attached_to = Some(targets[index % targets.len()]);
                         index += 1;
                     }
@@ -312,7 +329,7 @@ fn build(recipe: &Recipe) -> Env {
             .enumerate()
             .find_map(|(i, p)| {
                 p.as_ref()
-                    .filter(|p| game.state.objects[p.object].name == "The Rise of Sozin")
+                    .filter(|p| game.state[p.object].name == "The Rise of Sozin")
                     .map(|_| i)
             })
             .unwrap();
@@ -620,14 +637,15 @@ fn run(
                         .permanents
                         .iter()
                         .flatten()
-                        .find(|p| game.state.objects[p.object].name == "Gray Ogre")
+                        .find(|p| game.state[p.object].name == "Gray Ogre")
                         .or_else(|| game.state.permanents.iter().flatten().next())
                         .map(|p| p.object);
                     if let Some(card) = source {
                         benchmark_layers::triggers(
                             game,
                             GameEvent::CardMoved {
-                                object_id: card,
+                                object_id: game.state.live(card).expect("battlefield appearance"),
+                                departed: None,
                                 from: Some(ZoneType::Hand),
                                 to: ZoneType::Battlefield,
                                 controller: PlayerId(actor),

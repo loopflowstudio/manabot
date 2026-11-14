@@ -158,7 +158,7 @@ impl Game {
             if !self.still_in_combat(attacker_id) {
                 continue;
             }
-            let attacker_ref = self.permanent_object_ref(attacker_id);
+            let attacker_ref = self.permanent_object(attacker_id);
             if !self.creature_deals_damage_in_pass(attacker_id, pass) {
                 continue;
             }
@@ -194,7 +194,7 @@ impl Game {
                 if !self.still_in_combat(*blocker_id) {
                     continue;
                 }
-                let blocker_ref = self.permanent_object_ref(*blocker_id);
+                let blocker_ref = self.permanent_object(*blocker_id);
                 if !self.creature_deals_damage_in_pass(*blocker_id, pass) {
                     continue;
                 }
@@ -227,7 +227,7 @@ impl Game {
                     needed_damage
                 };
                 let assigned = remaining_damage.min(lethal);
-                if let Some(target) = self.permanent_object_ref(blocker_id) {
+                if let Some(target) = self.permanent_object(blocker_id) {
                     events.push(ProposedEvent::Damage {
                         source: attacker_ref,
                         target: ProposedDamageTarget::Object(target),

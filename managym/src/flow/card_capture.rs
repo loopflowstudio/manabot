@@ -6,7 +6,6 @@ use crate::agent::{
     observation::Observation,
 };
 use crate::flow::decision::EffectFrame;
-use crate::state::game_object::ObjectRef;
 use crate::{
     cards::content_pack::default_content_pack,
     flow::game::Game,
@@ -40,7 +39,8 @@ pub struct ExposureOption {
 pub struct ExposureResolution {
     pub revision: u64,
     pub controller: usize,
-    pub source: Option<ObjectRef>,
+    #[serde(serialize_with = "crate::state::game_object::exact")]
+    pub source: Option<ObjectId>,
     pub definition: Option<u32>,
 }
 
@@ -86,18 +86,23 @@ pub struct CardCapture {
 }
 
 fn snapshot(game: &Game, object: ObjectId) -> CardSnapshot {
-    let data = &game.state.objects[object];
-    let player = &game.state.players[data.owner.0];
+    let (definition, data) = game.state.source_base(object);
+    let (_, owner, _) = game
+        .state
+        .objects
+        .provenance(object)
+        .expect("captured provenance");
+    let player = &game.state.players[owner.0];
     let original = game
         .card_capture
         .as_ref()
         .and_then(|capture| capture.original(object));
     CardSnapshot {
-        copy: object.0,
-        definition: original.map_or(data.definition_id.0, |object| object.definition),
+        copy: object.slot(),
+        definition: original.map_or(definition.0, |object| object.definition),
         name: original.map_or_else(|| data.name.clone(), |object| object.name.clone()),
-        incarnation: game.state.object_incarnations[object].0,
-        owner: data.owner.0,
+        incarnation: object.generation(),
+        owner: owner.0,
         zone: game.state.zones.zone_of(object),
         origin: match game.state.card_id(object) {
             Some(card) if player.deck.contains(&card) => "deck",
@@ -108,8 +113,10 @@ fn snapshot(game: &Game, object: ObjectId) -> CardSnapshot {
 }
 
 pub(crate) fn snapshots(game: &Game) -> Vec<CardSnapshot> {
-    (0..game.state.objects.len())
-        .map(|i| snapshot(game, ObjectId(i)))
+    game.state
+        .zones
+        .latest()
+        .map(|object| snapshot(game, object))
         .collect()
 }
 
@@ -119,7 +126,7 @@ impl CardCapture {
         self.initial
             .iter()
             .chain(self.moves.iter().map(|m| &m.object))
-            .find(|snapshot| snapshot.copy == object.0)
+            .find(|snapshot| snapshot.copy == object.slot())
     }
 
     pub(crate) fn new(game: &Game) -> Self {
@@ -132,7 +139,7 @@ impl CardCapture {
                     .zones
                     .zone_objects(ZoneType::Hand, PlayerId(seat))
                     .iter()
-                    .map(|c| c.0)
+                    .map(|c| c.slot())
                     .collect()
             }),
             moves: Vec::new(),
@@ -165,11 +172,9 @@ impl Game {
                         .into_iter()
                         .filter_map(|id| {
                             self.state
-                                .objects
-                                .iter()
-                                .enumerate()
-                                .find(|(_, object_id)| object_id.id == id)
-                                .map(|(index, _)| ObjectId(index))
+                                .latest_objects()
+                                .find(|(_, object)| object.id == id)
+                                .map(|(object, _)| object)
                                 .or_else(|| {
                                     self.state
                                         .permanents
@@ -193,7 +198,7 @@ impl Game {
     pub(crate) fn capture_resolution(&mut self, frame: &EffectFrame) {
         // Attribute to the captured physical copy's initial definition. Copy/face
         // changes do not turn this into a count of executed mechanic programs.
-        let definition = frame.source.and_then(|source| {
+        let definition = frame.source().and_then(|source| {
             let capture = self.card_capture.as_ref()?;
             capture.original(source).map(|object| object.definition)
         });
@@ -205,7 +210,7 @@ impl Game {
             exposure.resolutions.push(ExposureResolution {
                 revision: self.decision_epoch,
                 controller: frame.controller.0,
-                source: frame.source_ref,
+                source: frame.source_ref(),
                 definition,
             });
         }
@@ -222,10 +227,12 @@ impl Game {
             return;
         }
         let data = snapshot(self, object);
+        let zones = &self.state.zones;
         let capture = self.card_capture.as_mut().expect("capture enabled");
         // Only the actual committed movement caused by draw_cards consumes this
-        // marker. Triggered movements during its processing cannot inherit it.
-        let drawn = capture.drawing == Some(object)
+        // marker: `object` is what the marked library card became (CR 400.7).
+        // Triggered movements during its processing cannot inherit it.
+        let drawn = capture.drawing.and_then(|drawing| zones.successor(drawing)) == Some(object)
             && from == Some(ZoneType::Library)
             && to == Some(ZoneType::Hand);
         if drawn {
@@ -308,10 +315,10 @@ mod tests {
             .zones
             .top(ZoneType::Library, PlayerId(0))
             .unwrap();
-        game.move_object(object, ZoneType::Hand); // selection, not draw
-        game.move_object(object, ZoneType::Battlefield);
-        game.move_object(object, ZoneType::Hand); // return, not draw
-        game.move_object(object, ZoneType::Library);
+        let object = game.move_object(object, ZoneType::Hand); // selection, not draw
+        let object = game.move_object(object, ZoneType::Battlefield);
+        let object = game.move_object(object, ZoneType::Hand); // return, not draw
+        let object = game.move_object(object, ZoneType::Library);
         // ZoneManager appends to the library's top.
         game.draw_cards(PlayerId(0), 1);
         let moves = &game.card_capture.as_ref().unwrap().moves;
@@ -319,7 +326,7 @@ mod tests {
             moves.iter().map(|m| m.cause).collect::<Vec<_>>(),
             ["selection", "move", "return", "move", "draw"]
         );
-        assert_eq!(moves.last().unwrap().object.copy, object.0);
+        assert_eq!(moves.last().unwrap().object.copy, object.slot());
         assert_eq!(moves.last().unwrap().object.incarnation, 5);
     }
     #[test]
@@ -342,11 +349,11 @@ mod tests {
                 .zones
                 .zone_objects(ZoneType::Hand, PlayerId(0))
                 .iter()
-                .find(|object_id| game.state.objects[**object_id].name == "Gray Ogre")
+                .find(|object_id| game.state[**object_id].name == "Gray Ogre")
                 .unwrap();
             // Synthetic free, untargeted spell isolates capture from card rules.
-            game.state.objects[object_id].mana_cost = None;
-            game.state.objects[object_id]
+            game.state[object_id].mana_cost = None;
+            game.state[object_id]
                 .keywords
                 .insert(crate::state::card::Keyword::Flash);
             game.card_capture = Some(CardCapture::new(&game));
@@ -365,7 +372,7 @@ mod tests {
                 ],
                 focus: Vec::new(),
             });
-            let source = game.current_object_ref(object_id).unwrap();
+            let source = game.state.live(object_id).unwrap();
             game.step(usize::from(outcome == "declined")).unwrap();
             if outcome == "countered" {
                 game.counter_spell(object_id, None, ZoneType::Graveyard);
@@ -384,11 +391,11 @@ mod tests {
             assert_eq!(exposure.choices[0].actor, 0);
             assert_eq!(
                 exposure.choices[0].options[0].objects[0].copy,
-                source.entity.0
+                source.slot()
             );
             assert_eq!(
                 exposure.choices[0].options[0].objects[0].incarnation,
-                source.incarnation.0
+                source.generation()
             );
             assert_eq!(
                 exposure.choices[0].selected,
@@ -399,7 +406,10 @@ mod tests {
                 usize::from(outcome == "completed")
             );
             if let Some(resolution) = exposure.resolutions.first() {
-                assert_eq!(resolution.source.unwrap().entity, source.entity);
+                // CR 400.7g: the spell is the object the hand card became.
+                let spell = resolution.source.unwrap();
+                assert_eq!(game.state.card_id(spell), game.state.card_id(source));
+                assert_eq!(spell.generation(), source.generation() + 1);
                 assert_eq!(resolution.controller, 0);
             }
         }
@@ -414,10 +424,10 @@ mod tests {
         // that this synthetic double-faced land is a playable card.
         let content = default_content_pack();
         let back = content.definition_id("Forest").unwrap();
-        game.state.objects[object]
+        game.state[object]
             .turn_back_face_up((back, Arc::clone(&content.definition(back).unwrap().printed)));
         let after = snapshot(&game, object);
-        assert_eq!(game.state.objects[object].name, "Forest");
+        assert_eq!(game.state[object].name, "Forest");
         assert_eq!(after.name, before.name);
         assert_eq!(after.definition, before.definition);
         assert_eq!(after.incarnation, before.incarnation);

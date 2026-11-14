@@ -1,6 +1,6 @@
 use super::ability::Effect;
 use super::card::{AbilityGrant, CardDefId};
-use super::game_object::{ObjectId, ObjectLki, ObjectRef, PlayerId, PublicId, Target};
+use super::game_object::{Exact, ObjectId, ObjectLki, PlayerId, PublicId, Target};
 use crate::binding::ObjectBinding;
 use crate::mana::ManaSpent;
 
@@ -49,9 +49,10 @@ pub struct ActivatedAbilityOnStack {
     pub controller: PlayerId,
     #[serde(rename = "source_card_registry_key")]
     pub source_definition_id: CardDefId,
-    #[serde(rename = "source_card")]
+    /// The exact source; recorded as its slot under `source_card` and whole
+    /// under `source_ref`.
+    #[serde(flatten, serialize_with = "serialize_activation_source")]
     pub source_object: ObjectId,
-    pub source_ref: ObjectRef,
     pub ability_index: usize,
     pub targets: Vec<Target>,
     /// The clause of each target when the ability has several; empty means
@@ -61,7 +62,8 @@ pub struct ActivatedAbilityOnStack {
     /// The exact object the source Aura or Equipment was attached to when
     /// the ability was activated, before costs such as sacrificing it.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub attached: Option<ObjectRef>,
+    #[serde(serialize_with = "crate::game_object::exact")]
+    pub attached: Option<ObjectId>,
     /// The announced value of X (CR 602.2b, 601.2b).
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub x: u8,
@@ -69,6 +71,17 @@ pub struct ActivatedAbilityOnStack {
     /// its grant, fixed at activation (`ability_index` names the grantee's list).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub granted_by: Option<AbilityGrant>,
+}
+
+fn serialize_activation_source<S: serde::Serializer>(
+    source: &ObjectId,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    use serde::ser::SerializeMap;
+    let mut map = serializer.serialize_map(Some(2))?;
+    map.serialize_entry("source_card", source)?;
+    map.serialize_entry("source_ref", &Exact(source))?;
+    map.end()
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -82,9 +95,8 @@ pub struct TriggeredAbilityOnStack {
     pub source_transforms: u32,
     pub id: PublicId,
     pub controller: PlayerId,
-    #[serde(rename = "source_card")]
-    pub source_object: ObjectId,
-    pub source_ref: Option<ObjectRef>,
+    #[serde(flatten)]
+    pub source_identity: crate::game_object::AbilitySource,
     pub source_lki: Option<ObjectLki>,
     #[serde(rename = "source_card_registry_key")]
     pub source_definition_id: CardDefId,
@@ -145,17 +157,17 @@ impl StackObject {
     pub fn source_object(&self) -> ObjectId {
         match self {
             StackObject::Spell(spell) => spell.object,
-            StackObject::ActivatedAbility(ability) => ability.source_object,
-            StackObject::TriggeredAbility(triggered) => triggered.source_object,
+            StackObject::ActivatedAbility(ability) => ability.source_object(),
+            StackObject::TriggeredAbility(triggered) => triggered.source_object(),
         }
     }
 
     /// The exact source object of an ability; spells have none.
-    pub fn source_ref(&self) -> Option<ObjectRef> {
+    pub fn source_ref(&self) -> Option<ObjectId> {
         match self {
             StackObject::Spell(_) => None,
-            StackObject::ActivatedAbility(ability) => Some(ability.source_ref),
-            StackObject::TriggeredAbility(triggered) => triggered.source_ref,
+            StackObject::ActivatedAbility(ability) => Some(ability.source_object()),
+            StackObject::TriggeredAbility(triggered) => triggered.source_ref(),
         }
     }
 
@@ -188,5 +200,20 @@ impl StackObject {
             StackObject::ActivatedAbility(ability) => &ability.targets,
             StackObject::TriggeredAbility(triggered) => &triggered.targets,
         }
+    }
+}
+
+impl TriggeredAbilityOnStack {
+    pub fn source_object(&self) -> ObjectId {
+        self.source_identity.object()
+    }
+    pub fn source_ref(&self) -> Option<ObjectId> {
+        self.source_identity.reference()
+    }
+}
+
+impl ActivatedAbilityOnStack {
+    pub fn source_object(&self) -> ObjectId {
+        self.source_object
     }
 }

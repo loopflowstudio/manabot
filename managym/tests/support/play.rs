@@ -23,7 +23,7 @@ use managym::{
 
 use crate::support::{
     game::{move_to_hand, Scenario},
-    inspect::{can_cast, find_owned_card, has_action, library_card, permanent_named},
+    inspect::{can_cast, find_owned_card, has_action, library_card, now, permanent_named},
 };
 
 const MAX_SCENARIO_ACTIONS: usize = 20_000;
@@ -154,7 +154,7 @@ impl Scenario {
                 let Some(permanent) = self.game.state.permanents[*permanent_id].as_ref() else {
                     return false;
                 };
-                let object = &self.game.state.objects[permanent.object];
+                let object = &self.game.state[permanent.object];
                 object.name == card_name
             })
             .expect("target choice for named permanent should exist");
@@ -344,7 +344,9 @@ pub fn spend_colorless(s: &mut Scenario) {
     panic!("colorless payment did not complete");
 }
 
+/// Select the card behind `object` wherever it is offered.
 pub fn select_card(s: &mut Scenario, object: ObjectId) {
+    let object = now(s, object);
     choose(
         s,
         |a| matches!(a,Action::SelectCard {object: selected,..} if *selected==object),
@@ -368,16 +370,18 @@ pub fn target_opponent(s: &mut Scenario) {
 // ---------------------------------------------------------------------------
 
 /// Move player 0's library copy into the hand through the zone-change
-/// authority and cast that copy.
+/// authority and cast that copy. Returns the card's object once the action
+/// returns: the spell, or the hand card while a casting choice is pending.
 pub fn cast(s: &mut Scenario, name: &str) -> ObjectId {
     let id = move_to_hand(s, name);
     cast_card(s, id);
-    id
+    now(s, id)
 }
 
 /// Cast `id` from whichever zone currently permits it, refreshing priority.
 pub fn cast_card(s: &mut Scenario, id: ObjectId) {
     s.game_mut().scenario_refresh_priority().unwrap();
+    let id = now(s, id);
     choose(
         s,
         |a| matches!(a, Action::CastSpell { object, .. } if *object == id),
@@ -397,15 +401,18 @@ pub fn play_land(s: &mut Scenario, name: &str) -> PermanentId {
         s,
         |a| matches!(a, Action::PlayLand { object, .. } if *object == id),
     );
-    s.game().state.object_to_permanent[id].expect("land entered")
+    s.game()
+        .state
+        .permanent_of(now(s, id))
+        .expect("land entered")
 }
 
 /// Like `cast`, but the copy may already be in player 0's hand.
 pub fn cast_owned(s: &mut Scenario, name: &str) -> ObjectId {
     let object = find_owned_card(s, 0, name);
-    s.game_mut().move_object(object, ZoneType::Hand);
+    let object = s.game_mut().move_object(object, ZoneType::Hand);
     cast_card(s, object);
-    object
+    now(s, object)
 }
 
 /// Take the first offered cast action.
@@ -447,6 +454,7 @@ pub fn activate(s: &mut Scenario, source: PermanentId, index: usize) {
 /// priority first.
 pub fn activate_card(s: &mut Scenario, source: ObjectId, index: usize) {
     s.game_mut().scenario_refresh_priority().unwrap();
+    let source = now(s, source);
     choose(s, |a| {
         matches!(a, Action::ActivateCardAbility { object, ability_index, .. }
         if *object == source && *ability_index == index)
@@ -482,14 +490,14 @@ pub fn activate_named(s: &mut Scenario, name: &str, index: usize) {
 /// onto the battlefield, anything else is cast.
 pub fn play_and_settle(s: &mut Scenario, name: &str) -> ObjectId {
     let id = library_card(s, 0, name);
-    if s.game().state.objects[id].types.is_land() {
+    if s.game().state[id].types.is_land() {
         s.game_mut().move_object(id, ZoneType::Battlefield);
         s.game_mut().scenario_refresh_priority().unwrap();
     } else {
         cast(s, name);
     }
     settle(s);
-    id
+    now(s, id)
 }
 
 /// Move player 0's library copy onto the battlefield through the zone-change
@@ -502,7 +510,7 @@ pub fn enter_and_settle(s: &mut Scenario, name: &str) -> ObjectId {
         s.pass_priority();
     }
     settle(s);
-    id
+    now(s, id)
 }
 
 // ---------------------------------------------------------------------------

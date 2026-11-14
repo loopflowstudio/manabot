@@ -28,7 +28,7 @@ use crate::{
     state::{
         ability::Effect,
         card::CardDefId,
-        game_object::{ObjectId, ObjectLki, ObjectRef, PlayerId, Target},
+        game_object::{ObjectId, ObjectLki, PlayerId, Target},
         mana::{Mana, ManaSpent},
     },
 };
@@ -194,7 +194,7 @@ struct Projection<'a> {
     started: bool,
     references: Vec<VisibleReference>,
     text: Option<Text>,
-    last_known: Vec<ObjectRef>,
+    last_known: Vec<ObjectId>,
 }
 
 impl<'a> Projection<'a> {
@@ -273,12 +273,12 @@ impl<'a> Projection<'a> {
             .unwrap_or_else(|| "an unrevealed object".into())
     }
 
-    fn object(&mut self, name: &str, object: ObjectRef) {
+    fn object(&mut self, name: &str, object: ObjectId) {
         self.reference(name, self.game.visible_reference(object, self.viewer));
         self.retained_object(object);
     }
 
-    fn retained_object(&mut self, object: ObjectRef) {
+    fn retained_object(&mut self, object: ObjectId) {
         if let Some(lki) = self.game.object_lki(object) {
             self.lki(lki);
         }
@@ -292,7 +292,7 @@ impl<'a> Projection<'a> {
         }
     }
 
-    fn object_id(&mut self, name: &str, object_id: impl Into<ObjectId>) {
+    fn object_id(&mut self, name: &str, object_id: ObjectId) {
         self.reference(name, self.game.object_reference(object_id, self.viewer));
     }
 
@@ -300,7 +300,7 @@ impl<'a> Projection<'a> {
         self.reference(name, self.game.target_reference(target, self.viewer));
     }
 
-    fn objects(&mut self, name: &str, objects: &[ObjectRef]) {
+    fn objects(&mut self, name: &str, objects: &[ObjectId]) {
         if objects.is_empty() {
             return;
         }
@@ -446,7 +446,7 @@ impl<'a> Projection<'a> {
             } => {
                 self.paid_summary();
                 self.field("return", &"paid activation");
-                self.object("activation source", ability.source_ref);
+                self.object("activation source", ability.source_object());
                 self.field("controller", &ability.controller);
                 self.field("ability", &ability.ability_index);
                 self.field("X", &ability.x);
@@ -497,7 +497,9 @@ impl<'a> Projection<'a> {
                     ActivationSource::Permanent(id) => {
                         self.target("paid source", Target::Permanent(*id))
                     }
-                    ActivationSource::Card(card) => self.object_id("paid source", *card),
+                    ActivationSource::Card(card) => {
+                        self.object_id("paid source", self.game.state.object_of(*card))
+                    }
                 }
                 self.field("ability", ability_index);
                 self.field("X", x);
@@ -533,13 +535,13 @@ impl<'a> Projection<'a> {
     }
 
     fn lki(&mut self, lki: &ObjectLki) {
-        if self.last_known.contains(&lki.object_ref) {
+        if self.last_known.contains(&lki.object) {
             return;
         }
-        self.last_known.push(lki.object_ref);
+        self.last_known.push(lki.object);
         self.reference(
             "pre-event object",
-            self.game.visible_reference(lki.object_ref, self.viewer),
+            self.game.visible_reference(lki.object, self.viewer),
         );
         // While the exact object still has this view, its ordinary object row
         // and catalog already carry the snapshot. After departure or a changed
@@ -552,7 +554,7 @@ impl<'a> Projection<'a> {
         self.summary(|| {
             format!(
                 "Last known {}: power {}, toughness {}; counters {:?}.",
-                Self::label(game.visible_reference(lki.object_ref, viewer)),
+                Self::label(game.visible_reference(lki.object, viewer)),
                 lki.power,
                 lki.toughness,
                 lki.counters
@@ -571,7 +573,6 @@ impl<'a> Projection<'a> {
             power,
             toughness,
             counters,
-            object_ref: _,
             object: _,
             from_zone,
             owner,
@@ -692,19 +693,18 @@ impl<'a> Projection<'a> {
                 }
                 ProposedEvent::ZoneMove {
                     object_id,
-                    object,
                     from,
                     to,
                     entry,
                 } => {
-                    if let Some(object) = object {
-                        self.object("moving object", *object);
+                    if from.is_some() {
+                        self.object("moving object", *object_id);
                     } else {
                         self.reference(
                             "entering definition",
                             VisibleReference {
                                 definition: Some(
-                                    self.game.state.objects[*object_id].definition_id.0,
+                                    self.game.state.entry_object(*object_id).definition_id.0,
                                 ),
                                 ..Default::default()
                             },
@@ -872,7 +872,7 @@ pub(crate) fn project_frame(
     let mut out = Projection::new(game, viewer, text);
     // Source/trigger quantities can read departed characteristics after another
     // instruction has suspended. Their definition join alone cannot carry LKI.
-    if let Some(source) = effect.source_ref {
+    if let Some(source) = effect.source_ref() {
         out.retained_object(source);
     }
     if let Some(target) = effect.context_target {
@@ -905,8 +905,8 @@ pub(crate) fn project_frame(
         out.field("excess damage", &effect.excess_damage);
     }
     let source_definition = effect
-        .source
-        .map(|object| game.state.objects[object].definition_id);
+        .source()
+        .map(|object| game.state.source_base(object).0);
     if receipt_matters(&effect.spent, source_definition) {
         out.receipt(&effect.spent);
     }
@@ -988,7 +988,9 @@ pub(crate) fn project_decision(
                         out.field("once each turn ability", &key.1);
                     }
                 }
-                SpendCompletion::Foretell(card) => out.object_id("cast from hand", *card),
+                SpendCompletion::Foretell(card) => {
+                    out.object_id("cast from hand", game.state.object_of(*card))
+                }
                 SpendCompletion::Upfront(_) => {}
             }
         }

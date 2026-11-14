@@ -55,11 +55,9 @@ fn cast_manowar_to_trigger(seed: u64) -> Vec<GameEvent> {
     let islands: Vec<_> = s
         .game()
         .state
-        .objects
-        .iter()
-        .enumerate()
+        .latest_objects()
         .filter(|(_, object)| object.owner == PlayerId(0) && object.name == "Island")
-        .map(|(idx, _)| managym::state::game_object::ObjectId(idx))
+        .map(|(idx, _)| idx)
         .take(3)
         .collect();
     for island in islands {
@@ -90,27 +88,38 @@ fn cast_manowar_to_trigger(seed: u64) -> Vec<GameEvent> {
 
 #[test]
 fn spell_events_are_observable_for_creature_spells() {
-    let (_s, elf, events) = cast_llanowar_elves(7101);
+    let (s, elf, events) = cast_llanowar_elves(7101);
+    // Each zone change makes a new object of the same card (CR 400.7).
+    let card = s.game().state.card_id(elf);
 
     assert!(events.contains(&GameEvent::SpellCast {
         object_id: elf,
         targets: Vec::new(),
     }));
     assert!(events.contains(&GameEvent::SpellResolved { object_id: elf }));
-    assert!(events.contains(&GameEvent::CardMoved {
-        object_id: elf,
-        from: Some(ZoneType::Hand),
-        to: ZoneType::Stack,
-        controller: PlayerId(0),
-        face_down: false,
-    }));
-    assert!(events.contains(&GameEvent::CardMoved {
-        object_id: elf,
-        from: Some(ZoneType::Stack),
-        to: ZoneType::Battlefield,
-        controller: PlayerId(0),
-        face_down: false,
-    }));
+    let moves: Vec<_> = events
+        .iter()
+        .filter_map(|event| match event {
+            GameEvent::CardMoved {
+                object_id,
+                departed,
+                from,
+                to,
+                controller,
+                face_down,
+            } if s.game().state.card_id(*object_id) == card => {
+                Some((*object_id, *departed, *from, *to, *controller, *face_down))
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(moves.len(), 2);
+    assert_eq!(moves[0].2, Some(ZoneType::Hand));
+    assert_eq!(moves[0].3, ZoneType::Stack);
+    assert_eq!(moves[1].1, Some(moves[0].0));
+    assert_eq!(moves[1].2, Some(ZoneType::Stack));
+    assert_eq!(moves[1].3, ZoneType::Battlefield);
+    assert!(moves.iter().all(|moved| moved.4 == PlayerId(0) && !moved.5));
 
     let spell_cast_index = events
         .iter()

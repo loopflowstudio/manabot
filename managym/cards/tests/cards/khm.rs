@@ -19,7 +19,7 @@ fn coils(s: &crate::support::game::Scenario) -> usize {
         .permanents
         .iter()
         .flatten()
-        .filter(|permanent| s.game().state.objects[permanent.object].name == "Koma's Coil")
+        .filter(|permanent| s.game().state[permanent.object].name == "Koma's Coil")
         .count()
 }
 

@@ -25,7 +25,8 @@ use managym::{
 };
 
 use crate::support::inspect::{
-    find_owned_card, find_owned_card_off_battlefield, library_card, owned_card, permanent_named,
+    find_owned_card, find_owned_card_off_battlefield, library_card, now, owned_card,
+    permanent_named,
 };
 
 // ---------------------------------------------------------------------------
@@ -119,13 +120,13 @@ impl Scenario {
     ) -> PermanentId {
         let mut chosen_card_id = None;
         let mut existing_battlefield_permanent = None;
-        for (index, object) in self.game.state.objects.iter().enumerate() {
+        for (index, object) in self.game.state.latest_objects() {
             if object.owner != PlayerId(player) || object.name != card_name {
                 continue;
             }
-            let object_id = ObjectId(index);
+            let object_id = index;
             if self.game.state.zones.zone_of(object_id) == Some(ZoneType::Battlefield) {
-                if let Some(permanent_id) = self.game.state.object_to_permanent[object_id] {
+                if let Some(permanent_id) = self.game.state.permanent_of(object_id) {
                     if existing_battlefield_permanent.is_none() {
                         existing_battlefield_permanent = Some(permanent_id);
                     }
@@ -144,7 +145,7 @@ impl Scenario {
         };
 
         if self.game.state.zones.zone_of(object_id) == Some(ZoneType::Battlefield) {
-            if let Some(permanent_id) = self.game.state.object_to_permanent[object_id] {
+            if let Some(permanent_id) = self.game.state.permanent_of(object_id) {
                 return permanent_id;
             }
         } else {
@@ -157,16 +158,16 @@ impl Scenario {
         let permanent = Permanent::new(
             self.game.state.id_gen.next_id(),
             object_id,
-            &self.game.state.objects[object_id],
+            &self.game.state[object_id],
         );
         self.game.state.permanents.push(Some(permanent));
-        if self.game.state.object_to_permanent.len() <= object_id.0 {
+        if self.game.state.object_to_permanent.len() <= object_id.slot() {
             self.game
                 .state
                 .object_to_permanent
-                .resize(object_id.0 + 1, None);
+                .resize(object_id.slot() + 1, None);
         }
-        self.game.state.object_to_permanent[object_id] = Some(permanent_id);
+        self.game.state.object_to_permanent[(object_id).slot()] = Some(permanent_id);
         permanent_id
     }
 
@@ -230,7 +231,7 @@ pub fn clear_hand(s: &mut Scenario, player: usize) {
 /// authority and refresh priority.
 pub fn move_to_hand(s: &mut Scenario, name: &str) -> ObjectId {
     let id = library_card(s, 0, name);
-    s.game_mut().move_object(id, ZoneType::Hand);
+    let id = s.game_mut().move_object(id, ZoneType::Hand);
     s.game_mut().scenario_refresh_priority().unwrap();
     id
 }
@@ -241,14 +242,12 @@ pub fn force_new_card_in_hand(s: &mut Scenario, player: usize, card_name: &str) 
     let object = s
         .game()
         .state
-        .objects
-        .iter()
-        .enumerate()
+        .latest_objects()
         .find_map(|(index, object)| {
             (object.owner == PlayerId(player)
                 && object.name == card_name
-                && s.game().state.zones.zone_of(ObjectId(index)) == Some(ZoneType::Library))
-            .then_some(ObjectId(index))
+                && s.game().state.zones.zone_of(index) == Some(ZoneType::Library))
+            .then_some(index)
         })
         .unwrap_or_else(|| panic!("no library copy of {card_name} for player {player}"));
     s.game_mut()
@@ -267,7 +266,7 @@ pub fn force_from_library(s: &mut Scenario, player: usize, name: &str) -> Object
         .zone_objects(ZoneType::Library, PlayerId(player))
         .iter()
         .copied()
-        .find(|object_id| game.state.objects[object_id].name == name)
+        .find(|object_id| game.state[object_id].name == name)
         .unwrap_or_else(|| panic!("no {name} in player {player}'s library"));
     s.game_mut()
         .state
@@ -287,7 +286,7 @@ pub fn pin_top(s: &mut Scenario, names: &[&str]) -> Vec<ObjectId> {
             .zone_objects(ZoneType::Library, PlayerId(0))
             .iter()
             .copied()
-            .find(|id| s.game().state.objects[*id].name == *name && !objects.contains(id))
+            .find(|id| s.game().state[*id].name == *name && !objects.contains(id))
             .unwrap();
         objects.push(next);
     }
@@ -300,12 +299,18 @@ pub fn pin_top(s: &mut Scenario, names: &[&str]) -> Vec<ObjectId> {
     objects
 }
 
+/// Move the card behind `object` to `zone` through the zone-change authority,
+/// wherever earlier moves left it, and return the object it becomes.
+pub fn move_card(s: &mut Scenario, object: ObjectId, zone: ZoneType) -> ObjectId {
+    let object = now(s, object);
+    s.game_mut().move_object(object, zone)
+}
+
 /// Move player `player`'s library copy of `name` to `zone` through the
 /// zone-change authority (firing any enter or leave triggers).
 pub fn move_from_library(s: &mut Scenario, player: usize, name: &str, zone: ZoneType) -> ObjectId {
     let object = library_card(s, player, name);
-    s.game_mut().move_object(object, zone);
-    object
+    s.game_mut().move_object(object, zone)
 }
 
 /// Silently move an owned hand or library card into the graveyard (e.g.
@@ -332,17 +337,17 @@ pub fn force_lands(s: &mut Scenario, player: usize, land: &str, count: usize) {
 /// authority (enter triggers fire) and refresh priority.
 pub fn enter_battlefield(s: &mut Scenario, name: &str) -> PermanentId {
     let id = library_card(s, 0, name);
-    s.game_mut().move_object(id, ZoneType::Battlefield);
+    let id = s.game_mut().move_object(id, ZoneType::Battlefield);
     s.game_mut().scenario_refresh_priority().unwrap();
-    s.game().state.object_to_permanent[id].unwrap()
+    s.game().state.permanent_of(id).unwrap()
 }
 
 /// Put an owned hand or library copy onto the battlefield through the
 /// zone-change authority, without refreshing priority.
 pub fn put_onto_battlefield(s: &mut Scenario, player: usize, name: &str) -> PermanentId {
     let object = find_owned_card(s, player, name);
-    s.game_mut().move_object(object, ZoneType::Battlefield);
-    s.game().state.object_to_permanent[object].unwrap()
+    let object = s.game_mut().move_object(object, ZoneType::Battlefield);
+    s.game().state.permanent_of(object).unwrap()
 }
 
 /// Move an off-battlefield copy onto the battlefield through the real
@@ -353,8 +358,11 @@ pub fn enters_battlefield_with_triggers(
     name: &str,
 ) -> PermanentId {
     let object_id = find_owned_card_off_battlefield(s, player, name);
-    s.game_mut().move_object(object_id, ZoneType::Battlefield);
-    s.game().state.object_to_permanent[object_id].expect("permanent should exist")
+    let object_id = s.game_mut().move_object(object_id, ZoneType::Battlefield);
+    s.game()
+        .state
+        .permanent_of(object_id)
+        .expect("permanent should exist")
 }
 
 pub fn clear_summoning_sickness(s: &mut Scenario, id: PermanentId) {
@@ -424,9 +432,7 @@ pub fn set_counters(s: &mut Scenario, id: PermanentId, kind: CounterKind, count:
 }
 
 pub fn inject_ability(s: &mut Scenario, object_id: ObjectId, ability: Ability) {
-    s.game_mut().state.objects[object_id]
-        .abilities
-        .push(ability);
+    s.game_mut().state[object_id].abilities.push(ability);
 }
 
 /// The UR Lessons list both players use for Gran-Gran, Proft's Eidetic Memory

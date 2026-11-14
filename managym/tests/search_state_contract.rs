@@ -195,7 +195,7 @@ fn stale_object_refs_are_rejected_in_a_fork_and_the_root_keeps_its_identity() {
         .as_ref()
         .expect("live permanent")
         .object;
-    let old_ref = root.current_object_ref(object).expect("current object ref");
+    let old_ref = root.state.live(object).expect("current object ref");
     assert_eq!(root.lookup_current_permanent(old_ref), Ok(permanent));
 
     let root_view = root.characteristics(permanent);
@@ -209,32 +209,30 @@ fn stale_object_refs_are_rejected_in_a_fork_and_the_root_keeps_its_identity() {
         Arc::ptr_eq(&root_view, &branch.characteristics(permanent)),
         "draining events does not change any layered characteristic"
     );
-    branch.move_object(object, ZoneType::Graveyard);
+    let object = branch.move_object(object, ZoneType::Graveyard);
     assert!(
         !Arc::ptr_eq(&root_view, &branch.characteristics(permanent)),
         "a departed object cannot keep its cached battlefield view"
     );
     assert_eq!(
         branch.lookup_current_permanent(old_ref),
-        Err(ObjectLookupError::StaleIncarnation)
+        Err(ObjectLookupError::Stale)
     );
     assert_eq!(
         branch
             .object_lki(old_ref)
             .expect("departing object has LKI")
-            .object_ref,
+            .object,
         old_ref
     );
 
-    branch.move_object(object, ZoneType::Battlefield);
-    let new_ref = branch
-        .current_object_ref(object)
-        .expect("re-entered object ref");
-    assert_eq!(new_ref.entity, old_ref.entity);
-    assert!(new_ref.incarnation > old_ref.incarnation);
+    let object = branch.move_object(object, ZoneType::Battlefield);
+    let new_ref = branch.state.live(object).expect("re-entered object ref");
+    assert_ne!(new_ref, old_ref);
+    assert_eq!(branch.state.card_id(new_ref), branch.state.card_id(old_ref));
     assert_eq!(
         branch.lookup_current_permanent(old_ref),
-        Err(ObjectLookupError::StaleIncarnation)
+        Err(ObjectLookupError::Stale)
     );
     assert!(branch.lookup_current_permanent(new_ref).is_ok());
     assert_ne!(witness(&branch), root_witness);
@@ -247,6 +245,6 @@ fn stale_object_refs_are_rejected_in_a_fork_and_the_root_keeps_its_identity() {
     assert_eq!(root.lookup_current_permanent(old_ref), Ok(permanent));
     assert_eq!(
         root.lookup_current_permanent(new_ref),
-        Err(ObjectLookupError::StaleIncarnation)
+        Err(ObjectLookupError::Stale)
     );
 }

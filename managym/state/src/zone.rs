@@ -1,5 +1,5 @@
-//! Ordered zone membership. Library and hand entries carry checked card ids
-//! or transient non-card occupants; other zones hold object ids. Borrowed views
+//! Ordered zone membership. Library and hand entries carry an appearance and
+//! its optional physical card; other zones hold object ids. Borrowed views
 //! and serialization project the same numeric ids without another stored list.
 
 use rand::seq::SliceRandom;
@@ -20,26 +20,32 @@ pub enum ZoneType {
 
 /// An occupant of a card zone. Non-cards are visitors until state-based actions;
 /// they keep their position but can never be returned by a card-only scan.
-#[derive(Clone, Copy, Debug, serde::Serialize)]
-#[serde(untagged)]
-enum CardZoneEntry {
-    Card(CardId),
-    Transient(ObjectId),
+#[derive(Clone, Copy, Debug)]
+struct CardZoneEntry {
+    object: ObjectId,
+    card: Option<CardId>,
+}
+
+// Keep the previous entry budget while storing both physical-card identity
+// and appearance. `Option<CardId>` uses the nonzero roster index's niche.
+const _: () = assert!(std::mem::size_of::<CardZoneEntry>() <= 16);
+
+impl serde::Serialize for CardZoneEntry {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serde::Serialize::serialize(&self.object, serializer)
+    }
 }
 
 impl CardZoneEntry {
     fn new(objects: &ObjectVec<Object>, object: ObjectId) -> Self {
-        match objects.card_id(object) {
-            Some(card) => Self::Card(card),
-            None => Self::Transient(object),
+        Self {
+            object,
+            card: objects.card_id(object),
         }
     }
 
     fn object(&self) -> &ObjectId {
-        match self {
-            Self::Card(card) => card.as_ref(),
-            Self::Transient(object) => object,
-        }
+        &self.object
     }
 }
 
@@ -67,17 +73,11 @@ impl<'a> ZoneObjects<'a> {
 
     /// Read stored checked ids in card zones; narrow mixed zones once here.
     pub fn cards(self, objects: &'a ObjectVec<Object>) -> impl Iterator<Item = CardId> + 'a {
-        self.entries
-            .iter()
-            .filter_map(|entry| match entry {
-                CardZoneEntry::Card(card) => Some(*card),
-                CardZoneEntry::Transient(_) => None,
-            })
-            .chain(
-                self.objects
-                    .iter()
-                    .filter_map(|object| objects.card_id(*object)),
-            )
+        self.entries.iter().filter_map(|entry| entry.card).chain(
+            self.objects
+                .iter()
+                .filter_map(|object| objects.card_id(*object)),
+        )
     }
 
     pub fn len(self) -> usize {
@@ -88,8 +88,7 @@ impl<'a> ZoneObjects<'a> {
         self.len() == 0
     }
 
-    pub fn contains(self, object: impl Into<ObjectId>) -> bool {
-        let object: ObjectId = object.into();
+    pub fn contains(self, object: ObjectId) -> bool {
         self.iter().any(|candidate| *candidate == object)
     }
 
@@ -128,8 +127,13 @@ pub struct ZoneManager {
     stack: [Vec<ObjectId>; 2],
     exile: [Vec<ObjectId>; 2],
     command: [Vec<ObjectId>; 2],
+    /// Each slot's zone, if its current appearance is in one.
     #[serde(rename = "card_zones")]
     object_zones: Vec<Option<ZoneType>>,
+    /// Each slot's current generation: the one owner of which appearance a
+    /// slot holds (CR 400.7). The state hash records it beside the zones.
+    #[serde(skip)]
+    generations: Vec<u32>,
 }
 
 impl ZoneManager {
@@ -140,15 +144,54 @@ impl ZoneManager {
             .find(|player| self.zone_objects(zone, *player).contains(object))
     }
 
-    fn ensure_slot(&mut self, object: ObjectId) {
-        if self.object_zones.len() <= object.0 {
-            self.object_zones.resize(object.0 + 1, None);
-        }
+    /// Allocate the next slot for a new card, token or copy, in no zone.
+    pub fn allocate(&mut self) -> ObjectId {
+        let slot = self.generations.len();
+        self.generations.push(0);
+        self.object_zones.push(None);
+        ObjectId::in_slot(slot, 0)
     }
 
-    pub fn zone_of(&self, object: impl Into<ObjectId>) -> Option<ZoneType> {
-        let object: ObjectId = object.into();
-        self.object_zones.get(object.0).copied().flatten()
+    /// The appearance each slot holds now, in creation order, whether or
+    /// not it is in a zone.
+    pub fn latest(&self) -> impl Iterator<Item = ObjectId> + '_ {
+        self.generations
+            .iter()
+            .enumerate()
+            .map(|(slot, generation)| ObjectId::in_slot(slot, *generation))
+    }
+
+    /// Every slot's current generation, in slot order.
+    pub fn generations(&self) -> &[u32] {
+        &self.generations
+    }
+
+    /// Whether `object` is the appearance its slot holds now. An object in
+    /// no zone (a sideboard card, a token not yet created, or one that ceased
+    /// to exist) is still the slot's latest; see [`ZoneManager::zone_of`] for
+    /// existence.
+    pub fn is_latest(&self, object: ObjectId) -> bool {
+        self.generations.get(object.slot()) == Some(&object.generation())
+    }
+
+    /// The zone holding this exact appearance; `None` once it has moved.
+    pub fn zone_of(&self, object: ObjectId) -> Option<ZoneType> {
+        self.is_latest(object)
+            .then(|| self.object_zones[object.slot()])
+            .flatten()
+    }
+
+    /// The object `object` became by its one next zone change, while that
+    /// successor is still in a zone (CR 400.7e, j).
+    pub fn successor(&self, object: ObjectId) -> Option<ObjectId> {
+        let next = ObjectId::in_slot(object.slot(), object.generation().checked_add(1)?);
+        self.zone_of(next).map(|_| next)
+    }
+
+    /// The appearance of a physical card its slot holds now, in a zone or not.
+    pub fn object_of(&self, card: CardId) -> ObjectId {
+        let slot = card.index();
+        ObjectId::in_slot(slot, self.generations[slot])
     }
 
     fn remove_from_zone(&mut self, object: ObjectId, zone: ZoneType) {
@@ -162,44 +205,71 @@ impl ZoneManager {
     }
 
     /// Remove an object from all zones entirely (CR 704.5d — tokens cease to
-    /// exist). The object remains in `GameState::objects` but is no
-    /// longer in any zone.
-    pub fn remove_object(&mut self, object: impl Into<ObjectId>) {
-        let object: ObjectId = object.into();
+    /// exist). Its row stays in the object store; its id names nothing.
+    pub fn remove_object(&mut self, object: ObjectId) {
         if let Some(zone) = self.zone_of(object) {
             self.remove_from_zone(object, zone);
-            self.object_zones[object.0] = None;
+            self.object_zones[object.slot()] = None;
         }
     }
 
-    /// Move `object` from wherever it is to the end of `holder`'s `to_zone`.
+    /// Move `object` from wherever it is to the end of `holder`'s `to_zone`
+    /// and return the appearance this makes (CR 400.7): a new generation of
+    /// its slot when it leaves a zone, the same id when it enters its first.
     /// The holder is the object's owner (CR 108.3, 111.2), except on the
     /// battlefield, where it is the permanent's controller (CR 110.2): each
     /// player's battlefield lists the permanents they control.
     pub fn move_object(
         &mut self,
         objects: &ObjectVec<Object>,
-        object: impl Into<ObjectId>,
+        object: ObjectId,
         holder: PlayerId,
         to_zone: ZoneType,
+    ) -> ObjectId {
+        debug_assert!(self.is_latest(object), "a stale object cannot move");
+        let slot = object.slot();
+        let mut moved = object;
+        if let Some(old_zone) = self.zone_of(object) {
+            self.remove_from_zone(object, old_zone);
+            let generation = &mut self.generations[slot];
+            *generation = generation
+                .checked_add(1)
+                .expect("object generation overflow");
+            moved = ObjectId::in_slot(slot, *generation);
+        }
+        match self.store_mut(to_zone, holder) {
+            ZoneStore::Cards(entries) => entries.push(CardZoneEntry::new(objects, moved)),
+            ZoneStore::Objects(zone) => zone.push(moved),
+        }
+        self.object_zones[slot] = Some(to_zone);
+        moved
+    }
+
+    /// Put the same appearance at the end of `holder`'s `zone` without a
+    /// zone change: setup, fixtures and possible-world materialization.
+    pub fn place(
+        &mut self,
+        objects: &ObjectVec<Object>,
+        object: ObjectId,
+        holder: PlayerId,
+        zone: ZoneType,
     ) {
-        let object: ObjectId = object.into();
-        self.ensure_slot(object);
+        debug_assert!(self.is_latest(object), "a stale object cannot be placed");
         if let Some(old_zone) = self.zone_of(object) {
             self.remove_from_zone(object, old_zone);
         }
-        match self.store_mut(to_zone, holder) {
+        match self.store_mut(zone, holder) {
             ZoneStore::Cards(entries) => entries.push(CardZoneEntry::new(objects, object)),
-            ZoneStore::Objects(zone) => zone.push(object),
+            ZoneStore::Objects(objects) => objects.push(object),
         }
-        self.object_zones[object.0] = Some(to_zone);
+        self.object_zones[object.slot()] = Some(zone);
     }
 
     pub fn top(&self, zone: ZoneType, player: PlayerId) -> Option<ObjectId> {
         self.zone_objects(zone, player).last().copied()
     }
 
-    pub fn contains(&self, object: impl Into<ObjectId>, zone: ZoneType, player: PlayerId) -> bool {
+    pub fn contains(&self, object: ObjectId, zone: ZoneType, player: PlayerId) -> bool {
         self.zone_objects(zone, player).contains(object)
     }
 
@@ -240,14 +310,7 @@ impl ZoneManager {
 
     /// Reorder an existing occupant; `index` is its position after removal,
     /// clamped to the end. This preserves its kind and zone membership.
-    pub fn reposition(
-        &mut self,
-        zone: ZoneType,
-        player: PlayerId,
-        object: impl Into<ObjectId>,
-        index: usize,
-    ) {
-        let object: ObjectId = object.into();
+    pub fn reposition(&mut self, zone: ZoneType, player: PlayerId, object: ObjectId, index: usize) {
         let Some(old) = self
             .zone_objects(zone, player)
             .iter()
@@ -295,8 +358,8 @@ impl ZoneManager {
         rng: &mut R,
     ) {
         match self.store_mut(zone, player) {
-            ZoneStore::Cards(entries) => entries.sort_unstable_by_key(|entry| entry.object().0),
-            ZoneStore::Objects(objects) => objects.sort_unstable_by_key(|object| object.0),
+            ZoneStore::Cards(entries) => entries.sort_unstable_by_key(|entry| *entry.object()),
+            ZoneStore::Objects(objects) => objects.sort_unstable(),
         }
         self.shuffle(zone, player, rng);
     }
@@ -311,9 +374,8 @@ impl ZoneManager {
         {
             *slot = new;
         }
-        self.ensure_slot(new);
-        self.object_zones[new.0] = Some(ZoneType::Exile);
-        self.object_zones[old.0] = None;
+        self.object_zones[new.slot()] = Some(ZoneType::Exile);
+        self.object_zones[old.slot()] = None;
     }
 
     /// Reassign `player`'s hand and library to exactly `new_hand` and
@@ -331,12 +393,10 @@ impl ZoneManager {
     ) {
         let idx = player.0;
         for &object in &new_hand {
-            self.ensure_slot(object);
-            self.object_zones[object.0] = Some(ZoneType::Hand);
+            self.object_zones[object.slot()] = Some(ZoneType::Hand);
         }
         for &object in &new_library {
-            self.ensure_slot(object);
-            self.object_zones[object.0] = Some(ZoneType::Library);
+            self.object_zones[object.slot()] = Some(ZoneType::Library);
         }
         self.hand[idx] = new_hand
             .into_iter()

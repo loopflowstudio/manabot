@@ -25,7 +25,7 @@ use crate::{
     state::{
         card::ActivatedAbilityDefinition,
         game_object::{
-            CardId, IdGenerator, Incarnation, ObjectId, ObjectLkiLog, ObjectRef, ObjectVec,
+            CardId, CardVec, IdGenerator, ObjectId, ObjectLkiLog, ObjectLookupError, ObjectVec,
             PermanentId, PermanentVec, PlayerId, Target,
         },
         mana::Mana,
@@ -37,13 +37,14 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub struct GameState {
+    /// Immutable physical cards, in deal order, including both sideboards.
+    pub cards: CardVec,
     /// Every object a game has made: its cards, tokens and copies of spells,
     /// told apart by `Object::kind` (CR 109.1).
     pub objects: ObjectVec<crate::state::game_object::Object>,
     pub permanents: PermanentVec<Option<crate::state::permanent::Permanent>>,
+    /// Each slot's battlefield permanent; read through [`GameState::permanent_of`].
     pub object_to_permanent: ObjectVec<Option<PermanentId>>,
-    /// Current CR 400.7 generation for each stored object.
-    pub object_incarnations: ObjectVec<Incarnation>,
     /// Last-known battlefield facts keyed by the departed exact object.
     pub object_lki: ObjectLkiLog,
     pub players: [crate::state::player::Player; 2],
@@ -77,10 +78,10 @@ pub struct GameState {
 }
 
 impl GameState {
-    /// Update raw membership, certifying card-zone occupants. Callers own
+    /// Put the same appearance in a zone without a zone change. Callers own
     /// rules events; ordinary play uses `Game::move_object`.
-    pub fn place_object(&mut self, object: impl Into<ObjectId>, holder: PlayerId, zone: ZoneType) {
-        self.zones.move_object(&self.objects, object, holder, zone);
+    pub fn place_object(&mut self, object: ObjectId, holder: PlayerId, zone: ZoneType) {
+        self.zones.place(&self.objects, object, holder, zone);
     }
 
     /// Materialize hidden-zone contents, retaining transient occupants and order.
@@ -94,7 +95,100 @@ impl GameState {
             .reassign_hidden(&self.objects, player, hand, library);
     }
 
-    /// A card keeps its kind across moves, transformations and copy effects.
+    /// Every stored object under the id its slot holds now, in creation
+    /// order, including objects in no zone.
+    pub fn latest_objects(
+        &self,
+    ) -> impl Iterator<Item = (ObjectId, &crate::state::game_object::Object)> {
+        self.zones.latest().zip(self.objects.iter())
+    }
+
+    /// `object` while it still names an object in a zone (CR 400.7).
+    pub fn live(&self, object: ObjectId) -> Option<ObjectId> {
+        self.zones.zone_of(object).map(|_| object)
+    }
+
+    /// The current appearance of a physical card. A card outside the game
+    /// (a sideboard) is in no zone: this is the id it would enter with.
+    pub fn object_of(&self, card: CardId) -> ObjectId {
+        self.zones.object_of(card)
+    }
+
+    /// The physical card behind an appearance; stale objects, tokens and
+    /// spell copies have no card.
+    pub fn card_of(&self, object: ObjectId) -> Option<CardId> {
+        self.object(object).ok()?;
+        self.objects.card_id(object)
+    }
+
+    /// Read one appearance, rejecting departed objects even when their
+    /// physical card still occupies the same storage slot.
+    pub fn object(
+        &self,
+        object: ObjectId,
+    ) -> Result<&crate::state::game_object::Object, ObjectLookupError> {
+        let value = self
+            .objects
+            .get(object.slot())
+            .ok_or(ObjectLookupError::Missing)?;
+        if self.zones.zone_of(object).is_none() {
+            return Err(ObjectLookupError::Stale);
+        }
+        Ok(value)
+    }
+
+    /// Zone-entry authority may inspect an allocated row before it is in a
+    /// zone (new tokens and outside-game cards). It still rejects a retired
+    /// generation; ordinary rules reads use `object`.
+    pub(crate) fn entry_object(&self, object: ObjectId) -> &crate::state::game_object::Object {
+        assert!(self.zones.is_latest(object), "retired entry appearance");
+        &self.objects[object.slot()]
+    }
+
+    pub(crate) fn entry_object_mut(
+        &mut self,
+        object: ObjectId,
+    ) -> &mut crate::state::game_object::Object {
+        assert!(self.zones.is_latest(object), "retired entry appearance");
+        &mut self.objects[object.slot()]
+    }
+
+    /// Definition provenance for a source that may have departed. A live
+    /// source supplies its current printing; departure restores its retained
+    /// base, independently of any later appearance in the same storage slot.
+    pub(crate) fn source_base(
+        &self,
+        source: ObjectId,
+    ) -> (
+        crate::state::card::CardDefId,
+        &crate::state::card::PrintedCharacteristics,
+    ) {
+        self.object(source)
+            .map(|row| (row.definition_id, &**row))
+            .unwrap_or_else(|_| self.objects.retained_base(source).expect("source printing"))
+    }
+
+    /// The battlefield permanent this appearance is.
+    pub fn permanent_of(&self, object: ObjectId) -> Option<PermanentId> {
+        self.live(object)?;
+        self.object_to_permanent
+            .get(object.slot())
+            .copied()
+            .flatten()
+    }
+
+    /// The object the card behind `object` is now: a test follows one card
+    /// across zones with it. A token or copy stays the object it was.
+    #[cfg(test)]
+    pub(crate) fn now(&self, object: ObjectId) -> ObjectId {
+        self.card_id(object)
+            .map_or(object, |card| self.object_of(card))
+    }
+
+    /// The card this object is or was, without the staleness check of
+    /// [`GameState::card_of`]: for a card outside the game (a sideboard is no
+    /// zone), a viewer capture of a departed object, and stale cast grants
+    /// whose callers check the zone themselves.
     pub fn card_id(&self, object: ObjectId) -> Option<CardId> {
         self.objects.card_id(object)
     }
@@ -107,6 +201,25 @@ impl GameState {
         player: PlayerId,
     ) -> impl Iterator<Item = CardId> + '_ {
         self.zones.zone_objects(zone, player).cards(&self.objects)
+    }
+}
+
+impl std::ops::Index<ObjectId> for GameState {
+    type Output = crate::state::game_object::Object;
+    fn index(&self, object: ObjectId) -> &Self::Output {
+        self.object(object).expect("current object appearance")
+    }
+}
+impl std::ops::Index<&ObjectId> for GameState {
+    type Output = crate::state::game_object::Object;
+    fn index(&self, object: &ObjectId) -> &Self::Output {
+        &self[*object]
+    }
+}
+impl std::ops::IndexMut<ObjectId> for GameState {
+    fn index_mut(&mut self, object: ObjectId) -> &mut Self::Output {
+        self.object(object).expect("current object appearance");
+        &mut self.objects.0[object.slot()]
     }
 }
 
@@ -520,17 +633,34 @@ impl TrackedState {
         &mut self.state.players[player.0].combat_mana_pool
     }
 
+    /// Name the stack appearance of the cast `player` recorded last. The
+    /// cast was recorded (through `DerefMut`) before its spell moved, so
+    /// derivations already saw it; only the entry's generation changes here,
+    /// and no cached derivation reads `spells_cast`.
+    pub(crate) fn name_last_cast(&mut self, player: PlayerId, spell: ObjectId) {
+        let cast = self.state.turn.spells_cast[player.0]
+            .last_mut()
+            .expect("a recorded cast");
+        debug_assert_eq!(cast.slot(), spell.slot(), "the cast's own spell");
+        *cast = spell;
+    }
+
     // Zone changes feed the derivations that read the zones they touch.
 
-    /// Move `object` to `to_zone` under `holder`. Characteristics read the
-    /// battlefield and graveyards; the trigger index reads the battlefield.
-    pub(crate) fn move_object(
+    /// Mint the appearance `object` becomes in `holder`'s `to_zone` (CR
+    /// 400.7) and return it: the slot's next generation, with the row's
+    /// base and entry values consumed together. Characteristics read the
+    /// battlefield and graveyards; the trigger index reads the battlefield;
+    /// a hidden-zone move invalidates nothing. Only a battlefield object's
+    /// identity reaches a cached derivation (through its effect records and
+    /// static attachments).
+    pub(crate) fn mint_appearance(
         &mut self,
-        object: impl Into<ObjectId>,
+        object: ObjectId,
         holder: PlayerId,
         to_zone: ZoneType,
-    ) {
-        let object: ObjectId = object.into();
+        entry_copy: bool,
+    ) -> ObjectId {
         let from_zone = self.state.zones.zone_of(object);
         let touches = |zone: ZoneType| matches!(zone, ZoneType::Battlefield | ZoneType::Graveyard);
         if touches(to_zone) || from_zone.is_some_and(touches) {
@@ -539,27 +669,14 @@ impl TrackedState {
         if to_zone == ZoneType::Battlefield || from_zone == Some(ZoneType::Battlefield) {
             self.revisions.triggers += 1;
         }
+        assert!(
+            self.state.zones.is_latest(object),
+            "retired mint appearance"
+        );
+        self.state.objects[object.slot()].mint_appearance(from_zone, to_zone, entry_copy);
         self.state
             .zones
-            .move_object(&self.state.objects, object, holder, to_zone);
-    }
-
-    /// Advance the object's CR 400.7 incarnation as it leaves `from_zone`.
-    /// Only a battlefield object's exact identity reaches a cached derivation
-    /// (through its effect records and static attachments).
-    pub(crate) fn advance_incarnation(&mut self, object: ObjectId, from_zone: ZoneType) {
-        if from_zone == ZoneType::Battlefield {
-            self.revisions.characteristics += 1;
-            self.revisions.triggers += 1;
-        }
-        let incarnation = self
-            .state
-            .object_incarnations
-            .get_mut(object.0)
-            .expect("card entity must have an incarnation");
-        *incarnation = incarnation
-            .checked_next()
-            .expect("rules object incarnation overflow");
+            .move_object(&self.state.objects, object, holder, to_zone)
     }
 }
 
@@ -622,7 +739,7 @@ pub struct Game {
     /// Authority-private exact bindings for object candidates already
     /// published through semantic DecisionFrames. This derived index is not
     /// part of the rules-state witness or client wire representation.
-    pub(crate) semantic_object_candidates: RefCell<BTreeMap<ObjectCandidateAddress, ObjectRef>>,
+    pub(crate) semantic_object_candidates: RefCell<BTreeMap<ObjectCandidateAddress, ObjectId>>,
     pub pending_choice: Option<PendingChoice>,
     pub skip_trivial_count: usize,
     pub trackers: [BehaviorTracker; 2],

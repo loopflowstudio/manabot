@@ -67,19 +67,16 @@ fn stack(
     indices: Vec<usize>,
 ) {
     if matches!(entry, Entry::Spell) {
-        let object_id = ObjectId(
-            game.state
-                .objects
-                .iter()
-                .position(|object_id| {
-                    object_id.owner == controller && object_id.name == "Lightning Bolt"
-                })
-                .unwrap(),
-        );
+        let object_id = game
+            .state
+            .latest_objects()
+            .find(|(_, object)| object.owner == controller && object.name == "Lightning Bolt")
+            .unwrap()
+            .0;
         // Lightning Bolt is only a vessel: the synthetic clauses carry their
         // own requirements, so its printed targeting must not apply.
-        game.state.objects[object_id].spell_effects = effects;
-        game.state.objects[object_id].targeting = Vec::new();
+        game.state[object_id].spell_effects = effects;
+        game.state[object_id].targeting = Vec::new();
         game.push_spell_to_stack(object_id, controller, targets, indices, Default::default());
         return;
     }
@@ -87,21 +84,20 @@ fn stack(
         .scenario_force_battlefield(controller, "Gray Ogre", true)
         .unwrap();
     let source_object = game.state.permanents[source].as_ref().unwrap().object;
-    let source_ref = game.permanent_object_ref(source).unwrap();
-    let source_definition_id = game.state.objects[source_object].definition_id;
+    let source_ref = game.permanent_object(source).unwrap();
+    let source_definition_id = game.state[source_object].definition_id;
     let id = game.state.id_gen.next_id();
     let object = match entry {
         Entry::Activated => {
             // Activated announcements currently expose one clause. Multi-clause
             // cases below use the spell/trigger paths that can announce them.
             assert_eq!(effects.len(), 1);
-            game.state.objects[source_object].activated_abilities =
-                vec![ActivatedAbilityDefinition {
-                    effects: vec![effects.remove(0)],
-                    ..Default::default()
-                }];
+            game.state[source_object].activated_abilities = vec![ActivatedAbilityDefinition {
+                effects: vec![effects.remove(0)],
+                ..Default::default()
+            }];
             StackObject::ActivatedAbility(ActivatedAbilityOnStack {
-                effects: game.state.objects[source_object].activated_abilities[0]
+                effects: game.state[source_object].activated_abilities[0]
                     .effects
                     .clone(),
                 program: false,
@@ -111,7 +107,6 @@ fn stack(
                 controller,
                 source_definition_id,
                 source_object,
-                source_ref,
                 ability_index: 0,
                 targets,
                 target_req_indices: Vec::new(),
@@ -126,8 +121,10 @@ fn stack(
             source_transforms: 0,
             id,
             controller,
-            source_object,
-            source_ref: Some(source_ref),
+            source_identity: crate::state::game_object::AbilitySource::new(
+                source_object,
+                Some(source_ref),
+            ),
             source_lki: None,
             source_definition_id,
             ability_index: 0,
@@ -182,6 +179,36 @@ fn pause() -> Effect {
     Effect::Modal {
         modes: vec![vec![], vec![Effect::gain_life(2)]],
     }
+}
+
+/// The v16 bytes keep the two names an activated ability's source had as a
+/// row and an exact reference, both read from its one stored id.
+#[test]
+fn activated_ability_records_both_v16_source_projections_from_one_object() {
+    let (mut game, _, _) = fixture(PlayerId(0));
+    stack(
+        &mut game,
+        Entry::Activated,
+        PlayerId(0),
+        vec![Effect::gain_life(2)],
+        Vec::new(),
+        Vec::new(),
+    );
+    let Some(StackObject::ActivatedAbility(ability)) = game.state.stack_objects.last() else {
+        panic!("activated ability on the stack");
+    };
+    let source = ability.source_object();
+    let value = serde_json::to_value(ability).unwrap();
+    assert_eq!(value["source_card"], serde_json::json!(source.slot()));
+    assert_eq!(
+        value["source_ref"],
+        serde_json::json!({"entity": source.slot(), "incarnation": source.generation()})
+    );
+    let text = serde_json::to_string(ability).unwrap();
+    let position = |key: &str| text.find(key).unwrap();
+    assert!(position("\"source_card_registry_key\"") < position("\"source_card\""));
+    assert!(position("\"source_card\"") < position("\"source_ref\""));
+    assert!(position("\"source_ref\"") < position("\"ability_index\""));
 }
 
 #[test]
@@ -337,7 +364,7 @@ fn resolution_same_object_can_be_illegal_for_only_one_clause() {
             let permanent = game.state.permanents[victim].as_ref().unwrap();
             assert_eq!(permanent.damage, 0);
             assert_eq!(permanent.counter_count(CounterKind::PlusOnePlusOne), 2);
-            assert_eq!(game.state.objects[permanent.object].owner, owner);
+            assert_eq!(game.state[permanent.object].owner, owner);
         }
     }
 }
@@ -434,11 +461,14 @@ fn resolution_does_not_follow_departed_permanent_or_graveyard_incarnation() {
                 vec![0],
             );
             game.resolve_top_of_stack();
-            assert_eq!(game.state.zones.zone_of(object_id), Some(ZoneType::Hand));
+            assert_eq!(
+                game.state.zones.zone_of(game.state.now(object_id)),
+                Some(ZoneType::Hand)
+            );
             // The first instruction moved the original object. A synthetic
             // reentry during the choice must not let the suffix find the card.
-            game.move_object(object_id, ZoneType::Battlefield);
-            let replacement = game.state.object_to_permanent[object_id].unwrap();
+            let object_id = game.move_object(game.state.now(object_id), ZoneType::Battlefield);
+            let replacement = game.state.permanent_of(object_id).unwrap();
             assert_ne!(victim, replacement);
             let space = game.suspended_decision_action_space().unwrap();
             game.publish_action_space(space);
@@ -457,15 +487,14 @@ fn resolution_does_not_follow_departed_permanent_or_graveyard_incarnation() {
             );
 
             let (mut game, _, _) = fixture(controller);
-            let object_id = ObjectId(
-                game.state
-                    .objects
-                    .iter()
-                    .position(|c| c.owner == controller && c.name == "Mountain")
-                    .unwrap(),
-            );
-            game.move_object(object_id, ZoneType::Graveyard);
-            let original = game.current_object_ref(object_id).unwrap();
+            let object_id = game
+                .state
+                .latest_objects()
+                .find(|(_, c)| c.owner == controller && c.name == "Mountain")
+                .unwrap()
+                .0;
+            let object_id = game.move_object(object_id, ZoneType::Graveyard);
+            let original = game.state.live(game.state.now(object_id)).unwrap();
             let spec = TargetSpec::GraveyardCardYouOwn {
                 predicate: CardPredicate::default(),
             };
@@ -485,9 +514,12 @@ fn resolution_does_not_follow_departed_permanent_or_graveyard_incarnation() {
                 vec![0],
             );
             game.resolve_top_of_stack();
-            assert_eq!(game.state.zones.zone_of(object_id), Some(ZoneType::Hand));
-            game.move_object(object_id, ZoneType::Graveyard);
-            assert_ne!(game.current_object_ref(object_id), Some(original));
+            assert_eq!(
+                game.state.zones.zone_of(game.state.now(object_id)),
+                Some(ZoneType::Hand)
+            );
+            let object_id = game.move_object(game.state.now(object_id), ZoneType::Graveyard);
+            assert_ne!(game.state.live(object_id), Some(original));
             let space = game.suspended_decision_action_space().unwrap();
             game.publish_action_space(space);
             let frames = game.continuation_frames(controller);
@@ -500,7 +532,7 @@ fn resolution_does_not_follow_departed_permanent_or_graveyard_incarnation() {
             })
             .unwrap();
             assert_eq!(
-                game.state.zones.zone_of(object_id),
+                game.state.zones.zone_of(game.state.now(object_id)),
                 Some(ZoneType::Graveyard)
             );
         }
@@ -532,7 +564,7 @@ fn resolution_positional_power_damage_never_substitutes_an_illegal_victim() {
                 StackObject::Spell(spell) => spell.object,
                 _ => unreachable!(),
             };
-            game.state.objects[spell_card].targeting = vec![
+            game.state[spell_card].targeting = vec![
                 TargetRequirement::up_to(2, TargetSpec::CreatureYouControl),
                 TargetRequirement::one(TargetSpec::CreatureOpponentControls),
             ];
@@ -666,10 +698,12 @@ fn counter_spell_cannot_affect_an_ability() {
         source_transforms: 0,
         id,
         controller: PlayerId(0),
-        source_object,
-        source_ref: game.permanent_object_ref(source),
+        source_identity: crate::state::game_object::AbilitySource::new(
+            source_object,
+            game.permanent_object(source),
+        ),
         source_lki: None,
-        source_definition_id: game.state.objects[source_object].definition_id,
+        source_definition_id: game.state[source_object].definition_id,
         ability_index: 0,
         targets: Vec::new(),
         target_req_indices: Vec::new(),
@@ -766,7 +800,7 @@ fn delayed_capture_survives_placement_and_choice_forks_without_following_reentry
         for leave_before_firing in [false, true] {
             let (mut game, subject, other) = fixture(controller);
             let subject_object = game.state.permanents[subject].as_ref().unwrap().object;
-            let captured = game.permanent_object_ref(subject).unwrap();
+            let captured = game.permanent_object(subject).unwrap();
             stack(
                 &mut game,
                 Entry::Triggered,
@@ -791,10 +825,10 @@ fn delayed_capture_survives_placement_and_choice_forks_without_following_reentry
                 game.state.delayed_triggers[0].remembered[0].object,
                 captured
             );
-            let source = game.state.delayed_triggers[0].source_object;
+            let source = game.state.delayed_triggers[0].source_object();
             let mut different = game.clone();
             different.state.delayed_triggers[0].remembered[0].object =
-                game.permanent_object_ref(other).unwrap();
+                game.permanent_object(other).unwrap();
             assert_ne!(
                 game.state.deterministic_hash(),
                 different.state.deterministic_hash()
@@ -802,7 +836,7 @@ fn delayed_capture_survives_placement_and_choice_forks_without_following_reentry
             // Source departure does not discard the ability or its controller.
             game.move_object(source, ZoneType::Graveyard);
             if leave_before_firing {
-                game.move_object(subject_object, ZoneType::Exile);
+                let subject_object = game.move_object(subject_object, ZoneType::Exile);
                 game.move_object(subject_object, ZoneType::Battlefield);
             }
             game.emit(GameEvent::StepStarted {
@@ -834,11 +868,14 @@ fn delayed_capture_survives_placement_and_choice_forks_without_following_reentry
                 captured
             );
             if !leave_before_firing {
-                game.move_object(subject_object, ZoneType::Exile);
+                let subject_object = game.move_object(subject_object, ZoneType::Exile);
                 game.move_object(subject_object, ZoneType::Battlefield);
             }
-            let new_subject = game.state.object_to_permanent[subject_object].unwrap();
-            assert_ne!(game.permanent_object_ref(new_subject).unwrap(), captured);
+            let new_subject = game
+                .state
+                .permanent_of(game.state.now(subject_object))
+                .unwrap();
+            assert_ne!(game.permanent_object(new_subject).unwrap(), captured);
             let space = game.suspended_decision_action_space().unwrap();
             assert_eq!(space.player, Some(controller));
             let choice = space
@@ -868,7 +905,7 @@ fn delayed_capture_survives_placement_and_choice_forks_without_following_reentry
 fn delayed_capture_keeps_event_context_and_original_controller_after_source_changes() {
     for controller in [PlayerId(0), PlayerId(1)] {
         let (mut game, subject, _) = fixture(controller);
-        let remembered = game.permanent_object_ref(subject).unwrap();
+        let remembered = game.permanent_object(subject).unwrap();
         stack(
             &mut game,
             Entry::Triggered,
@@ -890,8 +927,8 @@ fn delayed_capture_keeps_event_context_and_original_controller_after_source_chan
             vec![0],
         );
         game.resolve_top_of_stack();
-        let source = game.state.delayed_triggers[0].source_object;
-        let source_permanent = game.state.object_to_permanent[source].unwrap();
+        let source = game.state.delayed_triggers[0].source_object();
+        let source_permanent = game.state.permanent_of(game.state.now(source)).unwrap();
         game.change_control(source_permanent, PlayerId(1 - controller.0));
         game.move_object(source, ZoneType::Graveyard);
         stack(&mut game, Entry::Spell, controller, vec![], vec![], vec![]);
@@ -959,7 +996,7 @@ fn delayed_capture_projects_only_viewer_visible_incarnations() {
         vec![0],
     );
     game.resolve_top_of_stack();
-    let captured = game.current_object_ref(object_id).unwrap();
+    let captured = game.state.live(game.state.now(object_id)).unwrap();
     assert_eq!(
         game.state.delayed_triggers[0].remembered[0].object,
         captured
@@ -977,7 +1014,7 @@ fn delayed_capture_projects_only_viewer_visible_incarnations() {
             assert!(frame.remembered[0].object.is_some());
             assert_eq!(
                 frame.remembered[0].definition,
-                Some(game.state.objects[object_id].definition_id.0)
+                Some(game.state[game.state.now(object_id)].definition_id.0)
             );
         }
     }
@@ -1064,9 +1101,9 @@ fn hidden_selection_completed_capture_stays_in_sampled_hand() {
                     assert_eq!(objects.len(), 2, "stage {stage}");
                     assert_eq!(objects[0], objects[1], "aliases, stage {stage}");
                     let object = objects[0];
-                    assert_eq!(branch.current_object_ref(object.entity), Some(object));
+                    assert_eq!(branch.state.live(branch.state.now(object)), Some(object));
                     assert_eq!(
-                        branch.state.zones.zone_of(object.entity),
+                        branch.state.zones.zone_of(branch.state.now(object)),
                         Some(ZoneType::Hand)
                     );
                     if viewer == player {
@@ -1090,10 +1127,10 @@ fn hidden_selection_capture_does_not_follow_a_later_incarnation() {
     let viewer = PlayerId(0);
     let mut root = completed_private_capture(player);
     let original = root.state.delayed_triggers[0].remembered[0].object;
-    let object_id = ObjectId::from(original.entity);
-    root.move_object(object_id, ZoneType::Graveyard);
-    root.move_object(object_id, ZoneType::Hand);
-    assert_ne!(root.current_object_ref(object_id), Some(original));
+    let object_id = original;
+    let object_id = root.move_object(object_id, ZoneType::Graveyard);
+    let object_id = root.move_object(object_id, ZoneType::Hand);
+    assert_ne!(root.state.live(root.state.now(object_id)), Some(original));
     assert!(!root.hidden_commitments(viewer).constrains());
     let space = PossibleWorldSpace::for_viewer(&root, viewer);
     let mut sampled = root.clone();
@@ -1180,7 +1217,7 @@ fn hidden_selection_moved_capture_uses_its_new_zone() {
     ] {
         let object = branch.state.delayed_triggers[0].remembered[0].object;
         assert_eq!(
-            branch.state.zones.zone_of(object.entity),
+            branch.state.zones.zone_of(branch.state.now(object)),
             Some(ZoneType::Library)
         );
     }
@@ -1229,7 +1266,7 @@ fn hidden_selection_known_capture_pins_the_exact_copy_after_control_expires() {
             original
         );
         assert_eq!(
-            branch.state.zones.zone_of(original.entity),
+            branch.state.zones.zone_of(branch.state.now(original)),
             Some(ZoneType::Hand)
         );
     }
@@ -1268,16 +1305,14 @@ fn hidden_selection_from_remembered_keeps_decision_and_child_aliases() {
     root.resolve_top_of_stack();
     root.publish_action_space(root.suspended_decision_action_space().unwrap());
     let choosing = root.clone();
-    let object_id = ObjectId::from(
-        root.state
-            .suspended_decision
-            .as_ref()
-            .unwrap()
-            .frame
-            .remembered[0]
-            .object
-            .entity,
-    );
+    let object_id = root
+        .state
+        .suspended_decision
+        .as_ref()
+        .unwrap()
+        .frame
+        .remembered[0]
+        .object;
     checked_command(
         &mut root,
         Action::SelectCard {
@@ -1319,7 +1354,7 @@ fn hidden_selection_from_remembered_keeps_decision_and_child_aliases() {
                     &mut branch,
                     Action::SelectCard {
                         player,
-                        object: captured.entity.into(),
+                        object: captured,
                     },
                 );
             }
@@ -1331,7 +1366,7 @@ fn hidden_selection_from_remembered_keeps_decision_and_child_aliases() {
                 },
             );
             assert_eq!(
-                branch.state.zones.zone_of(captured.entity),
+                branch.state.zones.zone_of(branch.state.now(captured)),
                 Some(ZoneType::Exile)
             );
         }
@@ -1545,7 +1580,7 @@ fn delayed_lifetime_death_watchers_retire_on_exact_object_departure() {
             );
             let expected = usize::from(destination == ZoneType::Graveyard);
             assert_eq!(game.state.pending_triggers.len(), expected);
-            game.move_object(object, ZoneType::Battlefield);
+            let object = game.move_object(object, ZoneType::Battlefield);
             game.move_object(object, ZoneType::Graveyard);
             game.process_game_events();
             assert_eq!(
@@ -1721,7 +1756,7 @@ fn surveil_kept_order_retains_private_choices_forks_and_suffix() {
         let looked = root.library_top_objects(player, 4);
         let original_refs: Vec<_> = looked
             .iter()
-            .map(|object| root.current_object_ref(*object))
+            .map(|object| root.state.live(root.state.now(*object)))
             .collect();
         stack(
             &mut root,
@@ -1746,13 +1781,13 @@ fn surveil_kept_order_retains_private_choices_forks_and_suffix() {
             },
         );
         assert_eq!(
-            root.state.zones.zone_of(looked[0]),
+            root.state.zones.zone_of(root.state.now(looked[0])),
             Some(ZoneType::Library),
             "selection is private until the partition commits"
         );
         checked_command(&mut root, Action::Decline { player });
         assert_eq!(
-            root.state.zones.zone_of(looked[0]),
+            root.state.zones.zone_of(root.state.now(looked[0])),
             Some(ZoneType::Graveyard)
         );
         let before = root.state.deterministic_hash();
@@ -1818,7 +1853,10 @@ fn surveil_kept_order_retains_private_choices_forks_and_suffix() {
                     );
                 }
             }
-            assert_eq!(branch.state.zones.zone_of(order[0]), Some(ZoneType::Hand));
+            assert_eq!(
+                branch.state.zones.zone_of(branch.state.now(order[0])),
+                Some(ZoneType::Hand)
+            );
             assert_eq!(branch.library_top_objects(player, 2), order[1..]);
             for object in &order[1..] {
                 let index = looked
@@ -1826,7 +1864,7 @@ fn surveil_kept_order_retains_private_choices_forks_and_suffix() {
                     .position(|candidate| candidate == object)
                     .unwrap();
                 assert_eq!(
-                    branch.current_object_ref(*object),
+                    branch.state.live(branch.state.now(*object)),
                     original_refs[index],
                     "reorder is not a zone change"
                 );
@@ -1862,7 +1900,7 @@ fn cost_effect_completion_retains_output_and_parent_payment_across_choices() {
         .scenario_force_battlefield(player, "Gray Ogre", true)
         .unwrap();
     let object = game.state.permanents[source].as_ref().unwrap().object;
-    let source_ref = game.permanent_object_ref(source).unwrap();
+    let source_ref = game.permanent_object(source).unwrap();
     let looked = game.library_top_objects(player, 2);
     let caller = SuspendedResolution {
         frame: EffectFrame::new(player, vec![Effect::gain_life(3)]),
@@ -1885,13 +1923,15 @@ fn cost_effect_completion_retains_output_and_parent_payment_across_choices() {
         player,
         vec![Effect::sacrifice_this(), Effect::Surveil { count: 2 }],
     );
-    child.source = Some(object);
-    child.source_ref = Some(source_ref);
+    child.bind_source(Some(object), Some(source_ref));
     // A rules-level child choice isolates completion ownership. Entry
     // replacement suspension is a separate event-batch integration witness.
     game.run_before_decision(child, caller.clone());
     game.publish_action_space(game.suspended_decision_action_space().unwrap());
-    assert_eq!(game.state.zones.zone_of(object), Some(ZoneType::Graveyard));
+    assert_eq!(
+        game.state.zones.zone_of(game.state.now(object)),
+        Some(ZoneType::Graveyard)
+    );
     let after_sacrifice = game.state.deterministic_hash();
     let frames = game.capture_decision(player, 0).unwrap().frames;
     let obligations: Vec<_> = frames
@@ -1979,7 +2019,7 @@ fn retained_inspection_survives_nested_choices_and_hidden_world_sampling() {
         };
         let expected = looked
             .iter()
-            .map(|object| game.state.objects[*object].id.0 as i32)
+            .map(|object| game.state[*object].id.0 as i32)
             .collect::<Vec<_>>();
         assert_eq!(visible_library(&game, player), expected);
         assert!(visible_library(&game, opponent).is_empty());
@@ -2132,9 +2172,11 @@ fn surveil_commits_the_partition_once_and_announces_only_after_kept_order() {
             assert_eq!(game.state.players[player.0].life, 20);
         }
         checked_command(&mut game, Action::Decline { player });
-        assert!(objects[..2]
-            .iter()
-            .all(|object| game.state.zones.zone_of(*object) == Some(ZoneType::Graveyard)));
+        assert!(objects[..2].iter().all(|object| game
+            .state
+            .zones
+            .zone_of(game.state.now(*object))
+            == Some(ZoneType::Graveyard)));
         assert_eq!(surveils(&game), 0, "ordering is still part of surveil");
         let events_before = game.state.events.len();
         for object in objects[2..].iter().rev() {
@@ -2157,7 +2199,7 @@ fn surveil_commits_the_partition_once_and_announces_only_after_kept_order() {
                     .events
                     .iter()
                     .filter(|event| matches!(event,
-                GameEvent::CardMoved { object_id: moved, to: ZoneType::Graveyard, .. } if moved == object))
+                GameEvent::CardMoved { departed: Some(moved), to: ZoneType::Graveyard, .. } if moved == object))
                     .count(),
                 1
             );
@@ -2242,6 +2284,11 @@ fn selected_cards_bind_exact_objects_and_keep_the_callers_mill_result() {
             vec![],
         );
         game.resolve_top_of_stack();
+        // The selection offers the graveyard objects the milled cards became.
+        let milled: Vec<_> = milled
+            .iter()
+            .map(|object| game.state.now(*object))
+            .collect();
         game.publish_action_space(game.suspended_decision_action_space().unwrap());
         assert!(!game
             .action_space()
@@ -2257,7 +2304,7 @@ fn selected_cards_bind_exact_objects_and_keep_the_callers_mill_result() {
             },
         );
         assert_eq!(
-            game.state.zones.zone_of(milled[0]),
+            game.state.zones.zone_of(game.state.now(milled[0])),
             Some(ZoneType::Graveyard),
             "selection has not moved anything"
         );
@@ -2271,11 +2318,14 @@ fn selected_cards_bind_exact_objects_and_keep_the_callers_mill_result() {
                     object,
                 }),
             );
-            assert_eq!(fork.state.zones.zone_of(milled[0]), Some(ZoneType::Hand));
+            assert_eq!(
+                fork.state.zones.zone_of(fork.state.now(milled[0])),
+                Some(ZoneType::Hand)
+            );
             assert_eq!(fork.state.players[player.0].life, 20, "parent suffix waits");
             checked_command(&mut fork, Action::ChooseMode { player, mode: 0 });
             assert_eq!(
-                fork.state.zones.zone_of(milled[0]),
+                fork.state.zones.zone_of(fork.state.now(milled[0])),
                 Some(ZoneType::Hand),
                 "selected refs never follow a moved incarnation"
             );
@@ -2302,7 +2352,10 @@ fn selected_cards_bind_exact_objects_and_keep_the_callers_mill_result() {
                     object: milled[2],
                 },
             );
-            assert_eq!(fork.state.zones.zone_of(milled[2]), Some(ZoneType::Hand));
+            assert_eq!(
+                fork.state.zones.zone_of(fork.state.now(milled[2])),
+                Some(ZoneType::Hand)
+            );
             assert_eq!(fork.state.players[player.0].life, 23);
             assert!(fork.state.suspended_decision.is_none());
             assert_eq!(
@@ -2333,10 +2386,10 @@ fn keyword_completion_captures_triggers_before_the_callers_suffix_removes_source
         vec![],
     );
     let source = match game.state.stack_objects.last().unwrap() {
-        StackObject::TriggeredAbility(ability) => ability.source_object,
+        StackObject::TriggeredAbility(ability) => ability.source_object(),
         _ => unreachable!(),
     };
-    game.state.objects[source].abilities = vec![Ability::Triggered {
+    game.state[source].abilities = vec![Ability::Triggered {
         condition: TriggerCondition::Performs {
             who: Actor::You,
             any_of: vec![KeywordAction::Scry, KeywordAction::Surveil],
@@ -2348,12 +2401,15 @@ fn keyword_completion_captures_triggers_before_the_callers_suffix_removes_source
     game.publish_action_space(game.suspended_decision_action_space().unwrap());
     assert!(game.state.pending_triggers.is_empty());
     checked_command(&mut game, Action::Decline { player });
-    assert_eq!(game.state.zones.zone_of(source), Some(ZoneType::Graveyard));
+    assert_eq!(
+        game.state.zones.zone_of(game.state.now(source)),
+        Some(ZoneType::Graveyard)
+    );
     let occurrences = game
         .state
         .pending_triggers
         .iter()
-        .filter(|t| t.source_object == source)
+        .filter(|t| t.source_object() == source)
         .count()
         + game
             .state
@@ -2361,7 +2417,7 @@ fn keyword_completion_captures_triggers_before_the_callers_suffix_removes_source
             .iter()
             .filter(|object| {
                 matches!(object,
-            StackObject::TriggeredAbility(ability) if ability.source_object == source)
+            StackObject::TriggeredAbility(ability) if ability.source_object() == source)
             })
             .count();
     assert_eq!(occurrences, 1, "completion matched before source departure");
@@ -2378,7 +2434,7 @@ fn counter_replacement_drivers(game: &mut Game, player: PlayerId) {
             .scenario_force_battlefield(player, "Mountain", true)
             .unwrap();
         let object = game.state.permanents[id].as_ref().unwrap().object;
-        game.state.objects[object].replacement_effects = vec![ReplacementEffect::ModifyCounters {
+        game.state[object].replacement_effects = vec![ReplacementEffect::ModifyCounters {
             effects_only: false,
             kind: Some(CounterKind::PlusOnePlusOne),
             predicate: CardPredicate::default(),
@@ -2476,25 +2532,21 @@ fn retained_batch_counter_order_is_affected_players_choice_and_commits_once() {
 fn exiled_counter_entry(game: &mut Game, player: PlayerId) -> ObjectId {
     use crate::state::card::ReplacementEffect;
 
-    let object = ObjectId(
-        game.state
-            .objects
-            .iter()
-            .enumerate()
-            .find(|(index, object)| {
-                object.owner == player
-                    && object.name == "Gray Ogre"
-                    && game.state.zones.zone_of(ObjectId(*index)) != Some(ZoneType::Battlefield)
-            })
-            .unwrap()
-            .0,
-    );
-    game.move_object(object, ZoneType::Exile);
-    game.state.objects[object].replacement_effects =
-        vec![ReplacementEffect::EntersWithPlusOneCounters {
-            count: 1,
-            condition: None,
-        }];
+    let object = game
+        .state
+        .latest_objects()
+        .find(|(index, object)| {
+            object.owner == player
+                && object.name == "Gray Ogre"
+                && game.state.zones.zone_of(game.state.now(*index)) != Some(ZoneType::Battlefield)
+        })
+        .unwrap()
+        .0;
+    let object = game.move_object(object, ZoneType::Exile);
+    game.state[object].replacement_effects = vec![ReplacementEffect::EntersWithPlusOneCounters {
+        count: 1,
+        condition: None,
+    }];
     object
 }
 
@@ -2509,19 +2561,21 @@ fn retained_batch_rechecks_new_entry_replacements_without_reapplying_identity() 
         player,
         vec![Effect::return_to_battlefield(ObjectSelector::This, false)],
     );
-    frame.source = Some(object);
-    frame.source_ref = game.current_object_ref(object);
+    frame.bind_source(Some(object), game.state.live(game.state.now(object)));
     frame.completion = FrameCompletion::Continue;
     game.run_frame(frame);
     game.publish_action_space(game.suspended_decision_action_space().unwrap());
-    assert_eq!(game.state.zones.zone_of(object), Some(ZoneType::Exile));
+    assert_eq!(
+        game.state.zones.zone_of(game.state.now(object)),
+        Some(ZoneType::Exile)
+    );
     assert_eq!(
         game.action_space().unwrap().actions.len(),
         2,
         "own entry created counters, making both battlefield replacements applicable"
     );
     checked_command(&mut game, Action::ChooseMode { player, mode: 0 });
-    let id = game.state.object_to_permanent[object].unwrap();
+    let id = game.state.permanent_of(game.state.now(object)).unwrap();
     assert_eq!(
         game.state.permanents[id]
             .as_ref()
@@ -2544,7 +2598,7 @@ fn retained_batch_inspection_finishes_entry_before_more_selection_or_ordering() 
         let (mut game, _, _) = fixture(player);
         counter_replacement_drivers(&mut game, player);
         let entrant = exiled_counter_entry(&mut game, player);
-        game.move_object(entrant, ZoneType::Library);
+        let entrant = game.move_object(entrant, ZoneType::Library);
         let looked = game.library_top_objects(player, 4);
         assert_eq!(looked[0], entrant);
         game.run_frame(EffectFrame::new(
@@ -2570,14 +2624,17 @@ fn retained_batch_inspection_finishes_entry_before_more_selection_or_ordering() 
                 object: entrant,
             },
         );
-        assert_eq!(game.state.zones.zone_of(entrant), Some(ZoneType::Library));
+        assert_eq!(
+            game.state.zones.zone_of(game.state.now(entrant)),
+            Some(ZoneType::Library)
+        );
         assert!(matches!(
             game.state.suspended_decision.as_ref().unwrap().decision,
             Decision::OrderReplacement { .. }
         ));
         checked_command(&mut game, Action::ChooseMode { player, mode: 0 });
         assert_eq!(
-            game.state.zones.zone_of(entrant),
+            game.state.zones.zone_of(game.state.now(entrant)),
             Some(ZoneType::Battlefield)
         );
         if max_select == 2 {
@@ -2612,9 +2669,11 @@ fn retained_batch_inspection_finishes_entry_before_more_selection_or_ordering() 
         }
         assert_eq!(game.state.players[player.0].life, 23);
         assert!(game.state.suspended_decision.is_none());
-        assert!(looked[..max_select]
-            .iter()
-            .all(|object| game.state.zones.zone_of(*object) == Some(ZoneType::Battlefield)));
+        assert!(looked[..max_select].iter().all(|object| game
+            .state
+            .zones
+            .zone_of(game.state.now(*object))
+            == Some(ZoneType::Battlefield)));
     }
 }
 
@@ -2631,8 +2690,8 @@ fn retained_batch_linked_entry_suspends_actual_mana_cost_completion() {
         .scenario_force_battlefield(player, "Gray Ogre", true)
         .unwrap();
     let source_object = game.state.permanents[source].as_ref().unwrap().object;
-    let source_ref = game.permanent_object_ref(source).unwrap();
-    game.state.objects[source_object].activated_abilities = vec![ActivatedAbilityDefinition {
+    let source_ref = game.permanent_object(source).unwrap();
+    game.state[source_object].activated_abilities = vec![ActivatedAbilityDefinition {
         mana_cost: ManaCost::parse("{1}"),
         life_cost: 2,
         tap_source: true,
@@ -2645,7 +2704,7 @@ fn retained_batch_linked_entry_suspends_actual_mana_cost_completion() {
         }],
         ..Default::default()
     }];
-    game.state.objects[source_object].abilities = vec![crate::state::ability::Ability::Triggered {
+    game.state[source_object].abilities = vec![crate::state::ability::Ability::Triggered {
         condition: crate::state::ability::TriggerCondition::BecomesTapped {
             subject: crate::state::ability::TriggerSubject::This,
         },
@@ -2653,9 +2712,10 @@ fn retained_batch_linked_entry_suspends_actual_mana_cost_completion() {
         intervening_if: None,
     }];
     let returned = exiled_counter_entry(&mut game, player);
+    let returned_ref = game.state.live(game.state.now(returned)).unwrap();
     game.state.exile_links.push(ExileLink {
         source: source_ref,
-        exiled_object: returned,
+        exiled_object: returned_ref,
         returns: true,
     });
     game.state.players[player.0].mana_pool = Mana::parse("R");
@@ -2678,10 +2738,13 @@ fn retained_batch_linked_entry_suspends_actual_mana_cost_completion() {
         },
     );
     assert_eq!(
-        game.state.zones.zone_of(source_object),
+        game.state.zones.zone_of(game.state.now(source_object)),
         Some(ZoneType::Graveyard)
     );
-    assert_eq!(game.state.zones.zone_of(returned), Some(ZoneType::Exile));
+    assert_eq!(
+        game.state.zones.zone_of(game.state.now(returned)),
+        Some(ZoneType::Exile)
+    );
     assert_eq!(game.state.players[player.0].life, 18);
     assert_eq!(
         game.state.pending_triggers.len(),
@@ -2713,7 +2776,7 @@ fn retained_batch_linked_entry_suspends_actual_mana_cost_completion() {
     assert_eq!(game.state.players[player.0].life, 23);
     assert_eq!(game.state.players[player.0].mana_pool.total(), 0);
     assert_eq!(game.state.events.iter().filter(|event| matches!(event, GameEvent::PermanentSacrificed { object_id: object, .. } if *object == source_object)).count(), 1);
-    assert_eq!(game.state.events.iter().filter(|event| matches!(event, GameEvent::CardMoved { object_id: object, to: ZoneType::Battlefield, .. } if *object == returned)).count(), 1);
+    assert_eq!(game.state.events.iter().filter(|event| matches!(event, GameEvent::CardMoved { departed: Some(object), to: ZoneType::Battlefield, .. } if *object == returned_ref)).count(), 1);
 }
 
 #[test]
@@ -2730,7 +2793,7 @@ fn retained_batch_combat_defers_every_hit_until_all_replacements_are_chosen() {
             .scenario_force_battlefield(defender, "Mountain", true)
             .unwrap();
         let object = root.state.permanents[id].as_ref().unwrap().object;
-        root.state.objects[object].replacement_effects = vec![effect];
+        root.state[object].replacement_effects = vec![effect];
     }
     root.state.combat = Some(CombatState {
         attackers: vec![first, second],
@@ -2767,24 +2830,28 @@ fn retained_batch_state_based_departure_retains_linked_entry_and_lki() {
     let (mut game, source, _) = fixture(player);
     counter_replacement_drivers(&mut game, player);
     let source_object = game.state.permanents[source].as_ref().unwrap().object;
-    let source_ref = game.permanent_object_ref(source).unwrap();
+    let source_ref = game.permanent_object(source).unwrap();
     let returned = exiled_counter_entry(&mut game, player);
+    let returned_ref = game.state.live(game.state.now(returned)).unwrap();
     game.state.exile_links.push(ExileLink {
         source: source_ref,
-        exiled_object: returned,
+        exiled_object: returned_ref,
         returns: true,
     });
     game.state.permanents[source].as_mut().unwrap().damage = 2;
     assert_eq!(game.perform_state_based_actions(), SbaProgress::Pending);
     game.publish_action_space(game.suspended_decision_action_space().unwrap());
     assert_eq!(
-        game.state.zones.zone_of(source_object),
+        game.state.zones.zone_of(game.state.now(source_object)),
         Some(ZoneType::Graveyard)
     );
     assert_eq!(game.object_lki(source_ref).unwrap().power, 2);
-    assert_eq!(game.state.zones.zone_of(returned), Some(ZoneType::Exile));
+    assert_eq!(
+        game.state.zones.zone_of(game.state.now(returned)),
+        Some(ZoneType::Exile)
+    );
     checked_command(&mut game, Action::ChooseMode { player, mode: 1 });
-    let id = game.state.object_to_permanent[returned].unwrap();
+    let id = game.state.permanent_of(game.state.now(returned)).unwrap();
     assert_eq!(
         game.state.permanents[id]
             .as_ref()
@@ -2793,7 +2860,7 @@ fn retained_batch_state_based_departure_retains_linked_entry_and_lki() {
         3
     );
     assert_eq!(game.perform_state_based_actions(), SbaProgress::Stable);
-    assert_eq!(game.state.events.iter().filter(|event| matches!(event, GameEvent::CardMoved { object_id: object, from: Some(ZoneType::Battlefield), .. } if *object == source_object)).count(), 1);
+    assert_eq!(game.state.events.iter().filter(|event| matches!(event, GameEvent::CardMoved { departed: Some(object), from: Some(ZoneType::Battlefield), .. } if *object == source_ref)).count(), 1);
 }
 
 #[test]
@@ -2853,12 +2920,12 @@ fn hidden_selection_partial_discard_survives_both_samplers_and_divergent_command
             };
             assert_eq!(selected.len(), 1, "a prior choice cannot disappear");
             assert!(candidates.iter().all(|object| branch.state.zones.contains(
-                ObjectId::from(object.entity),
+                *object,
                 ZoneType::Hand,
                 player
             )));
             assert!(selected.iter().all(|object| candidates.contains(object)));
-            let first = ObjectId::from(selected[0].entity);
+            let first = selected[0];
             let second = branch
                 .action_space()
                 .unwrap()
@@ -2886,7 +2953,10 @@ fn hidden_selection_partial_discard_survives_both_samplers_and_divergent_command
                 };
                 let graveyard = fork.state.zones.size(ZoneType::Graveyard, player);
                 checked_command(&mut fork, choice);
-                assert_eq!(fork.state.zones.zone_of(first), Some(ZoneType::Graveyard));
+                assert_eq!(
+                    fork.state.zones.zone_of(fork.state.now(first)),
+                    Some(ZoneType::Graveyard)
+                );
                 assert_eq!(
                     fork.state.zones.size(ZoneType::Graveyard, player),
                     graveyard + count
@@ -2988,7 +3058,7 @@ fn hidden_selection_child_and_saved_caller_share_one_sampled_binding() {
             caller.frame.selected[0]
         );
         assert_eq!(caller.frame.remembered[0].object, caller.frame.selected[0]);
-        let selected = ObjectId::from(caller.frame.selected[0].entity);
+        let selected = caller.frame.selected[0];
         assert!(branch
             .state
             .zones
@@ -3013,7 +3083,7 @@ fn hidden_selection_child_and_saved_caller_share_one_sampled_binding() {
             },
         );
         assert_eq!(
-            branch.state.zones.zone_of(selected),
+            branch.state.zones.zone_of(branch.state.now(selected)),
             Some(ZoneType::Graveyard)
         );
         assert_eq!(branch.state.players[player.0].life, 23);
@@ -3034,11 +3104,9 @@ fn hidden_selection_library_commitments_survive_sampling_without_revealing_order
     // of eligible cards in the sampled library, even when its chooser is hidden.
     let bolts: Vec<_> = root
         .state
-        .objects
-        .iter()
-        .enumerate()
+        .latest_objects()
         .filter(|(_, object)| object.owner == player && object.name == "Lightning Bolt")
-        .map(|(index, _)| ObjectId(index))
+        .map(|(index, _)| index)
         .collect();
     for object in &bolts {
         root.move_object(*object, ZoneType::Library);
@@ -3050,7 +3118,7 @@ fn hidden_selection_library_commitments_survive_sampling_without_revealing_order
             .zone_objects(ZoneType::Library, player)
             .iter()
             .copied()
-            .find(|object| root.state.objects[*object].name == "Mountain")
+            .find(|object| root.state[*object].name == "Mountain")
             .unwrap();
         root.move_object(object, ZoneType::Hand);
     }
@@ -3127,22 +3195,25 @@ fn hidden_selection_library_commitments_survive_sampling_without_revealing_order
             panic!("search retained");
         };
         assert_eq!(selected.len(), 1);
-        let selected = ObjectId::from(selected[0].entity);
+        let selected = selected[0];
         assert_eq!(
-            branch.state.zones.zone_of(selected),
+            branch.state.zones.zone_of(branch.state.now(selected)),
             Some(ZoneType::Library)
         );
-        assert_eq!(branch.state.objects[selected].name, "Lightning Bolt");
+        assert_eq!(branch.state[selected].name, "Lightning Bolt");
         assert!(Observation::for_player(&branch, viewer)
             .opponent_cards
             .iter()
             .all(|object| object.zone != ZoneType::Library && object.zone != ZoneType::Hand));
         checked_command(&mut branch, Action::Decline { player });
-        assert_eq!(branch.state.zones.zone_of(selected), Some(ZoneType::Hand));
+        assert_eq!(
+            branch.state.zones.zone_of(branch.state.now(selected)),
+            Some(ZoneType::Hand)
+        );
         assert_eq!(
             branch.state.players[player.0]
                 .known_hand
-                .get(&branch.state.objects[selected].definition_id),
+                .get(&branch.state[branch.state.now(selected)].definition_id),
             Some(&1)
         );
         assert_eq!(branch.state.events.iter().filter(|event| matches!(event, GameEvent::LibrarySearched { player: owner } if *owner == player)).count(), 1);
@@ -3177,33 +3248,34 @@ fn hidden_selection_merchant_bottoms_source_before_linked_return_and_shuffles_af
         .scenario_force_battlefield(player, "Unlucky Cabbage Merchant", true)
         .unwrap();
     let source = game.state.permanents[merchant].as_ref().unwrap().object;
-    let source_ref = game.permanent_object_ref(merchant).unwrap();
+    let source_ref = game.permanent_object(merchant).unwrap();
     counter_replacement_drivers(&mut game, player);
     let returned = exiled_counter_entry(&mut game, player);
+    let returned_ref = game.state.live(game.state.now(returned)).unwrap();
     // The real Merchant program is the consumer; this constructed link isolates
     // a source departure whose consequent entry asks a replacement question.
     game.state.exile_links.push(ExileLink {
         source: source_ref,
-        exiled_object: returned,
+        exiled_object: returned_ref,
         returns: true,
     });
-    let Ability::Triggered { effects, .. } = &game.state.objects[source].abilities[1];
+    let Ability::Triggered { effects, .. } = &game.state[source].abilities[1];
     let mut effects = effects.clone();
     effects.push(Effect::gain_life(3));
     let mut frame = EffectFrame::new(player, effects);
-    frame.source = Some(source);
-    frame.source_ref = Some(source_ref);
+    frame.bind_source(Some(source), Some(source_ref));
     game.run_frame(frame);
     game.publish_action_space(game.suspended_decision_action_space().unwrap());
     checked_command(&mut game, Action::ChooseMode { player, mode: 0 });
-    let mut expected_library = vec![source];
-    expected_library.extend(
-        game.state
-            .zones
-            .zone_objects(ZoneType::Library, player)
-            .iter(),
-    );
+    let library_before = game
+        .state
+        .zones
+        .zone_objects(ZoneType::Library, player)
+        .to_vec();
     checked_command(&mut game, Action::Decline { player });
+    // The Merchant is a new object on the bottom of its library.
+    let mut expected_library = vec![game.state.now(source)];
+    expected_library.extend(library_before);
     assert!(matches!(
         game.state.suspended_decision.as_ref().unwrap().decision,
         Decision::OrderReplacement { .. }
@@ -3216,7 +3288,10 @@ fn hidden_selection_merchant_bottoms_source_before_linked_return_and_shuffles_af
         expected_library,
         "bottom placement has committed; the shuffle must wait for linked entry"
     );
-    assert_eq!(game.state.zones.zone_of(returned), Some(ZoneType::Exile));
+    assert_eq!(
+        game.state.zones.zone_of(game.state.now(returned)),
+        Some(ZoneType::Exile)
+    );
     assert_eq!(game.state.players[player.0].life, 20);
     assert!(
         !game
@@ -3230,10 +3305,13 @@ fn hidden_selection_merchant_bottoms_source_before_linked_return_and_shuffles_af
         let mut fork = game.clone();
         checked_command(&mut fork, Action::ChooseMode { player, mode });
         assert_eq!(
-            fork.state.zones.zone_of(returned),
+            fork.state.zones.zone_of(fork.state.now(returned)),
             Some(ZoneType::Battlefield)
         );
-        assert_eq!(fork.state.zones.zone_of(source), Some(ZoneType::Library));
+        assert_eq!(
+            fork.state.zones.zone_of(fork.state.now(source)),
+            Some(ZoneType::Library)
+        );
         assert_eq!(fork.state.players[player.0].life, 23);
         assert_eq!(
             fork.state
@@ -3263,7 +3341,7 @@ fn hidden_selection_public_entry_is_pinned_through_both_samplers() {
         let (mut root, _, _) = fixture(player);
         counter_replacement_drivers(&mut root, player);
         let entering = exiled_counter_entry(&mut root, player);
-        root.move_object(entering, zone);
+        let entering = root.move_object(entering, zone);
         root.run_frame(EffectFrame::new(
             player,
             vec![Effect::SelectCards {
@@ -3294,10 +3372,7 @@ fn hidden_selection_public_entry_is_pinned_through_both_samplers() {
             Observation::for_player(&root, viewer)
                 .opponent_cards
                 .iter()
-                .any(
-                    |object| object.id == root.state.objects[entering].id.0 as i32
-                        && object.zone == zone
-                ),
+                .any(|object| object.id == root.state[entering].id.0 as i32 && object.zone == zone),
             "a precommit entrant is public during replacement choices"
         );
         let before = crate::search_state::witness(&root);
@@ -3324,7 +3399,10 @@ fn hidden_selection_public_entry_is_pinned_through_both_samplers() {
         let mut sampled = root.clone();
         sampled.determinize(viewer, 11).unwrap();
         for mut branch in [sampled, materialized] {
-            assert_eq!(branch.state.zones.zone_of(entering), Some(zone));
+            assert_eq!(
+                branch.state.zones.zone_of(branch.state.now(entering)),
+                Some(zone)
+            );
             assert_eq!(
                 branch
                     .state
@@ -3342,7 +3420,7 @@ fn hidden_selection_public_entry_is_pinned_through_both_samplers() {
             );
             checked_command(&mut branch, Action::ChooseMode { player, mode: 0 });
             assert_eq!(
-                branch.state.zones.zone_of(entering),
+                branch.state.zones.zone_of(branch.state.now(entering)),
                 Some(ZoneType::Battlefield)
             );
         }
@@ -3364,22 +3442,20 @@ fn hidden_selection_foretold_measure_preserves_every_committed_slot() {
     let (mut root, _, _) = fixture(player);
     let object_ids: Vec<_> = root
         .state
-        .objects
-        .iter()
-        .enumerate()
+        .latest_objects()
         .filter(|(_, object_id)| object_id.owner == player)
-        .map(|(index, _)| ObjectId(index))
+        .map(|(index, _)| index)
         .collect();
     let bolts: Vec<_> = object_ids
         .iter()
         .copied()
-        .filter(|object_id| root.state.objects[*object_id].name == "Lightning Bolt")
+        .filter(|object_id| root.state[*object_id].name == "Lightning Bolt")
         .take(3)
         .collect();
     let ogres: Vec<_> = object_ids
         .iter()
         .copied()
-        .filter(|object_id| root.state.objects[*object_id].name == "Gray Ogre")
+        .filter(|object_id| root.state[*object_id].name == "Gray Ogre")
         .take(2)
         .collect();
     for object_id in object_ids {
@@ -3389,11 +3465,12 @@ fn hidden_selection_foretold_measure_preserves_every_committed_slot() {
     // three instants already selected in the library, only 14 of the 20
     // ordered fills remain compatible: 2 Ogre/Ogre and 12 Ogre/Bolt fills.
     for object_id in bolts.iter().chain(&ogres) {
-        root.state.objects[*object_id]
+        let current = root.state.now(*object_id);
+        root.state[current]
             .statics
             .push(StaticAbility::Foretell(ManaCost::parse("{1}")));
         root.move_object(
-            *object_id,
+            current,
             if bolts.contains(object_id) {
                 ZoneType::Library
             } else {
@@ -3401,8 +3478,16 @@ fn hidden_selection_foretold_measure_preserves_every_committed_slot() {
             },
         );
     }
+    // The library and exile objects those cards are now.
+    let current = |objects: &[ObjectId]| -> Vec<ObjectId> {
+        objects
+            .iter()
+            .map(|object| root.state.now(*object))
+            .collect()
+    };
+    let (bolts, ogres) = (current(&bolts), current(&ogres));
     for object_id in &ogres {
-        let object = root.current_object_ref(*object_id).unwrap();
+        let object = root.state.live(*object_id).unwrap();
         root.state
             .cast_permissions
             .exile_grants
@@ -3453,8 +3538,8 @@ fn hidden_selection_foretold_measure_preserves_every_committed_slot() {
             };
             assert_eq!(selected.len(), 2);
             for object in selected {
-                let object_id = ObjectId::from(object.entity);
-                assert_eq!(branch.state.objects[object_id].name, "Lightning Bolt");
+                let object_id = *object;
+                assert_eq!(branch.state[object_id].name, "Lightning Bolt");
                 assert!(branch
                     .state
                     .zones
@@ -3468,7 +3553,7 @@ fn hidden_selection_foretold_measure_preserves_every_committed_slot() {
                 .zones
                 .zone_objects(ZoneType::Hand, player)
                 .iter()
-                .all(|object_id| branch.state.objects[*object_id].name == "Lightning Bolt"));
+                .all(|object_id| branch.state[*object_id].name == "Lightning Bolt"));
         }
     }
 }
@@ -3483,17 +3568,16 @@ fn retained_creation_precedes_allocation_and_preserves_copy_entry_terms() {
         .scenario_force_battlefield(player, "Gray Ogre", true)
         .unwrap();
     let object = game.state.permanents[source].as_ref().unwrap().object;
-    game.state.objects[object].replacement_effects =
-        vec![ReplacementEffect::EntersWithPlusOneCounters {
-            count: 1,
-            condition: None,
-        }];
+    game.state[object].replacement_effects = vec![ReplacementEffect::EntersWithPlusOneCounters {
+        count: 1,
+        condition: None,
+    }];
     for multiplier in [2, 3] {
         let id = game
             .scenario_force_battlefield(player, "Mountain", true)
             .unwrap();
         let object = game.state.permanents[id].as_ref().unwrap().object;
-        game.state.objects[object].replacement_effects =
+        game.state[object].replacement_effects =
             vec![ReplacementEffect::MultiplyTokens { multiplier }];
     }
     counter_replacement_drivers(&mut game, player);
@@ -3510,8 +3594,7 @@ fn retained_creation_precedes_allocation_and_preserves_copy_entry_terms() {
             Effect::gain_life(3),
         ],
     );
-    frame.source = Some(object);
-    frame.source_ref = game.permanent_object_ref(source);
+    frame.bind_source(Some(object), game.permanent_object(source));
     frame.completion = FrameCompletion::Continue;
     let cards_before = game.state.objects.len();
     game.run_frame(frame);
@@ -3559,22 +3642,18 @@ fn retained_creation_precedes_allocation_and_preserves_copy_entry_terms() {
             assert_eq!(branch.state.players[0].life, 20, "suffix waits for entries");
             assert!(branch
                 .state
-                .objects
-                .iter()
-                .enumerate()
+                .latest_objects()
                 .skip(cards_before)
-                .all(|(id, _)| branch.state.zones.zone_of(ObjectId(id)).is_none()));
+                .all(|(id, _)| branch.state.zones.zone_of(branch.state.now(id)).is_none()));
             checked_command(branch, Action::ChooseMode { player, mode: 0 });
         }
         let tokens: Vec<_> = branch
             .state
-            .objects
-            .iter()
-            .enumerate()
+            .latest_objects()
             .skip(cards_before)
             .map(|(id, object)| {
                 assert_eq!(object.kind(), ObjectKind::Token);
-                branch.state.object_to_permanent[ObjectId(id)].unwrap()
+                branch.state.permanent_of(branch.state.now(id)).unwrap()
             })
             .collect();
         for token in tokens {
@@ -3710,9 +3789,7 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
             let mut frame = EffectFrame::new(player, vec![Effect::gain_life(1)]);
             match case {
                 "selected" => {
-                    frame
-                        .selected
-                        .push(game.permanent_object_ref(subject).unwrap());
+                    frame.selected.push(game.permanent_object(subject).unwrap());
                     frame.queue = vec![Effect::Tap {
                         what: ObjectSelector::Selected,
                     }]
@@ -3748,7 +3825,7 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
                         } else {
                             EventCause::TurnAction
                         }),
-                        target: game.permanent_object_ref(first).unwrap(),
+                        target: game.permanent_object(first).unwrap(),
                         kind: CounterKind::PlusOnePlusOne,
                         delta: 1,
                         by: Some(player),
@@ -3766,15 +3843,14 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
                 }
                 "departed_source" => {
                     let object = game.state.permanents[first].as_ref().unwrap().object;
-                    let source = game.permanent_object_ref(first).unwrap();
-                    game.move_object(object, ZoneType::Graveyard);
+                    let source = game.permanent_object(first).unwrap();
+                    let object = game.move_object(object, ZoneType::Graveyard);
                     let mut lki = game.object_lki(source).unwrap().clone();
                     // Two possible histories with the same present board and
                     // offers, but a consequential captured power of 2 versus 3.
                     lki.power += choice;
                     game.record_object_lki(lki);
-                    frame.source = Some(object);
-                    frame.source_ref = Some(source);
+                    frame.bind_source(Some(object), Some(source));
                     frame.queue = vec![Effect::GainLife {
                         amount: EffectValue::SourcePower,
                     }]
