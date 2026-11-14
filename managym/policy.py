@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 import hashlib
 from importlib.metadata import entry_points
 import json
@@ -320,8 +320,6 @@ class PolicyRunner:
         self.last_decision = None
         if int(obs.agent.player_index) != self.seat:
             raise ValueError("Policy received another chooser’s observation.")
-        from dataclasses import replace
-
         view = replace(
             self.view(obs), capture_json=env.capture_decision(self.seat, 0).to_json()
         )

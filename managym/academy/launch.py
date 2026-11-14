@@ -277,6 +277,7 @@ class Academy:
         self._require_open()
         import managym
         from managym.academy import server
+        from managym.academy.villain import player_fields
 
         seats = (
             ("hero", deck, "your deck"),
@@ -294,19 +295,11 @@ class Academy:
         checkpoint = opponent.startswith("policy:")
         imported = isinstance(deck, Path) or isinstance(opponent_deck, Path)
         config: dict[str, Any] = {
-            "villain_type": "policy"
-            if checkpoint
-            else "search"
-            if opponent.startswith("search-")
-            else opponent,
-            "villain_sims": int(opponent[7:])
-            if opponent.startswith("search-")
-            else sims,
+            "villain_sims": sims,
             "seed": seed,
             "decklists": decklists,
+            **player_fields(opponent),
         }
-        if checkpoint:
-            config["opponent_sha256"] = opponent.removeprefix("policy:")
         if imported:
             config["deck_import"] = {
                 seat: _deck_file(selected, label) for seat, selected, label in seats

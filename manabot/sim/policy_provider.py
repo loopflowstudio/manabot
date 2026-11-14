@@ -8,13 +8,16 @@ point; this module imports only the engine's public policy contract.
 from __future__ import annotations
 
 from collections.abc import Sequence
+import copy
 from dataclasses import dataclass
 import hashlib
 from importlib.metadata import version
+import json
 import os
 from pathlib import Path
 import random
-from typing import TYPE_CHECKING
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, cast
 
 import managym
 from managym.policy import (
@@ -31,7 +34,13 @@ from managym.policy import (
 )
 
 if TYPE_CHECKING:
+    from manabot.backends.torch.policy import ActorCritic
+    from manabot.env.env import Env
+    from manabot.env.observation import ObservationSpace
     from manabot.model.catalog import CheckpointSummary
+
+# Scripted reference players: no artifact, selected by `config["kind"]`.
+_ANCHORS = ("heuristic", "greedy")
 
 
 def runner_identity() -> str:
@@ -60,22 +69,29 @@ class BaselineFactory:
     spec: PolicySpec
     summary: CheckpointSummary | None = None
 
-    def describe(self) -> PolicyDescriptor:
+    def _inspect(self) -> CheckpointSummary | None:
+        """Current checkpoint facts, or None for a scripted reference player."""
         from manabot.backends import resolve
         from manabot.model.catalog import inspect_checkpoint
 
-        kind = self.spec.config.get("kind")
-        if kind in ("heuristic", "greedy"):
+        if self.spec.artifact is None:
+            if self.spec.config.get("kind") not in _ANCHORS:
+                raise ValueError("Manabot policy requires an artifact.")
+            return None
+        return inspect_checkpoint(Path(self.spec.artifact), backend=resolve("torch"))
+
+    def describe(self) -> PolicyDescriptor:
+        summary = self._inspect()
+        if summary is None:
+            kind = str(self.spec.config["kind"])
             return PolicyDescriptor(
-                str(kind).title(),
+                kind.title(),
                 "manabot",
                 runner_identity(),
                 config=self.spec.config,
-                alias=str(kind),
+                alias=kind,
             )
-        if self.spec.artifact is None:
-            raise ValueError("Manabot policy requires an artifact.")
-        summary = inspect_checkpoint(Path(self.spec.artifact), backend=resolve("torch"))
+        # Discovery's summary carries the run facts; the bytes are re-read here.
         displayed = self.summary or summary
         details = tuple(
             PolicyDetail(label, "not recorded" if value is None else str(value))
@@ -102,14 +118,10 @@ class BaselineFactory:
             )
         # Search admission belongs to the shared composition, not a bare flag.
         return PolicyDescriptor(
-            (self.summary or summary).label,
+            displayed.label,
             "manabot",
             runner_identity(),
-            {
-                "actor": hashlib.sha256(
-                    Path(self.spec.artifact).read_bytes()
-                ).hexdigest()
-            },
+            {"actor": hashlib.sha256(summary.path.read_bytes()).hexdigest()},
             self.spec.config,
             group=displayed.run or displayed.run_id,
             details=details,
@@ -118,18 +130,11 @@ class BaselineFactory:
         )
 
     def admit(self, setup: Sequence[managym.PlayerConfig]) -> None:
-        if self.spec.artifact is None:
-            if self.spec.config.get("kind") not in ("heuristic", "greedy"):
-                raise ValueError("Manabot policy requires an artifact.")
-            return
-        import json
-
-        from manabot.backends import resolve
-        from manabot.model.catalog import inspect_checkpoint
-
-        summary = inspect_checkpoint(Path(self.spec.artifact), backend=resolve("torch"))
         from manabot.infra.config import ObservationConfig
 
+        summary = self._inspect()
+        if summary is None:
+            return
         ObservationConfig.from_checkpoint(
             {"policy_input_version": summary.policy_input_version}
         )
@@ -160,46 +165,54 @@ class BaselineFactory:
                 f"{summary.label} was trained on the recorded deck setups; selected setup differs."
             )
 
-    def load(self, *, seat: int, seed: int) -> BaselineSession:
-        return BaselineSession(self.spec, seat=seat, seed=seed)
+    def load(self, *, seat: int, seed: int) -> PolicySession:
+        if self.spec.artifact is None:
+            return AnchorSession(str(self.spec.config["kind"]))
+        return BaselineSession(self.spec, seed=seed)
 
 
-class BaselineSession:
-    def __init__(self, spec: PolicySpec, *, seat: int, seed: int) -> None:
-        self.seat = seat
-        self.spec = spec
-        self._rng = random.Random(seed)
-        self.agent = None
-        self.space = None
-        self.anchor = None
-        if spec.artifact is not None:
-            from manabot.backends.torch.checkpoint import load_checkpoint
+class AnchorSession:
+    """A scripted reference player: one legal action, no probabilities or value."""
 
-            self.agent, self.space = load_checkpoint(spec.artifact)
-        else:
-            from manabot.sim.anchors import ScriptedGreedyPlayer
-            from manabot.sim.heuristic import HeuristicPlayer
+    def __init__(self, kind: str) -> None:
+        from manabot.sim.anchors import ScriptedGreedyPlayer
+        from manabot.sim.heuristic import HeuristicPlayer
 
-            self.anchor = (
-                HeuristicPlayer()
-                if spec.config["kind"] == "heuristic"
-                else ScriptedGreedyPlayer()
-            )
+        self.anchor = (
+            HeuristicPlayer() if kind == "heuristic" else ScriptedGreedyPlayer()
+        )
 
     def observe(self, view: PolicyView) -> None:
         pass
 
     def choose(self, view: PolicyView) -> PolicyDecision:
-        if self.anchor is not None:
-            from types import SimpleNamespace
-            from typing import cast
+        # The scripted players read only the raw observation from their Env.
+        action = self.anchor.act(
+            cast("Env", SimpleNamespace(last_raw_obs=view.observation)), {}
+        )
+        return PolicyDecision(view.choices[action], view.binding)
 
-            from manabot.env.env import Env
+    def close(self) -> None:
+        pass
 
-            action = self.anchor.act(
-                cast(Env, SimpleNamespace(last_raw_obs=view.observation)), {}
-            )
-            return PolicyDecision(view.choices[action], view.binding)
+
+class BaselineSession:
+    """A loaded checkpoint; search-capable through evaluate and fork."""
+
+    def __init__(self, spec: PolicySpec, *, seed: int) -> None:
+        from manabot.backends.torch.checkpoint import load_checkpoint
+
+        assert spec.artifact is not None
+        self.spec = spec
+        self._rng = random.Random(seed)
+        self.agent: ActorCritic | None
+        self.space: ObservationSpace | None
+        self.agent, self.space = load_checkpoint(spec.artifact)
+
+    def observe(self, view: PolicyView) -> None:
+        pass
+
+    def choose(self, view: PolicyView) -> PolicyDecision:
         evaluation = self.evaluate(view)
         probabilities = evaluation.probabilities
         action = (
@@ -217,7 +230,7 @@ class BaselineSession:
         from manabot.backends.torch.bot import evaluate_observation
 
         if self.agent is None or self.space is None:
-            raise ValueError("This policy has no baseline evaluator.")
+            raise ValueError("Policy session is closed.")
         probabilities, value = evaluate_observation(
             self.agent, self.space, view.observation
         )
@@ -230,16 +243,13 @@ class BaselineSession:
 
     def fork(self, *, seed: int) -> BaselineSession:
         # Model parameters are read-only; history-free evaluation mutates no model state.
-        branch = object.__new__(BaselineSession)
-        branch.seat, branch.spec = self.seat, self.spec
-        branch.agent, branch.space, branch.anchor = self.agent, self.space, None
+        branch = copy.copy(self)
         branch._rng = random.Random(seed)
         return branch
 
     def close(self) -> None:
         self.agent = None
         self.space = None
-        self.anchor = None
 
 
 @dataclass(frozen=True)
@@ -295,7 +305,7 @@ class BaselineProvider:
         return [
             *(
                 self.policy(PolicySpec("manabot", config={"kind": kind}))
-                for kind in ("heuristic", "greedy")
+                for kind in _ANCHORS
                 if ambient
             ),
             *(
