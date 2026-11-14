@@ -1,9 +1,10 @@
 # Framework backends
 
 ```python
-from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.backends import resolve
 
-policy, space = load_checkpoint(".runs/example/self-play-raw.safetensors")
+backend = resolve("torch")
+policy, space = backend.load_policy(".runs/example/self-play-raw.safetensors")
 batch = policy.prepare(obs, inference=True)  # NumPy in: the buffers VectorEnv produces
 logits, values = policy.evaluate(batch)      # NumPy out: logits [B,A], values [B]
 ```
@@ -16,7 +17,7 @@ returns logits, -1e8 off the legal actions, and each row's value.
 drops object and fact columns no row uses); the default is the learning
 layout, whose outputs differ from it by float summation order. Every
 backend reads the same `Prepared` batch and the same checkpoint file, so the
-MLX lines differ only in the import and the loader's name
+MLX lines differ only in the name passed to `resolve`
 ([mlx.md](mlx.md)).
 
 A backend runs the manabot policy forward and the learner step of its
@@ -57,15 +58,18 @@ encoders and `live_tokens.py`):
 | `rollout.py` | `AdmittedRollout`: a collected batch's observations as the policy reads them |
 | `checkpoint.py` | the map from canonical names to the backend's layout, loading (torch also saves), and `BACKEND` |
 
-`BACKEND` in `checkpoint.py` implements `manabot.policy.protocol.Backend`, the
-one object `parity` needs. A backend imports its own framework,
+`resolve` returns a `manabot.policy.protocol.Backend`: a configured loader
+with `rl`, `arrays`, `learner` and `rollout` modules for updates. These modules
+load on access, so playing a policy does not import training. A backend
+imports its own framework,
 `manabot.policy` and the configuration and observation modules; it never
 imports another backend (`tests/test_package_boundaries.py` enforces it).
 
 ## Who chooses a backend
 
 Library code receives a backend; it does not import one. An update takes the
-backend module as its first argument, and simulation and evaluation take a
+configured backend object (or an imported update module) as its first
+argument, and simulation and evaluation take a
 policy that satisfies `BackendPolicy`. Checkpoint discovery and registration
 receive `Backend` for loading and metadata reads; they never resolve it themselves.
 Only the code that starts a program
@@ -81,11 +85,11 @@ They name a backend once, by import or through the resolver:
 ```python
 import manabot.backends
 
-backend = manabot.backends.resolve("torch")  # the module manabot.backends.torch
+backend = manabot.backends.resolve("torch")
 learner = backend.learner.Learner(policy, "cpu", minibatch_rows=64)
 ```
 
-A loader calls `backend.checkpoint.BACKEND.load_policy(path)`, which returns
+A loader calls `backend.load_policy(path)`, which returns
 the policy and its observation space. The
 policy supplies host `prepare`/`evaluate`, action sampling and guarded
 `inference_scope()` calls. Sampling stays in the backend so moving a caller
@@ -93,7 +97,11 @@ preserves its seeded action stream. The serving child chooses Torch when it
 starts; a game child resolves it lazily only for an in-child checkpoint player.
 Code players and replay children keep importing no framework.
 
-`resolve` imports the framework on first use. A backend whose optional extra
+`resolve(name, *, precision=None)` imports the framework on first use.
+MLX carries the selected compute precision on the returned backend; omitted
+precision follows each loaded policy's width. Torch accepts omitted precision
+or `"float32"`; its learner configures reduced-precision training. A backend
+whose optional extra
 is not installed raises `ImportError` naming the extra; an unknown name raises
 `ValueError` listing the backends.
 
@@ -105,8 +113,9 @@ there by name; the list is compared exactly, so it can shrink and never grow.
 ## Algorithms are written once
 
 An update or a loop is written once and takes the backend as an argument:
-the backend's module itself, not a class to subclass or a configuration
-string. The maintained updates in `manabot/training/updates/` take it first:
+the configured backend object returned by `resolve`, or a directly imported
+backend module. The maintained updates in `manabot/training/updates/` take
+it first:
 
 ```python
 import manabot.backends.torch as backend
@@ -133,7 +142,7 @@ diagnostics = update_damped_iteration(
 
 Inside an update, array math goes only through the backend's modules. The
 Protocols in `manabot/training/updates/backend.py` state this surface
-(`Backend` for the damped update; `PPOBackend`, torch only, adds what PPO
+(`UpdateBackend` for the damped update; `PPOBackend`, torch only, adds what PPO
 calls; `CategoricalRL`, torch only, the categorical critic), and
 `tests/training/test_update_backend_protocols.py` checks every installed
 backend against them:

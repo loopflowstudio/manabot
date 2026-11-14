@@ -256,9 +256,7 @@ def sim_command(
         raise typer.BadParameter(str(error)) from error
     from manabot.backends import resolve
 
-    run_simulation(
-        sim_config, runtime_config, backend=resolve("torch").checkpoint.BACKEND
-    )
+    run_simulation(sim_config, runtime_config, backend=resolve("torch"))
 
 
 @app.command("training-report")

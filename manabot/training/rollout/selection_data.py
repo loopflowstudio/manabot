@@ -15,7 +15,7 @@ from typing import Literal
 from pydantic import ConfigDict, Field, model_validator
 import torch
 
-from manabot.backends.torch.arrays import device_of, on_device, to_numpy
+from manabot.backends.torch.arrays import device_of, on_device
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.failures import ScalarCapture
 from manabot.env.match import Match
@@ -141,15 +141,7 @@ def collect_selection_game(
                 raise ValueError("selection policy cannot encode every legal offer")
             tensors = on_device(
                 agent.prepare(
-                    {
-                        key: to_numpy(value)
-                        for key, value in (
-                            {
-                                k: torch.as_tensor(v).unsqueeze(0)
-                                for k, v in encoded.items()
-                            }
-                        ).items()
-                    },
+                    {key: value[None] for key, value in encoded.items()},
                     inference=True,
                 ),
                 device_of(agent),

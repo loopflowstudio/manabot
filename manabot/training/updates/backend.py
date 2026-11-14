@@ -1,13 +1,13 @@
 """What an update calls on its backend, as Protocols.
 
-The updates are written once over a backend module (`manabot.backends.torch`,
-`manabot.backends.mlx`) passed as an argument. `Backend` is that module's
+The updates are written once over a configured backend or a directly imported
+backend module passed as an argument. `UpdateBackend` is that module's
 surface: its `rl`, `arrays`, `learner` and `rollout` files, each a Protocol a
 module satisfies with plain functions. `Learner` and `Policy` are the objects
-an update steps and runs forward. `manabot.policy.protocol` is the narrower
-NumPy surface parity compares; `Learner` extends its `BackendLearner`.
+an update steps and runs forward. `manabot.policy.protocol.Backend` also
+provides loading and NumPy parity; `Learner` extends its `BackendLearner`.
 
-Both backends satisfy `Backend`. The PPO update needs `PPOBackend`, which adds
+Both backends satisfy `UpdateBackend`. The PPO update needs `PPOBackend`, which adds
 standardization, top-count selection and a policy `__call__`/`get_value`; only
 torch provides it. A categorical critic needs `CategoricalRL` (torch only);
 `categorical_rl` narrows to it and refuses a backend without one.
@@ -290,7 +290,7 @@ class PPOLearner(Learner, Protocol):
 # -- the backend module --------------------------------------------------------
 
 
-class Backend(Protocol):
+class UpdateBackend(Protocol):
     """A backend module as the damped update takes it."""
 
     @property
@@ -306,7 +306,7 @@ class Backend(Protocol):
     def rollout(self) -> RolloutFile: ...
 
 
-class PPOBackend(Backend, Protocol):
+class PPOBackend(UpdateBackend, Protocol):
     @property
     def rl(self) -> PPORL: ...
 

@@ -24,7 +24,7 @@ from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy.admission import Spec, check
 from manabot.policy.buckets import bucket_sizes, object_columns, trim_observation
 from manabot.policy.checkpoint import layout
-from manabot.policy.prepare import Tables, prepare
+from manabot.policy.prepare import OBJECT_VALIDITY_KEYS, Tables, prepare
 from manabot.verify.representation import shared_effect_root
 import managym
 from tests.model.prepared_routes import device_input
@@ -212,7 +212,8 @@ def test_belief_rows_extend_all_flat_object_coordinates() -> None:
     check(obs, spec, obs["actions_valid"].astype(bool))
     batch = prepare(obs, tables, live_tokens=True, value_token=True)
     assert batch.belief is not None
-    assert batch.validity.shape[1] == tables.layout.objects + 3
+    visible_objects = sum(original[key].shape[1] for key in OBJECT_VALIDITY_KEYS)
+    assert batch.validity.shape[1] == visible_objects + 3
     np.testing.assert_array_equal(batch.validity[:, -3:], [[1, 0, 1]] * 3)
     np.testing.assert_array_equal(batch.is_agent[:, -3:], [[True, False, False]] * 3)
     b, a = np.nonzero(batch.legal)

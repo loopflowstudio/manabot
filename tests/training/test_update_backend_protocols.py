@@ -9,8 +9,8 @@ A backend whose framework is absent is skipped.
 """
 
 from collections.abc import Callable
+import importlib
 import inspect
-from types import ModuleType
 from typing import Any, get_type_hints
 
 import numpy as np
@@ -26,17 +26,18 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.policy.checkpoint import PolicyCheckpoint, from_torch_state
+from manabot.policy.protocol import Backend
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
 from manabot.training.updates.backend import (
     AdmittedRollout,
     Arrays,
-    Backend,
     CategoricalRL,
     Learner,
     LearnerFile,
     PPOAdmittedRollout,
     PPOBackend,
     PPOLearner,
+    UpdateBackend,
     categorical_rl,
 )
 import managym
@@ -155,7 +156,7 @@ def captured() -> tuple[PolicyCheckpoint, RolloutBatch]:
     ), batch
 
 
-def _installed(name: str) -> ModuleType:
+def _installed(name: str) -> Backend:
     if name not in installed_backends():
         pytest.skip(f"the {BACKENDS[name]} framework is not installed")
     return resolve(name)
@@ -167,11 +168,16 @@ def test_backend_provides_what_the_damped_update_calls(
 ) -> None:
     module = _installed(name)
     weights, batch = captured
-    learner = module.learner.Learner(
-        module.checkpoint.assemble(weights), "cpu", minibatch_rows=4
-    )
+    learner = module.learner.Learner(module.load(weights)[0], "cpu", minibatch_rows=4)
     admitted = module.rollout.AdmittedRollout(learner.agent, batch)
     assert _violations(module, Backend, name) == []
+    assert _violations(module, UpdateBackend, name) == []
+    assert (
+        _violations(
+            importlib.import_module(f"manabot.backends.{name}"), UpdateBackend, name
+        )
+        == []
+    )
     assert _violations(learner, Learner, f"{name}.Learner") == []
     assert _violations(admitted, AdmittedRollout, f"{name}.AdmittedRollout") == []
 
@@ -181,7 +187,7 @@ def test_torch_provides_what_ppo_calls(
 ) -> None:
     module = resolve("torch")
     learner = module.learner.Learner(
-        module.checkpoint.assemble(captured[0]), "cpu", minibatch_rows=4
+        module.load(captured[0])[0], "cpu", minibatch_rows=4
     )
     assert _violations(module, PPOBackend, "torch") == []
     assert _violations(learner, PPOLearner, "torch.Learner") == []
@@ -201,7 +207,7 @@ def test_prefetched_minibatches_preserve_order_and_policy_input(
     captured: tuple[PolicyCheckpoint, RolloutBatch], grad_enabled: bool
 ) -> None:
     module = resolve("torch")
-    agent = module.checkpoint.assemble(captured[0])
+    agent = module.load(captured[0])[0]
     admitted = TorchRollout(agent, captured[1])
     order = np.array([1, 0, 1], dtype=np.int64)
     admitted.admit_rows(order, 2)
@@ -257,7 +263,7 @@ def test_prefetched_minibatches_preserve_order_and_policy_input(
 def test_prefetch_propagates_admission_failure_and_can_stop_early(
     captured: tuple[PolicyCheckpoint, RolloutBatch],
 ) -> None:
-    agent = resolve("torch").checkpoint.assemble(captured[0])
+    agent = resolve("torch").load(captured[0])[0]
     admitted = TorchRollout(agent, captured[1])
     admitted.admit_rows(np.array([0], dtype=np.int64), 1)
     device = torch.device("cpu")

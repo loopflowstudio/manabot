@@ -202,14 +202,15 @@ def test_simulation_imports_and_plays_without_training() -> None:
         from manabot.env.observation import ObservationSpace
         from manabot.infra.config import ModelConfig, RewardConfig
         from manabot.backends.torch.policy import ActorCritic
-        from manabot.backends.torch.checkpoint import BACKEND, save_checkpoint
+        from manabot.backends import resolve
+        from manabot.backends.torch.checkpoint import save_checkpoint
         from manabot.sim.search.flat_mc import make_player
         match, space = Match(), ObservationSpace()
         model = ActorCritic(space, ModelConfig())
         with tempfile.TemporaryDirectory() as directory:
             checkpoint = Path(directory) / 'policy.pt'
             save_checkpoint(model, space, checkpoint, player_configs=match.to_rust())
-            player, _ = make_player({'kind': 'checkpoint', 'path': str(checkpoint)}, 17, backend=BACKEND)
+            player, _ = make_player({'kind': 'checkpoint', 'path': str(checkpoint)}, 17, backend=resolve("torch"))
             env = Env(match, space, Reward(RewardConfig()), seed=17)
             observation, _ = env.reset(seed=17)
             action = player.act(env, observation)
@@ -519,12 +520,15 @@ def test_updates_take_the_backend_as_an_argument() -> None:
     assert violations == []
 
 
-def test_backend_resolver_selects_known_modules_and_names_missing_extras(
+def test_backend_resolver_selects_configured_backends_and_names_missing_extras(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from manabot.backends import resolve
 
-    assert resolve("torch").__name__ == "manabot.backends.torch"
+    assert resolve("torch").name == "torch"
+    assert resolve("torch", precision="float32").name == "torch"
+    with pytest.raises(ValueError, match="only for the MLX backend"):
+        resolve("torch", precision="bfloat16")
     with pytest.raises(ValueError, match="available backends: torch, mlx"):
         resolve("unknown")
     original = importlib.import_module

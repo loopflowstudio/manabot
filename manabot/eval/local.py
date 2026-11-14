@@ -118,7 +118,7 @@ def _prepare(
         torch.set_num_threads(1)
         request = checkpoint_request(
             checkpoint,
-            backend=resolve("torch").checkpoint.BACKEND,
+            backend=resolve("torch"),
             opponent=opponent,
             deal_seeds=seeds,
             authored_matchup=matchup,

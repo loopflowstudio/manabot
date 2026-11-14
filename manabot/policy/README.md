@@ -6,9 +6,10 @@ framework** (PyTorch, MLX, JAX); it uses NumPy only
 (`tests/test_package_boundaries.py` enforces it).
 
 ```python
-from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.backends import resolve
 
-policy, space = load_checkpoint("policy.safetensors")
+backend = resolve("torch")
+policy, space = backend.load_policy("policy.safetensors")
 batch = policy.prepare(obs, inference=True)  # check, trim, index: a Prepared batch
 logits, values = policy.evaluate(batch)      # NumPy: logits [B,A], values [B]
 ```

@@ -400,7 +400,7 @@ def game_worker(
         from manabot.backends import resolve
 
         torch.set_num_threads(1)
-        return resolve("torch").checkpoint.BACKEND
+        return resolve("torch")
 
     client = None if inference is None else InferenceClient(inference)
 

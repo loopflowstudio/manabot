@@ -124,10 +124,10 @@ main 1.354 [1.338, 1.355], parent 1.245 [1.234, 1.246], head
 so this is not a reliable speedup over main. The prior 7.2% regression and
 discarded metadata attempt remain in the historical receipts below.
 
-**Open for review, not waived:**
+**Findings and remaining validation:**
 
 - CUDA gradients meet the Task bar (≤1e-8) but exceed the head-vs-head repeat
-  floor the plan also asked for.
+  floor. Review 4 accepted this finding (exact reply below).
 - The order-dependent 300 s timeout reproduced on main; its leaked
   manager accept thread is fixed. The full reported order now passes (below).
 - Latest host inference preparation is 13.85 vs main 12.59 ms (+10.0%),
@@ -201,6 +201,34 @@ return branch; `_slice_obs_rows` retains host values and the action-focus cast.
 Delete the grad-mode read in `prepare_admitted`, the worker's grad-mode
 context, and rollout's captured inference flag/`_prepare_rows(inference)`
 parameter; explicit preparation purpose and exact learning results survive.
+
+Concept review 4: delete the update protocol name `Backend`, the public
+`load_mlx_policy` entry point, parity's `backend_module` helper and all
+`resolve(...).checkpoint.BACKEND` consumer access. Preserve configured MLX
+precision, lazy training imports, direct module updates and loader refusals.
+
+Direct compress, 2026-11-14: remove parity's `backend` selector in favor
+of `resolve`, MLX's single-use `_load_policy` and `mlx_gradients` wrappers,
+unused `Layout` capacities/`objects`, and action-gather coordinate parameters
+already carried by `Prepared`. Remove NumPy→Torch→NumPy round trips in
+selection collection, coverage and the MLX pilot; batch regression tensors
+convert directly in one comprehension. Serialized lookup buffers, recurrent
+schedules, action ordering and numerical operations remain unchanged.
+
+Direct compress validation (CPython 3.13, existing cp313 native extension;
+`uv sync --locked --extra dev --extra mlx --extra artifacts --no-install-package managym`
+installed the locked Python dependencies without rebuilding the unchanged engine):
+
+- `uv run --no-sync pytest tests/model/test_prepare_rows.py tests/model/test_agent.py tests/model/test_mlx_backend.py tests/model/test_backend_capture.py -q --basetemp /tmp/mtg333/compress-direct-tests` → **56 passed (26.13 s)**.
+- `uv run --no-sync pytest tests/training/test_update_backend_protocols.py tests/training/test_update_backends.py tests/model/test_torch_backend_protocol.py tests/model/test_torch_container_load.py tests/test_package_boundaries.py tests/verify/test_learning_regression.py tests/model/test_record_coverage.py::test_elemental_execution_ids_have_catalog_rows tests/training/test_automatic_game_capture.py -q --basetemp /tmp/mtg333/compress-direct-contract-tests` → **93 passed (33.17 s)**, one existing Torch nested-tensor warning.
+- `EQUIV_BELIEF_INPUT=/tmp/mtg333/post514-belief.pt uv run --no-sync python scratch/equivalence/run.py /tmp/mtg333/compress-direct-head.pt`, then `compare.py post514-base.pt compress-direct-head.pt` through uv → **3,410 tensors, differing 0**. `uv run --no-sync python scratch/equivalence/updates.py /tmp/mtg333/updates-compress-direct.json` then `cmp` against `updates-post514-base.json` → **five cases byte-identical**.
+- `uv run --no-sync python -m manabot.backends.parity /tmp/mtg333/compress-direct-tests/test_capture_replays_both_seat0/capture/initial.pt --capture /tmp/mtg333/compress-direct-tests/test_capture_replays_both_seat0/capture --minibatches 1 --collection 1 --json /tmp/mtg333/compress-direct-parity.json` → **parity: pass (torch, mlx)**; MLX clipped-step weight max difference 1.2e-7. The pilot's `_torch_inference` also completed on one captured batch.
+- Ruff check and format check on changed code, `git diff --check` → pass.
+  No CUDA rerun: values, schedules and device operations are unchanged.
+  Original uncommitted Markdown is preserved at
+  `/tmp/mtg333-compress-direct-before/`; historical launch detail remains at
+  the git reference in "Retained measurements". Broader gate, installed-wheel
+  checks and CI remain outstanding.
 
 ## Facts that still bind
 
@@ -304,232 +332,43 @@ backend; training writes `.safetensors` policies that sim, eval and Academy
 load beside old `.pt` files; the CPU oracle and CUDA checks hold; the speed
 table and the optimize pass's before/after are in the PR body.
 
-## Receipts, 2026-11-13
+## Retained measurements, 2026-11-13
 
-Launcher cost as recorded once per run; no cross-card ratios. Full speed
-tables with ranges and section timings: `scratch/speed/mtg333-results.txt`.
+Full launch attempts, costs, intermediate speed/gradient findings and prefetch
+profiles: `aac1062d9a:scratch/mtg333-plan.md`, sections "Receipts",
+"Post-#514 refresh" and "PPO prefetch iteration". Full speed tables and
+launcher costs remain in `scratch/speed/mtg333-results.txt`. These include the
+initial A40 PPO regression (−7.7%), the post-#514 −20.2% and −7.2% PPO
+checks, and the discarded metadata attempt; later measurements do not erase them.
 
-| Run | Card | Source | Result | Cost |
-|---|---|---|---|---|
-| `047fa57e0e5e` equivalence | A6000 | `296c90f33` | outputs, losses, CPU-trained weights exact; 95 gradients ≤3.725290298461914e-9; repeat: 7 belief gradients ≤5.529727786779404e-10 | $0.04 |
-| `8a4dd0751651` | A40 | `27daef1ae5` | failed before timing (baseline schema builder, see Facts) | $0.02 |
-| `2f98203dd0a7` equivalence + speed + profile | A40 | `cd7afaec86` | identical-input oracle 3,410 tensors: outputs exact, 95 gradients ≤3.259629011154175e-9, repeat 7 belief gradients ≤3.026798367500305e-9; speed below | ~$0.31 |
-| `267f945d54a0` optimization before/after | Vast 5090 | `e6cd7f59cc` | damped 18.2057→19.2337 steps/s (+5.6%), inference 9667→10170 obs/s, collection 31.46→21.86 s, PPO 0.33794→0.3379 (unchanged) | ~$0.18 |
-| `ce884945fab8` original baseline vs optimized head | Vast 5090 | `46e3db32d7` | damped 17.3248→18.1048 (+4.5%), PPO 0.360453→0.341814 (−5.2%), inference 9742.44→10725.6 obs/s, save 0.02085→0.01762 s; 55 gradients ≤2.561137080192566e-9, repeat 6 ≤2.0954757928848267e-9 | ~$0.15 |
+Final CUDA run `d0a1ec0dfb75`, source `fdc42e7371`, compared main
+`de39d601fb`, prefetch parent `53a705735b`, and head on one RTX 5090 rental,
+three processes each, USD 10 cohort cap. Outputs, losses and CPU-trained
+weights exact; 52 gradients differ, max 2.3283064365386963e-9. Head repeat:
+seven gradients, max 1.862645149230957e-9. The Task's ≤1e-8 bar passes;
+the stricter repeat-floor finding remains (accepted in review 4).
 
-A40 comparison (`2f98203dd0a7`, three processes per arm, head vs base
-medians): damped 7.615 vs 7.356 steps/s; PPO 0.1992 vs 0.2157 (**7.7%
-regression**, outside spread); inference 4136 vs 1318 obs/s; host preparation
-0.03386 vs 0.09876 s; save 0.02816 vs 0.03710 s; load 0.1757 vs 0.1662 s
-(within spread); collection 56.56 vs 79.60 s; forward sync warnings 1 vs 24.
-All arms: 55,391 learner rows, 217 damped and 16 PPO steps. The 5090 passes
-have one process per arm with three timed inner repeats.
+PPO main/parent/head: 1.354 [1.338, 1.355] / 1.245 [1.234, 1.246] /
+1.376 [1.298, 1.433] steps/s. Head +10.5% vs parent, +1.7% vs main;
+main/head ranges overlap. All arms: 55,391 learner rows, 217 damped and
+16 PPO steps. Head preparation wait + transfer: 5.551 s; forward/loss:
+1.093 s. Parent forward/loss included preparation: 8.205 s. Backward:
+2.111→2.112 s. Threaded cProfile timings are inconsistent (State), so only
+rates and main-thread timers support quantitative claims.
 
-Profile (same run): PPO made 1,519,556 visits each to `array_fields` and
-`_replace_arrays` (4.804 s and 4.117 s cumulative) over host-only
-`Packed.sizes`/`lengths` and bucket needs, against 0.113 s in GRU packing.
-The prediction that skipping them would cut PPO wall time 5–10% was not met;
-damped and collection improved instead.
+Complete digest-verified outputs: `/tmp/mtg333/prefetch-results`, retained
+in Etude. Rental terminated; provider inventory confirmed
+`etude-f482ab7677e1` absent. Generated patches were removed from the tree.
 
-CPU, current engine (native release rebuild 3m18s, cp313 extension replaced
-atomically): `compare.py current-shared-base.pt current-shared-head.pt` →
-**3,410 tensors, differing 0**; `updates-current-{base,head}.json`
-`cmp`-identical (five PPO/damped cases); `parity: pass (torch, mlx)` on a
-fresh 172-decision capture, MLX clipped-step parameter max difference 1.2e-7.
-Boundaries, capture replay and experiment discovery: 20 passed (66.98 s);
-`tests/model/test_backend_capture.py tests/model/test_mlx_backend.py` → 15
-passed.
-
-Compress pass, 20:40 UTC (`array_fields` skips scalar-only tuples for every
-leaf type; `MLXBackend.__init__` first): `compare.py current-shared-base.pt
-compress4-head.pt` → **3,410 tensors, differing 0**; `updates-compress4.json`
-`cmp`-identical; transfer-layout and two half-loader tests → 3 passed.
-
-Rentals at 20:38 UTC: RunPod holds two pods, both other Tasks'
-(`etude-e0f0acfca5a5` = `mtg324-l4-ab`, `etude-b0805de6f0f4` = `mtg347-l4`),
-left alone. Every MTG-333 launcher machine is a never-created request at
-$0.00 whose window has ended or ends by 20:51 UTC (`4b091160edbf` settled
-lost, $0.00). No Task rental is live.
-
-## Post-#514 refresh, 2026-11-13
-
-- CPU: fresh base `105e7e2aa` and merged head, shared
-  `/tmp/mtg333/post514-belief.pt` → **3,410 tensors, differing 0**, five
-  update cases byte-identical. Retained optimizations also pass:
-  `compare.py post514-base.pt post514-facts-head.pt` → same;
-  `cmp updates-post514-{base,facts}.json` → identical. Final `manabot/` was exactly
-  `e98109b8f8` before the compress pass below (empty diff after discarding metadata).
-- Compress pass, 21:52 UTC (`_facts` names its live rows and sets hashed-record
-  masks directly; the referenced-definition scan is inline in `prepare`;
-  `scratch/equivalence/probe.py` removed, last at `a26be160ee`):
-  `compare.py post514-base.pt compress5-head.pt` → **3,410 tensors, differing
-  0**; `cmp updates-post514-base.json updates-compress5.json` → identical;
-  `test_prepare_rows.py test_torch_backend_protocol.py` → 32 passed. No CUDA
-  rerun: host values are unchanged, so the speed numbers below predate it.
-- Focused checks: `test_prepare_rows.py` → 27 passed; packed transfer and
-  `test_torch_backend_protocol.py` → 6 passed, repeated after discarding the
-  metadata change. Ruff check/format passed. Broader validation stays at gate.
-- `5545e3f17584`: lost before bootstrap, `machine_lost_before_start`, launcher
-  ~$0.01, deletion confirmed. No second Task rental was live.
-- `1caf1c9a7f4f` (`5cc7c121bc`): initial post-#514 comparison against
-  `de39d601fb`, three processes each; PPO −20.2%, damped +9.4%, inference
-  +8.0%. CUDA outputs/losses/CPU-trained weights exact, 52 gradients differ,
-  max 1.396984e-9; repeat 6 gradients, max 1.862645e-9. Profile: preparation
-  5.134 s, facts 1.682 s, unused catalog scan 0.387 s, device traversal/copy
-  1.434 s per PPO update.
-- `d70a7d515116` (`e98109b8f8`): three processes each of main, pre-optimization,
-  and retained host optimization; PPO 1.324 / 1.102 / 1.197 steps/s. CUDA
-  outputs/losses/CPU-trained weights exact, 52 gradients differ, max
-  1.862645e-9; repeat 8 gradients, max 3.259629e-9. The stricter repeat-floor
-  finding remains for review.
-- `3abae50ac468` (`f955a49a31`): main / retained facts / metadata attempt,
-  one process each, three timed repeats. Metadata attempt discarded (State).
-  Retained PPO −7.2%, damped +3.0%, inference +14.9%, collection 23.47→23.40 s,
-  save 0.02438→0.01642 s, load 0.08036→0.07981 s. These are this check's
-  numbers, not cross-run ratios.
-
-All three successful runs used the **same physical RTX 5090 in one rental**,
-`mtg333-opt-vast5090-9ff43be26b3e`; each includes both comparison arms.
-Full speed tables, timed ranges and launcher costs: `scratch/speed/mtg333-results.txt`.
-Generated patches remain only in frozen launch commits, removed from the final tree.
-
-## PPO prefetch iteration, 2026-11-13
-
-CPU profile (`/tmp/mtg333/ppo-before.prof`, five-case update corpus): two
-PPO updates total 1.610 s; admitted row reads across both update kinds total
-0.316 s, host preparation across collection/updates 0.492 s. The retained
-CUDA profile (`post514-profile/profile.ppo`) attributes 6.394 s to
-`prepare_admitted`, 10.517 s to `rows` in a 15.031 s instrumented update;
-these are pre-fact-optimization timings, not final speed samples.
-
-Choose one-minibatch host prefetch: batch-dependent trimming, packed schedules
-and catalog selection make cross-epoch row reuse a larger cut. Delete the
-serial PPO `admitted.rows` loop; preserve shuffle order, bootstrap timing,
-grad-mode packing, native choices, values and optimizer steps. Keep one
-preparation implementation (`_prepare_rows`), also used by synchronous
-`rows`. Device transfers stay on the caller; epoch exit joins the worker.
-A separate profiler section measures preparation wait plus transfer; it was
-previously inside Forward and loss, so those sections are not directly comparable.
-
-First update comparison: five cases byte-identical to post-#514 base.
-Final focused prefetch/contract checks: 4 passed (18.97 s).
-`compare.py post514-base.pt overlap-head.pt` → 3,410 tensors, differing 0;
-`cmp updates-post514-base.json updates-overlap-final.json` → identical.
-CUDA run `d0a1ec0dfb75`, source `fdc42e7371`: main `de39d601fb`, prefetch
-parent `53a705735b`, and head on one RTX 5090 rental, three processes each,
-USD 10 cohort cap. CUDA oracle: outputs/losses/CPU-trained weights exact;
-52 gradients differ, max 2.3283064365386963e-9; head repeat: seven gradients,
-max 1.862645149230957e-9. Meets the Task bar; the stricter floor finding stays.
-Speed comparison complete: PPO medians main 1.354, parent 1.245, head
-1.376 steps/s; head improves 10.5% vs parent and clears the no-slower-median
-condition vs main (+1.7%, overlapping ranges). All arms have 55,391 learner
-rows, 217 damped and 16 PPO steps. Head's preparation wait + transfer is
-5.551 s and forward/loss 1.093 s; parent forward/loss (including preparation)
-8.205 s. Backward stays 2.111→2.112 s. The untimed profile completed but its
-threaded call breakdown is not used quantitatively (review finding above). The run succeeded; its complete,
-digest-verified output files are in `/tmp/mtg333/prefetch-results` and retained
-in Etude. Full tables and launcher cost are in `scratch/speed/mtg333-results.txt`.
-The rental was terminated; provider inventory confirms `etude-f482ab7677e1`
-is absent. Generated patches were removed from the final tree.
-
-Compress pass after the CUDA run (`minibatches` submits lazily from one chunk
-list; the executor's exit is the only join, so the manual generator close is
-gone; same preparation order and at most one batch ahead):
+The subsequent compress pass simplified lazy prefetch submission; preparation
+order and batch contents stayed unchanged, at most one batch ahead.
 `cmp updates-post514-base.json updates-compress6.json` → identical;
 `pytest tests/training/test_update_backend_protocols.py` → 8 passed (55.98 s).
-The forward oracle and CUDA speed were not rerun: `_prepare_rows`, transfers
-and the PPO loop are unchanged, so the numbers above predate this edit. One
-timing difference: the worker now receives batch i+1 before the caller waits
-on batch i (previously after), so overlap can only start earlier; preparation
-order and batch contents are unchanged. An early caller exit leaves at most one
-submitted batch for the executor exit to join.
-
-## First concept cleanup, 2026-11-13
-
-Both directions are implemented: the collector slices host observation rows,
-retaining the float32 action-focus cast and collection-entry device check;
-`prepare_admitted` chooses catalog coverage from `inference` and bucketed
-shapes alone, and the worker no longer sets grad mode. The backend README
-states catalog coverage, CPU compaction and default learner purpose.
-
-Checks with the retained post-#514 belief corpus and base:
-`run.py /tmp/mtg333/concept-head.pt` + `compare.py` → **3,410 tensors,
-differing 0**; `updates.py /tmp/mtg333/updates-concept.json` + `cmp` →
-five cases identical; the focused five-file suite below → **63 passed, 2 CUDA
-cases deselected (103.30 s)**. Compress repeated these on the unchanged tree
-(`compress-head.pt`, `updates-compress.json`): exact, exact, 63 passed
-(88.20 s). No CUDA rerun followed. Full directions, commands and receipts:
-`c7c6a43994:scratch/mtg333-plan.md`.
-
-Not directed: unifying damped's serial `rows` with PPO's prefetched
-`minibatches` needs a same-card speed pass; it remains an optimization
-candidate. MLX's published loader name and `Prepared.guard`/`bucket_needs`
-stay as recorded in `questions.md`.
-
-## Concept review 2, 2026-11-13 (implemented)
-
-Review found that callers still inferred preparation purpose from grad mode.
-Torch rollout now fixes it by role: inference bootstrap rows; learner
-`rows`/`minibatches`/`_prepare_rows`, with no captured mode or purpose
-parameter. Explicit no-grad sites use literal inference purpose; genuine
-dual-mode helpers may retain their expression. The original direction and
-fallback are at `2155061ffc:scratch/mtg333-plan.md`; the exactness checks
-below passed, so the cleanup is retained without a CUDA rerun.
-
-MLX bootstrap preparation stays learner-purpose, as directed (MLX changes
-excluded). Forward-time grad reads for caching, CUDA embedding gradients and
-inference guards remain. The two verification preparations outside their
-no-grad forward blocks also retain their current values.
-
-## Concept review 3, 2026-11-13 (nothing to change)
-
-Reviewed `6514220586`: since review 2 only the callback accept loop and the
-shared verification preparation changed; neither adds a concept. One input
-(`Prepared`), one statement of purpose (`inference`), one container and one
-backend rule hold across docs, protocol and callers. No open product choice.
-
-The one remaining grad-mode purpose read is `verify.util._tensor_observation`
-(used by verify and `academy/villain.py`, as on main). It stays: it reproduces
-the old `admit_on_device` rule per caller, and literal inference purpose would
-compact CPU columns for `llm_game`/`decision_profile`, a summation reorder
-under seeded action sampling (forbidden: changed seeded games). Its name and
-purpose belong to the verify/ follow-up, Task `c2ef4a`.
-
-## Next actions
-
-0. Role-based preparation cleanup and the callback listener fix are implemented
-   and verified (receipts below).
-1. Review: the CUDA repeat-floor finding (gradients ≤1e-8 meet the bar, but
-   exceed the head-vs-head floor), host preparation/load costs, and the threaded
-   profile limitation. PPO's no-slower-median condition now clears; main/head
-   ranges overlap.
-2. Gate: broader suites, installed wheel and Python 3.12. The previously
-   failing full-file order passes. Publication and landing are the caller's steps.
-
-## Role-based preparation receipt, 2026-11-13
-
-Torch rollout now always prepares bootstrap rows for inference and update rows
-for learning, including prefetch. No rollout grad-mode read or purpose parameter
-remains. Explicit no-grad/inference-mode blocks and decorators in parity,
-record coverage, frozen-policy inspection, selection collection and the
-breakdown script pass `inference=True`. Preparation outside those contexts in
-`verify/llm_game.py` and `decision_profile.py` retains its existing rule;
-changing them would change production values. Frozen experiments and the
-oracle are untouched. Docs and the existing two-grad-mode rollout test now
-state and check the role contract against explicit policy preparation.
-
-- `EQUIV_BELIEF_INPUT=/tmp/mtg333/post514-belief.pt uv run python scratch/equivalence/run.py /tmp/mtg333/role-head.pt && uv run python scratch/equivalence/compare.py /tmp/mtg333/post514-base.pt /tmp/mtg333/role-head.pt` → **3,410 tensors, differing 0**.
-- `uv run python scratch/equivalence/updates.py /tmp/mtg333/updates-role.json && cmp /tmp/mtg333/updates-post514-base.json /tmp/mtg333/updates-role.json` → five cases byte-identical.
-- `uv run --extra dev --extra mlx --extra artifacts pytest tests/model/test_inference.py tests/model/test_torch_backend_protocol.py tests/model/test_prepare_rows.py tests/model/test_semantic_card_precision.py tests/training/test_update_backend_protocols.py -k 'not cuda_semantic_policy_admission' --basetemp /tmp/mtg333/role-tests -q` → **63 passed, 2 deselected (99.99 s)**. Ruff check/format and diff whitespace checks passed.
-
-Compress after concept review 2: `verify/decision_profile.py` and
-`verify/llm_game.py` now call `verify.util._tensor_observation` instead of
-repeating its preparation through a tensor round trip; their grad-mode purpose
-expression is that helper's, unchanged. Same three commands
-(`compress2-head.pt`, `updates-compress2.json`): 3,410 tensors differing 0,
-five cases byte-identical, 63 passed (108.12 s); `tests/llm/test_llm_native_game.py`
-(needs `--extra llm`), `tests/verify/test_seat_balance.py` and
-`tests/test_package_boundaries.py` pass.
+The CUDA numbers predate that edit: the worker now receives batch i+1 before
+the caller waits on batch i, so overlap can start earlier. Early exit still
+joins the worker. Earlier host/role cleanup: 3,410 CPU tensors and five updates
+exact, 63 focused passes (two CUDA cases deselected); complete commands at
+`aac1062d9a:scratch/mtg333-plan.md`.
 
 ## New direction, 2026-11-13
 
@@ -563,3 +402,82 @@ test now checks no threads survive; no test is deleted.
 → **38 passed, 1 CUDA skip (235.99 s)**, process exited 0. Existing
 read-only-array warning in the meta transfer test; no thread-exception warning.
 Log: `/tmp/mtg333/head-order-fixed.log`. No test was deleted.
+
+## Publication attempt, 2026-11-13
+
+`lf sync` merged main as `5742e44d1a`; the sync resolver's four focused MLX
+precision checks passed. The publish gate exposed newly merged callers and
+fixtures still using old interfaces. Commit `aac1062d9a` repairs experiment
+import-time discovery (the finished BF16 probe names its original revision),
+Prepared search and training fixtures, checkpoint metadata, and the new
+checkpoint suffix. The main gate had 146 passes and one stale resolver failure;
+the corrected case passed separately. The post-merge oracle matched all 3,410
+tensors and five update cases byte for byte. Search group: 31 passed; world and
+collector group: 113 passed; repaired training fixtures: 55 passed; checkpoint,
+action and failed-stage cases: 45 passed. Additional MLX/release/search run:
+186 passed, three stale search cases subsequently fixed and passed. Ruff and
+diff checks passed.
+
+PR #519 remains draft: its last published head has failing integration CI; the
+new head has not been pushed or checked by CI. Installed-wheel checks on both
+Python 3.12 and 3.13 and the remaining broader gate are outstanding. The task
+prohibits heavy laptop runs. Do not mark ready until these checks pass; the
+CUDA repeat-floor and performance limitations above remain review findings.
+
+## Concept review 4, 2026-11-14 (implemented)
+
+Review page was `scratch/concept-review.html` (not retained in this tree). "Backend" names three things today:
+the module `resolve` returns (updates take it), the per-backend loader object
+`checkpoint.BACKEND` (`manabot.policy.protocol.Backend`: `load_policy`,
+`metadata`, `seed`, `load`, layouts; sim/eval take it), and the updates'
+module Protocol `training.updates.backend.Backend`. Every root that feeds
+sim/eval writes `resolve("torch").checkpoint.BACKEND` (ten sites), reaching
+into a backend's submodule, which the resolver was meant to spare them.
+
+Proposed:
+- A. `resolve(name, *, precision=None)` returns the configured backend object
+  (today's `checkpoint.BACKEND`; MLX's `MLXBackend(precision=)`), which also
+  exposes the module's `rl`, `arrays`, `learner`, `rollout`. Roots write
+  `resolve("torch")`.
+- B. One Protocol named `Backend` (`manabot.policy.protocol`); the updates'
+  module surface becomes `UpdateBackend`, `PPOBackend(UpdateBackend)`. A
+  directly imported backend module still satisfies `UpdateBackend`.
+- C. `backend.load_policy(path)` is the one documented loader; `load_mlx_policy`
+  goes private; torch `load_checkpoint` stays for code that needs `ActorCritic`.
+
+Counterexample kept: the backend object carries configuration (MLX precision),
+so a bare module cannot replace it; A returns the object, not the module.
+No values change; seeded games, checkpoints and the oracle are unaffected.
+Jack Heart, 2026-11-14, answering the page's questions 1–3: "a a a" —
+1a A–C all; 2a in #519 before demo (one more implement pass and CI);
+3a accept the CUDA repeat-floor finding (gradients within 1e-8; summation order).
+A–C are implemented. No CUDA rerun: no values change.
+
+
+## Configured backend receipt, 2026-11-14
+
+`resolve(name, precision=...)` now returns the loader object with lazy update
+modules. MLX precision stays on that object; library roots use `load_policy`.
+The update-only Protocol is `UpdateBackend`; directly imported modules still
+conform. MLX's loader helper is private. Parity's former module-identity test
+skipped device transfer for the configured Torch object; it now recognizes the
+Torch policy type. The corrected capture replay passes.
+
+- `EQUIV_BELIEF_INPUT=/tmp/mtg333/post514-belief.pt uv run --extra dev --extra mlx --extra artifacts python scratch/equivalence/run.py /tmp/mtg333/backend-object-head.pt` then `compare.py post514-base.pt backend-object-head.pt` → **3,410 tensors, differing 0**.
+- `updates.py /tmp/mtg333/updates-backend-object.json` then `cmp /tmp/mtg333/updates-post514-base.json /tmp/mtg333/updates-backend-object.json` → five cases byte-identical (both scripts through `uv run` with the same extras).
+- Focused resolver, loading, update-interface and boundary selection → **13 passed, 28 deselected (7.80 s)**. Strengthened configured/module conformance and training-free play checks → **3 passed**. `uv run --extra dev --extra mlx --extra artifacts pytest tests/training/test_update_backends.py tests/model/test_backend_capture.py -q --basetemp /tmp/mtg333/backend-object-updates-tests` → **11 passed (61.11 s)**.
+
+- `uv run --extra dev --extra mlx --extra artifacts python -m manabot.backends.parity /tmp/mtg333/backend-object-updates-tests/test_capture_replays_both_seat0/capture/initial.pt --capture /tmp/mtg333/backend-object-updates-tests/test_capture_replays_both_seat0/capture --minibatches 1 --collection 1 --json /tmp/mtg333/backend-object-parity.json` → **parity: pass (torch, mlx)**, MLX clipped-step weight max difference 1.2e-7.
+
+Changed Python files: Ruff check and format check pass; `git diff --check`
+passes. `lf context`: 11,756/12,000 tokens, 44,844/98,304 bytes before this line.
+
+Broader gate, installed wheels on Python 3.12/3.13, publication and CI remain
+outstanding as recorded above.
+
+Implement sanity pass: the backend guide now opens with `resolve` and
+`backend.load_policy`; MLX's package header names its damped update.
+The guide's load → prepare → evaluate example ran through `uv run --extra dev
+--extra mlx --extra artifacts python` on one retained capture row batch for
+both backends: finite logits `(2, 512)` and values `(2,)`, exit 0. No games or
+training launched. Removed-interface search found no remaining callers.

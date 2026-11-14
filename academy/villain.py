@@ -43,7 +43,7 @@ def checkpoint_backend() -> Backend:
     """Select Academy's policy runtime only when checkpoint operations need it."""
     from manabot.backends import resolve
 
-    return resolve("torch").checkpoint.BACKEND
+    return resolve("torch")
 
 
 def passive_policy(env: managym.Env, obs: managym.Observation) -> int:

@@ -614,7 +614,7 @@ class ActorCritic(nn.Module):
         # The optional trailing token is a critic input, never an action focus.
         post_attention_objects = encoded[:, : state.validity.shape[1]]
         informed_actions = self._gather_informed_actions(
-            obs, post_attention_objects, state, batches, slots
+            obs, post_attention_objects, state
         )
         if self.policy_film is not None:
             valid = state.validity.unsqueeze(-1)
@@ -757,8 +757,6 @@ class ActorCritic(nn.Module):
         obs: Prepared[torch.Tensor],
         post_attention_objects: torch.Tensor,
         state: EmbeddedObservation,
-        batches: torch.Tensor,
-        slots: torch.Tensor,
     ) -> torch.Tensor:
         """Embed selected legal rows [K,D], preserving their original joins.
 
@@ -773,7 +771,7 @@ class ActorCritic(nn.Module):
         actions = actions + self.name_candidates(obs)
         if self.semantic_cards is not None and state.programs is not None:
             actions = actions + state.programs[obs.candidate_rows]
-        actions = actions + state.shared_context[batches]
+        actions = actions + state.shared_context[obs.legal_batches]
         focused = post_attention_objects.flatten(0, 1)[obs.focus]
         focused = focused * obs.focus_mask.unsqueeze(-1)
         return self.action_layer(torch.cat((actions, focused.flatten(1)), dim=-1))

@@ -276,7 +276,7 @@ class SemanticCardEncoder(nn.Module):
             pooled = torch.einsum(
                 "bsrh,bsrc->bsch",
                 self.lookup(definitions, batch.deck_rows),
-                batch.deck_counts
+                batch.deck_counts,
             ).flatten(start_dim=2)
             known = known + self.decklist_projection(pooled)
         return cards, known

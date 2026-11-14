@@ -2,9 +2,9 @@
 
 A backend (`manabot.backends.<name>`) runs the policy forward and an update's
 optimizer step in one array framework, over the `Prepared` batches of
-`manabot.policy.prepare`. `BackendPolicy.prepare` and `evaluate` and every
-`Backend` method take and return NumPy, so callers such as
-`manabot.backends.parity` compare backends without touching their arrays.
+`manabot.policy.prepare`. The host-facing policy and parity methods exchange
+NumPy arrays, so callers such as `manabot.backends.parity` compare backends
+without touching their framework arrays.
 `BackendLearner` is what an update steps: it differentiates a loss written
 once over the backend's own arrays (`manabot.training.updates`). `Targets`
 and `Settings` are one captured minibatch's constants and coefficients.
@@ -13,7 +13,7 @@ and `Settings` are one captured minibatch's constants and coefficients.
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
-from types import TracebackType
+from types import ModuleType, TracebackType
 from typing import Any, Literal, Protocol, Self
 
 import numpy as np
@@ -190,7 +190,25 @@ class BackendLearner(Protocol):
 
 
 class Backend(Protocol):
+    """A configured loader and the array modules its updates use.
+
+    Update modules load on access so inference does not import training.
+    A directly imported framework module also satisfies `UpdateBackend`.
+    """
+
     name: str
+
+    @property
+    def rl(self) -> ModuleType: ...
+
+    @property
+    def arrays(self) -> ModuleType: ...
+
+    @property
+    def learner(self) -> ModuleType: ...
+
+    @property
+    def rollout(self) -> ModuleType: ...
 
     def load_policy(
         self, path: str, *, bucketed_shapes: bool = False, live_tokens: bool = False

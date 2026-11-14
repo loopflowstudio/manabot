@@ -736,9 +736,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
     from manabot.backends import resolve
 
-    run_simulation(
-        sim_config, runtime_config, backend=resolve("torch").checkpoint.BACKEND
-    )
+    run_simulation(sim_config, runtime_config, backend=resolve("torch"))
 
 
 if __name__ == "__main__":

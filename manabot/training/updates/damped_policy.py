@@ -8,7 +8,7 @@ see docs/learning.md#fidelity-to-the-sources for the fidelity boundary and unres
 
 The update is written once over a backend module (`manabot.backends.torch`,
 `manabot.backends.mlx`; the surface it calls is
-`manabot.training.updates.backend.Backend`): array math goes through
+`manabot.training.updates.backend.UpdateBackend`): array math goes through
 `backend.rl`, `backend.learner` and `backend.arrays`, observations are
 admitted by `backend.rollout`, and row bookkeeping and diagnostics (which rows train,
 minibatch indexes, selection groups, value scale) are NumPy. The minibatch
@@ -31,9 +31,9 @@ from manabot.training.updates.backend import (
     RL,
     AdmittedRollout,
     Array,
-    Backend,
     Learner,
     Policy,
+    UpdateBackend,
     categorical_rl,
 )
 from manabot.training.updates.health import (
@@ -109,7 +109,7 @@ def minibatch_objective(
 
 
 def _targets(
-    backend: Backend,
+    backend: UpdateBackend,
     learner: Learner,
     admitted: AdmittedRollout,
     learning: DampedPolicyLearning,
@@ -169,7 +169,7 @@ def _targets(
 
 
 def update_damped_iteration(
-    backend: Backend,
+    backend: UpdateBackend,
     learner: Learner,
     batch: RolloutBatch,
     learning: DampedPolicyLearning,

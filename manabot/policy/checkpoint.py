@@ -105,9 +105,6 @@ def layout(space: ObservationSpace) -> Layout:
     encoder = space.encoder
     joins = (PERMANENT_DEFINITION_INDEX, *PERMANENT_LINK_INDEXES)
     return Layout(
-        cards_per_player=encoder.cards_per_player,
-        perms_per_player=encoder.perms_per_player,
-        max_actions=encoder.max_actions,
         numeric_permanent_columns=tuple(
             c for c in range(encoder.permanent_dim) if c not in joins
         ),

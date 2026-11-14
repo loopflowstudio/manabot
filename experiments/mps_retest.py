@@ -570,9 +570,9 @@ def _compare(
 
     expected = reference.gradients
     if arm.startswith("mlx-"):
-        from manabot.backends.mlx.checkpoint import mlx_gradients
+        from manabot.backends import resolve
 
-        expected = mlx_gradients(expected)
+        expected = resolve("mlx").gradient_layout(expected)
     agreement = gradient_agreement(actual.gradients, expected)
     return {
         "logits_max_abs": float(

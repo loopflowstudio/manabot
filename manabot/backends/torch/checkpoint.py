@@ -12,9 +12,11 @@ beside the native torch API (see the protocol section below).
 """
 
 from collections.abc import Mapping
+import importlib
 import json
 from pathlib import Path
 import tempfile
+from types import ModuleType
 from typing import Any, Literal, overload
 
 from etude.train.records import CheckpointRecord
@@ -311,6 +313,22 @@ def save_checkpoint(
 
 class _Torch:
     name = "torch"
+
+    @property
+    def rl(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.torch.rl")
+
+    @property
+    def arrays(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.torch.arrays")
+
+    @property
+    def learner(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.torch.learner")
+
+    @property
+    def rollout(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.torch.rollout")
 
     @staticmethod
     def load_policy(

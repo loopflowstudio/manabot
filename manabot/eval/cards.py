@@ -140,7 +140,7 @@ def main() -> None:
         result = evaluate_cards(
             CardEvaluationSpec.model_validate_json(args.spec.read_bytes()),
             args.out,
-            backend=resolve("torch").checkpoint.BACKEND,
+            backend=resolve("torch"),
         )
         print(result.model_dump_json(indent=2))
     elif args.command == "data":

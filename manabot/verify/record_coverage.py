@@ -23,7 +23,7 @@ from typing import Literal
 import numpy as np
 import torch
 
-from manabot.backends.torch.arrays import device_of, on_device, to_numpy
+from manabot.backends.torch.arrays import device_of, on_device
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
@@ -173,15 +173,12 @@ def _embed(
     first: list[str],
     second: list[str],
 ) -> None:
-    batch = {key: torch.from_numpy(np.stack([r[key] for r in rows])) for key in rows[0]}
+    batch = {key: np.stack([r[key] for r in rows]) for key in rows[0]}
     try:
         with torch.no_grad():
             model(
                 on_device(
-                    model.prepare(
-                        {key: to_numpy(value) for key, value in (batch).items()},
-                        inference=True,
-                    ),
+                    model.prepare(batch, inference=True),
                     device_of(model),
                 )
             )

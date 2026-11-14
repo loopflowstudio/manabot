@@ -12,9 +12,10 @@ alongside timing and does not treat execution as numerical equivalence. Training
 still run the PyTorch model; nothing in the PyTorch path imports MLX.
 
 ```python
-from manabot.backends.mlx.checkpoint import load_mlx_policy
+from manabot.backends import resolve
 
-policy, obs_space = load_mlx_policy(".runs/example/self-play-raw.safetensors")
+backend = resolve("mlx")
+policy, obs_space = backend.load_policy(".runs/example/self-play-raw.safetensors")
 policy.cache_programs()  # inference with fixed weights: encode the catalog once
 logits, values = policy.evaluate(policy.prepare(observation, inference=True))
 ```
@@ -29,7 +30,7 @@ columns no row uses, exactly as PyTorch CPU inference does. `evaluate` returns
 NumPy logits `[B,A]` (-1e8 off the legal support) and values `[B]`, like the
 PyTorch policy; calling `policy(batch)` returns MLX arrays, with values `[B,1]`.
 
-`load_mlx_policy` reads only the container. An older `.pt` policy raises
+`backend.load_policy` reads only the container. An older `.pt` policy raises
 `NotAContainer`, saying to
 [convert it](README.md#convert-an-older-pt-checkpoint) first:
 
@@ -53,7 +54,7 @@ imports it, eagerly or lazily (`tests/test_package_boundaries.py` enforces this)
 
 The backend runs what the w160l8 recipe uses: a catalog world with catalog
 record ids, table attention, a masked-mean scalar critic and policy input v9.
-The container carries every configuration, so `load_mlx_policy` is where the
+The container carries every configuration, so `backend.load_policy` is where the
 rest is refused: a checkpoint that enables belief inputs, policy history,
 another critic, FiLM or input v10 raises `UnsupportedPolicy` naming every
 unsupported field, rather than running partially. Checkpoints of the `local`
@@ -134,17 +135,16 @@ below it (`manabot.backends.mlx.arrays.default_precision`). An explicit
 precision always wins. This does not enable an MLX training CLI.
 
 ```python
-from manabot.backends.mlx.checkpoint import load_mlx_policy
+from manabot.backends import resolve
 from manabot.backends.mlx.learner import Learner
 
-policy, obs_space = load_mlx_policy(
-    ".runs/example/checkpoint.safetensors", precision="bfloat16"
-)
+backend = resolve("mlx", precision="bfloat16")
+policy, obs_space = backend.load_policy(".runs/example/checkpoint.safetensors")
 learner = Learner(policy, minibatch_rows=64)  # inherits the policy's precision
 # Alternatively: Learner(policy, minibatch_rows=64, precision="float32")
 ```
 
-`MLXActorCritic`, `assemble`, `build` and `MLXBackend` also accept `precision`:
+`MLXActorCritic`, `assemble` and `build` also accept `precision`:
 `"float32"` or `"bfloat16"`; omitted, each policy takes its width's
 default. The parity command always names its precision (float32 unless
 `--precision` says otherwise). It is an execution option, not a change

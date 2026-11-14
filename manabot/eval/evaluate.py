@@ -249,7 +249,7 @@ def evaluate_matchup(args: argparse.Namespace) -> None:
         checkpoint_paths, space = validate_registered_player(
             candidate,
             args.candidate_checkpoint.resolve() if args.candidate_checkpoint else None,
-            backend=resolve("torch").checkpoint.BACKEND,
+            backend=resolve("torch"),
         )
     space = space or ObservationSpace()
     match = selected_match()

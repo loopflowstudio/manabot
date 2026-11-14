@@ -38,7 +38,7 @@ def _tables(catalog: SemanticCardEncoder | None) -> Tables:
         )
         buffers["name_candidates.program_rows"] = np.zeros(1, np.int64)
     return replace(
-        Tables.from_buffers(buffers, Layout(0, 0, 0, (), ())),
+        Tables.from_buffers(buffers, Layout((), ())),
         order_lengths=_catalog_order,
     )
 

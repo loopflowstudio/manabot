@@ -242,28 +242,23 @@ def test_focus_object_incorporation(
         objects, is_agent, key_padding_mask=key_padding_mask
     )
 
-    batches, slots = obs.legal.bool().nonzero(as_tuple=True)
-    features = agent._gather_informed_actions(
-        obs, post_attention, state, batches, slots
-    )
-    assert features.shape == (len(slots), agent.config.hidden_dim)
+    features = agent._gather_informed_actions(obs, post_attention, state)
+    assert features.shape == (len(obs.legal_slots), agent.config.hidden_dim)
     # Changing a legal focus changes the action feature; absent focus has no
     # dependence on object row zero (the clamped gather location).
     changed = replace(obs, focus_mask=torch.zeros_like(obs.focus_mask))
-    absent = agent._gather_informed_actions(
-        changed, post_attention, state, batches, slots
-    )
+    absent = agent._gather_informed_actions(changed, post_attention, state)
     mutated = post_attention.clone()
     mutated[:, 0] += 10
     torch.testing.assert_close(
-        absent, agent._gather_informed_actions(changed, mutated, state, batches, slots)
+        absent, agent._gather_informed_actions(changed, mutated, state)
     )
     focus_mask = changed.focus_mask.clone()
     focus_mask[:, 0] = 1
     focus = changed.focus.clone()
-    focus[:, 0] = batches * state.objects.shape[1]
+    focus[:, 0] = obs.legal_batches * state.objects.shape[1]
     changed = replace(changed, focus=focus, focus_mask=focus_mask)
-    focused = agent._gather_informed_actions(changed, mutated, state, batches, slots)
+    focused = agent._gather_informed_actions(changed, mutated, state)
     assert not torch.allclose(absent, focused)
 
 

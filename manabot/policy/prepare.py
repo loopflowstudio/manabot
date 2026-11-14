@@ -94,15 +94,8 @@ OBJECT_VALIDITY_KEYS = (
 class Layout:
     """Observation layout the policy reads, from the checkpoint's encoder."""
 
-    cards_per_player: int
-    perms_per_player: int
-    max_actions: int
     numeric_permanent_columns: tuple[int, ...]
     link_columns: tuple[int, ...]
-
-    @property
-    def objects(self) -> int:
-        return 2 + 2 * self.cards_per_player + 2 * self.perms_per_player
 
 
 @dataclass(frozen=True)

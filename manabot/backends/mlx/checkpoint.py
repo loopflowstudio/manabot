@@ -1,8 +1,8 @@
 """Load the shared checkpoint container into the MLX policy.
 
-`mlx_parameters` is the one name and layout mapping from canonical parameters
-(`manabot.policy.checkpoint`) to MLX's, and `mlx_gradients` the matching map
-for gradients. Three layouts differ:
+`mlx_parameters` maps canonical parameters and their gradients
+(`manabot.policy.checkpoint`) to MLX names and layouts. The map is linear
+and preserves norms. Three layouts differ:
 
 - Attention: the canonical packed in-projection `qkv_weight` [3D,D] /
   `qkv_bias` [3D] splits, in that order, into `query_proj`, `key_proj` and
@@ -15,9 +15,10 @@ for gradients. Three layouts differ:
 Every canonical parameter maps to MLX arrays or loading fails, naming the key.
 """
 
+import importlib
 import json
-from pathlib import Path
 import re
+from types import ModuleType
 from typing import Any
 
 import mlx.core as mx
@@ -107,11 +108,6 @@ def mlx_parameters(canonical: ParameterArrays) -> dict[str, np.ndarray]:
     return out
 
 
-def mlx_gradients(canonical: ParameterArrays) -> dict[str, np.ndarray]:
-    """Gradients of canonical parameters as gradients of MLX's."""
-    return mlx_parameters(canonical)
-
-
 def assemble(
     checkpoint: PolicyCheckpoint, *, precision: Precision | None = None
 ) -> MLXActorCritic:
@@ -141,23 +137,6 @@ def assemble(
     return policy
 
 
-def load_mlx_policy(
-    path: str | Path, *, precision: Precision | None = None
-) -> tuple[MLXActorCritic, ObservationSpace]:
-    """Load a checkpoint container, validating its world binding."""
-    checkpoint = read_container(path)
-    policy = assemble(checkpoint, precision=precision)
-    # read_container has already validated the world. Keep it on the loaded
-    # policy so simulation's common deck admission cannot silently bypass it.
-    policy.world_binding = json.loads(checkpoint.metadata["world_binding"])
-    record = json.loads(checkpoint.metadata.get("bc", "{}"))
-    semantic = record.get("value_semantic")
-    if semantic not in (None, "signed_outcome", "win_logit"):
-        raise ValueError("unsupported checkpoint value semantic")
-    policy.value_semantic = semantic
-    return policy, checkpoint.space
-
-
 class MLXBackend:
     """`manabot.policy.protocol.Backend` for MLX.
 
@@ -166,6 +145,22 @@ class MLXBackend:
     """
 
     name = "mlx"
+
+    @property
+    def rl(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.mlx.rl")
+
+    @property
+    def arrays(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.mlx.arrays")
+
+    @property
+    def learner(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.mlx.learner")
+
+    @property
+    def rollout(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.mlx.rollout")
 
     def __init__(self, precision: Precision | None = None) -> None:
         if precision is not None:
@@ -177,7 +172,17 @@ class MLXBackend:
     ) -> tuple[MLXActorCritic, ObservationSpace]:
         if bucketed_shapes or live_tokens:
             raise ValueError("MLX does not support bucketed or live-token inference")
-        return load_mlx_policy(path, precision=self.precision)
+        checkpoint = read_container(path)
+        policy = assemble(checkpoint, precision=self.precision)
+        # read_container has already validated the world. Keep it on the loaded
+        # policy so simulation's common deck admission cannot silently bypass it.
+        policy.world_binding = json.loads(checkpoint.metadata["world_binding"])
+        record = json.loads(checkpoint.metadata.get("bc", "{}"))
+        semantic = record.get("value_semantic")
+        if semantic not in (None, "signed_outcome", "win_logit"):
+            raise ValueError("unsupported checkpoint value semantic")
+        policy.value_semantic = semantic
+        return policy, checkpoint.space
 
     @staticmethod
     def metadata(path: str) -> dict[str, Any]:
@@ -195,7 +200,7 @@ class MLXBackend:
         return mlx_parameters(canonical)
 
     def gradient_layout(self, canonical: ParameterArrays) -> dict[str, np.ndarray]:
-        return mlx_gradients(canonical)
+        return mlx_parameters(canonical)
 
 
 BACKEND = MLXBackend()

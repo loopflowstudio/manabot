@@ -151,13 +151,8 @@ def inspect_policy(path: Path, cases: list[Case], updates: int) -> PolicySnapsho
     batch = on_device(
         agent.prepare(
             {
-                key: to_numpy(value)
-                for key, value in (
-                    {
-                        key: torch.cat([case.obs[key] for case in cases])
-                        for key in cases[0].obs
-                    }
-                ).items()
+                key: to_numpy(torch.cat([case.obs[key] for case in cases]))
+                for key in cases[0].obs
             },
             inference=True,
         ),

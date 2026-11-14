@@ -17,10 +17,10 @@ encoder reads `EffectRoutes`; host preparation owns all CSR and recurrent routes
 import torch
 from torch import nn
 
-from manabot.backends.torch._semantic_cards import SemanticCardEncoder
 from manabot.backends.torch._facts import RecordVocabulary
 from manabot.backends.torch._numerics import embedding_rows
 from manabot.backends.torch._records import RecordReducer, program_number
+from manabot.backends.torch._semantic_cards import SemanticCardEncoder
 from manabot.policy.prepare import EffectRoutes
 
 

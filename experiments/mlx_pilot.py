@@ -275,16 +275,7 @@ def _torch_inference(agent: Any, inference: Any, obs: dict[str, np.ndarray]) -> 
 
     tick = time.perf_counter()
     with torch.no_grad():
-        logits, _ = agent(
-            inference.prepare(
-                {
-                    key: value.detach().cpu().numpy()
-                    for key, value in (
-                        {k: torch.from_numpy(v) for k, v in obs.items()}
-                    ).items()
-                }
-            )
-        )
+        logits, _ = agent(inference.prepare(obs))
         logits.numpy()
     return time.perf_counter() - tick
 

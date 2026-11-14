@@ -147,7 +147,7 @@ def _numerical_worker(
     """Compare retained identical inputs, masks, seeds and outputs across modes."""
     from manabot.backends import resolve
 
-    backend = resolve("torch").checkpoint.BACKEND
+    backend = resolve("torch")
     torch.set_num_threads(1)
     stores: list[PolicyStore] = []
     try:

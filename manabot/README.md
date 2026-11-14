@@ -662,7 +662,7 @@ with those packages blocked.
 - `training/updates/`: an update learns from one collected batch. The damped
   policy update (`damped_policy.py`, the default), the PPO control (`ppo.py`)
   and their host-side pieces: numerical health and selection diagnostics.
-  Each takes a backend module as its first argument and does its array math
+  Each takes a backend object or module as its first argument and does its array math
   through it; recipe entry points pass `manabot.backends.torch`
   ([training loops](../docs/training-loop.md#the-updates-we-maintain)).
 - `training/loops/`: a loop keeps playing and updating until it is done; a

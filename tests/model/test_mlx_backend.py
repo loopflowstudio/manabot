@@ -18,9 +18,9 @@ mx = pytest.importorskip("mlx.core")
 
 from mlx.utils import tree_flatten  # noqa: E402
 
+from manabot.backends import resolve  # noqa: E402
 from manabot.backends.convert import convert  # noqa: E402
 from manabot.backends.mlx.checkpoint import (  # noqa: E402
-    load_mlx_policy,
     mlx_parameters,
 )
 from manabot.backends.mlx.policy import (  # noqa: E402
@@ -162,7 +162,7 @@ def test_converted_checkpoint_is_one_file_carrying_the_original_source(
     assert json.loads(metadata["source"]) == source
     assert metadata["converted_from"] == str(original)
 
-    policy, _ = load_mlx_policy(target)
+    policy, _ = resolve("mlx").load_policy(str(target))
     state = {k: v.detach().numpy() for k, v in agent.state_dict().items()}
     buffers = set(Tables.BUFFERS.values())
     expected = _mlx_names({k: v for k, v in state.items() if k not in buffers})
@@ -185,7 +185,7 @@ def test_a_refused_converted_checkpoint_names_the_original_revision(
     metadata["world_binding"] = json.dumps(binding)
     write_safetensors(target, arrays, metadata)
     with pytest.raises(ValueError) as refused:
-        load_mlx_policy(target)
+        resolve("mlx").load_policy(str(target))
     assert "written at revision 7c1e9a2, Etude run 3a1380d9; run it from there" in str(
         refused.value
     )
@@ -193,7 +193,7 @@ def test_a_refused_converted_checkpoint_names_the_original_revision(
 
 def test_prepared_batch_refuses_another_configuration(tmp_path: Path) -> None:
     _, target, _ = _converted(tmp_path)
-    policy, space = load_mlx_policy(target)
+    policy, space = resolve("mlx").load_policy(str(target))
     env = managym.Env(seed=7)
     env.reset(Match().to_rust())
     obs = space.encode(env.observation_for_player(env.current_agent_index()))
@@ -207,7 +207,7 @@ def test_mlx_policy_serves_and_samples_through_the_shared_interface(
     tmp_path: Path, cache_catalog: bool
 ) -> None:
     _, target, _ = _converted(tmp_path)
-    policy, space = load_mlx_policy(target)
+    policy, space = resolve("mlx").load_policy(str(target))
     policy.to("cpu").eval()
     env = managym.Env(seed=7)
     env.reset(Match().to_rust())
@@ -439,7 +439,7 @@ def test_half_policy_loading_and_float32_action_logs(tmp_path: Path) -> None:
     from manabot.backends.mlx.rl import action_logs, policy_logs
 
     _, path, _ = _converted(tmp_path)
-    policy, _ = load_mlx_policy(str(path), precision=precision)
+    policy, _ = resolve("mlx", precision=precision).load_policy(str(path))
     assert policy.precision == precision
     served, _ = MLXBackend(precision=precision).load_policy(str(path))
     assert served.precision == precision
@@ -473,7 +473,7 @@ def test_half_overflow_refuses_update(tmp_path: Path) -> None:
     from manabot.backends.mlx.rl import NumericalError
 
     _, path, _ = _converted(tmp_path)
-    policy, _ = load_mlx_policy(str(path), precision="bfloat16")
+    policy, _ = resolve("mlx", precision="bfloat16").load_policy(str(path))
     learner = Learner(policy, minibatch_rows=1)
     before = learner.parameters()
 
