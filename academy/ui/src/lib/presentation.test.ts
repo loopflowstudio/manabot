@@ -95,14 +95,9 @@ describe('curated combat-to-turn presentation fixture', () => {
       'turn_started',
     ]);
 
-    const liveBeats = [];
-    const replayBeats = [];
-    while (live.currentBeat && replay.currentBeat) {
-      liveBeats.push(live.currentBeat);
-      replayBeats.push(replay.currentBeat);
-      live.advance();
-      replay.advance();
-    }
+    // Live motion may catch up, but semantic history remains identical.
+    const liveBeats = live.events.map((event, index) => presentationBeat(event, live.labelsAt(index)));
+    const replayBeats = replay.events.map((event, index) => presentationBeat(event, replay.labelsAt(index)));
     expect(liveBeats).toEqual(replayBeats);
     expect(liveBeats.map((beat) => beat.detail)).toEqual([
       'Badgermole Cub attacks Hero.',
@@ -137,7 +132,7 @@ describe('PresentationPlayer', () => {
     const live = createPresentationPlayer();
     const replay = createPresentationPlayer();
 
-    live.enqueue(LIGHTNING_BOLT_PRESENTATION.events, LIGHTNING_BOLT_PRESENTATION.labels);
+    live.enqueue(LIGHTNING_BOLT_PRESENTATION.events.slice(0, 2), LIGHTNING_BOLT_PRESENTATION.labels);
     replay.load(LIGHTNING_BOLT_PRESENTATION);
 
     expect(live.currentBeat).toEqual(replay.currentBeat);
@@ -193,7 +188,7 @@ describe('PresentationPlayer', () => {
     player.togglePlayback();
     player.enqueue(LIGHTNING_BOLT_PRESENTATION.events.slice(2), LIGHTNING_BOLT_PRESENTATION.labels);
     expect(player.playing).toBe(false);
-    expect(player.currentEvent?.seq).toBe(900);
+    expect(player.currentEvent?.seq).toBe(902);
     expect(player.events).toHaveLength(5);
   });
 
@@ -228,5 +223,113 @@ describe('PresentationPlayer', () => {
         LIGHTNING_BOLT_PRESENTATION.labels,
       ),
     ).toThrow(/not after existing event/);
+  });
+});
+
+describe('scoped retained history', () => {
+  it('bounds paused live admission by count and duration, retaining all facts', () => {
+    const player = createPresentationPlayer();
+    const events = Array.from({ length: 18 }, (_, seq) => ({ ...LIGHTNING_BOLT_PRESENTATION.events[0], seq, suggested_ms: 80 }));
+    player.enqueue(events.slice(0, 1), LIGHTNING_BOLT_PRESENTATION.labels);
+    player.togglePlayback();
+    player.enqueue(events.slice(1), LIGHTNING_BOLT_PRESENTATION.labels);
+    expect(player.playing).toBe(false);
+    expect(player.remaining).toBe(12);
+    expect(player.pendingDurationMs).toBe(960);
+    expect(player.events).toHaveLength(18);
+    player.enqueue([{ ...events[0], seq: 18, suggested_ms: 5000 }], LIGHTNING_BOLT_PRESENTATION.labels);
+    expect(player.remaining).toBe(1);
+    expect(player.pendingDurationMs).toBe(2000);
+    expect(player.events).toHaveLength(19);
+  });
+
+  it('reapplies the live duration cap when leaving fast-forward', () => {
+    const player = createPresentationPlayer();
+    player.setFastForward(true);
+    player.enqueue(LIGHTNING_BOLT_PRESENTATION.events, LIGHTNING_BOLT_PRESENTATION.labels);
+    expect(player.remaining).toBe(5);
+    player.setFastForward(false);
+    expect(player.pendingDurationMs).toBeLessThanOrEqual(2000);
+    expect(player.remaining).toBe(3);
+    expect(player.events).toHaveLength(5);
+  });
+
+  it('merges recovery without repeating seen motion or erasing reading history', () => {
+    const player = createPresentationPlayer();
+    player.setScope('live:one');
+    player.enqueue(LIGHTNING_BOLT_PRESENTATION.events.slice(0, 3), LIGHTNING_BOLT_PRESENTATION.labels);
+    player.recover(LIGHTNING_BOLT_PRESENTATION.events.slice(1), LIGHTNING_BOLT_PRESENTATION.labels);
+    expect(player.events.map(event => event.seq)).toEqual([900, 901, 902, 903, 904]);
+    expect(player.currentEvent?.seq).toBe(903);
+    player.recover(LIGHTNING_BOLT_PRESENTATION.events, LIGHTNING_BOLT_PRESENTATION.labels);
+    expect(player.currentEvent).toBeNull();
+    expect(player.events).toHaveLength(5);
+    expect(player.unavailablePrefix).toBe(true);
+    player.enqueue([{ ...LIGHTNING_BOLT_PRESENTATION.events[0], seq: 910 }], LIGHTNING_BOLT_PRESENTATION.labels);
+    expect(player.hasGaps).toBe(true);
+    player.reject();
+    expect(player.incomplete).toBe(true);
+    expect(player.currentEvent).toBeNull();
+    expect(player.events).toHaveLength(6);
+  });
+
+  it('never mixes games, branch names, or later labels into a retained event', () => {
+    const player = createPresentationPlayer();
+    player.setScope('live:one');
+    player.enqueue(LIGHTNING_BOLT_PRESENTATION.events.slice(0, 1), LIGHTNING_BOLT_PRESENTATION.labels);
+    const renamed = structuredClone(LIGHTNING_BOLT_PRESENTATION.labels);
+    renamed.objects['31:0'] = 'A later name';
+    renamed.objects['999:0'] = 'Unrelated private card';
+    player.enqueue(LIGHTNING_BOLT_PRESENTATION.events.slice(1, 2), renamed);
+    expect(presentationBeat(player.events[0], player.labelsAt(0)).detail).toContain('Lightning Bolt');
+    expect(player.labels.objects['999:0']).toBeUndefined();
+    player.setScope('live:two');
+    expect(player.events).toEqual([]);
+    expect(player.labels.objects).toEqual({});
+    expect(player.incomplete).toBe(false);
+  });
+
+  it('rebuilds a canonical prefix on backward/forward seek and after Study', () => {
+    const player = createPresentationPlayer();
+    const batches = LIGHTNING_BOLT_PRESENTATION.events.map(event => ({ events: [event], labels: LIGHTNING_BOLT_PRESENTATION.labels }));
+    player.loadPrefix(batches, 'replay:one');
+    expect(player.events).toHaveLength(5);
+    expect(player.currentEvent?.seq).toBe(904);
+    player.loadPrefix(batches.slice(0, 2), 'replay:one');
+    expect(player.events.map(event => event.seq)).toEqual([900, 901]);
+    const branchLabels = structuredClone(LIGHTNING_BOLT_PRESENTATION.labels);
+    branchLabels.objects['31:0'] = 'Study only';
+    player.loadEvents([LIGHTNING_BOLT_PRESENTATION.events[0]], branchLabels, 'study:one');
+    expect(player.currentBeat?.detail).toContain('Study only');
+    player.loadPrefix(batches, 'replay:one', false);
+    expect(player.events).toHaveLength(5);
+    expect(player.currentEvent).toBeNull();
+    expect(player.labels.objects['31:0']).toBe('Lightning Bolt');
+  });
+});
+
+
+describe('recovery history gaps', () => {
+  it('fills previously unavailable rows by identity without replaying seen facts', () => {
+    const player = createPresentationPlayer();
+    const fixture = LIGHTNING_BOLT_PRESENTATION;
+    player.enqueue([fixture.events[0]], fixture.labels);
+    player.recover(fixture.events.slice(3), fixture.labels);
+    expect(player.hasGaps).toBe(true);
+    player.recover(fixture.events, fixture.labels);
+    expect(player.events.map(event => event.seq)).toEqual([900, 901, 902, 903, 904]);
+    expect(player.hasGaps).toBe(false);
+    expect(player.currentEvent?.seq).toBe(901);
+    expect(player.remaining).toBe(2);
+    player.recover(fixture.events, fixture.labels);
+    expect(player.remaining).toBe(0);
+  });
+
+  it('labels an unavailable empty recovery prefix', () => {
+    const player = createPresentationPlayer();
+    player.recover([], { objects: {}, players: {}, stacks: {} }, 12);
+    expect(player.unavailablePrefix).toBe(true);
+    player.setScope('another-match');
+    expect(player.unavailablePrefix).toBe(false);
   });
 });

@@ -13,6 +13,7 @@ digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 - [Running Academy](#running-academy): install, launch, chosen games and replays, Python, training games, card art, trained bots, troubleshooting
 - [Shared decision surface](#shared-decision-surface)
 - [Using the laptop table](#using-the-laptop-table)
+- [Reading consequences and controlling narration](#reading-consequences-and-controlling-narration)
 - [Choice navigation](#choice-navigation)
 - [Presentation runtime](#presentation-runtime)
 - [Playing a trained challenger](#playing-a-trained-challenger)
@@ -452,6 +453,62 @@ decision surface shows the acting seat's permitted view and the complete legal
 choices for that decision. Recorded policy outputs appear only when available;
 missing outputs are not reconstructed. See [Inspect a replay](#inspect-a-replay).
 
+### Reading consequences and controlling narration
+
+After casting a targeted damage spell, finish its target and payment prompts,
+then open **History and settings**. Read the recorded cast, target, resolution
+and damage consequences as they occur; if a creature dies, its recorded death
+appears too. The board shows the current position, and **Your choices** remains
+available while narration describes what already happened.
+
+History groups consequences under recorded turns. Use the earlier/later page
+controls to browse up to 100 events at a time; the counts describe the available
+history. Scroll back to read an earlier event: incoming events leave your reading
+position and keyboard focus in place and increase the unread count. **Latest**
+returns to the newest page and resumes following events while you stay near the
+bottom. Browsing an older page also stops following.
+
+When a consequence offers inspection of a card still available in your permitted
+view, select that subject to inspect the exact object without making a move.
+Departed or unavailable subjects keep their recorded text; another copy with the
+same name is not a substitute. Tab reaches history controls, turn headings and
+inspectable subjects; focus the scrolling region to read with the keyboard.
+
+Narration occupies the history area, leaving cards and choices accessible.
+Its controls affect presentation only:
+
+| Control | Result |
+|---|---|
+| **Pause narration** / **Resume narration** | Pause or resume the current narration; live play can continue. |
+| **Fast-forward** | Play narration at 4× speed; toggle again for normal speed. |
+| **Skip beat** | Move past the current narration beat. |
+| **Finish** | Finish the queued narration immediately. |
+| System reduced-motion preference | Remove movement while keeping consequence text and reading controls. |
+
+During live play, narration catches up automatically when its backlog grows;
+skipped motion keeps its history entries. Pausing narration does not pause the
+match or its configured priority-stop automation. Submitted actions, costs and
+revealed information are unaffected by narration controls.
+
+Consequences describe recorded game events. The action log separately identifies
+submitted choices and **Auto** passes; observed-state summaries describe changes
+visible in a frame. An action or a summary alone is not evidence that a spell
+resolved or a creature died.
+
+Reconnect preserves available history already held in this page and avoids
+repeating seen motion. A fresh reload can recover only the latest 256 events of
+an active match; earlier unavailable history and gaps are labeled explicitly.
+An unknown earlier turn stays unknown. To review the saved consequences of a
+completed game, open it from **Games** in **Replay**. History there follows the
+selected decision: stepping back and forward does not duplicate rows.
+**Try another line** has separate history, and **Return to recorded decision**
+restores the recording's history. Watch shows up to 256 preceding events from
+the selected acting bot's permitted track, with unavailable earlier history
+labeled. Spectator reveal does not add names to that history.
+Older recordings without event data say **Consequences not recorded**; missing
+events do not mean that nothing happened. A presentation error leaves the
+current board usable and marks retained history incomplete.
+
 ### Card art
 
 Cards on the table, in replays and in the deck browser show their Scryfall
@@ -726,22 +783,32 @@ same event list is returned live, persisted on the transition's final trace
 step and replayed through a separate instance of the same player; traces
 without the field replay with no events rather than inferred ones.
 
-Recovery commits the complete frame, cancels current theater and loads
-`presentation_tail` from `presentation_cursor`. The server keeps a bounded
-ledger of the latest 256 events (`MAX_PRESENTATION_EVENTS`), not a durable
-checkpoint. A non-contiguous tail is rejected and a fresh envelope requested; a
-cursor outside the retained window restarts theater at the oldest retained
-event. Malformed presentation clears theater and reports an error without
-touching the committed frame. Skip, Fast-forward, Finish, Pause, reduced motion
-and unmount cannot alter or delay canonical state.
+Retained semantic history is separate from the narration cursor. Validated live
+events append once, scoped by match, canonical or Study branch, and sequence.
+The live narration backlog, including the current beat's remaining duration, is
+bounded to 12 beats and 2,000ms of scheduled duration, even while paused. Older
+optional motion finishes as needed to admit new events; history remains readable.
+Replay plays its selected recorded sequence in order without this live cap.
+
+Recovery commits the complete frame, cancels stale theater and merges validated
+`presentation_tail` events with same-match in-memory history. Only unseen events
+can animate. The server retains the latest 256 events
+(`MAX_PRESENTATION_EVENTS`), so a fresh page labels any unavailable prefix.
+Sequence gaps are explicit. Malformed presentation clears theater and reports an
+error without touching the committed frame; valid retained history is marked
+incomplete. Skip, Fast-forward, Finish, Pause, reduced motion and unmount cannot
+alter or delay canonical state.
 
 Labels come only from viewer-safe frames. The current projection certifies
 incarnation zero and reuses the spell card's ID as the stack render ID;
 references it cannot name stay unnamed.
 
-**Recent consequences** (ETU-76, 2026-10-04) keeps the latest 12 semantic
-events in an expandable, keyboard-scrollable list that cursor movement does not
-erase; reduced motion removes movement without shortening reading time.
+History retains the active match's available events and renders a 100-row page.
+Recorded `turn_started` events establish turn headings; `group` is not a turn or
+spell-chain identifier. Canonical Replay history uses the prefix at its selected
+frame; Study has an isolated scope. See
+[Reading consequences and controlling narration](#reading-consequences-and-controlling-narration)
+for reading, inspection and recovery behavior.
 
 ## Playing a trained challenger
 

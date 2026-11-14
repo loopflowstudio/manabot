@@ -2,7 +2,7 @@ import { writeFile } from 'node:fs/promises';
 import { finishBoardNarration } from './presentation-readiness';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import boltJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
-import type { Command, ExperienceFrame, RecoveryEnvelope } from '../src/lib/types';
+import type { Command, ExperienceFrame, FrameUpdate, PresentationEvent, RecoveryEnvelope, Trace } from '../src/lib/types';
 import { denseFrame } from './fixtures/laptop-table';
 
 interface TableOptions {
@@ -314,8 +314,17 @@ for (const [seed, viewport] of [
   test(`ordinary seeded laptop game ${seed}`, async ({ page }, testInfo) => {
     test.setTimeout(120_000);
     await page.setViewportSize(viewport);
+    const observed = new Map<number, PresentationEvent>();
+    let matchId = '';
     await page.routeWebSocket('**/ws/play', socket => {
       const server = socket.connectToServer();
+      server.onMessage(raw => {
+        const message = JSON.parse(String(raw)) as { recovery?: RecoveryEnvelope; update?: FrameUpdate };
+        const frame = message.recovery?.frame ?? message.update?.frame;
+        if (frame) matchId = frame.match_id;
+        for (const event of message.recovery?.presentation_tail ?? message.update?.presentation ?? []) observed.set(event.seq, event);
+        socket.send(raw);
+      });
       socket.onMessage(raw => {
         const message = JSON.parse(String(raw));
         if (message.type === 'new_game') message.config.seed = seed;
@@ -332,8 +341,34 @@ for (const [seed, viewport] of [
         const options = page.getByTestId('action-option');
         const result = page.getByTestId('game-result');
         await expect(page.locator('[data-testid="action-option"], [data-testid="learn-mode"]:not(:disabled), [data-testid="game-result"]').first()).toBeVisible();
-        if (await result.isVisible()) return;
-        await finishBoardNarration(page);
+        if (await result.isVisible()) {
+          const sourceEvents = [...observed.values()].sort((left, right) => left.seq - right.seq);
+          expect(sourceEvents.length).toBeGreaterThan(0);
+          const history = page.getByTestId('presentation-history');
+          await page.locator('details.secondary-panels').evaluate((element: HTMLDetailsElement) => { element.open = true; });
+          await history.locator('details').evaluate((element: HTMLDetailsElement) => { element.open = true; });
+          const sequences = (): Promise<number[]> => history.locator('li[data-presentation-seq]').evaluateAll(rows => rows.map(row => Number(row.getAttribute('data-presentation-seq'))));
+          await expect.poll(sequences).toEqual(sourceEvents.slice(-100).map(event => event.seq));
+          await page.screenshot({ path: testInfo.outputPath('game-final.png') });
+          const saved = await page.evaluate(async id => {
+            const tokens = JSON.parse(localStorage.getItem('etude.play.record-credentials') ?? '[]') as string[];
+            const response = await fetch(`/api/traces/${id}`, { headers: { 'x-etude-participant-tokens': tokens.join(',') } });
+            if (!response.ok) throw new Error(`Saved trace unavailable: ${response.status}`);
+            return await response.json() as Trace;
+          }, matchId);
+          expect(saved.events.flatMap(event => event.presentation ?? [])).toEqual(sourceEvents);
+          await page.goto(`/replay?trace=${encodeURIComponent(matchId)}`);
+          await expect(page.getByRole('slider', { name: 'Replay position' })).toBeVisible();
+          await page.getByRole('slider', { name: 'Replay position' }).fill(String(saved.events.length));
+          await history.locator('summary').click();
+          await expect.poll(sequences).toEqual(sourceEvents.slice(-100).map(event => event.seq));
+          await writeFile(testInfo.outputPath('history-source.json'), JSON.stringify({
+            matchId, events: sourceEvents.length, kinds: [...new Set(sourceEvents.map(event => event.kind.kind))],
+            live: true, saved: true, replay: true,
+          }, null, 2));
+          return;
+        }
+        // Live offers stay usable while optional narration catches up.
         if (await options.count() === 0) {
           await page.getByTestId('learn-mode').first().click();
           continue;
@@ -354,7 +389,7 @@ for (const [seed, viewport] of [
     } finally {
       await writeFile(testInfo.outputPath('game-receipt.json'), JSON.stringify({ seed, viewport, receipts }, null, 2));
       await finishBoardNarration(page);
-      await page.screenshot({ path: testInfo.outputPath('game-final.png') });
+      await page.screenshot({ path: testInfo.outputPath('workflow-final.png') });
     }
   });
 }

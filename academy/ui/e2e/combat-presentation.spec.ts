@@ -148,6 +148,7 @@ async function installCombatAuthority(
   events: PresentationEvent[] = [],
   terminal = false,
 ): Promise<void> {
+  let starts = 0;
   await page.routeWebSocket('**/ws/play', (socket) => {
     socket.onMessage((raw) => {
       const message = JSON.parse(String(raw)) as {
@@ -156,6 +157,7 @@ async function installCombatAuthority(
       };
       if (message.type === 'new_game') {
         const frame = frameAt('attack');
+        if (starts++ > 0) frame.match_id += `-${starts}`;
         if (terminal) {
           frame.projection.game_over = true;
           frame.winner = 1;
@@ -331,7 +333,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await expect(page.getByTestId('current-decision')).toHaveText('Your decision — Choose a combat action');
     await page.getByRole('button', { name: 'Pause narration' }).click();
     await page.clock.runFor(5000);
-    await expect(stage).toHaveAttribute('data-presentation-kind', 'attack_group');
+    await expect(stage).toHaveAttribute('data-presentation-kind', 'damage');
     await page.getByRole('button', { name: 'Resume narration' }).click();
     await page.clock.runFor(10000);
     await expect(stage).toBeHidden();
@@ -368,9 +370,9 @@ test('terminal capture finishes JavaScript narration and retains consequences', 
 
   // Semantic narration still advances under the terminal dialog. Finish must
   // settle it without losing the retained consequences.
-  await expect(stage).toHaveAttribute('data-presentation-kind', 'attack_group');
-  await page.clock.runFor(500);
-  await expect(stage).toHaveAttribute('data-presentation-kind', 'blocked');
+  await expect(stage).toHaveAttribute('data-presentation-kind', 'damage');
+  await page.clock.runFor(1000);
+  await expect(stage).toHaveAttribute('data-presentation-kind', 'died');
 
   await finishBoardNarration(page);
   await expect(stage).toBeHidden();
@@ -386,4 +388,151 @@ test('terminal capture finishes JavaScript narration and retains consequences', 
   expect((await board.screenshot({ animations: 'disabled' })).equals(settled)).toBe(true);
   await finishBoardNarration(page);
   await expect(resultAction).toBeFocused();
+});
+
+
+for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 800 }]) {
+  for (const colorScheme of ['light', 'dark'] as const) {
+    test(`history respects reading and decision access ${viewport.width} ${colorScheme}`, async ({ page }, testInfo) => {
+      await page.setViewportSize(viewport);
+      await page.emulateMedia({ colorScheme });
+      const commands: Command[] = [];
+      // Fixed semantic pagination fixture, not a simulated workload or game.
+      const history: PresentationEvent[] = Array.from({ length: 105 }, (_, seq) => ({
+        ...structuredClone(combatSequence.events[seq % 6]) as PresentationEvent,
+        seq, from_revision: 8, to_revision: 9, suggested_ms: 80,
+      }));
+      let append = (): void => { throw new Error('Fixture not connected'); };
+      await page.routeWebSocket('**/ws/play', socket => {
+        socket.onMessage(raw => {
+          const message = JSON.parse(String(raw));
+          if (message.type === 'command') { commands.push(message.command); return; }
+          if (message.type !== 'new_game') return;
+          const frame = frameAt('attack');
+          socket.send(JSON.stringify({ type: 'observation', data: frame.projection, actions: [],
+            session_id: 'history', resume_token: 'history', recovery: {
+              ...structuredClone(boltFixture.recovery), frame,
+              presentation_tail: history, presentation_cursor: 0,
+            },
+          }));
+          append = () => {
+            const next = structuredClone(frame);
+            next.revision = 11;
+            const presentation = [{ ...structuredClone(history[0]), seq: 105, from_revision: 10, to_revision: 11 }];
+            socket.send(JSON.stringify({ type: 'command_outcome', status: 'accepted', update: {
+              base_revision: 10, frame: next, presentation, receipt: null,
+            }}));
+          };
+        });
+      });
+      await page.goto('/');
+      await expect(page.getByTestId('connection-badge')).toHaveText('connected');
+      await page.clock.install({ time: 0 });
+      await page.clock.pauseAt(10000);
+      await page.getByRole('button', { name: 'New Game', exact: true }).click();
+      await page.getByText('History and settings', { exact: true }).click();
+      const panel = page.getByTestId('presentation-history');
+      await panel.locator('summary').click();
+      await expect(panel.getByRole('listitem')).toHaveCount(100);
+      await expect(panel).toContainText('6–105 of 105');
+      await expect(page.getByTestId('action-option').first()).toBeEnabled();
+      const geometry = await page.evaluate(() => {
+        const rect = (testid: string): DOMRect => document.querySelector(`[data-testid="${testid}"]`)!.getBoundingClientRect();
+        const board = rect('game-board');
+        const stage = rect('presentation-stage');
+        return { width: innerWidth, height: innerHeight, dpr: devicePixelRatio, scale: visualViewport!.scale, scroll: scrollY,
+          board: board.toJSON(), stage: stage.toJSON(), intersects: stage.left < board.right && stage.right > board.left && stage.top < board.bottom && stage.bottom > board.top };
+      });
+      expect(geometry.intersects).toBe(false);
+      expect(geometry.scroll).toBe(0);
+      expect(geometry.scale).toBe(1);
+      await testInfo.attach('history-geometry', { body: JSON.stringify(geometry), contentType: 'application/json' });
+      await page.getByRole('button', { name: 'Pause narration' }).click();
+      await panel.getByRole('button', { name: 'Earlier events' }).click();
+      const region = panel.getByRole('list', { name: 'Recorded game events' });
+      await region.focus();
+      await region.evaluate(element => { element.scrollTop = 80; });
+      const before = await region.evaluate(element => element.scrollTop);
+      append();
+      await expect(panel.getByRole('button', { name: 'Latest (1 unread)' })).toBeVisible();
+      expect(await region.evaluate(element => element.scrollTop)).toBe(before);
+      await expect(region).toBeFocused();
+      await expect(panel.locator('[data-presentation-seq="0"]')).toHaveCount(1);
+      await panel.getByRole('button', { name: /^Inspect Otter-Penguin/ }).first().click();
+      await expect(panel.getByRole('region', { name: 'History card inspection' })).toContainText('Otter-Penguin');
+      expect(commands).toEqual([]);
+      expect(await panel.getByRole('button', { name: /^Inspect / }).evaluateAll(buttons => buttons.every(button => button.scrollHeight <= button.clientHeight + 1 && button.scrollWidth <= button.clientWidth + 1))).toBe(true);
+      await panel.getByRole('button', { name: 'Close history inspection' }).click();
+      await panel.getByRole('button', { name: 'Latest (1 unread)' }).click();
+      await expect(panel).toContainText('7–106 of 106');
+      await expect(panel.getByRole('button', { name: 'Latest', exact: true })).toBeVisible();
+      await page.screenshot({ path: testInfo.outputPath('history-reading.png') });
+      await page.getByRole('button', { name: 'Finish', exact: true }).click();
+      await expect(page.getByTestId('presentation-stage')).toBeHidden();
+      await page.getByTestId('action-option').first().click();
+      await expect.poll(() => commands.length).toBe(1);
+      expect(commands[0].expected_revision).toBe(11);
+      expect(await page.evaluate(() => scrollY)).toBe(0);
+      await page.screenshot({ path: testInfo.outputPath('read-history.png') });
+    });
+  }
+}
+
+test('Replay seeks retain exactly the recorded prefix and label missing old consequences', async ({ page }) => {
+  const observation = combatObservation();
+  const trace = {
+    id: 'recorded-history',
+    config: { hero_deck: {}, villain_deck: {}, villain_type: 'passive', seed: 42 },
+    events: [0, 1, 2].map(index => ({
+      actor: 'hero', observation, actions: [], action: 0, action_description: `Recorded choice ${index}`,
+      reward: 0, presentation: combatSequence.events.slice(index * 2, index * 2 + 2),
+    })),
+    final_observation: observation, winner: null, end_reason: 'fixture', timestamp: '2026-11-14T00:00:00Z',
+  };
+  await page.route('**/api/traces', route => route.fulfill({ json: [] }));
+  await page.route('**/api/traces/recorded-history', route => route.fulfill({ json: trace }));
+  await page.route('**/api/traces/recorded-history/decisions', route => route.fulfill({ status: 404 }));
+  await page.goto('/replay?trace=recorded-history');
+  const history = page.getByTestId('presentation-history');
+  await history.locator('summary').click();
+  await expect(history).toContainText('Consequences not recorded');
+  await page.getByRole('button', { name: 'Next frame', exact: true }).click();
+  await expect(history.getByRole('listitem')).toHaveCount(2);
+  await page.getByRole('button', { name: 'Next frame', exact: true }).click();
+  await expect(history.getByRole('listitem')).toHaveCount(4);
+  await page.getByRole('button', { name: 'Previous frame', exact: true }).click();
+  await expect(history.getByRole('listitem')).toHaveCount(2);
+  await page.getByRole('slider', { name: 'Replay position' }).fill('3');
+  await expect(history.getByRole('listitem')).toHaveCount(6);
+  await expect(history.locator('[data-presentation-seq="1"]')).toHaveCount(1);
+  await expect(history).toContainText('Otter-Penguin, Badgermole Cub die.');
+  await page.getByRole('slider', { name: 'Replay position' }).fill('0');
+  await expect(history.getByRole('listitem')).toHaveCount(0);
+  await expect(history).toContainText('Consequences not recorded');
+  // Older recordings remain readable without inventing causal events.
+  for (const event of trace.events) event.presentation = [];
+  await page.reload();
+  await page.getByRole('slider', { name: 'Replay position' }).fill('3');
+  await history.locator('summary').click();
+  await expect(history).toContainText('Consequences not recorded');
+});
+
+
+test('player damage emphasizes its exact subject while choices stay focused', async ({ page }) => {
+  const event: PresentationEvent = {
+    ...combatSequence.events[0] as PresentationEvent, seq: 0,
+    kind: { kind: 'damage', source: null, target: { kind: 'player', id: 0 }, amount: 1 },
+  };
+  await installCombatAuthority(page, [], [event]);
+  await page.goto('/');
+  await expect(page.getByTestId('connection-badge')).toHaveText('connected');
+  await page.clock.install({ time: 0 });
+  await page.clock.pauseAt(10000);
+  await page.getByRole('button', { name: 'New Game', exact: true }).click();
+  await expect(page.locator('[data-player-id="0"]')).toHaveAttribute('data-narrated-seq', '0');
+  await expect(page.locator('[data-player-id="0"]')).toHaveCSS('outline-style', 'solid');
+  await expect(page.locator('[data-player-id="1"]')).not.toHaveAttribute('data-narrated-seq');
+  await expect(page.getByTestId('action-option').first()).toBeFocused();
+  await page.clock.runFor(1000);
+  await expect(page.locator('[data-player-id="0"]')).not.toHaveAttribute('data-narrated-seq');
 });
