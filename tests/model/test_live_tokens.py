@@ -93,3 +93,28 @@ def test_padded_policy_measures_no_live_count() -> None:
     case = _policy()
     with torch.no_grad(), PolicyInference(case.agent) as scope:
         assert scope.prepare(case.obs).live_token_count is None
+
+
+@pytest.mark.parametrize("device", ["cpu", "cuda"])
+def test_sparse_batch_attention_backward(device: str) -> None:
+    """Sparse batches can hold fewer packed tokens than one padded row."""
+    if device == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA unavailable")
+    torch.manual_seed(265)
+    attention = torch.nn.MultiheadAttention(8, 2, batch_first=True).to(device)
+    present = torch.zeros((2, 202), dtype=torch.bool, device=device)
+    present[0, :3] = True
+    present[1, :5] = True
+    values = torch.randn((2, 202, 8), device=device, requires_grad=True)
+    live = LiveTokens.pack(present, 8)
+    actual = live.self_attention(attention, live.gather(values))
+    expected = torch.cat(
+        [
+            attention(row[None], row[None], row[None], need_weights=False)[0][0]
+            for row in (values[0, :3], values[1, :5])
+        ]
+    )
+    torch.testing.assert_close(actual, expected, atol=1e-5, rtol=1e-5)
+    actual_gradient = torch.autograd.grad(actual.square().sum(), values)[0]
+    expected_gradient = torch.autograd.grad(expected.square().sum(), values)[0]
+    torch.testing.assert_close(actual_gradient, expected_gradient, atol=1e-5, rtol=1e-4)

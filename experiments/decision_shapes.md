@@ -32,3 +32,29 @@ Reserve up to USD49 for training and USD5 for evaluation, with USD1 for
 calibration. The final launcher quote and measured calibration determine the
 training hours and placement. Do not duplicate a live cohort or spend beyond
 the remaining total. Preserve all failed and partial attempts.
+
+## Calibration repair, 2026-11-14
+
+Runs `6574e52d4932` and `21b2a10d2022` failed before training. The numerical
+suite passed 40 checks, then its tiny continuation fixture failed in CUDA
+attention backward with `Invalid max_seqlen_k:202` on RTX A5000, Torch
+2.15.0+cu132. Both receipts and logs remain in Etude. The rental was terminated;
+the launcher's retained estimate is about USD0.02 for the machine.
+
+Live-token attention supplied the padded slot count as the maximum sequence
+length, even when the packed batch contained fewer tokens. Tighten that
+upper bound to the smaller of the slot count and packed token total. This
+does not change attention membership or require a device-to-host read. The
+sparse-batch forward/backward regression also runs in the CUDA admission
+gate; that gate is not disabled. This is consistent with the efficient
+backward constraint documented in
+[PyTorch issue 129523](https://github.com/pytorch/pytorch/issues/129523).
+The focused local live-token tests passed (5 passed, 1 CUDA skip); GPU
+verification and successful calibration remain required before full training.
+
+The launcher validates a job's own dollar allowance before sharing its cost.
+Use USD16 per job and a USD48 ceiling for the complete six-run cohort, with
+two jobs per A5000 and up to three machines. A 48-hour maximum allows slower
+packed jobs to reach 500 updates; jobs stop at that target. The machine price
+ceiling is USD0.30/hour. Calibration and evaluation stay within the USD55
+total; these ceilings are not measured bills or evidence of completion.

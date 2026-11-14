@@ -94,10 +94,12 @@ class LiveTokens:
                 part.contiguous(),
                 self.offsets,
                 # Both player rows are always valid, so no sequence is empty;
-                # the slot count bounds every length. Passing both keeps the
-                # fused-kernel checks from reading them back.
+                # Both the slot count and packed total bound every length.
+                # Efficient-attention backward rejects a bound above the
+                # packed total, which small sparse batches can otherwise hit.
+                # Passing both keeps the checks from reading them back.
                 min_seqlen=1,
-                max_seqlen=self.slots,
+                max_seqlen=min(self.slots, length),
             ).transpose(1, 2)
             for part in qkv.view(length, 3, heads, width // heads).unbind(1)
         )

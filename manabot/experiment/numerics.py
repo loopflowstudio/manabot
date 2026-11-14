@@ -54,6 +54,7 @@ _CHECKS: tuple[tuple[str, list[str]], ...] = (
             "pytest",
             "tests/training/test_numerical_health.py",
             "tests/training/test_learning_state.py::test_segments_keep_adam_ema_and_absolute_coordinates",
+            "tests/model/test_live_tokens.py::test_sparse_batch_attention_backward",
             "-q",
         ],
     ),
