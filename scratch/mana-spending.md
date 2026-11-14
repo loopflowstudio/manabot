@@ -34,8 +34,8 @@ one it extends, with the decisions D double-counts there priced; the report
 names that decision as the mana-payment decision rather than by its shared
 `PayOrNot` kind, and presents per-source taps inside it as an unanswered
 alternative with its bounds. Since `caa15caca4` the branch changes only the
-report, `scratch/` and the read-only `summary --all-payments` aggregation in
-`experiments/mana_spending.py`. Published evidence and its manifest stay
+report, its index row, `scratch/` and the read-only `summary --all-payments`
+aggregation in `experiments/mana_spending.py`. Published evidence and its manifest stay
 unchanged.
 
 ## Docs
@@ -299,11 +299,12 @@ choice; prose only.
 
 Gate, for the report and read-only aggregation slice:
 
-- `git log --first-parent --name-only caa15caca4..HEAD`: branch commits touch
-  only the report and `scratch/` before this scope extension; the extension
-  also changes the read-only aggregation in `experiments/mana_spending.py`,
-  with no native, manifest or evidence change. A
-  plain diff from `caa15caca4` now includes main's #520 via merge `67e03ef138`.
+- `git log --no-merges --first-parent --name-only caa15caca4..HEAD`: branch
+  commits touch only the report, its `experiments/README.md` row, the
+  read-only aggregation in `experiments/mana_spending.py` and `scratch/`; no
+  native, manifest or evidence change (checked at `9dd498502f`). Without
+  `--no-merges` the log includes main's merges (#520 via `67e03ef138`,
+  `05d27fb273`).
 - `grep -c 'C followed by D' experiments/mana_spending.md`: 0.
 - `uv run --extra dev pytest tests/eval/test_experiment_files.py tests/infra/test_experiment_data_untracked.py -q`: pass.
 - Recommendation and review questions distinguish all payments from cast-only
