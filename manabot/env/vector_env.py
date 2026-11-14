@@ -3,7 +3,7 @@ vector_env.py
 Vectorized environment wrapper backed by managym.VectorEnv.
 """
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Literal, Optional, Tuple
 
 import numpy as np
 import torch
@@ -333,9 +333,12 @@ class VectorEnv:
         self,
         players: list[int],
         buffers: dict[str, np.ndarray],
-        action_overflow: str = "error",
+        action_overflow: Literal["error", "first-legal"] = "error",
     ) -> list[managym.ObservationRead]:
-        """Write viewer-safe NumPy rows without changing execution or capture buffers."""
+        """Write viewer-safe NumPy rows; discard every output row after an error.
+
+        Execution and capture buffers stay unchanged. Seats are native indices.
+        """
         return self._rust_env.write_observations_for_players(
             players, buffers, action_overflow=action_overflow
         )

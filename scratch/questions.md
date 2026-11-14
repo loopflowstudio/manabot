@@ -48,9 +48,8 @@ and explicit action overflow, seed rebuilds, root reassignment, terminal and
 failed-slot replacement. Player control uses a bounded native fixture because
 the public vector API has no state-injection method for it.
 
-Implementation and focused verification are complete. Gate owns affected suites
-and full acceptance: Rust format, all-feature Clippy
-and debug suite per `docs/development.md#validation-by-change-area`, plus
+Implementation and focused verification are complete. Gate covers Rust format,
+all-feature Clippy and affected debug tests, plus
 `tests/env/test_observation.py`, `tests/training/test_action_cutoff.py`,
 `tests/verify/test_native_buffer_capacities.py`, `tests/env/test_hand_snapshots.py`
 and `tests/env/test_captured_vector_bookkeeping.py`. No timing benchmark needed.
@@ -93,3 +92,33 @@ passed as buffers raised `AttributeError: 'torch.dtype' object has no attribute
 'name'` from the shared `require_numpy_array`; it now raises a `TypeError` naming
 NumPy and `torch.from_numpy`. Left as is: seat `-1` gives PyO3 `OverflowError`;
 other-version buffers are accepted by design.
+
+## Gate (2026-11-14)
+
+Reviewed the full branch diff and the clean starting worktree against the Task
+outcome, agent guide and package styles. No correctness blocker found. Both
+wrapper signatures now use the stub's `Literal["error", "first-legal"]`, and
+their docstrings state native-seat ownership and the discard-all-rows recovery
+rule. No Rust, layout, visibility or execution behavior changed during gate.
+
+Validation plan: vector lifecycle/control/identity tests and encoder unit tests
+reach the native additions; the six Python files below reach fixed-seat parity,
+shared buffer validation, wrapper capture bookkeeping and overflow. Formatting
+and all-feature Clippy cover the changed Python/stub and Rust surfaces. Existing
+QA already ran the guide example against the atomically installed CPython 3.13
+extension; gate reused that build because its Rust source is unchanged.
+
+- `CARGO_BUILD_JOBS=2 cargo nextest run --manifest-path managym/Cargo.toml --profile ci -p managym --lib -E 'test(agent::vector_env::tests) | test(agent::observation_encoder::tests)' --test-threads 2`: 28 passed in 23.314s, debug assertions enabled; 212 other library tests excluded.
+- `uv run --extra dev pytest tests/env/test_fixed_seat_observations.py tests/env/test_observation.py tests/training/test_action_cutoff.py tests/verify/test_native_buffer_capacities.py tests/env/test_hand_snapshots.py tests/env/test_captured_vector_bookkeeping.py -q`: 165 passed in 4.22s.
+- `CARGO_BUILD_JOBS=2 PYO3_PYTHON=$PWD/.venv/bin/python cargo clippy --manifest-path managym/Cargo.toml --all-targets --all-features -- -D warnings`: passed.
+- `uv run --extra dev ruff check --fix manabot/env/failures.py manabot/env/vector_env.py managym/__init__.pyi tests/env/test_fixed_seat_observations.py`: passed.
+- `uv run --extra dev ruff format manabot/env/failures.py manabot/env/vector_env.py managym/__init__.pyi tests/env/test_fixed_seat_observations.py`: four files unchanged.
+- `cargo fmt --manifest-path managym/Cargo.toml --all`: passed, no changes.
+- `git diff --check`: passed.
+- `git diff --name-only -z origin/main...HEAD | bash .github/ci/select-tests.sh`: selects every CI job for engine/stub changes; this is a job classifier, not a focused local test runner. Full Rust, Python unit/integration, Academy, protocol, conformance, frontend, clean-machine and Engine Budget matrices are deferred to CI, not reported passed here.
+
+No world, observation shape, learning estimator or rules changed; no stress-state
+or before/after benchmark was needed. No throughput claim follows from gate.
+CUDA and CPython 3.12 compatibility were not exercised locally. No servers,
+watchers or child processes remain running. The documented API is ready for
+delivery subject to CI; no human demo or approval is implied.
