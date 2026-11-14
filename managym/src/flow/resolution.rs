@@ -312,7 +312,7 @@ impl Game {
         let frame = EffectFrame {
             program,
             source: Some(ability.source_object),
-            source_ref: Some(ability.source_ref),
+            source_ref: Some(ability.source_object),
             inherited_from: ability.inherited_from,
             source_transforms: ability.source_transforms,
             x: ability.x,
@@ -499,8 +499,7 @@ impl Game {
         match target {
             Target::Permanent(id) => self.permanent_object(id).is_some(),
             Target::GraveyardCard(object) => {
-                self.state.card_id(object).is_some()
-                    && self.state.live(object).is_some()
+                self.state.card_of(object).is_some()
                     && self.state.zones.zone_of(object) == Some(ZoneType::Graveyard)
             }
             Target::StackSpell(object_id) => self.find_spell_on_stack_index(object_id).is_some(),
@@ -982,7 +981,7 @@ impl Game {
                     .into_iter()
                     .filter(|object| {
                         let object = *object;
-                        (!cards_only || self.state.card_id(object).is_some())
+                        (!cards_only || self.state.card_of(object).is_some())
                             && self.object_matches_predicate(object, predicate)
                     })
                     .collect();
@@ -2385,8 +2384,7 @@ impl Game {
                     }
                     _ => return false,
                 };
-                self.state.card_id(object).is_some()
-                    && self.state.live(object).is_some()
+                self.state.card_of(object).is_some()
                     && self.state.zones.zone_of(object) == Some(ZoneType::Graveyard)
                     && (!you_own || self.state.objects[object].owner == controller)
                     && self.object_matches_predicate(object, predicate)

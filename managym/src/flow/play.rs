@@ -100,7 +100,7 @@ impl Game {
     /// the grant is used: in TLA it never costs more than a printed flashback
     /// (a Lesson's {1}, or a spell's own mana cost).
     pub(crate) fn flashback_cost(&self, player: PlayerId, object: ObjectId) -> Option<ManaCost> {
-        let card = self.state.card_id(object)?;
+        let card = self.state.card_of(object)?;
         let definition = &self.state.objects[card];
         if !definition.types.is_spell()
             || !self
@@ -1234,7 +1234,7 @@ impl Game {
         }
         let card = self
             .state
-            .card_id(object)
+            .card_of(object)
             .ok_or_else(|| AgentError("activation source is not a card".into()))?;
         let ability = self
             .card_ability_in_zone(player, card, ability_index)
@@ -2326,10 +2326,9 @@ impl Game {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return Err(AgentError("source permanent does not exist".to_string()));
         };
-        let source_ref = self
+        let source_object = self
             .permanent_object(permanent_id)
             .ok_or_else(|| AgentError("missing activation source identity".into()))?;
-        let source_object = permanent.object;
         let attached = permanent.attached_to;
         let source_transforms = permanent.transforms;
         let source_definition_id = self.state.objects[source_object].definition_id;
@@ -2360,7 +2359,9 @@ impl Game {
         self.record_activation(permanent_id, ability_index, &ability);
         let cost = ability
             .sacrifice_source
-            .then_some(ProposedEvent::Sacrifice { target: source_ref });
+            .then_some(ProposedEvent::Sacrifice {
+                target: source_object,
+            });
 
         let id = self.state.id_gen_mut().next_id();
         Ok((
@@ -2374,7 +2375,6 @@ impl Game {
                 controller: player,
                 source_definition_id,
                 source_object,
-                source_ref,
                 ability_index,
                 targets,
                 attached,
@@ -2406,7 +2406,7 @@ impl Game {
             )
         });
         // The completion replaces this identity after the proposed cost commits.
-        let source_ref = self
+        let source_object = self
             .state
             .live(self.state.object_of(card))
             .ok_or_else(|| AgentError("missing activation source identity".into()))?;
@@ -2421,8 +2421,7 @@ impl Game {
                 id,
                 controller: player,
                 source_definition_id: self.state.objects[card].definition_id,
-                source_object: self.state.object_of(card),
-                source_ref,
+                source_object,
                 ability_index,
                 targets,
                 attached: None,

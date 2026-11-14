@@ -151,7 +151,10 @@ impl GameState {
             .map_or(object, |card| self.object_of(card))
     }
 
-    /// A card keeps its kind across moves, transformations and copy effects.
+    /// The card this object is or was, without the staleness check of
+    /// [`GameState::card_of`]: for a card outside the game (a sideboard is no
+    /// zone), a viewer capture of a departed object, and stale cast grants
+    /// whose callers check the zone themselves.
     pub fn card_id(&self, object: ObjectId) -> Option<CardId> {
         self.objects.card_id(object)
     }

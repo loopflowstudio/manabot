@@ -446,7 +446,7 @@ impl<'a> Projection<'a> {
             } => {
                 self.paid_summary();
                 self.field("return", &"paid activation");
-                self.object("activation source", ability.source_ref);
+                self.object("activation source", ability.source_object);
                 self.field("controller", &ability.controller);
                 self.field("ability", &ability.ability_index);
                 self.field("X", &ability.x);

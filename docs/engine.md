@@ -723,7 +723,9 @@ pub fn card_of(&self, object: ObjectId) -> Option<CardId>
 and `ZoneManager::successor(id)` returns the object `id` became by its one next
 zone change while that object is still there (CR 400.7e, j). `GameState::card_id`
 reads which card an object is or was without checking that the object still
-exists; it is for asking "is this a card", not for following one.
+exists. It serves a card outside the game (a sideboard is no zone), viewer
+captures of departed objects and stale cast grants; rules code that acts on a
+card uses `card_of`.
 
 Every lookup by `ObjectId` checks that the id is current:
 

@@ -167,10 +167,9 @@ impl ZoneManager {
     }
 
     /// Whether `object` is the appearance its slot holds now. An object in
-    /// no zone (a token not yet created, or one that ceased to exist) is
-    /// still the slot's latest; see [`ZoneManager::zone_of`] for existence.
-    /// Whether `object` is its slot's current appearance, in a zone or
-    /// outside the game; false once a zone change has replaced it.
+    /// no zone (a sideboard card, a token not yet created, or one that ceased
+    /// to exist) is still the slot's latest; see [`ZoneManager::zone_of`] for
+    /// existence.
     pub fn is_latest(&self, object: ObjectId) -> bool {
         self.generations.get(object.slot()) == Some(&object.generation())
     }

@@ -1156,7 +1156,7 @@ impl Game {
 
     pub(crate) fn named_search_cards(&self, owner: PlayerId) -> impl Iterator<Item = CardId> + '_ {
         self.named_search_objects(owner)
-            .filter_map(|object| self.state.card_id(object))
+            .filter_map(|object| self.state.card_of(object))
     }
 
     fn object_focus(&self, ids: &[ObjectId]) -> Vec<PublicId> {
@@ -1343,7 +1343,6 @@ impl Game {
                             source_after_cost.and_then(|object| self.state.zones.successor(object))
                         {
                             ability.source_object = source;
-                            ability.source_ref = source;
                         }
                         self.emit_permanents_targeted(
                             &ability.targets,
@@ -2391,7 +2390,7 @@ impl Game {
                     .state
                     .zones
                     .contains(*object_id, ZoneType::Hand, *player)
-                    || self.state.card_id(*object_id).is_none()
+                    || self.state.card_of(*object_id).is_none()
                 {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("discard must be from hand".into()));
@@ -2617,7 +2616,7 @@ impl Game {
                     .state
                     .zones
                     .contains(*object_id, ZoneType::Hand, *owner)
-                    || self.state.card_id(*object_id).is_none()
+                    || self.state.card_of(*object_id).is_none()
                     || !self.object_matches_predicate(*object_id, predicate)
                 {
                     *self.state.suspended_decision_mut() = Some(suspended);
@@ -2911,7 +2910,7 @@ impl Game {
                     .state
                     .zones
                     .contains(*object_id, ZoneType::Hand, player)
-                    || self.state.card_id(*object_id).is_none()
+                    || self.state.card_of(*object_id).is_none()
                 {
                     let err = AgentError("card to discard is not in hand".to_string());
                     *self.state.suspended_decision_mut() = Some(suspended);
@@ -2986,7 +2985,7 @@ impl Game {
         self.state
             .zones
             .top(ZoneType::Library, player)
-            .and_then(|object| self.state.card_id(object))
+            .and_then(|object| self.state.card_of(object))
     }
 
     /// The cards an `ExileLinked` decision may exile: matching graveyard
@@ -3007,7 +3006,7 @@ impl Game {
                 .into_iter()
                 .filter(|id| self.permanent_matches_predicate(*id, predicate))
                 .filter_map(|id| self.state.permanents[id].as_ref().map(|p| p.object))
-                .filter_map(|object| self.state.card_id(object))
+                .filter_map(|object| self.state.card_of(object))
                 .collect(),
             _ => self
                 .state
@@ -3055,7 +3054,7 @@ impl Game {
             ResolutionCastOffer::Exiled { object }
             | ResolutionCastOffer::Cascade { object, .. } => self
                 .state
-                .card_id(*object)
+                .card_of(*object)
                 .filter(|_| self.state.zones.contains(*object, ZoneType::Exile, *player))
                 .into_iter()
                 .collect(),
@@ -3114,7 +3113,7 @@ impl Game {
     pub(crate) fn revealed_hand_candidates(&self, decision: &Decision) -> Vec<CardId> {
         self.revealed_hand_objects(decision)
             .into_iter()
-            .filter_map(|object| self.state.card_id(object))
+            .filter_map(|object| self.state.card_of(object))
             .collect()
     }
 
@@ -3152,7 +3151,7 @@ impl Game {
     pub(crate) fn distinct_name_search_candidates(&self, decision: &Decision) -> Vec<CardId> {
         self.distinct_name_search_objects(decision)
             .into_iter()
-            .filter_map(|object| self.state.card_id(object))
+            .filter_map(|object| self.state.card_of(object))
             .collect()
     }
 

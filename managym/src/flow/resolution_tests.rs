@@ -108,7 +108,6 @@ fn stack(
                 controller,
                 source_definition_id,
                 source_object,
-                source_ref,
                 ability_index: 0,
                 targets,
                 target_req_indices: Vec::new(),
@@ -179,6 +178,36 @@ fn pause() -> Effect {
     Effect::Modal {
         modes: vec![vec![], vec![Effect::gain_life(2)]],
     }
+}
+
+/// The v16 bytes keep the two names an activated ability's source had as a
+/// row and an exact reference, both read from its one stored id.
+#[test]
+fn activated_ability_records_both_v16_source_projections_from_one_object() {
+    let (mut game, _, _) = fixture(PlayerId(0));
+    stack(
+        &mut game,
+        Entry::Activated,
+        PlayerId(0),
+        vec![Effect::gain_life(2)],
+        Vec::new(),
+        Vec::new(),
+    );
+    let Some(StackObject::ActivatedAbility(ability)) = game.state.stack_objects.last() else {
+        panic!("activated ability on the stack");
+    };
+    let source = ability.source_object;
+    let value = serde_json::to_value(ability).unwrap();
+    assert_eq!(value["source_card"], serde_json::json!(source.slot()));
+    assert_eq!(
+        value["source_ref"],
+        serde_json::json!({"entity": source.slot(), "incarnation": source.generation()})
+    );
+    let text = serde_json::to_string(ability).unwrap();
+    let position = |key: &str| text.find(key).unwrap();
+    assert!(position("\"source_card_registry_key\"") < position("\"source_card\""));
+    assert!(position("\"source_card\"") < position("\"source_ref\""));
+    assert!(position("\"source_ref\"") < position("\"ability_index\""));
 }
 
 #[test]

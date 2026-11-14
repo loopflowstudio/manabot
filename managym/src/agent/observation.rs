@@ -1654,7 +1654,7 @@ impl Observation {
             source_card_registry_key: stack_object.source_card_registry_key().0 as i32,
             source_permanent_id: match stack_object {
                 StackObject::ActivatedAbility(ability) => game
-                    .object_event_ref(ability.source_ref)
+                    .object_event_ref(ability.source_object)
                     .map(|object| object.entity.0 as i32),
                 _ => None,
             },

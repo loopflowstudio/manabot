@@ -104,7 +104,7 @@ impl Game {
     pub(crate) fn selection_zone_cards(&self, owner: PlayerId, zone: ZoneType) -> Vec<CardId> {
         self.selection_zone_objects(owner, zone)
             .into_iter()
-            .filter_map(|object| self.state.card_id(object))
+            .filter_map(|object| self.state.card_of(object))
             .collect()
     }
 

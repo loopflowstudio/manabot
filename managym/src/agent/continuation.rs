@@ -623,7 +623,7 @@ impl Game {
                 if ability.program {
                     frame.program(&ability.effects);
                 }
-                frame.source = self.visible_reference(ability.source_ref, viewer);
+                frame.source = self.visible_reference(ability.source_object, viewer);
                 frame.x = ability.x;
                 frame.inherited_from = ability.inherited_from.map(|id| VisibleReference {
                     definition: Some(id.0),
