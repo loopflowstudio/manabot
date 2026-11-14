@@ -44,7 +44,7 @@ else
       managym/.config/nextest.toml) select_jobs rust ;;
       academy/ui/src/lib/fixtures/*)
         select_jobs rust integration academy_integration protocol_v1 frontend semantic_conformance clean_machine_play ;;
-      academy/ui/package.json|academy/ui/package-lock.json|academy/ui/*config.*|academy/ui/scripts/*|academy/ui/static/*|academy/ui/src/lib/card-art/*)
+      academy/ui/package.json|academy/ui/package-lock.json|academy/ui/*config.*|academy/ui/scripts/*|academy/ui/static/*)
         select_jobs frontend clean_machine_play ;;
       academy/ui/*) select_jobs frontend ;;
       academy/*) select_jobs academy_integration protocol_v1 ;;

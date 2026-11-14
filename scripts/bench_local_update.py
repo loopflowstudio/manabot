@@ -62,10 +62,10 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.infra.identity import file_sha256
 from manabot.model.world import validate_agent_setup
-from manabot.sim.search.local_update import (
+from manabot.sim.search.local_update import LocalUpdateTeacher
+from manabot.sim.search.local_update_receipt import (
     LocalSearchConfig,
     LocalUpdateReceipt,
-    LocalUpdateTeacher,
 )
 import managym
 from managym.decision import Observation

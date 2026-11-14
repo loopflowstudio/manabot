@@ -144,18 +144,34 @@ class TrainingBots:
 
     def verify_arena(self, record: dict[str, Any]) -> VerifiedArena:
         from manabot.sim.replay import replay_environment, replay_games
-        from manabot.sim.search.local_update import LocalUpdateReceipt
+        from manabot.sim.search.local_update_receipt import LocalUpdateReceipt
 
         receipt = replay_games([record])
-        if not receipt.passed or record.get("failure") is not None:
-            raise ValueError("Arena replay verification failed; import rejected")
+        if receipt.trace_mismatches:
+            raise ValueError(
+                "Game trace digest mismatches: the file was edited after recording."
+            )
+        if record.get("failure") is not None:
+            raise ValueError(
+                "This evaluation game retained a failure; import rejected."
+            )
+        if not receipt.passed:
+            mismatches = ", ".join(
+                f"{name}={value}"
+                for name, value in receipt.to_dict().items()
+                if name not in {"games", "decisions", "passed"} and value
+            )
+            raise ValueError(
+                f"Replay verification failed: {mismatches}. "
+                "This revision may deal or build a different game; open the trace with the revision that wrote it."
+            )
         arena, _ = replay_environment(record)
         decisions = []
         for expected in record["decisions"]:
             index = int(expected["command"]["offer_id"])
             decision = BotDecision(
                 index,
-                unavailable="Policy, value and search outputs were not retained in this arena recording.",
+                unavailable="Policy, value and search outputs were not retained in this recorded game.",
             )
             if expected.get("local_update_receipt") is not None:
                 retained = LocalUpdateReceipt.from_json(

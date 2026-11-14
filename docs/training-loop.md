@@ -285,7 +285,9 @@ uv run python -c "from manabot.training.loops.minimal import train; train(3)"
 ```
 
 Three iterations take a few seconds on a laptop CPU and return a policy;
-they teach it almost nothing. Keep a run with `save_checkpoint(policy,
+they teach it almost nothing. To see what it did, wrap the call in
+`record_games` and open one of its games in Academy
+([watch a game from your training loop](academy.md#watch-a-game-from-your-training-loop)). Keep a run with `save_checkpoint(policy,
 policy.observation_space, "policy.pt", player_configs=Match().to_rust())`
 from `manabot.backends.torch.checkpoint`, which binds it to the decks it
 played, as a recipe's checkpoints are bound to their setups;

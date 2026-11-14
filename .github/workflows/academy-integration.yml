@@ -8,6 +8,9 @@ on:
         required: true
         type: string
 
+env:
+  ACADEMY_CARD_ART: "off"
+
 jobs:
   academy-integration:
     name: Academy Integration (${{ inputs.runner }})

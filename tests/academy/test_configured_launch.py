@@ -1,0 +1,545 @@
+"""Configured launch reaches the existing game and replay authorities."""
+
+from collections.abc import Iterator
+import copy
+import gzip
+import json
+from pathlib import Path
+import socket
+import subprocess
+import sys
+from typing import Any
+from urllib.parse import parse_qs, urlparse
+
+from fastapi.testclient import TestClient
+import pytest
+from websockets.sync.client import ClientConnection, connect
+
+from managym.academy import extensions, server
+from managym.academy.launch import (
+    Academy,
+    AcademyLaunchError,
+    _select_game,
+    read_games,
+    serve,
+)
+
+
+@pytest.fixture
+def academy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Academy]:
+    site = tmp_path / "site"
+    site.mkdir()
+    (site / "index.html").write_text("Academy")
+    monkeypatch.setenv("ACADEMY_FRONTEND_BUILD", str(site))
+
+    def unexpected_browser(url: str) -> bool:
+        raise AssertionError(f"Unexpected browser open: {url}")
+
+    monkeypatch.setattr("managym.academy.launch.webbrowser.open", unexpected_browser)
+    previous = server.trace_store.TRACES_DIR
+    with serve(port=0, traces_dir=tmp_path / "traces") as running:
+        yield running
+    server.trace_store.TRACES_DIR = previous
+
+
+def _launch_id(url: str) -> str:
+    return parse_qs(urlparse(url).query)["launch"][0]
+
+
+def _play_socket(academy: Academy) -> ClientConnection:
+    return connect(academy.url.replace("http:", "ws:") + "/ws/play")
+
+
+def _start_launch(ws: ClientConnection, launch_id: str) -> dict[str, Any]:
+    ws.send(json.dumps({"type": "new_game", "config": {"launch": launch_id}}))
+    message: dict[str, Any] = json.loads(ws.recv(timeout=20))
+    return message
+
+
+def test_game_launch_preserves_config_pending_decision_and_identity(
+    academy: Academy,
+) -> None:
+    launched = academy.new_game(
+        deck="gw_allies", opponent_deck="ur_lessons", opponent="passive", seed=7
+    )
+    launch_id = _launch_id(launched.url)
+    with _play_socket(academy) as ws:
+        message = _start_launch(ws, launch_id)
+        assert message["type"] == "observation", message
+        frame = (
+            message["recovery"]["frame"] if "recovery" in message else message["frame"]
+        )
+        assert frame["prompt"] and frame["offers"]
+        assert message["launch_setup"]["hero_deck"] == "gw_allies"
+        assert "seed" not in message["launch_setup"]
+        session = server.SESSION_REGISTRY[message["session_id"]].game
+        assert session.trace is not None
+        assert session.trace.config.seed == 7
+        assert session.trace.config.villain_type == "passive"
+        assert session.trace.config.hero_deck_name == "gw_allies"
+        again = _start_launch(ws, launch_id)
+        assert again["frame"]["match_id"] == frame["match_id"]
+
+
+def test_unseeded_launch_preserves_setup_in_two_sessions(academy: Academy) -> None:
+    launched = academy.new_game(
+        deck="gw_allies",
+        opponent_deck="ur_lessons",
+        opponent="passive",
+        decklists="closed",
+    )
+    launch_id = _launch_id(launched.url)
+    session_ids: list[str] = []
+    for _ in range(2):
+        with _play_socket(academy) as ws:
+            message = _start_launch(ws, launch_id)
+            assert message["type"] == "observation", message
+            assert message["launch"] == launch_id
+            assert message["launch_setup"]["hero_deck"] == "gw_allies"
+            assert message["launch_setup"]["villain_deck"] == "ur_lessons"
+            assert "seed" not in message["launch_setup"]
+            session_ids.append(message["session_id"])
+            session = server.SESSION_REGISTRY[message["session_id"]].game
+            assert session.trace is not None
+            config = session.trace.config
+            assert config.seed is not None
+            assert config.seed_was_requested is False
+            assert config.hero_deck_name == "gw_allies"
+            assert config.villain_deck_name == "ur_lessons"
+            assert config.villain_type == "passive"
+            assert config.decklists == "closed"
+    assert session_ids[0] != session_ids[1]
+
+
+def test_mixed_file_and_bundled_decks_admit_sideboards(
+    academy: Academy, tmp_path: Path
+) -> None:
+    deck = tmp_path / "deck.txt"
+    deck.write_text("20 Mountain\n20 Gray Ogre\nSideboard\n2 Lightning Bolt\n")
+    launched = academy.new_game(deck=deck, opponent="random", seed=11)
+    config = server._parse_game_config(server.LAUNCH_CONFIGS[_launch_id(launched.url)])
+    assert config.hero_deck_name == config.villain_deck_name == "imported"
+    assert config.hero_sideboard == {"Lightning Bolt": 2}
+    assert config.villain_sideboard
+    assert config.asset_pack is None
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "code"),
+    [
+        ({"deck": "absent"}, "deck.unknown"),
+        ({"deck": Path("/absent/deck.txt")}, "deck.unreadable"),
+        ({"seed": -1}, "setup.invalid"),
+        ({"sims": 0}, "setup.invalid"),
+        ({"decklists": "closed"}, "setup.invalid"),
+        ({"opponent": "a" * 64}, "opponent.unavailable"),
+    ],
+)
+def test_setup_errors_before_open(
+    academy: Academy, kwargs: dict[str, Any], code: str
+) -> None:
+    with pytest.raises(AcademyLaunchError) as error:
+        academy.new_game(**kwargs)
+    assert error.value.code == code
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "label"),
+    [
+        ({"deck": "absent"}, "Your deck"),
+        ({"opponent_deck": "absent"}, "Opponent deck"),
+        ({"deck": Path("/absent/deck.txt")}, "your deck"),
+        ({"opponent_deck": Path("/absent/deck.txt")}, "opponent deck"),
+    ],
+)
+def test_launch_deck_errors_name_the_seat(
+    academy: Academy, kwargs: dict[str, Any], label: str
+) -> None:
+    with pytest.raises(AcademyLaunchError, match=label):
+        academy.new_game(**kwargs)
+
+
+@pytest.mark.parametrize("seat", ["deck", "opponent_deck"])
+@pytest.mark.parametrize(
+    "value", ["./my-deck", "my-deck.txt", "my-deck.dek", "existing"]
+)
+def test_python_deck_strings_hint_path(
+    academy: Academy,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    seat: str,
+    value: str,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    Path("existing").write_text("20 Mountain")
+    with pytest.raises(AcademyLaunchError) as error:
+        academy.new_game(**{seat: value})
+    assert error.value.code == "deck.unknown"
+    assert "is not a bundled deck; bundled names:" in error.value.message
+    assert f"Pass pathlib.Path({value!r}) for a file." in error.value.message
+
+
+@pytest.mark.parametrize(
+    "value", ["out/trace", "trace.json", "trace.jsonl", "trace.gz", "existing"]
+)
+def test_python_replay_strings_hint_path(
+    academy: Academy,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    value: str,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    Path("existing").write_text("{}")
+    with pytest.raises(AcademyLaunchError) as error:
+        academy.replay(value)
+    assert error.value.code == "replay.missing"
+    assert f"Pass pathlib.Path({value!r}) for a file." in error.value.message
+
+
+def test_unknown_names_do_not_suggest_files(academy: Academy) -> None:
+    for prepare in (
+        lambda: academy.new_game(deck="absent"),
+        lambda: academy.replay("absent"),
+    ):
+        with pytest.raises(AcademyLaunchError) as error:
+            prepare()
+        assert "pathlib.Path" not in error.value.message
+
+
+def test_open_explicitly_selects_game_or_bare_table(
+    academy: Academy, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    opened: list[str] = []
+
+    def open_browser(url: str) -> bool:
+        opened.append(url)
+        return True
+
+    monkeypatch.setattr("managym.academy.launch.webbrowser.open", open_browser)
+    game = academy.new_game(opponent="passive")
+    assert opened == []
+    academy.open(game.url)
+    academy.open()
+    assert opened == [game.url, academy.url]
+
+
+def test_native_deck_diagnostics_and_unknown_launch(
+    academy: Academy, tmp_path: Path
+) -> None:
+    deck = tmp_path / "bad.txt"
+    deck.write_text("20 Mountain\n2 Not A Card\n")
+    with pytest.raises(AcademyLaunchError) as error:
+        academy.new_game(deck=deck)
+    assert error.value.code == "deck.rejected"
+    assert "hero" in error.value.message
+    assert "2" in error.value.message
+    with TestClient(server.app).websocket_connect("/ws/play") as ws:
+        ws.send_json({"type": "new_game", "config": {"launch": "expired"}})
+        assert "launch_unknown" in ws.receive_json()["message"]
+
+
+def test_lifecycle_exclusive_and_releases_port(academy: Academy) -> None:
+    with pytest.raises(AcademyLaunchError, match="already running") as error:
+        serve(port=0)
+    assert error.value.code == "server.running"
+    port = urlparse(academy.url).port
+    academy.close()
+    academy.close()
+    with socket.socket() as listener:
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        listener.bind(("127.0.0.1", port))
+    with serve(port=0, traces_dir=academy.traces_dir):
+        pass
+
+
+def _record(index: int) -> dict[str, Any]:
+    return {
+        "deal_seed": index,
+        "leg": 0,
+        "seat_players": ["random", "random"],
+        "seat_decks": ["one", "two"],
+        "game_trace_sha256": str(index) * 64,
+        "decisions": [],
+    }
+
+
+def test_trace_read_selection_and_errors(academy: Academy, tmp_path: Path) -> None:
+    path = tmp_path / "games.jsonl.gz"
+    path.write_bytes(
+        gzip.compress(b"\n".join(json.dumps(_record(i)).encode() for i in (1, 2)))
+    )
+    games = read_games(path)
+    assert [game.index for game in games] == [0, 1]
+    assert games[1].players == ("random", "random")
+    with pytest.raises(AcademyLaunchError) as error:
+        academy.replay(path)
+    assert error.value.code == "replay.ambiguous"
+    assert len(error.value.games) == 2
+    assert "select one by index or trace digest" in error.value.message
+    assert "--game" not in error.value.message
+    for game in (4, "ab"):
+        with pytest.raises(AcademyLaunchError) as error:
+            academy.replay(path, game=game)
+        assert error.value.code == "replay.game_unknown"
+    path.write_text("not a trace")
+    with pytest.raises(AcademyLaunchError) as error:
+        read_games(path)
+    assert error.value.code == "replay.unreadable"
+    for source in ("absent", tmp_path / "absent.json"):
+        with pytest.raises(AcademyLaunchError) as error:
+            academy.replay(source)
+        assert error.value.code == "replay.missing"
+
+
+def test_recording_id_rejects_game_selection_after_missing_check(
+    academy: Academy,
+) -> None:
+    launch_id = _launch_id(academy.new_game(opponent="passive", seed=7).url)
+    with _play_socket(academy) as ws:
+        message = _start_launch(ws, launch_id)
+        trace_id = message["table"]["attempt_id"]
+    assert academy.replay(trace_id).url.endswith(f"trace={trace_id}")
+    for selection in (0, 3, "3"):
+        with pytest.raises(AcademyLaunchError) as error:
+            academy.replay(trace_id, game=selection)
+        assert error.value.code == "replay.game_unknown"
+        assert "recording id names one game" in error.value.message
+        assert "trace file" in error.value.message
+        with pytest.raises(AcademyLaunchError) as error:
+            academy.replay("absent", game=selection)
+        assert error.value.code == "replay.missing"
+
+
+@pytest.mark.parametrize(
+    ("selection", "expected"),
+    [("111111111111", 0), ("1", 1), ("0", 0), (0, 0), (1, 1)],
+)
+def test_decimal_replay_selection_preserves_index_precedence(
+    tmp_path: Path,
+    selection: int | str,
+    expected: int,
+) -> None:
+    path = tmp_path / "games.json"
+    path.write_text(json.dumps([_record(1), _record(2)]))
+    assert _select_game(path, selection).index == expected
+    # Integers always mean positions, even when their spelling matches a digest.
+    with pytest.raises(AcademyLaunchError) as error:
+        _select_game(path, 111111111111)
+    assert error.value.code == "replay.game_unknown"
+
+
+def test_cli_replay_ambiguity_explains_flag(
+    academy: Academy,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from managym.cli import academy as launch_cli
+
+    path = tmp_path / "games.json"
+    path.write_text(json.dumps([_record(1), _record(2)]))
+    monkeypatch.setattr("managym.academy.cli.serve", lambda **kwargs: academy)
+    assert launch_cli(["replay", str(path), "--no-open"]) == 2
+    output = capsys.readouterr().err
+    assert "select one by index or trace digest" in output
+    assert "Select a game with --game <index-or-digest>." in output
+    assert "111111111111" in output
+
+
+def test_cli_selects_decimal_digest(
+    academy: Academy,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from managym.cli import academy as launch_cli
+
+    path = tmp_path / "games.json"
+    path.write_text(json.dumps([_record(1), _record(2)]))
+    monkeypatch.setattr("managym.academy.cli.serve", lambda **kwargs: academy)
+    monkeypatch.setattr(Academy, "wait", lambda self: None)
+    monkeypatch.setattr(
+        "managym.academy.watch.import_arena",
+        lambda record: {"id": str(record["deal_seed"])},
+    )
+    assert launch_cli(["replay", str(path), "--game", "111111111111", "--no-open"]) == 0
+    ready = next(
+        line.removeprefix("ACADEMY_PLAY_READY ")
+        for line in capsys.readouterr().out.splitlines()
+        if line.startswith("ACADEMY_PLAY_READY ")
+    )
+    assert json.loads(ready)["open"] == f"{academy.url}/replay?watch=1&trace=1"
+
+
+def test_replay_needs_optional_manabot(
+    academy: Academy, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(extensions, "entry_points", lambda **kwargs: [])
+    extensions.bot_extension.cache_clear()
+    path = tmp_path / "game.json"
+    path.write_text(json.dumps(_record(1)))
+    try:
+        with pytest.raises(AcademyLaunchError) as error:
+            academy.replay(path)
+        assert error.value.code == "replay.needs_manabot"
+        assert "uv pip install" in error.value.message
+    finally:
+        extensions.bot_extension.cache_clear()
+
+
+def test_evaluation_replay_reuses_recording_and_rejects_tampering(
+    academy: Academy, tmp_path: Path
+) -> None:
+    from manabot.eval.match import play_cell
+    from manabot.sim.replay import read_trace
+    from managym.academy.watch import inspect_watch
+    from tests.eval.arena_fixture import arena_fixture
+
+    contract = arena_fixture()
+    _, trace, receipt = play_cell(
+        key=contract.key,
+        player_a=contract.anchors[0],
+        player_b=contract.anchors[1],
+        deal_seeds=(777,),
+        legs=(0,),
+        out_dir=tmp_path / "arena",
+    )
+    assert receipt["passed"]
+    source = Path(trace["path"])
+    original = source.read_bytes()
+    records = read_games(source)
+    launched = academy.replay(source, game=0)
+    assert source.read_bytes() == original
+    assert academy.replay(source, game=records[0].game_trace_sha256[:12]) == launched
+    trace_id = parse_qs(urlparse(launched.url).query)["trace"][0]
+    inspected = inspect_watch(trace_id, 0, None)
+    assert inspected["count"] == len(read_trace(source)[0]["decisions"])
+    assert academy.replay(trace_id).url.endswith(f"trace={trace_id}")
+    broken = copy.deepcopy(read_trace(source)[0])
+    broken["decisions"][0]["command"]["offer_id"] += 1
+    bad = tmp_path / "bad.json"
+    bad.write_text(json.dumps(broken))
+    with pytest.raises(AcademyLaunchError) as error:
+        academy.replay(bad)
+    assert error.value.code == "replay.rejected"
+    assert "mismatches" in error.value.message
+
+
+def test_replay_verification_does_not_import_torch() -> None:
+    probe = """
+import importlib.abc
+from pathlib import Path
+import sys
+from tempfile import TemporaryDirectory
+class NoTorch(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname.split('.')[0] == 'torch':
+            raise ImportError('Replay imported Torch: ' + fullname)
+sys.meta_path.insert(0, NoTorch())
+from scripts.release.academy_replay_smoke import write_example_trace
+from manabot.sim.replay import read_trace
+from manabot.sim.table_bots import TrainingBots
+with TemporaryDirectory() as directory:
+    path = Path(directory) / 'game.jsonl.gz'
+    write_example_trace(path)
+    arena = TrainingBots().verify_arena(read_trace(path)[0])
+    assert arena.decisions
+assert 'torch' not in sys.modules
+"""
+    subprocess.run([sys.executable, "-c", probe], check=True, timeout=30)
+
+
+def test_launch_setup_stays_with_initiator_and_shutdown_keeps_history(
+    academy: Academy,
+) -> None:
+    from managym.academy.attempts import AttemptStore
+
+    first = _launch_id(
+        academy.new_game(opponent="passive", seed=7, decklists="closed").url
+    )
+    with _play_socket(academy) as pilot, _play_socket(academy) as watcher:
+        initial = _start_launch(pilot, first)
+        invite = parse_qs(urlparse(initial["table"]["watcher_invite"]).fragment)
+        watcher.send(
+            json.dumps(
+                {
+                    "type": "join_table",
+                    "table_id": invite["table"][0],
+                    "invite_token": invite["watch"][0],
+                }
+            )
+        )
+        watched = json.loads(watcher.recv(timeout=20))
+        assert "launch" not in watched and "launch_setup" not in watched
+        second = _launch_id(
+            academy.new_game(opponent="passive", seed=8, decklists="closed").url
+        )
+        pilot.send(
+            json.dumps(
+                {
+                    "type": "new_game",
+                    "grant_revision": initial["table"]["access"]["grant_revision"],
+                    "config": {"launch": second},
+                }
+            )
+        )
+        changed = json.loads(watcher.recv(timeout=20))
+        assert changed["type"] == "observation", changed
+        assert "launch" not in changed and "launch_setup" not in changed
+        trace_id = changed["table"]["attempt_id"]
+    academy.close()
+    store = AttemptStore(academy.traces_dir / "play.sqlite")
+    retained = store.load(trace_id)
+    assert retained is not None
+    assert retained["end_reason"] == "server_restart"
+    assert retained["winner"] is None
+
+
+def test_exported_game_source_label_and_import_rejection_messages(
+    academy: Academy, tmp_path: Path
+) -> None:
+    from manabot.infra.identity import canonical_sha256
+    from manabot.sim.replay import read_trace, write_trace
+    from managym.academy.watch import inspect_watch
+    from scripts.release.academy_replay_smoke import write_example_trace
+
+    source = tmp_path / "source.game.jsonl.gz"
+    write_example_trace(source)
+    # This synthetic source-kind fixture checks transport; test_recording owns
+    # actual collector provenance and the browser proof exports a training game.
+    game = read_trace(source)[0]
+    game["source"] = {"kind": "training"}
+    game.pop("game_trace_sha256")
+    game["game_trace_sha256"] = canonical_sha256(game)
+    write_trace(source, [game])
+    launched = academy.replay(source)
+    trace_id = parse_qs(urlparse(launched.url).query)["trace"][0]
+    assert inspect_watch(trace_id, 0, None)["source_kind"] == "training"
+    with TestClient(server.app) as client:
+        edited = copy.deepcopy(game)
+        edited["source"]["kind"] = "evaluation"
+        rejected = client.post("/api/watch/import", json=edited)
+        assert rejected.status_code == 400
+        assert "edited" in rejected.json()["detail"]
+        foreign = copy.deepcopy(game)
+        foreign["world"] = {"world_version": "foreign-world"}
+        rejected = client.post("/api/watch/import", json=foreign)
+        assert rejected.status_code == 400
+        assert "foreign-world" in rejected.json()["detail"]
+        assert "differs from running" in rejected.json()["detail"]
+
+
+def test_a_training_receipt_offered_as_a_game_names_the_export_step(
+    academy: Academy, tmp_path: Path
+) -> None:
+    receipt = {"schema": 1, "stream": 0, "game": {}, "context": {}}
+    path = tmp_path / "receipt.jsonl"
+    path.write_text(json.dumps(receipt) + "\n")
+    with pytest.raises(AcademyLaunchError) as raised:
+        academy.replay(path)
+    assert raised.value.code == "replay.unreadable"
+    assert "manabot export-game" in raised.value.message
+    with TestClient(server.app) as client:
+        rejected = client.post("/api/watch/import", json=receipt)
+        assert rejected.status_code == 400
+        assert "manabot export-game" in rejected.json()["detail"]

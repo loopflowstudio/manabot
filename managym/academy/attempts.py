@@ -125,6 +125,9 @@ class AttemptStore:
                 CREATE INDEX IF NOT EXISTS history_order ON attempts(started_at DESC, id DESC);
                 CREATE INDEX IF NOT EXISTS history_player ON attempt_players(player_id, attempt_id);
                 CREATE INDEX IF NOT EXISTS history_version ON attempt_players(version, attempt_id);
+                CREATE INDEX IF NOT EXISTS arena_source ON attempt_players(
+                    json_extract(inference_json, '$.source_sha256'), attempt_id
+                );
                 CREATE TABLE IF NOT EXISTS feedback (
                     attempt_id TEXT NOT NULL REFERENCES attempts(id),
                     request_id TEXT NOT NULL, created_at TEXT NOT NULL,
@@ -265,7 +268,9 @@ class AttemptStore:
         config = trace["config"]
         ending = trace["end_reason"] if finished else None
         status = (
-            ("completed" if ending == "game_over" else "stopped")
+            "interrupted"
+            if ending == "server_shutdown"
+            else ("completed" if ending == "game_over" else "stopped")
             if finished
             else "active"
         )
@@ -305,6 +310,18 @@ class AttemptStore:
             )
             if not exists:
                 self._save_players(db, attempt, players)
+
+    def arena_recording(self, source_sha256: str) -> str | None:
+        """Find one finished import by retained source identity, without reading traces."""
+        with self.connect() as db:
+            row = db.execute(
+                """SELECT p.attempt_id FROM attempt_players AS p
+                JOIN attempts AS a ON a.id=p.attempt_id
+                WHERE json_extract(p.inference_json, '$.source_sha256')=?
+                AND a.status='completed' LIMIT 1""",
+                (source_sha256,),
+            ).fetchone()
+        return None if row is None else str(row[0])
 
     def owner(self, attempt: str) -> str | None:
         with self.connect() as db:

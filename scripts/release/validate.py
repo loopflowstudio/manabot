@@ -82,6 +82,7 @@ def validate(directory: Path, complete: bool) -> None:
         "numpy>=1.24.0",
         "pydantic>=2.12.0",
         "fastapi>=0.116.0;extra=='academy'",
+        "typer>=0.12.5;extra=='academy'",
         "uvicorn[standard]>=0.34.0;extra=='academy'",
     }:
         raise ValueError(

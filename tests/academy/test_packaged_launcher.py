@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 import pytest
 
 from managym.academy import extensions, opponent, server
+from managym.academy.launch import Academy
 from managym.academy.watch import WatchRequest, create_watch, import_arena
 from managym.bots import BotPolicy, passive_policy
 from managym.cli import academy
@@ -37,6 +38,79 @@ def test_missing_site_names_checkout_launcher(
     record = json.loads(capsys.readouterr().err.removeprefix("ACADEMY_PLAY_ERROR "))
     assert record["code"] == "site.missing"
     assert "./scripts/play" in record["message"]
+
+
+@pytest.mark.parametrize("collision", ["file", "directory"])
+def test_cli_bundled_decks_win_over_paths(
+    collision: str,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    site = tmp_path / "site"
+    site.mkdir()
+    (site / "index.html").write_text("Academy")
+    monkeypatch.setenv("ACADEMY_FRONTEND_BUILD", str(site))
+    monkeypatch.chdir(tmp_path)
+    for name in ("ur_lessons", "gw_allies"):
+        path = tmp_path / name
+        if collision == "directory":
+            path.mkdir()
+        else:
+            path.write_text("not a decklist")
+    configs: list[server.GameConfig] = []
+
+    def inspect_launch(running: Academy) -> None:
+        configs.extend(
+            server._parse_game_config(c) for c in server.LAUNCH_CONFIGS.values()
+        )
+
+    monkeypatch.setattr(Academy, "wait", inspect_launch)
+    previous = server.trace_store.TRACES_DIR
+    try:
+        assert (
+            academy(
+                [
+                    "play",
+                    "--deck",
+                    "ur_lessons",
+                    "--opponent-deck",
+                    "gw_allies",
+                    "--port",
+                    "0",
+                    "--no-open",
+                ]
+            )
+            == 0
+        )
+        assert configs[0].hero_deck_name == "ur_lessons"
+        assert configs[0].villain_deck_name == "gw_allies"
+        assert "ACADEMY_PLAY_READY" in capsys.readouterr().out
+        # Explicit paths still select files (or report an unreadable directory).
+        assert (
+            academy(
+                [
+                    "play",
+                    "--deck",
+                    "./ur_lessons",
+                    "--port",
+                    "0",
+                    "--no-open",
+                ]
+            )
+            == 2
+        )
+        error_line = next(
+            line
+            for line in capsys.readouterr().err.splitlines()
+            if line.startswith("ACADEMY_PLAY_ERROR ")
+        )
+        error = json.loads(error_line.removeprefix("ACADEMY_PLAY_ERROR "))
+        assert error["code"] == (
+            "deck.unreadable" if collision == "directory" else "deck.rejected"
+        )
+    finally:
+        server.trace_store.TRACES_DIR = previous
 
 
 @pytest.mark.parametrize("held", ["127.0.0.1", "0.0.0.0"])
@@ -88,17 +162,22 @@ def test_play_only_capabilities_are_explicit(
         extensions.bot_extension.cache_clear()
 
 
-def test_launcher_without_extra_names_the_install_command() -> None:
-    probe = """
+@pytest.mark.parametrize(
+    "refused", [("fastapi", "starlette", "uvicorn"), ("typer", "click")]
+)
+def test_launcher_without_extra_names_the_install_command(
+    refused: tuple[str, ...],
+) -> None:
+    probe = f"""
 import importlib.abc
 import sys
-class RefuseServer(importlib.abc.MetaPathFinder):
+class RefuseExtra(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
-        if fullname.split('.')[0] in {'fastapi', 'starlette', 'uvicorn'}:
+        if fullname.split('.')[0] in {set(refused)!r}:
             raise ModuleNotFoundError(fullname, name=fullname)
-sys.meta_path.insert(0, RefuseServer())
-from managym.cli import academy
-raise SystemExit(academy(['--no-open']))
+sys.meta_path.insert(0, RefuseExtra())
+from managym.cli import main
+raise SystemExit(main(['academy', '--no-open']))
 """
     result = subprocess.run(
         [sys.executable, "-c", probe], capture_output=True, text=True
@@ -107,6 +186,40 @@ raise SystemExit(academy(['--no-open']))
     record = json.loads(result.stderr.removeprefix("ACADEMY_PLAY_ERROR "))
     assert record["code"] == "extra.missing"
     assert "managym[academy]" in record["message"]
+
+
+def test_shared_options_go_before_or_after_the_verb(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "index.html").write_text("Academy")
+    monkeypatch.setenv("ACADEMY_FRONTEND_BUILD", str(tmp_path))
+    monkeypatch.setattr(Academy, "wait", lambda self: None)
+    previous = server.trace_store.TRACES_DIR
+    try:
+        for argv in (
+            ["--port", "0", "--traces-dir", str(tmp_path / "a"), "play", "--no-open"],
+            ["play", "--port", "0", "--traces-dir", str(tmp_path / "a"), "--no-open"],
+            [
+                "--traces-dir",
+                str(tmp_path / "b"),
+                "play",
+                "--traces-dir",
+                str(tmp_path / "a"),
+                "--port",
+                "0",
+                "--no-open",
+            ],
+        ):
+            assert academy(argv) == 0
+            ready = json.loads(
+                capsys.readouterr()
+                .out.splitlines()[0]
+                .removeprefix("ACADEMY_PLAY_READY ")
+            )
+            assert ready["traces_dir"] == str((tmp_path / "a").resolve())
+            assert "launch=" in ready["open"]
+    finally:
+        server.trace_store.TRACES_DIR = previous
 
 
 def test_extension_declared_watch_player_plays_and_records(
