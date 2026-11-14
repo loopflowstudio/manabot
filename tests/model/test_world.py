@@ -51,7 +51,7 @@ def test_ordinary_loader_and_play_accept_full_setup_in_either_seat(
     assert agent.world_binding == payload["world_binding"]
     for match in (selected_match(), selected_match().swapped()):
         policy = CheckpointVillain(str(path), player_configs=match.to_rust())
-        assert policy.agent.world_binding == agent.world_binding
+        assert policy.session.agent.world_binding == agent.world_binding
     assert space.shapes["actions"][0] == 512
 
 

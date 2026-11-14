@@ -44,7 +44,7 @@ uv run --no-project managym academy play --deck ur_lessons --opponent-deck ./my-
 The browser opens already in that game: UR Lessons against the decklist in
 `my-deck.txt`, played by Search 64, with deal seed 7. Each deck is a bundled
 deck name or a decklist file; `--opponent` is `search`, `random`, `passive`
-or a checkpoint digest. A rejected decklist or unknown deck stops the command
+or a registered policy alias/identity. A rejected decklist or unknown deck stops the command
 with the reason before anything opens.
 Bundled names take precedence over same-named files; use `./ur_lessons` to
 select a file named `ur_lessons`.

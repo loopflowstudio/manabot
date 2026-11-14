@@ -189,19 +189,24 @@ uv run uvicorn managym.academy.server:app --port 8000
 The [local challenger workflow](../../docs/academy.md#playing-a-trained-challenger)
 covers the built same-origin server, feedback, and read-only SQL.
 
-Any trained checkpoint is selectable from the Opponent menu. The table
-lists every policy checkpoint under `MANABOT_RUNS_DIR` (default `./.runs`)
-and in `ACADEMY_PLAY_CHECKPOINTS` — `.pt` files, run directories and
-Tournament files, separated by `:` — with world, model shape, training step
-and producer. manabot's `manabot.model.catalog` reads them with Torch's
-weights-only loader and checks each world binding against the running engine;
-an incompatible checkpoint stays listed, disabled, with the mismatch (for
-example `trained in w5, engine is w6`), and the server refuses it with the same
-sentence. The browser sends only a digest; the server re-hashes the bytes,
-checks the selected decks against the checkpoint's binding (either seat), and
-records the exact checkpoint identity as the trace's `opponent_checkpoint`.
-Listing needs manabot; an install without it lists no trained opponents and
-says so.
+Play and both Watch seats use the same registered policy picker and
+`managym.policy` registry/session lifecycle
+([provider and Python contract](../../docs/academy.md#play-and-watch-a-trained-checkpoint)).
+Direct factories need no manifest. Optional `PolicySpec` values name installed
+providers in `managym.bots`; multiple providers coexist. `serve(policies=...,
+sources=...)` scopes sources to the server without rewriting environment variables.
+The CLI accepts repeatable `--policy <spec.json>` and uses each file stem as an alias.
+
+manabot owns checkpoint/run/Tournament discovery, bound-setup admission and
+training metadata; Academy never interprets its run directories. Its Qwen
+provider loads local fine-tuned safetensors with the tokenizer and advertises no
+search support. Action-only policies retain no fabricated probabilities or value.
+One-use decision bindings and complete legal-set validation precede native bound
+Commands. The descriptor pins artifact, runner, config and provider identity in
+existing recordings; old checkpoint records and finished replays need no loader.
+The browser renders provider/run groups and precise unavailable reasons;
+missing training counts remain "not recorded". Optional advice/import capabilities
+are separate from policy loading.
 
 Replacement admission must keep the old GameSession authority intact until the
 new environment resets successfully. Invalid native deck setup can raise
@@ -217,8 +222,10 @@ proofs (launch, offline reload, accessibility, release prompts) are under
 
 ## Watch and recorded bot decisions
 
-Open **Watch** (`/replay?watch=1`) to select both seats, decks and a deal seed.
-The configured checkpoint and random, greedy, heuristic and search anchors use
+Open **Watch** (`/replay?watch=1`) to select both seats, decks and a deal seed;
+`managym academy watch --player X --player Y` opens it with the seats selected
+(`&seat1=…&seat2=…`) and leaves Start to the person. Trained checkpoints, in
+one seat or both, and the random, greedy, heuristic and search anchors use
 GameSession's normal Command authority. Step advances one native decision;
 Play/Pause and speed control that same operation. Previous decisions read saved
 outputs without rerunning the policy. Completed watched games open from Games

@@ -196,7 +196,7 @@ CLOSED_DECK_NAME = "Closed decklist"
 DEFAULT_DECK = INTERACTIVE_DECK
 
 MAX_AUTOPLAY_STEPS = 1024
-VILLAIN_TYPES = {"passive", "random", "search", "checkpoint"}
+VILLAIN_TYPES = {"passive", "random", "search", "policy"}
 MAX_ACCEPTED_COMMANDS = 64
 MAX_PRESENTATION_EVENTS = 256
 MAX_UINT64 = 2**64 - 1
@@ -644,7 +644,7 @@ def _select_opponent(sha256: Any) -> Opponent:
     """
 
     if not isinstance(sha256, str):
-        raise ValueError("opponent_sha256 must name a trained checkpoint digest.")
+        raise ValueError("opponent_sha256 must name a registered policy identity.")
     opponent = catalog_opponent(sha256)
     if opponent is None:
         raise ValueError("The selected opponent is no longer available.")
@@ -658,40 +658,21 @@ def _deck_label(setup: dict) -> str:
     return "a custom deck"
 
 
-def _check_opponent_decks(opponent: Opponent, setups: list[dict]) -> None:
-    """Refuse a matchup outside the decks a catalog checkpoint was bound to.
-
-    Seats may swap: the binding is the sorted pair of deck/sideboard setups,
-    so the bot plays either of its decks from either seat.
-    """
-
-    if not opponent.setups:
-        return
-
-    def key(setup: dict) -> str:
-        return json.dumps(setup, sort_keys=True)
-
-    admitted = set(map(key, opponent.setups))
-    roster_match = (
-        len(opponent.setups) > 2
-        and len(setups) == 2
-        and all(key(setup) in admitted for setup in setups)
-    )
-    if not roster_match and sorted(map(key, setups)) != sorted(
-        map(key, opponent.setups)
-    ):
-        trained = " vs ".join(_deck_label(setup) for setup in opponent.setups)
-        raise ValueError(
-            f"{opponent.name} was trained on {trained}; choose those decks to play it."
-        )
-
-
 def _parse_game_config(config: Any) -> GameConfig:
     data = config or {}
     if not isinstance(data, dict):
         raise ValueError("new_game.config must be an object.")
 
     villain_type = data.get("villain_type", "search")
+    if villain_type == "checkpoint":
+        import warnings
+
+        warnings.warn(
+            "checkpoint player names are deprecated; use registered policies (removed in 0.4.0)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        villain_type = "policy"
     if villain_type not in VILLAIN_TYPES:
         raise ValueError(
             "villain_type must be one of: " + ", ".join(sorted(VILLAIN_TYPES)) + "."
@@ -795,19 +776,10 @@ def _parse_game_config(config: Any) -> GameConfig:
     villain_checkpoint: str | None = None
     villain_deterministic = False
     opponent: Opponent | None = None
-    if villain_type == "checkpoint":
+    if villain_type == "policy":
         opponent = _select_opponent(data.get("opponent_sha256"))
-        _check_opponent_decks(
-            opponent,
-            [
-                {"deck": hero_deck, "sideboard": sideboards["hero"]},
-                {"deck": villain_deck, "sideboard": sideboards["villain"]},
-            ],
-        )
-        villain_checkpoint = str(opponent.checkpoint)
-        villain_deterministic = opponent.deterministic
 
-    return GameConfig(
+    parsed = GameConfig(
         **provenance,
         hero_deck=hero_deck,
         villain_deck=villain_deck,
@@ -829,6 +801,11 @@ def _parse_game_config(config: Any) -> GameConfig:
         auto_pass=_parse_flag(data, "auto_pass", True),
         decklists=decklists,
     )
+    if opponent is not None:
+        from .opponent import policy_registry
+
+        policy_registry().admit(opponent.descriptor.id, parsed.to_rust())
+    return parsed
 
 
 class GameSession:
@@ -965,7 +942,19 @@ class GameSession:
             # priority-stop automation still records its Commands here.
             env = managym.Env(seed=seed)
             obs, _ = env.reset(config.to_rust())
+            from managym.policy import PolicyRunner
+
+            if isinstance(policy, PolicyRunner):
+                policy.observe(
+                    obs
+                    if int(obs.agent.player_index) == policy.seat
+                    else env.observation_for_player(policy.seat)
+                )
         except BaseException as exc:
+            from managym.policy import PolicyRunner
+
+            if isinstance(policy, PolicyRunner):
+                policy.close()
             # PyO3's PanicException derives directly from BaseException and has
             # no importable Python class. A failed disposable replacement must
             # not close the existing authority; process interrupts still escape.
@@ -998,6 +987,7 @@ class GameSession:
             self.close(end_reason="new_game")
         self.record_players = players
         self._record_player_owner = self.attempt_owner
+        self._close_policies()
         self.env, self.obs, self.villain_policy = env, obs, policy
         self._demo_name = demo_name
         # A pack identifies both decks, so closed games use the generic identity.
@@ -1537,6 +1527,12 @@ class GameSession:
                     encountered_definition_ids=encountered_definition_ids,
                 )
             )
+
+        try:
+            self._observe_policies()
+        finally:
+            if next_obs.game_over:
+                self._close_policies()
 
     def _auto_play_villain(self) -> None:
         if self.env is None or self.obs is None or self.trace is None:
@@ -2357,7 +2353,30 @@ class GameSession:
                 attempt.branch.return_to_recorded()
         self._study_attempts = {}
 
+    def _observe_policies(self) -> None:
+        from managym.policy import PolicyRunner
+
+        if self.env is None or self.obs is None:
+            return
+        policies = self.watch_policies or (self.villain_policy,)
+        for policy in policies:
+            if isinstance(policy, PolicyRunner):
+                observation = (
+                    self.obs
+                    if int(self.obs.agent.player_index) == policy.seat
+                    else self.env.observation_for_player(policy.seat)
+                )
+                policy.observe(observation)
+
+    def _close_policies(self) -> None:
+        from managym.policy import PolicyRunner
+
+        for policy in (self.villain_policy, *(self.watch_policies or ())):
+            if isinstance(policy, PolicyRunner):
+                policy.close()
+
     def close(self, end_reason: str) -> None:
+        self._close_policies()
         self._close_study_attempts()
         self._persist_attempt(end_reason=end_reason)
 

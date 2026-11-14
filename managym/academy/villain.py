@@ -12,7 +12,7 @@ from managym.bots import (
     passive_policy,
 )
 
-from .extensions import bot_extension
+from .opponent import policy_registry
 
 if TYPE_CHECKING:
     from .trace import GameConfig
@@ -33,15 +33,10 @@ def build_villain_policy(config: "GameConfig") -> BotPolicy:
     if villain_type == "search":
         sims = config.villain_sims or DEFAULT_SEARCH_SIMS
         return FlatSearchPolicy(sims=sims, seed=seed)
-    if villain_type == "checkpoint":
-        if not config.villain_checkpoint:
-            raise ValueError("checkpoint villain requires villain_checkpoint path.")
-        extension = bot_extension()
-        if extension is None:
-            raise ValueError("Trained opponents need manabot installed on this server.")
-        return extension.checkpoint_policy(
-            config.villain_checkpoint,
-            deterministic=config.villain_deterministic,
-            player_configs=config.to_rust(),
+    if villain_type == "policy":
+        if config.opponent is None:
+            raise ValueError("Policy opponent requires a registered identity.")
+        return policy_registry().load(
+            config.opponent["sha256"], config.to_rust(), seat=1, seed=seed
         )
     raise ValueError(f"Unsupported villain_type: {villain_type}")

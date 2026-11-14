@@ -16,6 +16,7 @@ from . import server
 from .attempts import AttemptStore, RecordedPlayer, bot_player
 from .extensions import bot_extension
 from .launch import refuse_training_receipt
+from .opponent import policy_registry
 from .replay_index import DecisionAddressV2, load_canonical_replay
 from .trace import load_trace
 from .villain import NATIVE_WATCH_PLAYERS, build_villain_policy
@@ -42,53 +43,80 @@ class WatchRequest(BaseModel):
     villain_sims: int = Field(default=16, ge=1, le=4096)
 
 
-def _policy(kind: str, request: WatchRequest, seat: int) -> BotPolicy:
-    if kind not in NATIVE_WATCH_PLAYERS:
-        extension = bot_extension()
-        if extension is None or kind not in extension.watch_players:
-            raise HTTPException(400, "watch_player_unavailable")
-        return extension.watch_policy(kind)
-    config = server._parse_game_config({**request.model_dump(), "villain_type": kind})
-    config.seed = request.seed + seat
-    return build_villain_policy(config)
+def resolve_player(
+    kind: str, request: WatchRequest, seat: int
+) -> tuple[BotPolicy, RecordedPlayer]:
+    """Resolve a seat once through Play's admission and policy construction."""
+    if kind not in (*NATIVE_WATCH_PLAYERS, "passive") and not kind.startswith(
+        ("policy:", "search-")
+    ):
+        kind = f"policy:{policy_registry().descriptor(kind).id}"
+    data = {**request.model_dump(), "seed": (request.seed + seat) % 2**64}
+    if kind.startswith("policy:"):
+        data.update(villain_type="policy", opponent_sha256=kind.removeprefix("policy:"))
+    elif kind.startswith("search-"):
+        try:
+            data.update(
+                villain_type="search", villain_sims=int(kind.removeprefix("search-"))
+            )
+        except ValueError as error:
+            raise ValueError("Invalid search playout count.") from error
+    else:
+        data["villain_type"] = kind
+    config = server._parse_game_config(data)
+    if kind.startswith("policy:"):
+        assert config.opponent is not None
+        policy = policy_registry().load(
+            config.opponent["sha256"],
+            config.to_rust(),
+            seat=seat,
+            seed=request.seed + seat,
+        )
+    else:
+        policy = build_villain_policy(config)
+    recorded = asdict(config)
+    player = bot_player(recorded)
+    if config.opponent_checkpoint is not None:
+        player = replace(
+            player, inference={**(player.inference or {}), **config.opponent_checkpoint}
+        )
+    return policy, replace(
+        player, seat=seat, deck=request.hero_deck if seat == 0 else request.villain_deck
+    )
 
 
 def create_watch(
     request: WatchRequest, recorded_players: list[RecordedPlayer] | None = None
 ) -> WatchCreated:
-    policies = (
-        _policy(request.players[0], request, 0),
-        _policy(request.players[1], request, 1),
-    )
+    seats: list[tuple[BotPolicy, RecordedPlayer]] = []
+    try:
+        for seat, kind in enumerate(request.players):
+            seats.append(resolve_player(kind, request, seat))
+    except (ValueError, OSError, ImportError) as error:
+        for policy, _ in seats:
+            close = getattr(policy, "close", None)
+            if close is not None:
+                close()
+        raise HTTPException(400, str(error)) from error
     token = server.secrets.token_urlsafe(32)
     game = server.GameSession(watch_mode=True)
-    # Session closure releases controllers, including checkpoint tensors.
-    # Policies never cross the trace or HTTP boundary.
-    game.watch_policies = policies
     game.attempt_owner = server.participant_id(token)
-    game.record_players = []
-    for seat, kind in enumerate(request.players):
-        config = asdict(
-            server._parse_game_config(
-                {
-                    **request.model_dump(),
-                    "villain_type": kind if kind in NATIVE_WATCH_PLAYERS else "passive",
-                }
-            )
-        )
-        config["villain_type"] = kind
-        game.record_players.append(
-            replace(
-                bot_player(config),
-                seat=seat,
-                deck=request.hero_deck if seat == 0 else request.villain_deck,
-            )
-        )
+    game.record_players = [player for _, player in seats]
     if recorded_players is not None:
         game.record_players = recorded_players
-    game.new_game(
-        {**request.model_dump(), "villain_type": "random", "auto_pass": False}
-    )
+    try:
+        game.new_game(
+            {**request.model_dump(), "villain_type": "random", "auto_pass": False}
+        )
+        game.watch_policies = (seats[0][0], seats[1][0])
+        game._observe_policies()
+    except BaseException:
+        for policy, _ in seats:
+            close = getattr(policy, "close", None)
+            if close is not None:
+                close()
+        game.close("setup_failed")
+        raise
     record = server.SessionRecord(game.match_id, token, game)
     server.SESSION_REGISTRY[game.match_id] = record
     assert game.trace is not None
