@@ -12,9 +12,11 @@ only the rows a batch references; the others never reach the loss, so their
 outputs receive no gradient either way. GRU input and recurrent biases remain
 separate parameters, preserving Adam state and global gradient-norm clipping.
 
-Compute precision is policy-owned and defaults to float32. Optional half
-forwards cast weights differentiably and restore float32 masters; inference
-and learning therefore use the same dtype. Outputs remain float32.
+Compute precision is policy-owned. Unless given, it follows the model's width
+(`manabot.backends.mlx.arrays.default_precision`): bfloat16 from
+`BF16_MIN_HIDDEN_DIM`, float32 below. Half forwards cast weights
+differentiably and restore float32 masters; inference and learning therefore
+use the same dtype. Outputs remain float32.
 
 Parameter paths equal the PyTorch state-dict names except where MLX containers
 differ: `nn.Sequential` children live under `layers`, attention in-projections
@@ -33,7 +35,7 @@ import mlx.nn as nn
 from mlx.utils import tree_flatten, tree_map
 import numpy as np
 
-from manabot.backends.mlx.arrays import precision_dtype, to_numpy
+from manabot.backends.mlx.arrays import default_precision, precision_dtype, to_numpy
 from manabot.backends.mlx.rl import NumericalError
 from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import ModelConfig
@@ -255,9 +257,11 @@ class MLXActorCritic(nn.Module):
         config: ModelConfig,
         space: ObservationSpace,
         *,
-        precision: Precision = "float32",
+        precision: Precision | None = None,
     ) -> None:
         super().__init__()
+        if precision is None:
+            precision = default_precision(dims.hidden)
         precision_dtype(precision)
         object.__setattr__(self, "_precision", precision)
         self.dims = dims

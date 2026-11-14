@@ -96,6 +96,9 @@ checkpoints or experiment evidence.
   recorded once; do not reconstruct bills, reserves or settlements.
 - An experiment whose whole cost is at or under USD25 launches under the
   launcher's cap (`--max-usd`). Above that, a person approves the amount first.
+- Etude rental admission includes the on-demand startup allowance in addition
+  to `Job.max_hours`. Size both job and cohort dollar caps for that whole
+  window; a price offer does not guarantee provider capacity.
 - An experiment is `experiments/<name>.py` at a commit with one report,
   `experiments/<name>.md`. Do not add a protocol document, a serialized regime,
   a digest check or a test suite for one experiment's schedule; reusable

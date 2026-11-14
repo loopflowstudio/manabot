@@ -121,8 +121,8 @@ Reduced precision is a context around the forward only:
 `with backend.learner.forward_precision(precision, device):` (or
 `learner.forward_precision()`) runs `bf16` autocast, and you cast the outputs
 with `backend.arrays.float32` (`.float()`) before any loss.
-`bf16` and `tf32` are CUDA-only; losses and their float64 terms stay in full
-precision on every device.
+`bf16` runs on CUDA and MPS and `tf32` on CUDA only; losses and their float64
+terms stay in full precision on every device.
 
 ### Health and metrics
 

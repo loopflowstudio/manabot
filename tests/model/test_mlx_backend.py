@@ -36,7 +36,11 @@ from manabot.backends.torch.checkpoint import (  # noqa: E402
 from manabot.backends.torch.policy import ActorCritic  # noqa: E402
 from manabot.env.match import Match  # noqa: E402
 from manabot.env.observation import ObservationSpace  # noqa: E402
-from manabot.infra.config import MatchConfig, ModelConfig  # noqa: E402
+from manabot.infra.config import (  # noqa: E402
+    BF16_MIN_HIDDEN_DIM,
+    MatchConfig,
+    ModelConfig,
+)
 from manabot.policy.checkpoint import (  # noqa: E402
     canonical_parameters,
     from_torch_state,
@@ -308,11 +312,9 @@ def test_bucket_trim_preserves_mlx_logits_values_and_gradients(tmp_path: Path) -
         )
 
 
-@pytest.mark.parametrize("precision", ["bfloat16", "float16"])
-def test_mixed_precision_preserves_master_updates(
-    tmp_path: Path, precision: Precision
-) -> None:
+def test_mixed_precision_preserves_master_updates(tmp_path: Path) -> None:
     """Half forwards preserve small updates in float32 masters and Adam state."""
+    precision: Precision = "bfloat16"
     import manabot.backends.mlx as backend
     from manabot.backends.mlx.arrays import precision_dtype
     from manabot.backends.mlx.checkpoint import assemble
@@ -338,7 +340,6 @@ def test_mixed_precision_preserves_master_updates(
     learner = Learner(policy, precision=precision, minibatch_rows=2)
     dtype = precision_dtype(precision)
     assert learner.precision == policy.precision == precision
-    assert learner.loss_scale == (128 if precision == "float16" else 1)
     batch = policy.prepare(obs)
     settings = Settings(1e-5, 0.2, 0.1, 0.05, 0.01)
     targets = Targets(
@@ -386,10 +387,53 @@ def test_mixed_precision_preserves_master_updates(
     )
 
 
-@pytest.mark.parametrize("precision", ["bfloat16", "float16"])
-def test_half_policy_loading_and_float32_action_logs(
-    tmp_path: Path, precision: Precision
+@pytest.mark.parametrize(
+    ("width", "expected"),
+    [
+        (BF16_MIN_HIDDEN_DIM - 8, "float32"),
+        (BF16_MIN_HIDDEN_DIM, "bfloat16"),
+        (384, "bfloat16"),
+    ],
+)
+def test_omitted_precision_follows_the_shared_width_rule(
+    width: int, expected: Precision
 ) -> None:
+    """A policy, backend and learner built without a precision run bfloat16
+    from the width torch's GPU devices use, with float32 masters and outputs."""
+    from manabot.backends.mlx.arrays import default_precision, precision_dtype
+    from manabot.backends.mlx.checkpoint import MLXBackend, assemble
+    from manabot.training.regime import ladder_precision
+
+    assert default_precision(width) == expected
+    assert (ladder_precision("mps", width) == "bf16") == (expected == "bfloat16")
+    space = ObservationSpace()
+    agent = ActorCritic(
+        space,
+        ModelConfig(
+            hidden_dim=width,
+            num_attention_heads=8,
+            world="ur-lessons-vs-gw-allies",
+            value_aggregation="masked_mean",
+        ),
+    )
+    weights = from_torch_state(
+        agent.config,
+        space.encoder.config,
+        {k: v.numpy() for k, v in agent.state_dict().items()},
+        parameter_names=dict(agent.named_parameters()),
+    )
+    policy, learner = MLXBackend().load(weights)
+    assert policy.precision == learner.precision == expected
+    assert all(p.dtype == mx.float32 for _, p in tree_flatten(policy.parameters()))
+    assert policy.programs().dtype == precision_dtype(expected)
+    # An explicit precision always wins over the width.
+    for explicit in ("float32", "bfloat16"):
+        assert assemble(weights, precision=explicit).precision == explicit
+        assert MLXBackend(explicit).load(weights)[0].precision == explicit
+
+
+def test_half_policy_loading_and_float32_action_logs(tmp_path: Path) -> None:
+    precision: Precision = "bfloat16"
     from manabot.backends.mlx.arrays import precision_dtype
     from manabot.backends.mlx.checkpoint import MLXBackend
     from manabot.backends.mlx.rl import action_logs, policy_logs
@@ -406,7 +450,7 @@ def test_half_policy_loading_and_float32_action_logs(
     assert policy.programs().dtype == mx.float32
     assert all(p.dtype == mx.float32 for _, p in tree_flatten(policy.parameters()))
     # Torch regimes spell "bf16"; the refusal names MLX's dtype spellings.
-    with pytest.raises(ValueError, match="expected one of float32, bfloat16, float16"):
+    with pytest.raises(ValueError, match="expected one of float32, bfloat16"):
         policy.set_precision("bf16")  # type: ignore[arg-type]
 
     logits = mx.array(
@@ -429,7 +473,7 @@ def test_half_overflow_refuses_update(tmp_path: Path) -> None:
     from manabot.backends.mlx.rl import NumericalError
 
     _, path, _ = _converted(tmp_path)
-    policy, _ = load_mlx_policy(str(path), precision="float16")
+    policy, _ = load_mlx_policy(str(path), precision="bfloat16")
     learner = Learner(policy, minibatch_rows=1)
     before = learner.parameters()
 

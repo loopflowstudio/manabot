@@ -22,7 +22,7 @@ from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.policy.checkpoint import ParameterArrays, PolicyCheckpoint
 from manabot.policy.prepare import Prepared
 
-Precision = Literal["float32", "bfloat16", "float16"]
+Precision = Literal["float32", "bfloat16"]
 
 
 @dataclass(frozen=True)

@@ -200,13 +200,16 @@ def _agents(capture_dir: Path, width: int) -> tuple[Any, Any]:
             torch.manual_seed(21501)
             agent = ActorCritic(space, config)
     state = {k: v.detach().numpy().copy() for k, v in agent.state_dict().items()}
+    # The pilot measured float32 at every width; pin it against the backend's
+    # width default.
     policy = assemble(
         from_torch_state(
             agent.config,
             space.encoder.config,
             state,
             parameter_names=dict(agent.named_parameters()),
-        )
+        ),
+        precision="float32",
     )
     return agent, policy
 

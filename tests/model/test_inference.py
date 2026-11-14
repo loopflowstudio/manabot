@@ -25,7 +25,6 @@ from tests.training.test_recovery import recipe
 def _batch_tensors(batch: RolloutBatch) -> dict[str, torch.Tensor]:
     rows = batch.observations()
     result = {
-        "probabilities": torch.from_numpy(rows.probabilities),
         "log_probabilities": torch.from_numpy(rows.log_probabilities),
         **{
             f"obs/{key}": torch.from_numpy(value)

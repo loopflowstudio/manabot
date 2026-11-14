@@ -171,15 +171,17 @@ def update_ema(averaged: nn.Module, model: nn.Module, rate: float) -> None:
 # - `float32`: nothing changes; every helper here is a no-op.
 # - `tf32`: for the stage, CUDA matmul and cuDNN may use TF32 tensor cores
 #   (`allow_tf32`). Weights, activations and losses stay float32 tensors.
-# - `bf16`: `torch.autocast(cuda, bfloat16)` around the policy forwards only, in
-#   collection (behavior sampling and stored values) and in the learner (bootstrap
-#   targets and the loss forward). Callers cast forward outputs back to float32,
-#   so behavior log-probabilities, targets, losses and their reductions are float32;
-#   weights and Adam state stay float32 and no gradient scaler is used, since bf16
-#   keeps float32's exponent range.
+# - `bf16`: `torch.autocast(device, bfloat16)` on CUDA or MPS around the policy
+#   forwards only, in collection (behavior sampling and stored values) and in the
+#   learner (bootstrap targets and the loss forward). Callers cast forward outputs
+#   back to float32, so behavior log-probabilities, targets, losses and their
+#   reductions are float32; weights and Adam state stay float32 and no gradient
+#   scaler is used, since bf16 keeps float32's exponent range.
 #
-# Both reduced precisions change numerics, so they are declared regime variants,
-# never edits of a float32 regime; `Execution` rejects them off CUDA.
+# A regime's `auto` resolves to `bf16` for wide models on CUDA and MPS and to
+# `float32` otherwise (`manabot.training.regime.ladder_precision`). Both reduced
+# precisions change numerics, so a saved regime keeps the precision it recorded.
+# `Execution` rejects `tf32` off CUDA and `bf16` on CPU.
 
 
 # The process's switches before any stage set them. float32 keeps them, so float32
@@ -197,7 +199,8 @@ def apply_matmul_precision(precision: "Precision") -> None:
 def forward_precision(
     precision: "Precision", device: torch.device
 ) -> AbstractContextManager[object]:
-    """The context one policy forward runs in: bf16 autocast, else nothing."""
+    """The context one policy forward runs in: bf16 autocast on `device`
+    (CUDA or MPS), else nothing."""
     if precision != "bf16":
         return nullcontext()
     return torch.autocast(device.type, dtype=torch.bfloat16)

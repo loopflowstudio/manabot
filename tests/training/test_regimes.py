@@ -151,7 +151,6 @@ def test_named_treatments_execute_real_optimizer_batches() -> None:
         next_done=np.ones(1, dtype=bool),
         action_data=PackedActions.pack(
             obs,
-            probs,
             logits.masked_fill(torch.as_tensor(obs["actions_valid"]) == 0, -torch.inf)
             .log_softmax(-1)
             .numpy(),
