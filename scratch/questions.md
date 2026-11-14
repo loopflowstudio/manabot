@@ -84,3 +84,12 @@ Earlier planning/sync/write-docs history is in
 `250bb3ba44ee699ae46cac41b0dfc78d110894de:scratch/questions.md`.
 Unrelated b015d5/C1/C2 evidence and exact quotes remain at
 `757bb6257ef07cf2536ad7f7ec24f0f7309628c6:scratch/questions.md`.
+
+## QA (2026-11-14)
+
+Guide example and an 8-slot Torch-wrapper collector (600 random steps, v9 and
+v10, closed decklists) passed; report in `scratch/qa.html`. Fixed: Torch tensors
+passed as buffers raised `AttributeError: 'torch.dtype' object has no attribute
+'name'` from the shared `require_numpy_array`; it now raises a `TypeError` naming
+NumPy and `torch.from_numpy`. Left as is: seat `-1` gives PyO3 `OverflowError`;
+other-version buffers are accepted by design.

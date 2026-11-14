@@ -145,6 +145,9 @@ def test_fixed_seat_invalid_requests_and_buffers_do_not_write() -> None:
     for bad in malformed:
         with pytest.raises((KeyError, ValueError, TypeError, BufferError)):
             vector.write_observations_for_players([0, 1], bad)
+    tensors = {key: torch.from_numpy(value) for key, value in buffers.items()}
+    with pytest.raises(TypeError, match="must be a NumPy array, got Tensor"):
+        vector.write_observations_for_players([0, 1], tensors)
     with pytest.raises(ValueError):
         vector.write_observations_for_players(
             [0, 1], buffers, action_overflow="truncate"
