@@ -187,6 +187,15 @@ the expected matchup set.
 When moving modules, tests or entry points, collect the
 exact paths in `.github/workflows/manabot-integration.yml` and run
 `uv run --extra dev pytest tests/infra/test_ci_selection.py tests/infra/test_release.py -q`.
+Moves between Academy and checkout-only conformance tools also require
+`uv run --extra dev pytest --collect-only tests/academy/test_authored_match_authority.py tests/academy/test_authored_match_parity.py tests/academy/test_public_commitment_parity.py tests/academy/test_learn_evidence.py -q`
+to catch stale module-level imports before running the affected behavior checks.
+Academy package, bot or fixture moves also require
+`uv run --extra dev pytest tests/model/test_world.py tests/model/test_policy_input_rejection.py -q`
+and `npm --prefix academy/ui run test:e2e -- --config playwright.release.config.ts --list`.
+These cover checkpoint admission consumers outside Academy's test directory and
+browser fixture imports, which Svelte checks and Vitest do not collect. Run the
+affected browser specs against the built frontend after collection succeeds.
 Package initializer changes also require
 `uv run --extra dev --extra artifacts --extra evaluation pytest tests/test_package_boundaries.py tests/eval/test_inference_receipts.py -q`;
 offline receipt reports must work without probing the native engine, even to
@@ -834,7 +843,9 @@ uv run --no-project --python /tmp/manabot-release-venv/bin/python manabot-releas
 ```
 
 The training smoke checks one shared engine behind both import paths, catalog
-binding, gradients and a tiny CPU training update. Repeat in a separate environment with
+binding, gradients, a CPU update on the native lethal-target fixture, and the
+installed Academy bot entry point and checkpoint catalog. This bounded fixture
+does not certify the default training recipe's completion time. Repeat in a separate environment with
 3.12 and its wheel. `release.yml` covers both interpreters on Linux and macOS,
 then installs and imports the optional extras. Consumer checks run outside the
 checkout with default dependency groups disabled, including the minimum

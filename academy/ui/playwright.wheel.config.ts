@@ -14,7 +14,11 @@ export default defineConfig({
   webServer: {
     command: `${command} --no-open --port ${port} --traces-dir "${cwd}/browser-traces"`,
     cwd,
-    env: { PATH: `${process.env.ACADEMY_WHEEL_NO_TOOLS ?? ''}:${process.env.PATH ?? ''}` },
+    env: {
+      PATH: `${process.env.ACADEMY_WHEEL_NO_TOOLS ?? ''}:${process.env.PATH ?? ''}`,
+      PYTHONPATH: '',
+      ACADEMY_FRONTEND_BUILD: '',
+    },
     url: `http://127.0.0.1:${port}/api/opponents`,
     reuseExistingServer: false,
     timeout: 30_000,

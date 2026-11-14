@@ -6,6 +6,7 @@ no test framework, browser, training distribution or build tool is imported.
 
 from importlib.metadata import distributions
 import json
+import os
 from pathlib import Path
 from queue import Queue
 import re
@@ -20,6 +21,8 @@ from urllib.request import urlopen
 
 from websockets.sync.client import connect
 
+import managym
+
 INSTALL_COMMAND = (
     "uv pip install --python .venv/bin/python --only-binary :all: 'managym[academy]'"
 )
@@ -28,6 +31,9 @@ DEFAULT_URL = "http://127.0.0.1:8000"
 
 
 def main() -> None:
+    prefix = Path(sys.prefix).resolve()
+    assert Path(managym.__file__).resolve().is_relative_to(prefix)
+    assert Path(managym._managym.__file__).resolve().is_relative_to(prefix)
     installed = {d.metadata["Name"].lower() for d in distributions()}
     assert not installed.intersection({"manabot", "torch", "etude-sdk"})
     with tempfile.TemporaryDirectory(prefix="academy-wheel-") as directory:
@@ -56,6 +62,8 @@ def main() -> None:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            # Ignore checkout overrides: this proof must serve installed bytes.
+            env={**os.environ, "PYTHONPATH": "", "ACADEMY_FRONTEND_BUILD": ""},
         )
 
         def read_output() -> None:

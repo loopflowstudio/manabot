@@ -30,7 +30,7 @@ MAX_COMMANDS = 10_000
 def source_identity():
     files = {row["path"]: row for row in _source_manifest()["files"]}
     for folder in (
-        "academy",
+        "conformance",
         "manabot/model",
         "manabot/env",
         "manabot/semantic",

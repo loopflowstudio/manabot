@@ -20,8 +20,10 @@ from manabot.belief.likelihood import (
     _matching_offer_indexes,
     public_commitment_key,
 )
+from manabot.belief.range import BeliefState
 from manabot.belief.tracker import BeliefTracker
 import managym
+from managym.academy import server, trace as trace_store
 from managym.academy.curated_pack import load_curated_pack
 from managym.academy.replay_index import CanonicalReplayV1
 from managym.decision import (
@@ -31,9 +33,7 @@ from managym.decision import (
     SemanticTransition,
     apply_semantic_command,
 )
-from managym.possible_worlds import PossibleWorldSpace
-
-from . import server, trace as trace_store
+from managym.possible_worlds import PossibleWorldSpace, WorldQuery
 
 ROOT = Path(__file__).parents[1]
 RECEIPT_PATH = (
@@ -136,15 +136,23 @@ class IdentityAuditLikelihood:
 
     def evaluate(
         self,
-        root_engine: Any,
+        root_engine: managym.Env,
         *,
         viewer: int,
         commitment: Mapping[str, Any],
-        belief: Any,
+        belief: BeliefState,
     ) -> LikelihoodResult:
         public_commitment_key(commitment)
-        root_space = PossibleWorldSpace.from_engine(root_engine, viewer)
-        _require("likelihood root space", belief.space.identity, root_space.identity)
+        # Rules checks the exact space identity. A support receipt avoids
+        # projecting every hand back into Python just to read that identity.
+        support = json.loads(
+            root_engine.possible_world_support_json(
+                viewer, belief.space.identity, json.dumps(WorldQuery.true().to_dict())
+            )
+        )
+        _require(
+            "likelihood root space", belief.space.identity, support["space_identity"]
+        )
         frame = DecisionFrame.from_json(root_engine.semantic_decision_frame_json())
         matching, legal_count = _matching_offer_indexes(frame, commitment)
         if not matching:
@@ -259,7 +267,12 @@ def _run_engine(
     decisions: list[dict[str, Any]],
     *,
     track_beliefs: bool,
+    viewers: tuple[int, ...] = (0, 1),
 ) -> tuple[dict[str, Any], managym.Env | None]:
+    """Replay the tape, auditing selected viewers independently in bounded tests.
+
+    The combined receipt producer keeps both viewers as its default.
+    """
     env = _fresh_env()
     likelihood = IdentityAuditLikelihood()
     trackers = (
@@ -270,7 +283,7 @@ def _run_engine(
                 likelihood=likelihood,
                 epsilon=0.0,
             )
-            for viewer in (0, 1)
+            for viewer in viewers
         }
         if track_beliefs
         else {}
@@ -285,7 +298,7 @@ def _run_engine(
         root = env.clone_env()
         frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
         _require("decision actor", int(row["actor"]), frame.actor)
-        if track_beliefs and int(row["from_revision"]) == DISCARD_REVISION:
+        if 1 in trackers and int(row["from_revision"]) == DISCARD_REVISION:
             discard_root = root.clone_env()
             negative = _negative_proof(root, row, trackers[1], likelihood)
         transition = apply_semantic_command(env, _semantic_command(row, frame))

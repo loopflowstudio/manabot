@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 
 from conformance.authored_match_receipt import DEFAULT_RECEIPT_PATH
 import managym
+from managym.academy import server, trace as trace_store
 from managym.academy.curated_pack import load_curated_pack
 from managym.academy.replay_index import (
     CanonicalReplayV1,
@@ -25,8 +26,6 @@ from managym.decision import (
     SemanticContractError,
     apply_semantic_command,
 )
-
-from . import server, trace as trace_store
 
 ROOT = Path(__file__).parents[1]
 RECEIPT_PATH = (
