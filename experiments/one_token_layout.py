@@ -20,17 +20,16 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import asdict, dataclass
-from itertools import product
 import json
 from pathlib import Path
 import time
 from typing import Literal
 import warnings
 
-from etude.eval.records import Inference, Seating
-from etude.experiment import ExperimentState, TrainingRun
+from etude.eval.records import Seating
+from etude.experiment import ExperimentState
 from etude.launch.records import Job, Run
-from etude.report import Curve, Matches, Ranking, Report, Score
+from etude.report import Curve, Matches, Report, Score
 import numpy as np
 import torch
 
@@ -40,7 +39,6 @@ from experiments.learning_signal import (
     ELEMENTAL_PAIRS,
     FINALIZATION_SECONDS,
     SETUP_SECONDS,
-    Conditions,
     benchmark_jobs,
     scheduled_matchups,
     training_runs,
@@ -49,7 +47,6 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationEncoder, ObservationSpace
 from manabot.infra.config import MatchConfig, ObservationConfig
-from manabot.infra.runtime import regime_tag
 from manabot.model.admission import admit_observation
 from manabot.training.panels import ML, PERF
 from manabot.training.regime import TrainingRegime
@@ -68,8 +65,8 @@ SECONDS_PER_UPDATE = 40.0
 HOURS = (UPDATES * SECONDS_PER_UPDATE + SETUP_SECONDS + FINALIZATION_SECONDS) / 3600
 USD_PER_RUN = 2.25
 EVALUATION = "one-token-layout-v1"
-# Scheduled checkpoints against the heuristic and four head-to-heads, each
-# over 50 pairings x 4 legs.
+# Scheduled and final checkpoints against the heuristic, each over 50
+# pairings x 4 legs.
 EVALUATION_HOURS = 1.0
 EVALUATION_USD = 2.0
 
@@ -134,12 +131,6 @@ def runs(
 # --------------------------------------------------------------------------- evaluation
 
 
-def arm_runs(state: ExperimentState, version: Arm) -> list[TrainingRun]:
-    """The arm's runs: their checkpoints' regime tag names them."""
-    tag = regime_tag(regime_id(version))
-    return [run for run in state.runs if run.checkpoints.tagged(tag)]
-
-
 def eval(state: ExperimentState) -> list[Job]:
     return benchmark_jobs(
         evaluation_matchups(state),
@@ -151,52 +142,21 @@ def eval(state: ExperimentState) -> list[Job]:
 
 
 def evaluation_matchups(state: ExperimentState) -> tuple[Seating, ...]:
-    """Scheduled checkpoints against the heuristic, then v11 against v10.
+    """Each run's scheduled checkpoints and final checkpoint against the heuristic.
 
-    A head-to-head pairs two ended runs at the last update both checkpointed,
-    v10 first; the four legs give each both decks on the play and the draw.
+    The arms meet only through the heuristic: one arena game encodes both seats
+    with one observation layout, so a v10 checkpoint cannot sit across from a
+    v11 one.
     """
-    found = [
+    return tuple(
         matchup
         for run in state.runs
         for matchup in scheduled_matchups(run, ELEMENTAL_PAIRS)
-    ]
-    source = [
-        *sorted((ROOT / "manabot").rglob("*.py")),
-        ROOT / "experiments/learning_signal.py",
-    ]
-    inference = Inference(source=source)
-    conditions = tuple(
-        Conditions(design=ELEMENTAL_PAIRS.name, **pairing.model_dump()).model_dump()
-        for pairing in ELEMENTAL_PAIRS.pairings
     )
-    reference, candidate = (arm_runs(state, version) for version in ARMS)
-    for left, right in product(reference, candidate):
-        if not (left.ended and right.ended):
-            continue
-        shared = {int(c.at["updates"]) for c in left.checkpoints} & {
-            int(c.at["updates"]) for c in right.checkpoints
-        }
-        if not shared:
-            continue
-        update = max(shared)
-        first = left.checkpoints.at("updates", update).last
-        second = right.checkpoints.at("updates", update).last
-        assert first is not None and second is not None
-        found.append(
-            Seating(
-                name=f"v10 {left.name} v v11 {right.name} u{update}",
-                players=(first.model(inference), second.model(inference)),
-                conditions=conditions,
-                games=ELEMENTAL_PAIRS.legs,
-                tags=("head-to-head",),
-            )
-        )
-    return tuple(found)
 
 
 def report() -> Report:
-    """Score against the heuristic by update, and v11 against v10 at matched updates."""
+    """Score against the heuristic by update, each arm against the other."""
     return Report(
         score=Score(table="plays", value="score", reference=0.5),
         clock="updates",
@@ -204,11 +164,6 @@ def report() -> Report:
         evals=(
             Curve(
                 title="Score against the heuristic", matches=Matches(tag="heuristic")
-            ),
-            Ranking(
-                title="Head-to-head at matched updates, by seat",
-                by="on_play",
-                matches=Matches(tag="head-to-head"),
             ),
         ),
         perf=PERF,
