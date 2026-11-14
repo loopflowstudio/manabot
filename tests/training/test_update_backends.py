@@ -213,7 +213,7 @@ def test_half_damped_update_after_cached_inference(
     precision: Precision = "bfloat16"
     if "mlx" not in installed_backends():
         pytest.skip("MLX is not installed")
-    module = backend_module("mlx")
+    module = resolve("mlx")
     weights, batch = captured
     agents = [
         module.checkpoint.assemble(weights, precision=precision) for _ in range(2)

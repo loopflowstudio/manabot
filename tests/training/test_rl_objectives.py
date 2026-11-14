@@ -1,5 +1,7 @@
 """Independent RL estimator, policy-reference and update-clock contracts."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from copy import deepcopy
 
 import numpy as np
@@ -57,6 +59,20 @@ class TinyRollout:
             key: torch.as_tensor(value, device=device)
             for key, value in rows.observation.items()
         }, rows
+
+    @contextmanager
+    def minibatches(
+        self, indexes: np.ndarray, size: int, device: torch.device
+    ) -> Iterator[Iterator[tuple[np.ndarray, dict[str, torch.Tensor], ActionRows]]]:
+        def batches() -> Iterator[
+            tuple[np.ndarray, dict[str, torch.Tensor], ActionRows]
+        ]:
+            for start in range(0, len(indexes), size):
+                chunk = indexes[start : start + size]
+                obs, rows = self.rows(chunk, device)
+                yield chunk, obs, rows
+
+        yield batches()
 
     def legal(self, obs: dict[str, torch.Tensor]) -> torch.Tensor:
         return obs["actions_valid"]

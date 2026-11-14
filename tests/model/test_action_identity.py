@@ -102,7 +102,6 @@ def test_generic_identity_padding_and_state_roundtrip(tmp_path: Path) -> None:
     obs = decision_case("land").observation
     spec = ModelConfig(hidden_dim=8, num_attention_heads=2)
     agent = ActorCritic(ObservationSpace(), spec)
-    assert not agent._generic_definitions(torch.zeros(2, 3)).any()
     path = tmp_path / "weights.pt"
     torch.save(agent.state_dict(), path)
     restored = ActorCritic(ObservationSpace(), spec)

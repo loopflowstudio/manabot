@@ -296,9 +296,9 @@ def test_batched_rollouts_match_sequential_evidence(
     batch_sizes: list[int] = []
 
     def observe_forward(module: torch.nn.Module, args: tuple[object, ...]) -> None:
-        tensors = args[0]
-        assert isinstance(tensors, dict)
-        batch_sizes.append(len(tensors["actions_valid"]))
+        prepared = args[0]
+        assert isinstance(prepared, Prepared)
+        batch_sizes.append(prepared.batch)
 
     handle = teacher.agent.register_forward_pre_hook(observe_forward)
     try:

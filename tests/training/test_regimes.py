@@ -255,7 +255,7 @@ def test_failed_stage_keeps_artifacts_and_exported_config(tmp_path, monkeypatch)
     load = execution.load_checkpoint
 
     def reject_checkpoint(path: str) -> object:
-        if Path(path).name == "policy-0-raw.pt":
+        if Path(path).name == "policy-0-raw.safetensors":
             raise ValueError("checkpoint admission failed")
         return load(path)
 
@@ -267,7 +267,7 @@ def test_failed_stage_keeps_artifacts_and_exported_config(tmp_path, monkeypatch)
         assert saved["stages"][0]["status"] == "failed"
         assert saved["stages"][0]["seconds"] > 0
         assert saved["regime"]["agent"]["hidden_dim"] == 8
-        assert (tmp_path / "run/policy-0-raw.pt").exists()
+        assert (tmp_path / "run/policy-0-raw.safetensors").exists()
         # Rejected bytes remain on disk, never advertised as an admitted artifact.
         assert "raw" not in saved["stages"][0]["artifacts"]
         assert saved["stages"][0]["rejected_artifacts"]["raw"]["sha256"]

@@ -33,6 +33,7 @@ def checkpoint():
     )
     return {
         "model_state_dict": agent.state_dict(),
+        "parameter_names": [name for name, _ in agent.named_parameters()],
         "bc": {"value_semantic": "signed_outcome"},
         "hypers": {
             "agent_hypers": agent.config.checkpoint_payload(),
