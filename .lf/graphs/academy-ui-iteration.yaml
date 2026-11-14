@@ -1,0 +1,9 @@
+# Three substantial serial deliveries for the repeated-play UX objective.
+# Each pursue round selects the next undelivered slice from the Task history.
+# Builtin auto supplies implementation/review/QA loops and waited delivery.
+- graph: auto
+- verify
+- graph: auto
+- verify
+- graph: auto
+- verify

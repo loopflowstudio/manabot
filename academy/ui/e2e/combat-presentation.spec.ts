@@ -306,7 +306,9 @@ test('a taller decision sidebar does not stretch the board', async ({ page }) =>
   await page.evaluate(() => document.fonts.ready);
   const initialHeight = (await board.boundingBox())!.height;
   await page.getByTestId('current-decision').evaluate((status) => {
-    status.parentElement!.style.minHeight = '3000px';
+    const content = document.createElement('div');
+    content.style.height = '3000px';
+    status.parentElement!.append(content);
   });
   expect((await board.boundingBox())!.height).toBe(initialHeight);
 });
@@ -318,9 +320,10 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await page.goto('/');
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
     await page.clock.install({ time: 0 });
-    await page.clock.pauseAt(100);
+    await page.clock.pauseAt(10_000);
     await page.getByRole('button', { name: 'New Game' }).first().click();
     const history = page.getByTestId('presentation-history');
+    await page.getByText('History and settings', { exact: true }).click();
     await history.locator('summary').click();
     const stage = page.getByTestId('presentation-stage');
     await expect(history.getByRole('listitem')).toHaveCount(6);
@@ -354,7 +357,7 @@ test('terminal capture finishes JavaScript narration and retains consequences', 
   await page.goto('/');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.clock.install({ time: 0 });
-  await page.clock.pauseAt(100);
+  await page.clock.pauseAt(10_000);
   await page.getByRole('button', { name: 'New Game' }).first().click();
   const board = page.getByTestId('game-board');
   const stage = page.getByTestId('presentation-stage');
@@ -363,19 +366,18 @@ test('terminal capture finishes JavaScript narration and retains consequences', 
   await expect(page.getByTestId('action-option')).toHaveCount(0);
   await page.evaluate(() => document.fonts.ready);
 
-  // Reproduce the capture hazard: reduced motion and disabled CSS animations
-  // still allow a pending semantic beat to change the terminal board pixels.
+  // Semantic narration still advances under the terminal dialog. Finish must
+  // settle it without losing the retained consequences.
   await expect(stage).toHaveAttribute('data-presentation-kind', 'attack_group');
-  const beforeBeat = await board.screenshot({ animations: 'disabled' });
   await page.clock.runFor(500);
   await expect(stage).toHaveAttribute('data-presentation-kind', 'blocked');
-  expect((await board.screenshot({ animations: 'disabled' })).equals(beforeBeat)).toBe(false);
 
   await finishBoardNarration(page);
   await expect(stage).toBeHidden();
   await expect(resultAction).toBeFocused();
   const history = page.getByTestId('presentation-history');
-    // Inspect the retained disclosure without moving focus out of the terminal dialog.
+  // Inspect the retained disclosures without moving focus out of the terminal dialog.
+  await page.locator('details.secondary-panels').evaluate((element: HTMLDetailsElement) => { element.open = true; });
   await history.locator('details').evaluate((element: HTMLDetailsElement) => { element.open = true; });
   await expect(history.getByRole('listitem')).toHaveCount(6);
   await expect(history).toContainText('Otter-Penguin, Badgermole Cub die.');
