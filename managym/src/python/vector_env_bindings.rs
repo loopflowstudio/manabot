@@ -138,7 +138,7 @@ impl PyVectorEnv {
         player_policies: Option<Vec<String>>,
     ) -> PyResult<Self> {
         let policies = parse_player_policies(player_policies, opponent_policy)?;
-        let mut inner = VectorEnv::new_with_player_policies(num_envs, seed, skip_trivial, policies);
+        let mut inner = VectorEnv::new(num_envs, seed, skip_trivial, policies);
         if let Some(stride) = seed_stride {
             inner = inner.with_seed_stride(stride).map_err(map_agent_err)?;
         }

@@ -538,6 +538,29 @@ _VECTOR_READS = frozenset(
 )
 
 
+def resolve_player_policies(
+    opponent_policy: str | None, player_policies: tuple[str, str] | None
+) -> tuple[str, str]:
+    """Per-seat chooser policies from either spelling of the argument.
+
+    The legacy ``opponent_policy`` warns (removal in 0.3.0): ``none`` surfaces
+    both seats and any other name plays seat 1 natively. Native construction
+    rejects unknown per-seat names.
+    """
+    if opponent_policy is None:
+        return ("agent", "agent") if player_policies is None else player_policies
+    if opponent_policy not in ("none", "random", "heuristic"):
+        raise ValueError(f"unsupported opponent_policy: {opponent_policy}")
+    if player_policies is not None:
+        raise ValueError("use player_policies or opponent_policy, not both")
+    warnings.warn(
+        "opponent_policy is deprecated; use player_policies; removal in 0.3.0",
+        DeprecationWarning,
+        stacklevel=3,
+    )
+    return ("agent", "agent" if opponent_policy == "none" else opponent_policy)
+
+
 class CapturedVector(_Capture):
     """Instrument the strict native vector API without isolating or retrying rows.
 
@@ -561,29 +584,8 @@ class CapturedVector(_Capture):
         super().__init__()
         self.stride = seed_stride or num_envs
         self.skip_trivial = skip_trivial
-        if opponent_policy is not None and opponent_policy not in (
-            "none",
-            "random",
-            "heuristic",
-        ):
-            raise ValueError(f"unsupported opponent_policy: {opponent_policy}")
-        if opponent_policy is not None and player_policies is not None:
-            raise ValueError("use player_policies or opponent_policy, not both")
-        if opponent_policy is not None:
-            warnings.warn(
-                "opponent_policy is deprecated; use player_policies; removal in 0.3.0",
-                DeprecationWarning,
-                stacklevel=2,
-            )
+        self.player_policies = resolve_player_policies(opponent_policy, player_policies)
         self.opponent_policy = opponent_policy or "none"
-        self.player_policies = (
-            player_policies
-            if player_policies is not None
-            else (
-                "agent",
-                "agent" if self.opponent_policy == "none" else self.opponent_policy,
-            )
-        )
         self.native = managym.VectorEnv(
             num_envs=num_envs,
             seed=seed,

@@ -590,8 +590,7 @@ fn run(
         let mut clone_bytes = None;
         for sample in 0..3 {
             let mut env = root.fork().unwrap();
-            let mut vector =
-                VectorEnv::new_with_player_policies(1, 7, true, [PlayerPolicy::Agent; 2]);
+            let mut vector = VectorEnv::new(1, 7, true, [PlayerPolicy::Agent; 2]);
             let buffer = std::cell::RefCell::new(encode(&obs, &config).unwrap());
             if layer == "vector" {
                 vector.reset_all(root.player_configs().to_vec()).unwrap();

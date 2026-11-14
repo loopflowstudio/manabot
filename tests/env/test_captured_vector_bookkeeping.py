@@ -19,9 +19,16 @@ def _players() -> list[managym.PlayerConfig]:
 
 
 def _captured(
-    seed: int, opponent_policy: str = "none"
+    seed: int,
+    opponent_policy: str | None = None,
+    player_policies: tuple[str, str] | None = None,
 ) -> tuple[CapturedVector, dict[str, np.ndarray]]:
-    vector = CapturedVector(num_envs=1, seed=seed, opponent_policy=opponent_policy)
+    vector = CapturedVector(
+        num_envs=1,
+        seed=seed,
+        opponent_policy=opponent_policy,
+        player_policies=player_policies,
+    )
     buffers = ObservationSpace().encoder.allocate(1)
     buffers.update(
         rewards=np.zeros(1, dtype=np.float64),
@@ -141,14 +148,7 @@ def test_torch_reset_with_a_seed_restarts_and_without_continues(
 def test_captured_per_seat_configuration_and_terminal_rewards(
     policies: tuple[str, str],
 ) -> None:
-    vector = CapturedVector(num_envs=1, seed=213, player_policies=policies)
-    buffers = ObservationSpace().encoder.allocate(1)
-    buffers.update(
-        rewards=np.zeros(1, dtype=np.float64),
-        terminated=np.zeros(1, dtype=np.uint8),
-        truncated=np.zeros(1, dtype=np.uint8),
-    )
-    vector.set_buffers(buffers)
+    vector, buffers = _captured(213, player_policies=policies)
     players = [
         managym.PlayerConfig(name, {"Forest": 8, "Llanowar Elves": 4})
         for name in ("a", "b")

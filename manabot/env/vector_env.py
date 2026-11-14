@@ -4,12 +4,11 @@ Vectorized environment wrapper backed by managym.VectorEnv.
 """
 
 from typing import Any, Dict, Optional, Tuple
-import warnings
 
 import numpy as np
 import torch
 
-from manabot.env.failures import CapturedVector
+from manabot.env.failures import CapturedVector, resolve_player_policies
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 import managym
@@ -29,27 +28,8 @@ class VectorEnv:
         player_policies: tuple[str, str] | None = None,
     ) -> None:
         self._skip_trivial = True
-        if opponent_policy is not None and opponent_policy not in (
-            "none",
-            "random",
-            "heuristic",
-        ):
-            raise ValueError(f"unsupported opponent_policy: {opponent_policy}")
-        if opponent_policy is not None and player_policies is not None:
-            raise ValueError("use player_policies or opponent_policy, not both")
-        if opponent_policy is not None:
-            warnings.warn(
-                "opponent_policy is deprecated; use player_policies; removal in 0.3.0",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-        self._player_policies = (
-            player_policies
-            if player_policies is not None
-            else (
-                "agent",
-                "agent" if opponent_policy in (None, "none") else opponent_policy,
-            )
+        self._player_policies = resolve_player_policies(
+            opponent_policy, player_policies
         )
         self._player_configs = match.to_rust()
         self.observation_space = observation_space

@@ -446,7 +446,7 @@ fn heuristic_per_seat_scalar_vector_parity_and_terminal_rewards() {
         [PlayerPolicy::Heuristic, PlayerPolicy::Heuristic],
     ] {
         let mut scalar = Env::new(213, true, false, false).with_player_policies(policies);
-        let mut vector = VectorEnv::new_with_player_policies(1, 213, true, policies);
+        let mut vector = VectorEnv::new(1, 213, true, policies);
         let (mut obs, _) = scalar.reset(players.clone()).unwrap();
         let batch = vector.reset_all(players.clone()).unwrap();
         assert_eq!(obs.to_json(), batch[0].0.to_json());

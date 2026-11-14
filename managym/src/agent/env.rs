@@ -4,11 +4,13 @@ use crate::{
     agent::{
         action::AgentError,
         behavior_tracker::BehaviorTracker,
+        heuristic::Heuristic,
         observation::{EventData, Observation},
         observation_encoder::{
             encode, encode_into, EncodedObservation, EncodedObservationMut, ObservationEncodeError,
             ObservationEncoderConfig,
         },
+        opponent::PlayerPolicy,
         structured_offer::{OfferSubmission, StructuredOfferSet},
     },
     cards::{
@@ -129,8 +131,8 @@ struct NativeActionTrace {
 #[derive(Debug)]
 pub struct Env {
     game: Option<Game>,
-    pub(crate) heuristics: [Option<Box<crate::agent::heuristic::Heuristic>>; 2],
-    player_policies: [crate::agent::opponent::PlayerPolicy; 2],
+    pub(crate) heuristics: [Option<Box<Heuristic>>; 2],
+    player_policies: [PlayerPolicy; 2],
     // Observation::for_player deliberately omits events. Built-in index stepping
     // must reuse the live projection's events, especially combat declarations.
     heuristic_events: Vec<EventData>,
@@ -226,7 +228,7 @@ impl Env {
             game: None,
             heuristics: [None, None],
             heuristic_events: Vec::new(),
-            player_policies: [crate::agent::opponent::PlayerPolicy::Agent; 2],
+            player_policies: [PlayerPolicy::Agent; 2],
             action_trace: None,
             capture_cards: false,
             capture_exposure: false,
@@ -308,7 +310,7 @@ impl Env {
         drop(_scope);
         self.remember_heuristic_events(&observation);
         let (observation, _, _, _, info) =
-            self.settle_players(observation, 0.0, false, false, empty_info_dict(), None)?;
+            self.settle_players(observation, 0.0, false, false, empty_info_dict())?;
         Ok((observation, info))
     }
 
@@ -409,10 +411,7 @@ impl Env {
     }
 
     /// Set chooser policies without changing game configuration or world identity.
-    pub fn with_player_policies(
-        mut self,
-        policies: [crate::agent::opponent::PlayerPolicy; 2],
-    ) -> Self {
+    pub fn with_player_policies(mut self, policies: [PlayerPolicy; 2]) -> Self {
         self.player_policies = policies;
         self
     }
@@ -423,7 +422,6 @@ impl Env {
         &mut self,
         action: i64,
     ) -> Result<(Observation, f64, bool, bool, InfoDict), AgentError> {
-        use crate::agent::opponent::PlayerPolicy;
         let chooser = self
             .current_agent_index()
             .ok_or_else(|| AgentError("no active chooser".into()))?;
@@ -440,18 +438,29 @@ impl Env {
             obs.recent_events.clone_from(&self.heuristic_events);
             policy.select_action(self, &obs)?
         };
-        let reward_seat = match self.player_policies {
-            [PlayerPolicy::Agent, other] if other != PlayerPolicy::Agent => 0,
-            [other, PlayerPolicy::Agent] if other != PlayerPolicy::Agent => 1,
-            _ => chooser,
-        };
         let (obs, mut reward, terminated, truncated, info) = self.step_once(action)?;
-        if reward_seat != chooser {
+        // A mixed game's rewards belong to its external seat, also when a
+        // built-in continues after a Command left it the decision.
+        if self.external_seat().is_some_and(|seat| seat != chooser) {
             reward = -reward;
         }
-        self.settle_players(obs, reward, terminated, truncated, info, Some(reward_seat))
+        self.settle_players(obs, reward, terminated, truncated, info)
     }
 
+    /// The agent seat of a mixed game; None when both or neither seat is external.
+    fn external_seat(&self) -> Option<usize> {
+        match self
+            .player_policies
+            .map(|policy| policy == PlayerPolicy::Agent)
+        {
+            [true, false] => Some(0),
+            [false, true] => Some(1),
+            _ => None,
+        }
+    }
+
+    /// Play a mixed game's built-in decisions until its external seat chooses
+    /// or the game ends, crediting each reward to the external seat.
     fn settle_players(
         &mut self,
         mut obs: Observation,
@@ -459,26 +468,18 @@ impl Env {
         mut terminated: bool,
         mut truncated: bool,
         mut info: InfoDict,
-        reward_seat: Option<usize>,
     ) -> Result<(Observation, f64, bool, bool, InfoDict), AgentError> {
-        use crate::agent::opponent::PlayerPolicy;
-        if !self.player_policies.contains(&PlayerPolicy::Agent) {
+        let Some(external) = self.external_seat() else {
             return Ok((obs, reward, terminated, truncated, info));
-        }
+        };
         for _ in 0..10_000 {
-            if terminated || truncated {
-                return Ok((obs, reward, terminated, truncated, info));
-            }
             let chooser = obs.agent.player_index as usize;
-            let policy = self.player_policies[chooser];
-            if policy == PlayerPolicy::Agent {
+            if terminated || truncated || chooser == external {
                 return Ok((obs, reward, terminated, truncated, info));
             }
-            let action = policy.select_action(self, &obs)?;
+            let action = self.player_policies[chooser].select_action(self, &obs)?;
             (obs, reward, terminated, truncated, info) = self.step_once(action)?;
-            if reward_seat.is_some_and(|seat| seat != chooser) {
-                reward = -reward;
-            }
+            reward = -reward;
         }
         Err(AgentError(
             "exceeded 10000 built-in decisions without an external chooser".into(),
@@ -521,10 +522,8 @@ impl Env {
             trace.actions.push(action);
         }
         let mut result = finish_game_step(game, agent, done);
-        if self
-            .player_policies
-            .contains(&crate::agent::opponent::PlayerPolicy::Heuristic)
-        {
+        // The profiler scope borrows self, so this cannot call remember_heuristic_events.
+        if self.player_policies.contains(&PlayerPolicy::Heuristic) {
             self.heuristic_events.clone_from(&result.0.recent_events);
         }
         if done {
@@ -535,18 +534,16 @@ impl Env {
     }
 
     fn remember_heuristic_events(&mut self, observation: &Observation) {
-        if self
-            .player_policies
-            .contains(&crate::agent::opponent::PlayerPolicy::Heuristic)
-        {
+        if self.player_policies.contains(&PlayerPolicy::Heuristic) {
             self.heuristic_events.clone_from(&observation.recent_events);
         }
     }
 
     fn require_external_chooser(&self) -> Result<(), AgentError> {
-        if self.current_agent_index().is_some_and(|seat| {
-            self.player_policies[seat] != crate::agent::opponent::PlayerPolicy::Agent
-        }) {
+        if self
+            .current_agent_index()
+            .is_some_and(|seat| self.player_policies[seat] != PlayerPolicy::Agent)
+        {
             return Err(AgentError(
                 "built-in chooser requires native stepping".into(),
             ));

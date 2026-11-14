@@ -20,29 +20,3 @@ impl PlayerPolicy {
         }
     }
 }
-
-#[deprecated(note = "use per-seat PlayerPolicy; removal in 0.3.0")]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum OpponentPolicy {
-    None,
-    Random,
-    Heuristic,
-}
-
-#[allow(deprecated)]
-impl OpponentPolicy {
-    pub fn select_action(self, env: &mut Env, obs: &Observation) -> Result<i64, AgentError> {
-        self.player_policies()[1].select_action(env, obs)
-    }
-
-    pub fn player_policies(self) -> [PlayerPolicy; 2] {
-        [
-            PlayerPolicy::Agent,
-            match self {
-                Self::None => PlayerPolicy::Agent,
-                Self::Random => PlayerPolicy::Random,
-                Self::Heuristic => PlayerPolicy::Heuristic,
-            },
-        ]
-    }
-}

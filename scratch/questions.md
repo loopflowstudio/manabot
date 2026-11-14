@@ -321,6 +321,7 @@ Env owns selection, settlement and memory for both scalar and vector callers.
 Delete — do not maintain: vector-only opponent advancement and one shared
 heuristic memory slot. Preserve the public old argument through a warning with
 removal in 0.3.0; retained receipt spellings remain readable.
+The warning alias is the Python `opponent_policy` argument only (see Compress, per-seat).
 Two built-ins reset without playing, then advance one decision per step
 (scalar None; vector -1). Mixed games settle to the external chooser with a
 10,000-decision error bound and never loop resets. Vector terminal autoreset
@@ -353,3 +354,19 @@ always use the external seat, including this continuation; two built-ins use
 the acting chooser. Fixed-player projections omit events, so built-in stepping
 retains the previous live projection's combat events, copied on forks and
 replaced on reset. The native independent-selector parity test exercises this.
+
+## Compress, per-seat API (2026-11-13)
+
+Deleted: Rust `OpponentPolicy` and the deprecated `VectorEnv::new` wrapper
+(`new` now takes `[PlayerPolicy; 2]`), unused `VectorEnv::with_player_policies`,
+`reset_to_hero_turn_on_env` and the policy arguments threaded through vector
+stepping (Env owns settlement). `Env::external_seat` replaces the optional
+reward-seat argument of `settle_players`. One Python resolver,
+`manabot.env.failures.resolve_player_policies`, serves CapturedVector and the
+Torch wrapper. No behavior, identity-file or public Python API change.
+Reversible assumption: the Rust crate is not a published API (PyPI ships the
+Python surface), so only the Python argument keeps a deprecated alias.
+
+- `CARGO_BUILD_JOBS=2 cargo test --manifest-path managym/Cargo.toml -p managym --lib -- --test-threads 2 heuristic vector_env` — 38 passed (debug); `cargo check --all-targets --all-features` passed.
+- Release wheel rebuilt, cp313 extension replaced atomically; `uv run --no-sync pytest tests/env/test_native_player_policies.py tests/sim/test_heuristic.py tests/env/test_captured_vector_bookkeeping.py tests/env/test_opponents.py tests/semantic/test_player_control.py tests/training/test_action_cutoff.py::test_heuristic_scores_only_retained_legal_offers -q` — 70 passed.
+- Rust fmt and focused Ruff passed. Gate's remaining checks are unchanged.
