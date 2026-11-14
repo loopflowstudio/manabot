@@ -12,7 +12,6 @@ import mlx.core as mx
 from mlx.utils import tree_flatten
 import numpy as np
 
-from manabot.infra.config import BF16_MIN_HIDDEN_DIM
 from manabot.policy.protocol import Precision
 
 FLOAT = mx.float32
@@ -28,13 +27,6 @@ def precision_dtype(precision: Precision) -> mx.Dtype:
             f"unsupported MLX precision: {precision!r}; expected one of "
             f"{', '.join(dtypes)}"
         ) from error
-
-
-def default_precision(hidden_dim: int) -> Precision:
-    """The compute precision a policy of this width runs in when none is given:
-    bfloat16 from `BF16_MIN_HIDDEN_DIM`, the width rule torch's GPU devices
-    share, and float32 below it. An explicit precision always wins."""
-    return "bfloat16" if hidden_dim >= BF16_MIN_HIDDEN_DIM else "float32"
 
 
 def to_mlx(array: np.ndarray) -> mx.array:

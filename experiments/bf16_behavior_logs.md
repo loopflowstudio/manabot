@@ -1,4 +1,4 @@
-# BF16 behavior logs: cause of the update-141 stop, and the default that follows
+# BF16 behavior logs: cause of the update-141 stop
 
 Exploratory. BF16 seed 32401 of the [learning A/B](precision_ladder.md)
 stopped at update 141 with `behavior_log_probability_mismatch`. This report
@@ -13,9 +13,8 @@ updates with no rejected step, at 114 s per update against float32's 196 s
 the float32 runs. The rerun never produced a probability small enough to
 trigger the old failure, so the direct evidence for the fix is the CPU
 regression on the retained incident row, and the run shows no regression.
-Playing strength was not measured. `auto` now selects bfloat16 for models of
-width 256 or more on CUDA, MPS and MLX
-([the rule](../docs/training.md#reduced-precision)).
+Playing strength was not measured. Defaults and the `auto` resolver remain
+float32 on every model and device.
 
 ## Cause and change
 
@@ -106,8 +105,8 @@ Both bfloat16 arms pass the existing bfloat16 parity bars (logits 1e-3, loss
 1%, full-gradient cosine ≥ 0.99).
 
 Three real updates per arm at w384l8, 16 streams × 64 transitions, completed
-with zero rejected steps and finite parameters on MPS (bfloat16 by default,
-and float32) and MLX (bfloat16 by default, and float32). MLX has no collector,
+with zero rejected steps and finite parameters on MPS (explicit bfloat16
+and float32) and MLX (explicit bfloat16 and float32). MLX has no collector,
 so its arms collected with the torch CPU policy and stepped the MLX learner.
 Single-minibatch losses were in the same range in both precisions
 (MPS: −0.07, 0.00, 1.84 against 0.11, 0.08, 1.78).
@@ -134,7 +133,7 @@ and cancelled within minutes (USD 0.02); it produced no data.
   but the cancelled run delivered no output files, so those numbers are not
   available. The CPU smoke of the same probe is wiring evidence only.
 - The Apple updates ran at 16 streams on a machine busy with other work. They
-  show the default executes without a numerical stop, and their timings and
+  show explicit BF16 executes without a numerical stop, and their timings and
   losses support nothing more. Whole-update timings at 256 streams are in the
   [MPS retest](mps_retest.md). M1 and M2 machines were not measured.
 - Bucketed shapes with live tokens, the CUDA default layout, has no BF16
@@ -167,3 +166,25 @@ Apple receipts and scripts (`mac/`).
 - 2026-11-13 23:27 UTC: cancelled after update 200; machine terminated.
 
 </details>
+
+## Follow-up implementation (2026-11-13)
+
+Restored float32 defaults and `auto` resolution on all devices and widths;
+explicit BF16 and saved resolved precisions remain available. The probe-only
+launch option completes independently of training so output delivery does not
+require cancelling a long training job. Its job cap is USD 1.32, the remaining
+authorized budget after the two costs above, including startup allowance.
+
+Execution is blocked here: the installed Etude SDK uses `launcher-17.db`, whose
+on-demand registry is empty (`etude ondemands` returned no rows). The prior
+`mtg324-l4-ab` rental is recorded in the older `launcher.db`. No launcher
+configuration was migrated or changed, and no additional rental was launched.
+The missing input is a configured rental/provider/storage in the current
+launcher. CUDA distributions and fixed-weight comparisons, including live-token
+layouts, remain unavailable. The retained incident and 200-update run support
+considering another learning A/B, but the requested CUDA checks must still
+finish before deciding to rerun it. The full A/B was not launched.
+
+Once that configuration is available, launch the committed probe revision with
+`uv run etude launch experiments/bf16_behavior_logs.py --rent mtg324-l4-ab --cohort mtg345-cuda-probe --max-usd 1.32 --revision COMMIT --probe-only`.
+Let it complete and fetch `probe.json`; do not cancel after probe execution.

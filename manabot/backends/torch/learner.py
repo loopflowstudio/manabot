@@ -177,9 +177,9 @@ def update_ema(averaged: nn.Module, model: nn.Module, rate: float) -> None:
 #   reductions are float32; weights and Adam state stay float32 and no gradient
 #   scaler is used, since bf16 keeps float32's exponent range.
 #
-# A regime's `auto` resolves to `bf16` for wide models on CUDA and MPS and to
-# `float32` otherwise (`manabot.training.regime.ladder_precision`). Both reduced
-# precisions change numerics, so a saved regime keeps the precision it recorded.
+# A regime's `auto` resolves to `float32` on every model and device
+# (`manabot.training.regime.ladder_precision`). Both reduced precisions change
+# numerics, so a saved regime keeps the precision it recorded.
 # `Execution` rejects `tf32` off CUDA and `bf16` on CPU.
 
 

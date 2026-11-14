@@ -303,10 +303,10 @@ def test_mps_one_update_and_export(
 
 
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="requires Apple MPS")
-def test_mps_wide_model_trains_one_bf16_update_by_default(
+def test_mps_wide_model_trains_one_explicit_bf16_update(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """`auto` at the threshold width runs bfloat16 forwards on MPS, keeping
+    """Explicit BF16 runs bfloat16 forwards on MPS, keeping
     float32 behavior logs, master weights and a finite update."""
     plan = with_capacity(
         local_smoke(steps=1, seconds=600, learning_seats="one", device="mps"),
@@ -317,6 +317,7 @@ def test_mps_wide_model_trains_one_bf16_update_by_default(
     )
     stage = plan.stages[0]
     assert isinstance(stage, TrainSelfPlay)
+    stage.execution = stage.execution.model_copy(update={"precision": "bf16"})
     assert stage.execution.resolved_precision == "bf16"
     stage.learning.min_advantage = 0
     autocast: list[bool] = []

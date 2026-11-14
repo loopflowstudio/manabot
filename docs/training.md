@@ -548,23 +548,10 @@ NVIDIA L4 on 2026-10-08; neither is full training throughput.
 
 A stage's `Execution.precision` defaults to `auto`. The regime resolves it
 alongside `bucketed_shapes` and `live_tokens` when it is built, and records
-only the resolved precision. One rule covers every GPU backend:
-
-| Model width (`hidden_dim`) | CUDA | MPS | MLX | CPU |
-| --- | --- | --- | --- | --- |
-| below 256 | float32 | float32 | float32 | float32 |
-| 256 or wider (`BF16_MIN_HIDDEN_DIM` in `manabot.infra.config`) | bfloat16 | bfloat16 | bfloat16 | float32 |
-
-**Wide models train in half precision (bfloat16) by default on GPU backends;
-narrower models and CPU train in float32.** On CUDA and MPS the rule applies to
-`train_self_play` stages through `ladder_precision`; every other operation is
-float32. The [MLX backend](../manabot/backends/mlx.md#compute-precision) applies
-the same width to a policy built without a precision. On every backend only the
-policy forwards run in bfloat16: logits, values, log-softmax, behavior
-log-probabilities, losses, master weights and optimizer state stay float32, and
-no loss scaling is used, since bfloat16 keeps float32's exponent range.
-Float16 is not offered. Apple M1 and M2 machines have weaker bfloat16 support
-and are unmeasured; a fallback for them is possible future work.
+only the resolved precision. `auto` resolves to float32 on every device and
+at every width. MLX policies also default to float32. Reduced precision
+requires an explicit choice. BF16 forwards keep log-probabilities, losses,
+master weights and optimizer state in float32.
 
 An explicit choice always wins:
 
@@ -581,7 +568,7 @@ reads as `float32`. Only fresh authoring meets the automatic policy.
 
 | `precision` | What changes |
 | --- | --- |
-| `auto` (default) | `bf16` for a `train_self_play` stage on CUDA or MPS at width 256 or more, else `float32`; never serialized. |
+| `auto` (default) | `float32` on every model and device; never serialized. |
 | `float32` | Nothing; the process's own TF32 switches are left as they were. |
 | `tf32` | For the stage, CUDA matmul and cuDNN may use TF32 tensor cores (`torch.backends.cuda.matmul.allow_tf32`, `torch.backends.cudnn.allow_tf32`). Every tensor stays float32. |
 | `bf16` | `torch.autocast(device, bfloat16)` on CUDA or MPS around the policy forwards only: behavior sampling and stored values in collection, bootstrap targets and the loss forward in the learner. Forward outputs are cast back to float32, so behavior log-probabilities, targets, losses and their reductions are float32; weights and Adam state stay float32 and no gradient scaler is used. |

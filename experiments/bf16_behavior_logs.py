@@ -17,7 +17,7 @@ import os
 from pathlib import Path
 import tempfile
 
-from etude.launch.records import Run
+from etude.launch.records import Job, Run
 from etude.report import Report
 import numpy as np
 import torch
@@ -29,7 +29,7 @@ from manabot.backends.torch.rl import policy_logs
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
-from manabot.experiment.job import TrainingJob, run_worker
+from manabot.experiment.job import TOOLCHAIN_ENV, TrainingJob, machine_setup, run_worker
 from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.model.admission import admit_observation
 from manabot.model.inference import PolicyInference, transfer_admitted
@@ -207,12 +207,25 @@ def probe(output: Path, *, smoke: bool = False) -> None:
     )
 
 
-def runs(revision: str) -> list[Run]:
+def runs(revision: str, probe_only: bool = False) -> list[Run]:
     """One L4 proof, with the USD 5 ceiling on the job itself.
 
     The probe is its own process ahead of the unmodified training worker, so
     training starts from a fresh interpreter and binds its source exactly once.
     """
+    if probe_only:
+        # Completion lets the launcher deliver probe.json; cancellation of the
+        # earlier training proof lost this output. Include startup in the cap.
+        return Job(
+            name="bf16-cuda-probe",
+            repo=str(ROOT),
+            revision=revision,
+            setup=machine_setup(""),
+            command=f"{TOOLCHAIN_ENV}\nuv run --locked python -m experiments.bf16_behavior_logs probe",
+            max_hours=0.75,
+            max_usd=Decimal("1.32"),
+            max_attempts=1,
+        ).runs(SEED)
     recipe = arm("bf16")
     recipe.wall_seconds = TRAIN_SECONDS
     recipe.stages[0].execution.wall_seconds = TRAIN_SECONDS

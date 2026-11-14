@@ -11,16 +11,15 @@ checked against.
 | Backend | Status | Guide |
 | --- | --- | --- |
 | `torch` | the reference: training, evaluation, the CLI and Academy | [below](#the-torch-backend) |
-| `mlx` | experimental policy and damped update; bf16 for wide models, f32 otherwise | [mlx.md](mlx.md) |
+| `mlx` | experimental policy and damped update; f32 by default, explicit bf16 | [mlx.md](mlx.md) |
 
 ## Which backend on Apple Silicon
 
 Keep PyTorch in production and retain MLX as an experimental Apple backend:
 MLX half's measured speed advantage still needs learning-quality validation.
 See the [MPS retest](../../experiments/mps_retest.md) for results and limits.
-Both follow [one precision rule](../../docs/training.md#reduced-precision):
-bfloat16 forwards for models of width 256 or more on MPS and MLX, as on CUDA,
-with float32 log-probabilities, master weights and optimizer state.
+Both default to float32. Explicit bfloat16 forwards keep float32
+log-probabilities, master weights and optimizer state.
 
 ## Layout
 

@@ -114,11 +114,8 @@ Results, machine and cost are in
 
 ## Compute precision
 
-A policy built without a precision follows the
-[one width rule](../../docs/training.md#reduced-precision) every GPU backend
-shares: bfloat16 at `hidden_dim` 256 or more (`BF16_MIN_HIDDEN_DIM`), float32
-below it (`manabot.backends.mlx.arrays.default_precision`). An explicit
-precision always wins. This does not enable an MLX training CLI.
+A policy built without a precision uses float32 at every width. Explicit
+bfloat16 remains available. This does not enable an MLX training CLI.
 
 ```python
 from manabot.backends.mlx.checkpoint import load_mlx_policy
@@ -132,8 +129,7 @@ learner = Learner(policy, minibatch_rows=64)  # inherits the policy's precision
 ```
 
 `MLXActorCritic`, `assemble`, `build` and `MLXBackend` also accept `precision`:
-`"float32"` or `"bfloat16"`; omitted, each policy takes its width's
-default. The parity command always names its precision (float32 unless
+`"float32"` (the default) or `"bfloat16"`. The parity command always names its precision (float32 unless
 `--precision` says otherwise). It is an execution option, not a change
 to the checkpoint's stored float32 weights. `policy.set_precision(...)` changes
 both inference and learning and invalidates cached catalog encodings.
@@ -171,8 +167,8 @@ per-tensor cosine and the maximum post-step parameter difference. It does not
 apply float32's 1e-6 post-step bound: the retained half deltas exceed it.
 Float32 keeps its existing per-tensor cosine and post-step gates unchanged.
 
-Run this preflight on the intended weights and inputs: half support, default
-or explicit, means the API executes that dtype, not that an input passes its
+Run this preflight on the intended weights and inputs: explicit half support
+means the API executes that dtype, not that an input passes its
 gate or trains equivalently. Float32 passed each real-capture check below. Half did not:
 
 - Two-row captures: bfloat16 failed once at 1.07% relative loss
