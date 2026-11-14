@@ -364,3 +364,21 @@ publish, land or choose the next Graph step from here.
   Check the hand ends above history. Recorded terminal results have no next-game
   action and must leave keyboard navigation available; the live Play Again
   dialog retains its focus behavior.
+- Play/Inspect QA: fresh storage starts in Inspect. In Play, activate the exact
+  hand `[data-object-id]` by pointer or Enter, then commit its labeled
+  `[data-offer-id]`; selection, Inspect card, mode switches and Escape send no
+  Command. Only an unambiguous cast/play-land source supports drag: move at
+  least 8 CSS px and release in `[data-testid=play-drop-area]`. Verify outside
+  release and Escape during capture send nothing and leave no selection after
+  the compatibility click. Observe WebSocket frames without rewriting them and
+  compare each deliberate Command's match, revision, prompt and offer.
+  Open History and settings before selecting a card and before a payment choice
+  at 1280×800: inspect screenshots and compare `.decision-controls`, `.offer-list`
+  and `[data-testid=automation-status]` rectangles. Parent panel bounds alone
+  miss overflowing children. Repeat with 100 offers; the list must scroll
+  independently while controls remain visible. Use Edit stops, change a whose-turn
+  checkbox, wait for the authority update, then reload; check settings and pending
+  frame as well as the separate persisted Play preference. A second tab must
+  have no resumed game. Initial automatic history may precede a launch's received
+  tail; compare that tail exactly to the saved source and the full saved prefix
+  to Replay, retaining explicit unavailable-prefix labels.

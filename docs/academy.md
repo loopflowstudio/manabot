@@ -13,6 +13,8 @@ digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 - [Running Academy](#running-academy): install, launch, chosen games and replays, Python, training games, card art, trained bots, troubleshooting
 - [Shared decision surface](#shared-decision-surface)
 - [Using the laptop table](#using-the-laptop-table)
+- [Play and Inspect modes](#play-and-inspect-modes)
+- [Choosing priority stops](#choosing-priority-stops)
 - [Reading consequences and controlling narration](#reading-consequences-and-controlling-narration)
 - [Choice navigation](#choice-navigation)
 - [Presentation runtime](#presentation-runtime)
@@ -396,10 +398,12 @@ for imported decks. Uncheck the import option to return to bundled decks.
 `managym academy play` starts the same game from the command line
 ([Start in a chosen game](#start-in-a-chosen-game)).
 
-The table reads **Who decides / What is happening / Your choices**. Clicking a
-card inspects it and sends nothing; choosing one of the listed legal actions
-commits it. Decisions with a single legal action are taken for you and never
-shown. Reloading the page restores the pending decision.
+The table reads **Who decides / What is happening / Your choices**. It starts in
+**Inspect** mode: clicking a card inspects it and sends nothing; choosing one of
+the listed legal actions commits it. **Play** adds card selection and a hand-drag
+shortcut ([controls below](#play-and-inspect-modes)). Decisions with a single
+legal action are taken for you and never shown. Reloading the page restores the
+pending decision.
 
 ### Using the laptop table
 
@@ -414,7 +418,7 @@ decision. Scroll the legal choices while the current instruction, legal count,
 **Show all** and filter controls remain available. Long instructions scroll
 independently. Open **History and settings** for decision details, consequences,
 advice and stop configuration without losing the pending decision. The current
-priority-stop automation setting remains visible below the choices. At narrow or short windows, board and
+priority-stop automation setting and **Edit stops** remain visible beside the choices. At narrow or short windows, board and
 choices stack; use the board/choices jump links to move between them. Changing decisions
 moves focus within the choices region without pulling the page away from the
 board.
@@ -429,8 +433,9 @@ board.
   contents. Empty zones keep their labels and counts; hidden cards remain
   hidden.
 - **Card details:** hover or keyboard-focus a visible card to preview it, or
-  select it to inspect its details and related choices. Inspection leaves the
-  pending decision unchanged. Use **Show all** to return from card-specific
+  use **Inspect card** in Play; in Inspect, activate the card to open its details
+  and related choices. Inspection leaves the pending decision unchanged.
+  Use **Show all** to return from card-specific
   choices to the complete list.
 - **Keyboard navigation:** Tab reaches the board, choices and inspection
   controls, including labeled scrolling regions. Focus a region to scroll it
@@ -452,6 +457,77 @@ For bot inspection, open **Watch** or a recording in **Replay**. The shared
 decision surface shows the acting seat's permitted view and the complete legal
 choices for that decision. Recorded policy outputs appear only when available;
 missing outputs are not reconstructed. See [Inspect a replay](#inspect-a-replay).
+
+### Play and Inspect modes
+
+In a live game, choose **Play**, click a land in your hand, then activate its
+labeled play action. The land enters play and the next decision appears on the
+same board. For a spell, read the cast label before committing, then follow any
+target or payment prompts. Selecting the card alone sends no action. Keyboard
+users can focus the card, press Enter to select it, then activate the labeled
+action control.
+
+For a hand card with exactly one current play or cast action, you can also drag
+it into the labeled play area. Move at least 8 CSS pixels to start the drag;
+read the action label and release inside the area to commit. Escape, pointer
+cancellation or releasing outside the area discards the drag. If the card has
+several actions, choose an explicit alternative from the list. A card with no
+current action remains available for inspection.
+
+Hover or focus previews the card; **Inspect card** opens its details without
+committing. Player targets have explicit named controls. During combat, choose
+for the creature named by the current prompt: attack or decline, or select one
+of its legal blocks or decline. Each choice commits separately before the next
+creature's prompt. Mana-source choices likewise follow the offered decisions;
+dragging a spell does not configure manual tapping.
+
+Choose **Inspect** to examine the acting viewer's observation and every legal
+offer. Card selection narrows navigation; **Show all** restores the full list.
+Both modes retain the legal count and complete choices. Switching modes clears
+uncommitted selection, sends no game action and leaves priority automation at
+its configured setting. Inspect is the initial default; an explicit mode
+preference is remembered in this browser.
+
+A new decision, a stop-setting change or connection recovery clears uncommitted
+selection and drags. Wait for the current prompt, then select again. Actions are
+unavailable while disconnected, awaiting a submitted action or changing settings.
+These live-play shortcuts do not submit moves in Watch, recorded Replay or Study;
+use their own decision controls. Cancellation only discards local selection:
+after commitment, costs and revealed information remain committed.
+
+### Choosing priority stops
+
+To hold up a response during the opponent's upkeep, choose **Edit stops**, keep
+**Use priority stops** checked and check **Upkeep** under **Opponent turn**.
+Academy pauses at a priority window there when you have a real choice. The
+automation summary beside the choices keeps the current setting visible.
+
+**Your turn** and **Opponent turn** say whose turn contains the window. A checked
+step stops automatic priority passing there; an unchecked step allows it unless
+the stack-response setting requires a stop. The available steps are upkeep,
+draw, first main, beginning of combat, declare attackers, declare blockers,
+combat damage, second main and end step.
+
+| Setting | Default and effect |
+|---|---|
+| **Use priority stops** | On. Automatically passes priority outside configured stops. Turn it off to see every priority window with a real choice. |
+| **Your turn** | Stops in both main phases. |
+| **Opponent turn** | Stops in the end step. |
+| **Stop when the stack offers a response choice** | On. Stops for a response when the stack is nonempty, even at an unchecked step. |
+| **Reset to defaults** | Restores these settings. |
+
+Changing a stop can immediately advance the game. Target, payment, Learn,
+attack and block decisions still appear whenever they offer a choice; stops
+only govern priority passing. Sole legal actions are skipped in either mode.
+Settings are remembered in this browser, and reconnect restores the active
+game's server settings.
+
+When **Pass Turn (F6)** is available, activating it yields through priority
+windows, including checked stops and stack responses, until the turn ends or
+a non-priority decision needs you. With **Use priority stops** off, priority
+windows continue to appear. Automatic passes retain **Auto** labels in the
+action log and recording. Switching Play/Inspect or pausing narration does not
+change these settings.
 
 ### Reading consequences and controlling narration
 
@@ -910,24 +986,34 @@ with no account recovery.
 
 ## Experience proof gate
 
-A repeatable regression gate for UR Lessons (human) versus GW Allies (Search
-64). It is not a parity or release-readiness claim. The single source of truth
-for reference profile, sample counts and budgets is
-[academy/ui/e2e/experience-proof-baseline.ts](../academy/ui/e2e/experience-proof-baseline.ts);
-each run attaches its distribution as `experience-proof.json`.
+The release proof drives ordinary UR Lessons versus GW Allies games at 1440×900
+and 1280×800, with Random and Search 64, normal and reduced motion. It records
+actual browser metadata, per-action samples and distributions in `timing.json`,
+plus a Chromium `timeline.json` with layout, style and paint events.
 
 ```bash
-npm --prefix academy/ui run test:e2e -- experience-proof.spec.ts
-npm --prefix academy/ui run test:e2e:release   # focused decision, Learn, combat, navigation, Elemental checks
+ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build
+npm --prefix academy/ui run test:e2e:release -- experience-proof.spec.ts
 ```
 
-The proof measures warm launch, input latency, frame pacing and renderer heap
-in headless Chromium; force-closes the WebSocket at a decision and requires
-recovery with identical board, legal actions and log; and requires accessible
-names on enabled buttons. It does not cover cold startup, process memory,
-touch, real assistive technology, stale-Command handling or replay
-equivalence. CI selects the release suite for browser code
-and the backend/rules paths it consumes.
+Input acknowledgement is input-to-socket-send. Authority response is input to a
+matching newer frame's arrival before parsing, including policy and network time.
+The client measurements cover arrival-to-synchronous-listener completion and
+arrival-to-second-animation-frame after the matching DOM revision. The latter is
+an upper bound on a rendering opportunity, not physical display latency. The
+receipt reports misses against 100ms client targets, sample counts and probe
+attribution overhead; it does not pretend to measure server-only computation.
+Same-origin art requests and cancellations are reported separately. Normal cache
+state and a fresh isolated art directory must be identified when comparing runs.
+
+The older [baseline](../academy/ui/e2e/experience-proof-baseline.ts) remains frozen
+with its own metric definitions and historical browser/dev-server profile. Its
+DOM update-sequence metric was never paint latency. The current proof does not
+compare different metrics against those historical numbers. Recovery, stale
+Commands, complete choices and Replay equality are covered by the companion
+release workflow specs. This is machine evidence, not an expert endurance or
+human-enjoyment claim. CI selects the release suite for browser code and the
+backend/rules paths it consumes.
 
 History: [choice navigation](https://github.com/loopflowstudio/manabot/blob/a74f31828/docs/choice-navigation.md),
 [experience proof](https://github.com/loopflowstudio/manabot/blob/a74f31828/docs/experience-proof.md),

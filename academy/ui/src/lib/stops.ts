@@ -5,12 +5,12 @@ import type { StopsConfig } from './types';
 export const STOP_STEPS = [
   { key: 'upkeep', label: 'Upkeep' },
   { key: 'draw', label: 'Draw' },
-  { key: 'main1', label: 'Main 1' },
-  { key: 'begin_combat', label: 'Begin combat' },
-  { key: 'declare_attackers', label: 'Attackers' },
-  { key: 'declare_blockers', label: 'Blockers' },
-  { key: 'combat_damage', label: 'Damage' },
-  { key: 'main2', label: 'Main 2' },
+  { key: 'main1', label: 'First main' },
+  { key: 'begin_combat', label: 'Beginning of combat' },
+  { key: 'declare_attackers', label: 'Declare attackers' },
+  { key: 'declare_blockers', label: 'Declare blockers' },
+  { key: 'combat_damage', label: 'Combat damage' },
+  { key: 'main2', label: 'Second main' },
   { key: 'end_step', label: 'End step' },
 ] as const;
 

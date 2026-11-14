@@ -27,6 +27,16 @@
     onOverlayAction?: () => void;
     presentationPlayer?: PresentationPlayer;
     workspace?: boolean;
+    playMode?: boolean;
+    canSelectForPlay?: boolean;
+    selectedId?: number | null;
+    gestureActive?: boolean;
+    dragLabel?: string | null;
+    onHandPointerDown?: (event: PointerEvent) => void;
+    onHandPointerMove?: (event: PointerEvent) => void;
+    onHandPointerUp?: (event: PointerEvent) => void;
+    onHandPointerCancel?: () => void;
+    onHandClickCapture?: (event: MouseEvent) => void;
   }
 
   let {
@@ -43,6 +53,16 @@
     onOverlayAction = undefined,
     presentationPlayer = undefined,
     workspace = false,
+    playMode = false,
+    canSelectForPlay = true,
+    selectedId = null,
+    gestureActive = false,
+    dragLabel = null,
+    onHandPointerDown,
+    onHandPointerMove,
+    onHandPointerUp,
+    onHandPointerCancel,
+    onHandClickCapture,
   }: Props = $props();
 
   setContext(PRESENTATION_CONTEXT, () => presentationPlayer?.currentEvent ?? null);
@@ -69,11 +89,15 @@
     inspected = null;
   });
 
+  function selectTarget(id: number): void {
+    if (!playMode || !canSelectForPlay) inspectTarget(id);
+    onSelectTarget?.(id);
+  }
+
   function inspectTarget(id: number): void {
     const players = [observation.agent, observation.opponent];
     const card = players.flatMap(player => [...player.hand, ...player.graveyard, ...player.exile, ...player.stack, ...player.battlefield, ...(player.inspected ?? [])]).find(card => card.id === id);
     inspected = card ? { id, card: { name: card.name, text_box: card.text_box, power: card.power, toughness: card.toughness } } : null;
-    onSelectTarget?.(id);
   }
 
   function setPreview(card: CardPreview | null): void {
@@ -109,7 +133,21 @@
   });
 </script>
 
-<section data-testid="game-board" class="relative min-w-0" class:workspace-board={workspace}>
+<!-- svelte-ignore a11y_no_static_element_interactions (delegates pointer gestures from descendant card buttons; explicit actions serve keyboard input) -->
+<section aria-label="Game board" data-testid="game-board" class="relative min-w-0" class:workspace-board={workspace}
+  onclickcapture={onHandClickCapture} onpointerdown={onHandPointerDown} onpointermove={onHandPointerMove} onpointerup={onHandPointerUp}
+  onpointercancel={onHandPointerCancel} onlostpointercapture={onHandPointerCancel}>
+  {#if playMode}
+    <div class="play-drop-area type-caption border-b border-line py-1" class:dragging={gestureActive} data-testid="play-drop-area" aria-live="polite">
+      {gestureActive && dragLabel ? `Release to ${dragLabel}` : 'Play area · select a card, then choose its labeled action; drag a single hand play here.'}
+      {#if selectedId !== null && selectedId !== observation.agent.id && selectedId !== observation.opponent.id}<button class="btn btn-ghost btn-sm" onclick={() => inspectTarget(selectedId!)}>Inspect card</button>{/if}
+    </div>
+    <div class="flex flex-wrap gap-2" role="group" aria-label="Player targets">
+      {#each [{ player: observation.agent, label: heroLabel }, { player: observation.opponent, label: villainLabel }] as seat}
+        {#if clickableTargets?.has(seat.player.id)}<button class="btn btn-secondary btn-sm" onclick={() => selectTarget(seat.player.id)}>Target {seat.label}</button>{/if}
+      {/each}
+    </div>
+  {/if}
 
   <!-- The turn, set as a tempo marking. -->
   <div
@@ -137,7 +175,7 @@
     opponent={true}
     {focusedIds}
     {clickableTargets}
-    onSelectTarget={inspectTarget}
+    onSelectTarget={selectTarget}
     {onHoverTarget}
     onPreviewCard={setPreview}
   />
@@ -151,7 +189,7 @@
           <li>{index === 0 ? 'Top' : index + 1} · {entry.label} · {entry.kind.replaceAll('_', ' ')} · Seat {entry.controller + 1}
             {#if entry.source_permanent !== undefined}
               {#if tablePermanents.some(permanent => permanent.id === entry.source_permanent)}
-                <button class="underline" onclick={() => inspectTarget(entry.source_permanent!)}>Inspect source</button>
+                <button class="underline" onclick={() => { inspectTarget(entry.source_permanent!); onSelectTarget?.(entry.source_permanent!); }}>Inspect source</button>
               {:else}<span>Source no longer on the battlefield</span>{/if}
             {/if}
             {#if entry.chosen_mode !== undefined} · Mode {entry.chosen_mode + 1}{/if}
@@ -174,7 +212,7 @@
               type="button"
               data-object-id={card.id}
               data-narrated-seq={narratedStacks.has(card.id) ? presentationPlayer?.currentEvent?.seq : undefined}
-              onclick={() => inspectTarget(card.id)}
+              onclick={() => selectTarget(card.id)}
               aria-label={card.name}
               class={`relative ${focusedIds.has(card.id) ? 'stack-hit' : ''}`}
               onmouseenter={() => {
@@ -209,7 +247,7 @@
       deckName={deckNames?.hero ?? null}
       {focusedIds}
       {clickableTargets}
-      onSelectTarget={inspectTarget}
+      onSelectTarget={selectTarget}
       {onHoverTarget}
       onPreviewCard={setPreview}
     />
@@ -219,7 +257,7 @@
     <section aria-label="Private inspection" class="border-t border-line py-3">
       <h3 class="type-title">Private inspection · not library order</h3>
       {#each observation.agent.inspected as card}
-        <button class="btn btn-secondary m-1" onclick={() => inspectTarget(card.id)}>{visibleCardLabel(observation, card.id) ?? card.name}</button>
+        <button class="btn btn-secondary m-1" onclick={() => selectTarget(card.id)}>{visibleCardLabel(observation, card.id) ?? card.name}</button>
       {/each}
     </section>
   {/if}
@@ -285,6 +323,8 @@
     [aria-label="Inspected card"], [aria-label="Private inspection"], [aria-label="The stack"] { max-height: 130px; overflow-y: auto; flex-shrink: 0; }
   }
 
+  .play-drop-area { flex-shrink: 0; min-height: 32px; }
+  .play-drop-area.dragging { outline: 2px dashed var(--accent); background: var(--bg-field); }
   .tempo[data-narrated] { background: var(--bg-field); }
 
   .tempo::before,

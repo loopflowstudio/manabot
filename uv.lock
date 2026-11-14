@@ -1203,9 +1203,9 @@ training-runtime = [
 [package.metadata]
 requires-dist = [
     { name = "boto3", marker = "extra == 'artifacts'", specifier = ">=1.35.0" },
-    { name = "etude-sdk", specifier = ">=0.3.2" },
-    { name = "etude-sdk", extras = ["eval"], marker = "extra == 'evaluation'", specifier = ">=0.3.2" },
-    { name = "etude-sdk", extras = ["s3"], marker = "extra == 'reports'", specifier = ">=0.3.2" },
+    { name = "etude-sdk", specifier = ">=0.3.2,<0.4" },
+    { name = "etude-sdk", extras = ["eval"], marker = "extra == 'evaluation'", specifier = ">=0.3.2,<0.4" },
+    { name = "etude-sdk", extras = ["s3"], marker = "extra == 'reports'", specifier = ">=0.3.2,<0.4" },
     { name = "fastapi", marker = "extra == 'dev'", specifier = ">=0.116.0" },
     { name = "gymnasium", specifier = ">=1.0.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0" },
