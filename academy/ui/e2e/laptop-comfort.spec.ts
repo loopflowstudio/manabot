@@ -1,17 +1,32 @@
 import { writeFile } from 'node:fs/promises';
 import { finishBoardNarration } from './presentation-readiness';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import boltJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type { Command, ExperienceFrame, RecoveryEnvelope } from '../src/lib/types';
 import { denseFrame } from './fixtures/laptop-table';
 
-async function installTable(page: Page): Promise<{ commands: Command[]; frame: ExperienceFrame }> {
+interface TableOptions {
+  offerCount?: number;
+  longInstruction?: boolean;
+  holdCommand?: boolean;
+}
+
+async function installTable(page: Page, options: TableOptions = {}): Promise<{
+  commands: Command[]; frame: ExperienceFrame; rejectPending: () => void;
+}> {
   const frame = denseFrame();
   // A large published offer set over exact visible objects, including identical copies.
-  frame.offers = frame.projection.agent.battlefield.map((card, index) => ({
-    ...frame.offers[0], id: 1000 + index, label: `Inspect choice ${index + 1}: ${card.name}`,
-    focus: [card.id],
-  }));
+  frame.offers = Array.from({ length: options.offerCount ?? frame.projection.agent.battlefield.length }, (_, index) => {
+    const card = frame.projection.agent.battlefield[index % frame.projection.agent.battlefield.length];
+    return {
+      ...frame.offers[0], id: 1000 + index, label: `Inspect choice ${index + 1}: ${card.name}`,
+      focus: [card.id],
+    };
+  });
+  if (options.longInstruction) {
+    frame.prompt!.instruction = `${'Read this instruction before choosing. '.repeat(60)}End of the complete instruction.`;
+  }
+  let rejectPending = (): void => { throw new Error('No pending command'); };
   const commands: Command[] = [];
   await page.routeWebSocket('**/ws/play', socket => {
     const recover = (): RecoveryEnvelope => ({ ...boltJson.recovery as RecoveryEnvelope,
@@ -23,12 +38,15 @@ async function installTable(page: Page): Promise<{ commands: Command[]; frame: E
           session_id: 'laptop', resume_token: 'laptop', recovery: recover() }));
       } else if (message.type === 'command') {
         commands.push(message.command);
-        frame.revision += 1;
-        frame.frame_hash = `laptop-${frame.revision}`;
-        socket.send(JSON.stringify({ type: 'command_outcome', status: 'rejected',
-          rejection: { command_id: message.command.command_id, code: 'stale_revision',
-            message: 'Inspect the current decision.', current_revision: frame.revision,
-            current_prompt: frame.prompt!.id }, recovery: recover() }));
+        rejectPending = () => {
+          frame.revision += 1;
+          frame.frame_hash = `laptop-${frame.revision}`;
+          socket.send(JSON.stringify({ type: 'command_outcome', status: 'rejected',
+            rejection: { command_id: message.command.command_id, code: 'stale_revision',
+              message: 'Inspect the current decision.', current_revision: frame.revision,
+              current_prompt: frame.prompt!.id }, recovery: recover() }));
+        };
+        if (!options.holdCommand) rejectPending();
       }
     });
   });
@@ -37,7 +55,7 @@ async function installTable(page: Page): Promise<{ commands: Command[]; frame: E
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByRole('button', { name: 'New Game', exact: true }).click();
   await expect(page.getByTestId('action-option')).toHaveCount(frame.offers.length);
-  return { commands, frame };
+  return { commands, frame, rejectPending: () => rejectPending() };
 }
 
 for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 800 }]) {
@@ -102,6 +120,115 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 800
       expect(recoveredHand!.y + recoveredHand!.height).toBeLessThanOrEqual(viewport.height);
       await page.screenshot({ path: testInfo.outputPath('laptop-table.png') });
       await context.close();
+    });
+  }
+}
+
+async function expectInsideViewport(locator: Locator): Promise<void> {
+  await expect(locator).toBeVisible();
+  const bounds = (await locator.boundingBox())!;
+  const viewport = locator.page().viewportSize()!;
+  expect(bounds.y).toBeGreaterThanOrEqual(0);
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(viewport.height);
+}
+
+for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 800 }]) {
+  for (const colorScheme of ['light', 'dark'] as const) {
+    test(`persistent context through unfiltered browsing ${viewport.width} ${colorScheme}`, async ({ page }, testInfo) => {
+      await page.setViewportSize(viewport);
+      await page.emulateMedia({ colorScheme });
+      const { commands, frame, rejectPending } = await installTable(page, {
+        offerCount: 100, longInstruction: true, holdCommand: true,
+      });
+      const offers = page.getByTestId('action-option');
+      const list = page.getByRole('group', { name: 'Legal choices', exact: true });
+      const prompt = page.getByTestId('decision-prompt');
+      const filter = page.getByRole('searchbox', { name: 'Find an action' });
+      const count = page.getByTestId('legal-choice-count');
+      const pass = page.getByTestId('pass-turn');
+      const automation = page.getByTestId('automation-status');
+      const assertRegions = async (): Promise<void> => {
+        const boxes = await page.evaluate(() => {
+          const box = (selector: string): DOMRect => document.querySelector(selector)!.getBoundingClientRect();
+          return { status: box('[data-testid="current-decision"]').toJSON(),
+            decision: box('[data-testid="decision-surface"]').toJSON(),
+            automation: box('[data-testid="automation-status"]').toJSON(),
+            secondary: box('.secondary-panels').toJSON(),
+            rail: box('#table-choices').toJSON(), board: box('#table-board').toJSON() };
+        });
+        expect(boxes.status.bottom).toBeLessThanOrEqual(boxes.decision.top);
+        expect(boxes.decision.bottom).toBeLessThanOrEqual(boxes.automation.top);
+        expect(boxes.automation.bottom).toBeLessThanOrEqual(boxes.secondary.top);
+        expect(boxes.secondary.bottom).toBeLessThanOrEqual(boxes.rail.bottom);
+        expect(boxes.board.top).toBeGreaterThanOrEqual(0);
+        expect(boxes.board.bottom).toBeLessThanOrEqual(viewport.height);
+        expect(await page.evaluate(() => scrollY)).toBe(0);
+      };
+      // Browse the full list with the keyboard; never reduce it to one search result.
+      await offers.first().focus();
+      for (let index = 1; index < frame.offers.length; index += 1) await page.keyboard.press('Tab');
+      await expect(offers.last()).toBeFocused();
+      for (const control of [prompt, filter, count, pass, automation, offers.last()]) await expectInsideViewport(control);
+      expect(await list.evaluate(node => node.scrollTop)).toBeGreaterThan(0);
+      await expect(count).toHaveText('100 of 100 legal choices');
+      // All of a long instruction remains independently keyboard-readable.
+      await prompt.focus();
+      await prompt.press('End');
+      await expect.poll(() => prompt.evaluate(node => node.scrollTop)).toBeGreaterThan(0);
+      await expectInsideViewport(offers.last());
+      expect(commands).toEqual([]);
+
+      // Several offers for an exact copy: Show all must survive last-offer browsing.
+      const subject = frame.offers.at(-1)!.focus[0];
+      await page.locator(`[data-object-id="${subject}"]`).click();
+      const showAll = page.getByRole('button', { name: 'Show all', exact: true });
+      await offers.last().focus();
+      await expectInsideViewport(showAll);
+      await showAll.press('Enter');
+      await expect(offers).toHaveCount(100);
+      await filter.fill('nothing matches');
+      await expect(offers).toHaveCount(0);
+      await expectInsideViewport(page.getByRole('button', { name: 'Clear filter', exact: true }));
+      await filter.press('Escape');
+      await expect(offers).toHaveCount(100);
+
+      const settings = page.getByText('History and settings', { exact: true });
+      await settings.click();
+      await page.getByTestId('stops-panel').locator('summary').click();
+      const secondary = page.getByRole('region', { name: 'History and settings', exact: true });
+      await secondary.focus();
+      await secondary.press('End');
+      await offers.last().focus();
+      for (const control of [prompt, count, filter, automation, offers.last()]) await expectInsideViewport(control);
+      await assertRegions();
+      await page.screenshot({ path: testInfo.outputPath('last-offer-context.png') });
+      const revision = frame.revision;
+      const last = frame.offers.at(-1)!;
+      await offers.last().press('Enter');
+      await expect.poll(() => commands.length).toBe(1);
+      expect(commands[0]).toMatchObject({ expected_revision: revision, offer_id: last.id,
+        match_id: frame.match_id, prompt_id: frame.prompt!.id });
+      await expect(offers.last()).toBeDisabled();
+      await expectInsideViewport(page.getByText('Actions unavailable', { exact: true }));
+      // Recover a different pending frame; navigation cannot retain an old offer or filter.
+      frame.prompt!.id += 1;
+      frame.prompt!.instruction = 'Recovered pending decision';
+      frame.offers = frame.offers.slice(0, 12).map(offer => ({ ...offer, id: offer.id + 2000 }));
+      rejectPending();
+      await expect(page.getByTestId('decision-surface')).toHaveAttribute('data-revision', String(revision + 1));
+      await expect(prompt).toHaveText('Recovered pending decision');
+      await expect(filter).toHaveValue('');
+      await expect(offers).toHaveCount(12);
+      await expect(offers.first()).toBeFocused();
+      await expectInsideViewport(offers.first());
+      await expectInsideViewport(count);
+      expect(commands).toHaveLength(1);
+      expect(await page.evaluate(() => scrollY)).toBe(0);
+      await writeFile(testInfo.outputPath('context-geometry.json'), JSON.stringify(await page.evaluate(() => ({
+        viewport: { width: innerWidth, height: innerHeight, scale: visualViewport!.scale, dpr: devicePixelRatio },
+        controls: [...document.querySelectorAll('[data-testid="decision-prompt"], [data-testid="legal-choice-count"], .offer-list')]
+          .map(node => ({ bounds: node.getBoundingClientRect().toJSON(), scroll: node.scrollTop })),
+      })), null, 2));
     });
   }
 }

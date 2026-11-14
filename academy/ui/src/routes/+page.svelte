@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { revealWithinScrollRegions } from '$lib/scroll-regions';
   import { onMount, tick } from 'svelte';
 
   import { offerFocus, offerTargets } from '$lib/offer-map';
@@ -95,15 +96,17 @@
   let adviceResponse = $state<AdviceResponse | null>(null);
   let adviceSelectedScenario = $state('');
   let adviceStatus = $state<'ok' | 'unavailable' | 'loading'>('loading');
+  let secondaryOpen = $state(false);
   let adviceOpen = $state(false);
   let advicePanel: HTMLDetailsElement | null = $state(null);
 
   async function compareBelief(scenarioId: string): Promise<void> {
+    secondaryOpen = true;
     adviceOpen = true;
     void loadAdvice(scenarioId);
     await tick();
-    advicePanel?.querySelector('summary')?.focus();
-    advicePanel?.scrollIntoView({ block: 'start' });
+    advicePanel?.querySelector('summary')?.focus({ preventScroll: true });
+    if (advicePanel) revealWithinScrollRegions(advicePanel);
   }
 
   async function loadAdviceMeta(): Promise<void> {
@@ -428,7 +431,8 @@
         id="table-choices" tabindex="0" role="region" aria-label="Current choices and game controls" class="choices-region"
       >
         <a href="#table-board" class="table-jump type-caption underline">Inspect board</a>
-        <p data-testid="current-decision" role="status" aria-live="polite" aria-atomic="true" class="text-ink">
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex (keyboard access to long decision status) -->
+        <p tabindex="0" data-testid="current-decision" role="status" aria-live="polite" aria-atomic="true" class="text-ink">
           {gameStore.decisionStatus}
         </p>
         {#if gameStore.branchProjection}
@@ -436,6 +440,7 @@
           <p class="type-caption">Alternate action played. Return to recorded decision to try another choice.</p>
         {:else if tableFrame}
         <DecisionSurface
+          workspace
           frame={tableFrame}
           navigationKey={String(gameStore.updateSeq)}
           selectedTargetId={gameStore.selectedTargetId}
@@ -454,42 +459,51 @@
         />
         {/if}
 
-        <PresentationHistory player={presentationPlayer} />
+        <p data-testid="automation-status" class="type-caption text-ink-2">Priority-stop automation: {gameStore.stops.auto_pass ? 'on' : 'off'}</p>
+        <details bind:open={secondaryOpen} class="secondary-panels">
+          <summary class="type-rubric cursor-pointer">History and settings</summary>
+          <div class="secondary-content space-y-4" tabindex="0" role="region" aria-label="History and settings">
+            {#if tableFrame && !gameStore.branchProjection}
+              <DecisionContext observation={tableFrame.projection} actor={tableFrame.prompt?.actor ?? null} />
+            {/if}
+            <PresentationHistory player={presentationPlayer} />
 
-        {#if adviceMetaState}
-        <details bind:this={advicePanel} bind:open={adviceOpen} class="border-t border-line pt-4"><summary class="type-rubric cursor-pointer">Advice</summary>
-          <DecisionAdvice
-            mode="live"
-            scenarios={adviceMetaState?.scenarios ?? []}
-            selectedScenarioId={adviceSelectedScenario}
-            frame={adviceResponse?.frame ?? null}
-            offers={adviceResponse?.offers ?? []}
-            evidence={adviceResponse?.evidence ?? null}
-            deltas={adviceResponse?.deltas ?? null}
-            status={adviceStatus}
-            reason={adviceResponse?.reason ?? null}
-            advisorId={adviceMetaState?.identity.advisor_id ?? ''}
-            computeId={adviceMetaState?.identity.compute_id ?? ''}
-            onSelectScenario={(id) => void loadAdvice(id)}
-          />
-        </details>
-        {/if}
+            {#if adviceMetaState}
+            <details bind:this={advicePanel} bind:open={adviceOpen} class="border-t border-line pt-4"><summary class="type-rubric cursor-pointer">Advice</summary>
+              <DecisionAdvice
+                mode="live"
+                scenarios={adviceMetaState?.scenarios ?? []}
+                selectedScenarioId={adviceSelectedScenario}
+                frame={adviceResponse?.frame ?? null}
+                offers={adviceResponse?.offers ?? []}
+                evidence={adviceResponse?.evidence ?? null}
+                deltas={adviceResponse?.deltas ?? null}
+                status={adviceStatus}
+                reason={adviceResponse?.reason ?? null}
+                advisorId={adviceMetaState?.identity.advisor_id ?? ''}
+                computeId={adviceMetaState?.identity.compute_id ?? ''}
+                onSelectScenario={(id) => void loadAdvice(id)}
+              />
+            </details>
+            {/if}
 
-        <div class="border-t border-line pt-4">
-          <fieldset disabled={!gameStore.hasCapability('configure_match')}>
-            <legend class="sr-only">Pilot stop controls</legend>
-            <StopsPanel
-              stops={gameStore.stops}
-              onToggleStop={handleToggleStop}
-              onStopOnStackChange={handleStopOnStackChange}
-              onAutoPassChange={handleAutoPassChange}
-              onReset={handleResetStops}
-            />
-          </fieldset>
-        </div>
+            <div class="border-t border-line pt-4">
+              <fieldset disabled={!gameStore.hasCapability('configure_match')}>
+                <legend class="sr-only">Pilot stop controls</legend>
+                <StopsPanel
+                  stops={gameStore.stops}
+                  onToggleStop={handleToggleStop}
+                  onStopOnStackChange={handleStopOnStackChange}
+                  onAutoPassChange={handleAutoPassChange}
+                  onReset={handleResetStops}
+                />
+              </fieldset>
+            </div>
 
-        <details class="border-t border-line pt-4"><summary class="type-rubric cursor-pointer">Decision log</summary>
-          <GameLog entries={gameStore.actionLog} />
+            <details class="border-t border-line pt-4"><summary class="type-rubric cursor-pointer">Decision log</summary>
+              <GameLog entries={gameStore.actionLog} />
+            </details>
+          </div>
         </details>
       </div>
     </div>
@@ -556,7 +570,11 @@
     .play-workspace { grid-template-columns: minmax(0, 1fr) clamp(19rem, 26vw, 23rem); height: calc(100dvh - 190px); min-height: 0; padding-top: .5rem; }
     .board-region { min-height: 0; display: flex; flex-direction: column; }
     .board-region :global([data-testid="game-board"]) { flex: 1; min-height: 0; }
-    .choices-region { min-height: 0; overflow-y: auto; overscroll-behavior: contain; border-top: 0; border-left: 1px solid var(--border); padding: 0 .5rem 1rem 1rem; scrollbar-gutter: stable; }
+    .choices-region { min-height: 0; gap: .5rem; border-top: 0; border-left: 1px solid var(--border); padding: 0 .5rem 1rem 1rem; scrollbar-gutter: stable; }
+    .choices-region > :global(*) { flex-shrink: 0; }
+    .choices-region > :global(.workspace-decision) { flex: 1; min-height: 0; }
+    [data-testid="current-decision"] { max-height: 3rem; overflow-y: auto; overscroll-behavior: contain; }
+    .secondary-content { max-height: 16dvh; overflow-y: auto; overscroll-behavior: contain; }
     .table-jump { position: absolute; width: 1px; height: 1px; overflow: hidden; }
     .table-jump:focus { position: static; width: auto; height: auto; }
   }

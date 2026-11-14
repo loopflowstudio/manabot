@@ -7,6 +7,7 @@
 
   interface Props {
     frame: ExperienceFrame;
+    workspace?: boolean;
     navigationKey?: string;
     selectedTargetId?: number | null;
     disabled?: boolean;
@@ -20,7 +21,7 @@
     onClearSelection?: () => void;
     onPassTurn?: () => void;
   }
-  let { frame, navigationKey = '', selectedTargetId = null, disabled = false, readOnly = false,
+  let { frame, workspace = false, navigationKey = '', selectedTargetId = null, disabled = false, readOnly = false,
     chosenOffer = null, fastForwarding = false, canPassTurn = false,
     highlightedOfferIds = new Set<number>(), onHoverAction, onSelectAction,
     onClearSelection, onPassTurn }: Props = $props();
@@ -34,12 +35,20 @@
   ]));
 </script>
 
-<section aria-label="Decision surface" data-testid="decision-surface" data-revision={frame.revision} class="min-w-0 space-y-3">
+<section aria-label="Decision surface" data-testid="decision-surface" data-revision={frame.revision} class="min-w-0 space-y-3" class:workspace-decision={workspace}>
   <ActionPanel {offers} describeSubject={object => subjectLabel(frame.projection, object)} {previewNames} actionSpaceKind={frame.action_space}
     instruction={context?.instruction ?? frame.prompt?.instruction ?? ''}
     totalOffers={frame.offers.length} gameOver={frame.status === 'game_over'} {chosenOffer} {selectedTargetId}
     {disabled} {readOnly} {fastForwarding} {canPassTurn} {highlightedOfferIds}
     focusKey={`${frame.match_id}:${frame.revision}:${frame.prompt?.id}:${navigationKey}:${selectedTargetId ?? 'all'}`}
     {onHoverAction} {onSelectAction} {onClearSelection} {onPassTurn} />
-  <DecisionContext observation={frame.projection} actor={frame.prompt?.actor ?? null} />
+  {#if !workspace}
+    <DecisionContext observation={frame.projection} actor={frame.prompt?.actor ?? null} />
+  {/if}
 </section>
+
+<style>
+  @media (min-width: 1024px) and (min-height: 650px) {
+    .workspace-decision { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  }
+</style>

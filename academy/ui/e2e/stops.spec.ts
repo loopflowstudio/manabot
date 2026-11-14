@@ -31,6 +31,10 @@ async function setCheckbox(page: Page, testId: string, checked: boolean): Promis
 }
 
 async function openStopsPanel(page: Page): Promise<void> {
+  const secondary = page.locator('details.secondary-panels');
+  if (await secondary.count() && !await secondary.evaluate((node: HTMLDetailsElement) => node.open)) {
+    await secondary.locator(':scope > summary').click();
+  }
   const panel = page.getByTestId('stops-panel');
   if (!(await panel.getAttribute('open'))) {
     await panel.locator('summary').first().click();

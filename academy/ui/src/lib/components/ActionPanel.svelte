@@ -113,87 +113,61 @@
   data-action-space-kind={actionSpaceKind}
   aria-labelledby="action-panel-heading"
   aria-describedby={decisionPrompt ? 'decision-prompt' : undefined}
-  class="min-w-0"
+  class="action-panel min-w-0"
 >
-  <div class="mb-2 flex flex-wrap items-baseline justify-between gap-3">
-    <div class="flex min-w-0 flex-wrap items-baseline gap-2.5">
-      <h2 id="action-panel-heading" class="type-title text-display">Your choices</h2>
-      {#if gameOver}
-        <span role="status" class="type-label text-ink-2">Game over</span>
-      {:else if readOnly}
-        <span class="type-label text-ink-2">Recorded decision</span>
-      {:else if disabled}
-        <span role="status" aria-live="polite" aria-atomic="true" class="type-label rounded-full bg-swamp/20 px-2 py-1 text-ink-2">Actions unavailable</span>
-      {:else if fastForwarding}
-        <span role="status" aria-live="polite" aria-atomic="true" data-testid="auto-passing" class="type-label animate-pulse rounded-full bg-island/20 px-2 py-1 text-ink">Auto-passing…</span>
-      {:else if offers.length > 0}
-        <span role="status" aria-live="polite" aria-atomic="true" class="type-label whitespace-nowrap uppercase text-mountain-ink">Your move</span>
-      {/if}
-    </div>
-    <div class="flex items-center gap-3">
-      {#if selectedTargetId !== null}
-        <button class="type-label inline-block py-1 text-ink-2 underline underline-offset-2 hover:text-ink" onclick={() => onClearSelection?.()}>
-          Show all
-        </button>
-      {/if}
-      {#if !readOnly}<button
-        data-testid="pass-turn"
-        class="btn btn-secondary btn-sm"
-        disabled={!canPassTurn || fastForwarding}
-        onclick={() => onPassTurn?.()}
-        title="Auto-pass every priority window until the turn ends"
-      >
-        Pass Turn (F6)
-      </button>{/if}
-    </div>
-  </div>
-
-  {#if decisionPrompt}
-    <p
-      id="decision-prompt"
-      data-testid="decision-prompt"
-      data-kind={actionSpaceKind}
-      class="type-annotation mb-3 border-l-2 border-action py-0.5 pl-3 text-ink"
-    >
-      {decisionPrompt}
-    </p>
-  {/if}
-
-  <p role="status" class="type-caption mb-2 text-ink-2">{isLearn && !learnMode ? offers.length : visibleOffers.length} of {totalOffers} legal choices</p>
-  {#if selectedTargetId !== null}
-    <p class="type-caption mb-3 text-ink-2">Showing choices for the inspected card.</p>
-  {/if}
-
-  <div
-    bind:this={actionList}
-    class="space-y-2"
-    role="group"
-    aria-labelledby="action-panel-heading"
-    aria-describedby={decisionPrompt ? 'decision-prompt' : undefined}
-  >
-    {#if offers.length === 0}
-      <p class="type-caption text-ink-3">No offers available.</p>
-    {:else if isLearn && !learnMode}
-      {#each [
-        { type: 'LEARN_TAKE_LESSON', label: 'Take a Lesson', empty: 'No eligible Lessons remaining.' },
-        { type: 'LEARN_DISCARD', label: 'Discard and draw', empty: 'No cards to discard.' },
-      ] as mode}
-        <button
-          data-testid="learn-mode"
-          class="btn btn-secondary w-full disabled:opacity-50"
-          disabled={!offers.some(action => action.action_type === mode.type)}
-          onclick={() => chooseMode(mode.type)}
-        >{mode.label}</button>
-        {#if !offers.some(action => action.action_type === mode.type)}
-          <p class="type-caption text-ink-2">{mode.empty}</p>
+  <div class="decision-controls">
+    <div class="mb-2 flex flex-wrap items-baseline justify-between gap-3">
+      <div class="flex min-w-0 flex-wrap items-baseline gap-2.5">
+        <h2 id="action-panel-heading" class="type-title text-display">Your choices</h2>
+        {#if gameOver}
+          <span role="status" class="type-label text-ink-2">Game over</span>
+        {:else if readOnly}
+          <span class="type-label text-ink-2">Recorded decision</span>
+        {:else if disabled}
+          <span role="status" aria-live="polite" aria-atomic="true" class="type-label rounded-full bg-swamp/20 px-2 py-1 text-ink-2">Actions unavailable</span>
+        {:else if fastForwarding}
+          <span role="status" aria-live="polite" aria-atomic="true" data-testid="auto-passing" class="type-label animate-pulse rounded-full bg-island/20 px-2 py-1 text-ink">Auto-passing…</span>
+        {:else if offers.length > 0}
+          <span role="status" aria-live="polite" aria-atomic="true" class="type-label whitespace-nowrap uppercase text-mountain-ink">Your move</span>
         {/if}
-      {/each}
-      {#each offers.filter(action => action.action_type === 'DECLINE_CHOICE') as action}
-        <button class="btn btn-secondary w-full" data-testid="action-option"
-          data-action-type={action.action_type} data-offer-id={action.id}
-          onclick={() => onSelectAction?.(action)} disabled={disabled || readOnly}>Decline Learn</button>
-      {/each}
-    {:else}
+      </div>
+      <div class="flex items-center gap-3">
+        {#if selectedTargetId !== null}
+          <button class="type-label inline-block py-1 text-ink-2 underline underline-offset-2 hover:text-ink" onclick={() => onClearSelection?.()}>
+            Show all
+          </button>
+        {/if}
+        {#if !readOnly}<button
+          data-testid="pass-turn"
+          class="btn btn-secondary btn-sm"
+          disabled={!canPassTurn || fastForwarding}
+          onclick={() => onPassTurn?.()}
+          title="Auto-pass every priority window until the turn ends"
+        >
+          Pass Turn (F6)
+        </button>{/if}
+      </div>
+    </div>
+
+    {#if decisionPrompt}
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex (keyboard scrolling of long instructions) -->
+      <p
+        id="decision-prompt"
+        data-testid="decision-prompt"
+        data-kind={actionSpaceKind}
+        tabindex="0"
+        class="decision-instruction type-annotation mb-3 border-l-2 border-action py-0.5 pl-3 text-ink"
+      >
+        {decisionPrompt}
+      </p>
+    {/if}
+
+    <p data-testid="legal-choice-count" role="status" class="type-caption mb-2 text-ink-2">{isLearn && !learnMode ? offers.length : visibleOffers.length} of {totalOffers} legal choices</p>
+    {#if selectedTargetId !== null}
+      <p class="type-caption mb-3 text-ink-2">Showing choices for the inspected card.</p>
+    {/if}
+
+    {#if !isLearn || learnMode}
       {#if isLearn}
         <button class="btn btn-secondary" onclick={() => chooseMode(null)} {disabled}>Back</button>
         <p class="type-caption text-ink-2">{learnMode === 'LEARN_TAKE_LESSON' ? 'Choose a Lesson to take.' : 'Choose a card to discard.'}</p>
@@ -231,6 +205,41 @@
           {/if}
         </div>
       {/if}
+    {/if}
+  </div>
+
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex (keyboard scrolling of legal offers) -->
+  <div
+    bind:this={actionList}
+    class="offer-list space-y-2"
+    role="group"
+    tabindex="0"
+    aria-label="Legal choices"
+    aria-describedby={decisionPrompt ? 'decision-prompt' : undefined}
+  >
+    {#if offers.length === 0}
+      <p class="type-caption text-ink-3">No offers available.</p>
+    {:else if isLearn && !learnMode}
+      {#each [
+        { type: 'LEARN_TAKE_LESSON', label: 'Take a Lesson', empty: 'No eligible Lessons remaining.' },
+        { type: 'LEARN_DISCARD', label: 'Discard and draw', empty: 'No cards to discard.' },
+      ] as mode}
+        <button
+          data-testid="learn-mode"
+          class="btn btn-secondary w-full disabled:opacity-50"
+          disabled={!offers.some(action => action.action_type === mode.type)}
+          onclick={() => chooseMode(mode.type)}
+        >{mode.label}</button>
+        {#if !offers.some(action => action.action_type === mode.type)}
+          <p class="type-caption text-ink-2">{mode.empty}</p>
+        {/if}
+      {/each}
+      {#each offers.filter(action => action.action_type === 'DECLINE_CHOICE') as action}
+        <button class="btn btn-secondary w-full" data-testid="action-option"
+          data-action-type={action.action_type} data-offer-id={action.id}
+          onclick={() => onSelectAction?.(action)} disabled={disabled || readOnly}>Decline Learn</button>
+      {/each}
+    {:else}
       {#each visibleOffers as action}
         <button
           data-testid="action-option"
@@ -259,3 +268,13 @@
     {/if}
   </div>
 </aside>
+
+<style>
+  .decision-instruction { overflow-wrap: anywhere; }
+  :global(.workspace-decision) .action-panel { display: flex; flex-direction: column; min-height: 0; flex: 1; gap: .5rem; }
+  @media (min-width: 1024px) and (min-height: 650px) {
+    :global(.workspace-decision) .decision-controls { flex-shrink: 0; }
+    :global(.workspace-decision) .decision-instruction { max-height: 12dvh; overflow-y: auto; overscroll-behavior: contain; }
+    :global(.workspace-decision) .offer-list { min-height: 4rem; flex: 1; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding: .25rem; }
+  }
+</style>

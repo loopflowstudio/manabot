@@ -320,9 +320,10 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await page.goto('/');
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
     await page.clock.install({ time: 0 });
-    await page.clock.pauseAt(100);
+    await page.clock.pauseAt(10_000);
     await page.getByRole('button', { name: 'New Game' }).first().click();
     const history = page.getByTestId('presentation-history');
+    await page.getByText('History and settings', { exact: true }).click();
     await history.locator('summary').click();
     const stage = page.getByTestId('presentation-stage');
     await expect(history.getByRole('listitem')).toHaveCount(6);
@@ -356,7 +357,7 @@ test('terminal capture finishes JavaScript narration and retains consequences', 
   await page.goto('/');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.clock.install({ time: 0 });
-  await page.clock.pauseAt(100);
+  await page.clock.pauseAt(10_000);
   await page.getByRole('button', { name: 'New Game' }).first().click();
   const board = page.getByTestId('game-board');
   const stage = page.getByTestId('presentation-stage');
@@ -375,7 +376,8 @@ test('terminal capture finishes JavaScript narration and retains consequences', 
   await expect(stage).toBeHidden();
   await expect(resultAction).toBeFocused();
   const history = page.getByTestId('presentation-history');
-    // Inspect the retained disclosure without moving focus out of the terminal dialog.
+  // Inspect the retained disclosures without moving focus out of the terminal dialog.
+  await page.locator('details.secondary-panels').evaluate((element: HTMLDetailsElement) => { element.open = true; });
   await history.locator('details').evaluate((element: HTMLDetailsElement) => { element.open = true; });
   await expect(history.getByRole('listitem')).toHaveCount(6);
   await expect(history).toContainText('Otter-Penguin, Badgermole Cub die.');

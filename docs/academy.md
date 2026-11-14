@@ -408,10 +408,13 @@ the card sends nothing; selecting the legal action commits the play. If a spell
 needs a target or payment choice, follow the next prompt before taking another
 action.
 
-At laptop widths, the board and hand sit beside the current decision. Long
-choice lists scroll within their own region, so reaching an action does not
-require scrolling away from the table. At narrow widths, board and choices
-stack; use the board/choices jump links to move between them. Changing decisions
+At laptop widths and heights, the board and hand sit beside the current
+decision. Scroll the legal choices while the current instruction, legal count,
+**Show all** and filter controls remain available. Long instructions scroll
+independently. Open **History and settings** for decision details, consequences,
+advice and stop configuration without losing the pending decision. The current
+priority-stop automation setting remains visible below the choices. At narrow or short windows, board and
+choices stack; use the board/choices jump links to move between them. Changing decisions
 moves focus within the choices region without pulling the page away from the
 board.
 

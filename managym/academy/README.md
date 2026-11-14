@@ -108,10 +108,14 @@ are separate from complete-game replay certification.
 The table reads **Who decides / What is happening / Your choices**. Inspect any
 visible card without submitting; choose an explicit legal offer to commit one
 Command. Card locations and copy labels distinguish same-name choices; focusing an offer highlights its exact board subjects. The complete offer count
-stays visible while a card or text filter narrows navigation; **Show all** and
-**Clear filter** restore the full set. At every width, the board comes first,
-followed by full-width play selection. History, advice and table tools stay
-collapsed until opened; **Compare advice** opens and focuses Advice. Native card
+is displayed while a card or text filter narrows navigation; **Show all** and
+**Clear filter** restore the full set. In live play at laptop widths and heights,
+the board sits beside independently scrolling offers; instruction, legal count
+and filter navigation stay available. Long instructions have their own scroll
+area. **History and settings** opens decision details, consequences, advice and
+stop configuration while the pending decision stays available. Narrow or short windows stack
+the board above choices, with links between them. History, advice and table
+tools can be opened separately; **Compare advice** opens and focuses Advice. Native card
 types group creatures, lands, other
 permanents and artifact tokens into bounded battlefield lanes; dense lanes
 compact their cards, then offer explicit paging. Focusing a legal offer reveals
