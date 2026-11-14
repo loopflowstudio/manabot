@@ -13,7 +13,7 @@ from urllib.parse import parse_qs, urlparse
 
 from fastapi.testclient import TestClient
 import pytest
-from websockets.sync.client import connect
+from websockets.sync.client import ClientConnection, connect
 
 from managym.academy import extensions, server
 from managym.academy.launch import (
@@ -46,6 +46,16 @@ def _launch_id(url: str) -> str:
     return parse_qs(urlparse(url).query)["launch"][0]
 
 
+def _play_socket(academy: Academy) -> ClientConnection:
+    return connect(academy.url.replace("http:", "ws:") + "/ws/play")
+
+
+def _start_launch(ws: ClientConnection, launch_id: str) -> dict[str, Any]:
+    ws.send(json.dumps({"type": "new_game", "config": {"launch": launch_id}}))
+    message: dict[str, Any] = json.loads(ws.recv(timeout=20))
+    return message
+
+
 def test_game_launch_preserves_config_pending_decision_and_identity(
     academy: Academy,
 ) -> None:
@@ -53,9 +63,8 @@ def test_game_launch_preserves_config_pending_decision_and_identity(
         deck="gw_allies", opponent_deck="ur_lessons", opponent="passive", seed=7
     )
     launch_id = _launch_id(launched.url)
-    with connect(academy.url.replace("http:", "ws:") + "/ws/play") as ws:
-        ws.send(json.dumps({"type": "new_game", "config": {"launch": launch_id}}))
-        message = json.loads(ws.recv(timeout=20))
+    with _play_socket(academy) as ws:
+        message = _start_launch(ws, launch_id)
         assert message["type"] == "observation", message
         frame = (
             message["recovery"]["frame"] if "recovery" in message else message["frame"]
@@ -68,9 +77,38 @@ def test_game_launch_preserves_config_pending_decision_and_identity(
         assert session.trace.config.seed == 7
         assert session.trace.config.villain_type == "passive"
         assert session.trace.config.hero_deck_name == "gw_allies"
-        ws.send(json.dumps({"type": "new_game", "config": {"launch": launch_id}}))
-        again = json.loads(ws.recv(timeout=20))
+        again = _start_launch(ws, launch_id)
         assert again["frame"]["match_id"] == frame["match_id"]
+
+
+def test_unseeded_launch_preserves_setup_in_two_sessions(academy: Academy) -> None:
+    launched = academy.new_game(
+        deck="gw_allies",
+        opponent_deck="ur_lessons",
+        opponent="passive",
+        decklists="closed",
+    )
+    launch_id = _launch_id(launched.url)
+    session_ids: list[str] = []
+    for _ in range(2):
+        with _play_socket(academy) as ws:
+            message = _start_launch(ws, launch_id)
+            assert message["type"] == "observation", message
+            assert message["launch"] == launch_id
+            assert message["launch_setup"]["hero_deck"] == "gw_allies"
+            assert message["launch_setup"]["villain_deck"] == "ur_lessons"
+            assert "seed" not in message["launch_setup"]
+            session_ids.append(message["session_id"])
+            session = server.SESSION_REGISTRY[message["session_id"]].game
+            assert session.trace is not None
+            config = session.trace.config
+            assert config.seed is not None
+            assert config.seed_was_requested is False
+            assert config.hero_deck_name == "gw_allies"
+            assert config.villain_deck_name == "ur_lessons"
+            assert config.villain_type == "passive"
+            assert config.decklists == "closed"
+    assert session_ids[0] != session_ids[1]
 
 
 def test_mixed_file_and_bundled_decks_admit_sideboards(
@@ -257,9 +295,8 @@ def test_recording_id_rejects_game_selection_after_missing_check(
     academy: Academy,
 ) -> None:
     launch_id = _launch_id(academy.new_game(opponent="passive", seed=7).url)
-    with connect(academy.url.replace("http:", "ws:") + "/ws/play") as ws:
-        ws.send(json.dumps({"type": "new_game", "config": {"launch": launch_id}}))
-        message = json.loads(ws.recv(timeout=20))
+    with _play_socket(academy) as ws:
+        message = _start_launch(ws, launch_id)
         trace_id = message["table"]["attempt_id"]
     assert academy.replay(trace_id).url.endswith(f"trace={trace_id}")
     for selection in (0, 3, "3"):
@@ -420,10 +457,8 @@ def test_launch_setup_stays_with_initiator_and_shutdown_keeps_history(
     first = _launch_id(
         academy.new_game(opponent="passive", seed=7, decklists="closed").url
     )
-    endpoint = academy.url.replace("http:", "ws:") + "/ws/play"
-    with connect(endpoint) as pilot, connect(endpoint) as watcher:
-        pilot.send(json.dumps({"type": "new_game", "config": {"launch": first}}))
-        initial = json.loads(pilot.recv(timeout=20))
+    with _play_socket(academy) as pilot, _play_socket(academy) as watcher:
+        initial = _start_launch(pilot, first)
         invite = parse_qs(urlparse(initial["table"]["watcher_invite"]).fragment)
         watcher.send(
             json.dumps(

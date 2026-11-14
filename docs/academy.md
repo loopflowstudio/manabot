@@ -156,8 +156,10 @@ not deal again. **New Game** returns to ordinary setup with the launched
 decks, opponent and decklist mode selected.
 
 The launch address is good for as long as that server runs. Opened in another
-browser it starts that browser's own game with the same decks, opponent and
-seed. After the server stops the address means nothing: the page says the
+browser it starts that browser's own game with the same decks and opponent.
+With `--seed`, each opening deals the same game; without it, each opening
+deals afresh.
+After the server stops the address means nothing: the page says the
 launch is unknown and shows ordinary setup, so run the command again.
 
 ### Open a replay directly
@@ -239,6 +241,8 @@ with serve(port=0) as academy:
   `academy.traces_dir` report what is in use. It opens no browser.
 - `academy.new_game(...)` takes the options of `managym academy play`. A deck
   given as `str` is a bundled deck name; a `pathlib.Path` is a decklist file.
+  With `seed`, each opening of its address deals the same game; without it,
+  each opening deals afresh. Reloading in the same tab resumes its game either way.
 - `academy.replay(source, game=None)` takes a trace `Path` with the same
   `game` selection as the command line, or a recording id as `str`. An integer
   `game` selects only a position; strings can also select a digest prefix.
