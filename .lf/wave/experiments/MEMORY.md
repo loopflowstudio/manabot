@@ -46,7 +46,9 @@ local output index independent of learner saves. Retained synthetic checks cover
 lost storage/local acknowledgements, idempotent redelivery, orphan exclusion and
 reopening newer outputs after an older learner cursor. They do not restore a lost
 worker directory. The remaining gap is maintained SelfPlay/Etude retention and
-restoration of that index and its referenced private bytes before restarting work.
+restoration of a coherent output cut before restarting work: the index, every
+referenced private byte, failure evidence and recoverable started-attempt identity.
+Snapshots select completed games; they cannot account for abandoned in-flight work.
 
 Reusable lessons: acknowledge publication only after immutable storage verifies
 bytes; descriptive log references may be dropped. Lost acknowledgements must
@@ -68,7 +70,17 @@ prefix reconstruction or durable publication for this pipeline. Its source pin
 `9e8fec1268ed` over Etude 0.4.0 requirements differs from this checkout's 0.3.2;
 its notes retain failed local job-input delivery. EXP-66's source contains input
 placement and verification, a contrary source finding that does not prove this
-checkout's installed client or remote delivery. The maintained owner integration,
+checkout's installed client or remote delivery. At EXP-66 source `c8ff84b3ebdc`,
+a retained controlled carrier fixture delivered an updated `producer.json` before
+its new pack; recovery under preceding out membership kept the index but omitted
+the pack. This is a fixture counterexample, not observed remote loss. Ordinary
+output-directory placement therefore does not establish coherent recovery.
+Named saves have pointer ordering in that source, but cadence-driven save calls
+do not themselves acknowledge remote delivery. Preserve the preceding committed
+cut until the maintained owner acknowledges a complete new cut; do not add a
+second controller. Record abandoned started games as interrupted and allocate
+new identities for fresh streams even if updates/seeds repeat. Unretained starts
+or prefixes remain unknown. The maintained owner integration,
 real bounded A/B proof and original-runtime TLA admission/fits remain incomplete.
 The active plan owns their acceptance; no trained result or strength claim exists.
 

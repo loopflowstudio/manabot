@@ -96,7 +96,10 @@ successful closures with `retain_game`, and retains already-persisted failure
 evidence digests with `retain_failure`. `prepare_snapshot` derives the cut from
 that index and retains exact pending bytes. `publish_pending_snapshot` reconciles
 the same content key after a lost reply and saves its verified reference before
-returning it. Fit declarations read only `read_producer(...).verified`.
+returning it. Fit declarations select from
+`read_producer(...).verified` only after the maintained owner also acknowledges
+a recoverable producer output cut. The local `verified` value establishes
+immutable storage verification, not restoration after worker loss.
 These functions supply no game loop or launcher. The producer output directory
 must survive independently of learner saves; reopening fixes neither a missing
 output index nor missing shard bytes by scanning for files.
@@ -219,6 +222,12 @@ retains original game identities and must not publish replayed prefixes as new
 games. Strict batch failures cannot publish an unverified successful subset.
 Export errors stop before the next optimizer update while preserving completed
 prior work.
+
+Recovery must restore one coherent producer output cut: the index, referenced
+shards/packs, retained failure evidence and started-attempt identities. Validate
+that set before exposing fit references or restarting collection. Placing a
+mutable directory in Etude's outputs alone does not establish this boundary.
+Missing authoritative bytes fail recovery; scanning files is no substitute.
 
 Restoring an older learner checkpoint must preserve later acknowledged game
 outputs and failure evidence. Reconcile those outputs with the restored cursor;
