@@ -185,14 +185,21 @@ there are three: both Forests, or the Mountain with either Forest.
   accepts the plan (table below). Where the outcomes fit the action capacity
   they are offered flat.
 - **When outcomes exceed the action capacity,** the offers after the automatic
-  plan are native balanced groups, and only an outcome commits. Card naming is
-  the precedent (`Decision::NameCard`, `NAME_BRANCHING`). Naming partitions a
-  sorted vocabulary by contiguous span; payment outcomes have no such public
-  order, so how outcomes are ordered into groups is for the implementing Task.
+  plan are native balanced groups. Entering a group commits nothing: it taps
+  nothing and reveals nothing, so every root offer (the automatic plan, mana
+  activations, Waterbend taps and any `Decline`) stays reachable from inside
+  every group. Because nothing is committed, Academy's cancellation rule
+  allows an explicit shared return offer; the implementing Task chooses
+  between that and repeating the root offers in each group.
+  Card naming (`Decision::NameCard`, `NAME_BRANCHING`) is the precedent for
+  balanced grouping only: it has no return offer and needs none, since every
+  leaf is a name. It partitions a sorted vocabulary by contiguous span;
+  payment outcomes have no such public order, so the implementing Task also
+  chooses how outcomes are ordered into groups.
   Every permitted outcome stays reachable; an enumerator's work cap never
   truncates the legal action space, and first-legal truncation is not used to
   fit this chooser. Whether groups are needed at all depends on questions 1
-  and 2.
+  and 2, and question 4 decides whether to build an outcome menu at all.
 
 **What it costs.** All decisions per game on the measured trajectories, without
 redundant taps and treating equal-output sources as one choice. The design
@@ -220,7 +227,8 @@ runs from always accepting the plan to always overriding. These are counts on
 today's trajectories, not games played under the design, an acceptance rate or
 a learning cost; learning effects belong to MTG-265's study. The
 [all-payment costs](#all-payment-costs) include exact identity and surplus
-choices; group-navigation decisions are additional.
+choices; group-navigation decisions, including any return steps, are additional
+and unmeasured.
 
 **For the policy,** each outcome and group has native action descriptors for
 what remains available, the floating pool and the relevant receipt. The
@@ -237,8 +245,9 @@ visible object joins for the distinctions question 2 retains. The automatic plan
 is shown as automation. Keyboard access, stale rejection, reconnect to the
 actual pending decision and replay/fork identity are preserved. The selected
 sources and receipt commit through native payment execution once; group
-navigation offers no cancellation or undo of committed costs or revealed
-information.
+navigation commits no payment. Leaving a group is navigation, not undo: it
+cannot reverse a committed payment or an activation already taken, restore
+committed costs or erase revealed information.
 
 **Not recommended.**
 
@@ -251,8 +260,7 @@ information.
 - *A browser-only override.* It would divide the shared policy/Academy
   contract.
 
-Mana activations remain offers within the extended payment decision. How
-outcome groups sit beside activations is for the implementing Task.
+Mana activations remain offers within the extended payment decision.
 `MANAGYM_EXPERIMENT_AUTOSPEND` remains a reproduction control for this
 experiment's frozen A/B revision; the follow-up replaces it with the automatic
 offer above. No Academy code, default training behavior or deployment changes
@@ -637,7 +645,8 @@ menu fits.
 
 The corresponding **all decisions/game** without redundant tapping are below. D's
 interval reflects incomplete enumeration; C's interval also spans accepting automatic
-versus taking every nontrivial override. No group-navigation decisions are included.
+versus taking every nontrivial override. No group-navigation decisions, including
+return steps, are included.
 Exact identity and capability are alternative measurement keys, not two successive
 menus. Noncast payments retain their observed behavior.
 
@@ -858,7 +867,7 @@ measurements.
 - The shape tables price casts only; [all-payment costs](#all-payment-costs)
   prices non-casts from the same published rows, without their rules reason.
   No earlier opt-out for non-cast payments is measured. All D counts exclude
-  group-navigation steps.
+  group-navigation steps, including returns; their cost is unmeasured.
 - The shape comparison counts offers. It does not measure play or learning
   under a shape that is not implemented. Manual tapping at every priority
   window is a qualitative alternative, without a measured offer count here;

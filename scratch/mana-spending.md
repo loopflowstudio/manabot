@@ -19,9 +19,9 @@ and sacrifice choices, and presents per-source taps as the fourth unanswered
 review question with published-row bounds. D's overlap pricing and the outcome
 menu recommendation survive.
 
-**Next implement direction (concept review `15cb04c339`):** say in the report
-what entering an outcome group does to the decision's other offers; see
-"Entering a group" below. Report prose only. No PR created here.
+The group-navigation contract from concept review `15cb04c339` is now in the
+report; see "Entering a group" below. No implementation work remains in this
+prose slice. No PR created here.
 
 ## Demo and done when
 
@@ -243,7 +243,7 @@ full direction is in git `5fa62e0d21:scratch/mana-spending.md`.
 
 ## Entering a group (concept review `15cb04c339`)
 
-Not yet in the report. Walking the recovery path of the grouped menu: the
+Implemented in the report. Walking the recovery path of the grouped menu: the
 design's precedent, `Decision::NameCard`, narrows one way. `NameScope::option`
 (`managym/src/cards/names.rs`) offers only child groups or names, and
 `Decision::NameCard`'s action space (`flow/decision.rs`) has no offer that
@@ -259,23 +259,19 @@ reachable", and a mis-entered group in Academy has no recovery.
 The report's one sentence on this, "group navigation offers no cancellation or
 undo of committed costs or revealed information", reads either way.
 
-Direction, implied by "only an outcome commits" rather than chosen:
+The report now says, as implied by "only an outcome commits" rather than
+chosen: entering a group commits nothing, so every root offer stays reachable
+from inside it; a shared return offer is allowed by Academy's cancellation rule
+and the mechanism (return offer or repeated root offers) is the implementing
+Task's; card naming is the precedent for balanced grouping only; leaving a
+group is navigation, not undo of a committed payment or activation; and
+group-navigation costs, return steps included, are unmeasured. This applies
+only if groups are built at all (questions 1, 2 and 4).
 
-- State in "When outcomes exceed the action capacity" that entering a group
-  commits nothing, so every root offer (automatic plan, activations, Waterbend
-  taps, `Decline`) stays reachable from inside a group. Entering a group taps
-  nothing and reveals nothing, so an explicit shared return offer is allowed by
-  Academy's cancellation rule; whether the implementation uses a return offer
-  or repeats the root offers in each group stays with the implementing Task,
-  beside the ordering question already left there.
-- Say that card naming is the precedent for balanced groups only: it has no
-  return and needs none.
-- Reword the Academy sentence so it says what cannot be undone (a committed
-  payment, an activation already taken) and that leaving a group is not undo.
-- Where group navigation is called "additional", say it includes any return
-  step. No figure changes; nothing is measured for it.
-
-This applies only if groups are built at all (questions 1, 2 and 4).
+Check (2026-11-13): comparison against HEAD showed every table row, numeric
+figure and the four opening questions unchanged; `git diff --check` passed.
+Compress then removed the report's second statement of the return-offer
+choice; prose only.
 
 ## Open product choices (nobody has answered; they do not block this Task)
 
