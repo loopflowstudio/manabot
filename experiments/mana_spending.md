@@ -6,7 +6,7 @@ unit pays each pip (`mana_spend` decisions). That prompt is rare, and it hides t
 that differs far more often: which sources stay untapped.
 
 - **Recommendation, for review:** one native decision at every mana payment
-  whose offers differ: today's `PayOrNot` decision, extended, with `PayCost`
+  whose offers differ: today's mana-payment decision, extended, with `PayCost`
   as the automatic plan, listed first.
   [Recommended design](#recommended-design).
 - **Today's prompt is rare.** 0.11–0.60% of decisions on Elemental and TLA
@@ -26,9 +26,10 @@ that differs far more often: which sources stay untapped.
   two seeds per arm, about USD1.4 of rental, no resolved difference.
   [Learning comparison](#learning-comparison).
 
-Three [questions for review](#questions-for-review) decide the size of the menu
-and where a player opts out of automation. This report makes no claim about
-learning; the comparison of compound and sequential decisions is MTG-265's.
+Four [questions for review](#questions-for-review) decide the size of the menu,
+where a player opts out of automation and whether sources are chosen together
+or one at a time. This report makes no claim about learning; the comparison of
+compound and sequential decisions is MTG-265's.
 
 ## Questions for review
 
@@ -49,8 +50,9 @@ the set of minimal payments, the same set MTG-342's fixed tapper picks from.
 - **A tap-for-mana action at priority.** The same payment menu. Activated mana
   abilities are already offered at priority and during payment; a land's fixed
   output is tapped only by the automatic payer, so this extends an existing
-  action to fixed sources. Its cost in offers per priority window is not
-  measured here.
+  action to fixed sources. This also implies offering fixed-source taps during
+  payment, the per-source alternative in question 4. Its cost in offers per
+  priority window is not measured here.
 - **In the payment chooser.** 655 payments certified above 64 offers (422
   casts), an exact maximum of 712 and a cast-only 95th percentile of 49–59 on
   ordinary decks, so groups are required. Decisions per game rise 4.2–16.7%
@@ -95,14 +97,55 @@ needing their own control; the recommended decision there adds the non-cast
 increments in the [all-payment table](#all-payment-costs). No earlier opt-out
 for those payments was measured. Learning effects of either stay with MTG-265.
 
+### 4. Whole-payment outcomes or per-source taps?
+
+- **One outcome offer for the whole payment (recommended).** One decision
+  commits the fixed sources and spend receipt together. Exact identity makes
+  the menu combinatorial: 655 non-redundant payments exceed 64 offers, so
+  groups are required until question 2 establishes an equivalence rule.
+- **One tap step per source, within the mana-payment decision.** Extend today's
+  activated-mana-ability steps to fixed sources too, with `PayCost` finishing
+  automatically from what remains. The published rows bound the fixed-source
+  portion of the menu at 16 taps on ordinary decks and 25 on Heartbeat, beside
+  activations and `PayCost`; they do not bound the complete legal menu. Exact
+  identity needs no outcome enumeration or groups. Each manual tap costs a
+  decision, plus the finishing `PayCost`; pooled-unit spending still needs
+  today's per-pip prompts or automation. With one mana per source, the tap
+  count is bounded by min(cost, fixed sources): medians 2 on ordinary decks,
+  95th percentiles 4–5, provided no redundant taps are taken.
+  [Per-source bounds](#per-source-bounds).
+
+Shapes A–E did not measure per-source play, and neither alternative has a
+measured override rate. The outcome menu is recommended because it avoids the
+low-level payment steps named in the Task's goal. That preference remains a
+review question; choosing per-source control would remove the need to build
+outcome enumeration and groups for fixed-source selection.
+
 ## Recommended design
 
-**Extend the existing native payment decision, with `PayCost` as the automatic
-plan, listed first.** Today `PendingChoice::ManaPayment` and resolution
-`Decision::Payment` publish `PayOrNot` for mana costs: activatable mana abilities
-beside `PayCost`, which runs the automatic payer. Waterbend has its own taps,
+**Extend the existing native mana-payment decision (context stage `payment`),
+with `PayCost` as the automatic plan, listed first.** Today
+`PendingChoice::ManaPayment` and resolution `Decision::Payment` publish this
+under kind `PayOrNot` for mana costs: activatable mana abilities beside
+`PayCost`, which runs the automatic payer. Waterbend has its own taps,
 and optional resolution payments may offer `Decline`. The recommendation adds
 payment outcomes to that decision; it introduces no second decision kind.
+
+The shared kind and action names do not identify a single decision. Kicker's
+opt-in (`PendingChoice::KickerChoice`) also uses `PayOrNot`, but its `PayCost`
+means accept kicker; at `PendingChoice::SacrificePayment`, `PayCost` means pay
+mana instead of sacrificing. Those choices stay as they are; their `PayCost`
+is not a payment plan. Upfront mana-ability fees (`Decision::ManaUpfront`)
+also use the shared kind today, with activation offers and no `PayCost`; the
+all-payment recommendation includes those fees. Whether serialized kind or
+action names change belongs to the implementing Task.
+
+Today an activated mana ability commits one source and returns to the
+mana-payment decision, while a fixed-output source is tapped only by the
+automatic payer. The recommendation keeps those activation steps and adds
+whole-payment outcomes for fixed sources and pooled spending. Question 4 asks
+whether fixed sources should instead receive the same step control.
+
 This is a design for review; implementing it is a separate Task, and nothing
 here is built. The learning pilot does not test it.
 
@@ -214,6 +257,35 @@ outcome groups sit beside activations is for the implementing Task.
 experiment's frozen A/B revision; the follow-up replaces it with the automatic
 offer above. No Academy code, default training behavior or deployment changes
 here.
+
+## Per-source bounds
+
+Derived from the published `current/non-redundant-shapes/shapes.jsonl` rows:
+positive-cost payments that hit the traversal cap or have at least two
+non-redundant exact-identity outcomes. Percentiles use the nearest rank.
+Capped rows are included because their complete outcome count is unknown.
+These are boundary resource counts, not legal tap-offer counts or trajectories
+under per-source control.
+
+| decks | policy | payments | fixed sources median / p95 / max | min(cost, fixed) median / p95 / max | max activated sources |
+| --- | --- | ---: | ---: | ---: | ---: |
+| elemental | heuristic | 1645 | 6 / 11 / 15 | 2 / 5 / 7 | 17 |
+| elemental | random | 2647 | 6 / 12 / 15 | 2 / 5 / 7 | 8 |
+| tla | heuristic | 1435 | 6 / 12 / 16 | 2 / 4 / 7 | 16 |
+| tla | random | 2605 | 5 / 10 / 15 | 2 / 5 / 13 | 2 |
+| heartbeat | heuristic | 94 | 7 / 17 / 21 | 4 / 4 / 4 | 0 |
+| heartbeat | random | 128 | 8 / 21 / 25 | 3 / 4 / 4 | 0 |
+
+A tap must preserve the pending obligations, as today's activation offers do
+through `activation_witness`; not every counted source is necessarily a legal
+offer. Per-source selection avoids combinatorial outcome enumeration, but its
+complete menu must also include legal activations, Waterbend taps and any
+`Decline`. Maxima in different columns need not occur at the same boundary.
+The min(cost, fixed) column bounds manual taps only when each source produces
+one mana and no redundant taps are taken; Heartbeat's extra output prevents
+reading it as a measured tap count. It excludes activations, finishing
+`PayCost`, pooled-unit decisions and any effect of changed play. The report
+therefore gives no decisions-per-game estimate for this alternative.
 
 ## Run it
 
@@ -789,7 +861,9 @@ measurements.
   group-navigation steps.
 - The shape comparison counts offers. It does not measure play or learning
   under a shape that is not implemented. Manual tapping at every priority
-  window is a qualitative alternative, without a measured offer count here.
+  window is a qualitative alternative, without a measured offer count here;
+  per-source taps within the payment decision have resource bounds only, no
+  decisions-per-game estimate.
 - Ten TLA builds in retained file order are a bounded convenience sample, not
   a representative sample of the entire Limited corpus. The eight Heartbeat
   games per policy are a constructed upper-end example, not a metagame rate.

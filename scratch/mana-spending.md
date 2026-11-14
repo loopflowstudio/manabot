@@ -9,25 +9,25 @@ execution and the frozen A/B pilot unchanged. No Wave is selected.
 
 All measurement is complete and published: frequencies, the A/B pilot, and the
 paired shape counts with and without redundant taps. The report recommends extending
-today's `PayOrNot` payment decision, `PayCost` (the automatic plan) first, and asks three
+today's mana-payment decision, `PayCost` (the automatic plan) first, and asks four
 review questions. Do not rerun the pilot or rewrite its evidence. Earlier plan
 text, launch notes and per-slice checks are in git `78397f2042` and before
 (`ce074e9d37` for the first concept review).
 
-The report and read-only aggregation now extend the existing `PayOrNot`
-decision in the recommendation and price D's overlap (section "The payment
-decision already exists"). Next implement slice: the report-only direction in
-"Per-source steps and the decision's name" below; then gate/review and the
-caller's delivery steps. No PR created here.
+The report names the mana-payment decision precisely, distinguishes kicker
+and sacrifice choices, and presents per-source taps as the fourth unanswered
+review question with published-row bounds. D's overlap pricing and the outcome
+menu recommendation survive. Remaining: the caller's Graph review and delivery
+steps. No PR created here.
 
 ## Demo and done when
 
 A reviewer opens `experiments/mana_spending.md` and, before any table, reads:
-the summary with the recommendation (today's `PayOrNot` decision, extended,
-`PayCost` as the automatic plan first), then three numbered questions, each with its options as
+the summary with the recommendation (today's mana-payment decision, extended,
+`PayCost` as the automatic plan first), then four numbered questions, each with its options as
 bullets and the measured price of each. The design, evidence and limits follow;
 run logistics sit in a collapsed appendix. Headless:
-`sed -n 1,110p experiments/mana_spending.md`.
+`sed -n 1,150p experiments/mana_spending.md`.
 
 Done when the report recommends that single decision with D's costs, names no
 entry step as part of the design, and every number it quotes is one already in
@@ -188,8 +188,8 @@ implementing Task. No games, native code or published bytes changed.
 
 ## Per-source steps and the decision's name (concept review `d947e7e425`)
 
-Next implement direction. Report text and, if wanted, read-only aggregation
-only; no games, native code or published bytes.
+Implemented in the report. The review's reasoning follows; no games, native
+code or published bytes changed.
 
 **1. Name the decision for what it is.** `ActionSpaceKind::PayOrNot` is not
 one decision. Its doc comment is "You may pay [cost]"; it is published for the
@@ -226,36 +226,17 @@ anyway, because the report says activations are offered "at priority and
 during payment", after which the outcome menu is a shortcut over a control
 that already exists rather than the only control.
 
-Bounds from published `current/non-redundant-shapes/shapes.jsonl`, positive
-cost payments that are capped or have at least two non-redundant identity
-outcomes (local read at this review, not in the report):
-
-| decks, policy | payments | fixed sources median / p95 / max | min(cost, fixed) median / p95 / max | max activated sources |
-| --- | ---: | ---: | ---: | ---: |
-| elemental heuristic | 1645 | 6 / 11 / 15 | 2 / 5 / 7 | 17 |
-| elemental random | 2647 | 6 / 12 / 15 | 2 / 5 / 7 | 8 |
-| tla heuristic | 1435 | 6 / 12 / 16 | 2 / 4 / 7 | 16 |
-| tla random | 2605 | 5 / 10 / 15 | 2 / 5 / 13 | 2 |
-| heartbeat heuristic | 94 | 7 / 17 / 21 | 4 / 4 / 4 | 0 |
-| heartbeat random | 128 | 8 / 21 / 25 | 3 / 4 / 4 | 0 |
-
-So per-source steps keep exact identity in a flat menu of at most 16 fixed
-taps on ordinary decks (25 on Heartbeat) beside the activations and `PayCost`:
-no groups, no outcome enumeration or cap, and question 2 becomes labelling.
-Its price is decisions: a manual payment is one decision per tap, bounded per
-payment by min(cost, fixed sources) only when each source makes one mana, plus
-the finishing `PayCost`; an outcome is one decision. It also leaves which
-pooled unit pays each pip to today's per-pip prompt or to automation, and it
-is the "low-level payment steps" the Task set out to avoid. How often a
-player would override is not measured for either shape.
-
-What the report should do: add this shape beside the outcome menu, under
-question 3 or as its own question, with the bounds above derived from the
-published rows and labelled as bounds; say under question 1's priority option
-that it implies taps during payment; say in the recommended design why the
-outcome menu is recommended over it (one decision per payment, the Task's
-aim) without presenting that as answered. The recommendation stays as it is
-unless someone answers choice 4.
+The report's "Per-source bounds" table holds the derived figures (published
+`current/non-redundant-shapes/shapes.jsonl`; positive-cost payments that are
+capped or have at least two non-redundant identity outcomes). Per-source steps
+keep exact identity in a flat menu of at most 16 fixed taps on ordinary decks
+(25 on Heartbeat) beside the activations and `PayCost`: no groups, no outcome
+enumeration or cap, and question 2 becomes labelling. Their price is one
+decision per tap plus the finishing `PayCost`, pooled-unit spending left to
+per-pip prompts or automation, and the "low-level payment steps" the Task set
+out to avoid. Override rates are unmeasured for either shape. The
+recommendation stays as it is unless someone answers choice 4. The review's
+full direction is in git `5fa62e0d21:scratch/mana-spending.md`.
 
 ## Open product choices (nobody has answered; they do not block this Task)
 
@@ -332,3 +313,12 @@ byte-identically and leaves `summary.json` untouched; stripping
 match the derived figures; the three published evidence SHA256s match the
 manifest. Ruff check/format and `git diff --check` pass.
 `uv run --extra dev pytest tests/eval/test_experiment_files.py tests/infra/test_experiment_data_untracked.py -q`: 6 passed.
+
+## Per-source report revision (2026-11-13)
+
+Report and plan only. A local `uv run --no-sync python` raw-row projection
+reproduced all six bounds rows (payment count, nearest-rank median/p95/max,
+activated maximum). Four questions precede every table; all internal anchors
+resolve; prior table rows survive in order; `git diff --check` passed. Compress
+then reflowed report prose and added the per-source limit line; no figure
+changed.
