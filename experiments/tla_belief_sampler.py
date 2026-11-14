@@ -24,83 +24,25 @@ from manabot.belief.sampling_cohort import (
     report_sampler_cohort,
 )
 from manabot.belief.sampling_collection import (
-    CaptureRuntime,
     CaptureSlot,
     _write_private,
-    collect_schedule,
+    read_closed_dataset,
 )
-from manabot.belief.sampling_evidence import (
-    CaptureWork,
-    EvidenceRoot,
-    JobAllocation,
-    WorkerSnapshot,
-)
-from manabot.belief.sampling_fit import SavedFitConfig, fit_saved_sampler
-from manabot.belief.sampling_types import SamplerSchema, _digest
 from manabot.infra.torch import deterministic_cpu
 from manabot.reports.belief import report_saved_sampler
 from managym.decision import PUBLIC_COMMITMENT_KINDS
 
 
-def execute_work(
-    root: WorkerSnapshot,
-    job: JobAllocation,
-    *,
-    runtime: CaptureRuntime | None = None,
-    config: SavedFitConfig | None = None,
-) -> None:
-    """Frozen worker boundary: execute only the exact retained intent.
-
-    A compatible launcher must admit/stage this worker. This is not a local
-    admission command or a replacement for launcher inventory and placement.
-    """
-    if not isinstance(root, WorkerSnapshot) or job != root.allocation:
-        raise ValueError("worker has no retained dispatch intent")
-    if isinstance(job.work, CaptureWork):
-        if runtime is None or config is not None:
-            raise ValueError("capture worker requires its admitted frozen runtime")
-        directory = root.directory / (
-            "admission" if job.phase == "admission" else "main"
-        )
-        schedule = json.loads((directory / "schedule.json").read_text())
-        capture = schedule["capture"]
-        if (
-            schedule["identity"] != job.work.schedule_identity
-            or _digest(capture) != job.work.schedule_identity
-        ):
-            raise ValueError("worker schedule identity mismatch")
-        collect_schedule(
-            runtime,
-            TypeAdapter(tuple[CaptureSlot, ...]).validate_python(capture["slots"]),
-            TypeAdapter(SamplerSchema).validate_python(capture["schema"]),
-            directory=directory,
-            policy_identity=capture["policy_identity"],
-            world_identity=capture["world_identity"],
-            max_steps=capture["max_steps"],
-            moments=capture["moments"],
-            ordinals=job.work.slots,
-        )
-    else:
-        if config is None or runtime is not None:
-            raise ValueError("fit worker requires its declared configuration")
-        if (
-            root.dataset().identity != job.work.dataset_identity
-            or _digest(asdict(config)) != job.work.configuration_identity
-        ):
-            raise ValueError("worker fit binding mismatch")
-        fit_saved_sampler(root, config, seed=job.work.seed)
-
-
-def report_panels(root: EvidenceRoot, spec: CohortSpec) -> dict[str, CohortReport]:
+def report_panels(directory: Path, spec: CohortSpec) -> dict[str, CohortReport]:
     """Join full saved reports to predeclared schedule panels and deal groups.
 
     Missing legs and complete zero-row games remain declared group members.
     Their absence from prediction measurements never erases their denominator.
     """
-    dataset = root.dataset()
+    dataset = read_closed_dataset(directory)
     if spec.evaluation_dataset_identity != dataset.identity:
         raise ValueError("panel dataset identity mismatch")
-    schedule = json.loads((root.directory / "main/schedule.json").read_text())
+    schedule = json.loads((directory / "main/schedule.json").read_text())
     slots = TypeAdapter(tuple[CaptureSlot, ...]).validate_python(
         schedule["capture"]["slots"]
     )
@@ -124,7 +66,7 @@ def report_panels(root: EvidenceRoot, spec: CohortSpec) -> dict[str, CohortRepor
                 ),
             }
         )
-        panels[name] = report_sampler_cohort(panel, root=root.directory)
+        panels[name] = report_sampler_cohort(panel, root=directory)
     if any(slot.split == "test" and slot.panel is None for slot in slots):
         raise ValueError("test slot has no frozen panel")
     by_seed: dict[int, set[str | None]] = {}
@@ -144,8 +86,7 @@ def demo(directory: Path, *, cohort: CohortSpec | None = None) -> Path:
     """
     if not directory.is_dir():
         raise FileNotFoundError("saved evidence root is unavailable")
-    root = EvidenceRoot(directory)
-    dataset = root.dataset()
+    dataset = read_closed_dataset(directory)
     fit = directory / "fits/357"
     receipt = json.loads((fit / "complete.json").read_text())
     binding = json.loads((fit / "started.json").read_text())
@@ -161,6 +102,7 @@ def demo(directory: Path, *, cohort: CohortSpec | None = None) -> Path:
             checkpoint,
             expected_dataset_identity=dataset.identity,
             expected_policy_identity=dataset.policy_identity,
+            expected_snapshot_binding=dataset.binding,
             expected_schema_identity=dataset.schema.identity,
             expected_world_identity=dataset.world_identity,
             expected_checkpoint_identity=receipt["checkpoint_identity"],
@@ -169,7 +111,7 @@ def demo(directory: Path, *, cohort: CohortSpec | None = None) -> Path:
         output.mkdir(exist_ok=True, mode=0o700)
         if cohort is not None:
             panels = TypeAdapter(dict[str, CohortReport]).dump_python(
-                report_panels(root, cohort), mode="json"
+                report_panels(directory, cohort), mode="json"
             )
             panel_path = output / "panels.json"
             if panel_path.exists():
@@ -234,6 +176,13 @@ def demo(directory: Path, *, cohort: CohortSpec | None = None) -> Path:
                 ),
             }
         public = {
+            "dataset_identity": dataset.identity,
+            "producer_identity": dataset.policy_identity
+            if dataset.binding is None
+            else dataset.binding.producer_identity,
+            "snapshot_identity": None
+            if dataset.binding is None
+            else dataset.binding.identity,
             "description": "First retained test observation with public commitments; 64 samples per arm. Zero history illustrates sensitivity, not an ablation.",
             "card_names": dataset.schema.card_names,
             "public_inputs": asdict(inputs),

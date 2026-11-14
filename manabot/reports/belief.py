@@ -20,7 +20,7 @@ from typing import Literal, Sequence
 import torch
 
 from manabot.belief.checkpoint import load_belief_sampler
-from manabot.belief.sampling_data import Split, read_dataset
+from manabot.belief.sampling_data import SnapshotBinding, Split, read_dataset
 from manabot.belief.sampling_fit import (
     CalibrationBin,
     SamplerArmMetrics,
@@ -28,6 +28,7 @@ from manabot.belief.sampling_fit import (
     evaluate_physical_sampler,
     evaluate_sampler,
 )
+from manabot.belief.sampling_snapshot import validate_snapshot_groups
 from manabot.infra.torch import deterministic_cpu
 
 
@@ -50,6 +51,20 @@ class GameMeasurement:
 
 
 @dataclass(frozen=True, slots=True)
+class EqualGameLosses:
+    """Predictive losses with one unit of mass per nonempty completed game.
+
+    ECE pools normalized game forecasts before taking bin absolute errors; it
+    is not the mean of game ECEs. Counts and timing remain in the pooled metrics.
+    """
+
+    joint_nll: float
+    inclusion_brier: float
+    inclusion_ece: float
+    conjunction_brier: float | None
+
+
+@dataclass(frozen=True, slots=True)
 class SplitMeasurement:
     split: Split
     game_ids: tuple[str, ...]
@@ -58,6 +73,9 @@ class SplitMeasurement:
     physical_prior: SamplerArmMetrics
     learned: SamplerArmMetrics | None
     games: tuple[GameMeasurement, ...] = ()
+    equal_game_prior: EqualGameLosses | None = None
+    equal_game_learned: EqualGameLosses | None = None
+    zero_row_game_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,9 +83,15 @@ class SamplerQualityReport:
     format: str
     evaluation_dataset_identity: str
     training_dataset_identity: str | None
-    evaluation_policy_identity: str
+    evaluation_policy_identity: str | None
     training_policy_identity: str | None
-    policy_relationship: Literal["same_policy", "foreign_policy", "prior_only"]
+    policy_relationship: Literal[
+        "same_policy",
+        "foreign_policy",
+        "prior_only",
+        "same_producers",
+        "producer_shift",
+    ]
     world_identity: str
     schema_identity: str
     checkpoint_identity: str | None
@@ -81,6 +105,8 @@ class SamplerQualityReport:
     measurements: tuple[SplitMeasurement, ...]
     unavailable: tuple[UnavailableMetric, ...]
     training_seed: int | None = None
+    evaluation_snapshot: SnapshotBinding | None = None
+    training_snapshot: SnapshotBinding | None = None
 
 
 def _pool_games(
@@ -116,6 +142,31 @@ def _pool_games(
         peak_python_bytes=max(a.peak_python_bytes for a in arms),
         largest_sample_tensor_bytes=max(a.largest_sample_tensor_bytes for a in arms),
         calibration_bins=bins,
+    )
+
+
+def _equal_games(arms: Sequence[SamplerArmMetrics]) -> EqualGameLosses:
+    count = len(arms)
+    return EqualGameLosses(
+        sum(a.joint_nll for a in arms) / count,
+        sum(a.inclusion_brier for a in arms) / count,
+        sum(
+            abs(
+                sum(
+                    (
+                        a.calibration_bins[i].probability_sum
+                        - a.calibration_bins[i].truth_sum
+                    )
+                    / sum(b.count for b in a.calibration_bins)
+                    for a in arms
+                )
+            )
+            for i in range(10)
+        )
+        / count,
+        None
+        if any(a.conjunction_brier is None for a in arms)
+        else sum(a.conjunction_brier or 0 for a in arms) / count,
     )
 
 
@@ -158,6 +209,8 @@ def report_saved_sampler(
             or training.schema.identity != dataset.schema.identity
         ):
             raise ValueError("evaluation schema/world differs from training dataset")
+        if training.binding is not None and dataset.binding is not None:
+            validate_snapshot_groups((training.binding, dataset.binding))
         if training.identity != dataset.identity:
             fitting_ids = {
                 game.game_id for game in training.games if game.split == "train"
@@ -171,6 +224,7 @@ def report_saved_sampler(
                 checkpoint,
                 expected_dataset_identity=training.identity,
                 expected_policy_identity=training.policy_identity,
+                expected_snapshot_binding=training.binding,
                 expected_schema_identity=training.schema.identity,
                 expected_world_identity=training.world_identity,
                 expected_checkpoint_identity=checkpoint_identity,
@@ -184,10 +238,19 @@ def report_saved_sampler(
                 raise ValueError("invalid checkpoint training seed")
             training_seed = metrics["seed"]
     measurements: list[SplitMeasurement] = []
+    empty_splits: list[UnavailableMetric] = []
     splits: tuple[Split, ...] = ("train", "validation", "test")
     with deterministic_cpu():
         for split in splits:
-            games = tuple(game for game in dataset.games if game.split == split)
+            all_games = tuple(game for game in dataset.games if game.split == split)
+            games = tuple(game for game in all_games if game.examples)
+            if not games:
+                empty_splits.append(
+                    UnavailableMetric(
+                        split, "No representable rows in completed games."
+                    )
+                )
+                continue
             for count in sample_counts:
                 evidence: list[GameMeasurement] = []
                 for game in games:
@@ -233,10 +296,15 @@ def report_saved_sampler(
                         _pool_games([game.physical_prior for game in evidence], sizes),
                         _pool_games(learned_arms, sizes) if learned_arms else None,
                         tuple(evidence),
+                        _equal_games([game.physical_prior for game in evidence]),
+                        _equal_games(learned_arms) if learned_arms else None,
+                        tuple(game.game_id for game in all_games if not game.examples),
                     )
                 )
     return SamplerQualityReport(
-        format="manabot.sampler-quality/v2",
+        format="manabot.sampler-quality/v2"
+        if dataset.binding is None and (training is None or training.binding is None)
+        else "manabot.sampler-quality/v3",
         evaluation_dataset_identity=dataset.identity,
         training_dataset_identity=None if training is None else training.identity,
         evaluation_policy_identity=dataset.policy_identity,
@@ -244,7 +312,16 @@ def report_saved_sampler(
         policy_relationship="prior_only"
         if training is None
         else (
-            "same_policy"
+            (
+                "same_producers"
+                if training.binding.producer_identity
+                == dataset.binding.producer_identity
+                else "producer_shift"
+            )
+            if training.binding is not None and dataset.binding is not None
+            else "producer_shift"
+            if training.binding is not None or dataset.binding is not None
+            else "same_policy"
             if training.policy_identity == dataset.policy_identity
             else "foreign_policy"
         ),
@@ -265,6 +342,8 @@ def report_saved_sampler(
         ).hexdigest(),
         seed=seed,
         training_seed=training_seed,
+        evaluation_snapshot=dataset.binding,
+        training_snapshot=None if training is None else training.binding,
         torch_version=str(torch.__version__),
         python_version=platform.python_version(),
         device="cpu",
@@ -274,6 +353,7 @@ def report_saved_sampler(
         else sum(p.numel() * p.element_size() for p in model.parameters()),
         measurements=tuple(measurements),
         unavailable=(
+            *empty_splits,
             UnavailableMetric(
                 "arbitrary_queries",
                 "Only card presence and adjacent vocabulary-pair conjunctions are measured; no typed-query interpreter.",

@@ -16,7 +16,8 @@ experimental admission. Producer `paused`, launcher `succeeded` and scientific
 completion describe different things. Exact records and hashes live in
 `experiments/tla_belief_sampler.md`; no sampler training or scored result exists.
 
-Both Etude 0.3.2 and original 0.2.15 refused the shared launcher database with
+Etude 0.3.2, original 0.2.15 and the later inspected 0.2.16 refused the shared
+launcher database with
 “was written by another version of etude; move or delete it to start again”.
 The database was preserved and no alternate controller or job was created.
 Failed inventory is unknown capacity/work, not missing credentials or zero cost.
@@ -58,9 +59,12 @@ recovery, even if subsequent submission is idempotent. The adapter still needs
 a controller-supported request identity, its retained intent before any launcher
 mutation, verified preparation side effects and lookup of that same request.
 Unknown preparation cannot authorize another preparation or new dispatch.
-The candidate `prepare_launch`/`submit_launch` and store lookup APIs have not
-been proved against the preserved controller. Keep launcher execution, artifact
-delivery and scientific completion distinct; local fixtures supply none of those
+Source inspection of 0.2.16 preserves supplied `Run.id` values and exposes
+store `launches(run)`, but the controller exposes diagnostics by run rather than
+direct launch-record lookup. Neither establishes exact request/work/cap binding
+or resumable preparation. The candidate APIs have not been proved against the
+preserved controller; compatible read-only inventory remains the first dependency.
+Keep launcher execution, artifact delivery and scientific completion distinct; local fixtures supply none of those
 connected proofs.
 
 ## Self-play metric indexing (MTG-273, 2026-11-11)

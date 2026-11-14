@@ -382,8 +382,12 @@ See [frozen-policy belief sampling](../README.md#beside-the-loop). This separate
 admitted belief artifact does not change the policy's input contract or establish
 foreign-opponent calibration or search strength.
 
-For collection from the original Small u1952 player, fitting and inspecting saved
-predictions, see the [TLA belief-sampler guide](../docs/tla-belief-sampler.md).
+For completed player-game export, immutable snapshot selection, equal-game
+belief fitting and saved predictions, see the
+[belief-sampler guide](../docs/tla-belief-sampler.md). It also covers the original
+Small/raw/u1952 TLA reference. Select producer/update ranges explicitly:
+mixed training-history games and final-player games describe different
+distributions.
 
 [Frozen-policy local search](../README.md#beside-the-loop) plays through the
 `local_update` player kind; exact-history search rejects unsupported Rules

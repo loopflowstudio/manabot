@@ -10,6 +10,7 @@ import pytest
 import torch
 
 from experiments.tla_belief_sampler import demo, report_panels
+from manabot.belief.checkpoint import load_belief_sampler
 from manabot.belief.sampling import AutoregressiveBeliefSampler
 from manabot.belief.sampling_cohort import (
     CohortSpec,
@@ -18,7 +19,11 @@ from manabot.belief.sampling_cohort import (
     _estimate,
     report_sampler_cohort,
 )
-from manabot.belief.sampling_collection import CaptureSlot
+from manabot.belief.sampling_collection import (
+    CaptureSlot,
+    close_capture_collection,
+    freeze_capture_dataset,
+)
 from manabot.belief.sampling_data import (
     SamplerDataset,
     SamplerExample,
@@ -28,8 +33,8 @@ from manabot.belief.sampling_data import (
 )
 from manabot.belief.sampling_fit import CalibrationBin, SamplerArmMetrics
 from manabot.belief.sampling_types import SamplerInput, SamplerSchema, _digest
-from manabot.reports.belief import _pool_games, main, report_saved_sampler
-from tests.belief.test_sampling_data import _collected_root, _settled
+from manabot.reports.belief import _equal_games, _pool_games, main, report_saved_sampler
+from tests.belief.test_sampling_data import _collected_directory, _snapshot_fixture
 
 
 def _dataset(width: int = 2, capacity: int = 2) -> SamplerDataset:
@@ -70,21 +75,23 @@ def _checkpoint(path: Path, dataset: SamplerDataset, seed: int = 19) -> str:
             model.correction.bias.copy_(
                 torch.linspace(-0.4, 0.4, dataset.schema.max_count + 1)
             )
-    torch.save(
-        {
-            "format": "manabot.autoregressive-belief-sampler/v1",
-            "schema": asdict(dataset.schema),
-            "schema_identity": dataset.schema.identity,
-            "dataset_identity": dataset.identity,
-            "policy_identity": dataset.policy_identity,
-            "world_identity": dataset.world_identity,
-            "hidden_size": 4,
-            "history_dropout": 0.0,
-            "state_dict": model.state_dict(),
-            "metrics": {"seed": seed},
-        },
-        path,
-    )
+    payload = {
+        "format": "manabot.autoregressive-belief-sampler/v1",
+        "schema": asdict(dataset.schema),
+        "schema_identity": dataset.schema.identity,
+        "dataset_identity": dataset.identity,
+        "policy_identity": dataset.policy_identity,
+        "world_identity": dataset.world_identity,
+        "hidden_size": 4,
+        "history_dropout": 0.0,
+        "state_dict": model.state_dict(),
+        "metrics": {"seed": seed},
+    }
+    if dataset.binding is not None:
+        payload["format"] = "manabot.autoregressive-belief-sampler/v2"
+        del payload["policy_identity"]
+        payload["snapshot_binding"] = asdict(dataset.binding)
+    torch.save(payload, path)
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
@@ -445,9 +452,9 @@ def test_pooled_ece_uses_bins_not_mean_game_ece() -> None:
 def test_tla_saved_demo_is_public_and_never_optimizes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    root = _collected_root(tmp_path)
-    root.close_collection("main", reason="controlled fixture complete", read=_settled)
-    dataset = root.freeze_dataset()
+    root = _collected_directory(tmp_path)
+    close_capture_collection(root / "main", reason="controlled fixture complete")
+    dataset = freeze_capture_dataset(root)
     fit = tmp_path / "fits/357"
     fit.mkdir(parents=True)
     digest = _checkpoint(fit / "sampler.pt", dataset, 357)
@@ -498,7 +505,7 @@ def test_schedule_panels_retain_zero_row_and_unattempted_games(tmp_path: Path) -
             )
         )
     )
-    root = _collected_root(tmp_path, slots)
+    root = _collected_directory(tmp_path, slots)
     shard_path = tmp_path / "main/game-000003.game.json"
     shard = json.loads(shard_path.read_text())
     shard["game"] = None
@@ -509,8 +516,8 @@ def test_schedule_panels_retain_zero_row_and_unattempted_games(tmp_path: Path) -
     receipt_path.write_text(json.dumps(receipt))
     for path in (tmp_path / "main").glob("game-000004.*.json"):
         path.unlink()
-    root.close_collection("main", reason="wall bound", read=_settled)
-    dataset = root.freeze_dataset()
+    close_capture_collection(root / "main", reason="wall bound")
+    dataset = freeze_capture_dataset(root)
     checkpoint = tmp_path / "fixed.pt"
     digest = _checkpoint(checkpoint, dataset, 357)
     report = report_saved_sampler(
@@ -568,3 +575,135 @@ def test_schedule_panels_retain_zero_row_and_unattempted_games(tmp_path: Path) -
     demo(tmp_path, cohort=spec)
     saved_panels = json.loads((tmp_path / "demo/panels.json").read_text())
     assert saved_panels["reserved"]["group_coverage"][0]["missing_games"] == ["3"]
+
+
+def test_snapshot_checkpoint_reload_and_report_name_producers(tmp_path: Path) -> None:
+    dataset, path = _snapshot_fixture(tmp_path)
+    checkpoint = tmp_path / "sampler.pt"
+    digest = _checkpoint(checkpoint, dataset, 357)
+    model = load_belief_sampler(
+        checkpoint,
+        expected_dataset_identity=dataset.identity,
+        expected_snapshot_binding=dataset.binding,
+        expected_schema_identity=dataset.schema.identity,
+        expected_world_identity=dataset.world_identity,
+        expected_checkpoint_identity=digest,
+    )
+    assert not model.training
+    with pytest.raises(ValueError, match="policy_identity"):
+        load_belief_sampler(
+            checkpoint,
+            expected_dataset_identity=dataset.identity,
+            expected_policy_identity="frozen-policy",
+            expected_schema_identity=dataset.schema.identity,
+            expected_world_identity=dataset.world_identity,
+            expected_checkpoint_identity=digest,
+        )
+    assert dataset.binding is not None
+    with pytest.raises(ValueError, match="snapshot identity"):
+        load_belief_sampler(
+            checkpoint,
+            expected_dataset_identity=dataset.identity,
+            expected_snapshot_binding=replace(dataset.binding, watermark="another-cut"),
+            expected_schema_identity=dataset.schema.identity,
+            expected_world_identity=dataset.world_identity,
+            expected_checkpoint_identity=digest,
+        )
+    report = report_saved_sampler(
+        path,
+        checkpoint=checkpoint,
+        checkpoint_identity=digest,
+        training_dataset_path=path,
+        sample_counts=(2,),
+    )
+    assert report.format == "manabot.sampler-quality/v3"
+    assert report.policy_relationship == "same_producers"
+    assert (
+        report.training_policy_identity is None
+        and report.evaluation_policy_identity is None
+    )
+    assert report.training_snapshot == dataset.binding == report.evaluation_snapshot
+    assert report.measurements[0].zero_row_game_ids == (dataset.games[0].game_id,)
+    assert report.measurements[0].equal_game_prior is not None
+
+
+def test_equal_game_losses_keep_pooled_rows_separate() -> None:
+    # Equal-game ECE pools normalized per-game forecasts, so these cancel.
+    bins_a = (CalibrationBin(1, 0.5, 0),) + (CalibrationBin(0, 0, 0),) * 9
+    bins_b = (CalibrationBin(8, 4, 8),) + (CalibrationBin(0, 0, 0),) * 9
+    first = SamplerArmMetrics(1, 0.1, 0.5, 0.2, 0, 1, 0, 0, 0, bins_a)
+    second = SamplerArmMetrics(3, 0.3, 0.5, 0.4, 0, 8, 0, 0, 0, bins_b)
+    equal = _equal_games((first, second))
+    assert equal.joint_nll == 2
+    assert equal.inclusion_brier == pytest.approx(0.2)
+    assert equal.inclusion_ece == 0
+    assert _pool_games((first, second), (1, 8)).joint_nll == pytest.approx(25 / 9)
+
+
+def test_snapshot_cohort_binds_manifest_groups_and_fit_distribution(
+    tmp_path: Path,
+) -> None:
+    dataset, path = _snapshot_fixture(tmp_path)
+    checkpoint = tmp_path / "fixed.pt"
+    digest = _checkpoint(checkpoint, dataset, 357)
+    quality = report_saved_sampler(
+        path,
+        checkpoint=checkpoint,
+        checkpoint_identity=digest,
+        training_dataset_path=path,
+        sample_counts=(2,),
+    )
+    data = json.dumps(asdict(quality)).encode()
+    (tmp_path / "quality.json").write_bytes(data)
+    assert dataset.binding is not None
+    member = dataset.binding.games[-1]
+    spec = CohortSpec(
+        format="manabot.sampler-cohort/v2",
+        description="Fixed snapshot with independent groups",
+        producer_snapshot_identity=dataset.binding.identity,
+        evaluation_snapshot_identity=dataset.binding.identity,
+        evaluation_dataset_identity=dataset.identity,
+        world_identity=dataset.world_identity,
+        schema_identity=dataset.schema.identity,
+        evaluator_identity=quality.evaluator_identity,
+        samples_per_example=2,
+        sampling_seed=0,
+        bootstrap_replicates=100,
+        groups=(
+            EvaluationGroup(group_id=member.group, game_ids=(member.key.identity,)),
+        ),
+        attempts=(
+            FitAttempt(
+                attempt_id="fit",
+                treatment="fixed",
+                training_seed=357,
+                fit_receipt_identity="receipt",
+                configuration_identity="config",
+                training_dataset_identity=dataset.identity,
+                status="complete",
+                report=Path("quality.json"),
+                report_sha256=hashlib.sha256(data).hexdigest(),
+            ),
+        ),
+    )
+    report = report_sampler_cohort(spec, root=tmp_path)
+    assert report.complete
+    assert report.group_coverage[0].retained_games == (member.key.identity,)
+    with pytest.raises(ValueError, match="snapshot identity"):
+        report_sampler_cohort(
+            spec.model_copy(update={"producer_snapshot_identity": "other"}),
+            root=tmp_path,
+        )
+    with pytest.raises(ValueError, match="groups differ"):
+        report_sampler_cohort(
+            spec.model_copy(
+                update={
+                    "groups": (
+                        EvaluationGroup(
+                            group_id="unrelated", game_ids=(member.key.identity,)
+                        ),
+                    )
+                }
+            ),
+            root=tmp_path,
+        )

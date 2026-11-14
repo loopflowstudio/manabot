@@ -1,220 +1,226 @@
-# TLA frozen-player belief sampler
+# Belief sampling from player games
 
-Implementation status (2026-11-14): scheduled capture is implemented and the
-original policy loads in its isolated runtime. The saved-artifact `demo` CLI and
-evidence lifecycle, exclusive work handoff and frozen worker adapter are implemented. Remote `admission` and `run` dispatch are
-not available yet. Experiment fitting and saved demo artifacts remain outstanding;
-see the [current report](../experiments/tla_belief_sampler.md) for the launcher
-compatibility dependency.
-
-Inspect the saved sampler and its held-out comparison from the repository root:
+Inspect a saved TLA sampler and its held-out comparison from the repository root:
 
 ```sh
 uv run --extra artifacts python experiments/tla_belief_sampler.py demo --artifacts experiments/data/tla-belief-357
 ```
 
-The demo reloads fit seed 357 against its recorded dataset, schema, policy and
-world hashes. It retains the held-out statistics and emits a public text/JSON
-example with normalized public commitment features, prior and learned card-inclusion probabilities,
-and learned predictions with history zeroed. The example contains no true hidden
-hand or private game seed. Zeroing history illustrates sensitivity; it does not
-isolate the value of history in a controlled comparison. The example uses the first
-saved test row with nonempty public history, without selecting on predictions.
-If no such row exists, the history example remains unavailable.
+Supply a downloaded evidence directory containing the dataset, completed seed-357
+fit and its receipts. The command reloads the sampler, checks its recorded byte,
+data, schema, producer and world bindings, and writes reports and a viewer-safe
+text/JSON prediction under `demo/`. It prints the JSON example's path. It performs
+no collection or fitting. If the files are missing, restore the exact saved
+artifacts before retrying; a directory name alone does not identify a candidate.
 
-This exploratory workflow trains a hidden-hand sampler from complete TLA games
-played by the frozen Small u1952 player from Etude run `59718fe34945`. A negative
-comparison is a useful result. Prediction scores do not establish better search
-or playing strength.
+The sampler predicts hidden-hand card counts for gameplay search, correcting
+native physical-deal probabilities using public constraints and public action
+commitments. Actual hidden hands supply private training targets. Held-out
+prediction quality measures this sampler; search integration and playing-strength
+comparisons are separate work.
 
-## Prepare the frozen worker
+The snapshot data APIs, equal-game sampling, saved-fit admission and offline
+reports are implemented. Player-collector export, native capture before autoreset
+and the Etude jobs described below remain implementation work. There is no
+collector export switch or connected handoff command available yet; `demo` is
+the current experiment CLI.
 
-Collection and fitting run serially on an admitted remote worker. Check its
-existing work before using shared capacity. Offline reload and reporting can run
-locally. Use the repository's locked uv environment and artifact credentials
-injected through Doppler; see [development setup](development.md#environment-and-commands).
-Keep the original policy runtime isolated from the current source environment.
+The reusable APIs are `seal_game`, `seal_snapshot` and `publish_snapshot` in
+`manabot.belief.sampling_snapshot`. `read_dataset` admits the self-contained
+snapshot; `fit_saved_sampler` takes that file and an attempt output directory.
+Run fitting only on the admitted remote worker. Snapshot checkpoints reload
+with `expected_snapshot_binding`; single-policy checkpoints retain
+`expected_policy_identity`.
 
-Admission requires the ordinary producer export identifying Small/raw/u1952,
-checkpoint bytes and digest, the original configuration and native manifest, and
-the compatible source tree. A launcher specification alone does not establish
-the checkpoint's producer. The original checkpoint has no `checkpoint_source`;
-retain that absence and verify provenance through its producer records. The
-experimental adoption used for deck-builder work is a separate identity and
-cannot substitute for this player.
+## Reuse completed player games
 
-The capture schema covers all card, token and face names in the original native
-manifest. Its vocabulary comes from public definitions, never hidden labels.
+Enable private belief-game export on the player-training collector. Export is
+off by default. Dedicated frozen-player collection produces the same game data.
+Both sources retain complete games, per-seat behavior identities, replay
+provenance, selected private labels and coverage. Enabling export preserves the
+player's action sampling and learning batches; publication adds elapsed time.
+It does not enable tolerance of game failures.
+
+For example, select the completed games from a player's first update and publish
+snapshot A. Give A to a belief fit while player training continues. After the
+next update, publish snapshot B with the additional qualifying games. The fit
+and later reload of A still use A's original membership and bytes. B is a new
+input and requires an explicitly selected fit of its own.
+
+Select producer runs and update/checkpoint ranges explicitly. Each seat records
+its actual raw/EMA weights generation and digest, with a checkpoint reference
+when one exists. A game that spans updates retains its ordered behavior
+segments; every segment must qualify for the selected range. An unsaved
+intermediate generation is still identified, but is not a published checkpoint.
+Earlier-player games and final-player games describe different distributions.
+An all-history selection must not be reported as final-player data.
+
+A snapshot records the selection, publication watermark, game membership,
+shard digests and sizes, producer identities, world/schema, splits and coverage.
+It includes only sealed shards with successful completion records. A completed
+game with no representable rows remains in coverage. Partial files, orphan rows
+and failed or interrupted games supply no successful-game labels. Other games
+may still be running when a snapshot is sealed.
+
+## Deliver a snapshot and fit it
+
+Run collection and fitting on an admitted remote worker. Offline reload and
+reporting can run locally. Use the locked uv environment and inject artifact and
+provider credentials through Doppler; see [development setup](development.md#environment-and-commands).
+Verify private destination access before sending hidden labels.
+
+Publish a self-contained snapshot file containing its manifest and selected
+shards through the immutable artifact store. Publication is synchronous and
+bounded at update boundaries. A snapshot becomes available only after storage
+verifies its bytes. A metric or log message describing it is not a delivery
+acknowledgement. Etude supplies the selected file to a fit as a named `Input`
+with its exact URI, digest and size. The fitter reads those bytes rather than a
+changing producer directory. Missing, corrupt or mismatched input fails admission.
+
+Declare Etude training jobs in `experiments/tla_belief_sampler.py` for the player,
+snapshot fits and frozen-player reference. Each fit selects an already published
+snapshot. Etude owns execution, work deduplication, attempts and costs; the
+producer owns completed games and the snapshot owns fit membership. Use the
+experiment report's admitted jobs and caps for connected execution. The
+saved-artifact `demo` command above is the inspection entry point.
+
+The fitter samples a nonempty training game uniformly, then a saved row uniformly
+within that game. Thus a game with eight saved rows has the same total training
+weight as a game with two. Zero-row games supply no gradient. No completed games,
+or an empty required split, makes fitting unavailable; it does not yield a zero
+loss.
+
+Assign seeded game/deal-group splits before capture and retain them across
+snapshots. Both viewers and swapped legs of a deal stay together. Validate group
+membership across all selected snapshots: a test group in A cannot become a
+training group in B. Repeated numeric seeds in independent producer runs do not
+by themselves identify the same game or dependent group. Game identity includes
+the producer run, original attempt, stream and game ordinal.
+
+Retain each candidate's training snapshot, producer selection, fit configuration,
+seed, checkpoint digest, schema and world. Reload verifies these bindings.
+Reports also identify the evaluation producer distribution and mark a shift from
+training. Older single-policy datasets and checkpoints retain their original
+bytes and binding meanings.
+
+## Collect the original TLA reference
+
+The first TLA reference uses the unchanged Small/raw/u1952 player from Etude run
+`59718fe34945`. Keep its runtime isolated from current-world player training.
+Admission requires the ordinary producer export, original checkpoint bytes and
+digest, saved configuration, native manifest and compatible source tree. The
+checkpoint lacks `checkpoint_source`; preserve that absence and verify its
+provenance through producer records. The deck-builder's adopted player is a
+separate identity.
+
 Keep the player's saved observation capacities and deterministic first-64 legal
-action support. Native legality still supplies every choice; collection records
-overflow and preserves the retained choices' native offer IDs.
+action support. Native legality supplies every choice; overflow diagnostics
+record the policy's restricted support. The capture vocabulary covers the
+original manifest's public card, token and face names.
 
-## Admit, then collect and fit
+Before main collection, use eight frozen-runtime admission slots to measure
+capture, fit, evaluation and serialization pace. The initial planning ceiling is
+1,024 TLA attempts, up to eight decision moments per game, three fit seeds and
+27 reserved deck IDs. Freeze the final schedule and any prospective reduction
+in the [experiment report](../experiments/tla_belief_sampler.md) before main
+collection. Admission games and the current-world training-game handoff proof
+remain separate from the TLA reference data.
 
-The following `admission` and `run` commands remain planned interfaces, not
-executable subcommands. A compatible Etude controller and the frozen worker
-bundle must be admitted first. Run admission remotely before freezing the main schedule:
+Rows are selected by a seeded, label-independent reservoir while both viewer
+histories advance at every transition, including built-in continuation. Capture
+retains terminal game observations before autoreset. Native trivial decisions
+remain skipped; the 2,000-decision limit fails a game. Reserved deck IDs are held
+out from sampler fitting; the frozen player trained on all 134 field entries.
 
-```sh
-uv run --extra artifacts python experiments/tla_belief_sampler.py admission --out experiments/data/tla-belief-357 --max-usd 2
-```
+Fit seeds are 357, 358 and 359. Initial settings are 512 optimizer steps, batch
+size 32, hidden size 64, learning rate 0.001, history dropout 0 and 16 evaluation
+samples during fitting. Admission pace determines the final allocation within
+the remaining cap. Test scores never choose a candidate or change the allocation.
+Seed 357 supplies the demo regardless of score.
 
-Admission verifies producer bindings and the frozen execution bundle, accounts
-for eight game slots, and records collection, fit, evaluation and serialization
-pace. Use those measurements to freeze the final schedule and work allocation
-in the experiment report before main collection. The admission subcap counts
-toward the USD25 whole-experiment ceiling, including setup, failures, fitting,
-evaluation and teardown. The launcher owns the cost receipt.
-
-With producer inputs and the final schedule frozen, run:
-
-```sh
-uv run --extra artifacts python experiments/tla_belief_sampler.py run --out experiments/data/tla-belief-357 --max-usd 25
-```
-
-The command collects the declared schedule, fits three independent samplers and
-retains their artifacts for reporting. Its cap is cumulative with admission;
-it does not add USD25 to an earlier allocation. Collection shards and each fit
-are separate durable jobs so completed evidence can be delivered before later
-work starts.
-
-The initial allocation is at most 1,024 game slots, with swapped assignments
-kept together in a single split, and up to eight decision moments per game for
-both viewers. The final report records any prospective reduction needed to fit
-the cap. Whole games are assigned to train, validation or test before play.
-The test panels distinguish new deals from reserved deck IDs: those deck IDs
-are held out from sampler fitting, but the frozen player trained on all 134
-field entries.
-
-Rows are selected with a seeded, label-independent reservoir while viewer
-histories advance at every transition. Actual hidden hands are private
-supervision only. Only complete games contribute fitting rows. Native trivial
-decisions remain skipped; reaching the 2,000-decision limit fails the game.
-
-Fit seeds are 357, 358 and 359. Initial fit settings are 512 optimizer steps,
-batch size 32, hidden size 64, learning rate 0.001, history dropout 0 and 16
-evaluation samples during fitting. The frozen report specifies the final
-allocation; test scores never choose a checkpoint or change it. Seed 357 supplies
-the demo regardless of its score.
+All setup, handoff proof, admission, attempts, fitting, evaluation and teardown
+share the cumulative USD25 ceiling. The USD2 setup subcap is included. Check
+shared launcher inventory, writer ownership, costs and outstanding commitments
+before launching. Size job caps for startup as well as execution. A per-launch
+`--max-usd` does not account for earlier passes: derive the remaining ceiling
+from the launcher's retained costs and commitments. Failed inventory leaves
+capacity and commitments unknown. Preserve the shared launcher database and
+resolve compatible access before further execution.
 
 ## Read the comparison
 
 Saved reports compare learned predictions with the compatible physical-deal
-prior at 16 and 64 samples. Joint hand NLL is measured in nats; card-inclusion
-Brier, ten-bin inclusion calibration error, conjunction Brier and sample support
-violations describe different aspects of prediction quality. Lower NLL and
-Brier are better. Learned-minus-prior differences therefore favor the learned
-sampler when negative for those losses.
+prior at 16 and 64 samples. Joint hand NLL is in nats. Card-inclusion Brier,
+ten-bin inclusion calibration error, conjunction Brier and support violations
+measure different properties. Lower NLL and Brier are better; negative
+learned-minus-prior differences favor the learned sampler for these losses.
+The physical-deal prior is not a claim of uniform sampling over every distinct
+valid world.
 
-Read equal-game means separately from pooled decision-weighted measurements.
-Conditional evaluation intervals resample declared deal groups, keeping available
-swapped legs and viewers together; variation across the three fit seeds is
-reported separately. The maintained cohort reporter supports these groups and
-exposes missing legs. TLA panels now derive their deal groups and expected games
-from the closed schedule, including zero-row and unattempted games. To retain
-these panels with the demo, pass `--cohort <saved-cohort.json>`; report paths in
-that saved fit-cohort declaration resolve from the evidence root. This reads
-saved reports and performs no fitting. The schedule must identify every test
-slot as `same-field` or `reserved` before collection.
-Inspect both test panels, attempted-game
-denominators, row-selection coverage and omissions alongside the scores.
+Read equal-game means separately from pooled row-weighted measurements.
+Intervals resample whole declared deal groups, keeping available swapped legs
+and both viewers together. Variation across fit seeds is reported separately;
+fits sharing one snapshot are not independent data-generation seeds. Inspect
+same-field and reserved-deck panels, expected/attempted/completed-game counts,
+zero-row games and omission reasons alongside the scores.
 
-The model's history features are order-invariant, square-root-normalized public
-commitment counts. They omit event order and most board context. Count-only
-sampling cannot represent retained-selection and foretold-slot constraints:
-those viewer rows are explicitly omitted while the game and both histories
-continue. Metrics condition on representable rows from completed games;
-failures and omissions can bias the comparison. Native materialization checks
-on fixed replay-backed observations are reported separately from count-bound
-support checks. Neither establishes an exact posterior.
+To include grouped panels in the saved demo, add `--cohort <saved-cohort.json>`.
+This reads a saved fit-cohort declaration and reports without fitting; its report
+paths resolve from the evidence directory. TLA panels derive expected games from
+the closed finite schedule, including unattempted and zero-row games. Every test
+slot is assigned to `same-field` or `reserved` before collection.
 
-## Evidence lifecycle and planned continuation
+The model uses square-root-normalized, order-independent public commitment
+counts. Its GRU decodes card counts, not game time. It omits event order and most
+board context. Count-only sampling cannot represent retained-selection and
+foretold-slot constraints: those viewer rows have explicit omission reasons
+while the game and histories continue. Metrics therefore condition on
+representable rows in completed games. Failures and omissions can bias results.
+Native materialization checks on replay-backed observations are separate from
+count-support checks; neither establishes an exact posterior.
 
-Use one private evidence directory for admission, `run` and `demo`. Admission
-and main collection occupy separate subdirectories; admission games never enter
-the main dataset. The directory retains references to Etude jobs and their
-launcher cost receipts, so the cumulative USD25 limit survives continuation.
-`EvidenceRoot` implements allocation, settlement, closure and frozen-dataset
-bindings through an injected launcher reader. Its caller must reconcile shared
-capacity and confirm costs and that no queued, retry or active worker can write.
-Allocations bind exact schedule slots or the frozen dataset, fit configuration
-and seed. The root lock covers reservation through submission. Lost responses
-leave work reserved, even without a local started file; another run cannot
-claim it. Fresh launcher observations and delivery digests remain private.
-The continuation view distinguishes unknown/live work, verified delivery and
-ended work with unavailable delivery, and derives untouched slots/seeds.
-The controller directory is bound to its host, resolved path and filesystem
-identity. Copies remain readable but cannot dispatch, reconcile, restore, close
-or freeze evidence. `stage_worker` exports a private `WorkerSnapshot` containing
-one retained intent and its immutable inputs, without a ledger or controller
-authority. `execute_work` accepts only that snapshot. `admit_outputs` uses fresh
-launcher observations to exclude all writers and verify assigned paths, byte
-identities and schedule/dataset/configuration receipts before retaining outputs.
-Fatal causes and orphan outputs survive as incomplete evidence. Controller
-closure and subsequent dispatch reject worker outputs awaiting admission.
+The public example uses the first saved test row with nonempty public history,
+without selecting on its predictions. It shows normalized commitments, prior
+and learned inclusion probabilities, and predictions with history zeroed.
+If no such row exists, the example is unavailable. History zeroing illustrates
+sensitivity and does not isolate history's causal value. The example exposes no
+true hidden hand, private seed or replay prefix.
 
-A compatible live Etude adapter and remote commands remain unavailable; the continuation below describes
-their required user interface. No pre-submit reference contract has been verified
-against the mini's existing controller. The live adapter must use one authoritative
-controller directory; copied worker staging directories execute assigned work and
-return evidence, without dispatching further jobs or closing collection. The
-owner enforces this boundary locally; transport and connected launcher lookup
-and delivery still require proof. Its filesystem lock coordinates invocations
-sharing the authoritative directory.
+## Failures and continuation
 
-Proposed recovery also covers a lost launch-preparation response. Repeating
-`run --out` must look up the original preparation through the same controller
-before preparing more work. A run ID returned only in the lost response is
-insufficient. Until that lookup contract is verified, remote dispatch remains
-unavailable; no manual preparation step is required from the operator.
+Successful game closure and its private shard are persisted together before
+acknowledgement. Republishing identical bytes for the same game is idempotent;
+changed bytes under the same identity are corruption. Collector reconstruction
+retains original game identities and must not publish replayed prefixes as new
+games. Strict batch failures cannot publish an unverified successful subset.
+Export errors stop before the next optimizer update while preserving completed
+prior work.
 
-Repeat the same `run --out` command to reconcile existing jobs and continue
-untouched work. Unknown live jobs or costs stop new dispatch. Verify completed
-outputs before reuse; never replay started games or silently restart a failed
-fit. An interrupted fit without a verified complete candidate stays unavailable;
-other declared, untouched fit seeds may proceed within the remaining cap.
+An interrupted upload may resume the same content key after verification. It
+does not authorize more games or a new fit attempt. Etude owns attempt identity
+and acknowledged saved state. An interrupted fit without a verified completed
+candidate remains unavailable; never adopt an orphan candidate or blindly
+restart the same seed. Saved artifacts remain inspectable without live launcher
+access.
 
-Before fitting, close collection accounting: every slot is completed, failed,
-interrupted or explicitly unattempted at a recorded stop, and no worker may
-still write. Save one immutable dataset for all fits and reports. Three
-nonempty splits alone do not establish closure. A completed game with no saved
-representable rows remains in coverage, even though it supplies no fit rows.
-
-For example, if a worker stops after writing a game shard but before its result
-receipt, retain the shard as interrupted evidence and exclude its rows. Reconcile
-the old job, restore any fatal prerequisite, then continue untouched slots.
-A checksum-valid shard does not prove completion. Keep a fatal stop's cause
-private; marking its slot interrupted cannot erase the reason collection stopped.
-
-## Failures, continuation and private evidence
-
-Each scheduled slot has a receipt before reset and ends completed, failed,
-interrupted or unattempted. A finished game's private shard is persisted before
-the next slot. An isolated game failure discards both viewers' rows from that
-game and retains its reason and replay prefix. There are no replacement games.
-Continuation reads receipts and never replays a settled slot; an interrupted
-attempt stays in the accounting.
+For finite frozen collection, every scheduled slot ends completed, failed,
+interrupted or explicitly unattempted at the recorded stop. Preserve failure
+causes and replay prefixes; there are no replacement games. Close this accounting
+before the reference fits. An ongoing player producer can publish a snapshot of
+closed games without declaring its entire run complete.
 
 Identity mismatches, infrastructure errors, malformed constraints, unexpected
-schema names or capacity overflow, and corrupt artifacts stop the job. Inspect
-the retained failure and restore the required producer, runtime or artifact
-before continuing; do not relax bindings, expand a fitted schema or substitute
-a newer checkpoint. Missing split data makes fitting unavailable, with no
-invented empty metrics. Unsupported-row omission applies only to the recognized
-retained-selection and foretell states.
+schema names, capacity overflow and unclassified native errors stop the job.
+Recognized retained-selection and foretell states omit only the affected viewer
+rows. The frozen capture adapter recognizes native panics and the known
+`no legal targets` active-step failure, including its wrapped native cause;
+other native errors remain fatal. Inspect retained diagnostics and restore the
+required runtime, producer or artifact before continuing untouched work. Keep
+fatal causes distinct from interrupted-slot status. Do not relax bindings or
+substitute a newer checkpoint to make evidence load.
 
-The runtime adapter recognizes native panics and the known `no legal targets`
-rules failure during active steps, including the native cause wrapped by the
-semantic API. Other native errors remain fatal until explicitly classified.
-Capture retains private fatal-stop causes/prefixes, per-viewer saved-row counts
-and distinct omission-reason counts. Restoration requires a recorded repaired
-prerequisite and launcher reconciliation before untouched slots continue.
-`fit_saved_sampler` refuses started seeds without verified complete output.
-
-Keep hidden labels, game seeds and replay prefixes in private artifact storage.
-Before publishing through `manabot.data`, verify the private evidence destination;
-publishable summaries and the demo expose only viewer-safe information. Follow
-the [artifact workflow](../experiments/README.md#data) to publish result bytes,
-record their manifest and keep data files out of git. Retain all three sampler
-fits and their exact bindings. The result is a candidate for later belief-guided
-search; this workflow ends with the saved demo and report.
+Keep hidden labels, seeds, prefixes and raw failures private. Follow the
+[artifact workflow](../experiments/README.md#data) to publish result bytes to a
+verified private destination, record their manifest and keep data files out of
+git. Retain all three fits and their exact bindings. This workflow ends with the
+saved report and demo for review.

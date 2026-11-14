@@ -30,9 +30,14 @@ from manabot.belief.sampling import (
     physical_deal_log_prob,
     sample_physical_deal,
 )
-from manabot.belief.sampling_collection import _write_private
-from manabot.belief.sampling_data import SamplerDataset, SamplerExample
-from manabot.belief.sampling_evidence import EvidenceRoot, WorkerSnapshot
+from manabot.belief.sampling_collection import _write_private, read_closed_dataset
+from manabot.belief.sampling_data import (
+    SamplerDataset,
+    SamplerExample,
+    SamplerGame,
+    SnapshotBinding,
+    read_dataset,
+)
 from manabot.infra.torch import deterministic_cpu
 
 
@@ -99,8 +104,9 @@ class SamplerFitResult:
     model: AutoregressiveBeliefSampler
     metrics: SamplerFitMetrics
     dataset_identity: str
-    policy_identity: str
+    policy_identity: str | None
     world_identity: str
+    snapshot_binding: SnapshotBinding | None = None
 
     @property
     def optimizer_exposures(self) -> int:
@@ -253,6 +259,22 @@ def evaluate_sampler(
         model.train(previous)
 
 
+def _sample_training_rows(
+    games: Sequence[SamplerGame], batch_size: int
+) -> list[SamplerExample]:
+    """Uniform nonempty games, then uniform rows; never weight by reservoir size."""
+    if not games or batch_size < 1:
+        raise ValueError("training draw requires nonempty games")
+    indexes = torch.randint(len(games), (batch_size,)).tolist()
+    rows: list[SamplerExample] = []
+    for index in indexes:
+        game = games[index]
+        if not game.examples:
+            raise ValueError("training draw requires nonempty games")
+        rows.append(game.examples[int(torch.randint(len(game.examples), ()).item())])
+    return rows
+
+
 def fit_belief_sampler(
     dataset: SamplerDataset,
     *,
@@ -265,7 +287,7 @@ def fit_belief_sampler(
     seed: int = 0,
     check: Callable[[], None] | None = None,
 ) -> SamplerFitResult:
-    """Optimize minibatch mean joint NLL; each step draws train rows with replacement.
+    """Optimize equal-game joint NLL: draw a nonempty game, then a row.
 
     Gradients pass through teacher-forced conditional logits only. Full private
     labels are never features. History dropout is applied only while fitting;
@@ -303,13 +325,14 @@ def fit_belief_sampler(
             dataset.schema, hidden_size, history_dropout
         )
         optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-        training = split_rows["train"]
+        training = tuple(
+            game for game in dataset.games if game.split == "train" and game.examples
+        )
         started = time.perf_counter()
         model.train()
         for _ in range(steps):
             _check(check)
-            indexes = torch.randint(len(training), (batch_size,)).tolist()
-            rows = [training[index] for index in indexes]
+            rows = _sample_training_rows(training, batch_size)
             targets = torch.tensor([row.target_hand for row in rows], dtype=torch.int64)
             loss = -model.log_prob([row.inputs for row in rows], targets).mean()
             if not bool(torch.isfinite(loss)):
@@ -344,6 +367,7 @@ def fit_belief_sampler(
         dataset.identity,
         dataset.policy_identity,
         dataset.world_identity,
+        dataset.binding,
     )
 
 
@@ -359,6 +383,8 @@ def save_belief_sampler(
         raise ValueError(
             "sampler fit is bound to a different dataset or policy/world identity"
         )
+    if result.snapshot_binding != dataset.binding:
+        raise ValueError("sampler fit is bound to a different snapshot")
     if result.model.schema != dataset.schema:
         raise ValueError("sampler and dataset schemas differ")
     payload = {
@@ -373,6 +399,10 @@ def save_belief_sampler(
         "state_dict": result.model.state_dict(),
         "metrics": asdict(result.metrics),
     }
+    if dataset.binding is not None:
+        payload["format"] = "manabot.autoregressive-belief-sampler/v2"
+        del payload["policy_identity"]
+        payload["snapshot_binding"] = asdict(dataset.binding)
     stream = io.BytesIO()
     torch.save(payload, stream)
     data = stream.getvalue()
@@ -393,7 +423,7 @@ def save_belief_sampler(
 
 @dataclass(frozen=True, slots=True)
 class SavedFitConfig:
-    """One predeclared sampler treatment; seeds identify attempts, never retries."""
+    """One predeclared sampler treatment; Etude owns its execution attempts."""
 
     steps: int = 512
     batch_size: int = 32
@@ -404,22 +434,24 @@ class SavedFitConfig:
 
 
 def fit_saved_sampler(
-    root: EvidenceRoot | WorkerSnapshot,
+    dataset_path: Path,
+    directory: Path,
     config: SavedFitConfig,
     *,
     seed: int,
     check: Callable[[], None] | None = None,
 ) -> Path:
-    """Fit once from closed evidence, or verify a previously completed candidate.
+    """Fit from an immutable input into one Etude attempt's output directory.
+
+    Re-entry verifies a previously completed candidate; it cannot adopt an orphan.
 
     Any interruption after the started receipt consumes this seed's attempt.
     An orphan checkpoint without a completion receipt is unavailable, even if
     its bytes can be loaded. This is not optimizer recovery.
     """
-    if seed not in (357, 358, 359):
-        raise ValueError("fit seed is outside the declared three-seed cohort")
-    dataset = root.dataset()
-    directory = root.directory / "fits" / str(seed)
+    dataset = read_dataset(dataset_path)
+    if dataset.binding is None:
+        dataset = read_closed_dataset(dataset_path.parent)
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
     started = directory / "started.json"
     complete = directory / "complete.json"
@@ -441,6 +473,7 @@ def fit_saved_sampler(
             checkpoint,
             expected_dataset_identity=dataset.identity,
             expected_policy_identity=dataset.policy_identity,
+            expected_snapshot_binding=dataset.binding,
             expected_world_identity=dataset.world_identity,
             expected_schema_identity=dataset.schema.identity,
             expected_checkpoint_identity=receipt["checkpoint_identity"],
@@ -454,6 +487,7 @@ def fit_saved_sampler(
             checkpoint,
             expected_dataset_identity=dataset.identity,
             expected_policy_identity=dataset.policy_identity,
+            expected_snapshot_binding=dataset.binding,
             expected_world_identity=dataset.world_identity,
             expected_schema_identity=dataset.schema.identity,
             expected_checkpoint_identity=identity,

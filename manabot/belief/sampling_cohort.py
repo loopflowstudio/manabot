@@ -1,8 +1,8 @@
-"""Offline uncertainty over saved sampler reports, conditional on one producer.
+"""Offline uncertainty over saved sampler reports, conditional on one producer distribution.
 
 CohortSpec declares every fit attempt and one fixed evaluation panel. Analysis
-never samples hands or loads models. Fits are the independent training unit;
-games (all decisions/viewers together) are the conditional evaluation unit.
+never samples hands or loads models. Fit seeds index optimizer variation;
+declared game groups keep all dependent legs and viewers together.
 Separate percentile bootstraps vary one axis at a time, never individual rows.
 """
 
@@ -73,10 +73,14 @@ class EvaluationGroup(Declaration):
 
 
 class CohortSpec(Declaration):
-    format: Literal["manabot.sampler-cohort/v1"] = "manabot.sampler-cohort/v1"
+    format: Literal["manabot.sampler-cohort/v1", "manabot.sampler-cohort/v2"] = (
+        "manabot.sampler-cohort/v1"
+    )
     description: str = Field(min_length=1)
-    producer_policy_identity: str = Field(min_length=1)
-    evaluation_policy_identity: str = Field(min_length=1)
+    producer_policy_identity: str | None = Field(default=None, min_length=1)
+    evaluation_policy_identity: str | None = Field(default=None, min_length=1)
+    producer_snapshot_identity: str | None = Field(default=None, min_length=1)
+    evaluation_snapshot_identity: str | None = Field(default=None, min_length=1)
     evaluation_dataset_identity: str = Field(min_length=1)
     world_identity: str = Field(min_length=1)
     schema_identity: str = Field(min_length=1)
@@ -93,6 +97,19 @@ class CohortSpec(Declaration):
 
     @model_validator(mode="after")
     def check_design(self) -> CohortSpec:
+        snapshots = self.format == "manabot.sampler-cohort/v2"
+        for policy, snapshot in (
+            (self.producer_policy_identity, self.producer_snapshot_identity),
+            (self.evaluation_policy_identity, self.evaluation_snapshot_identity),
+        ):
+            if (policy is None) == (snapshot is None) or (
+                snapshot is not None
+            ) != snapshots:
+                raise ValueError(
+                    "cohort requires policy bindings for v1 or snapshot bindings for v2"
+                )
+        if snapshots and not self.groups:
+            raise ValueError("snapshot cohort requires declared independent groups")
         if len(set(self.panel_game_ids)) != len(self.panel_game_ids):
             raise ValueError("panel game identities must be unique")
         grouped_games = [game for group in self.groups for game in group.game_ids]
@@ -219,7 +236,9 @@ def _admit_report(
         raise ValueError(f"{attempt.attempt_id}: report byte identity mismatch")
     report = TypeAdapter(SamplerQualityReport).validate_json(data)
     expected = {
-        "format": "manabot.sampler-quality/v2",
+        "format": "manabot.sampler-quality/v2"
+        if spec.format == "manabot.sampler-cohort/v1"
+        else "manabot.sampler-quality/v3",
         "evaluation_dataset_identity": spec.evaluation_dataset_identity,
         "evaluation_policy_identity": spec.evaluation_policy_identity,
         "training_dataset_identity": attempt.training_dataset_identity,
@@ -233,6 +252,29 @@ def _admit_report(
     for name, value in expected.items():
         if getattr(report, name) != value:
             raise ValueError(f"{attempt.attempt_id}: {name} mismatch")
+    if spec.format == "manabot.sampler-cohort/v2":
+        if (
+            report.training_snapshot is None
+            or report.evaluation_snapshot is None
+            or (
+                report.training_snapshot.identity != spec.producer_snapshot_identity
+                or report.evaluation_snapshot.identity
+                != spec.evaluation_snapshot_identity
+            )
+        ):
+            raise ValueError("cohort snapshot identity mismatch")
+        memberships = {g.key.identity: g for g in report.evaluation_snapshot.games}
+        for group in spec.groups:
+            for game_id in group.game_ids:
+                member = memberships.get(game_id)
+                if (
+                    member is None
+                    or member.group != group.group_id
+                    or member.split != spec.split
+                ):
+                    raise ValueError(
+                        "cohort groups differ from the evaluation snapshot"
+                    )
     if report.checkpoint_identity is None:
         raise ValueError("cohort requires learned sampler reports")
     panels = [
@@ -393,6 +435,7 @@ def report_sampler_cohort(spec: CohortSpec, *, root: Path = Path(".")) -> Cohort
     if (
         membership is not None
         and not spec.groups
+        and spec.format == "manabot.sampler-cohort/v1"
         and len({row[1] for row in membership}) != len(membership)
     ):
         raise ValueError("shared deal seeds require declared evaluation groups")
@@ -405,7 +448,8 @@ def report_sampler_cohort(spec: CohortSpec, *, root: Path = Path(".")) -> Cohort
     for group in declared_groups:
         for game_id, seed, _, _ in membership or ():
             if (
-                game_id in group.game_ids
+                spec.format == "manabot.sampler-cohort/v1"
+                and game_id in group.game_ids
                 and seed_groups.setdefault(seed, group.group_id) != group.group_id
             ):
                 raise ValueError("shared deal seed crosses evaluation groups")

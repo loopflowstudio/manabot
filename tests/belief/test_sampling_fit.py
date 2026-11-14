@@ -7,22 +7,25 @@ import pytest
 import torch
 
 from manabot.belief.checkpoint import load_belief_sampler
+from manabot.belief.sampling import AutoregressiveBeliefSampler
 from manabot.belief.sampling_data import (
     SamplerDataset,
     SamplerExample,
     SamplerGame,
     Split,
 )
-from manabot.belief.sampling_evidence import EvidenceRoot
 from manabot.belief.sampling_fit import (
+    SamplerFitMetrics,
     SamplerFitResult,
     SavedFitConfig,
+    _sample_training_rows,
     evaluate_sampler,
     fit_belief_sampler,
     fit_saved_sampler,
     save_belief_sampler,
 )
 from manabot.belief.sampling_types import SamplerInput, SamplerSchema
+from tests.belief.test_sampling_data import _snapshot_fixture
 
 
 def _dataset() -> SamplerDataset:
@@ -175,9 +178,7 @@ def test_foreign_baiting_is_identified_and_safe_baseline_retained() -> None:
 def test_saved_fit_attempt_is_never_restarted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    root = EvidenceRoot(tmp_path)
-    # Bind a controlled immutable dataset; no game generation or optimization.
-    monkeypatch.setattr(root, "dataset", _dataset)
+    _, data = _snapshot_fixture(tmp_path)
     config = SavedFitConfig(steps=1)
 
     def interrupted(dataset: SamplerDataset, **kwargs: object) -> SamplerFitResult:
@@ -185,7 +186,7 @@ def test_saved_fit_attempt_is_never_restarted(
 
     monkeypatch.setattr("manabot.belief.sampling_fit.fit_belief_sampler", interrupted)
     with pytest.raises(TimeoutError, match="optimizer"):
-        fit_saved_sampler(root, config, seed=357)
+        fit_saved_sampler(data, tmp_path / "fits" / str(357), config, seed=357)
     assert (tmp_path / "fits/357/stop.json").exists()
 
     def forbidden(dataset: SamplerDataset, **kwargs: object) -> SamplerFitResult:
@@ -193,28 +194,76 @@ def test_saved_fit_attempt_is_never_restarted(
 
     monkeypatch.setattr("manabot.belief.sampling_fit.fit_belief_sampler", forbidden)
     with pytest.raises(ValueError, match="retries"):
-        fit_saved_sampler(root, config, seed=357)
+        fit_saved_sampler(data, tmp_path / "fits" / str(357), config, seed=357)
     with pytest.raises(ValueError, match="configuration changed"):
-        fit_saved_sampler(root, replace(config, steps=2), seed=357)
-    with pytest.raises(ValueError, match="three-seed"):
-        fit_saved_sampler(root, config, seed=360)
+        fit_saved_sampler(
+            data, tmp_path / "fits" / str(357), replace(config, steps=2), seed=357
+        )
 
 
 def test_completed_saved_fit_reuses_verified_candidate(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    root = EvidenceRoot(tmp_path)
-    monkeypatch.setattr(root, "dataset", _dataset)
+    _, data = _snapshot_fixture(tmp_path)
     config = SavedFitConfig(steps=1, batch_size=2, hidden_size=4, evaluation_samples=2)
-    checkpoint = fit_saved_sampler(root, config, seed=358)
+
+    def fixed(dataset: SamplerDataset, **kwargs: object) -> SamplerFitResult:
+        # Fixed weights isolate persistence/reload from optimizer correctness.
+        model = AutoregressiveBeliefSampler(dataset.schema, hidden_size=4)
+        model.eval()
+        evaluation = evaluate_sampler(model, dataset.games[-1].examples, samples=2)
+        metrics = SamplerFitMetrics(
+            evaluation, evaluation, evaluation, 0, 0, 0.0, 358, 0.0, 0
+        )
+        return SamplerFitResult(
+            model,
+            metrics,
+            dataset.identity,
+            dataset.policy_identity,
+            dataset.world_identity,
+            dataset.binding,
+        )
+
+    monkeypatch.setattr("manabot.belief.sampling_fit.fit_belief_sampler", fixed)
+    checkpoint = fit_saved_sampler(data, tmp_path / "fits/358", config, seed=358)
     before = checkpoint.read_bytes()
 
     def forbidden(dataset: SamplerDataset, **kwargs: object) -> SamplerFitResult:
         raise AssertionError("completed fit optimized again")
 
     monkeypatch.setattr("manabot.belief.sampling_fit.fit_belief_sampler", forbidden)
-    assert fit_saved_sampler(root, config, seed=358) == checkpoint
+    assert (
+        fit_saved_sampler(data, tmp_path / "fits/358", config, seed=358) == checkpoint
+    )
     assert checkpoint.read_bytes() == before
     checkpoint.write_bytes(b"corrupt")
     with pytest.raises(ValueError, match="byte identity"):
-        fit_saved_sampler(root, config, seed=358)
+        fit_saved_sampler(data, tmp_path / "fits/358", config, seed=358)
+
+
+def test_training_draw_weights_games_equally_with_unequal_reservoirs() -> None:
+    first = _dataset().games[0]
+    # Distinct observations make it possible to see both game and within-game draws.
+    short = replace(
+        first,
+        game_id="short",
+        examples=(replace(first.examples[0], observation_identity="short"),),
+    )
+    long = replace(
+        first,
+        game_id="long",
+        examples=tuple(
+            replace(first.examples[1], observation_identity=f"long-{i}")
+            for i in range(8)
+        ),
+    )
+    with torch.random.fork_rng(devices=[]):
+        torch.manual_seed(357)
+        rows = _sample_training_rows((short, long), 1024)
+    short_count = sum(row.observation_identity == "short" for row in rows)
+    assert 450 < short_count < 575
+    assert {
+        row.observation_identity for row in rows if row.observation_identity != "short"
+    } == {f"long-{i}" for i in range(8)}
+    with pytest.raises(ValueError, match="nonempty"):
+        _sample_training_rows((replace(short, examples=()),), 1)

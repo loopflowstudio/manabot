@@ -1,8 +1,9 @@
-"""Frozen-policy self-play evidence for constrained hidden-hand sampling.
+"""Private hand-sampler rows and immutable producer/snapshot bindings.
 
-Inputs are snapshotted from the viewer before accessing supervision-only hands.
-Games are the split unit; artifacts retain checkpoint and complete world bindings.
-The native constraint projection shares exact-range semantics without enumeration.
+SamplerDataset admits supervision against public constraints. Single-policy v1
+artifacts keep their original identities; SnapshotBinding describes explicit
+producer selections, complete-game membership and prospective group splits.
+Inputs are constructed from the viewer before accessing hidden-hand labels.
 """
 
 from __future__ import annotations
@@ -68,48 +69,296 @@ class SamplerGame:
 
 
 @dataclass(frozen=True, slots=True)
-class SamplerDataset:
-    schema: SamplerSchema
-    policy_identity: str
-    world_identity: str
-    games: tuple[SamplerGame, ...]
+class GameKey:
+    """Original producer attempt and global stream survive prefix reconstruction."""
+
+    run: str
+    attempt: str
+    stream: int
+    ordinal: int
+
+    def __post_init__(self) -> None:
+        if not self.run or not self.attempt or self.stream < 0 or self.ordinal < 0:
+            raise ValueError(
+                "game key requires producer, attempt and nonnegative ordinals"
+            )
 
     @property
     def identity(self) -> str:
         return _digest(asdict(self))
 
+
+@dataclass(frozen=True, slots=True)
+class BehaviorIdentity:
+    """Actual acting weights; an unsaved generation has no checkpoint reference.
+
+    Built-ins bind code/configuration through weights_identity and use no update.
+    Source/runtime identities describe bytes, never an adopted frozen world.
+    """
+
+    run: str
+    source_identity: str
+    runtime_identity: str
+    settings_identity: str
+    weights_identity: str
+    kind: Literal["raw", "ema", "builtin"]
+    update: int | None
+    checkpoint: str | None = None
+
     def __post_init__(self) -> None:
-        if len({game.game_id for game in self.games}) != len(self.games) or len(
-            {(game.seed, game.assignment) for game in self.games}
-        ) != len(self.games):
+        if not all(
+            (
+                self.run,
+                self.source_identity,
+                self.runtime_identity,
+                self.settings_identity,
+                self.weights_identity,
+            )
+        ):
+            raise ValueError("behavior requires complete producer bindings")
+        if self.kind not in ("raw", "ema", "builtin") or (self.kind == "builtin") != (
+            self.update is None
+        ):
+            raise ValueError("behavior generation disagrees with its kind")
+        if self.update is not None and self.update < 0:
+            raise ValueError("behavior update must be nonnegative")
+
+    @property
+    def identity(self) -> str:
+        return _digest(asdict(self))
+
+
+@dataclass(frozen=True, slots=True)
+class BehaviorSegment:
+    """Half-open exposed-step range, with the behavior of each rules chooser seat."""
+
+    first_step: int
+    stop_step: int
+    seats: tuple[BehaviorIdentity, BehaviorIdentity]
+
+    def __post_init__(self) -> None:
+        if (
+            self.first_step < 0
+            or self.stop_step <= self.first_step
+            or len(self.seats) != 2
+        ):
+            raise ValueError("behavior segment needs a nonempty range and both seats")
+
+
+@dataclass(frozen=True, slots=True)
+class ProducerSelection:
+    """An explicit inclusive update range, or a named built-in producer."""
+
+    run: str
+    first_update: int | None
+    last_update: int | None
+    kinds: tuple[Literal["raw", "ema", "builtin"], ...]
+    checkpoints: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.run or not self.kinds or len(set(self.kinds)) != len(self.kinds):
+            raise ValueError("selection needs a run and distinct behavior kinds")
+        if any(k not in ("raw", "ema", "builtin") for k in self.kinds):
+            raise ValueError("unknown selected behavior kind")
+        if "builtin" in self.kinds:
+            if (
+                self.kinds != ("builtin",)
+                or self.first_update is not None
+                or self.last_update is not None
+            ):
+                raise ValueError("built-in selection has no update range")
+        elif (
+            self.first_update is None
+            or self.last_update is None
+            or not 0 <= self.first_update <= self.last_update
+        ):
+            raise ValueError("weight selection requires an explicit update range")
+
+    def includes(self, behavior: BehaviorIdentity) -> bool:
+        return (
+            behavior.run == self.run
+            and behavior.kind in self.kinds
+            and (not self.checkpoints or behavior.checkpoint in self.checkpoints)
+            and (
+                behavior.update is None
+                or (
+                    self.first_update is not None
+                    and self.last_update is not None
+                    and self.first_update <= behavior.update <= self.last_update
+                )
+            )
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class GroupSplit:
+    group: str
+    split: Split
+
+
+@dataclass(frozen=True, slots=True)
+class SplitPlan:
+    """Seeded group assignment fixed before capture; overrides support tiny proofs."""
+
+    family: str
+    seed: int
+    overrides: tuple[GroupSplit, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.family or len({x.group for x in self.overrides}) != len(
+            self.overrides
+        ):
+            raise ValueError("split plan needs a family and unique group overrides")
+        if any(
+            not x.group or x.split not in ("train", "validation", "test")
+            for x in self.overrides
+        ):
+            raise ValueError("invalid group split override")
+
+    def assign(self, group: str) -> Split:
+        if not group:
+            raise ValueError("game needs an explicit independent group")
+        for override in self.overrides:
+            if override.group == group:
+                return override.split
+        bucket = (
+            int(_digest({"family": self.family, "seed": self.seed, "group": group}), 16)
+            % 10
+        )
+        return "test" if bucket == 0 else "validation" if bucket == 1 else "train"
+
+
+@dataclass(frozen=True, slots=True)
+class GameMembership:
+    key: GameKey
+    group: str
+    split: Split
+    sha256: str
+    size: int
+
+    def __post_init__(self) -> None:
+        if (
+            self.size < 1
+            or len(self.sha256) != 64
+            or any(c not in "0123456789abcdef" for c in self.sha256)
+        ):
+            raise ValueError("game membership needs an exact shard digest and size")
+
+
+@dataclass(frozen=True, slots=True)
+class SnapshotBinding:
+    """Manifest authority: membership, distribution, split rule and publication cut."""
+
+    selection: tuple[ProducerSelection, ...]
+    producers: tuple[BehaviorIdentity, ...]
+    split_plan: SplitPlan
+    watermark: str
+    games: tuple[GameMembership, ...]
+    failure_references: tuple[str, ...] = ()
+    weighting: Literal["equal-game"] = "equal-game"
+
+    def __post_init__(self) -> None:
+        if (
+            not self.selection
+            or not self.producers
+            or not self.watermark
+            or self.weighting != "equal-game"
+        ):
+            raise ValueError(
+                "snapshot needs explicit producer selection, watermark and equal-game weighting"
+            )
+        if len({p.identity for p in self.producers}) != len(self.producers):
+            raise ValueError("duplicate snapshot producer")
+        if len({g.key.identity for g in self.games}) != len(self.games):
+            raise ValueError("duplicate snapshot game")
+        if any(
+            len(ref) != 64 or any(c not in "0123456789abcdef" for c in ref)
+            for ref in self.failure_references
+        ):
+            raise ValueError("failure references must name immutable evidence digests")
+        for game in self.games:
+            if game.split != self.split_plan.assign(game.group):
+                raise ValueError("snapshot group changed its prospective split")
+
+    @property
+    def identity(self) -> str:
+        return _digest(asdict(self))
+
+    @property
+    def producer_identity(self) -> str:
+        return _digest([asdict(p) for p in self.producers])
+
+
+@dataclass(frozen=True, slots=True)
+class SamplerDataset:
+    schema: SamplerSchema
+    policy_identity: str | None
+    world_identity: str
+    games: tuple[SamplerGame, ...]
+    binding: SnapshotBinding | None = None
+
+    @property
+    def identity(self) -> str:
+        return _digest(self.to_payload())
+
+    def to_payload(self) -> dict[str, object]:
+        payload = asdict(self)
+        if self.binding is None:
+            del payload["binding"]  # Preserve v1 bytes and content identities.
+        return payload
+
+    def __post_init__(self) -> None:
+        if len({game.game_id for game in self.games}) != len(self.games) or (
+            self.binding is None
+            and len({(game.seed, game.assignment) for game in self.games})
+            != len(self.games)
+        ):
             raise ValueError("duplicate game identities in belief dataset")
-        if {game.split for game in self.games} != {"train", "validation", "test"}:
+        if self.binding is None and {game.split for game in self.games} != {
+            "train",
+            "validation",
+            "test",
+        }:
             raise ValueError("belief dataset requires three nonempty whole-game splits")
-        if not self.policy_identity or not self.world_identity:
+        if not self.world_identity or (self.binding is None) != bool(
+            self.policy_identity
+        ):
             raise ValueError(
                 "belief dataset requires frozen policy and world identities"
             )
+        if self.binding is not None:
+            members = self.binding.games
+            if [(g.game_id, g.split) for g in self.games] != [
+                (m.key.identity, m.split) for m in members
+            ]:
+                raise ValueError("snapshot games differ from manifest membership")
         for game in self.games:
-            if not game.examples:
+            if self.binding is None and not game.examples:
                 raise ValueError("belief dataset contains an empty game")
             for row in game.examples:
-                row.inputs.validate(self.schema)
-                if len(row.target_hand) != len(self.schema.card_names):
-                    raise ValueError("belief hand label vocabulary mismatch")
-                if sum(row.target_hand) != row.inputs.hand_size or any(
-                    type(count) is not int or count < low or count > high
-                    for count, low, high in zip(
-                        row.target_hand,
-                        row.inputs.known_minima,
-                        row.inputs.pool_counts,
-                        strict=True,
-                    )
-                ):
-                    raise ValueError("belief hand label violates authority constraints")
+                _validate_example(row, self.schema)
+
+
+def _validate_example(row: SamplerExample, schema: SamplerSchema) -> None:
+    row.inputs.validate(schema)
+    if len(row.target_hand) != len(schema.card_names):
+        raise ValueError("belief hand label vocabulary mismatch")
+    if sum(row.target_hand) != row.inputs.hand_size or any(
+        type(count) is not int or count < low or count > high
+        for count, low, high in zip(
+            row.target_hand,
+            row.inputs.known_minima,
+            row.inputs.pool_counts,
+            strict=True,
+        )
+    ):
+        raise ValueError("belief hand label violates authority constraints")
 
 
 def save_dataset(dataset: SamplerDataset, path: Path) -> None:
     """Create immutable private training evidence; refuse accidental overwrite."""
+    if dataset.binding is not None:
+        raise ValueError("publish multi-producer data with its sealed snapshot shards")
     path.parent.mkdir(parents=True, exist_ok=True)
     # Publish only fully flushed bytes. Linking is atomic and refuses overwrite.
     descriptor, temporary = tempfile.mkstemp(prefix=".belief-", dir=path.parent)
@@ -119,7 +368,7 @@ def save_dataset(dataset: SamplerDataset, path: Path) -> None:
                 {
                     "schema_version": 1,
                     "identity": dataset.identity,
-                    "dataset": asdict(dataset),
+                    "dataset": dataset.to_payload(),
                 },
                 output,
                 sort_keys=True,
@@ -135,6 +384,10 @@ def save_dataset(dataset: SamplerDataset, path: Path) -> None:
 def read_dataset(path: Path) -> SamplerDataset:
     """Load typed immutable rows and verify the complete content digest."""
     payload = json.loads(path.read_text())
+    if payload.get("format") == "manabot.belief-snapshot/v1":
+        from manabot.belief.sampling_snapshot import _read_snapshot_payload
+
+        return _read_snapshot_payload(payload)
     if payload["schema_version"] != 1:
         raise ValueError("unsupported belief dataset version")
     data = payload["dataset"]
