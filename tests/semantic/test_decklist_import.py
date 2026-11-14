@@ -24,8 +24,8 @@ from manabot.infra.config import (
     SimulationConfig,
 )
 from manabot.model.world import validate_agent_setup
-from manabot.sim.player import ModelPlayer
 from manabot.sim import sim
+from manabot.sim.player import ModelPlayer
 from manabot.sim.sim import load_player, simulate_models
 import managym
 from managym import DeckImport, DeckImportError, Decklist
