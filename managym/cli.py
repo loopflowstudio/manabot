@@ -1,7 +1,6 @@
 """Engine command line: prepare and launch the packaged Academy browser UI."""
 
 import argparse
-from collections.abc import Collection
 import json
 from pathlib import Path
 import sys
@@ -10,18 +9,14 @@ DEFAULT_URL = "http://127.0.0.1:8000"
 GUIDE_URL = "https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#running-academy"
 
 
-def _path_or_name(
-    value: str, suffixes: set[str], names: Collection[str] = ()
-) -> str | Path:
-    """A known name is never a file; otherwise an existing or path-shaped value is one."""
-    if value in names:
-        return value
-    path = Path(value).expanduser()
-    return path if path.exists() or "/" in value or path.suffix in suffixes else value
-
-
 def academy(argv: list[str] | None = None) -> int:
-    from managym.academy.launch import AcademyLaunchError, serve
+    from managym.academy.launch import (
+        _DECK_SUFFIXES,
+        _TRACE_SUFFIXES,
+        AcademyLaunchError,
+        _path_or_name,
+        serve,
+    )
 
     common = argparse.ArgumentParser(add_help=False)
     # Suppressed defaults let shared options occur before or after the verb.
@@ -58,11 +53,10 @@ def academy(argv: list[str] | None = None) -> int:
             if args.command == "play":
                 from managym.academy import server
 
-                decklist = {".txt", ".dek"}
                 target = running.new_game(
-                    deck=_path_or_name(args.deck, decklist, server.NAMED_DECKS),
+                    deck=_path_or_name(args.deck, _DECK_SUFFIXES, server.NAMED_DECKS),
                     opponent_deck=_path_or_name(
-                        args.opponent_deck, decklist, server.NAMED_DECKS
+                        args.opponent_deck, _DECK_SUFFIXES, server.NAMED_DECKS
                     ),
                     opponent=args.opponent,
                     sims=args.sims,
@@ -70,14 +64,9 @@ def academy(argv: list[str] | None = None) -> int:
                     decklists=args.decklists,
                 ).url
             elif args.command == "replay":
-                selection = (
-                    int(args.game)
-                    if args.game is not None and args.game.isdecimal()
-                    else args.game
-                )
                 target = running.replay(
-                    _path_or_name(args.source, {".json", ".jsonl", ".gz"}),
-                    game=selection,
+                    _path_or_name(args.source, _TRACE_SUFFIXES),
+                    game=args.game,
                 ).url
             print(
                 "ACADEMY_PLAY_READY "
@@ -103,6 +92,7 @@ def academy(argv: list[str] | None = None) -> int:
             flush=True,
         )
         if exc.games:
+            print("  Select a game with --game <index-or-digest>.", file=sys.stderr)
             print("  game  deal seed  leg  players  trace", file=sys.stderr)
             for row in exc.games[:20]:
                 print(

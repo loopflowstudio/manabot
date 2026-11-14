@@ -7,6 +7,7 @@ optional bot extension; neither operation chooses a game action.
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from dataclasses import dataclass, field
 import errno
 import gzip
@@ -25,6 +26,8 @@ if TYPE_CHECKING:
     import uvicorn
 
 _ACTIVE_LOCK = threading.Lock()
+_DECK_SUFFIXES = {".txt", ".dek"}
+_TRACE_SUFFIXES = {".json", ".jsonl", ".gz"}
 
 
 @dataclass(frozen=True)
@@ -51,6 +54,22 @@ class AcademyLaunchError(ValueError):
 @dataclass(frozen=True)
 class Launched:
     url: str
+
+
+def _path_or_name(
+    value: str, suffixes: set[str], names: Collection[str] = ()
+) -> str | Path:
+    """A known name is never a file; otherwise an existing or path-shaped value is one."""
+    if value in names:
+        return value
+    path = Path(value).expanduser()
+    return path if path.exists() or "/" in value or path.suffix in suffixes else value
+
+
+def _file_hint(value: str, suffixes: set[str]) -> str:
+    if isinstance(_path_or_name(value, suffixes), Path):
+        return f" Pass pathlib.Path({value!r}) for a file."
+    return ""
 
 
 def read_games(path: Path) -> list[RecordedGame]:
@@ -134,9 +153,12 @@ def _select_game(path: Path, game: int | str | None) -> RecordedGame:
             return games[0]
         raise AcademyLaunchError(
             "replay.ambiguous",
-            f"{path} holds {len(games)} games; choose one with --game.",
+            f"{path} holds {len(games)} games; select one by index or trace digest.",
             games,
         )
+    # A decimal string is a position when the file has one, else a digest prefix.
+    if isinstance(game, str) and game.isdecimal() and int(game) < len(games):
+        game = int(game)
     matches = [
         row
         for row in games
@@ -247,7 +269,9 @@ class Academy:
             if isinstance(selected, str) and selected not in server.NAMED_DECKS:
                 raise AcademyLaunchError(
                     "deck.unknown",
-                    f"Unknown {label} {selected!r}; bundled names: {', '.join(sorted(server.NAMED_DECKS))}",
+                    f"{label.capitalize()} {selected!r} is not a bundled deck; "
+                    f"bundled names: {', '.join(sorted(server.NAMED_DECKS))}."
+                    + _file_hint(selected, _DECK_SUFFIXES),
                 )
         checkpoint = _is_sha256(opponent)
         imported = isinstance(deck, Path) or isinstance(opponent_deck, Path)
@@ -314,7 +338,9 @@ class Academy:
         store = AttemptStore(self.traces_dir / "play.sqlite")
         if store.owner(source) is None:
             raise AcademyLaunchError(
-                "replay.missing", f"No recording {source!r} in {self.traces_dir}."
+                "replay.missing",
+                f"No recording {source!r} in {self.traces_dir}."
+                + _file_hint(source, _TRACE_SUFFIXES),
             )
         return Launched(f"{self.url}/replay?{urlencode({'trace': source})}")
 

@@ -16,7 +16,13 @@ import pytest
 from websockets.sync.client import connect
 
 from managym.academy import extensions, server
-from managym.academy.launch import Academy, AcademyLaunchError, read_games, serve
+from managym.academy.launch import (
+    Academy,
+    AcademyLaunchError,
+    _select_game,
+    read_games,
+    serve,
+)
 
 
 @pytest.fixture
@@ -102,8 +108,8 @@ def test_setup_errors_before_open(
 @pytest.mark.parametrize(
     ("kwargs", "label"),
     [
-        ({"deck": "absent"}, "your deck"),
-        ({"opponent_deck": "absent"}, "opponent deck"),
+        ({"deck": "absent"}, "Your deck"),
+        ({"opponent_deck": "absent"}, "Opponent deck"),
         ({"deck": Path("/absent/deck.txt")}, "your deck"),
         ({"opponent_deck": Path("/absent/deck.txt")}, "opponent deck"),
     ],
@@ -113,6 +119,53 @@ def test_launch_deck_errors_name_the_seat(
 ) -> None:
     with pytest.raises(AcademyLaunchError, match=label):
         academy.new_game(**kwargs)
+
+
+@pytest.mark.parametrize("seat", ["deck", "opponent_deck"])
+@pytest.mark.parametrize(
+    "value", ["./my-deck", "my-deck.txt", "my-deck.dek", "existing"]
+)
+def test_python_deck_strings_hint_path(
+    academy: Academy,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    seat: str,
+    value: str,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    Path("existing").write_text("20 Mountain")
+    with pytest.raises(AcademyLaunchError) as error:
+        academy.new_game(**{seat: value})
+    assert error.value.code == "deck.unknown"
+    assert "is not a bundled deck; bundled names:" in error.value.message
+    assert f"Pass pathlib.Path({value!r}) for a file." in error.value.message
+
+
+@pytest.mark.parametrize(
+    "value", ["out/trace", "trace.json", "trace.jsonl", "trace.gz", "existing"]
+)
+def test_python_replay_strings_hint_path(
+    academy: Academy,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    value: str,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    Path("existing").write_text("{}")
+    with pytest.raises(AcademyLaunchError) as error:
+        academy.replay(value)
+    assert error.value.code == "replay.missing"
+    assert f"Pass pathlib.Path({value!r}) for a file." in error.value.message
+
+
+def test_unknown_names_do_not_suggest_files(academy: Academy) -> None:
+    for prepare in (
+        lambda: academy.new_game(deck="absent"),
+        lambda: academy.replay("absent"),
+    ):
+        with pytest.raises(AcademyLaunchError) as error:
+            prepare()
+        assert "pathlib.Path" not in error.value.message
 
 
 def test_open_explicitly_selects_game_or_bare_table(
@@ -184,6 +237,8 @@ def test_trace_read_selection_and_errors(academy: Academy, tmp_path: Path) -> No
         academy.replay(path)
     assert error.value.code == "replay.ambiguous"
     assert len(error.value.games) == 2
+    assert "select one by index or trace digest" in error.value.message
+    assert "--game" not in error.value.message
     for game in (4, "ab"):
         with pytest.raises(AcademyLaunchError) as error:
             academy.replay(path, game=game)
@@ -196,6 +251,67 @@ def test_trace_read_selection_and_errors(academy: Academy, tmp_path: Path) -> No
         with pytest.raises(AcademyLaunchError) as error:
             academy.replay(source)
         assert error.value.code == "replay.missing"
+
+
+@pytest.mark.parametrize(
+    ("selection", "expected"),
+    [("111111111111", 0), ("1", 1), ("0", 0), (0, 0), (1, 1)],
+)
+def test_decimal_replay_selection_preserves_index_precedence(
+    tmp_path: Path,
+    selection: int | str,
+    expected: int,
+) -> None:
+    path = tmp_path / "games.json"
+    path.write_text(json.dumps([_record(1), _record(2)]))
+    assert _select_game(path, selection).index == expected
+    # Integers always mean positions, even when their spelling matches a digest.
+    with pytest.raises(AcademyLaunchError) as error:
+        _select_game(path, 111111111111)
+    assert error.value.code == "replay.game_unknown"
+
+
+def test_cli_replay_ambiguity_explains_flag(
+    academy: Academy,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from managym.cli import academy as launch_cli
+
+    path = tmp_path / "games.json"
+    path.write_text(json.dumps([_record(1), _record(2)]))
+    monkeypatch.setattr("managym.academy.launch.serve", lambda **kwargs: academy)
+    assert launch_cli(["replay", str(path), "--no-open"]) == 2
+    output = capsys.readouterr().err
+    assert "select one by index or trace digest" in output
+    assert "Select a game with --game <index-or-digest>." in output
+    assert "111111111111" in output
+
+
+def test_cli_selects_decimal_digest(
+    academy: Academy,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from managym.cli import academy as launch_cli
+
+    path = tmp_path / "games.json"
+    path.write_text(json.dumps([_record(1), _record(2)]))
+    monkeypatch.setattr("managym.academy.launch.serve", lambda **kwargs: academy)
+    monkeypatch.setattr(Academy, "wait", lambda self: None)
+    monkeypatch.setattr(
+        "managym.academy.watch.import_arena",
+        lambda record: {"id": str(record["deal_seed"])},
+    )
+    assert launch_cli(["replay", str(path), "--game", "111111111111", "--no-open"]) == 0
+    ready = next(
+        line.removeprefix("ACADEMY_PLAY_READY ")
+        for line in capsys.readouterr().out.splitlines()
+        if line.startswith("ACADEMY_PLAY_READY ")
+    )
+    assert json.loads(ready)["open"] == f"{academy.url}/replay?watch=1&trace=1"
 
 
 def test_replay_needs_optional_manabot(

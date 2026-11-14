@@ -191,11 +191,13 @@ accepted. Recordings in **Games** open without manabot.
 
 A trace file usually holds many games. `--game` takes either the game's
 zero-based position in the file (the order **Recorded game** lists in the
-browser) or the first characters of its `game_trace_sha256`. A file with one
-game needs no `--game`. Leave it off a larger file to see what the file holds:
+browser) or the first characters of its `game_trace_sha256`. A position in
+the file takes precedence when both fit. A file with one game needs no
+`--game`. Leave it off a larger file to see what the file holds:
 
 ```text
-ACADEMY_PLAY_ERROR {"code": "replay.ambiguous", "message": "out/traces/c41.commands.jsonl.gz holds 40 games; choose one with --game."}
+ACADEMY_PLAY_ERROR {"code": "replay.ambiguous", "message": "out/traces/c41.commands.jsonl.gz holds 40 games; select one by index or trace digest."}
+  Select a game with --game <index-or-digest>.
   game  deal seed   leg  players                    trace
      0  9120443     0    w17-final vs heuristic     5be01c9a2f31
      1  9120443     1    heuristic vs w17-final     e07a44d1c8b2
@@ -238,7 +240,8 @@ with serve(port=0) as academy:
 - `academy.new_game(...)` takes the options of `managym academy play`. A deck
   given as `str` is a bundled deck name; a `pathlib.Path` is a decklist file.
 - `academy.replay(source, game=None)` takes a trace `Path` with the same
-  `game` selection as the command line, or a recording id as `str`.
+  `game` selection as the command line, or a recording id as `str`. An integer
+  `game` selects only a position; strings can also select a digest prefix.
 - `launch.read_games(path)` lists a trace file's games as `RecordedGame`
   values (`index`, `deal_seed`, `leg`, `players`, `decks`,
   `game_trace_sha256`), for choosing one in code.
@@ -387,15 +390,15 @@ and a message, and exits with status 2. From Python the same `code` and
 | `ACADEMY_PLAY_ERROR` with code `extra.missing` | `managym` is installed without the server dependencies. Run `uv pip install 'managym[academy]'`. |
 | `ACADEMY_PLAY_ERROR` with code `port.in_use` | Another program, often an earlier Academy, holds the port. Stop it, or run `uv run --no-project managym academy --port 8001`. |
 | `ACADEMY_PLAY_ERROR` with code `site.missing` | This `managym` was built from source without the browser client, as in a checkout. Use `./scripts/play` from the checkout, or install a released wheel. |
-| `deck.unknown` | The value is neither a bundled deck nor an existing file. The message lists the bundled names. |
+| `deck.unknown` | The value is not a bundled deck. The message lists bundled names; in Python, pass a `pathlib.Path` for a decklist file. |
 | `deck.unreadable` | The decklist file cannot be read as UTF-8 text. |
 | `deck.rejected` | Native admission refused a decklist. The message gives each seat's issues by line; fix them as you would after **Check decklists**. |
 | `setup.invalid` | The combination is not allowed, for example `--opponent search` with `--decklists closed`, or a checkpoint opponent with a decklist file. The message says which. |
 | `opponent.unavailable` | The checkpoint digest is not in the catalog, or manabot is not installed. See [Trained opponents and other bots](#trained-opponents-and-other-bots). |
-| `replay.missing` | No such trace file, and no recording with that id in this traces directory. Check the path, or pass the `--traces-dir` the game was recorded in. |
+| `replay.missing` | No such trace file, and no recording with that id in this traces directory. Check the path (use `pathlib.Path` for files in Python), or pass the `--traces-dir` the game was recorded in. |
 | `participant_credential_required` in the browser after READY | The recording is private or unfinished and this browser at this address has no participant credential. Use the same browser and address (including port) where **Games** lists it, or open a shared, finished recording. |
 | `replay.unreadable` | The file is not a command trace: not JSON, JSONL or gzip of either, or it holds no game records. Use `traces/<cell-id>.commands.jsonl.gz`, not the metrics or summary file. |
-| `replay.ambiguous` | The trace holds several games and none was selected. Choose one of the listed games with `--game`. |
+| `replay.ambiguous` | The trace holds several games and none was selected. Select one by index or trace digest: `--game` in the CLI, or `game=` in Python. |
 | `replay.game_unknown` | `--game` is past the end of the file, or matches no digest or more than one. |
 | `replay.needs_manabot` | Evaluation traces are verified by manabot. Install it at the same version: `uv pip install --python .venv/bin/python --only-binary :all: --torch-backend cpu manabot`. |
 | `replay.rejected` | Verification failed: the trace was recorded in another world, or its Commands or digests do not replay. Open it with the revision that produced it. |
