@@ -4,6 +4,13 @@ from enum import Enum
 import math
 from typing import Literal
 
+from pydantic import model_validator
+
+from managym.academy.replay_index import (
+    DecisionAddressV2,
+    decision_payload_sha256,
+    parse_decision_address,
+)
 from managym.experience import (
     Command,
     ExperienceFrame,
@@ -13,13 +20,6 @@ from managym.experience import (
     UInt8,
     UInt32,
     UInt64,
-)
-from pydantic import model_validator
-
-from academy.replay_index import (
-    DecisionAddressV2,
-    decision_payload_sha256,
-    parse_decision_address,
 )
 
 STUDY_VERSION: Literal[1] = 1

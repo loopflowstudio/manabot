@@ -6,9 +6,9 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 import pytest
 
-from academy import server
-from academy.replay_index import restore_decision
-from academy.watch import (
+from managym.academy import server
+from managym.academy.replay_index import restore_decision
+from managym.academy.watch import (
     WatchCreated,
     WatchRequest,
     create_watch,
@@ -132,8 +132,7 @@ def test_watch_roots_fork_both_seats_without_mutating_match(
 
 
 def test_search_captures_actual_scores(watch: WatchCreated) -> None:
-    from academy.villain import choose_bot
-    from manabot.sim.search.flat import FlatSearchPolicy
+    from managym.bots import FlatSearchPolicy, choose_bot
 
     game = server._live_record_for_trace(watch["id"]).game
     # Forced actions bypass search; reach a real choice before checking scores.
@@ -155,9 +154,9 @@ def test_arena_import_keeps_source_and_rejects_tampering(
 ) -> None:
     import copy
 
-    from academy.watch import import_arena
     from manabot.eval.match import play_cell
     from manabot.sim.replay import read_trace
+    from managym.academy.watch import import_arena
     from tests.eval.arena_fixture import arena_fixture
 
     monkeypatch.setattr(server.trace_store, "TRACES_DIR", tmp_path / "academy")
@@ -209,11 +208,12 @@ def test_checkpoint_outputs_are_from_the_chosen_inference(
     """Flat checkpoints play; removed compound checkpoints fail before play."""
     import torch
 
-    from academy.villain import CheckpointVillain, choose_bot
     from manabot.backends.torch.policy import ActorCritic
     from manabot.env.observation import ObservationSpace
     from manabot.infra.config import ModelConfig
     from manabot.model.world import checkpoint_world
+    from manabot.sim.table_bots import CheckpointVillain
+    from managym.bots import choose_bot
 
     config = server._parse_game_config(
         {
@@ -260,3 +260,22 @@ def test_checkpoint_outputs_are_from_the_chosen_inference(
     assert decision.action == max(
         range(len(decision.probabilities)), key=decision.probabilities.__getitem__
     )
+
+
+@pytest.mark.parametrize("kind", ["greedy", "heuristic"])
+def test_training_watch_players_keep_their_declared_identity(
+    kind: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(server.trace_store, "TRACES_DIR", tmp_path)
+    result = create_watch(WatchRequest(players=[kind, kind], seed=42))
+    try:
+        assert step_watch(result["id"], result["token"], 0)["revision"] == 1
+        row = inspect_watch(result["id"], 0, result["token"])
+        assert row["players"] == [kind, kind]
+        assert [player["name"] for player in row["identities"]] == [
+            kind.title(),
+            kind.title(),
+        ]
+        assert row["outputs"]["probabilities"][row["outputs"]["action"]] == 1
+    finally:
+        server._drop_session(result["id"], "test")

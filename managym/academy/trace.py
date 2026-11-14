@@ -14,11 +14,9 @@ from pathlib import Path
 import re
 from typing import Any, Literal
 
-from managym.experience_projection import redact_observation
-
 import managym
-
-from .bot_decision import BotDecision
+from managym.bots import BotDecision
+from managym.experience_projection import redact_observation
 
 TRACE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
 TRACES_DIR = Path(os.getenv("ACADEMY_TRACES_DIR", "academy/traces"))

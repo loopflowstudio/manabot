@@ -1,15 +1,70 @@
 # managym
 
 The deterministic Magic: The Gathering rules engine and training environment
-behind Manabot. Rust, with PyO3 bindings consumed by `manabot` (the agent)
-and `academy` (the optional play UI). Install the `managym` distribution for
-`import managym` without the training stack. `manabot` depends on the exact
-same version and keeps `manabot.managym` as a compatibility alias. Rust sources
-stay in this directory. Start with the
-[Python installation example](../docs/engine-python.md). Both `Env` and
-`VectorEnv` accept `player_policies=("agent", "heuristic")`: each native seat
-can use an external agent, random play or the built-in heuristic, without
-installing `manabot`. See [built-in play](../docs/engine.md#per-seat-players).
+behind Manabot. Rust, with PyO3 bindings consumed by `manabot` (the agent).
+Install the `managym` distribution for `import managym` without the training
+stack. `manabot` depends on the exact same version and keeps `manabot.managym`
+as a compatibility alias. Rust sources stay in this directory. Start with the
+[Python installation example](https://github.com/loopflowstudio/manabot/blob/main/docs/engine-python.md).
+Both `Env` and `VectorEnv` accept `player_policies=("agent", "heuristic")`:
+each native seat can use an external agent, random play or the built-in
+heuristic, without installing `manabot`. See
+[per-seat players](https://github.com/loopflowstudio/manabot/blob/main/docs/engine.md#per-seat-players).
+
+## Play in the browser
+
+The distribution includes Academy, a browser table for playing a game against
+the engine's built-in opponents and stepping through recorded games:
+
+```bash
+uv venv --python 3.13
+uv pip install --python .venv/bin/python --only-binary :all: 'managym[academy]'
+uv run --no-project managym academy
+```
+
+This starts a local server and opens `http://127.0.0.1:8000` with a game
+ready; Ctrl-C stops it. It needs CPython 3.12 or 3.13 and nothing else: no
+manabot, Torch, Node or Rust. Finished and unfinished games are listed under
+**Games** and open in **Replay**. `uv run --no-project python -m managym.academy` is the same
+command, and `uv run --no-project managym academy --help` lists the port, host and storage
+options. Installing `manabot` in the same environment adds trained opponents.
+The [Academy guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#running-academy)
+covers playing, replays, trained bots and launch troubleshooting.
+
+### Start a game with your chosen decks
+
+After launching Academy, open **Choose decks**. Browse a bundled deck and
+select **Use for me** or **Use for opponent** to assign each seat, choose an
+opponent such as **Search 64**, then click **New Game**.
+
+For your own lists, expand **Import decklist files** and check **Use imported
+decks for the next game**. Upload or paste both decks, one `count card name`
+per line, with optional `Main` and `Sideboard` headings. Click **Check decklists**,
+fix any reported issues, and select **New Game**. Imported decks use the
+development format and supported cards; choose a built-in opponent, since
+checkpoint opponents do not accept imported decks. See the
+[play guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#play-a-game).
+
+### Watch a replay from an evaluation
+
+Evaluation trace import needs the optional manabot integration, installed in
+the same environment and at the same release version as managym:
+
+```bash
+uv pip install --python .venv/bin/python --only-binary :all: --torch-backend cpu manabot
+uv run --no-project managym academy
+```
+
+Open **Watch** at `http://127.0.0.1:8000/replay?watch=1`. Under **Open arena /
+Tournament game**, select the evaluation's retained command trace, usually
+`traces/<cell-id>.commands.jsonl.gz` in its output directory. Download the
+artifact first if the evaluation ran remotely. Select a **Recorded game** and
+**Open selected game** when the file contains more than one game, then use
+**Step decision**, **Previous decision** or **Play**. Import verifies the
+recorded actions and state digests without running the original players or
+loading their checkpoints. Incompatible historical worlds need their original
+revision. The [evaluation replay guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#watch-a-game-from-an-evaluation)
+covers supported files and troubleshooting.
 
 For building a deck before play, see [Limited deck building](../docs/deck-building.md):
 `CardPool` holds the cards available, `format.Limited` holds the rules, and a

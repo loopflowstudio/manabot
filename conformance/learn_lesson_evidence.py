@@ -9,9 +9,7 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-import managym
-
-from .authored_match_parity import (
+from conformance.authored_match_parity import (
     ROOT,
     _canonical_bytes,
     _checkpoint,
@@ -20,10 +18,11 @@ from .authored_match_parity import (
     _sha256,
     _source_manifest,
 )
-from .authored_match_receipt import _ledger, play_fixed_authored_match
-from .replay_index import CanonicalReplayV1, project_replay
-from .server import GameSession
-from .trace import GameConfig
+from conformance.authored_match_receipt import _ledger, play_fixed_authored_match
+import managym
+from managym.academy.replay_index import CanonicalReplayV1, project_replay
+from managym.academy.server import GameSession
+from managym.academy.trace import GameConfig
 
 MAX_COMMANDS = 10_000
 
@@ -31,7 +30,7 @@ MAX_COMMANDS = 10_000
 def source_identity():
     files = {row["path"]: row for row in _source_manifest()["files"]}
     for folder in (
-        "academy",
+        "conformance",
         "manabot/model",
         "manabot/env",
         "manabot/semantic",
