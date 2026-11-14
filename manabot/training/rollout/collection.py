@@ -523,7 +523,7 @@ class SeatRoutedCollector:
                     num_envs=num_envs,
                     seed=seed,
                     skip_trivial=True,
-                    opponent_policy="none",
+                    player_policies=("agent", "agent"),
                 )
             )
         else:

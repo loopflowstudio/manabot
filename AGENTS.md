@@ -55,6 +55,9 @@ to stage self-contained source archives; direct engine sdists from the workspace
 do not preserve shared asset paths. `manabot` requires that exact `managym` version;
 `manabot.managym` is a compatibility alias to the same engine. manabot never imports
 Academy, eagerly or lazily (`tests/test_package_boundaries.py` enforces it).
+The engine wheel retains `managym/src/**/*.rs` and `managym/Cargo.lock` for
+source-byte identities. Keep wheel exclusions narrow: `**/cards/**` and
+`**/state/**` also match engine modules under `src/`.
 
 ## Academy's shared decision surface
 
@@ -256,6 +259,15 @@ chooser: `publish_action_space` resolves control once from the legal actions.
 Env dispatch, observations and Command/offer actors read that chooser directly;
 never remap it again. Player control grants in-game inspection through native
 `shares_information`, never private sideboard access or outside-game selection.
+
+Native heuristic selection consumes the live viewer `Observation`, including
+`action_space.focus` (source identity for target/cost decisions). Canonical viewer
+JSON omits that focus; a `toJSON`/`from_json` round trip is not an equivalent
+selector input. Parity fixtures replay decisions to retain the live projection.
+`Observation::for_player` omits presentation events; built-in stepping retains
+the last live projection's events so combat history survives scalar calls and
+exact forks. Player policies belong to Env/VectorEnv chooser seats, separate
+from rules/deck PlayerConfig and world identity.
 
 ## Forced decisions
 

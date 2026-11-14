@@ -28,13 +28,13 @@ def test_build_opponent_policy_none() -> None:
 @pytest.mark.parametrize("name", ["passive", "unknown"])
 @pytest.mark.parametrize("api", ["factory", "native", "captured", "torch"])
 def test_unsupported_opponent_policy(name: str, api: str) -> None:
-    with pytest.raises(ValueError, match=f"[Uu]nsupported opponent_policy:.*{name}"):
+    with pytest.raises(ValueError, match=f"[Uu]nsupported .*policy:.*{name}"):
         if api == "factory":
             build_opponent_policy(name)
         elif api == "native":
-            managym.VectorEnv(num_envs=1, opponent_policy=name)
+            managym.VectorEnv(num_envs=1, player_policies=("agent", name))
         elif api == "captured":
-            CapturedVector(num_envs=1, opponent_policy=name)
+            CapturedVector(num_envs=1, player_policies=("agent", name))
         else:
             VectorEnv(
                 1,
@@ -42,10 +42,11 @@ def test_unsupported_opponent_policy(name: str, api: str) -> None:
                 ObservationSpace(),
                 Reward(RewardConfig()),
                 "cpu",
-                opponent_policy=name,
+                player_policies=("agent", name),
             )
 
 
+@pytest.mark.filterwarnings("error::DeprecationWarning")
 def test_retained_passive_evidence_is_readable_but_cannot_replay() -> None:
     evidence = FailureEvidence(
         mode="vector",
@@ -59,6 +60,6 @@ def test_retained_passive_evidence_is_readable_but_cannot_replay() -> None:
     retained = evidence.model_dump_json(by_alias=True)
     restored = FailureEvidence.model_validate_json(retained)
     assert restored.opponent_policy == "passive"
-    with pytest.raises(ValueError, match="unsupported opponent_policy: passive"):
+    with pytest.raises(ValueError, match="[Uu]nsupported player policy:.*passive"):
         replay_failure_inputs(restored)
     assert restored.model_dump_json(by_alias=True) == retained

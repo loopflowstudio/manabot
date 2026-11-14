@@ -31,18 +31,17 @@ include = [
     { path = "content/semantic/**/*.json", format = "sdist" },
     { path = "managym/academy/site/**/*", format = ["sdist", "wheel"] },
 ]
-# The wheel keeps managym/Cargo.lock: manabot's runtime provenance
-# (`manabot.infra.provenance.engine_source_paths`) hashes it from the install.
+# Keep src/**/*.rs and Cargo.lock at their original package paths: heuristic
+# registrations and manabot runtime provenance hash these installed bytes.
 exclude = [
     "academy/ui/**",
     "academy/README.md",
     "**/__pycache__/**", "**/*.pyc", "**/target/**", "**/*.dSYM/**",
-    { path = "**/*.rs", format = "wheel" },
     { path = "**/Cargo.toml", format = "wheel" },
     { path = "**/uv.lock", format = "wheel" },
     { path = "**/pyproject.toml", format = "wheel" },
-    { path = "**/state/**", format = "wheel" },
-    { path = "**/cards/**", format = "wheel" },
+    { path = "**/state/src/**", format = "wheel" },
+    { path = "**/cards/src/**", format = "wheel" },
     { path = "**/tests/**", format = "wheel" },
     { path = "**/examples/**", format = "wheel" },
     { path = "**/perf/**", format = "wheel" },
