@@ -22,7 +22,7 @@ fn lightning_strike_any_target_deals_damage_to_creatures_players_planeswalkers_a
             let object = card_of(&s, victim);
             // Controlled shell: no invented catalog definition or unsupported
             // battle/planeswalker ability is needed to test CR 120.3.
-            s.game_mut().state.objects[object].types = CardTypes::new([card_type]);
+            s.game_mut().state[object].types = CardTypes::new([card_type]);
             let counter = if card_type == CardType::Battle {
                 CounterKind::Defense
             } else {
@@ -81,7 +81,7 @@ fn lightning_strike_rechecks_hexproof_and_damage_uses_every_current_type() {
         let mut s = five_color_setup(&["Lightning Strike", "Wall of Stone"]);
         let victim = s.force_permanent_on_battlefield(1, "Wall of Stone");
         let object = card_of(&s, victim);
-        s.game_mut().state.objects[object].types =
+        s.game_mut().state[object].types =
             CardTypes::new([CardType::Creature, CardType::Planeswalker, CardType::Battle]);
         set_counters(&mut s, victim, CounterKind::Loyalty, 5);
         set_counters(&mut s, victim, CounterKind::Defense, 5);
@@ -119,7 +119,7 @@ fn lightning_strike_excludes_opposing_hexproof_planeswalkers_and_battles() {
         let opposing = s.force_permanent_on_battlefield(1, "Wall of Stone");
         for id in [own, opposing] {
             let object = card_of(&s, id);
-            s.game_mut().state.objects[object].types = CardTypes::new([card_type]);
+            s.game_mut().state[object].types = CardTypes::new([card_type]);
             set_counters(&mut s, id, counter, 5);
             until_end_of_turn(
                 &mut s,

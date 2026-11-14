@@ -199,7 +199,12 @@ fn structured_offer_bolt_cast_is_atomic_and_legacy_equivalent() {
     let Some(StackObject::Spell(spell)) = structured.state.stack_objects.last() else {
         panic!("Bolt should be on the stack")
     };
-    assert_eq!(spell.object, *object);
+    // The spell is the object the offered hand card became (CR 400.7g).
+    assert_eq!(
+        structured.state.card_id(spell.object),
+        structured.state.card_id(*object)
+    );
+    assert_ne!(spell.object, *object);
     assert_eq!(spell.targets, vec![Target::Player(PlayerId(1))]);
     assert_equivalent_surface(&structured, &legacy);
 

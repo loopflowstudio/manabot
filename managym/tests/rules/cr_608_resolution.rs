@@ -17,15 +17,16 @@ use managym::{
     },
 };
 
+use crate::support::game::move_card;
+use crate::support::inspect::{now, zone_of};
 use crate::support::{game::*, play::select_card};
 
 fn queue_effects(s: &mut Scenario, source: ObjectId, effects: Vec<Effect>) {
-    let source_ref = s.game().current_object_ref(source);
+    let source_ref = s.game().state.live(now(s, source));
     s.game_mut().state.pending_triggers.push(PendingTrigger {
         program: false,
         remembered: Vec::new(),
-        source_object: source,
-        source_ref,
+        source_identity: managym::state::game_object::AbilitySource::new(source, source_ref),
         source_lki: None,
         ability_index: 0,
         controller: PlayerId(0),
@@ -234,7 +235,7 @@ fn chosen_selector_without_candidates_does_not_reuse_a_previous_move() {
     s.pass_priority();
     s.pass_priority();
     s.pass_priority();
-    assert_eq!(s.game().state.zones.zone_of(object), Some(ZoneType::Exile));
+    assert_eq!(zone_of(&s, object), Some(ZoneType::Exile));
     assert_eq!(s.game().state.players[0].life, life);
     assert!(s.game().state.stack_objects.is_empty());
 }
@@ -267,10 +268,7 @@ fn moved_selector_sacrifices_the_returned_permanent() {
     s.pass_priority();
     s.pass_priority();
     s.pass_priority();
-    assert_eq!(
-        s.game().state.zones.zone_of(object),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, object), Some(ZoneType::Graveyard));
     assert_eq!(s.game().state.players[0].life, life + 5);
     assert!(s.game().state.stack_objects.is_empty());
 }
@@ -339,13 +337,13 @@ fn audit_earthbend_return_does_not_follow_a_second_zone_change() {
     assert!(s.choose_target(managym::state::game_object::Target::Permanent(land)));
     s.pass_priority();
     s.pass_priority();
-    s.game_mut().move_object(object, ZoneType::Graveyard);
+    let object = move_card(&mut s, object, ZoneType::Graveyard);
     s.pass_priority(); // the return is now on the stack
     assert_eq!(s.game().state.stack_objects.len(), 1);
-    s.game_mut().move_object(object, ZoneType::Exile);
+    let object = move_card(&mut s, object, ZoneType::Exile);
     s.pass_priority();
     s.pass_priority();
-    assert_eq!(s.game().state.zones.zone_of(object), Some(ZoneType::Exile));
+    assert_eq!(zone_of(&s, object), Some(ZoneType::Exile));
 }
 
 /// CR 704.5h: surviving a deathtouch SBA check does not keep a destruction
@@ -367,19 +365,13 @@ fn audit_deathtouch_does_not_reapply_after_surviving_an_sba_check() {
     let indestructible = Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible]));
     until_end_of_turn(&mut s, ogre, indestructible.clone());
     s.pass_priority();
-    assert_eq!(
-        s.game().state.zones.zone_of(object),
-        Some(ZoneType::Battlefield)
-    );
+    assert_eq!(zone_of(&s, object), Some(ZoneType::Battlefield));
     s.game_mut()
         .state
         .effects
         .retain(|effect| effect.modification != indestructible);
     s.pass_priority();
-    assert_eq!(
-        s.game().state.zones.zone_of(object),
-        Some(ZoneType::Battlefield)
-    );
+    assert_eq!(zone_of(&s, object), Some(ZoneType::Battlefield));
 }
 
 /// CR 608.2b: target legality is checked as resolution starts, not again

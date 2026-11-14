@@ -11,6 +11,7 @@ use managym::{
 };
 
 use crate::support::game::*;
+use crate::support::inspect::now;
 
 fn resolve_player_bolt(seed: u64) -> (Scenario, ObjectId, Vec<GameEvent>) {
     let mut s = Scenario::new(deck_of("Mountain", "Lightning Bolt"), deck(&[("Mountain", 40)]), seed);
@@ -106,7 +107,7 @@ fn event_log_records_counterspell() {
     s.pass_priority();
 
     assert!(s.take_action_by_type(ActionType::PriorityCastSpell));
-    assert!(s.choose_target(Target::StackSpell(bolt)));
+    assert!(s.choose_target(Target::StackSpell(now(&s, bolt))));
     let counterspell = s
         .game()
         .state
