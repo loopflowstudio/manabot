@@ -189,8 +189,8 @@ same browser and at the same address (including port) where **Games** lists
 it, or open a shared, finished recording. Another browser or address cannot
 open a private or unfinished game without its participant credential. The
 launcher checks that the id exists; access is checked when the browser opens
-it. Imported evaluation games are shared, finished recordings and can open in
-any browser that can reach the server.
+it. Imported game files (evaluation traces and exported training games) are
+shared, finished recordings and can open in any browser that can reach the server.
 
 An evaluation trace or an exported training game needs manabot installed
 beside Academy, at the same release version
@@ -543,10 +543,10 @@ and a message, and exits with status 2. From Python the same `code` and
 | `opponent.unavailable` | The checkpoint digest is not in the catalog, or manabot is not installed. See [Trained opponents and other bots](#trained-opponents-and-other-bots). |
 | `replay.missing` | No such trace file, and no recording with that id in this traces directory. Check the path (use `pathlib.Path` for files in Python), or pass the `--traces-dir` the game was recorded in. |
 | `participant_credential_required` in the browser after READY | The recording is private or unfinished and this browser at this address has no participant credential. Use the same browser and address (including port) where **Games** lists it, or open a shared, finished recording. |
-| `replay.unreadable` | The file is not a command trace: not JSON, JSONL or gzip of either, or it holds no game records. Use `traces/<cell-id>.commands.jsonl.gz`, not the metrics or summary file. |
+| `replay.unreadable` | The file is not a game file: not JSON, JSONL or gzip of either, or it holds no game records. Use an evaluation's `traces/<cell-id>.commands.jsonl.gz` (not its metrics or summary file) or an exported training game. |
 | `replay.ambiguous` | The trace holds several games and none was selected. Select one by index or trace digest: `--game` in the CLI, or `game=` in Python. |
 | `replay.game_unknown` | The selection is past the end of the file, or matches no digest or more than one. A recording id already names one game; omit `--game` (Python `game=`) when opening it. Selection applies only within a trace file. |
-| `replay.needs_manabot` | Evaluation traces are verified by manabot. Install it at the same version: `uv pip install --python .venv/bin/python --only-binary :all: --torch-backend cpu manabot`. |
+| `replay.needs_manabot` | Game files are verified by manabot. Install it at the same version: `uv pip install --python .venv/bin/python --only-binary :all: --torch-backend cpu manabot`. |
 | `replay.rejected` | Verification failed: the trace was recorded in another world, or its Commands or digests do not replay. Open it with the revision that produced it. |
 | `server.running` | (Python) `serve` was called while an Academy from this process is still open. Close it first. |
 | `server.closed` | (Python) This Academy has already closed. Call `serve` again. |
@@ -612,7 +612,7 @@ browser. The invariants that follow:
   (a full clone of the native game; the engine has no undo) and **Return to
   recorded decision** restores the original address, frame and Command. Expired
   roots stay unavailable rather than being reconstructed from the screen.
-  Imported arena traces get their own Academy identity while retaining the
+  Imported game files get their own Academy identity while retaining the
   source digest; frozen `erd1` evidence keeps its original bindings.
 
 `/api/advice` serves fixture advice for the decision-advice surface; Academy has

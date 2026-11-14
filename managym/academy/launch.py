@@ -1,8 +1,9 @@
 """Start Academy and prepare browser addresses for games and retained replays.
 
 `serve` owns the one process-local server. `Academy` prepares configurations
-through the server's admission path and imports evaluation evidence through the
-optional bot extension; neither operation chooses a game action.
+through the server's admission path and imports game files (evaluation traces
+and exported training games) through the optional bot extension; neither
+operation chooses a game action.
 """
 
 from __future__ import annotations
@@ -73,7 +74,7 @@ def _file_hint(value: str, suffixes: set[str]) -> str:
 
 
 def read_games(path: Path) -> list[RecordedGame]:
-    """Read JSON, JSONL or gzip evidence without altering its retained bytes."""
+    """Read a JSON, JSONL or gzip game file without altering its retained bytes."""
     try:
         data = path.expanduser().read_bytes()
     except OSError as exc:
@@ -97,7 +98,7 @@ def read_games(path: Path) -> list[RecordedGame]:
             if not isinstance(record, dict) or not isinstance(
                 record.get("decisions"), list
             ):
-                raise ValueError("expected evaluation game records with decisions")
+                raise ValueError("expected game records with decisions")
             digest = record["game_trace_sha256"]
             if not _is_sha256(digest):
                 raise ValueError("invalid game_trace_sha256")
@@ -123,7 +124,8 @@ def read_games(path: Path) -> list[RecordedGame]:
         return games
     except (ValueError, KeyError, TypeError, OSError, EOFError) as exc:
         raise AcademyLaunchError(
-            "replay.unreadable", f"{path}: {exc}. Supply an evaluation command trace."
+            "replay.unreadable",
+            f"{path}: {exc}. Supply an evaluation command trace or an exported training game.",
         ) from exc
 
 

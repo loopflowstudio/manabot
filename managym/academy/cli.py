@@ -141,14 +141,15 @@ def play(
     _run(_Shared(host, port, traces_dir, no_open).over(_earlier(ctx)), prepare)
 
 
-@academy_app.command(help="Open an evaluation trace or recording")
+@academy_app.command(help="Open a game file or recording")
 def replay(
     ctx: typer.Context,
     source: str = typer.Argument(
-        help="A trace file (.json, .jsonl, gzipped) or a recording id from Games"
+        help="A game file (an evaluation trace or exported training game) or a recording id from Games"
     ),
     game: str | None = typer.Option(
-        None, help="A trace's game: zero-based position or a game_trace_sha256 prefix"
+        None,
+        help="A game within the file: zero-based position or a game_trace_sha256 prefix",
     ),
     host: str | None = _HOST,
     port: int | None = _PORT,
