@@ -40,9 +40,13 @@ self-contained snapshot packs, stable group splits, equal-game row draws and
 snapshot-bound checkpoint/report admission. The retained 39-pass fixture receipt
 in the active plan establishes these data boundaries, not native pre-reset
 capture, collector parity, producer restart, remote Input delivery or a fit.
-The current gap is producer-owned durable publication state: membership, split
-plan, frontier and pending/verified references must survive learner rollback.
-Caller-held lists and a string watermark do not establish that ownership.
+`sampling_publication.py:ProducerPublication` now retains acknowledged membership,
+the fixed split plan, output frontier and exact pending/verified references in a
+local output index independent of learner saves. Retained synthetic checks cover
+lost storage/local acknowledgements, idempotent redelivery, orphan exclusion and
+reopening newer outputs after an older learner cursor. They do not restore a lost
+worker directory. The remaining gap is maintained SelfPlay/Etude retention and
+restoration of that index and its referenced private bytes before restarting work.
 
 Reusable lessons: acknowledge publication only after immutable storage verifies
 bytes; descriptive log references may be dropped. Lost acknowledgements must
@@ -52,6 +56,11 @@ files cannot distinguish acknowledged shards from orphans. Select every seat
 and behavior segment explicitly; mixed training-history games are not final-
 player data. Numeric seeds across producers do not define dependent groups.
 Keep both viewers and swapped legs in declared split/uncertainty groups.
+Local fsync and remote object verification are separate from recoverable producer
+state: a verified pack alone does not restore membership, failures or pending cuts.
+An output carrier that delivers only at attempt completion cannot establish
+mid-run loss recovery. Missing authoritative outputs must fail recovery, never
+initialize an empty producer or adopt orphan files.
 
 MTG-329's current SelfPlay source explicitly resumes with fresh native streams
 and saves no game/RNG state. Its existing recovery checks therefore do not prove
