@@ -530,3 +530,9 @@ the first feasible pooled unit and preserves automatic source order, saved costs
 and receipts. The experiment's job command records the switch; replay and
 heuristic evaluation must use the same value. Ordinary runs leave it unset.
 This switch is experiment scaffolding, pending the report's design review.
+
+The automatic payer taps no fixed source the cost does not need and, among such
+payments, the sources that leave the most of the payer's other hand cards and
+battlefield abilities affordable; ties go to the least reluctant sources (basic
+lands, then other lands, lands with another ability, other permanents,
+creatures), then to colorless ones (`flow/mana/tap_choice.rs`).

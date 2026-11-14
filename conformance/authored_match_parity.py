@@ -32,10 +32,10 @@ RECEIPT_PATH = (
     ROOT
     / "conformance/authored-match-parity-w17-v2/release-live-headless-replay-seed-0.json"
 )
-AUTHORITY_SHA256 = "39ec3796e6b09bc4775aa29894274e82e88b96aaed3f440b252ca54d7b34b1dc"
-TERMINAL_STATE = "a1bb10c197286cc2b08138b63a9321328b3d5ff62caaa0f828cf001e1177b2ac"
+AUTHORITY_SHA256 = "831c442cbad84701bc83293f8aea4714ff9b4a6222f52bedf155326bcf8253f7"
+TERMINAL_STATE = "70de97a6ec827cddc3046efb866ab1a0e7ea0ca3027412e6c41a6a627b9a275f"
 
-COMMAND_COUNT = 135
+COMMAND_COUNT = 182
 
 
 def _json_bytes(value: object) -> bytes:
