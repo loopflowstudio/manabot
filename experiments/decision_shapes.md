@@ -139,3 +139,21 @@ The replacement L4 placement above was acquired successfully. Provider
 inventory confirms 16 vCPUs and 86–94 GB RAM per machine at USD0.69/hour.
 The question, six seeds/arms, 500-update target and evaluation schedule remain
 unchanged; only hardware and admission allowances changed.
+
+## Runtime vocabulary failure (2026-11-14)
+
+Full collection exposed a failure the two-update smoke missed: combat seed
+26501 (`8b1208dffc09`) stopped before update one, and baseline seed 26501
+(`baae8dd0fb5d`) stopped after update two, both with `policy received a
+program token outside the vocabulary`. The other four study runs continue.
+These attempts are operational evidence, not completed training results.
+
+Source `972424a47c0b` adds the rejected token kind/hash to the error receipt;
+it changes no valid observation, model, vocabulary or training schedule. All
+six admission tests pass, and the bounded catalog coverage sweep passes. A
+diagnostic combat retry (`13bb90d47e30`, cohort
+`mtg265-token-diagnostic-20261114`) retains seed 26501 and the 500-update
+damping horizon, with a 1.2-hour maximum job window, on an existing free L4
+slot. It is diagnostic only and must not become a scored study candidate.
+No additional rental is authorized; the same three USD16 leases bound total
+hardware spending. The supervisor now waits for both cohorts before cleanup.
