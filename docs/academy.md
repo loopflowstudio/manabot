@@ -646,7 +646,9 @@ deleting the cache directory is safe.
 Every game you start is recorded as you play.
 
 - **Games** (`/games`) lists them, newest first, with filters for player, deck,
-  status, result and date. **My games** narrows the list to this browser.
+  status, result and date. **My games** narrows the list to this browser. A
+  trained bot appears under its
+  [short name and digest](#how-a-trained-opponent-is-named).
 - Opening a game shows it in **Replay** (`/replay`): step forward and back
   through each recorded decision, with the board, the legal actions offered
   and the action taken. While the server that played the game is still
@@ -731,6 +733,23 @@ against a checkpoint still replays without its provider; continuing it needs
 the original admitted policy. The decision-advice panel reads
 fixtures from a checkout of this repository and is absent from an installed
 package.
+
+#### How a trained opponent is named
+
+Academy shows the first and last parts of a long checkpoint name, followed by
+its identity's first ten characters. For example, `run/checkpoints/step_8`
+appears as `run/…/step_8 · 7ac5d442da`. Human names are never shortened this way.
+
+The same compact identity appears at the table, in Games, Replay and Watch.
+Open **status and mana** on the player's bar with a mouse or Tab and Enter to
+read the full recorded name, identity, producer and available provenance.
+Registered policies also retain the runner, artifact digests and configuration.
+Their identity binds that whole execution; historical checkpoint identities
+remain the checkpoint file's SHA-256. Missing provenance stays absent.
+
+Shortening is display only. Recordings, exported games and filter links keep
+the full name and identity. Search Games by either; the Bot version filter uses
+the full recorded identity.
 
 ### Play and watch a trained checkpoint
 

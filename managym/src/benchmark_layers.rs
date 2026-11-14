@@ -12,6 +12,8 @@ pub struct Metrics {
     /// Matched ordinary/granted battlefield occurrences before placement.
     /// Cast, graveyard and delayed trigger paths are not included.
     pub triggers_found: u64,
+    /// `TriggerIndex` rebuilds (cache misses after a trigger or layer revision).
+    pub trigger_indexes: u64,
     pub source_plans: u64,
     pub board_ns: u64,
     pub contexts_cloned: u64,

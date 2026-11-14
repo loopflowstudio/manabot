@@ -1,5 +1,7 @@
 //! Tests for cards filed in `src/stx.rs`, in card order.
 
+use crate::support::game::move_card;
+use crate::support::inspect::{now, permanent_of, zone_of};
 use crate::support::{
     game::{clear_hand, deck, five_color_setup, force_lands, Scenario},
     inspect::{hand, library, library_card, permanent, stack_spell_card},
@@ -39,12 +41,12 @@ fn divide_by_zero_bounces_spell_from_stack() {
     s.pass_priority();
     cast_only(&mut s); // P0 responds with Divide by Zero
     let ogre = stack_spell_card(&s, "Gray Ogre");
-    assert!(s.choose_target(Target::StackSpell(ogre)));
+    assert!(s.choose_target(Target::StackSpell(now(&s, ogre))));
     s.pass_priority();
     s.pass_priority();
 
     // The Ogre spell was bounced to its owner's hand, not countered.
-    assert_eq!(s.game().state.zones.zone_of(ogre), Some(ZoneType::Hand));
+    assert_eq!(zone_of(&s, ogre), Some(ZoneType::Hand));
     assert_eq!(s.zone_size(1, ZoneType::Graveyard), 0);
     // Learn rider.
     assert_eq!(s.action_space().kind, ActionSpaceKind::Learn);
@@ -157,7 +159,7 @@ fn library_search_is_private_enters_tapped_and_continues_to_learn() {
             })
             .unwrap();
         if forest {
-            assert_eq!(s.game().state.objects[selected].name, "Forest");
+            assert_eq!(s.game().state[selected].name, "Forest");
         }
         let index = s
             .action_space()
@@ -166,7 +168,7 @@ fn library_search_is_private_enters_tapped_and_continues_to_learn() {
             .position(|a| matches!(a,Action::SelectCard {object,..} if *object==selected))
             .unwrap();
         s.step_action(index);
-        let id = s.game().state.object_to_permanent[selected].unwrap();
+        let id = permanent_of(&s, selected).unwrap();
         assert!(s.game().state.permanents[id].as_ref().unwrap().tapped);
         assert_eq!(
             s.action_space().kind,
@@ -229,8 +231,8 @@ fn resampled_private_search_choices_still_name_library_cards() {
                 .zones
                 .zone_objects(ZoneType::Library, PlayerId(0))
                 .iter()
-                .filter(|object| branch.state.objects[**object].name == "Forest")
-                .map(|object| branch.state.objects[*object].id.0 as i32)
+                .filter(|object| branch.state[**object].name == "Forest")
+                .map(|object| branch.state[*object].id.0 as i32)
                 .collect();
             let offered: BTreeSet<_> = branch
                 .action_space()
@@ -238,9 +240,7 @@ fn resampled_private_search_choices_still_name_library_cards() {
                 .actions
                 .iter()
                 .filter_map(|action| match action {
-                    Action::SelectCard { object, .. } => {
-                        Some(branch.state.objects[*object].id.0 as i32)
-                    }
+                    Action::SelectCard { object, .. } => Some(branch.state[*object].id.0 as i32),
                     _ => None,
                 })
                 .collect();
@@ -257,7 +257,7 @@ fn resampled_private_search_choices_still_name_library_cards() {
                 .zones
                 .zone_objects(ZoneType::Library, PlayerId(0))
                 .iter()
-                .map(|object| branch.state.objects[*object].id.0 as i32)
+                .map(|object| branch.state[*object].id.0 as i32)
                 .collect::<BTreeSet<_>>();
             assert_eq!(
                 visible, inspected,
@@ -298,7 +298,7 @@ fn search_possible_worlds_refresh_private_candidates_without_exposing_library_ca
     use managym::possible_worlds::{MaterializeMode, PossibleWorldSpace};
     let mut s = five_color_setup(&["Field Trip"]);
     let hand = library_card(&s, 0, "Forest");
-    s.game_mut().move_object(hand, ZoneType::Hand);
+    move_card(&mut s, hand, ZoneType::Hand);
     cast(&mut s, "Field Trip");
     spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
@@ -320,7 +320,7 @@ fn search_possible_worlds_refresh_private_candidates_without_exposing_library_ca
         for action in &branch.action_space().unwrap().actions {
             if let Action::SelectCard { object, .. } = action {
                 assert_eq!(branch.state.zones.zone_of(*object), Some(ZoneType::Library));
-                assert_eq!(branch.state.objects[*object].name, "Forest");
+                assert_eq!(branch.state[*object].name, "Forest");
             }
         }
     }
@@ -570,7 +570,7 @@ fn pop_quiz_learn_retrieves_owned_lesson_and_finalizes_once() {
         let hand_before = hand(&s, 0).len();
         s.drain_events();
         assert!(s.take_action_by_type(ActionType::LearnTakeLesson));
-        assert!(hand(&s, 0).contains(&card.into()));
+        assert!(hand(&s, 0).contains(&s.game().state.object_of(card)));
         assert_eq!(hand(&s, 0).len(), hand_before + 1);
         assert_eq!(library(&s, 0), library_before);
         assert_eq!(s.zone_size(0, ZoneType::Graveyard), 1);

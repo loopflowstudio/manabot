@@ -10,9 +10,12 @@ from typing import Any
 
 from pydantic import ValidationError
 import pytest
-import torch
 
-from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.checkpoint import (
+    BACKEND as TORCH_BACKEND,
+    load_checkpoint,
+    save_checkpoint,
+)
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
@@ -27,6 +30,7 @@ from manabot.infra.config import (
 from manabot.model.catalog import checkpoint_incompatibility, inspect_checkpoint
 from manabot.sim.replay import replay_environment
 from manabot.sim.table_bots import CheckpointVillain
+from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
 SETUP = "ur-lessons-vs-gw-allies"
 
@@ -42,14 +46,14 @@ def _saved(path: Path, version: int | None) -> dict[str, Any]:
         space, ModelConfig(hidden_dim=8, num_attention_heads=2, world=SETUP)
     )
     save_checkpoint(agent, space, path, player_configs=_match().to_rust())
-    payload = torch.load(path, map_location="cpu", weights_only=False)
+    payload = read_checkpoint(path, map_location="cpu", weights_only=False)
     saved = payload["hypers"]["observation_hypers"]
     assert saved["policy_input_version"] == POLICY_INPUT_VERSION
     if version is None:
         del saved["policy_input_version"]
     else:
         saved["policy_input_version"] = version
-    torch.save(payload, path)
+    write_checkpoint(payload, path)
     return payload
 
 
@@ -110,7 +114,7 @@ def test_checkpoint_of_another_input_is_rejected_before_loading(
     reason = checkpoint_incompatibility(payload)
     assert reason is not None
     _assert_names_the_recording_revision(reason, recorded)
-    summary = inspect_checkpoint(path)
+    summary = inspect_checkpoint(path, backend=TORCH_BACKEND)
     assert not summary.compatible and summary.incompatibility == reason
     with pytest.raises(UnsupportedPolicyInput):
         CheckpointVillain(str(path), player_configs=_match().to_rust())

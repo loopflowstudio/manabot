@@ -18,16 +18,15 @@ from dataclasses import dataclass, field
 import math
 from pathlib import Path
 import time
-from typing import TYPE_CHECKING, Any, Mapping, Protocol
+from typing import Any, Mapping, Protocol
 
 import numpy as np
-import torch
 
 from manabot.env.env import Env
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.identity import canonical_sha256, file_sha256
-from manabot.model.admission import admit_observation
 from manabot.model.world import validate_agent_setup
+from manabot.policy.protocol import BackendPolicy
 from manabot.sim.search.branch import (
     SELECTED_BRANCH_DRIVER_ID,
     BranchSession,
@@ -36,9 +35,6 @@ from manabot.sim.search.branch import (
     structured_random_playout,
 )
 from manabot.sim.search.runtime import DEFAULT_MAX_PLAYOUT_STEPS, SearchStats
-
-if TYPE_CHECKING:
-    from manabot.backends.torch.policy import ActorCritic
 
 _U64_MASK = (1 << 64) - 1
 
@@ -167,20 +163,12 @@ class AgentLeafEvaluator:
 
     def __init__(
         self,
-        agent: ActorCritic,
+        agent: BackendPolicy,
         observation_space: ObservationSpace,
         *,
         value_mode: str = "learned",
     ) -> None:
-        try:
-            device = next(agent.parameters()).device
-        except (
-            StopIteration
-        ) as exc:  # pragma: no cover - ActorCritic always has parameters
-            raise ValueError(
-                "agent leaf evaluator requires a parameterized model"
-            ) from exc
-        if device.type != "cpu":
+        if agent.device_type != "cpu":
             raise ValueError("agent leaf evaluator requires a CPU model")
         if value_mode not in {"learned", "neutral"}:
             raise ValueError(
@@ -204,20 +192,17 @@ class AgentLeafEvaluator:
         if self.agent.value_semantic == "signed_outcome":
             return (value + 1.0) / 2.0
         if self.agent.value_semantic == "win_logit":
-            return float(torch.sigmoid(torch.tensor(value, dtype=torch.float64)))
+            return self.agent.probability_from_logit(value)
         raise ValueError("PUCT critic has an unsupported value semantic")
 
     def _predict(
-        self, observation: Any | Mapping[str, np.ndarray], *, action_count: int
+        self, observation: Any | ObservationBuffers, *, action_count: int
     ) -> tuple[np.ndarray, float]:
         encoded = (
             observation
             if isinstance(observation, Mapping)
             else self.observation_space.encode(observation)
         )
-        tensor_obs = {
-            key: torch.as_tensor(value).unsqueeze(0) for key, value in encoded.items()
-        }
         valid = np.asarray(encoded["actions_valid"])
         if (
             action_count < 1
@@ -227,17 +212,20 @@ class AgentLeafEvaluator:
             or np.any(valid[action_count:] != 0)
         ):
             raise ValueError("PUCT policy cannot represent the complete legal offers")
-        with torch.inference_mode():
-            logits, value = self.agent(admit_observation(self.agent, tensor_obs))
-            legal_logits = logits[0, :action_count].double()
-            if not torch.isfinite(legal_logits).all():
-                raise ValueError("PUCT policy returned nonfinite legal logits")
-            priors = torch.softmax(legal_logits, dim=-1)
-            if torch.any(priors <= 0):
-                raise ValueError("PUCT flat policy lost positive legal support")
+        batch = self.agent.prepare(
+            {key: np.asarray(value)[None] for key, value in encoded.items()},
+            inference=True,
+        )
+        logits, value = self.agent.evaluate(batch)
+        legal_logits = logits[0, :action_count]
+        if not np.isfinite(legal_logits).all():
+            raise ValueError("PUCT policy returned nonfinite legal logits")
+        priors = self.agent.normalize_logits(legal_logits, double=True)
+        if np.any(priors <= 0):
+            raise ValueError("PUCT flat policy lost positive legal support")
         self.forward_calls += 1
         return (
-            priors.detach().cpu().numpy().astype(np.float64),
+            priors.astype(np.float64),
             self._score(float(value[0])),
         )
 
@@ -622,7 +610,7 @@ class DeterminizedPuctPlayer:
         if self.deadline is not None and time.perf_counter() >= self.deadline:
             raise TimeoutError("PUCT deadline exceeded; result unavailable")
 
-    def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
+    def act(self, env: Env, obs: ObservationBuffers) -> int:
         agent = getattr(self.evaluator, "agent", None)
         if agent is not None:
             validate_agent_setup(agent, env.match.to_rust())

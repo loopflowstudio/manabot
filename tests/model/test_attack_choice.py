@@ -16,7 +16,6 @@ from manabot.env.observation import (
 )
 from manabot.experiment.config import Experiment
 from manabot.infra.config import ModelConfig
-from manabot.model.admission import admit_observation
 from manabot.model.world import WORLD, checkpoint_world
 from manabot.policy.prepare import reference_distribution
 from manabot.training.execution import execute_regime
@@ -27,6 +26,7 @@ from manabot.verify.action_cases import (
     reorder_offers,
 )
 from manabot.verify.store import VerifyStore
+from tests.model.prepared_routes import device_input
 from tests.training.wdl_baseline import wdl_baseline
 
 
@@ -60,21 +60,21 @@ def test_native_attack_choice_can_learn_either_preference(
                 ModelConfig(hidden_dim=8, num_attention_heads=2, attention_on=False),
             )
         # Erasing the declaration reproduces the old, weight-independent tie.
-        logits, _ = agent(admit_observation(agent, identity_removed(attack_case)))
+        logits, _ = agent(device_input(agent, identity_removed(attack_case)))
         torch.testing.assert_close(logits[0, 0], logits[0, 1], rtol=0, atol=0)
 
         optimizer = torch.optim.Adam(agent.parameters(), lr=0.02)
         for _ in range(40):
-            logits, _ = agent(admit_observation(agent, attack_observation))
+            logits, _ = agent(device_input(agent, attack_observation))
             loss = -logits.log_softmax(-1)[0, preferred]
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
         with torch.no_grad():
-            logits, _ = agent(admit_observation(agent, attack_observation))
+            logits, _ = agent(device_input(agent, attack_observation))
             assert float(logits.softmax(-1)[0, preferred]) > 0.95
             swapped, _ = agent(
-                admit_observation(
+                device_input(
                     agent, reorder_offers(attack_observation, torch.tensor([1, 0]))
                 )
             )

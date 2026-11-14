@@ -109,7 +109,8 @@ def main() -> None:
         check=True,
         timeout=180,
     )
-    policy, _ = load_checkpoint(str(output / "self-play-raw.pt"))
+    checkpoint_path = output / "self-play-raw.safetensors"
+    policy, _ = load_checkpoint(str(checkpoint_path))
     assert not policy.training
     extension = bot_extension()
     assert extension is not None and extension.name == "manabot", (
@@ -124,7 +125,7 @@ def main() -> None:
             PolicySource(
                 "manabot",
                 {
-                    "paths": [str(output / "self-play-raw.pt")],
+                    "paths": [str(checkpoint_path)],
                     "runs_dir": str(output / "no-other-runs"),
                 },
             )

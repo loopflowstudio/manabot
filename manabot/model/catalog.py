@@ -1,14 +1,13 @@
 """Find trained policy checkpoints and check them against the running engine.
 
 The catalog answers "which bots could play here?" without constructing them.
-``inspect_checkpoint`` reads one ``.pt`` file with Torch's ``weights_only``
-unpickler (tensors and plain containers only, so listing never executes code
-from a checkpoint) and returns a ``CheckpointSummary``: exact bytes, world,
+``inspect_checkpoint`` reads container metadata or a legacy ``.pt`` with
+Torch's ``weights_only`` unpickler, and returns a ``CheckpointSummary``: exact bytes, world,
 model shape, training step, producer and — when the checkpoint cannot play in
 this runtime — a sentence naming the mismatch. ``discover_checkpoints`` walks
 run directories, explicit files and Tournament files into summaries.
 
-Admission is still ``manabot.sim.search.flat_mc.load_checkpoint``; the catalog
+Admission belongs to the injected backend's policy loader; the catalog
 reuses its world binding rules (``manabot.model.world``) so a listed
 "compatible" checkpoint and a loadable one cannot disagree about the world.
 """
@@ -19,12 +18,9 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from functools import lru_cache
 import hashlib
-import io
 import json
 from pathlib import Path
 from typing import Any, Literal
-
-import torch
 
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
@@ -38,6 +34,7 @@ from manabot.model.world import (
     expected_world,
     written_at,
 )
+from manabot.policy.protocol import Backend
 import managym
 
 CheckpointSource = Literal["path", "runs", "tournament"]
@@ -92,6 +89,7 @@ class NotAPolicyCheckpoint(ValueError):
 def inspect_checkpoint(
     path: Path,
     *,
+    backend: Backend,
     label: str | None = None,
     source: CheckpointSource = "path",
     producer: str | None = None,
@@ -107,7 +105,7 @@ def inspect_checkpoint(
     stat = resolved.stat()
     if stat.st_size > MAX_CHECKPOINT_BYTES:
         raise NotAPolicyCheckpoint(f"{resolved} is too large to be a policy")
-    summary = _inspect_cached(str(resolved), stat.st_size, stat.st_mtime_ns)
+    summary = _inspect_cached(str(resolved), stat.st_size, stat.st_mtime_ns, backend)
     if isinstance(summary, NotAPolicyCheckpoint):
         raise summary
     return replace(
@@ -120,46 +118,19 @@ def inspect_checkpoint(
 
 @lru_cache(maxsize=512)
 def _inspect_cached(
-    path: str, size: int, mtime_ns: int
+    path: str, size: int, mtime_ns: int, backend: Backend
 ) -> CheckpointSummary | NotAPolicyCheckpoint:
     # Refusals are returned, not raised, so they are cached too: run
     # directories hold large optimizer and dataset files that every listing
     # and every game admission would otherwise read again in full.
     del size, mtime_ns  # cache key only: a rewritten file is re-read
     data = Path(path).read_bytes()
-    format_incompatibility: str | None = None
     try:
-        checkpoint = torch.load(io.BytesIO(data), map_location="cpu", weights_only=True)
-    except Exception:  # Containers share admission with the configured backend.
-        from manabot.policy.checkpoint import read_safetensors, require_supported
-
-        try:
-            arrays, metadata = read_safetensors(Path(path))
-            checkpoint = {
-                "hypers": json.loads(metadata["hypers"]),
-                "world_binding": json.loads(metadata["world_binding"]),
-                "checkpoint_source": json.loads(metadata["source"]),
-                "model_state_dict": {
-                    key: value
-                    for key, value in arrays.items()
-                    if not key.startswith("buffer/")
-                },
-            }
-            try:
-                require_supported(
-                    ModelConfig.from_checkpoint(checkpoint["hypers"]["agent_hypers"]),
-                    ObservationConfig.from_checkpoint(
-                        checkpoint["hypers"]["observation_hypers"]
-                    ),
-                )
-            except ValueError as error:
-                format_incompatibility = str(error)
-        except Exception:  # A catalog entry never executes arbitrary file code.
-            return NotAPolicyCheckpoint(f"{path} is not a policy checkpoint")
-    if (
-        not isinstance(checkpoint, dict)
-        or not isinstance(checkpoint.get("model_state_dict"), Mapping)
-        or not isinstance(checkpoint.get("hypers"), Mapping)
+        checkpoint = backend.metadata(path)
+    except Exception as error:  # legacy unpickling and malformed container headers
+        return NotAPolicyCheckpoint(f"{path} holds no policy: {error}")
+    if not isinstance(checkpoint, dict) or not isinstance(
+        checkpoint.get("hypers"), Mapping
     ):
         return NotAPolicyCheckpoint(f"{path} holds no policy")
     config = checkpoint["hypers"]
@@ -175,18 +146,15 @@ def _inspect_cached(
         producer=_producer(checkpoint),
         world=world if isinstance(world, str) else None,
         model=_model_shape(config.get("agent_hypers")),
-        parameters=sum(
-            int(tensor.numel() if isinstance(tensor, torch.Tensor) else tensor.size)
-            for tensor in checkpoint["model_state_dict"].values()
-            if hasattr(tensor, "shape")
-        ),
+        parameters=(checkpoint.get("architecture") or {})
+        .get("parameters", {})
+        .get("total", checkpoint.get("parameter_count", 0)),
         step=step if isinstance(step, int) and step > 0 else None,
         run_id=_text(checkpoint.get("bc"), "run_id"),
         stage=_text(checkpoint.get("bc"), "stage_id"),
         weights=_text(checkpoint.get("bc"), "weights"),
         setups=_setups(binding),
-        incompatibility=checkpoint_incompatibility(checkpoint)
-        or format_incompatibility,
+        incompatibility=checkpoint_incompatibility(checkpoint),
         policy_input_version=config.get("observation_hypers", {}).get(
             "policy_input_version", 1
         ),
@@ -343,7 +311,7 @@ class UnavailableEntry:
 
 
 def discover_checkpoints(
-    sources: Iterable[Path], *, runs_dir: Path | None = None
+    sources: Iterable[Path], *, backend: Backend, runs_dir: Path | None = None
 ) -> tuple[list[CheckpointSummary], list[UnavailableEntry]]:
     """Summarize every policy checkpoint reachable from ``sources``.
 
@@ -369,31 +337,32 @@ def discover_checkpoints(
 
     for source in sources:
         if source.suffix == ".json" and source.is_file():
-            for entry in _tournament(source, directories):
+            for entry in _tournament(source, directories, backend):
                 if isinstance(entry, CheckpointSummary):
                     add(entry)
                 else:
                     missing.append(entry)
         elif source.is_file():
-            add(inspect_checkpoint(source))
+            add(inspect_checkpoint(source, backend=backend))
         elif source.is_dir():
-            for summary in _scan(source, "path"):
+            for summary in _scan(source, "path", backend):
                 add(summary)
     if runs_dir is not None and runs_dir.is_dir():
-        for summary in _scan(runs_dir, "runs"):
+        for summary in _scan(runs_dir, "runs", backend):
             add(summary)
     return list(found.values()), missing
 
 
-def _scan(directory: Path, source: CheckpointSource) -> list[CheckpointSummary]:
+def _scan(
+    directory: Path, source: CheckpointSource, backend: Backend
+) -> list[CheckpointSummary]:
     summaries = []
-    for path in sorted(
-        path for path in directory.rglob("*") if path.suffix in (".pt", ".safetensors")
-    ):
+    for path in sorted([*directory.rglob("*.pt"), *directory.rglob("*.safetensors")]):
         try:
             summaries.append(
                 inspect_checkpoint(
                     path,
+                    backend=backend,
                     label=str(path.relative_to(directory).with_suffix("")),
                     source=source,
                 )
@@ -488,7 +457,7 @@ def _with_run_facts(summary: CheckpointSummary, root: Path) -> CheckpointSummary
 
 
 def _tournament(
-    path: Path, directories: list[Path]
+    path: Path, directories: list[Path], backend: Backend
 ) -> list[CheckpointSummary | UnavailableEntry]:
     """Read checkpoint entrants from a Tournament file.
 
@@ -513,7 +482,11 @@ def _tournament(
                 continue
             try:
                 summary = inspect_checkpoint(
-                    candidate, label=label, source="tournament", producer=producer
+                    candidate,
+                    backend=backend,
+                    label=label,
+                    source="tournament",
+                    producer=producer,
                 )
             except (OSError, ValueError):
                 continue

@@ -1,5 +1,6 @@
 //! Tests for cards filed in `src/wth.rs`, in card order.
 
+use crate::support::inspect::permanent_of;
 use crate::support::{
     game::five_color_setup,
     play::{attack_with, cast_owned, pass_until, settle},
@@ -13,7 +14,7 @@ fn fervor_lets_a_new_creature_attack_at_once() {
     settle(&mut s);
     let object = cast_owned(&mut s, "Gray Ogre");
     settle(&mut s);
-    let ogre = s.game().state.object_to_permanent[object].unwrap();
+    let ogre = permanent_of(&s, object).unwrap();
     pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
     attack_with(&mut s, ogre);
     s.advance_to_step(StepKind::EndOfCombat);

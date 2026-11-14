@@ -12,9 +12,10 @@ import numpy as np
 from numpy.typing import NDArray
 import torch
 
+from manabot.backends.torch.arrays import device_of, on_device
 from manabot.belief.range import BeliefState
+from manabot.env.observation import ObservationBuffers
 from manabot.infra.identity import file_sha256
-from manabot.model.inference import admit_on_device
 from managym.decision import DecisionFrame, PublicCommitment, SemanticContractError
 
 
@@ -143,7 +144,7 @@ class FrozenPolicyLikelihood:
         matching_counts = np.zeros(belief.support_size, dtype=np.int64)
 
         def infer_batch(
-            encoded_batch: list[dict[str, np.ndarray]],
+            encoded_batch: list[ObservationBuffers],
             matching_batch: list[list[int]],
             legal_batch: list[int],
             row_batch: list[int],
@@ -152,9 +153,8 @@ class FrozenPolicyLikelihood:
                 key: np.stack([encoded[key] for encoded in encoded_batch])
                 for key in encoded_batch[0]
             }
-            tensors = admit_on_device(
-                self.agent,
-                {key: torch.from_numpy(value) for key, value in buffers.items()},
+            tensors = on_device(
+                self.agent.prepare(buffers, inference=True), device_of(self.agent)
             )
             with torch.inference_mode():
                 logits, _ = self.agent.forward(tensors)

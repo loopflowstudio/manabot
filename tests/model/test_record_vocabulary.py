@@ -3,9 +3,13 @@
 from pathlib import Path
 from typing import Literal
 
+import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch._facts import FactEncoder
+from manabot.backends.torch._semantic_cards import SemanticCardEncoder
+from manabot.backends.torch._shared_effects import SharedEffectEncoder
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import (
@@ -20,17 +24,19 @@ from manabot.env.observation import (
     ObservationSpace,
 )
 from manabot.infra.config import ModelConfig
-from manabot.model.admission import admit_observation
 from manabot.model.architecture import architecture_identity
-from manabot.model.facts import FactEncoder, admit_facts
-from manabot.model.semantic_cards import (
-    RecordEmbeddings,
-    RecordNamespace,
-    SemanticCardEncoder,
-)
-from manabot.model.shared_effects import SharedEffectEncoder, admit_shared_effects
+from manabot.policy import admission
+from manabot.policy.prepare import RecordNamespace
 from manabot.verify.representation import kellan_upgrade_root
 import managym
+from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
+from tests.model.prepared_routes import (
+    device_input,
+    effect_rows,
+    fact_rows,
+    program_input,
+    record_vocabulary,
+)
 
 WIDTH = 8
 _value = managym.catalog_token_value
@@ -67,7 +73,7 @@ def _granted_keyword(name: str, source: int = 0) -> torch.Tensor:
 
 
 def _fact_encoder() -> FactEncoder:
-    encoder = FactEncoder(WIDTH, 4, vocabulary="catalog")
+    encoder = FactEncoder(WIDTH, vocabulary="catalog")
     # A fresh fact output is zero; expose the representation and its gradients.
     with torch.no_grad():
         encoder.output.weight.copy_(torch.eye(WIDTH))
@@ -98,9 +104,8 @@ def test_granted_fact_and_printed_keyword_share_one_row(
     cards: SemanticCardEncoder,
 ) -> None:
     printed = _card_row(cards, 3, _value("Keyword::flying"))
-    granted = cards.record_names(
-        RecordNamespace.TOKEN, torch.tensor([_value("flying")])
-    )
+    rows = fact_rows(_granted_keyword("flying"), torch.zeros(1, 2, WIDTH), cards)
+    granted = cards.token_embedding(rows.detail_rows[0, :1])
     torch.testing.assert_close(granted[0], cards.token_embedding.weight[printed])
 
 
@@ -112,9 +117,12 @@ def test_fact_and_effect_gradients_reach_shared_rows(
     modification = _card_row(cards, 3, _value("Modification::AddKeywords"))
     source = int(cards.definition_rows.nonzero()[0])  # a definition id + 1
     cards.zero_grad()
-    records = RecordEmbeddings(cards, cards.definitions())
+    definitions = cards.definitions(program_input(cards))
     out = _fact_encoder()(
-        _granted_keyword("flying", source), torch.zeros(1, 2, WIDTH), records
+        fact_rows(_granted_keyword("flying", source), torch.zeros(1, 2, WIDTH), cards),
+        torch.zeros(1, 2, WIDTH),
+        cards.token_embedding,
+        definitions,
     )
     out.square().sum().backward()
     grad = cards.token_embedding.weight.grad
@@ -133,9 +141,12 @@ def test_fact_and_effect_gradients_reach_shared_rows(
     details[0, 0] = torch.tensor([1, *_halves(_value("flying"))])
     members[0, 0] = torch.tensor([2, 1])
     effects = SharedEffectEncoder(WIDTH, vocabulary="catalog")
-    records = RecordEmbeddings(cards, cards.definitions())
+    definitions = cards.definitions(program_input(cards))
     effects(
-        headers, details, members, torch.zeros(1, 2, WIDTH), records
+        effect_rows(headers, details, members, torch.zeros(1, 2, WIDTH), cards),
+        torch.zeros(1, 2, WIDTH),
+        cards.token_embedding,
+        definitions,
     ).square().sum().backward()
     grad = cards.token_embedding.weight.grad
     assert grad is not None
@@ -149,7 +160,7 @@ def test_catalog_fact_inference_preserves_sparse_rows(
     torch.set_num_threads(1)
     encoder = _fact_encoder()
     source = int(cards.definition_rows.nonzero()[0])
-    records = RecordEmbeddings(cards, cards.definitions())
+    definitions = cards.definitions(program_input(cards))
     facts = torch.cat(
         (_granted_keyword("flying", source), _granted_keyword("trample", source)), 0
     )
@@ -157,9 +168,16 @@ def test_catalog_fact_inference_preserves_sparse_rows(
     if empty:
         facts.zero_()
     objects = torch.randn(2, 2, WIDTH)
-    expected = encoder(facts, objects, records)
+    expected = encoder(
+        fact_rows(facts, objects, cards), objects, cards.token_embedding, definitions
+    )
     with torch.inference_mode():
-        actual = encoder(facts, objects, records)
+        actual = encoder(
+            fact_rows(facts, objects, cards),
+            objects,
+            cards.token_embedding,
+            definitions,
+        )
     torch.testing.assert_close(actual, expected, atol=1e-6, rtol=1e-5)
     if empty:
         torch.testing.assert_close(actual, objects)
@@ -171,20 +189,25 @@ def test_unknown_ids_fail_admission_instead_of_hashing(
     cards: SemanticCardEncoder,
 ) -> None:
     with pytest.raises(ValueError, match="outside the record vocabulary"):
-        admit_facts(_granted_keyword("not a keyword"), 4, 2, cards)
+        admission.facts(
+            (_granted_keyword("not a keyword")).detach().cpu().numpy(),
+            4,
+            2,
+            record_vocabulary(cards),
+        )
     facts = _granted_keyword("flying")
     facts[0, 0, FACT_ID_INDEX : FACT_ID_INDEX + 2] = torch.tensor(
         _halves(_value("Modification::NoSuchModification"))
     )
     with pytest.raises(ValueError, match="outside the record vocabulary"):
-        admit_facts(facts, 4, 2, cards)
+        admission.facts((facts).detach().cpu().numpy(), 4, 2, record_vocabulary(cards))
     facts = _granted_keyword("flying", source=len(cards.definition_rows))
     with pytest.raises(ValueError, match="unadmitted"):
-        admit_facts(facts, 4, 2, cards)
+        admission.facts((facts).detach().cpu().numpy(), 4, 2, record_vocabulary(cards))
     with pytest.raises(ValueError, match="outside the vocabulary"):
-        cards.require_record_tokens(
-            torch.tensor([3]), torch.tensor([_value("Effect::None")])
-        )
+        vocabulary = record_vocabulary(cards)
+        assert vocabulary is not None
+        vocabulary.require_tokens(np.array([3]), np.array([_value("Effect::None")]))
 
 
 def test_catalog_effect_batch_preserves_independent_outputs_and_gradients(
@@ -210,18 +233,28 @@ def test_catalog_effect_batch_preserves_independent_outputs_and_gradients(
     def reading(batched: bool) -> tuple[torch.Tensor, list[torch.Tensor | None]]:
         effects.zero_grad(set_to_none=True)
         cards.zero_grad(set_to_none=True)
-        catalog = RecordEmbeddings(cards, cards.definitions())
+        definitions = cards.definitions(program_input(cards))
         if batched:
-            result = effects(headers, details, members, objects, catalog)
+            result = effects(
+                effect_rows(headers, details, members, objects, cards),
+                objects,
+                cards.token_embedding,
+                definitions,
+            )
         else:
             result = torch.cat(
                 [
                     effects(
-                        headers[i : i + 1],
-                        details[i : i + 1],
-                        members[i : i + 1],
+                        effect_rows(
+                            headers[i : i + 1],
+                            details[i : i + 1],
+                            members[i : i + 1],
+                            objects[i : i + 1],
+                            cards,
+                        ),
                         objects[i : i + 1],
-                        catalog,
+                        cards.token_embedding,
+                        definitions,
                     )
                     for i in range(3)
                 ]
@@ -244,7 +277,13 @@ def test_catalog_effect_batch_preserves_independent_outputs_and_gradients(
         _halves(_value("Modification::NoSuchModification"))
     )
     with pytest.raises(ValueError, match="outside the record vocabulary"):
-        admit_shared_effects(headers, details, members, objects.shape[1], cards)
+        admission.shared_effects(
+            (headers).detach().cpu().numpy(),
+            (details).detach().cpu().numpy(),
+            (members).detach().cpu().numpy(),
+            objects.shape[1],
+            record_vocabulary(cards),
+        )
 
 
 def test_real_program_ids_map_and_checkpoints_keep_their_vocabulary(
@@ -262,21 +301,21 @@ def test_real_program_ids_map_and_checkpoints_keep_their_vocabulary(
         config = fresh.model_copy(update={"record_vocabulary": vocabulary})
         model = ActorCritic(space, config)
         assert hasattr(model.shared_effects, "modification") == (vocabulary == "hashed")
-        logits, _ = model(admit_observation(model, values))
+        logits, _ = model(device_input(model, values))
         assert torch.isfinite(logits).all()
         path = tmp_path / f"{vocabulary}.pt"
         save_checkpoint(model, space, path, player_configs=None)
         if vocabulary == "hashed":
             # Frozen checkpoints predate the field; omission means hashed ids.
-            checkpoint = torch.load(path, weights_only=False)
+            checkpoint = read_checkpoint(path, weights_only=False)
             del checkpoint["hypers"]["agent_hypers"]["record_vocabulary"]
-            torch.save(checkpoint, path)
+            write_checkpoint(checkpoint, path)
         restored, _ = load_checkpoint(str(path))
         assert restored.config.record_vocabulary == vocabulary
         assert restored.architecture_receipt() == model.architecture_receipt()
         torch.testing.assert_close(
-            model(admit_observation(model, values))[0],
-            restored(admit_observation(restored, values))[0],
+            model(device_input(model, values))[0],
+            restored(device_input(restored, values))[0],
         )
 
 

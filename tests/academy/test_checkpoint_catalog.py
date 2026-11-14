@@ -8,12 +8,14 @@ from fastapi.testclient import TestClient
 import pytest
 import torch
 
+from manabot.backends import resolve
 from manabot.model.world import WORLD
 from managym.academy import server, trace as trace_store
 from managym.academy.opponent import policy_registry
 from managym.academy.server import app
 from managym.policy import PolicySpec
 from tests.academy.test_play_modes import _recorded_traces, _write_tiny_checkpoint
+from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
 
 @pytest.fixture()
@@ -27,10 +29,10 @@ def runs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     torch.manual_seed(0)
     current = tmp_path / ".runs" / "self-play" / "step_0.pt"
     _write_tiny_checkpoint(current)
-    checkpoint = torch.load(current, map_location="cpu", weights_only=False)
+    checkpoint = read_checkpoint(current, map_location="cpu", weights_only=False)
     checkpoint["world_binding"]["world"] = "w5"
     (tmp_path / ".runs" / "older").mkdir()
-    torch.save(checkpoint, tmp_path / ".runs" / "older" / "step_0.pt")
+    write_checkpoint(checkpoint, tmp_path / ".runs" / "older" / "step_0.pt")
     return tmp_path / ".runs"
 
 
@@ -235,7 +237,7 @@ def test_run_facts_join_exact_bytes_and_prefer_run_file(runs: Path) -> None:
         ],
     }
     (directory / "run.json").write_text(json.dumps(record))
-    found, _ = discover_checkpoints([], runs_dir=runs)
+    found, _ = discover_checkpoints([], backend=resolve("torch"), runs_dir=runs)
     entry = next(entry for entry in found if entry.sha256 == _sha(raw))
     assert entry.path == raw.resolve()
     assert (
@@ -248,7 +250,7 @@ def test_run_facts_join_exact_bytes_and_prefer_run_file(runs: Path) -> None:
     ) == ("self-play", "run-123", "self-play", "raw", 7, 1234)
     record["stages"][0]["artifacts"]["raw"]["sha256"] = "f" * 64
     (directory / "run.json").write_text(json.dumps(record))
-    found, _ = discover_checkpoints([], runs_dir=runs)
+    found, _ = discover_checkpoints([], backend=resolve("torch"), runs_dir=runs)
     entry = next(entry for entry in found if entry.sha256 == _sha(raw))
     assert entry.updates is None and entry.transitions is None and entry.run is None
 
@@ -275,13 +277,13 @@ def test_monitoring_counts_override_stage_and_unfinished_exports_stay_unknown(
     }
     path = directory / "run.json"
     path.write_text(json.dumps(record))
-    found, _ = discover_checkpoints([directory])
+    found, _ = discover_checkpoints([directory], backend=resolve("torch"))
     assert found[0].updates is None and found[0].transitions is None
     record["monitoring_checkpoints"] = [
         {"updates": 4, "learner_transitions": 32, "artifact": {"sha256": _sha(raw)}}
     ]
     path.write_text(json.dumps(record))
-    found, _ = discover_checkpoints([directory])
+    found, _ = discover_checkpoints([directory], backend=resolve("torch"))
     assert (found[0].updates, found[0].transitions) == (4, 32)
 
 

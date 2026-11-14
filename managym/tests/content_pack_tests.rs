@@ -4,7 +4,7 @@ use managym::{
     cards::content_pack::{default_content_pack, ContentPack, CONTENT_PACK_SCHEMA_VERSION},
     state::{
         card::{PrintedCharacteristics, TokenDefinition},
-        game_object::{ObjectId, ObjectKind, PlayerId, PublicId},
+        game_object::{ObjectKind, PlayerId, PublicId},
         player::PlayerConfig,
         zone::{ZoneManager, ZoneType},
     },
@@ -55,7 +55,7 @@ fn zone_trace(zones: &ZoneManager) -> Vec<(ZoneType, PlayerId, Vec<usize>)> {
                 zones
                     .zone_objects(zone, player)
                     .iter()
-                    .map(|object| object.0)
+                    .map(|object| object.slot())
                     .collect(),
             ));
         }
@@ -196,7 +196,7 @@ fn matches_and_search_clones_share_one_immutable_content_pack() {
     let expected_digest = admitted.content_digest();
     let mut branch = game.clone();
     let sibling = game.clone();
-    let first_card = ObjectId(0);
+    let first_card = game.state.zones.latest().next().unwrap();
 
     assert!(std::ptr::eq(admitted, default_content_pack()));
     assert_eq!(admitted.schema_version, CONTENT_PACK_SCHEMA_VERSION);
@@ -229,15 +229,13 @@ fn matches_and_search_clones_share_one_immutable_content_pack() {
 
     // The legacy scenario mutation seam is copy-on-write and cannot mutate a
     // definition in either the source branch or the process-wide pack.
-    branch.state.objects[first_card]
+    branch.state[first_card]
         .subtypes
         .push("scenario-only".to_string());
-    assert!(!game.state.objects[first_card].has_subtype("scenario-only"));
-    assert!(
-        !branch.state.objects[first_card].shares_definition_with(&game.state.objects[first_card])
-    );
+    assert!(!game.state[first_card].has_subtype("scenario-only"));
+    assert!(!branch.state[first_card].shares_definition_with(&game.state[first_card]));
     assert!(!admitted
-        .definition(game.state.objects[first_card].definition_id)
+        .definition(game.state[first_card].definition_id)
         .unwrap()
         .subtypes
         .iter()

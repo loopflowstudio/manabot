@@ -8,7 +8,13 @@ from numpy.typing import NDArray
 import pytest
 import torch
 
-from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch._facts import FactEncoder
+from manabot.backends.torch._shared_effects import SharedEffectEncoder
+from manabot.backends.torch.checkpoint import (
+    BACKEND as TORCH_BACKEND,
+    load_checkpoint,
+    save_checkpoint,
+)
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import (
@@ -25,15 +31,19 @@ from manabot.env.observation import (
 from manabot.eval.admission import register_checkpoint
 from manabot.eval.evaluate import validate_registered_player
 from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
-from manabot.model.admission import admit_observation
-from manabot.model.facts import FactEncoder, admit_facts
-from manabot.model.shared_effects import SharedEffectEncoder
+from manabot.policy import admission
 from manabot.recipes.local import local_smoke
 from manabot.semantic.text_observation import capture_text_decision, submit_response
 from manabot.training.regime import TrainingRegime
 from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.verify.representation import kellan_trigger_root, kellan_upgrade_root
 import managym
+from tests.model.prepared_routes import (
+    device_input,
+    effect_rows,
+    fact_rows,
+    record_vocabulary,
+)
 
 
 def test_recipe_collector_and_evaluation_select_saved_input(tmp_path: Path) -> None:
@@ -66,8 +76,11 @@ def test_recipe_collector_and_evaluation_select_saved_input(tmp_path: Path) -> N
             content_suite="layer-input-fixture",
             player_id="layer-fixture",
             display_name="layer fixture",
+            backend=TORCH_BACKEND,
         )
-        paths, selected = validate_registered_player(admitted.registration, path)
+        paths, selected = validate_registered_player(
+            admitted.registration, path, backend=TORCH_BACKEND
+        )
         assert paths["layer-fixture"] == str(path)
         assert selected is not None and selected.encoder.config == recipe.observation
     finally:
@@ -104,7 +117,7 @@ def test_layer_input_native_python_text_forward_backward_and_reload(
     assert "exile" in capture_text_decision(env).text.lower()
     values = {key: torch.from_numpy(value)[None] for key, value in reference.items()}
     model = ActorCritic(space, ModelConfig(hidden_dim=16, world=managym.WORLD_SETUP))
-    logits, value = model(admit_observation(model, values))
+    logits, value = model(device_input(model, values))
     assert torch.isfinite(logits).all() and torch.isfinite(value).all()
     (
         logits[values["actions_valid"].bool()].square().mean() + value.square().mean()
@@ -118,8 +131,8 @@ def test_layer_input_native_python_text_forward_backward_and_reload(
     restored, restored_space = load_checkpoint(str(path))
     assert restored_space.encoder.config == config
     for expected, actual in zip(
-        model(admit_observation(model, values)),
-        restored(admit_observation(restored, values)),
+        model(device_input(model, values)),
+        restored(device_input(restored, values)),
         strict=True,
     ):
         torch.testing.assert_close(expected, actual)
@@ -207,7 +220,7 @@ def test_captured_continuation_program_reaches_native_python_and_policy() -> Non
     assert (reference["facts"][:, 1] == 14).sum() > 0
     values = {key: torch.from_numpy(value)[None] for key, value in reference.items()}
     model = ActorCritic(space, ModelConfig(hidden_dim=16))
-    logits, value = model(admit_observation(model, values))
+    logits, value = model(device_input(model, values))
     assert torch.isfinite(logits).all() and torch.isfinite(value).all()
     value.sum().backward()
     assert model.facts.output.weight.grad is not None
@@ -237,7 +250,7 @@ def test_fact_inference_preserves_sparse_rows_and_fresh_state(
 ) -> None:
     torch.set_num_threads(1)
     torch.manual_seed(268)
-    encoder = FactEncoder(8, 32)
+    encoder = FactEncoder(8)
     with torch.no_grad():
         encoder.output.weight.copy_(torch.eye(8))
         encoder.output.bias.fill_(0.2)
@@ -253,9 +266,9 @@ def test_fact_inference_preserves_sparse_rows_and_fresh_state(
             facts[batch, slots] = rows
         facts[0, [21, 25, 30]] = facts[0, [0, 4, 19]]
     objects = torch.randn(3, 2, 8, requires_grad=True)
-    expected = encoder(facts, objects)
+    expected = encoder(fact_rows(facts, objects), objects)
     with torch.inference_mode():
-        actual = encoder(facts, objects)
+        actual = encoder(fact_rows(facts, objects), objects)
     torch.testing.assert_close(actual, expected, atol=1e-6, rtol=1e-5)
     torch.testing.assert_close(actual[2], objects[2])
     if empty:
@@ -266,14 +279,17 @@ def test_fact_inference_preserves_sparse_rows_and_fresh_state(
         changed = facts.flip(0)
         with torch.no_grad():
             encoder.output.bias.add_(0.3)
-        dense = encoder(changed, objects)
+        dense = encoder(fact_rows(changed, objects), objects)
         with torch.inference_mode():
             torch.testing.assert_close(
-                encoder(changed, objects), dense, atol=1e-6, rtol=1e-5
+                encoder(fact_rows(changed, objects), objects),
+                dense,
+                atol=1e-6,
+                rtol=1e-5,
             )
         assert not torch.allclose(dense, actual)
     # Inference never leaves detached data in the later learning computation.
-    trained = encoder(facts, objects)
+    trained = encoder(fact_rows(facts, objects), objects)
     trained.square().sum().backward()
     assert objects.grad is not None and torch.isfinite(objects.grad).all()
     assert encoder.output.weight.grad is not None
@@ -290,13 +306,13 @@ def test_fact_admission_rejects_malformed_rows(column: int, value: float) -> Non
     facts[0, 31, FACT_VALID_INDEX] = 1
     facts[0, 31, column] = value
     with pytest.raises(ValueError, match="fact"):
-        admit_facts(facts, 32, 2, None)
+        admission.facts((facts).detach().cpu().numpy(), 32, 2, record_vocabulary(None))
 
 
 def test_local_programs_preserve_ownership_order_multiplicity_and_gradients() -> None:
     torch.set_num_threads(1)
     torch.manual_seed(244)
-    encoder = FactEncoder(8, 32)
+    encoder = FactEncoder(8)
     # A trained output must expose the representation; fresh fact output is zero.
     with torch.no_grad():
         encoder.output.weight.copy_(torch.eye(8))
@@ -307,7 +323,7 @@ def test_local_programs_preserve_ownership_order_multiplicity_and_gradients() ->
     def encode(rows: torch.Tensor) -> torch.Tensor:
         facts = torch.zeros(1, 32, FACT_DIM)
         facts[0, : len(rows)] = rows
-        return encoder(facts, objects)
+        return encoder(fact_rows(facts, objects), objects)
 
     combined = encode(torch.cat((first, second)))
     torch.testing.assert_close(combined, encode(first) + encode(second))
@@ -358,7 +374,9 @@ def test_local_program_admission_rejects_broken_boundaries(malformed: str) -> No
     else:
         rows[1, FACT_ID_INDEX + 1] = 2
     with pytest.raises(ValueError, match="fact program"):
-        admit_facts(rows[None], len(rows), 2, None)
+        admission.facts(
+            (rows[None]).detach().cpu().numpy(), len(rows), 2, record_vocabulary(None)
+        )
 
 
 def test_shared_program_order_joins_padding_multiplicity_and_numeric_gradients() -> (
@@ -381,30 +399,36 @@ def test_shared_program_order_joins_padding_multiplicity_and_numeric_gradients()
         headers[:, i, 17] = 1
         details[:, i * 2 : i * 2 + 2] = torch.tensor([[14, 0, 4096], [14, 0, 3 + i]])
         members[:, i] = torch.tensor([i + 3, i + 1])
-    expected = encoder(headers, details, members, objects)
+    expected = encoder(effect_rows(headers, details, members, objects), objects)
     # Packed programs from different observations have no shared recurrent state.
     for b in range(2):
         torch.testing.assert_close(
             expected[b : b + 1],
             encoder(
-                headers[b : b + 1],
-                details[b : b + 1],
-                members[b : b + 1],
+                effect_rows(
+                    headers[b : b + 1],
+                    details[b : b + 1],
+                    members[b : b + 1],
+                    objects[b : b + 1],
+                ),
                 objects[b : b + 1],
             ),
         )
     changed = details.clone()
     changed[:, 0, 2] = 8192  # same embedding bucket, distinct magnitude
-    actual = encoder(headers, changed, members, objects)
+    actual = encoder(effect_rows(headers, changed, members, objects), objects)
     assert not torch.allclose(actual[:, 2], expected[:, 2])
     torch.testing.assert_close(actual[:, 3], expected[:, 3])
     changed[:, :2] = details[:, :2].flip(1)
-    assert not torch.allclose(encoder(headers, changed, members, objects), expected)
+    assert not torch.allclose(
+        encoder(effect_rows(headers, changed, members, objects), objects), expected
+    )
     for column in (9, 12):  # timestamp and source are strategically meaningful
         changed_headers = headers.clone()
         changed_headers[:, 0, column] += 1
         assert not torch.allclose(
-            encoder(changed_headers, details, members, objects), expected
+            encoder(effect_rows(changed_headers, details, members, objects), objects),
+            expected,
         )
     # Physical record order is immaterial after CSR slices move with the records.
     swapped = headers.clone()
@@ -415,7 +439,10 @@ def test_shared_program_order_joins_padding_multiplicity_and_numeric_gradients()
     swapped_members = members.clone()
     swapped_members[:, :2] = members[:, :2].flip(1)
     torch.testing.assert_close(
-        encoder(swapped, swapped_details, swapped_members, objects), expected
+        encoder(
+            effect_rows(swapped, swapped_details, swapped_members, objects), objects
+        ),
+        expected,
     )
     # Remap all public object addresses together.
     remapped = headers.clone()
@@ -424,23 +451,35 @@ def test_shared_program_order_joins_padding_multiplicity_and_numeric_gradients()
     remapped_members = members.clone()
     remapped_members[:, :2, 0] = 5 - remapped_members[:, :2, 0]
     torch.testing.assert_close(
-        encoder(remapped, details, remapped_members, objects.flip(1)), expected.flip(1)
+        encoder(
+            effect_rows(remapped, details, remapped_members, objects.flip(1)),
+            objects.flip(1),
+        ),
+        expected.flip(1),
     )
     # Duplicate targets preserve multiplicity, not a mean over memberships.
     duplicate_headers = headers.clone()
     duplicate_headers[:, 1, 17] = 0
-    one = encoder(duplicate_headers, details, members, objects) - objects
+    one = (
+        encoder(effect_rows(duplicate_headers, details, members, objects), objects)
+        - objects
+    )
     duplicate_headers[:, 0, 16] = 2
     duplicate_members = members.clone()
     duplicate_members[:, 1, 0] = members[:, 0, 0]
     torch.testing.assert_close(
-        encoder(duplicate_headers, details, duplicate_members, objects) - objects,
+        encoder(
+            effect_rows(duplicate_headers, details, duplicate_members, objects), objects
+        )
+        - objects,
         2 * one,
     )
     headers[:, 2:, :17] = float("nan")
     details[:, 4:] = float("nan")
     members[:, 2:] = float("nan")
-    torch.testing.assert_close(encoder(headers, details, members, objects), expected)
+    torch.testing.assert_close(
+        encoder(effect_rows(headers, details, members, objects), objects), expected
+    )
     expected.square().sum().backward()
     assert objects.grad is not None and objects.grad.abs().sum() > 0
     assert encoder.detail_number.weight.grad is not None

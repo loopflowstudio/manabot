@@ -6,20 +6,22 @@ from typing import Literal
 import pytest
 import torch
 
+from manabot.backends.torch._facts import FactEncoder
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
 from manabot.infra.identity import canonical_sha256
-from manabot.model.admission import admit_observation
 from manabot.model.architecture import (
     architecture_identity,
     architecture_receipt,
     validate_architecture_receipt,
 )
-from manabot.model.facts import FactEncoder, admit_facts
+from manabot.policy import admission
 from manabot.training.rollout.collection import SeatRoutedCollector
+from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
+from tests.model.prepared_routes import device_input, fact_rows, record_vocabulary
 
 
 @pytest.mark.parametrize("width,depth", [(64, 1), (64, 2), (128, 2)])
@@ -55,7 +57,7 @@ def test_capacity_export_and_real_legal_policy(
         batch_closure="exact-quota",
     )
     batch = collector.collect(agent, 2)
-    obs = admit_observation(
+    obs = device_input(
         agent,
         {
             k: torch.from_numpy(v[0])
@@ -63,11 +65,11 @@ def test_capacity_export_and_real_legal_policy(
         },
     )
     policy, value = agent(obs)
-    assert policy.shape == obs["actions_valid"].shape
+    assert policy.shape == obs.legal.shape
     assert value.shape == (2,)
     assert torch.isfinite(value).all()
     probabilities = policy.softmax(-1)
-    assert (probabilities[obs["actions_valid"] == 0] == 0).all()
+    assert (probabilities[obs.legal == 0] == 0).all()
     torch.testing.assert_close(probabilities.sum(-1), torch.ones(2))
     path = tmp_path / "capacity.pt"
     save_checkpoint(
@@ -78,10 +80,10 @@ def test_capacity_export_and_real_legal_policy(
     actual = loaded(obs)
     for expected, observed in zip((policy, value), actual, strict=True):
         torch.testing.assert_close(expected, observed, rtol=0, atol=0)
-    checkpoint = torch.load(path, weights_only=False)
+    checkpoint = read_checkpoint(path, weights_only=False)
     # Pooling changes critic semantics while retaining every parameter shape.
     checkpoint["hypers"]["agent_hypers"]["value_aggregation"] = "masked_mean"
-    torch.save(checkpoint, path)
+    write_checkpoint(checkpoint, path)
     with pytest.raises(ValueError, match="architecture receipt mismatch"):
         load_checkpoint(str(path))
     checkpoint["hypers"]["agent_hypers"]["value_aggregation"] = "historical_mean"
@@ -89,7 +91,7 @@ def test_capacity_export_and_real_legal_policy(
     if depth == 1:
         del checkpoint["hypers"]["agent_hypers"]["attention_layers"]
         del checkpoint["hypers"]["agent_hypers"]["value_aggregation"]
-    torch.save(checkpoint, path)
+    write_checkpoint(checkpoint, path)
     historical, _ = load_checkpoint(str(path))
     for expected, observed in zip((policy, value), historical(obs), strict=True):
         torch.testing.assert_close(expected, observed, rtol=0, atol=0)
@@ -142,7 +144,7 @@ def test_receipt_saved_in_a_checkpoint_verifies_byte_for_byte(tmp_path: Path) ->
     save_checkpoint(
         agent, agent.observation_space, path, player_configs=Match().to_rust()
     )
-    saved = torch.load(path, weights_only=False)["architecture"]
+    saved = read_checkpoint(path, weights_only=False)["architecture"]
     loaded, _ = load_checkpoint(str(path))
     loaded.policy_head.requires_grad_(False)
     recomputed = loaded.architecture_receipt()
@@ -230,7 +232,7 @@ def test_fact_capacity_checkpoint_contract(tmp_path: Path) -> None:
 @pytest.mark.parametrize("capacity", [256, 512])
 def test_fact_capacity_preserves_timestamp_scale_and_gradients(capacity: int) -> None:
     torch.manual_seed(213)
-    old, larger = FactEncoder(4, 128), FactEncoder(4, capacity)
+    old, larger = FactEncoder(4), FactEncoder(4)
     # Nonzero learned weights make numerical drift and dropped facts observable.
     with torch.no_grad():
         old.output.weight.fill_(0.25)
@@ -244,13 +246,22 @@ def test_fact_capacity_preserves_timestamp_scale_and_gradients(capacity: int) ->
     objects = torch.zeros(1, 2, 4)
     padded = facts.clone()
     padded[:, 128:] = 0
-    torch.testing.assert_close(old(facts[:, :128], objects), larger(padded, objects))
-    facts.requires_grad_()
-    output = larger(facts, objects)
-    assert not torch.equal(output, larger(padded, objects))
+    torch.testing.assert_close(
+        old(fact_rows(facts[:, :128], objects), objects),
+        larger(fact_rows(padded, objects), objects),
+    )
+    prepared = fact_rows(facts, objects)
+    prepared.columns.requires_grad_()
+    output = larger(prepared, objects)
+    assert not torch.equal(output, larger(fact_rows(padded, objects), objects))
     output.sum().backward()
-    assert facts.grad is not None
-    assert (facts.grad[0, 128:140, 9] != 0).all()
-    assert facts.grad[0, 140:].count_nonzero() == 0
+    assert prepared.columns.grad is not None
+    assert (prepared.columns.grad[0, 128:140, 4] != 0).all()
+    assert prepared.columns.grad[0, 140:].count_nonzero() == 0
     with pytest.raises(ValueError, match="expected"):
-        admit_facts(facts, old.max_facts, objects.shape[1], None)
+        admission.facts(
+            (facts).detach().cpu().numpy(),
+            128,
+            objects.shape[1],
+            record_vocabulary(None),
+        )

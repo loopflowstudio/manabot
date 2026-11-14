@@ -664,6 +664,7 @@ export interface OpponentConfig {
   opponent_sha256?: string;
 }
 
+/** What a game recorded about its policy; an unrecorded value is absent. */
 export interface CheckpointProvenance {
   policy?: PolicyRuntimeIdentity;
   source?: string | null;

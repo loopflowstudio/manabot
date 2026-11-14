@@ -49,6 +49,7 @@ class BaselineFactory:
     summary: CheckpointSummary | None = None
 
     def describe(self) -> PolicyDescriptor:
+        from manabot.backends import resolve
         from manabot.model.catalog import inspect_checkpoint
 
         kind = self.spec.config.get("kind")
@@ -62,7 +63,7 @@ class BaselineFactory:
             )
         if self.spec.artifact is None:
             raise ValueError("Manabot policy requires an artifact.")
-        summary = inspect_checkpoint(Path(self.spec.artifact))
+        summary = inspect_checkpoint(Path(self.spec.artifact), backend=resolve("torch"))
         metadata: dict[str, JSONValue] = {
             key: getattr(self.summary or summary, key)
             for key in (
@@ -105,9 +106,10 @@ class BaselineFactory:
             return
         import json
 
+        from manabot.backends import resolve
         from manabot.model.catalog import inspect_checkpoint
 
-        summary = inspect_checkpoint(Path(self.spec.artifact))
+        summary = inspect_checkpoint(Path(self.spec.artifact), backend=resolve("torch"))
         from manabot.infra.config import ObservationConfig
 
         ObservationConfig.from_checkpoint(
@@ -243,6 +245,7 @@ class BaselineProvider:
         return BaselineFactory(spec)
 
     def discover(self, config: dict[str, JSONValue]) -> list[PolicyFactory]:
+        from manabot.backends import resolve
         from manabot.model.catalog import discover_checkpoints
 
         paths = config.get("paths", [])
@@ -254,7 +257,9 @@ class BaselineProvider:
         ):
             raise ValueError("manabot discovery requires paths and a runs_dir string.")
         summaries, missing = discover_checkpoints(
-            [Path(p).expanduser() for p in paths], runs_dir=Path(root).expanduser()
+            [Path(p).expanduser() for p in paths],
+            backend=resolve("torch"),
+            runs_dir=Path(root).expanduser(),
         )
         return [
             *(
