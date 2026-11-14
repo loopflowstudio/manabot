@@ -380,6 +380,7 @@ The Torch wrapper and the capture wrapper are separate Python classes:
 |---|---|
 | One game, explicit reset, readable observations | `managym.Env` |
 | A fixed viewer's observation | `Env.observation_for_player(player_index)` |
+| Encoded fixed-viewer observations for every slot, including nonchoosing seats | `VectorEnv.write_observations_for_players` ([fixed-seat observations](#fixed-seat-observations)) |
 | Revision-bound Commands, decision captures, forks and possible worlds | Scalar `Env`; these are not general `VectorEnv` operations |
 | Batched readable observations and automatic reset | `managym.VectorEnv.reset_all` / `step` |
 | Caller-owned NumPy buffers, per-slot setups and partial stepping | Native `VectorEnv` buffer methods |
@@ -537,11 +538,19 @@ for slot, (read, hand) in enumerate(zip(reads, hands, strict=True)):
 
 `write_observations_for_players(players, buffers, action_overflow="error")`
 writes all slots in one native call, with one explicit native seat (`0` or `1`)
-per slot. It returns `slot`, `player`, `game_id`, `seed` and `revision` records
-with the same meanings as `HandSnapshot`. Pair snapshots by slot, game ID and
-revision, selecting matching or opposite seats as needed. Save a collection/run
-identity too: `game_id` distinguishes resets within the process, even to the
-same seed, but is not a portable replay ID.
+per slot and no implicit opponent. It returns one `ObservationRead` per slot, in
+slot order, naming the game state each row describes:
+
+| Field | Meaning |
+|---|---|
+| `slot: int` | The row in every array, equal to the list index |
+| `player: int` | Requested native seat, unchanged by control effects |
+| `game_id: int`, `seed: int`, `revision: int` | The same values a `HandSnapshot` of that slot reports at this read boundary |
+
+Pair a read with the hand snapshot at the same list index when game ID and
+revision agree, selecting matching or opposite seats as needed. Save a
+collection/run identity too: `game_id` distinguishes resets within the process,
+even to the same seed, but is not a portable replay ID.
 
 The arrays contain the same encoding as scalar
 `Env.observation_for_player(player_index)` for the requested seat and selected

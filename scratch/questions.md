@@ -116,3 +116,22 @@ reversible integration choices; the fixed-seat API still needs implementation.
 This sync brings in HandSnapshot, generation-based capture synchronization and
 the wrapper read interfaces; the earlier missing-interface statements describe
 the pre-sync checkout. Recheck their final contracts before implementation.
+
+## Write-docs after sync — 2026-11-14
+
+Changed docs for the next step: `docs/engine.md` (Fixed-seat observations; a
+row in Choosing a Python API) and `docs/python-api-audit.md` (Perspective and
+Partial execution rows, follow-up link). They describe intended behavior; the
+method is still unimplemented.
+
+Reversible assumption, not a user decision: the returned record is named
+`managym.ObservationRead` with `slot`, `player`, `game_id`, `seed`, `revision`.
+`HandSnapshot` has no `slot`; the guide pairs by list index and checks game ID
+and revision.
+
+The example's existing calls (`ObservationSpace().encoder.allocate`,
+`encoder.config.action_overflow`, `hand_snapshots`, `player_policies`) were
+checked against source only: this checkout has no cp313 extension built
+(`import managym` fails under `uv run --no-sync`; only a stale
+`manabot/managym/_managym.cpython-312-darwin.so` exists). Run the example after
+the implementation's rebuild.
