@@ -201,9 +201,11 @@ def make_player(
         from pathlib import Path
 
         from manabot.sim.search.local_update import (
-            LocalSearchConfig,
             LocalUpdatePlayer,
             LocalUpdateTeacher,
+        )
+        from manabot.sim.search.local_update_receipt import (
+            LocalSearchConfig,
             SamplerArtifact,
         )
 

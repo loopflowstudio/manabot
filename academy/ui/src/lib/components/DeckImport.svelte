@@ -5,7 +5,9 @@
     { key: 'hero', label: 'Your deck' },
     { key: 'villain', label: 'Opponent deck' },
   ] as const;
-  let enabled = $state(gameStore.deckImport !== null);
+  // Setup that arrives with imported decks opens on them; later toggles leave the panel alone.
+  const imported = gameStore.deckImport !== null;
+  let enabled = $state(imported);
   let draft = $state(gameStore.deckImport ?? {
     hero: { source: '', filename: 'hero.txt' },
     villain: { source: '', filename: 'villain.txt' },
@@ -65,7 +67,7 @@
   }
 </script>
 
-<details class="mt-4 rounded-lg border border-line bg-panel p-4">
+<details open={imported} class="mt-4 rounded-lg border border-line bg-panel p-4">
   <summary class="cursor-pointer font-medium">Import decklist files</summary>
   <p class="mt-2 text-sm text-ink-2">Development format — supported cards only, no tournament legality claim. Sideboards are fixed outside-game copies. Checkpoint opponents are not available for imported decks.</p>
   <label class="mt-3 flex items-center gap-2"><input type="checkbox" bind:checked={enabled} onchange={update} /> Use imported decks for the next game</label>
@@ -75,6 +77,7 @@
       {#each seats as { key, label }}
         <div>
           <label class="block text-sm" for={`${key}-deck-file`}>{label} file</label>
+          <p class="type-caption text-ink-2">Selected source: {draft[key].filename}</p>
           <input id={`${key}-deck-file`} type="file" accept=".txt,.dek,text/plain" onchange={event => loadFile(event, key)} />
           <label class="mt-2 block text-sm" for={`${key}-deck-source`}>{label} source</label>
           <textarea id={`${key}-deck-source`} class="w-full rounded border border-line bg-panel p-2 font-mono text-sm" rows="9" bind:value={draft[key].source} oninput={update}></textarea>

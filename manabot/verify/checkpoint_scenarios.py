@@ -14,14 +14,13 @@ from pathlib import Path
 import time
 from typing import Any, Literal
 
-from managym.experience import UNVERSIONED_CONTENT_HASH
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 import torch
 
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import RECORDED_ASSET_MANIFEST_HASH
 from manabot.model.world import checkpoint_world, validate_agent_setup
-from manabot.sim.frames import build_command, build_viewer_frame
+from manabot.sim.frames import build_viewer_frame, decision_row
 from manabot.sim.replay import read_trace, replay_games, write_trace
 from manabot.sim.search.flat_mc import AgentMatchupPlayer, make_player
 from manabot.verify.scenario_validation import (
@@ -37,6 +36,7 @@ from manabot.verify.scenarios import (
     build_scenario_env,
     hero_view,
 )
+from managym.experience import UNVERSIONED_CONTENT_HASH
 
 
 class ScenarioScore(BaseModel):
@@ -153,21 +153,11 @@ def score_checkpoint(
                         bool(card.card_types.is_creature)
                         for card, _ in battlefield_pairs(raw, side)
                     )
-            command = build_command(frame, action)
+            row = decision_row(env, frame, action)
+            row["player_id"] = game["seat_players"][actor]
             observation, _, terminated, truncated, _ = env.step(action)
-            game["decisions"].append(
-                {
-                    "actor": actor,
-                    "player_id": game["seat_players"][actor],
-                    "action_space_kind": frame["action_space"],
-                    "frame_sha256": canonical_sha256(frame),
-                    "command": command,
-                    "command_sha256": canonical_sha256(command),
-                    "chosen_offer": offers[action],
-                    "pre_state_digest": pre,
-                    "post_state_digest": env._engine.state_digest(),
-                }
-            )
+            row["post_state_digest"] = env._engine.state_digest()
+            game["decisions"].append(row)
             game["terminated"] = bool(terminated)
             game["truncated"] = bool(truncated)
             game["winner"] = env._engine.winner_index() if terminated else None

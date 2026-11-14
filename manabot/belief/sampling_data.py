@@ -21,7 +21,7 @@ from typing import Literal, cast
 import torch
 
 from manabot.backends.torch.checkpoint import load_checkpoint
-from manabot.belief.sampling import SamplerInput, SamplerSchema
+from manabot.belief.sampling_types import SamplerInput, SamplerSchema, _digest
 from manabot.belief.state import ViewerHistory
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
@@ -37,14 +37,6 @@ from managym.decision import (
 
 Split = Literal["train", "validation", "test"]
 HISTORY_SCHEMA = "manabot.public-commitment-counts/actor-kind-card-sqrt-v1"
-
-
-def _digest(value: object) -> str:
-    return hashlib.sha256(
-        json.dumps(
-            value, sort_keys=True, separators=(",", ":"), allow_nan=False
-        ).encode()
-    ).hexdigest()
 
 
 @dataclass(frozen=True, slots=True)

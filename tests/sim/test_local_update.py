@@ -3,7 +3,6 @@
 from dataclasses import replace
 from pathlib import Path
 
-from managym._managym import AgentError
 import numpy as np
 import pytest
 import torch
@@ -28,14 +27,15 @@ from manabot.sim.native_game import execute_game
 from manabot.sim.registration import PlayerRegistration, SearchSemantics
 from manabot.sim.replay import replay_games
 from manabot.sim.search import local_update
-from manabot.sim.search.local_update import (
+from manabot.sim.search.local_update import LocalUpdateTeacher
+from manabot.sim.search.local_update_receipt import (
     LocalSearchConfig,
     LocalUpdateReceipt,
-    LocalUpdateTeacher,
     SamplerArtifact,
     regularized_update,
 )
 import managym
+from managym._managym import AgentError
 from managym.decision import Observation
 from managym.possible_worlds import PossibleWorldSpace, WorldQuery
 
@@ -94,6 +94,9 @@ def make_teacher(
         "manabot/model/facts.py",
         "manabot/sim/search/rollout.py",
         "manabot/sim/search/rollout_receipt.py",
+        "manabot/sim/search/local_update_receipt.py",
+        "manabot/sim/search/sampling_receipt.py",
+        "manabot/belief/sampling_types.py",
     ],
 )
 def test_teacher_identity_tracks_implementation_owners(

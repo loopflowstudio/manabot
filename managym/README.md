@@ -27,13 +27,29 @@ ready; Ctrl-C stops it. It needs CPython 3.12 or 3.13 and nothing else: no
 manabot, Torch, Node or Rust. Finished and unfinished games are listed under
 **Games** and open in **Replay**. `uv run --no-project python -m managym.academy` is the same
 command, and `uv run --no-project managym academy --help` lists the port, host and storage
-options. Installing `manabot` in the same environment adds trained opponents.
+options. Cards show their Scryfall art with no extra step: the server fetches
+each image the first time it is shown and keeps it in `~/.cache/managym/card-art`;
+`ACADEMY_CARD_ART=off` turns that off ([card art](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#card-art)).
+Installing `manabot` in the same environment adds trained opponents.
 The [Academy guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#running-academy)
 covers playing, replays, trained bots and launch troubleshooting.
 
 ### Start a game with your chosen decks
 
-After launching Academy, open **Choose decks**. Browse a bundled deck and
+```bash
+uv run --no-project managym academy play --deck ur_lessons --opponent-deck ./my-deck.txt \
+    --opponent search --sims 64 --seed 7
+```
+
+The browser opens already in that game: UR Lessons against the decklist in
+`my-deck.txt`, played by Search 64, with deal seed 7. Each deck is a bundled
+deck name or a decklist file; `--opponent` is `search`, `random`, `passive`
+or a checkpoint digest. A rejected decklist or unknown deck stops the command
+with the reason before anything opens.
+Bundled names take precedence over same-named files; use `./ur_lessons` to
+select a file named `ur_lessons`.
+
+The same choices are in the browser. Open **Choose decks**. Browse a bundled deck and
 select **Use for me** or **Use for opponent** to assign each seat, choose an
 opponent such as **Search 64**, then click **New Game**.
 
@@ -52,19 +68,65 @@ the same environment and at the same release version as managym:
 
 ```bash
 uv pip install --python .venv/bin/python --only-binary :all: --torch-backend cpu manabot
-uv run --no-project managym academy
 ```
 
-Open **Watch** at `http://127.0.0.1:8000/replay?watch=1`. Under **Open arena /
-Tournament game**, select the evaluation's retained command trace, usually
-`traces/<cell-id>.commands.jsonl.gz` in its output directory. Download the
-artifact first if the evaluation ran remotely. Select a **Recorded game** and
-**Open selected game** when the file contains more than one game, then use
-**Step decision**, **Previous decision** or **Play**. Import verifies the
+With any earlier Academy server stopped, open one game of the evaluation's
+retained command trace, usually
+`traces/<cell-id>.commands.jsonl.gz` in its output directory (download the
+artifact first if the evaluation ran remotely):
+
+```bash
+uv run --no-project managym academy replay out/traces/<cell-id>.commands.jsonl.gz --game 3
+```
+
+The browser opens in **Replay** on that game's first decision; use **Step
+decision**, **Previous decision** or **Play**. `--game` is the game's
+position in the file, counted from 0, or the start of its trace digest; run
+the command without it to list the file's games. `managym academy replay
+<recording-id>` reopens a game from **Games**, with or without manabot, in the
+same browser and address (including port), or when it is shared and finished. In
+the browser, the same import is **Open a game file** under
+**Watch** (`/replay?watch=1`). Import verifies the
 recorded actions and state digests without running the original players or
 loading their checkpoints. Incompatible historical worlds need their original
 revision. The [evaluation replay guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#watch-a-game-from-an-evaluation)
 covers supported files and troubleshooting.
+
+### Watch a game from your training loop
+
+A game the training loop itself played opens the same way, once manabot has
+exported it:
+
+```bash
+uv run manabot export-game runs/jace/games --game 0 --out jace.game.jsonl.gz
+uv run --no-project managym academy replay jace.game.jsonl.gz
+```
+
+**Replay** opens headed **Training game** with both players' names, on the
+first of the decisions the loop actually made; an evaluation's game is headed
+**Evaluation game**. Recording the games is one `with record_games(...)` block
+around the loop:
+[Watch a game from your training loop](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#watch-a-game-from-your-training-loop).
+
+### Launch from Python
+
+```python
+from pathlib import Path
+
+from managym.academy.launch import serve
+
+with serve(port=0) as academy:
+    game = academy.new_game(deck="ur_lessons", opponent_deck=Path("my-deck.txt"), seed=7)
+    replay = academy.replay(Path("out/traces/c41.commands.jsonl.gz"), game=3)
+    academy.open(game.url)
+    academy.wait()  # until Ctrl-C; leaving the block stops the server
+```
+
+`serve` opens no browser; call `academy.open()` to open the bare table.
+`game.url` and imported evaluation replay URLs open in any browser that can
+reach the server; recording ids retain the access rules above. Failures raise
+`AcademyLaunchError` with a `code`. See
+[Launch from Python](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#launch-from-python).
 
 For building a deck before play, see [Limited deck building](../docs/deck-building.md):
 `CardPool` holds the cards available, `format.Limited` holds the rules, and a

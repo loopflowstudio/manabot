@@ -12,11 +12,12 @@ npm --prefix academy/ui test
 npm --prefix academy/ui run build
 npm --prefix academy/ui run test:e2e
 npm --prefix academy/ui run test:e2e:release
-npm --prefix academy/ui run fetch:card-art
 ```
 
-Scryfall images are cached locally and bundled when present; the app uses
-procedural treatments when absent. Artist and source credits are in the footer.
+Card art comes from the Academy server (`/api/card-art/`), which fetches and
+caches Scryfall images on first view; no image is bundled into the build. The
+app shows its procedural treatment until an image loads and keeps it when none
+does. Artist and source credits are in the footer.
 Generated dependencies, images, builds and test output are ignored by git.
 Python wheels include immutable asset packs, without the Node application or
 its dependencies. Pack identities and historical protocol evidence keep their

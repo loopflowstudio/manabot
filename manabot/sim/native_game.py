@@ -26,19 +26,15 @@ import traceback
 from typing import Any
 from uuid import uuid4
 
-from managym.decision import Command, DecisionFrame
-from managym.experience import UNVERSIONED_CONTENT_HASH
-
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ObservationConfig
-from manabot.infra.identity import canonical_sha256
 from manabot.infra.provenance import (
     RECORDED_ASSET_MANIFEST_HASH,
     runtime_fingerprints,
     source_bundle_sha256,
 )
 from manabot.sim.execution import EvalExecution
-from manabot.sim.frames import build_command, build_viewer_frame
+from manabot.sim.frames import build_viewer_frame, decision_row
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.players import CODE_PLAYER_KINDS, build_code_player
 from manabot.sim.registration import PlayerRegistration, require_open_decklists
@@ -52,6 +48,8 @@ from manabot.sim.serving_protocol import (
 )
 from manabot.sim.supervision import _failure, _infrastructure_failure
 from manabot.sim.threads import GAME_BUDGET, ThreadBudgetExceeded
+from managym.decision import Command, DecisionFrame
+from managym.experience import UNVERSIONED_CONTENT_HASH
 
 
 class _InChildPlayers:
@@ -266,23 +264,16 @@ def execute_game(
             if action not in offers:
                 game["integrity"]["illegal_actions"] += 1
                 raise RuntimeError(f"illegal offer {action}")
-            command = build_command(frame, action)
             perf.record("command_validation", validation_started)
             responsible = None
             send(("phase", None))
             decision = {
+                **decision_row(env, frame, action),
                 "revision": revision,
-                "actor": actor,
                 "player_id": player_id,
                 "player_seed": game["player_seeds"][player_id],
                 "player_decision_ordinal": ordinal,
                 "policy_rng_seed": policy_seed,
-                "action_space_kind": frame["action_space"],
-                "frame_sha256": canonical_sha256(frame),
-                "command": command,
-                "command_sha256": canonical_sha256(command),
-                "chosen_offer": offers[action],
-                "pre_state_digest": pre_digest,
                 "latency_seconds": elapsed,
             }
             if player_id in policies:

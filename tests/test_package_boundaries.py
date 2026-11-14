@@ -218,6 +218,8 @@ _TORCH_FREE_MODULES = (
     "manabot.sim.match",
     "manabot.sim.native_game",
     "manabot.sim.replay",
+    "manabot.sim.table_bots",
+    "managym.academy.launch",
     "manabot.sim.serving_protocol",
     "manabot.sim.supervision",
     "manabot.sim.threads",

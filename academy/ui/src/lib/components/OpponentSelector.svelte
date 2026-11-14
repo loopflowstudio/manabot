@@ -72,6 +72,9 @@
       onchange={(event) =>
         onChange?.((event.currentTarget as HTMLSelectElement).value as OpponentChoice)}
     >
+      {#if value.startsWith('search-') && !searchOptions.some(option => option.value === value)}
+        <option {value} disabled={searchUnavailable}>Search {value.slice(7)}</option>
+      {/if}
       {#each searchOptions as option (option.value)}
         <option value={option.value} disabled={searchUnavailable}
           >{option.label}{searchUnavailable ? ' — needs open decklists' : ''}</option>

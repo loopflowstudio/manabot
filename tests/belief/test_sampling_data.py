@@ -8,7 +8,6 @@ import pytest
 import torch
 
 from manabot.backends.torch.policy import ActorCritic
-from manabot.belief.sampling import SamplerInput, SamplerSchema
 from manabot.belief.sampling_data import (
     SamplerDataset,
     SamplerExample,
@@ -19,6 +18,7 @@ from manabot.belief.sampling_data import (
     read_dataset,
     save_dataset,
 )
+from manabot.belief.sampling_types import SamplerInput, SamplerSchema
 from manabot.belief.state import ViewerHistory
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
