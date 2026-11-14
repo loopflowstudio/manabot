@@ -27,3 +27,19 @@ Each is reversible before the PR lands.
    `viewer_observation_sha256`/`viewer_state_sha256` (270 checkpoints × 3
    surfaces each) and the source manifest changed.
 8. Retained public-commitment receipt regenerated: only tracker history/prior/posterior digests and the source manifest changed; commands, commitments, gaps and consumed counts are identical.
+9. The comparison runs on RunPod RTX A5000 (`mtg344-a5000`, $0.27/h at
+   launch): L4 and RTX 4000 Ada had no capacity at 14:04 UTC. All four runs
+   share the GPU type, so the arms stay matched.
+10. The four runs stopped at their wall-clock watchdog at 115-156 updates
+    (A5000 ran ~50-60 s per update against the 40 s budget). Accepted rather
+    than continued: every run has the 20/40/75 checkpoints, so the arms
+    compare at matched updates.
+11. The v10-v11 head-to-heads were dropped: an arena game encodes both seats
+    with one `ObservationSpace` (`manabot/sim/native_game.py`, "players have
+    different observation ABIs"), so cross-layout checkpoints cannot meet.
+    The arms compare through the heuristic only. Per-seat encoding in the
+    arena is separate work.
+12. Heuristic play surfaces a ChooseMode whose focus names an object with no
+    row (Food activation, then a modal choice; 1 in ~12k observations). It
+    happens identically in v10, whose encodings match main, so it predates
+    this change; filed as a bug Task rather than fixed here.

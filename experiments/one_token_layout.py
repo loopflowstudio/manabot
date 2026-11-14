@@ -10,9 +10,9 @@ arms see the same information laid out differently. Two shared seeds per arm
 start from matched initialization and meet the same deals until their policies
 diverge. The report is experiments/one_token_layout.md.
 
-    uv run etude launch experiments/one_token_layout.py --rent l4 --parallel 4 \\
+    uv run etude queue experiments/one_token_layout.py --rent mtg344-a5000 --parallel 4 \\
         --cohort mtg344 --max-usd 25 --revision COMMIT
-    uv run etude eval experiments/one_token_layout.py --rent cpu32 --source r2://manabot/jobs
+    uv run etude eval experiments/one_token_layout.py --rent mtg344-cpu32 --source r2://manabot/jobs
     uv run etude report experiments/one_token_layout.py --source r2://manabot/jobs --open
 """
 
