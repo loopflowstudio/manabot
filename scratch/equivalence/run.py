@@ -122,7 +122,11 @@ def belief_batch(
     EQUIV_BELIEF_INPUT names the shared corpus file. Upstream schema generation
     can change independently of a forward, so comparisons must reuse its bytes.
     """
-    path = Path(os.environ["EQUIV_BELIEF_INPUT"]) if "EQUIV_BELIEF_INPUT" in os.environ else None
+    path = (
+        Path(os.environ["EQUIV_BELIEF_INPUT"])
+        if "EQUIV_BELIEF_INPUT" in os.environ
+        else None
+    )
     if path is not None and path.exists():
         saved = torch.load(path, map_location="cpu", weights_only=True)
         batch = saved["batch"]
@@ -175,11 +179,16 @@ def belief_batch(
         belief_card_vocab_size=1 + max(row.card_def_id for row in schema.rows),
     )
     if path is not None:
-        torch.save({
-            "observation": env.observation_space.encoder.config.model_dump(mode="json"),
-            "model": config.model_dump(mode="json"),
-            "batch": batch,
-        }, path)
+        torch.save(
+            {
+                "observation": env.observation_space.encoder.config.model_dump(
+                    mode="json"
+                ),
+                "model": config.model_dump(mode="json"),
+                "batch": batch,
+            },
+            path,
+        )
     return env.observation_space, config, batch
 
 

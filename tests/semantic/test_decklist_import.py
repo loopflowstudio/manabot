@@ -28,6 +28,7 @@ from manabot.infra.config import (
     SimulationConfig,
 )
 from manabot.model.world import validate_agent_setup
+from manabot.policy.protocol import Backend
 from manabot.sim.player import ModelPlayer
 from manabot.sim.sim import load_player, simulate_models
 import managym
@@ -107,7 +108,10 @@ def test_sim_cli_preserves_overrides_with_optional_deck_files(
 ) -> None:
     configs: list[SimulationConfig] = []
 
-    def capture(config: SimulationConfig, runtime: RuntimeConfig) -> None:
+    def capture(
+        config: SimulationConfig, runtime: RuntimeConfig, *, backend: Backend
+    ) -> None:
+        assert backend.name == "torch"
         configs.append(config)
 
     monkeypatch.setattr(cli, "run_simulation", capture)

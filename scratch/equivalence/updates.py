@@ -4,6 +4,7 @@ uv run python scratch/equivalence/updates.py OUT.json
 Dumps every diagnostic (repr) and every per-parameter float64 sum after one
 update for PPO (KL on, both references), damped scalar and damped categorical.
 """
+
 import inspect
 import json
 import sys
@@ -31,8 +32,13 @@ def run(model, learning, iteration=1):
     space = ObservationSpace()
     agent = ActorCritic(space, model)
     collector = SeatRoutedCollector(
-        space, Match(MatchConfig()), Reward(RewardConfig()), num_envs=2,
-        opponent_mode="self", learning_seats="one", batch_closure="exact-quota",
+        space,
+        Match(MatchConfig()),
+        Reward(RewardConfig()),
+        num_envs=2,
+        opponent_mode="self",
+        learning_seats="one",
+        batch_closure="exact-quota",
         device="cpu",
     )
     batch = collector.collect(agent, 6)
@@ -42,11 +48,22 @@ def run(model, learning, iteration=1):
         out = update_damped_iteration(*lead, learner, batch, learning, iteration)
     else:
         out = update_iteration(
-            *lead, learner, batch, learning, 0.3, np.random.default_rng(3),
+            *lead,
+            learner,
+            batch,
+            learning,
+            0.3,
+            np.random.default_rng(3),
             iteration=iteration,
         )
-    params = {n: repr(float(p.detach().double().sum())) for n, p in agent.named_parameters()}
-    residuals = None if batch.target_residuals is None else batch.target_residuals.tobytes().hex()
+    params = {
+        n: repr(float(p.detach().double().sum())) for n, p in agent.named_parameters()
+    }
+    residuals = (
+        None
+        if batch.target_residuals is None
+        else batch.target_residuals.tobytes().hex()
+    )
     return {
         "diagnostics": repr(sorted(out.items(), key=lambda kv: kv[0])),
         "params": params,
@@ -67,7 +84,8 @@ result = {
         ModelConfig(**small), DampedPolicyLearning(**damped, filter_scope="actor")
     ),
     "damped_categorical": run(
-        ModelConfig(**small, value_kind="categorical_wdl"), DampedPolicyLearning(**damped)
+        ModelConfig(**small, value_kind="categorical_wdl"),
+        DampedPolicyLearning(**damped),
     ),
 }
 assert result["ppo_kl_uniform"]["diagnostics"] != "[]"

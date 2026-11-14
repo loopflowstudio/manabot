@@ -24,7 +24,6 @@ from pathlib import Path
 import time
 from typing import Callable, Literal, Mapping, Sequence
 
-import managym._managym as native
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
@@ -57,6 +56,7 @@ from manabot.sim.search.sampling import (
     validate_hand,
 )
 import managym
+import managym._managym as native
 from managym.decision import Command, DecisionFrame, Observation, SemanticTransition
 from managym.possible_worlds import WorldQuery
 

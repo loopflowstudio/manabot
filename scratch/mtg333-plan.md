@@ -21,8 +21,8 @@ report and update-metrics readers, `pyproject.toml` and `uv.lock`; no
 CUDA receipts remained applicable at that merge. The latest main merge is
 `6fff54f7d2`, incorporating `ff881e3e04` (packaged Academy and native heuristic).
 Unlike the SDK-only merge, it changes native Env/VectorEnv and bindings.
-The retained CPU/parity receipts below predate it; final-runtime equivalence
-and installed-package validation remain open. CUDA results describe their
+The final-runtime CPU oracle, updates, parity and installed macOS consumers
+now pass (QA receipt below). CUDA results describe their
 recorded source and runtime, not a new measurement of this merge.
 
 ## Problem
@@ -88,8 +88,8 @@ optimize pass's before/after.
 
 ## State
 
-Slices 1–8 are implemented. The retained post-#514 CPU oracle and updates are
-exact; the latest native-runtime merge still needs the refresh described above.
+Slices 1–8 are implemented. The final-native CPU oracle and updates are
+exact, captured Torch/MLX parity passes, and installed macOS consumers pass.
 All CUDA jobs have ended; the successful rentals were terminated. Provider
 inventory confirms the final rental absent. The host optimizations and bounded
 PPO preparation pipeline are retained;
@@ -144,7 +144,9 @@ discarded metadata attempt remain in the historical receipts below.
   (`actions.unpack`: 1.293 s self, 1.016 s cumulative) and overlapping counts.
   Do not use its function breakdown quantitatively. Timed total rates and
   main-thread phase timers are the performance evidence.
-- Gate's broader suites, Python 3.12 and installed-wheel checks have not run.
+- The publication gate's focused suites and installed macOS Python 3.12/3.13
+  checks pass. Final-head hosted CI remains pending; no Linux installed
+  consumer or legacy-package upgrade proof is claimed locally.
 
 Captures in `/tmp/mtg333/` are temporary. If gone, or after a change to
 `prepare`, `backends/torch/`, the model, the updates or the engine: rebuild the
@@ -622,3 +624,50 @@ browser reconnect guidance. Validated existing realign catalog-suffix repair.
 Workflow compiler, `lf help qa`, Ruff and diff whitespace checks pass.
 Broader gate, Linux consumers, legacy package upgrade and hosted CI remain
 separate; no claim that those checks or exhaustive fault scenarios ran here.
+
+## Publication gate, 2026-11-14
+
+`lf sync` committed the QA/realign edits as `92048052f6` and merged cleanly
+with main (no new native or policy implementation changes). Reviewing CI at
+`6fff54f7d2` found three stale fixtures: the historical-value test still passed
+removed action coordinates, the simulation CLI stub omitted injected `backend`,
+and the NumPy policy-prior fixture's default tolerance excluded a one-ULP
+float32 result on Linux. The fixtures now use the current helper signature,
+assert the injected Torch backend, and use absolute tolerance 1e-7. No policy
+arithmetic changed. Ruff also sorted two moved native imports and formatted
+three scratch oracle drivers.
+
+Local commands used `uv run --no-sync`, the current cp313 extension and
+Task-owned `/tmp/mtg333/publish-*` basetemps:
+
+- Required backend selection (update protocols/backends, Torch protocol and
+  container, preparation rows, MLX, package boundaries): **101 passed**.
+- `test_value_aggregation.py`, `test_decklist_import.py`, `test_guidance.py`:
+  **62 passed** after the fixture repairs.
+- Observation/cutoff/native capacities, active training, batch closure, layer
+  input, Elemental world, arena admission/monitoring and choice separability:
+  **231 passed (145.46 s)**.
+- CI selection, release tooling, offline inference receipts, world/input
+  rejection, regime discovery and experiment inventory: first **206 passed,
+  five failures**, all five from recipe discovery importing report modules
+  while this checkout lacked matplotlib. Installed the locked reports,
+  evaluation, notebook, play and LLM extras without rebuilding the engine;
+  **all 18 regime tests then passed (41.31 s)**. No report/discovery code edit
+  was retained. The initial CI collection also lacked those extras; after
+  installation the exact workflow path inventory **collected 1,882 tests**.
+- Release browser inventory: **27 tests in eight files**. Academy conformance
+  collection and final lint/workflow checks are recorded by the publication run.
+
+Hosted CI at `92048052f6` passes Clean-machine Play (the preceding Rollup
+optional-dependency failure did not recur) and Academy UI. Its model and Academy
+failures are the stale fixtures repaired here. New final-head CI is pending
+publication; earlier heads are not claimed as its result. Installed 3.12/3.13
+QA and final-native numerical/parity receipts above remain applicable: this
+pass changes no preparation, forward, update arithmetic or engine source.
+PR copy carries the full last measured CUDA table and optimization before/after,
+including slower preparation/loading and the later unmeasured cleanup.
+
+Academy conformance inventory collected **23 tests**, and the fresh-process
+local evaluation CLI check passed (**1 test, 23.08 s**). Final Ruff check and
+format check pass on all **185** changed Python files. The workflow compiler
+passes every repository graph; `git diff --check` is clean.

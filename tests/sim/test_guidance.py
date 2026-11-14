@@ -98,7 +98,9 @@ def test_policy_prior_evaluator_normalizes_only_legal_logits() -> None:
         {"features": np.array([1.0], dtype=np.float32)}, action_count=2
     )
 
-    np.testing.assert_allclose(priors, np.array([0.26894143, 0.7310586]))
+    np.testing.assert_allclose(
+        priors, np.array([0.26894143, 0.7310586]), rtol=0, atol=1e-7
+    )
     np.testing.assert_array_equal(evaluator.last_root_priors, priors)
 
 

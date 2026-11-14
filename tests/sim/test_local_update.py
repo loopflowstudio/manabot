@@ -3,7 +3,6 @@
 from dataclasses import replace
 from pathlib import Path
 
-from managym._managym import AgentError
 import numpy as np
 import pytest
 import torch
@@ -36,6 +35,7 @@ from manabot.sim.search.local_update import (
     regularized_update,
 )
 import managym
+from managym._managym import AgentError
 from managym.decision import Observation
 from managym.possible_worlds import PossibleWorldSpace, WorldQuery
 

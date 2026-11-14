@@ -230,9 +230,7 @@ def test_real_forward_padding_and_historical_equation(aggregation: Aggregation) 
         value = agent.value_head(post)
         batches, slots = obs["actions_valid"].bool().nonzero(as_tuple=True)
         scores = agent.policy_head(
-            agent._gather_informed_actions(
-                device_input(agent, obs), post, state, batches, slots
-            )
+            agent._gather_informed_actions(device_input(agent, obs), post, state)
         ).squeeze(-1)
         logits = scores.new_full(obs["actions_valid"].shape, -1e8)
         logits[batches, slots] = scores

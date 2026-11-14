@@ -19,8 +19,9 @@
   costs and threaded-profile limits remain visible. No rental is live.
   Fresh macOS Python 3.12/3.13 installed-wheel smokes, legacy round trips,
   simulator play, installed Academy/reconnect and interrupt/resume pass
-  (`qa.html`). Broader gate and Linux/upgrade checks remain; #519 is
-  draft with CI running on `6fff54f7d2` at the realign snapshot.
+  (`qa.html`). Publication gate passes its backend/consumer selections and
+  collects the CI inventory. Three stale fixtures from CI were repaired;
+  final-head CI and Linux/upgrade checks remain distinct from local QA.
 - `qa.html`: current-runtime installed consumer and browser QA, transcripts
   and screenshots; limits and remaining gate are explicit.
 - `speed/mtg333-results.txt`: full A40 and 5090 speed tables.
