@@ -124,6 +124,11 @@ impl Game {
         }
 
         let mut game = Self {
+            mana_payment_shapes: None,
+            // The experiment job records automatic spending in its command.
+            mana_payment_stats: crate::flow::mana::ManaPaymentStats::new(
+                std::env::var("MANAGYM_EXPERIMENT_AUTOSPEND").as_deref() == Ok("1"),
+            ),
             derived: Default::default(),
             payment_sources: Default::default(),
             state: TrackedState::new(GameState {

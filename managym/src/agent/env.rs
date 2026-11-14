@@ -904,11 +904,56 @@ impl Env {
         Ok(blake3::hash(&canonical).to_hex().to_string())
     }
 
+    /// Opt-in offline fixed-source outcome measurement. Never enters observations.
+    /// Call after reset; a new reset disables capture. Drain after the game.
+    pub fn capture_payment_shapes(&mut self, cap: usize) -> Result<(), AgentError> {
+        if !(2..=65536).contains(&cap) {
+            return Err(AgentError("payment shape cap must be in 2..=65536".into()));
+        }
+        let game = self
+            .game
+            .as_mut()
+            .ok_or_else(|| AgentError("reset first".into()))?;
+        game.mana_payment_shapes = Some(crate::flow::mana::PaymentShapeCapture {
+            cap,
+            rows: Vec::new(),
+        });
+        Ok(())
+    }
+
+    pub fn take_payment_shapes_json(&mut self) -> Result<String, AgentError> {
+        let game = self
+            .game
+            .as_mut()
+            .ok_or_else(|| AgentError("reset first".into()))?;
+        let capture = game
+            .mana_payment_shapes
+            .as_mut()
+            .ok_or_else(|| AgentError("enable payment shape capture first".into()))?;
+        serde_json::to_string(&std::mem::take(&mut capture.rows))
+            .map_err(|error| AgentError(error.to_string()))
+    }
+
     pub fn info(&self) -> InfoDict {
         let _scope = self.profiler.track("env_info");
         let mut info = empty_info_dict();
         self.add_profiler_info(&mut info);
         self.add_behavior_info(&mut info);
+        let stats = self
+            .game
+            .as_ref()
+            .map(|game| game.mana_payment_stats.clone())
+            .unwrap_or_default();
+        for (name, value) in [
+            ("mana_payments", stats.payments),
+            ("mana_payments_over_tapped", stats.over_tapped),
+            (
+                "mana_spend_decisions_over_tapped",
+                stats.spend_decisions_over_tapped,
+            ),
+        ] {
+            insert_info(&mut info, name, InfoValue::Int(value as i64));
+        }
         info
     }
 

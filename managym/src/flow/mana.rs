@@ -14,6 +14,9 @@
 // player's sources across the questions of a `PaymentScan`. Pool arithmetic
 // and spend-purpose restrictions belong to state/mana.rs.
 
+mod outcomes;
+pub(crate) use outcomes::PaymentShapeCapture;
+
 use std::num::NonZeroUsize;
 
 use crate::{
@@ -36,6 +39,30 @@ use crate::{
         mana::{Color, Mana, ManaCost, ManaSpendChoice, ManaSpent},
     },
 };
+
+/// Per-game diagnostics, outside rules state, hashes and policy observations.
+/// Every spend directly follows its own recorded payment and cannot start a
+/// nested one, so each offered spend decision belongs to the latest payment;
+/// upfront activation fees are payments of their own.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct ManaPaymentStats {
+    /// MTG-347's comparison arm, and the one field here that changes play:
+    /// spend the first feasible pooled unit instead of offering the choice.
+    pub automatic: bool,
+    pub payments: usize,
+    pub over_tapped: usize,
+    pub spend_decisions_over_tapped: usize,
+    latest_over_tapped: bool,
+}
+
+impl ManaPaymentStats {
+    pub(crate) fn new(automatic: bool) -> Self {
+        Self {
+            automatic,
+            ..Self::default()
+        }
+    }
+}
 
 /// One finite resource transition model. A source is reserved before its
 /// upfront obligation, so filters cannot finance themselves or form seedless
@@ -985,6 +1012,27 @@ impl PaymentModel {
         #[cfg(feature = "benchmark")]
         crate::benchmark_payments::end_plan(&path);
         path
+    }
+
+    /// The over-tap criterion, asked of the board after the payment's taps:
+    /// without one source's complete `output` (triggered bonuses included),
+    /// `pool` still holds `cost` and the saved callers in `tail` stay payable.
+    /// Callers first check that the pool exceeds the cost at all.
+    fn is_surplus(&self, pool: &Mana, output: &Mana, cost: &ManaCost, tail: &[Obligation]) -> bool {
+        let mut remaining = pool.clone();
+        remaining.spend(output, &cost.purpose);
+        if !remaining.can_pay(cost) {
+            return false;
+        }
+        if tail.is_empty() {
+            return true;
+        }
+        let mut obligations = vec![Obligation::Pay {
+            cost: cost.clone(),
+            waterbend: false,
+        }];
+        obligations.extend_from_slice(tail);
+        self.payable(remaining, obligations, SourcePolicy::All)
     }
 
     /// Whether `obligations` can be paid: `plan(..).is_some()` without
@@ -1942,9 +1990,15 @@ impl Game {
         {
             return Ok(());
         }
-        for step in path {
+        if self.mana_payment_shapes.is_some() {
+            let cost = self.characteristics(permanent).activated_abilities[ability_index]
+                .mana_cost
+                .clone();
+            self.capture_payment_outcomes(player, &cost, &model);
+        }
+        for step in &path {
             match step {
-                PaymentStep::Fixed(source) => self.tap_fixed_mana_source(player, source),
+                PaymentStep::Fixed(source) => self.tap_fixed_mana_source(player, *source),
                 PaymentStep::Spend => break,
                 _ => unreachable!("validated automatic prefix"),
             }
@@ -1952,6 +2006,7 @@ impl Game {
         let cost = self.characteristics(permanent).activated_abilities[ability_index]
             .mana_cost
             .clone();
+        self.record_mana_payment(player, &cost, &model, &path);
         let caller = self.state.suspended_decision_mut().take().unwrap();
         self.begin_mana_spend(
             player,
@@ -2206,8 +2261,8 @@ impl Game {
         player: PlayerId,
         cost: &ManaCost,
     ) -> Result<(), AgentError> {
-        let path = self
-            .payment_model(player, None)
+        let model = self.payment_model(player, None);
+        let path = model
             .plan(
                 self.pooled_mana(player),
                 vec![Obligation::Pay {
@@ -2217,13 +2272,71 @@ impl Game {
                 SourcePolicy::FixedOnly,
             )
             .ok_or_else(|| AgentError("not enough automatic mana".into()))?;
-        for step in path {
+        self.capture_payment_outcomes(player, cost, &model);
+        for step in &path {
             if let PaymentStep::Fixed(source) = step {
-                self.tap_fixed_mana_source(player, source);
+                self.tap_fixed_mana_source(player, *source);
             }
         }
+        self.record_mana_payment(player, cost, &model, &path);
 
         Ok(())
+    }
+
+    /// Costs of the callers suspended behind the payment now being made.
+    fn saved_obligations(&self, player: PlayerId) -> Vec<Obligation> {
+        self.payment_obligations(player)
+            .into_iter()
+            .skip(1)
+            .collect()
+    }
+
+    fn capture_payment_outcomes(
+        &mut self,
+        player: PlayerId,
+        cost: &ManaCost,
+        model: &PaymentModel,
+    ) {
+        if let Some(capture) = &self.mana_payment_shapes {
+            let tail = self.saved_obligations(player);
+            let row = model.fixed_outcomes(self.pooled_mana(player), cost, capture.cap, &tail);
+            self.mana_payment_shapes.as_mut().unwrap().rows.push(row);
+        }
+    }
+
+    /// Attribute this automatic prefix without changing it: over-tapped when
+    /// some tapped source `is_surplus`. No search runs for exact pools.
+    fn record_mana_payment(
+        &mut self,
+        player: PlayerId,
+        cost: &ManaCost,
+        model: &PaymentModel,
+        path: &[PaymentStep],
+    ) {
+        let pool = self.pooled_mana(player);
+        let over_tapped = pool.usable_total(cost) > u16::from(cost.mana_value) && {
+            let tail = self.saved_obligations(player);
+            // Only saved callers read the board, which is then the tapped one.
+            let after = (!tail.is_empty()).then(|| self.payment_model(player, None));
+            let board = after.as_ref().unwrap_or(model);
+            path.iter()
+                .take_while(|step| !matches!(step, PaymentStep::Spend))
+                .any(|step| {
+                    let PaymentStep::Fixed(id) = step else {
+                        return false;
+                    };
+                    let output = model
+                        .sources
+                        .iter()
+                        .find(|source| source.permanent == *id)
+                        .and_then(|source| source.fixed.as_ref())
+                        .expect("fixed witness source has an output");
+                    board.is_surplus(&pool, output, cost, &tail)
+                })
+        };
+        self.mana_payment_stats.payments += 1;
+        self.mana_payment_stats.over_tapped += usize::from(over_tapped);
+        self.mana_payment_stats.latest_over_tapped = over_tapped;
     }
 
     /// Commit precisely the selected unit, retaining its expiry identity.
@@ -2324,8 +2437,22 @@ impl Game {
                 let choices = self.mana_spend_choices(player, &cost);
                 let index = match selected.take() {
                     Some(index) => index,
-                    None if choices.len() == 1 => 0,
-                    None if !choices.is_empty() => return Ok(()),
+                    None if choices.len() == 1
+                        || (self.mana_payment_stats.automatic && !choices.is_empty()) =>
+                    {
+                        0
+                    }
+                    None if !choices.is_empty() => {
+                        // The player is offered this pip's units.
+                        if let Some(capture) = &mut self.mana_payment_shapes {
+                            if let Some(row) = capture.rows.last_mut() {
+                                row.spend_offers.push(choices.len());
+                            }
+                        }
+                        self.mana_payment_stats.spend_decisions_over_tapped +=
+                            usize::from(self.mana_payment_stats.latest_over_tapped);
+                        return Ok(());
+                    }
                     None => return Err(AgentError("no feasible mana spending choice".into())),
                 };
                 let choice = choices
@@ -2543,6 +2670,91 @@ mod tests {
         mana::{Mana, ManaCost, ManaRestriction, SpendEffect, SpendingContext},
     };
 
+    #[test]
+    fn over_tap_diagnostics_keep_production_spending_and_forks() {
+        use crate::flow::{
+            decision::{EffectFrame, PaymentProgress, SpendCompletion},
+            game::Game,
+        };
+        use crate::state::{ability::PaymentCost, game_object::PlayerId, player::PlayerConfig};
+        use std::collections::BTreeMap;
+
+        for (lands, heartbeat, expected_over, expected_choices) in [
+            (vec!["Mountain", "Mountain", "Forest"], false, 1, 0),
+            (vec!["Mountain", "Island", "Forest"], false, 1, 1),
+            (vec!["Forest", "Mountain"], false, 0, 0),
+            (vec!["Forest", "Mountain"], true, 0, 1),
+        ] {
+            let deck = BTreeMap::from([
+                ("Mountain".into(), 8),
+                ("Island".into(), 8),
+                ("Forest".into(), 8),
+                ("Heartbeat of Spring".into(), 4),
+            ]);
+            let mut game = Game::new(
+                vec![
+                    PlayerConfig::new("p0", deck.clone()),
+                    PlayerConfig::new("p1", deck),
+                ],
+                347,
+                true,
+            );
+            let player = PlayerId(0);
+            for land in lands {
+                game.scenario_force_battlefield(player, land, true).unwrap();
+            }
+            if heartbeat {
+                game.scenario_force_battlefield(player, "Heartbeat of Spring", true)
+                    .unwrap();
+            }
+            // {1}{G} needs only one doubled Forest, leaving no surplus.
+            // {2}{G} needs both sources and leaves a genuine color choice.
+            let cost = ManaCost::parse(if heartbeat { "2G" } else { "1G" });
+            game.produce_mana(player, &cost).unwrap();
+            assert_eq!(game.mana_payment_stats.payments, 1);
+            assert_eq!(game.mana_payment_stats.over_tapped, expected_over);
+            assert_eq!(
+                game.pooled_mana(player).usable_total(&cost),
+                if heartbeat {
+                    4
+                } else {
+                    2 + expected_over as u16
+                }
+            );
+            let completion = SpendCompletion::Resolution(PaymentProgress::new(
+                player,
+                PaymentCost::Mana(cost.clone()),
+                vec![],
+                vec![],
+            ));
+            game.begin_mana_spend(player, cost, completion, EffectFrame::new(player, vec![]))
+                .unwrap();
+            let offered = game.state.suspended_decision.is_some();
+            assert_eq!(usize::from(offered), expected_choices);
+            if offered {
+                let mut automatic = game.clone();
+                automatic.mana_payment_stats.automatic = true;
+                automatic.advance_mana_spend(None).unwrap();
+                assert!(!matches!(
+                    automatic
+                        .state
+                        .suspended_decision
+                        .as_ref()
+                        .map(|s| &s.decision),
+                    Some(super::Decision::ManaSpend { .. })
+                ));
+                let mut fork = game.clone();
+                fork.advance_mana_spend(Some(0)).unwrap();
+                assert!(game.state.suspended_decision.is_some());
+                game.advance_mana_spend(Some(0)).unwrap();
+            }
+            assert_eq!(
+                game.mana_payment_stats.spend_decisions_over_tapped,
+                expected_over * expected_choices
+            );
+        }
+    }
+
     fn tapping_ability(outputs: Vec<Mana>) -> ManaActivation {
         ManaActivation {
             tap_source: true,
@@ -2568,7 +2780,7 @@ mod tests {
         }
     }
 
-    fn forests(count: usize) -> PaymentModel {
+    pub(in crate::flow::mana) fn forests(count: usize) -> PaymentModel {
         PaymentModel {
             sources: (0..count)
                 .map(|index| source(index, Some("G"), Vec::new()))

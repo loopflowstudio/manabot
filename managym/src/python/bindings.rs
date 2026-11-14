@@ -3814,6 +3814,22 @@ impl PyEnv {
         serde_json::to_string(&controls).map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
+    fn capture_payment_shapes(&self, cap: usize) -> PyResult<()> {
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .capture_payment_shapes(cap)
+            .map_err(map_agent_err)
+    }
+
+    fn take_payment_shapes_json(&self) -> PyResult<String> {
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .take_payment_shapes_json()
+            .map_err(map_agent_err)
+    }
+
     fn decision_context_json(&self, viewer: usize) -> PyResult<String> {
         let env = self
             .inner

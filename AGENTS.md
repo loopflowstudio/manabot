@@ -85,6 +85,10 @@ checkpoints or experiment evidence.
 
 ### Experiments
 
+- Launcher credentials are split across Doppler projects: `manabot/prd` holds
+  R2 variables and `etude/prd` holds provider variables such as `RUNPOD_API_KEY`.
+  Nest `doppler run` for both when a command needs both; never print values.
+
 - Most runs are exploratory: calibration, throughput, capacity, pilots and
   anything run to make later work possible. They need no prediction, protocol
   or review; the report ends them. A finding, a result that will be cited as a claim
@@ -539,6 +543,11 @@ the untargeted rest (`ActivatedAbilityDefinition::mana_suffix`) runs once, off
 the stack, as the source's frame before the output choice (CR 605.3b).
 
 ### Etude training records
+
+Programmatic Etude readers take a `Storage` or a local path. Parse remote URIs
+with `etude.run.storage.storage_from_uri` before passing them to `observe` or
+`read_all`; a bare string is treated as a local path and can produce an empty
+listing for a bucket URI.
 
 Training row tables belong under the metric run's `artifacts/`, named by their
 content digest, with `.partial` staging before atomic rename. Etude's tracker

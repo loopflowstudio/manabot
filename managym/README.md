@@ -506,3 +506,27 @@ retired codes 5, 6 and 7 keep their historical meanings.
 `SuspendedResolution::continuation` walks retained frames and decisions root first;
 observation projection and hidden-world sampling share that chain for caller
 ancestry and inspection permissions.
+
+### Offline payment-shape measurement
+
+After `Env.reset`, `capture_payment_shapes(cap)` enables an offline diagnostic
+outside policy inputs and rules state. Replay the game, then call
+`take_payment_shapes_json()` once to drain its rows. A reset disables capture.
+The cap (2–65,536) bounds source-subset and receipt traversal work per payment;
+`cap_hit` marks incomplete lower bounds. The diagnostic enumerates fixed-source
+payments using the existing payment model and native unit spending. It records
+untapped-source capabilities, floating pools, receipts, exact source identities
+and today's offered spend steps separately. It also counts capability and exact
+identity outcomes over non-redundant source sets: no selected source's whole
+output can be removed while keeping the current cost pooled and saved callers
+feasible on the post-tap board (the over-tap counter's criterion). Unavoidable
+surplus from an indivisible source remains. All counts share the same traversal
+and cap; a cap hit makes every count a lower bound, including non-redundant
+counts. Saved payment obligations must stay
+feasible. Activated mana abilities are counted as present but are not enumerated.
+
+`MANAGYM_EXPERIMENT_AUTOSPEND=1` is MTG-347's temporary comparison arm. It selects
+the first feasible pooled unit and preserves automatic source order, saved costs
+and receipts. The experiment's job command records the switch; replay and
+heuristic evaluation must use the same value. Ordinary runs leave it unset.
+This switch is experiment scaffolding, pending the report's design review.
