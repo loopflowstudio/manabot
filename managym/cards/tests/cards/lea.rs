@@ -1,7 +1,7 @@
 //! Tests for cards filed in `src/lea.rs`, in card order.
 
 use crate::support::game::move_card;
-use crate::support::inspect::{now, permanent_of, zone_of};
+use crate::support::inspect::{current_object, now, permanent_of, zone_of};
 use crate::support::{
     game::{deck, deck_of, five_color_setup, ready, Scenario},
     inspect::{library_card, permanent_named},
@@ -231,7 +231,7 @@ fn clone_enters_as_a_copy_and_leaves_as_clone() {
     settle(&mut s);
 
     let copy = permanent_of(&s, clone).expect("entered");
-    let object = &s.game().state.objects[clone];
+    let object = current_object(&s, clone);
     assert_eq!(object.name, "Gray Ogre");
     assert!(object.is_card());
     assert_eq!(s.game().characteristics(copy).pt(), (2, 2));
@@ -275,7 +275,7 @@ fn clone_takes_the_copied_entry_replacements_or_dies_as_itself() {
     choose(&mut s, |action| matches!(action, Action::Decline { .. }));
     settle(&mut s);
     assert_eq!(zone_of(&s, second), Some(ZoneType::Graveyard));
-    assert_eq!(s.game().state.objects[second].name, "Clone");
+    assert_eq!(current_object(&s, second).name, "Clone");
 }
 
 /// CR 614.12: the prospective copy and its entry terms survive another
@@ -303,7 +303,7 @@ fn clone_copy_survives_suspended_entry_and_keeps_its_printed_base() {
     resolve_top(&mut s);
     assert!(s.choose_target(Target::Permanent(villager)));
     assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
-    assert_eq!(s.game().state.objects[clone].name, "Wolf Cove Villager");
+    assert_eq!(current_object(&s, clone).name, "Wolf Cove Villager");
     // Recorded before the mint change: the pending entry's prospective copy
     // and replacement continuation must retain their v16 bytes.
     assert_eq!(
@@ -329,7 +329,7 @@ fn clone_copy_survives_suspended_entry_and_keeps_its_printed_base() {
     let permanent = s.game().state.permanents[copy].as_ref().unwrap();
     assert!(permanent.tapped);
     assert_eq!(permanent.counter_count(CounterKind::PlusOnePlusOne), 2);
-    assert_eq!(s.game().state.objects[clone].name, "Wolf Cove Villager");
+    assert_eq!(current_object(&s, clone).name, "Wolf Cove Villager");
 
     let clone = move_card(&mut s, clone, ZoneType::Hand);
     assert_eq!(s.game().state.objects[clone].name, "Clone");

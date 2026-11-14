@@ -1011,7 +1011,11 @@ fn delayed_capture_projects_only_viewer_visible_incarnations() {
             assert!(frame.remembered[0].object.is_some());
             assert_eq!(
                 frame.remembered[0].definition,
-                Some(game.state.objects[object_id].definition_id.0)
+                Some(
+                    game.state.objects[game.state.now(object_id)]
+                        .definition_id
+                        .0
+                )
             );
         }
     }
@@ -3213,7 +3217,7 @@ fn hidden_selection_library_commitments_survive_sampling_without_revealing_order
         assert_eq!(
             branch.state.players[player.0]
                 .known_hand
-                .get(&branch.state.objects[selected].definition_id),
+                .get(&branch.state.objects[branch.state.now(selected)].definition_id),
             Some(&1)
         );
         assert_eq!(branch.state.events.iter().filter(|event| matches!(event, GameEvent::LibrarySearched { player: owner } if *owner == player)).count(), 1);
@@ -3469,11 +3473,12 @@ fn hidden_selection_foretold_measure_preserves_every_committed_slot() {
     // three instants already selected in the library, only 14 of the 20
     // ordered fills remain compatible: 2 Ogre/Ogre and 12 Ogre/Bolt fills.
     for object_id in bolts.iter().chain(&ogres) {
-        root.state.objects[*object_id]
+        let current = root.state.now(*object_id);
+        root.state.objects[current]
             .statics
             .push(StaticAbility::Foretell(ManaCost::parse("{1}")));
         root.move_object(
-            root.state.now(*object_id),
+            current,
             if bolts.contains(object_id) {
                 ZoneType::Library
             } else {

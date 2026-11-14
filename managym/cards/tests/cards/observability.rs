@@ -13,7 +13,7 @@
 //! Viewer-safety tests check hidden cards change neither.
 
 use crate::support::game::move_card;
-use crate::support::inspect::zone_of;
+use crate::support::inspect::{current_object, zone_of};
 use crate::support::{
     game::{
         clear_summoning_sickness, deck, five_color_setup, five_color_unfunded_setup, move_to_hand,
@@ -3956,9 +3956,7 @@ fn a_waiting_delayed_trigger_is_observed_until_it_fires_or_expires() {
             remembered[24], watched,
             "capture and event watch are distinct relations"
         );
-        assert!(
-            definitions_seen(&s, viewer).contains(&s.game().state.objects[fissure].definition_id.0)
-        );
+        assert!(definitions_seen(&s, viewer).contains(&current_object(&s, fissure).definition_id.0));
     }
     let frame = Observation::for_player(s.game(), PlayerId(1))
         .continuation
@@ -4052,7 +4050,7 @@ fn foretold_and_hand_cards_never_reach_the_opponents_encoding() {
         |a| matches!(a, Action::Foretell { object, .. } if *object == comet),
     );
     assert_eq!(zone_of(&s, comet), Some(ZoneType::Exile));
-    let hidden = [comet, front].map(|object| s.game().state.objects[object].definition_id.0);
+    let hidden = [comet, front].map(|object| current_object(&s, object).definition_id.0);
 
     let owner = encoded(&s, 0);
     let face_down = owner
@@ -4222,7 +4220,7 @@ fn encoded_default(observation: &Observation) -> EncodedObservation {
 }
 
 fn object_id(s: &Scenario, object: ObjectId) -> i32 {
-    s.game().state.objects[object].id.0 as i32
+    current_object(s, object).id.0 as i32
 }
 
 /// The encoded row of `card` on either side of `observation`, if listed.
@@ -4912,7 +4910,7 @@ fn input_v10_carries_turn_state_that_v9_refuses() {
     let slot = observation
         .agent_cards
         .iter()
-        .position(|object| object.id == s.game().state.objects[ogre_card].id.0 as i32)
+        .position(|object| object.id == current_object(&s, ogre_card).id.0 as i32)
         .expect("graveyard row");
     let objects = encoded(&s).card_turn_state;
     assert_eq!(objects[slot], 1.0);

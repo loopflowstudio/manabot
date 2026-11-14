@@ -42,12 +42,22 @@ struct FiredTrigger {
 /// Exact battlefield source facts used while matching one or more committed
 /// events. SBA batches reuse one sorted snapshot so simultaneous departures
 /// see the same pre-batch abilities (CR 603.6c, 704.3).
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct TriggerSourceSnapshot {
-    #[serde(rename = "card")]
-    pub(crate) object: ObjectId,
     pub(crate) controller: PlayerId,
     pub(crate) lki: ObjectLki,
+}
+
+impl serde::Serialize for TriggerSourceSnapshot {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        // V16 records the source slot under `card`; LKI owns the exact id.
+        let mut snapshot = serializer.serialize_struct("TriggerSourceSnapshot", 3)?;
+        snapshot.serialize_field("card", &self.lki.object)?;
+        snapshot.serialize_field("controller", &self.controller)?;
+        snapshot.serialize_field("lki", &self.lki)?;
+        snapshot.end()
+    }
 }
 
 /// A set of `EventKind`s, one bit per variant.
@@ -915,7 +925,7 @@ impl Game {
         let mut fired: Vec<FiredTrigger> = Vec::new();
         for source in sources {
             for (ability_index, ability) in self
-                .source_face(source.object, source.lki.definition_id)
+                .source_face(source.lki.object, source.lki.definition_id)
                 .expect("source face")
                 .abilities
                 .iter()
@@ -1006,10 +1016,10 @@ impl Game {
         } in fired
         {
             let TriggerSourceSnapshot {
-                object: source_object,
                 controller,
                 lki: source_lki,
             } = source;
+            let source_object = source_lki.object;
             if granted.is_none()
                 && matches!(
                     &self
@@ -1124,14 +1134,20 @@ impl Game {
         source: &TriggerSourceSnapshot,
         event: &GameEvent,
     ) -> usize {
-        if !self.trigger_condition_fires(condition, source.object, source.controller, true, event) {
+        if !self.trigger_condition_fires(
+            condition,
+            source.lki.object,
+            source.controller,
+            true,
+            event,
+        ) {
             return 0;
         }
         debug_assert!(
             condition_event_kinds(condition).contains(event.kind()),
             "{condition:?} fired on an event kind it is not indexed by: {event:?}"
         );
-        self.trigger_multiplicity(condition, source.object, source.controller, event)
+        self.trigger_multiplicity(condition, source.lki.object, source.controller, event)
             + self.additional_trigger_times(source)
     }
 
@@ -1167,7 +1183,7 @@ impl Game {
     /// time" covers the source (CR 603.2d), as the source is or last was.
     fn additional_trigger_times(&self, source: &TriggerSourceSnapshot) -> usize {
         let current = self.lookup_current_permanent(source.lki.object).ok();
-        let object = &self.state.objects[source.object];
+        let object = &self.state.objects[source.lki.object];
         self.static_sources()
             .filter(|(_, controller, _)| *controller == source.controller)
             .map(|(_, _, grantor)| {
@@ -1372,13 +1388,13 @@ impl Game {
         for source in self.indexed_sources(EventKinds::of(EventKind::CountersPut)) {
             let Some(permanent) = self
                 .state
-                .permanent_of(source.object)
+                .permanent_of(source.lki.object)
                 .and_then(|id| self.state.permanents[id].as_ref())
             else {
                 continue;
             };
             let face = self
-                .source_face(source.object, source.lki.definition_id)
+                .source_face(source.lki.object, source.lki.definition_id)
                 .expect("source face");
             for (ability_index, ability) in face.abilities.iter().enumerate() {
                 let Ability::Triggered {
@@ -1408,7 +1424,7 @@ impl Game {
                 targets: Vec::new(),
                 target_req_indices: Vec::new(),
                 requirement_index: 0,
-                source_object: source.object,
+                source_object: source.lki.object,
                 source_ref: Some(source.lki.object),
                 source_lki: Some(source.lki),
                 ability_index,
@@ -1550,7 +1566,6 @@ impl Game {
                 let permanent = self.state.permanents[entry.permanent].as_ref()?;
                 self.snapshot_current_permanent(entry.object)
                     .map(|lki| TriggerSourceSnapshot {
-                        object: entry.object,
                         controller: permanent.controller,
                         lki,
                     })
@@ -1624,7 +1639,6 @@ impl Game {
                 .and_then(|object| self.object_lki(object))
             {
                 sources.push(TriggerSourceSnapshot {
-                    object: lki.object,
                     controller: *controller,
                     lki: lki.clone(),
                 });

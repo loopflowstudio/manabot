@@ -4,7 +4,7 @@
 //! end.
 
 use crate::support::game::move_card;
-use crate::support::inspect::{now, permanent_of};
+use crate::support::inspect::{current_object, now, permanent_of};
 use crate::support::{
     game::{
         animate, clear_hand, clear_summoning_sickness, deck, enter_battlefield,
@@ -974,7 +974,7 @@ fn landcyclers_discard_for_two_and_find_their_basic_type() {
         );
         assert_eq!(zone_of(&s, offered[0]), Some(ZoneType::Hand));
         assert_eq!(s.zone_size(0, ZoneType::Library), library - 1);
-        let definition = s.game().state.objects[offered[0]].definition_id;
+        let definition = current_object(&s, offered[0]).definition_id;
         assert_eq!(
             s.game().state.players[0].known_hand.get(&definition),
             Some(&1)
@@ -1450,7 +1450,7 @@ fn hama_exiles_a_milled_spell_and_casts_it_by_waterbending() {
     settle(&mut s);
     s.assert_life(1, 17);
     assert_eq!(zone_of(&s, strike), Some(ZoneType::Graveyard));
-    assert_eq!(s.game().state.objects[strike].owner, PlayerId(1));
+    assert_eq!(current_object(&s, strike).owner, PlayerId(1));
 }
 
 /// Hama can exile an opposing noncreature permanent card: cast by
@@ -1718,7 +1718,7 @@ fn merchant_of_many_hats_returns_itself_from_the_graveyard() {
     assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
     settle(&mut s);
     assert_eq!(zone_of(&s, merchant), Some(ZoneType::Hand));
-    let definition = s.game().state.objects[merchant].definition_id;
+    let definition = current_object(&s, merchant).definition_id;
     assert_eq!(
         s.game().state.players[0].known_hand.get(&definition),
         Some(&1)
@@ -7725,7 +7725,7 @@ fn master_piandao_reveals_a_selected_ally_and_bottoms_the_rest() {
     s.step_action(index);
     settle(&mut s);
     assert_eq!(zone_of(&s, ally), Some(ZoneType::Hand));
-    let definition = s.game().state.objects[ally].definition_id.0;
+    let definition = current_object(&s, ally).definition_id.0;
     let other = Observation::for_player(s.game(), PlayerId(1));
     assert_eq!(other.opponent.known_hand.get(&definition), Some(&1));
     assert!(other
@@ -7768,7 +7768,7 @@ fn piandao_can_take_a_lesson_or_equipment_or_decline_without_revealing_remainder
             .zones
             .zone_objects(ZoneType::Library, PlayerId(0));
         for (index, id) in top.iter().enumerate() {
-            let definition = s.game().state.objects[*id].definition_id.0;
+            let definition = current_object(&s, *id).definition_id.0;
             assert_eq!(
                 view.opponent
                     .known_hand
@@ -9553,7 +9553,7 @@ fn rallier_reveals_only_the_selected_card_and_can_decline() {
         });
         settle(&mut s);
         let other = Observation::for_player(s.game(), PlayerId(1));
-        let definition = s.game().state.objects[top[1]].definition_id.0;
+        let definition = current_object(&s, top[1]).definition_id.0;
         assert_eq!(
             other
                 .opponent
@@ -10960,7 +10960,7 @@ fn benevolent_river_spirit_requires_waterbend_five_and_scries_on_entry() {
     settle(&mut s);
     let permanent = permanent_named(&s, "Benevolent River Spirit");
     assert!(keywords(&s, permanent).has(Keyword::Flying));
-    assert!(s.game().state.objects[spirit].ward().is_some());
+    assert!(current_object(&s, spirit).ward().is_some());
 }
 
 /// "They" is the caster, whichever player that is; creature spells do not
@@ -13425,7 +13425,7 @@ fn transformed_saga(s: &mut Scenario, name: &str) -> PermanentId {
     next_main_phase(s);
     settle(s);
     assert!(
-        s.game().state.objects[object].is_transformed(),
+        current_object(s, object).is_transformed(),
         "{name} transformed"
     );
     permanent_of(s, object).unwrap()
@@ -13644,7 +13644,7 @@ fn the_legend_of_kuruk_returns_transformed_as_avatar_kuruk() {
     assert_eq!(zone_of(&s, kuruk_card), Some(ZoneType::Battlefield));
     let kuruk = permanent_of(&s, kuruk_card).unwrap();
     assert_ne!(kuruk, saga, "a new object (CR 400.7)");
-    let back = &s.game().state.objects[kuruk_card];
+    let back = current_object(&s, kuruk_card);
     assert!(back.is_transformed());
     assert_eq!(back.name, "Avatar Kuruk");
     let characteristics = s.game().characteristics(kuruk);
@@ -13728,7 +13728,7 @@ fn the_legend_of_kyoshi_draws_by_power_earthbends_by_hand_size_and_returns_as_av
     next_main_phase(&mut s);
     settle(&mut s);
     let kyoshi = permanent_of(&s, object).unwrap();
-    assert_eq!(s.game().state.objects[object].name, "Avatar Kyoshi");
+    assert_eq!(current_object(&s, object).name, "Avatar Kyoshi");
     let land = s.game().characteristics(forest);
     assert!(
         land.keywords.has(Keyword::Trample) && land.keywords.has(Keyword::Hexproof),
@@ -13790,7 +13790,7 @@ fn the_legend_of_roku_lets_its_exiled_cards_be_played_through_your_next_turn() {
     next_main_phase(&mut s);
     settle(&mut s);
     let roku = permanent_of(&s, object).unwrap();
-    assert_eq!(s.game().state.objects[object].name, "Avatar Roku");
+    assert_eq!(current_object(&s, object).name, "Avatar Roku");
     s.set_player_mana_pool(0, "8");
     activate(&mut s, roku, 0);
     settle(&mut s);
@@ -13844,7 +13844,7 @@ fn aang_swift_savior_airbends_a_spell_and_transforms_into_aang_and_la() {
     settle(&mut s);
     assert_eq!(permanent_of(&s, aang_card), Some(aang), "same object");
     assert_eq!(
-        s.game().state.objects[aang_card].name,
+        current_object(&s, aang_card).name,
         "Aang and La, Ocean's Fury"
     );
     assert_eq!(
@@ -13893,7 +13893,7 @@ fn aang_swift_savior_entry_trigger_can_be_redirected_after_transforming() {
     activate(&mut s, aang, 0);
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     resolve_top(&mut s);
-    assert!(s.game().state.objects[aang_card].is_transformed());
+    assert!(current_object(&s, aang_card).is_transformed());
 
     s.set_player_mana_pool(0, "3R");
     cast(&mut s, "Redirect Lightning");
@@ -14119,16 +14119,13 @@ fn aang_at_the_crossroads_finds_a_creature_and_transforms_at_the_next_upkeep() {
     s.game_mut().scenario_refresh_priority().unwrap();
     settle(&mut s);
     assert!(
-        !s.game().state.objects[aang_card].is_transformed(),
+        !current_object(&s, aang_card).is_transformed(),
         "waits for the upkeep"
     );
     s.advance_to_active_step(1, StepKind::Upkeep);
     settle(&mut s);
     let aang = permanent_of(&s, aang_card).unwrap();
-    assert_eq!(
-        s.game().state.objects[aang_card].name,
-        "Aang, Destined Savior"
-    );
+    assert_eq!(current_object(&s, aang_card).name, "Aang, Destined Savior");
 
     s.advance_to_active_step(0, StepKind::BeginningOfCombat);
     assert!(s.choose_target(Target::Permanent(land)));
@@ -14201,7 +14198,7 @@ fn the_legend_of_yangchen_exiles_chosen_permanents_and_airbends_on_the_second_sp
 
     next_main_phase(&mut s);
     settle(&mut s);
-    assert_eq!(s.game().state.objects[object].name, "Avatar Yangchen");
+    assert_eq!(current_object(&s, object).name, "Avatar Yangchen");
     let target = s.force_permanent_on_battlefield(1, "Gray Ogre");
     s.set_player_mana_pool(0, "RR");
     cast(&mut s, "Lightning Bolt");
@@ -14323,7 +14320,7 @@ fn the_rise_of_sozin_destroys_names_and_reanimates_as_fire_lord_sozin() {
     next_main_phase(&mut s);
     settle(&mut s);
     let sozin = permanent_of(&s, object_id).unwrap();
-    assert_eq!(s.game().state.objects[object_id].name, "Fire Lord Sozin");
+    assert_eq!(current_object(&s, object_id).name, "Fire Lord Sozin");
     clear_summoning_sickness(&mut s, sozin);
     force_lands(&mut s, 0, "Forest", 4);
     force_lands(&mut s, 0, "Island", 4);
@@ -14573,7 +14570,7 @@ fn abilities_on_the_stack_keep_the_face_they_came_from() {
     }
     settle(&mut s);
     assert_eq!(
-        s.game().state.objects[aang_card].name,
+        current_object(&s, aang_card).name,
         "Aang and La, Ocean's Fury"
     );
     assert_eq!(
@@ -15454,7 +15451,7 @@ fn secret_of_bloodbending_foretold_cards_are_visible_only_during_control() {
         &mut s,
         |a| matches!(a, Action::Foretell { object: selected, .. } if *selected == object),
     );
-    let id = s.game().state.objects[object].id.0 as i32;
+    let id = current_object(&s, object).id.0 as i32;
     let obs = Observation::for_player(s.game(), PlayerId(0));
     assert!(obs
         .opponent_cards

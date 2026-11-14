@@ -9,7 +9,7 @@ use managym::{
     state::{
         card::Keywords,
         effect::Modification,
-        game_object::{ObjectId, PermanentId, PlayerId},
+        game_object::{Object, ObjectId, PermanentId, PlayerId},
         permanent::{CounterKind, Permanent},
         stack_object::StackObject,
         target::Target,
@@ -338,6 +338,15 @@ pub fn now(s: &Scenario, object: ObjectId) -> ObjectId {
     state
         .card_id(object)
         .map_or(object, |card| state.object_of(card))
+}
+
+/// Read the current appearance of the card behind `object`. Tokens and
+/// copies keep their exact identity and must still be present.
+pub fn current_object(s: &Scenario, object: ObjectId) -> &Object {
+    s.game()
+        .state
+        .object(now(s, object))
+        .expect("scenario object must be present")
 }
 
 /// The zone holding the card behind `object`, wherever it has moved since.

@@ -94,6 +94,36 @@ fn trigger(source: ObjectId, effects: Vec<Effect>, order: u64) -> PendingTrigger
     }
 }
 
+/// The snapshot's single exact identity still projects the v16 `card` slot,
+/// even after the source departs and its storage slot holds another object.
+#[test]
+fn trigger_source_snapshot_keeps_v16_bytes_after_departure() {
+    use crate::flow::triggers::TriggerSourceSnapshot;
+
+    let (mut game, _, _, Target::Permanent(permanent), _) = fixture() else {
+        unreachable!()
+    };
+    let object = game.state.permanents[permanent].as_ref().unwrap().object;
+    let object = game.move_object(object, ZoneType::Graveyard);
+    let object = game.move_object(object, ZoneType::Battlefield);
+    assert!(object.generation() > 0);
+    let source = TriggerSourceSnapshot {
+        controller: PlayerId(0),
+        lki: game.snapshot_current_permanent(object).unwrap(),
+    };
+    let expected = format!(
+        "{{\"card\":{},\"controller\":0,\"lki\":{}}}",
+        object.slot(),
+        serde_json::to_string(&source.lki).unwrap()
+    );
+    assert_eq!(serde_json::to_string(&source).unwrap(), expected);
+
+    game.move_object(object, ZoneType::Graveyard);
+    assert!(game.state.object(source.lki.object).is_err());
+    assert_eq!(source.lki.object, object);
+    assert_eq!(serde_json::to_string(&source).unwrap(), expected);
+}
+
 #[test]
 fn cr_400_zone_event_keeps_its_departure_after_a_later_death() {
     use crate::flow::event::GameEvent;
@@ -152,7 +182,7 @@ fn cr_400_zone_event_keeps_its_departure_after_a_later_death() {
     assert!(!game
         .trigger_ability_sources(hand_event)
         .iter()
-        .any(|source| source.object == object));
+        .any(|source| source.lki.object == object));
 }
 
 #[test]
