@@ -1,5 +1,30 @@
 # Combat and mana decision shapes on the Small TLA model
 
+**Current launch: `mtg265-study-20261114d`, source `ee0281c0d402`.** All six
+jobs are admitted on three provider-confirmed L4s, two jobs each. Each uses
+256 streams and targets 500 updates on the common v10 input. The three arm
+smokes completed two updates each; no study learning result is available yet.
+
+| Arm | Seed 26501 | Seed 26502 |
+| --- | --- | --- |
+| Baseline | `baae8dd0fb5d` | `3cae72a9ae8d` |
+| Combat pick-then-done | `8b1208dffc09` | `86569bef127e` |
+| Manual mana taps | `ef6848121d91` | `5b578c31fbea` |
+
+The three held rentals each have a USD16 cap and 23-hour timer: USD48 maximum
+hardware, with USD5 reserved for evaluation and preparation below USD1,
+within the USD55 authorization. The supply `mtg265-l4-held` permits manual
+rental only (`max=0`), so this cohort cannot acquire additional machines.
+The rental caps, rather than the launcher's duplicate per-job reservation,
+are the spending authority for these already allocated machines. Jobs have
+a 22-hour allowance and USD15.50 per-job ceiling. A local supervisor waits
+for this cohort and then terminates exactly these three manual rentals:
+`mtg265-l4-held-08fc662039b4`, `mtg265-l4-held-60c5dd4c4bee`, and
+`mtg265-l4-held-996fb972dd40`. The timers remain independent of that supervisor.
+
+Read current progress with `uv run etude status mtg265-study-20261114d`.
+The stopped attempts below remain history; do not relaunch them.
+
 Exploratory study. Compare the existing combat decisions and smart automatic
 mana payer with combat pick-then-done and optional per-source mana taps. The
 frontier Small model trains for 500 updates on 900 TLA pool decks; 100 decks
@@ -98,7 +123,7 @@ rentals too short, and the worker correctly refused with `remaining allocation
 cannot cover the frozen regime`. Stop that cohort; all its attempts ended at
 update zero or before training. Its acquired machines were terminated.
 
-The replacement is `mtg265-study-20261114c`, source `ee0281c0d402`, with the
+The next attempt was `mtg265-study-20261114c`, source `ee0281c0d402`, with the
 same six seeds/arms and 500-update target, but a 28-hour maximum per job and
 USD9 job ceiling. The whole cohort retains its USD48 ceiling. Placement is
 two jobs per Ada GPU, up to three machines, under USD0.28/hour. The launcher
@@ -106,3 +131,11 @@ quoted USD23.73 for that full maximum first-wave rental window, including
 startup; this is a quote, not a bill. The scientific question, damping horizon,
 population and evaluation schedule are unchanged. Earlier failed/cancelled
 attempts remain in Etude and are not reused as completed study runs.
+
+All six `...14c` jobs were capacity-refused before execution, at USD0.
+A5000s were unavailable. A40 and RTX2000-Ada create requests returned HTTP400;
+termination was requested and provider inventory confirmed no pods acquired.
+The replacement L4 placement above was acquired successfully. Provider
+inventory confirms 16 vCPUs and 86–94 GB RAM per machine at USD0.69/hour.
+The question, six seeds/arms, 500-update target and evaluation schedule remain
+unchanged; only hardware and admission allowances changed.
