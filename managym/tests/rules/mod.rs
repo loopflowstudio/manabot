@@ -1,3 +1,4 @@
+pub mod combat_pick;
 pub mod cr_103_game_start;
 pub mod cr_106_mana;
 pub mod cr_117_priority;

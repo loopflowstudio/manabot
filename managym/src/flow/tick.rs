@@ -296,6 +296,90 @@ impl Game {
         }
     }
 
+    /// The pick shape of attacker declaration
+    /// (`ExperimentSwitches::combat_pick`): "done" first, then an attack offer
+    /// for every creature still queued, in the order the default shape asks
+    /// about them. `None` with the switch off or the queue empty, when the
+    /// caller ends the declaration.
+    fn attacker_pick_space(&self, active: PlayerId) -> Option<ActionSpace> {
+        if !self.experiments.combat_pick {
+            return None;
+        }
+        let queue = &self.state.combat.as_ref()?.attackers_to_declare;
+        if queue.is_empty() {
+            return None;
+        }
+        // "Done" leads so a policy's action-slot limit never cuts it off.
+        let mut actions = vec![Action::Decline { player: active }];
+        actions.extend(
+            queue
+                .iter()
+                .rev()
+                .map(|&permanent| Action::DeclareAttacker {
+                    player: active,
+                    permanent,
+                    attack: true,
+                }),
+        );
+        Some(ActionSpace {
+            player: Some(active),
+            kind: ActionSpaceKind::DeclareAttacker,
+            actions,
+            focus: Vec::new(),
+        })
+    }
+
+    /// The pick shape of blocker declaration: "done" first, then every legal
+    /// (blocker, attacker) pair over the queued blockers. Required blocks
+    /// (CR 509.1c) are offered alone, without "done", until none remains.
+    /// With no legal pair the queue is emptied here and `None` returned, so
+    /// the caller ends the declaration without a prompt.
+    fn blocker_pick_space(&mut self, defending: PlayerId) -> Option<ActionSpace> {
+        if !self.experiments.combat_pick {
+            return None;
+        }
+        let combat = self.state.combat.as_ref()?;
+        if combat.blockers_to_declare.is_empty() {
+            return None;
+        }
+        let mut pairs = Vec::new();
+        for &blocker in combat.blockers_to_declare.iter().rev() {
+            for &attacker in &combat.attackers {
+                if self.blocker_can_block_attacker(blocker, attacker) {
+                    pairs.push(Action::DeclareBlocker {
+                        player: defending,
+                        blocker,
+                        attacker: Some(attacker),
+                    });
+                }
+            }
+        }
+        if pairs.is_empty() {
+            if let Some(combat) = self.state.combat.as_mut() {
+                combat.blockers_to_declare.clear();
+            }
+            return None;
+        }
+        let required = |action: &Action| {
+            matches!(action, Action::DeclareBlocker { attacker: Some(attacker), .. }
+                if self.must_be_blocked_by_all_able(*attacker))
+        };
+        let actions = if pairs.iter().any(required) {
+            pairs.retain(required);
+            pairs
+        } else {
+            let mut actions = vec![Action::Decline { player: defending }];
+            actions.append(&mut pairs);
+            actions
+        };
+        Some(ActionSpace {
+            player: Some(defending),
+            kind: ActionSpaceKind::DeclareBlocker,
+            actions,
+            focus: Vec::new(),
+        })
+    }
+
     fn perform_turn_based_actions(&mut self, step: StepKind) -> Option<ActionSpace> {
         match step {
             StepKind::Untap => {
@@ -350,6 +434,9 @@ impl Game {
             }
             StepKind::DeclareAttackers => {
                 let active = self.active_player();
+                if let Some(space) = self.attacker_pick_space(active) {
+                    return Some(space);
+                }
                 let combat = self.state.combat.get_or_insert_with(CombatState::default);
                 let Some(attacker) = combat.attackers_to_declare.pop() else {
                     // CR 508.1 — Attack triggers fire once the whole batch of
@@ -394,6 +481,9 @@ impl Game {
             }
             StepKind::DeclareBlockers => {
                 let defending = self.non_active_player();
+                if let Some(space) = self.blocker_pick_space(defending) {
+                    return Some(space);
+                }
                 let combat = self.state.combat.get_or_insert_with(CombatState::default);
                 let Some(blocker) = combat.blockers_to_declare.pop() else {
                     self.cleanup_illegal_menace_blocks();

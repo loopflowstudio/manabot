@@ -6,9 +6,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
-from managym.enums import ActionEnum, ActionSpaceEnum, EventTypeEnum, StepEnum, ZoneEnum
 import pytest
 
+from experiments.elemental_grid import DECKS, PACK
 from manabot.env.env import Env
 from manabot.eval.admission import register_anchor
 from manabot.eval.monitor import MonitorProtocol
@@ -22,6 +22,8 @@ from manabot.sim.heuristic import (
     targeted_spells,
 )
 from manabot.sim.players import build_code_player
+import managym
+from managym.enums import ActionEnum, ActionSpaceEnum, EventTypeEnum, StepEnum, ZoneEnum
 from tests.eval.arena_fixture import arena_fixture
 
 OWN, OPPONENT = 10, 20
@@ -718,3 +720,95 @@ def test_holds_back_a_defender_when_the_swing_back_is_lethal() -> None:
     board = dict(mine=[a, b], theirs=[ogre], life=(5, 20), player=player)
     assert act(ActionSpaceEnum.DECLARE_ATTACKER, attack_prompt(30), **board) == 0
     assert act(ActionSpaceEnum.DECLARE_ATTACKER, attack_prompt(31), **board) == 1
+
+
+# Pick-shape combat (MANAGYM_EXPERIMENT_COMBAT_PICK) --------------------------
+
+
+def pick_attack_prompt(*attackers: int) -> list[SimpleNamespace]:
+    return [offer(ActionEnum.DECLINE_CHOICE)] + [
+        offer(ActionEnum.DECLARE_ATTACKER, a, declared=True) for a in attackers
+    ]
+
+
+def pick_block_prompt(*pairs: tuple[int, int], done: bool = True) -> list[Any]:
+    return [offer(ActionEnum.DECLINE_CHOICE)] * done + [
+        offer(ActionEnum.DECLARE_BLOCKER, b, a, declared=True) for b, a in pairs
+    ]
+
+
+def test_pick_shape_attacks_with_the_same_creatures_then_finishes() -> None:
+    grunt, flyer = creature(30, OWN, 3, 3), creature(31, OWN, 2, 2, flying=True)
+    ogre = creature(40, OPPONENT, 5, 5)
+    by_prompt = HeuristicPlayer()
+    board = dict(mine=[grunt, flyer], theirs=[ogre])
+    kind = ActionSpaceEnum.DECLARE_ATTACKER
+    assert act(kind, attack_prompt(30), player=by_prompt, **board) == 1
+    assert act(kind, attack_prompt(31), player=by_prompt, **board) == 0
+
+    by_pick = HeuristicPlayer()
+    first = pick_attack_prompt(30, 31)
+    assert first[act(kind, first, player=by_pick, **board)].focus == [31]
+    # The flyer is declared and tapped; only the held grunt is still offered.
+    flyer[0].tapped = True
+    assert act(kind, pick_attack_prompt(30), player=by_pick, **board) == 0
+
+
+def test_pick_shape_serves_the_block_plan_then_finishes() -> None:
+    a, b = creature(30, OWN, 1, 1, mv=1), creature(31, OWN, 1, 1, mv=1)
+    big, other = creature(40, OPPONENT, 4, 4), creature(41, OPPONENT, 3, 3)
+    player = HeuristicPlayer()
+    board = dict(mine=[a, b], theirs=[big, other], life=(6, 20), player=player)
+    kind = ActionSpaceEnum.DECLARE_BLOCKER
+    first = pick_block_prompt((30, 40), (30, 41), (31, 40), (31, 41))
+    assert first[act(kind, first, **board)].focus == [30, 40]
+    assert act(kind, pick_block_prompt((31, 40), (31, 41)), **board) == 0
+
+
+def test_pick_shape_takes_a_required_block_when_there_is_no_done() -> None:
+    a, b = creature(30, OWN, 1, 1, mv=1), creature(31, OWN, 1, 1, mv=1)
+    lure = creature(40, OPPONENT, 4, 4)
+    required = pick_block_prompt((30, 40), (31, 40), done=False)
+    board = dict(mine=[a, b], theirs=[lure])
+    assert act(ActionSpaceEnum.DECLARE_BLOCKER, required, **board) in (0, 1)
+
+
+def _mirror(deck: str, seed: int) -> tuple[int | None, int, list[int], int]:
+    """A heuristic mirror: winner, turns, final lives, decisions outside combat.
+
+    The state digest is no comparison across shapes: it counts skipped forced
+    decisions, and the shapes skip different ones.
+    """
+    setup = managym.authored_deck_setup(PACK, deck)
+    engine = managym.Env(seed=seed, skip_trivial=True)
+    raw, _ = engine.reset(
+        [
+            managym.PlayerConfig(
+                f"seat-{seat}", setup.decklist, setup.sideboard, managym.WORLD_SETUP
+            )
+            for seat in range(2)
+        ]
+    )
+    players = [HeuristicPlayer(), HeuristicPlayer()]
+    combat = (ActionSpaceEnum.DECLARE_ATTACKER, ActionSpaceEnum.DECLARE_BLOCKER)
+    other = 0
+    for _ in range(10_000):
+        if raw.game_over:
+            break
+        other += raw.action_space.action_space_type not in combat
+        view = cast(Env, SimpleNamespace(last_raw_obs=raw))
+        raw, *_ = engine.step(players[raw.turn.agent_player_id].act(view, {}))
+    assert raw.game_over
+    lives = sorted((int(raw.agent.life), int(raw.opponent.life)))
+    return engine.winner_index(), int(raw.turn.turn_number), lives, other
+
+
+def test_pick_shape_mirror_reaches_the_default_shapes_game(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The heuristic declares in offered order, so both shapes play one game."""
+    monkeypatch.delenv("MANAGYM_EXPERIMENT_COMBAT_PICK", raising=False)
+    by_prompt = [_mirror(deck, 265) for deck in DECKS[:2]]
+    # The engine reads the switch each time a game is set up.
+    monkeypatch.setenv("MANAGYM_EXPERIMENT_COMBAT_PICK", "1")
+    assert [_mirror(deck, 265) for deck in DECKS[:2]] == by_prompt

@@ -7,6 +7,7 @@ pub mod damage;
 pub mod decision;
 pub mod effects;
 pub mod event;
+pub mod experiments;
 pub mod game;
 pub mod identity;
 mod layers;

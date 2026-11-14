@@ -544,3 +544,13 @@ each fixed source whose output the cost can still use as a `TapForMana` step
 Nothing is offered when the pool covers the cost or every offered source is
 needed. Waterbend, resolution payments, upfront fees and foretell stay
 automatic. Replay and evaluation must use the same value.
+
+`MANAGYM_EXPERIMENT_COMBAT_PICK=1` is the combat arm of
+`experiments/decision_shapes.py` (`flow/experiments.rs`). A combat declaration
+is then one repeated decision: `Decline` ("done", always the first action)
+beside an attack offer for every undeclared creature, or a block offer for
+every legal blocker and attacker pair, in place of one yes/no decision per
+creature in engine order. Required blocks (CR 509.1c) are offered alone, and a
+declaration with no legal block ends without a decision. The player now chooses
+the declaration order, which is the order blockers are assigned combat damage.
+Replay and evaluation must use the same value.

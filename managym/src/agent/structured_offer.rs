@@ -591,7 +591,11 @@ impl Game {
         }
         match self.current_action_space.as_ref().map(|space| space.kind) {
             Some(ActionSpaceKind::Priority) => self.structured_priority_offers(),
-            Some(ActionSpaceKind::DeclareAttacker) => self.structured_attacker_offers(),
+            // The pick shape has no batch declaration to project; it stays on
+            // the ordinary action space like other unsupported decisions.
+            Some(ActionSpaceKind::DeclareAttacker) if !self.experiments.combat_pick => {
+                self.structured_attacker_offers()
+            }
             Some(_) => Err(StructuredOfferError::WrongDecision),
             None => Err(StructuredOfferError::NoActiveActionSpace),
         }
@@ -688,6 +692,15 @@ impl Game {
     /// every other decision retains its ordinary action-aligned offer.
     pub fn compound_offers(&self) -> Result<StructuredOfferSet, StructuredOfferError> {
         let mut complete = self.structured_search_offers()?;
+        if self.experiments.combat_pick {
+            // Pick-shape declarations are already one action per choice;
+            // their offers stay action-aligned.
+            if let Some(ActionSpaceKind::DeclareAttacker | ActionSpaceKind::DeclareBlocker) =
+                self.current_action_space.as_ref().map(|space| space.kind)
+            {
+                return Ok(complete);
+            }
+        }
         match self.current_action_space.as_ref().map(|space| space.kind) {
             Some(ActionSpaceKind::DeclareAttacker) => self.structured_attacker_offers(),
             Some(ActionSpaceKind::DeclareBlocker) => {

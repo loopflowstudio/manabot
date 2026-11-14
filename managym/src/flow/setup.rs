@@ -132,6 +132,7 @@ impl Game {
                 true,
                 std::env::var("MANAGYM_EXPERIMENT_SOURCE_TAPS").as_deref() == Ok("1"),
             ),
+            experiments: crate::flow::experiments::ExperimentSwitches::from_env(),
             derived: Default::default(),
             payment_sources: Default::default(),
             state: TrackedState::new(GameState {

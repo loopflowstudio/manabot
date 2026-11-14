@@ -57,12 +57,12 @@ from pathlib import Path
 import re
 from typing import Any, Literal, cast
 
-from managym.enums import ActionEnum, ActionSpaceEnum, EventTypeEnum, StepEnum, ZoneEnum
 import numpy as np
 
 from manabot.env.env import Env
 from manabot.sim.anchors import ScriptedGreedyPlayer
 import managym
+from managym.enums import ActionEnum, ActionSpaceEnum, EventTypeEnum, StepEnum, ZoneEnum
 
 Polarity = Literal["harmful", "beneficial"]
 
@@ -657,6 +657,7 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
         self._kicked: dict[int, bool] = {}
         self._turn = -1
         self._attack_pool: set[int] | None = None
+        self._attack_plan: dict[int, bool] = {}
         self._held: set[int] = set()
         self._blocks: dict[int, set[int]] = {}
         self._block_plan: dict[int, int] | None = None
@@ -702,6 +703,7 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
         if turn != self._turn:
             self._turn = turn
             self._attack_pool = None
+            self._attack_plan = {}
             self._held = set()
             self._blocks = {}
             self._block_plan = None
@@ -1070,9 +1072,32 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
 
     def _attack(self, board: _Board) -> int | None:
         raw = board.raw
-        attacker = board.permanents.get(int(raw.action_space.actions[0].focus[0]))
-        if attacker is None:
-            return None
+        actions = raw.action_space.actions
+        done = _first(raw, ActionEnum.DECLINE_CHOICE)
+        if done is None:
+            attacker = board.permanents.get(int(actions[0].focus[0]))
+            if attacker is None:
+                return None
+            return _declared(raw, self._attacks(board, attacker))
+        # Pick shape (`MANAGYM_EXPERIMENT_COMBAT_PICK`): every undeclared
+        # creature is offered at once. Decide each in offered order, which is
+        # the order the one-creature prompts ask in, so the attack set is the
+        # same; then declare the planned ones and finish.
+        for action in actions:
+            if not action.focus or int(action.focus[0]) in self._attack_plan:
+                continue
+            attacker = board.permanents.get(int(action.focus[0]))
+            if attacker is None:
+                return None
+            self._attack_plan[int(attacker.id)] = self._attacks(board, attacker)
+        for index, action in enumerate(actions):
+            if action.focus and self._attack_plan[int(action.focus[0])]:
+                return index
+        return done
+
+    def _attacks(self, board: _Board, attacker: managym.Permanent) -> bool:
+        """Whether this creature attacks; reserves the trick that lets it."""
+        raw = board.raw
         if self._attack_pool is None:
             # Declared attackers tap, so fix the pool at the first prompt.
             self._attack_pool = {
@@ -1089,9 +1114,9 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
             and not any(_can_block(b, p) for b in blockers)
         )
         if unblockable >= raw.opponent.life:
-            return _declared(raw, True)
+            return True
         if int(attacker.id) in self._held:
-            return _declared(raw, False)
+            return False
         dominators = [
             b
             for b in blockers
@@ -1108,7 +1133,7 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
             ):
                 self._trick_reserved = True
                 dominators = []
-        return _declared(raw, not dominators)
+        return not dominators
 
     def _defenders_to_hold(self, board: _Board) -> set[int]:
         """Attack-pool creatures to keep home so the swing back is not lethal.
@@ -1140,6 +1165,18 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
         actions = raw.action_space.actions
         if self._block_plan is None:
             self._block_plan = self._plan_blocks(board)
+        done = _first(raw, ActionEnum.DECLINE_CHOICE)
+        blockers = {int(a.focus[0]) for a in actions if a.focus}
+        if done is not None or len(blockers) > 1:
+            # Pick shape: pairs for every undeclared blocker at once. Declare
+            # the planned blocks still offered, then finish. Without "done"
+            # these are required blocks, left to the fallback as before.
+            for index, action in enumerate(actions):
+                if len(action.focus) == 2 and (
+                    self._block_plan.get(int(action.focus[0])) == int(action.focus[1])
+                ):
+                    return index
+            return done
         blocker_id = next((int(a.focus[0]) for a in actions if len(a.focus) >= 1), None)
         target = self._block_plan.get(blocker_id) if blocker_id is not None else None
         for index, action in enumerate(actions):
@@ -1158,8 +1195,14 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
         # The offers name what this blocker can block; tapped recorded attackers
         # add any it cannot (fliers). Recent events can still carry an earlier
         # turn's attack, so an untapped one is not counted.
+        # In the pick shape the first offered blocker is the one the
+        # one-creature prompts would ask first, so the plan reads the same.
+        actions = board.raw.action_space.actions
+        first = next((int(a.focus[0]) for a in actions if a.focus), None)
         offered = {
-            int(a.focus[1]) for a in board.raw.action_space.actions if len(a.focus) == 2
+            int(a.focus[1])
+            for a in actions
+            if len(a.focus) == 2 and int(a.focus[0]) == first
         }
         attackers = [
             p

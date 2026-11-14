@@ -350,6 +350,10 @@ impl Game {
             Some(PendingChoice::KickerChoice { .. }) => ("additional_cost", "Choose whether to include the kicker cost."),
             Some(PendingChoice::AnnounceX { object: object_id, .. }) if self.state.objects[*object_id].replicate().is_some() => ("mode", "Announce how many times to pay the replicate cost; each offer's mode index is that count, and the spell is copied once per payment."),
             Some(PendingChoice::AnnounceX { .. }) => ("mode", "Announce the value of X; each offer's mode index is that value."),
+            None if self.experiments.combat_pick && space.kind == crate::agent::action::ActionSpaceKind::DeclareAttacker =>
+                ("declare_attackers", "Choose one more creature to attack with, or the done offer: creatures not chosen do not attack. Each declaration is committed."),
+            None if self.experiments.combat_pick && space.kind == crate::agent::action::ActionSpaceKind::DeclareBlocker =>
+                ("declare_blockers", "Choose one more block, or the done offer when it is offered: creatures not chosen do not block. Each declaration is committed."),
             None => match space.kind {
                 crate::agent::action::ActionSpaceKind::DeclareAttacker => ("declare_attackers", "Choose each attack declaration, including the legal nonparticipation offers. Submitted declarations are committed."),
                 crate::agent::action::ActionSpaceKind::DeclareBlocker => ("declare_blockers", "Choose each block declaration, including the legal nonparticipation offers. Submitted declarations are committed."),

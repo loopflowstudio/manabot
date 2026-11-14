@@ -63,12 +63,22 @@ impl Scenario {
             ActionSpaceKind::DeclareAttacker => space
                 .actions
                 .iter()
-                .position(|action| matches!(action, Action::DeclareAttacker { attack: false, .. }))
+                .position(|action| {
+                    matches!(
+                        action,
+                        Action::DeclareAttacker { attack: false, .. } | Action::Decline { .. }
+                    )
+                })
                 .unwrap_or(space.actions.len().saturating_sub(1)),
             ActionSpaceKind::DeclareBlocker => space
                 .actions
                 .iter()
-                .position(|action| matches!(action, Action::DeclareBlocker { attacker: None, .. }))
+                .position(|action| {
+                    matches!(
+                        action,
+                        Action::DeclareBlocker { attacker: None, .. } | Action::Decline { .. }
+                    )
+                })
                 .unwrap_or(space.actions.len().saturating_sub(1)),
             // Picks first legal target arbitrarily — tests that care about targeting
             // should use choose_target_named or explicit action selection instead.

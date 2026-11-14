@@ -240,6 +240,14 @@ impl Game {
             {
                 Some("Pay the mana cost".into())
             }
+            Action::Decline { .. } if self.declaring_by_pick() => {
+                Some(match self.state.turn.current_step_kind() {
+                    crate::flow::turn::StepKind::DeclareAttackers => {
+                        "Done declaring attackers".into()
+                    }
+                    _ => "Done declaring blockers".into(),
+                })
+            }
             Action::Decline { .. } => match &self.state.suspended_decision.as_ref()?.decision {
                 Decision::SearchNamed { .. } => Some("Stop searching and shuffle".into()),
                 Decision::Surveil { .. } => Some("Keep on top".into()),
@@ -953,6 +961,7 @@ impl Game {
             | Action::ChooseMode { .. }
             | Action::LearnDiscard { .. }
             | Action::LearnTakeLesson { .. } => self.execute_decision_action(action),
+            Action::Decline { .. } if self.declaring_by_pick() => self.finish_combat_pick(),
             Action::Decline { player } => {
                 if self.state.suspended_decision.is_some() {
                     return self.execute_decision_action(action);

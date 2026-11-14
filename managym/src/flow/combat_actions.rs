@@ -9,6 +9,7 @@ use crate::{
         decision::{EffectFrame, FrameCompletion},
         game::{CombatDamagePass, Game},
         proposed_event::{EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent},
+        turn::StepKind,
     },
     state::{
         card::{BlockRestriction, Restriction, StaticAbility},
@@ -69,6 +70,44 @@ impl Game {
         if let Some(combat) = self.state.combat.as_mut() {
             combat.attackers.push(permanent_id);
             combat.attacker_to_blockers.entry(permanent_id).or_default();
+            // The pick shape leaves a creature queued until it is chosen; the
+            // default shape has already popped it.
+            combat.attackers_to_declare.retain(|id| *id != permanent_id);
+        }
+        Ok(())
+    }
+
+    /// Whether the pending decision is a pick-shape combat declaration
+    /// (`ExperimentSwitches::combat_pick`), where `Action::Decline` means
+    /// "done": the declaration step's turn-based action is still open and no
+    /// other choice is pending.
+    pub(crate) fn declaring_by_pick(&self) -> bool {
+        let turn = &self.state.turn;
+        self.experiments.combat_pick
+            && self.state.suspended_decision.is_none()
+            && self.pending_choice.is_none()
+            && turn.step_initialized
+            && !turn.turn_based_actions_complete
+            && matches!(
+                turn.current_step_kind(),
+                StepKind::DeclareAttackers | StepKind::DeclareBlockers
+            )
+    }
+
+    /// "Done" in the pick shape: every creature still queued neither attacks
+    /// nor blocks. The step's ordinary end of declaration runs on the next
+    /// tick, exactly as after the default shape's last answer.
+    pub(crate) fn finish_combat_pick(&mut self) -> Result<(), AgentError> {
+        let step = self.state.turn.current_step_kind();
+        let combat = self
+            .state
+            .combat
+            .as_mut()
+            .ok_or_else(|| AgentError("no combat to finish declaring".to_string()))?;
+        if step == StepKind::DeclareAttackers {
+            combat.attackers_to_declare.clear();
+        } else {
+            combat.blockers_to_declare.clear();
         }
         Ok(())
     }
@@ -90,6 +129,7 @@ impl Game {
                     .entry(attacker_id)
                     .or_default()
                     .push(blocker);
+                combat.blockers_to_declare.retain(|id| *id != blocker);
             }
         }
         Ok(())
