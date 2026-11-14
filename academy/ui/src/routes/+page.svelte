@@ -14,6 +14,7 @@
   import DeckIdentity from '$lib/components/DeckIdentity.svelte';
   import DeckSelector from '$lib/components/DeckSelector.svelte';
   import DeckImport from '$lib/components/DeckImport.svelte';
+  import { checkpointIdentity, playerIdentity } from '$lib/player-identity';
   import GameBoard from '$lib/components/GameBoard.svelte';
   import Feedback from '$lib/components/Feedback.svelte';
   import GameLog from '$lib/components/GameLog.svelte';
@@ -293,11 +294,11 @@
     random: 'Random',
     passive: 'Passive',
   };
-  const opponentLabel = $derived(
-    gameStore.table?.opponent_label
-      ?? OPPONENT_LABELS[gameStore.opponentChoice]
-      ?? 'Opponent',
-  );
+  const opponentIdentity = $derived(gameStore.table?.opponent
+    ? checkpointIdentity(gameStore.table.opponent)
+    : playerIdentity({
+        name: gameStore.table?.opponent_label ?? OPPONENT_LABELS[gameStore.opponentChoice] ?? 'Opponent',
+      }));
 
   function syncStopsToServer(): void {
     if (gameActive && gameStore.hasCapability('configure_match')) {
@@ -422,7 +423,7 @@
         <!-- The players live at their bars; this line is the summary for
              assistive tech and the proof suite. -->
         <span data-testid="deck-names" class="sr-only">
-          You ({gameStore.deckNames.hero}) vs {opponentLabel} ({gameStore.deckNames.villain})
+          You ({gameStore.deckNames.hero}) vs {opponentIdentity.text} ({gameStore.deckNames.villain})
         </span>
       {:else}
         <span class="type-annotation text-ink-2">No game in progress</span>
@@ -532,8 +533,8 @@
         onHoverTarget={handleBoardTargetHover}
         winner={gameStore.winner}
         deckNames={gameStore.deckNames}
-        heroLabel="You"
-        villainLabel={opponentLabel}
+        heroIdentity={playerIdentity({ name: 'You', kind: 'human' })}
+        villainIdentity={opponentIdentity}
         overlayActionLabel="Play Again"
         onOverlayAction={startNewGame}
         presentationPlayer={tablePresentation}

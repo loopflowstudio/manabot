@@ -53,6 +53,17 @@ pub struct StepResult {
     pub info: InfoDict,
 }
 
+/// Identity of one viewer-safe encoded row, paired with HandSnapshot at this boundary.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "python", pyo3::pyclass(get_all, frozen))]
+pub struct ObservationRead {
+    pub slot: usize,
+    pub player: usize,
+    pub game_id: u64,
+    pub seed: u64,
+    pub revision: u64,
+}
+
 /// One root sampler with explicit pair semantics and roster ownership.
 #[derive(Debug, Default)]
 struct RootRoster {
@@ -320,6 +331,48 @@ impl VectorEnv {
             .zip(players)
             .map(|(env, &player)| env.hand_snapshot(player))
             .collect()
+    }
+
+    /// Project each requested native seat without advancing games or chooser state.
+    /// The whole request is validated before the first write; an encoding failure
+    /// can leave a written prefix, so callers must discard all rows on failure.
+    pub fn write_observations_for_players(
+        &self,
+        players: &[usize],
+        mut write: impl FnMut(usize, &Observation) -> Result<(), AgentError>,
+    ) -> Result<Vec<ObservationRead>, AgentError> {
+        if players.len() != self.len() {
+            return Err(AgentError(format!(
+                "expected {} observation players, got {}",
+                self.len(),
+                players.len()
+            )));
+        }
+        if players.iter().any(|&player| player > 1) {
+            return Err(AgentError("observation player must be 0 or 1".into()));
+        }
+        self.validate_ready_for_step().map_err(|_| {
+            AgentError("vector env must be reset before reading observations".into())
+        })?;
+        let reads = self
+            .envs
+            .iter()
+            .zip(players)
+            .enumerate()
+            .map(|(slot, (env, &player))| {
+                Ok(ObservationRead {
+                    slot,
+                    player,
+                    game_id: env.capture_generation,
+                    seed: env.reset_seed(),
+                    revision: env.selected_revision()?,
+                })
+            })
+            .collect::<Result<Vec<_>, AgentError>>()?;
+        for (env, read) in self.envs.iter().zip(&reads) {
+            write(read.slot, &env.observation_for_player(read.player)?)?;
+        }
+        Ok(reads)
     }
 
     /// Retain the exact surfaced offers before a strict batch can mutate any row.
@@ -851,6 +904,68 @@ mod tests {
         infra::profiler::InfoValue,
         state::player::PlayerConfig,
     };
+
+    #[test]
+    fn fixed_seat_observations_validate_before_writing_and_preserve_control() {
+        let mut vector = VectorEnv::new(2, 42, true, [PlayerPolicy::Agent; 2]);
+        let mut writes = 0;
+        assert!(vector
+            .write_observations_for_players(&[0, 1], |_, _| {
+                writes += 1;
+                Ok(())
+            })
+            .is_err());
+        vector
+            .reset_all(vec![
+                PlayerConfig::new("a", BTreeMap::from([("Mountain".into(), 20)])),
+                PlayerConfig::new("b", BTreeMap::from([("Island".into(), 20)])),
+            ])
+            .unwrap();
+        for players in [vec![], vec![0], vec![0, 2]] {
+            assert!(vector
+                .write_observations_for_players(&players, |_, _| {
+                    writes += 1;
+                    Ok(())
+                })
+                .is_err());
+        }
+        assert_eq!(writes, 0);
+        vector.envs[0].scenario_control_player(0, 1);
+        assert_eq!(vector.envs[0].current_agent_index(), Some(1));
+        // A pending seed belongs to the next reset, not to the game being read.
+        vector.envs[1].set_seed(99);
+        let before = vector.hand_snapshots(&[0, 1]).unwrap();
+        let frames = vector.semantic_decision_frames_json(None).unwrap();
+        for players in [[0, 1], [1, 0]] {
+            let reads = vector
+                .write_observations_for_players(&players, |slot, obs| {
+                    assert_eq!(
+                        obs.to_json(),
+                        vector.envs[slot]
+                            .observation_for_player(players[slot])
+                            .unwrap()
+                            .to_json()
+                    );
+                    assert_eq!(
+                        obs.action_space.actions.is_empty(),
+                        vector.envs[slot].current_agent_index() != Some(players[slot])
+                    );
+                    writes += 1;
+                    Ok(())
+                })
+                .unwrap();
+            for (read, hand) in reads.iter().zip(vector.hand_snapshots(&players).unwrap()) {
+                assert_eq!(read.player, players[read.slot]);
+                assert_eq!(
+                    (read.game_id, read.seed, read.revision),
+                    (hand.game_id, hand.seed, hand.revision)
+                );
+            }
+        }
+        assert_eq!(writes, 4);
+        assert_eq!(before, vector.hand_snapshots(&[0, 1]).unwrap());
+        assert_eq!(frames, vector.semantic_decision_frames_json(None).unwrap());
+    }
 
     #[test]
     fn hand_snapshots_keep_native_seats_when_another_player_chooses() {

@@ -44,6 +44,8 @@ from typing import Any, TypedDict
 import torch
 
 from experiments import l4_step_profile as profile
+from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND
+from manabot.backends.torch.policy import PolicyInference
 
 ROOT = Path(__file__).resolve().parents[1]
 SEED = 32801
@@ -93,7 +95,6 @@ def cpu(captures: Path, out: Path) -> dict[str, Any]:
     A learner pass is the minibatch's forward, loss and backward without an
     optimizer step, so every layout sees identical weights.
     """
-    from manabot.model.inference import PolicyInference
 
     torch.set_num_threads(CPU_THREADS)
     inputs = profile._inputs(captures)
@@ -182,7 +183,11 @@ def evaluation_pass(
     from manabot.sim.execution import EvalExecution
 
     request = checkpoint_request(
-        policy, opponent=policy, deal_seeds=DEALS[:deals], game_seconds=600
+        policy,
+        opponent=policy,
+        deal_seeds=DEALS[:deals],
+        game_seconds=600,
+        backend=TORCH_BACKEND,
     )
     on = arm == "layout"
     execution = EvalExecution(
@@ -219,7 +224,7 @@ def job(smoke: bool = False) -> None:
     """Checkpoint, then each pass in its own process; `smoke` is a toy CPU run."""
     out = Path(os.environ["ETUDE_OUTPUT_DIR"])
     out.mkdir(parents=True, exist_ok=True)
-    policy = out / "inputs" / "policy.pt"
+    policy = out / "inputs" / "policy.safetensors"
     device, size, deals = ("cpu", "w160l8", 1) if smoke else ("cuda", SIZE, len(DEALS))
     checkpoint(policy, size)
     stages: list[dict[str, Any]] = []

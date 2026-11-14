@@ -23,20 +23,13 @@ import numpy as np
 import torch
 
 from experiments.precision_ladder import arm
-from manabot.backends.torch.learner import forward_precision
-from manabot.backends.torch.policy import ActorCritic
-from manabot.backends.torch.rl import policy_logs
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.experiment.job import TrainingJob, run_worker
-from manabot.infra.config import ModelConfig, RewardConfig
-from manabot.model.admission import admit_observation
-from manabot.model.inference import PolicyInference, transfer_admitted
-from manabot.policy.buckets import BucketSizes
+from manabot.infra.config import RewardConfig
 from manabot.recipes.local import local_smoke
 from manabot.training.panels import ML, PERF
-from manabot.training.regime import Precision
 
 ROOT = Path(__file__).resolve().parents[1]
 SEED = 32401
@@ -119,74 +112,7 @@ def forward_probe(device: torch.device, *, smoke: bool) -> list[ForwardDifferenc
     as in training, and uses a fresh catalog graph rather than inference's cache.
     These deltas are measurements, not an admission tolerance.
     """
-    torch.manual_seed(SEED)
-    recipe = arm("bf16")
-    space = ObservationSpace(recipe.observation)
-    obs = _observations(space, Match(recipe.match), 8 if smoke else 32)
-    config = (
-        ModelConfig(hidden_dim=16, attention_layers=1, num_attention_heads=2)
-        if smoke
-        else recipe.agent
-    )
-    results: list[ForwardDifference] = []
-    for live in (False, True):
-        torch.manual_seed(SEED)
-        agent = (
-            ActorCritic(space, config, bucketed_shapes=True, live_tokens=live)
-            .to(device)
-            .train()
-        )
-        precisions: tuple[Precision, ...] = ("float32", "bf16")
-        for declared in precisions:
-            with torch.no_grad(), PolicyInference(agent) as scope:
-                prepared = scope.prepare(obs)
-                with forward_precision(declared, device):
-                    logits, _ = agent.forward_distribution(prepared)
-                logs = policy_logs(logits.float(), prepared["actions_valid"].bool())
-                generator = torch.Generator(device=device).manual_seed(SEED)
-                actions = torch.multinomial(logs.exp(), 1, generator=generator)
-                selected = logs.gather(-1, actions).squeeze(-1).cpu()
-            base = admit_observation(agent, obs).buckets
-            assert base is not None
-            for scale in (1, 2):
-                buckets = BucketSizes(
-                    {
-                        key: min(size * scale, base.capacities[key])
-                        for key, size in base.sizes.items()
-                    },
-                    base.capacities,
-                )
-                parts: list[torch.Tensor] = []
-                for start in range(0, len(selected), 4 if smoke else 8):
-                    end = start + (4 if smoke else 8)
-                    admitted = admit_observation(
-                        agent, {key: value[start:end] for key, value in obs.items()}
-                    )
-                    admitted.buckets = buckets
-                    moved = transfer_admitted(admitted, device)[0]
-                    with forward_precision(declared, device):
-                        logits, _ = agent.forward_distribution(moved)
-                    logs = policy_logs(logits.float(), moved["actions_valid"].bool())
-                    parts.append(
-                        logs.gather(-1, actions[start:end]).squeeze(-1).detach().cpu()
-                    )
-                delta = (torch.cat(parts) - selected).abs()
-                if not torch.isfinite(delta).all():
-                    raise RuntimeError("nonfinite fixed-weight chosen-log difference")
-                quantiles = delta.quantile(torch.tensor([0.5, 0.95, 0.99])).tolist()
-                results.append(
-                    ForwardDifference(
-                        declared,
-                        live,
-                        scale,
-                        buckets.sizes,
-                        len(selected),
-                        *quantiles,
-                        float(delta.max()),
-                    )
-                )
-        del agent
-    return results
+    raise RuntimeError("Run this frozen probe from revision 2284e4400c.")
 
 
 def probe(output: Path, *, smoke: bool = False) -> None:

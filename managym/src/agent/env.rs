@@ -379,6 +379,11 @@ impl Env {
         self.seed
     }
 
+    /// Seed the live game was reset with; a pending `set_seed` does not change it.
+    pub(crate) fn reset_seed(&self) -> u64 {
+        self.reset_seed
+    }
+
     /// Setups this game was reset with; empty before the first reset.
     pub fn player_configs(&self) -> &[PlayerConfig] {
         self.action_trace

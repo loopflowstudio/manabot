@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 import torch
 
+from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND
 from manabot.eval.endpoint import CallbackEndpoint
 from manabot.eval.evaluation import (
     EvaluationRequest,
@@ -56,6 +57,7 @@ def _request(
         max_commands=commands,
         deal_seeds=(101,),
         game_seconds=240,
+        backend=TORCH_BACKEND,
     )
 
 

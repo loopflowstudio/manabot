@@ -13,8 +13,9 @@ Each test aims to verify a specific aspect of the agent's behavior while
 maintaining robustness to architectural changes.
 """
 
+from dataclasses import replace
 import logging
-from typing import Dict, Generator
+from typing import Generator
 
 import pytest
 import torch
@@ -25,7 +26,8 @@ from manabot.backends.torch.policy import ActorCritic
 # Local imports
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model.admission import admit_observation
+from manabot.policy.prepare import Prepared
+from tests.model.prepared_routes import device_input
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -63,7 +65,7 @@ def agent(
 @pytest.fixture
 def real_observation(
     observation_space: ObservationSpace, agent: ActorCritic
-) -> Generator[Dict[str, torch.Tensor], None, None]:
+) -> Generator[Prepared[torch.Tensor], None, None]:
     """
     Create a real observation using a vector env and the real observation encoder.
 
@@ -87,7 +89,7 @@ def real_observation(
         player_policies=("agent", "random"),
     )
     obs, _ = vec_env.reset()
-    yield admit_observation(agent, obs)
+    yield device_input(agent, obs)
     vec_env.close()
 
 
@@ -98,7 +100,7 @@ def real_observation(
 
 def test_forward_pass_shapes(
     agent: ActorCritic,
-    real_observation: Dict[str, torch.Tensor],
+    real_observation: Prepared[torch.Tensor],
     observation_space: ObservationSpace,
 ):
     """
@@ -109,7 +111,7 @@ def test_forward_pass_shapes(
 
     # Execute forward pass
     logits, value = agent(obs)
-    batch_size = obs[next(iter(obs))].shape[0]
+    batch_size = obs.batch
 
     # Check output shapes
     assert logits.shape == (
@@ -129,7 +131,7 @@ def test_forward_pass_shapes(
     assert not torch.isinf(value).any(), "Inf in value"
 
 
-def test_gradient_flow(agent: ActorCritic, real_observation: Dict[str, torch.Tensor]):
+def test_gradient_flow(agent: ActorCritic, real_observation: Prepared[torch.Tensor]):
     """
     Verify that gradients flow properly through the entire network.
     """
@@ -160,7 +162,7 @@ def test_gradient_flow(agent: ActorCritic, real_observation: Dict[str, torch.Ten
 
 def test_object_embeddings(
     agent: ActorCritic,
-    real_observation: Dict[str, torch.Tensor],
+    real_observation: Prepared[torch.Tensor],
     observation_space: ObservationSpace,
 ) -> None:
     """
@@ -175,7 +177,7 @@ def test_object_embeddings(
         + observation_space.encoder.cards_per_player * 2  # Cards for both players
         + observation_space.encoder.perms_per_player * 2  # Permanents for both players
     )
-    batch_size = obs[next(iter(obs))].shape[0]
+    batch_size = obs.batch
     assert objects.shape == (
         batch_size,
         expected_objects,
@@ -202,7 +204,7 @@ def test_object_embeddings(
 
 
 def test_attention_mechanism(
-    agent: ActorCritic, real_observation: Dict[str, torch.Tensor]
+    agent: ActorCritic, real_observation: Prepared[torch.Tensor]
 ) -> None:
     """
     Verify the attention mechanism's behavior and output properties.
@@ -227,7 +229,7 @@ def test_attention_mechanism(
 
 
 def test_focus_object_incorporation(
-    agent: ActorCritic, real_observation: Dict[str, torch.Tensor]
+    agent: ActorCritic, real_observation: Prepared[torch.Tensor]
 ) -> None:
     """
     Verify that focus objects are correctly incorporated into action representations.
@@ -240,25 +242,23 @@ def test_focus_object_incorporation(
         objects, is_agent, key_padding_mask=key_padding_mask
     )
 
-    batches, slots = obs["actions_valid"].bool().nonzero(as_tuple=True)
-    features = agent._gather_informed_actions(
-        obs, post_attention, state, batches, slots
-    )
-    assert features.shape == (len(slots), agent.config.hidden_dim)
+    features = agent._gather_informed_actions(obs, post_attention, state)
+    assert features.shape == (len(obs.legal_slots), agent.config.hidden_dim)
     # Changing a legal focus changes the action feature; absent focus has no
     # dependence on object row zero (the clamped gather location).
-    changed = {key: value.clone() for key, value in obs.items()}
-    changed["action_focus"].fill_(-1)
-    absent = agent._gather_informed_actions(
-        changed, post_attention, state, batches, slots
-    )
+    changed = replace(obs, focus_mask=torch.zeros_like(obs.focus_mask))
+    absent = agent._gather_informed_actions(changed, post_attention, state)
     mutated = post_attention.clone()
     mutated[:, 0] += 10
     torch.testing.assert_close(
-        absent, agent._gather_informed_actions(changed, mutated, state, batches, slots)
+        absent, agent._gather_informed_actions(changed, mutated, state)
     )
-    changed["action_focus"][batches, slots, 0] = 0
-    focused = agent._gather_informed_actions(changed, mutated, state, batches, slots)
+    focus_mask = changed.focus_mask.clone()
+    focus_mask[:, 0] = 1
+    focus = changed.focus.clone()
+    focus[:, 0] = obs.legal_batches * state.objects.shape[1]
+    changed = replace(changed, focus=focus, focus_mask=focus_mask)
+    focused = agent._gather_informed_actions(changed, mutated, state)
     assert not torch.allclose(absent, focused)
 
 
@@ -267,13 +267,13 @@ def test_focus_object_incorporation(
 # -----------------------------------------------------------------------------
 
 
-def test_action_masking(agent: ActorCritic, real_observation: Dict[str, torch.Tensor]):
+def test_action_masking(agent: ActorCritic, real_observation: Prepared[torch.Tensor]):
     """Verify that action masking properly prevents selection of invalid actions."""
     obs = real_observation
     with torch.no_grad():
         action, _, _, _ = agent.get_action_and_value(obs)
 
-    action_mask = obs["actions_valid"]
+    action_mask = obs.legal
     batch_size = action_mask.shape[0]
     for i in range(batch_size):
         chosen_action = action[i].item()
@@ -288,7 +288,7 @@ def test_action_masking(agent: ActorCritic, real_observation: Dict[str, torch.Te
 
 
 def test_value_estimate_range(
-    agent: ActorCritic, real_observation: Dict[str, torch.Tensor]
+    agent: ActorCritic, real_observation: Prepared[torch.Tensor]
 ):
     """
     Verify that value estimates stay within reasonable bounds.
@@ -304,7 +304,7 @@ def test_value_estimate_range(
 
 
 def test_probability_distribution(
-    agent: ActorCritic, real_observation: Dict[str, torch.Tensor]
+    agent: ActorCritic, real_observation: Prepared[torch.Tensor]
 ):
     """
     Verify that action probabilities form a valid distribution.
@@ -321,7 +321,7 @@ def test_probability_distribution(
         "Probabilities do not sum to 1"
     )
 
-    valid_mask = obs["actions_valid"].bool()
+    valid_mask = obs.legal.bool()
     invalid_mask = ~valid_mask
     if invalid_mask.any():
         assert torch.all(probs[invalid_mask] == 0), (
@@ -337,7 +337,7 @@ def test_policy_head_initial_logits(agent: ActorCritic):
 
 
 def test_attention_stability(
-    agent: ActorCritic, real_observation: Dict[str, torch.Tensor]
+    agent: ActorCritic, real_observation: Prepared[torch.Tensor]
 ) -> None:
     """
     Verify that the attention mechanism produces stable outputs across multiple forward passes.
@@ -362,7 +362,7 @@ def test_attention_stability(
 
 
 def test_policy_output_consistency(
-    agent: ActorCritic, real_observation: Dict[str, torch.Tensor]
+    agent: ActorCritic, real_observation: Prepared[torch.Tensor]
 ):
     """
     Verify consistency between direct forward pass and action sampling interface.
@@ -376,7 +376,7 @@ def test_policy_output_consistency(
     )
 
 
-def test_action_entropy(agent: ActorCritic, real_observation: Dict[str, torch.Tensor]):
+def test_action_entropy(agent: ActorCritic, real_observation: Prepared[torch.Tensor]):
     """
     Verify that action distribution entropy behaves reasonably.
     """
@@ -384,7 +384,7 @@ def test_action_entropy(agent: ActorCritic, real_observation: Dict[str, torch.Te
     with torch.no_grad():
         _, _, entropy, _ = agent.get_action_and_value(obs)
     assert torch.all(entropy >= 0), "Negative entropy found"
-    valid_actions = obs["actions_valid"].sum(dim=-1)
+    valid_actions = obs.legal.sum(dim=-1)
     max_entropy = torch.log(valid_actions)
     assert torch.all(entropy <= max_entropy + 1e-5), (
         "Entropy exceeds theoretical maximum"
@@ -392,7 +392,7 @@ def test_action_entropy(agent: ActorCritic, real_observation: Dict[str, torch.Te
 
 
 def test_categorical_logits(
-    agent: ActorCritic, real_observation: Dict[str, torch.Tensor], monkeypatch
+    agent: ActorCritic, real_observation: Prepared[torch.Tensor], monkeypatch
 ):
     """Action distribution should be built from logits for numerical stability."""
     call_kwargs = {}

@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import torch
 
-from manabot.backends.torch.checkpoint import save_checkpoint
+from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
@@ -18,6 +18,7 @@ from manabot.model.catalog import (
 )
 from manabot.model.world import WORLD
 import managym
+from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
 PACK = "ur-lessons-vs-gw-allies"
 
@@ -39,16 +40,16 @@ def _write_checkpoint(path: Path) -> None:
 
 
 def _rewrite(path: Path, target: Path, **binding: object) -> None:
-    checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+    checkpoint = read_checkpoint(path, map_location="cpu", weights_only=False)
     checkpoint["world_binding"].update(binding)
-    torch.save(checkpoint, target)
+    write_checkpoint(checkpoint, target)
 
 
 def test_current_checkpoint_is_admissible_with_its_identity(tmp_path: Path) -> None:
     path = tmp_path / "run" / "step_0.pt"
     _write_checkpoint(path)
 
-    summary = inspect_checkpoint(path)
+    summary = inspect_checkpoint(path, backend=TORCH_BACKEND)
 
     assert summary.compatible
     assert summary.world == WORLD
@@ -69,18 +70,24 @@ def test_mismatches_are_named(tmp_path: Path) -> None:
         tmp_path / "old-content.pt",
         content_manifest={"content_digest": "0123456789abcdef"},
     )
-    unbound = torch.load(current, map_location="cpu", weights_only=False)
+    unbound = read_checkpoint(current, map_location="cpu", weights_only=False)
     del unbound["world_binding"]
-    torch.save(unbound, tmp_path / "unbound.pt")
+    write_checkpoint(unbound, tmp_path / "unbound.pt")
 
     assert (
-        inspect_checkpoint(tmp_path / "old-world.pt").incompatibility
+        inspect_checkpoint(
+            tmp_path / "old-world.pt", backend=TORCH_BACKEND
+        ).incompatibility
         == f"trained in w5, engine is {WORLD}"
     )
-    content = inspect_checkpoint(tmp_path / "old-content.pt").incompatibility
+    content = inspect_checkpoint(
+        tmp_path / "old-content.pt", backend=TORCH_BACKEND
+    ).incompatibility
     assert content is not None and "trained on content 0123456789ab" in content
     assert (
-        inspect_checkpoint(tmp_path / "unbound.pt").incompatibility
+        inspect_checkpoint(
+            tmp_path / "unbound.pt", backend=TORCH_BACKEND
+        ).incompatibility
         == f"trained without a world binding; engine is {WORLD}"
     )
 
@@ -91,14 +98,14 @@ def test_non_policy_files_are_refused_without_rereading(
     optimizer = tmp_path / "optimizer.pt"
     torch.save({"state": {}}, optimizer)
     with pytest.raises(NotAPolicyCheckpoint):
-        inspect_checkpoint(optimizer)
+        inspect_checkpoint(optimizer, backend=TORCH_BACKEND)
 
     def no_reload(*args: object, **kwargs: object) -> None:
         raise AssertionError("an unchanged refusal is read again")
 
     monkeypatch.setattr(torch, "load", no_reload)
     with pytest.raises(NotAPolicyCheckpoint, match="holds no policy"):
-        inspect_checkpoint(optimizer)
+        inspect_checkpoint(optimizer, backend=TORCH_BACKEND)
 
 
 def test_discovery_reads_runs_paths_and_tournaments(tmp_path: Path) -> None:
@@ -134,7 +141,9 @@ def test_discovery_reads_runs_paths_and_tournaments(tmp_path: Path) -> None:
         )
     )
 
-    found, missing = discover_checkpoints([tournament], runs_dir=runs)
+    found, missing = discover_checkpoints(
+        [tournament], runs_dir=runs, backend=TORCH_BACKEND
+    )
 
     by_label = {summary.label: summary for summary in found}
     assert set(by_label) == {"width 8 entrant", "self-play/step_1"}
