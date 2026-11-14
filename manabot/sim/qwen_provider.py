@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import hashlib
 from importlib.metadata import version
 import json
+import math
 from pathlib import Path
 
 from manabot.sim.policy_provider import runner_identity
@@ -57,7 +58,6 @@ class QwenFactory:
         # Native setup admission belongs to the engine. This adapter consumes
         # its complete text authority rather than a trained tensor layout.
         del setup
-        self.describe()
 
     def load(self, *, seat: int, seed: int) -> QwenSession:
         del seat, seed  # Greedy decoding has no mutable RNG.
@@ -116,7 +116,12 @@ class QwenProvider:
             raise ValueError("Unsupported Qwen device or precision.")
         for key, default in (("max_new_tokens", 32), ("seconds", 30)):
             value = spec.config.get(key, default)
-            if type(value) not in (int, float) or value <= 0:
+            if (
+                type(value) not in (int, float)
+                or not math.isfinite(value)
+                or value <= 0
+                or (key == "max_new_tokens" and type(value) is not int)
+            ):
                 raise ValueError(f"Qwen {key} must be positive.")
         return QwenFactory(spec)
 

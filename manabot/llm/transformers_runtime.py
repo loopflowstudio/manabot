@@ -1,7 +1,8 @@
-"""Pinned, untouched Transformers causal-LM inference for the text harness.
+"""Transformers inference for pinned Hub models and local saved Qwen policies.
 
-Only the worker imports this module. Hub snapshots bind both sets of bytes to
-explicit commit IDs; remote Python code, adapters and training are not enabled.
+TransformersRuntime keeps the text harness's untouched Hub snapshots pinned to
+commits. LocalQwenRuntime loads provider-verified fine-tuned local artifacts in
+process. Both refuse remote Python code; neither performs training.
 """
 
 import platform

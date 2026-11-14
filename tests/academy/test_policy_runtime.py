@@ -181,3 +181,41 @@ def test_factory_cannot_share_a_mutable_session_between_games(
         assert not factory.sessions[0].closed
     finally:
         first.close()
+
+
+def test_completed_independent_game_replays_without_a_provider(
+    registry: PolicyRegistry,
+) -> None:
+    import random
+
+    class RandomSession(IndependentSession):
+        def __init__(self, seat: int, seed: int) -> None:
+            super().__init__(seat)
+            self.rng = random.Random(seed)
+
+        def choose(self, view: PolicyView) -> PolicyDecision:
+            return PolicyDecision(self.rng.choice(view.choices), view.binding)
+
+    class RandomFactory(IndependentFactory):
+        def load(self, *, seat: int, seed: int) -> IndependentSession:
+            session = RandomSession(seat, seed)
+            self.sessions.append(session)
+            return session
+
+    factory = RandomFactory()
+    key = registry.register(factory)
+    created = create_watch(
+        WatchRequest(players=[f"policy:{key}", f"policy:{key}"], seed=42)
+    )
+    for revision in range(2000):
+        if step_watch(created["id"], created["token"], revision)["finished"]:
+            break
+    else:
+        pytest.fail("Independent game did not finish in its decision budget.")
+    assert all(session.closed for session in factory.sessions)
+    server._drop_session(created["id"], "test")
+    set_policy_registry(PolicyRegistry(providers={}))
+    retained = inspect_watch(created["id"], 0, created["token"])
+    assert retained["finished"]
+    assert retained["outputs"]["probabilities"] == []
+    assert retained["identities"][0]["inference"]["runtime"]["id"] == key

@@ -49,10 +49,6 @@ class Opponent:
     def name(self) -> str:
         return self.descriptor.name
 
-    @property
-    def setups(self) -> list[dict[str, Any]]:
-        return self.descriptor.metadata.get("setups", [])
-
     def identity(self) -> dict[str, str]:
         return {
             "name": self.name,

@@ -2,7 +2,7 @@ import { browser } from '$app/environment';
 
 import { sanitizeDeckSelection } from './decks';
 import { rememberRecordCredential } from './records';
-import { checkpointChoice, gameStore } from './game.svelte';
+import { policyChoice, gameStore } from './game.svelte';
 import {
   mergePresentationLabels,
   presentationLabelsFromFrame,
@@ -32,7 +32,7 @@ function applyLaunchSetup(setup: LaunchSetup): void {
   if (decks) { gameStore.setHeroDeck(decks.hero); gameStore.setVillainDeck(decks.villain); }
   gameStore.deckImport = setup.deck_import ?? null;
   gameStore.setDecklists(setup.decklists);
-  if (setup.villain_type === 'checkpoint' && setup.opponent_sha256) gameStore.setOpponentChoice(checkpointChoice(setup.opponent_sha256));
+  if (setup.villain_type === 'policy' && setup.opponent_sha256) gameStore.setOpponentChoice(policyChoice(setup.opponent_sha256));
   else if (setup.villain_type === 'search') gameStore.setOpponentChoice(`search-${setup.villain_sims ?? 64}`);
   else if (setup.villain_type === 'random' || setup.villain_type === 'passive') gameStore.setOpponentChoice(setup.villain_type);
 }
