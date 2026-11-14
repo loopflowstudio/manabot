@@ -61,6 +61,17 @@ No public predecessor exists and no buffer plumbing was replaced. Retain one
 shared validation/encoding path, reset/step outcome writes, chooser buffers,
 Commands, capture semantics and complete native legality. No migration or shim.
 
+## Concept review (2026-11-14)
+
+No design change and no open product choice. One action (a fixed-seat batch
+read), three concepts already published by hand snapshots (slot = list index,
+native seat, game ID/seed/revision boundary) and one recovery rule (discard all
+rows after a failure). Considered and kept: `ObservationRead.slot` duplicates
+the list index that `HandSnapshot` relies on, but it survives a collector's
+mask filter and costs no extra identity owner; the method name follows scalar
+`observation_for_player` rather than `*_into_buffers`, which means the
+registered execution buffers this call must not touch.
+
 ## Checks
 
 - After compress: `CARGO_BUILD_JOBS=2 cargo test --manifest-path managym/Cargo.toml -p managym --lib fixed_seat_observations -- --test-threads 2`: 1 passed (debug).
