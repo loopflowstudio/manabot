@@ -417,7 +417,7 @@ fn typed_card_zones_preserve_wire_order_and_hidden_reassignment() {
     assert_eq!(zones.zone_of(ids[0]), None);
     assert_eq!(zones.zone_of(moved), Some(ZoneType::Graveyard));
     assert_eq!(zones.successor(ids[0]), Some(moved));
-    assert_eq!(zones.generations(), [1, 0, 0, 0]);
+    assert_eq!(zones.generations().collect::<Vec<_>>(), [1, 0, 0, 0]);
 }
 
 /// A physical card retains its identity and printing while its appearances
@@ -670,6 +670,15 @@ fn cr_400_7_outside_card_is_in_no_zone_until_it_enters_the_game() {
         400_714,
     );
     assert_eq!(s.game().state.cards.len(), 83);
+    // Recorded zone bytes list slots up to the highest one ever in a zone:
+    // the untouched sideboard is absent until a card of it enters.
+    let recorded_zones = |s: &Scenario| {
+        serde_json::to_value(&s.game().state.zones).unwrap()["card_zones"]
+            .as_array()
+            .unwrap()
+            .len()
+    };
+    assert_eq!(recorded_zones(&s), 80);
     let card = s.game().state.players[0].sideboard[0];
     let physical = s.game().state.cards[card];
     assert_eq!(physical.owner, PlayerId(0));
@@ -681,6 +690,7 @@ fn cr_400_7_outside_card_is_in_no_zone_until_it_enters_the_game() {
         PlayerId(1)
     );
     let appearance = s.game_mut().move_object(outside, ZoneType::Hand);
+    assert_eq!(recorded_zones(&s), 81);
     assert_eq!(s.game().state.object_of(card), appearance);
     assert_eq!(s.game().state.card_of(appearance), Some(card));
     assert_eq!(s.game().state.cards[card], physical);

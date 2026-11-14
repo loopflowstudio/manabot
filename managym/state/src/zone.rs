@@ -44,6 +44,7 @@ impl CardZoneEntry {
         }
     }
 
+    #[inline]
     fn object(&self) -> &ObjectId {
         &self.object
     }
@@ -64,6 +65,7 @@ pub struct ZoneObjects<'a> {
 }
 
 impl<'a> ZoneObjects<'a> {
+    #[inline]
     pub fn iter(self) -> impl DoubleEndedIterator<Item = &'a ObjectId> + Clone {
         self.entries
             .iter()
@@ -72,6 +74,7 @@ impl<'a> ZoneObjects<'a> {
     }
 
     /// Read stored checked ids in card zones; narrow mixed zones once here.
+    #[inline]
     pub fn cards(self, objects: &'a ObjectVec<Object>) -> impl Iterator<Item = CardId> + 'a {
         self.entries.iter().filter_map(|entry| entry.card).chain(
             self.objects
@@ -80,18 +83,22 @@ impl<'a> ZoneObjects<'a> {
         )
     }
 
+    #[inline]
     pub fn len(self) -> usize {
         self.entries.len() + self.objects.len()
     }
 
+    #[inline]
     pub fn is_empty(self) -> bool {
         self.len() == 0
     }
 
+    #[inline]
     pub fn contains(self, object: ObjectId) -> bool {
         self.iter().any(|candidate| *candidate == object)
     }
 
+    #[inline]
     pub fn last(self) -> Option<&'a ObjectId> {
         self.iter().next_back()
     }
@@ -103,6 +110,7 @@ impl<'a> ZoneObjects<'a> {
 
 impl std::ops::Index<usize> for ZoneObjects<'_> {
     type Output = ObjectId;
+    #[inline]
     fn index(&self, index: usize) -> &ObjectId {
         if self.entries.is_empty() {
             &self.objects[index]
@@ -127,13 +135,43 @@ pub struct ZoneManager {
     stack: [Vec<ObjectId>; 2],
     exile: [Vec<ObjectId>; 2],
     command: [Vec<ObjectId>; 2],
-    /// Each slot's zone, if its current appearance is in one.
+    /// Each slot's current generation and zone, read together by every
+    /// checked lookup. The zone manager is the one owner of which appearance
+    /// a slot holds (CR 400.7); the record serializes only the zones, and the
+    /// state hash records the generations beside them.
     #[serde(rename = "card_zones")]
-    object_zones: Vec<Option<ZoneType>>,
-    /// Each slot's current generation: the one owner of which appearance a
-    /// slot holds (CR 400.7). The state hash records it beside the zones.
-    #[serde(skip)]
-    generations: Vec<u32>,
+    slots: SlotTable,
+}
+
+/// Every allocated slot's state. `placed` is one past the highest slot ever
+/// moved or placed into a zone: the recorded `card_zones` list stops there,
+/// so slots allocated but never in a zone (an untouched sideboard) are not
+/// written, as when that list grew on placement.
+#[derive(Clone, Debug, Default)]
+struct SlotTable {
+    states: Vec<SlotState>,
+    placed: usize,
+}
+
+impl SlotTable {
+    /// Record `slot`'s zone after a move or placement.
+    fn place(&mut self, slot: usize, zone: ZoneType) {
+        self.states[slot].zone = Some(zone);
+        self.placed = self.placed.max(slot + 1);
+    }
+}
+
+impl serde::Serialize for SlotTable {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_seq(self.states[..self.placed].iter().map(|slot| slot.zone))
+    }
+}
+
+/// One slot's current appearance: its generation, and its zone if it is in one.
+#[derive(Clone, Copy, Debug, Default)]
+struct SlotState {
+    generation: u32,
+    zone: Option<ZoneType>,
 }
 
 impl ZoneManager {
@@ -146,52 +184,67 @@ impl ZoneManager {
 
     /// Allocate the next slot for a new card, token or copy, in no zone.
     pub fn allocate(&mut self) -> ObjectId {
-        let slot = self.generations.len();
-        self.generations.push(0);
-        self.object_zones.push(None);
+        let slot = self.slots.states.len();
+        self.slots.states.push(SlotState::default());
         ObjectId::in_slot(slot, 0)
     }
 
     /// The appearance each slot holds now, in creation order, whether or
     /// not it is in a zone.
     pub fn latest(&self) -> impl Iterator<Item = ObjectId> + '_ {
-        self.generations
+        self.slots
+            .states
             .iter()
             .enumerate()
-            .map(|(slot, generation)| ObjectId::in_slot(slot, *generation))
+            .map(|(slot, state)| ObjectId::in_slot(slot, state.generation))
     }
 
     /// Every slot's current generation, in slot order.
-    pub fn generations(&self) -> &[u32] {
-        &self.generations
+    pub fn generations(&self) -> impl Iterator<Item = u32> + '_ {
+        self.slots.states.iter().map(|slot| slot.generation)
+    }
+
+    /// The generation `slot` holds now; `None` for a slot never allocated.
+    #[inline]
+    pub fn generation(&self, slot: usize) -> Option<u32> {
+        self.slots.states.get(slot).map(|state| state.generation)
     }
 
     /// Whether `object` is the appearance its slot holds now. An object in
     /// no zone (a sideboard card, a token not yet created, or one that ceased
     /// to exist) is still the slot's latest; see [`ZoneManager::zone_of`] for
     /// existence.
+    #[inline]
     pub fn is_latest(&self, object: ObjectId) -> bool {
-        self.generations.get(object.slot()) == Some(&object.generation())
+        self.slots
+            .states
+            .get(object.slot())
+            .is_some_and(|slot| slot.generation == object.generation())
     }
 
     /// The zone holding this exact appearance; `None` once it has moved.
+    #[inline]
     pub fn zone_of(&self, object: ObjectId) -> Option<ZoneType> {
-        self.is_latest(object)
-            .then(|| self.object_zones[object.slot()])
-            .flatten()
+        self.slots
+            .states
+            .get(object.slot())
+            .filter(|slot| slot.generation == object.generation())
+            .and_then(|slot| slot.zone)
     }
 
     /// The object `object` became by its one next zone change, while that
     /// successor is still in a zone (CR 400.7e, j).
+    #[inline]
     pub fn successor(&self, object: ObjectId) -> Option<ObjectId> {
         let next = ObjectId::in_slot(object.slot(), object.generation().checked_add(1)?);
         self.zone_of(next).map(|_| next)
     }
 
     /// The appearance of a physical card its slot holds now, in a zone or not.
+    #[inline]
     pub fn object_of(&self, card: CardId) -> ObjectId {
         let slot = card.index();
-        ObjectId::in_slot(slot, self.generations[slot])
+        ObjectId::in_slot(slot, self.slots.states[slot].generation)
     }
 
     fn remove_from_zone(&mut self, object: ObjectId, zone: ZoneType) {
@@ -209,7 +262,7 @@ impl ZoneManager {
     pub fn remove_object(&mut self, object: ObjectId) {
         if let Some(zone) = self.zone_of(object) {
             self.remove_from_zone(object, zone);
-            self.object_zones[object.slot()] = None;
+            self.slots.states[object.slot()].zone = None;
         }
     }
 
@@ -231,7 +284,7 @@ impl ZoneManager {
         let mut moved = object;
         if let Some(old_zone) = self.zone_of(object) {
             self.remove_from_zone(object, old_zone);
-            let generation = &mut self.generations[slot];
+            let generation = &mut self.slots.states[slot].generation;
             *generation = generation
                 .checked_add(1)
                 .expect("object generation overflow");
@@ -241,7 +294,7 @@ impl ZoneManager {
             ZoneStore::Cards(entries) => entries.push(CardZoneEntry::new(objects, moved)),
             ZoneStore::Objects(zone) => zone.push(moved),
         }
-        self.object_zones[slot] = Some(to_zone);
+        self.slots.place(slot, to_zone);
         moved
     }
 
@@ -262,21 +315,25 @@ impl ZoneManager {
             ZoneStore::Cards(entries) => entries.push(CardZoneEntry::new(objects, object)),
             ZoneStore::Objects(objects) => objects.push(object),
         }
-        self.object_zones[object.slot()] = Some(zone);
+        self.slots.place(object.slot(), zone);
     }
 
+    #[inline]
     pub fn top(&self, zone: ZoneType, player: PlayerId) -> Option<ObjectId> {
         self.zone_objects(zone, player).last().copied()
     }
 
+    #[inline]
     pub fn contains(&self, object: ObjectId, zone: ZoneType, player: PlayerId) -> bool {
         self.zone_objects(zone, player).contains(object)
     }
 
+    #[inline]
     pub fn size(&self, zone: ZoneType, player: PlayerId) -> usize {
         self.zone_objects(zone, player).len()
     }
 
+    #[inline]
     pub fn zone_objects(&self, zone: ZoneType, player: PlayerId) -> ZoneObjects<'_> {
         let idx = player.0;
         let mut view = ZoneObjects {
@@ -374,12 +431,12 @@ impl ZoneManager {
         {
             *slot = new;
         }
-        self.object_zones[new.slot()] = Some(ZoneType::Exile);
-        self.object_zones[old.slot()] = None;
+        self.slots.states[new.slot()].zone = Some(ZoneType::Exile);
+        self.slots.states[old.slot()].zone = None;
     }
 
     /// Reassign `player`'s hand and library to exactly `new_hand` and
-    /// `new_library`, updating `object_zones` for every object. Used by exact
+    /// `new_library`, updating every object's slot zone. Used by exact
     /// possible-world materialization: the caller chooses which physical
     /// cards land in which hidden zone, so the resulting branch is a valid
     /// authoritative state rather than a uniform sample. The union of
@@ -393,10 +450,10 @@ impl ZoneManager {
     ) {
         let idx = player.0;
         for &object in &new_hand {
-            self.object_zones[object.slot()] = Some(ZoneType::Hand);
+            self.slots.states[object.slot()].zone = Some(ZoneType::Hand);
         }
         for &object in &new_library {
-            self.object_zones[object.slot()] = Some(ZoneType::Library);
+            self.slots.states[object.slot()].zone = Some(ZoneType::Library);
         }
         self.hand[idx] = new_hand
             .into_iter()

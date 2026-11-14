@@ -161,7 +161,7 @@ struct CanonicalMatchState<'a> {
     permanents: &'a PermanentVec<Option<crate::state::permanent::Permanent>>,
     #[serde(rename = "card_to_permanent")]
     object_to_permanent: &'a ObjectVec<Option<PermanentId>>,
-    object_incarnations: &'a [u32],
+    object_incarnations: Vec<u32>,
     #[serde(serialize_with = "crate::state::game_object::exact")]
     object_lki: Vec<(ObjectId, ObjectLki)>,
     players: &'a [crate::state::player::Player; 2],
@@ -252,7 +252,7 @@ impl<'a> CanonicalMatchState<'a> {
             objects,
             permanents,
             object_to_permanent,
-            object_incarnations: zones.generations(),
+            object_incarnations: zones.generations().collect(),
             object_lki,
             players,
             zones,

@@ -1024,9 +1024,8 @@ impl Game {
             || self
                 .state
                 .zones
-                .generations()
-                .get(object_ref.slot())
-                .is_some_and(|current| object_ref.generation() < *current)
+                .generation(object_ref.slot())
+                .is_some_and(|current| object_ref.generation() < current)
     }
 
     fn collect_replacements(&self, event: &ProposedEvent) -> Vec<ReplacementCandidate> {

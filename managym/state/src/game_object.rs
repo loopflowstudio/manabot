@@ -34,6 +34,7 @@ impl ObjectId {
     /// Storage only: the object store and zone manager name the appearance
     /// they hold. Rules code takes ids from the game, never from numbers.
     #[doc(hidden)]
+    #[inline]
     pub(crate) fn in_slot(slot: usize, generation: u32) -> Self {
         Self {
             slot: u32::try_from(slot).expect("object store exceeds u32"),
@@ -43,11 +44,13 @@ impl ObjectId {
 
     /// Storage row, for the stores, the state hash and viewer captures.
     #[doc(hidden)]
+    #[inline]
     pub fn slot(self) -> usize {
         self.slot as usize
     }
 
     /// How many zone changes preceded this appearance in its slot.
+    #[inline]
     pub fn generation(self) -> u32 {
         self.generation
     }
@@ -192,6 +195,7 @@ pub fn serialize_frame_source<S: serde::Serializer>(
 pub struct CardId(NonZeroU32);
 
 impl CardId {
+    #[inline]
     fn from_index(index: usize) -> Self {
         let one_based = u32::try_from(index)
             .ok()
@@ -202,6 +206,7 @@ impl CardId {
     }
 
     /// Zero-based roster position, which is also the card's storage slot.
+    #[inline]
     pub(crate) fn index(self) -> usize {
         (self.0.get() - 1) as usize
     }
@@ -256,6 +261,7 @@ impl CardVec {
 impl std::ops::Index<CardId> for CardVec {
     type Output = Card;
 
+    #[inline]
     fn index(&self, card: CardId) -> &Card {
         &self.0[card.index()]
     }
@@ -438,6 +444,7 @@ impl ObjectVec<Object> {
     }
 
     /// Narrow a storage id once; missing rows, tokens and spell copies are not cards.
+    #[inline]
     pub fn card_id(&self, object: ObjectId) -> Option<CardId> {
         self.get(object.slot())
             .filter(|value| value.is_card())
@@ -660,12 +667,14 @@ impl Object {
         }
     }
 
+    #[inline]
     pub fn kind(&self) -> ObjectKind {
         self.kind
     }
 
     /// Whether it is a Magic card (CR 108.2): not a token or a copy. Effects
     /// that say "card" see only these.
+    #[inline]
     pub fn is_card(&self) -> bool {
         self.kind == ObjectKind::Card
     }
