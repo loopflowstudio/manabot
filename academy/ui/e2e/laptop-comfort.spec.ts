@@ -722,7 +722,7 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900
         config: { hero_deck: {}, villain_deck: {}, villain_type: 'checkpoint',
           opponent: table.opponent, opponent_checkpoint: { source: 'runs', world: 'w6', model: 'Transformer', step: 8 } },
         players: [{ seat: 0, name: humanName, kind: 'human', player_id: 'human', deck: 'ur_lessons', version: null },
-          { seat: 1, name: checkpointName, kind: 'bot', player_id: 'bot', deck: 'gw_allies', version: checkpointDigest }],
+          { seat: 1, name: checkpointName, kind: 'bot', player_id: `checkpoint:${checkpointDigest}`, deck: 'gw_allies', version: checkpointDigest }],
         events: [], final_observation: frame.projection, winner: null, end_reason: 'active', timestamp: '2026-11-14T00:00:00Z',
       } }));
       await page.goto('/replay?trace=identity-human');

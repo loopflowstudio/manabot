@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { playerIdentity } from '$lib/player-identity';
+  import { playerIdentity, recordedIdentity, shortHash } from '$lib/player-identity';
   import PlayerName from '$lib/components/PlayerName.svelte';
   import { onMount } from 'svelte';
   import { page } from '$app/state';
@@ -79,7 +79,7 @@
     if (game.status !== 'completed') return { active: 'In progress', stopped: 'Stopped', interrupted: 'Interrupted' }[game.status];
     if (game.winner === null) return 'Draw';
     const winner = game.players.find((p) => p.seat === game.winner);
-    return `${winner ? playerIdentity(winner).text : `Seat ${game.winner + 1}`} won`;
+    return `${winner ? recordedIdentity(winner).text : `Seat ${game.winner + 1}`} won`;
   }
 
   async function saveName(event: SubmitEvent): Promise<void> {
@@ -145,7 +145,7 @@
               <select name={key} value={page.url.searchParams.get(key) ?? ''} class="rounded border border-line bg-field p-2">
                 <option value="">Any player</option>
                 {#if page.url.searchParams.get(key) && !participantOptions.some((p) => p.player_id === page.url.searchParams.get(key))}<option value={page.url.searchParams.get(key)!}>Selected player</option>{/if}
-                {#each participantOptions as p}<option value={p.player_id}>{playerIdentity({ ...p, version: null }).compact} · {p.kind} · {p.player_id.slice(-6)}</option>{/each}
+                {#each participantOptions as p}<option value={p.player_id}>{playerIdentity(p).compact} · {p.kind} · {p.player_id.slice(-6)}</option>{/each}
               </select>
             </label>
           {/each}
@@ -153,7 +153,7 @@
             <select name="version" value={page.url.searchParams.get('version') ?? ''} class="rounded border border-line bg-field p-2">
               <option value="">All versions</option>
               {#if page.url.searchParams.get('version') && !games.some((g) => g.players.some((p) => p.version === page.url.searchParams.get('version')))}<option value={page.url.searchParams.get('version')!}>Selected version</option>{/if}
-              {#each [...new Map(games.flatMap((g) => g.players).filter((p) => p.version).map((p) => [p.version!, p])).values()] as p}<option value={p.version!}>{playerIdentity(p).text}</option>{/each}
+              {#each [...new Map(games.flatMap((g) => g.players).filter((p) => p.version).map((p) => [p.version!, p])).values()] as p}<option value={p.version!}>{recordedIdentity(p).compact} · {shortHash(p.version!)}</option>{/each}
             </select>
           </label>
           <label class="flex flex-col gap-1">Deck<select name="deck" value={page.url.searchParams.get('deck') ?? ''} class="rounded border border-line bg-field p-2"><option value="">Any deck</option><option value="ur_lessons">UR Lessons</option><option value="gw_allies">GW Allies</option><option value="interactive">Interactive</option><option value="custom">Custom</option></select></label>
@@ -188,9 +188,9 @@
                 {@const player = game.players.find((p) => p.seat === seat)}
                 <td class="p-4 [overflow-wrap:anywhere]">
                   {#if player}
-                    <a href={filterUrl('player', player.player_id)} class="font-semibold underline decoration-line underline-offset-4"><PlayerName identity={playerIdentity(player)} /></a>
+                    <a href={filterUrl('player', player.player_id)} class="font-semibold underline decoration-line underline-offset-4"><PlayerName identity={recordedIdentity(player)} chip={false} /></a>
                     <div class="mt-1 text-sm text-ink-2">{player.kind === 'human' ? 'Human' : 'Bot'} · {player.deck.replaceAll('_', ' ')}</div>
-                    {#if player.version}<a href={filterUrl('version', player.version)} title={player.version} class="mt-1 block font-mono text-xs underline">{player.version.slice(0, 10)}</a>{/if}
+                    {#if player.version}<a href={filterUrl('version', player.version)} title={player.version} class="mt-1 block font-mono text-xs underline">{shortHash(player.version)}</a>{/if}
                     {#if page.url.searchParams.has('player') && page.url.searchParams.get('player') !== player.player_id}<a class="mt-1 block text-xs underline" href={filterUrl('other', player.player_id)}>Filter this pairing</a>{/if}
                   {:else}<span class="text-ink-2">Unknown player</span>{/if}
                 </td>

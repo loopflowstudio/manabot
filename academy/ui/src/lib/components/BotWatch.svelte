@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { replaceState } from '$app/navigation';
-  import { playerIdentity, type PlayerIdentity } from '$lib/player-identity';
+  import { playerIdentity, recordedIdentity, type PlayerIdentity } from '$lib/player-identity';
   import PlayerName from './PlayerName.svelte';
   import GameBoard from './GameBoard.svelte';
   import PresentationHistory from './PresentationHistory.svelte';
@@ -217,7 +217,7 @@
   }
   function watchIdentity(seat: number): PlayerIdentity {
     const recorded = current?.identities.find(player => player.seat === seat);
-    return playerIdentity(recorded ?? { name: `Seat ${seat + 1} · ${current?.players[seat] ?? 'Bot'}` });
+    return recorded ? recordedIdentity(recorded) : playerIdentity({ name: `Seat ${seat + 1} · ${current?.players[seat] ?? 'Bot'}` });
   }
 </script>
 
@@ -274,7 +274,7 @@
         <GameBoard {presentationPlayer} observation={branch ?? restored?.frame.projection ?? current.observation} heroIdentity={watchIdentity(current.decision.viewer)} villainIdentity={watchIdentity(1 - current.decision.viewer)} />
         <aside class="border-l border-line pl-5">
           {#each current.identities as identity}
-            <p class="type-caption text-ink-2">Seat {identity.seat + 1}: <PlayerName identity={playerIdentity(identity)} /></p>
+            <p class="type-caption text-ink-2">Seat {identity.seat + 1}: <PlayerName identity={recordedIdentity(identity)} /></p>
           {/each}
           {#if current.revealed && !restored}<p class="type-rubric text-mountain-ink">Both hands · spectator view</p>{/if}
           {#if branch}<DecisionContext observation={branch} actor={branch.decision_context?.actor ?? null} />{/if}

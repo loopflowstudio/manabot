@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { playerIdentity } from './player-identity';
+import { playerIdentity, recordedIdentity } from './player-identity';
 
 it('shortens only path-shaped bot names and retains exact provenance', () => {
   const name = 'ci-fix-528/consumer/release-smoke/checkpoints/learner_transitions-8';
@@ -21,8 +21,17 @@ it('keeps human names whole and missing versions absent', () => {
 });
 
 it('distinguishes checkpoints with the same compact name by recorded version', () => {
-  const first = playerIdentity({ name: 'run/one/model', kind: 'bot', version: 'a'.repeat(64) });
-  const second = playerIdentity({ name: 'run/two/model', kind: 'bot', version: 'b'.repeat(64) });
+  const first = recordedIdentity({ name: 'run/one/model', kind: 'bot', player_id: 'checkpoint:a', version: 'a'.repeat(64) });
+  const second = recordedIdentity({ name: 'run/two/model', kind: 'bot', player_id: 'checkpoint:b', version: 'b'.repeat(64) });
   expect(first.compact).toBe(second.compact);
   expect(first.text).not.toBe(second.text);
+});
+
+it('treats a control bot version as settings, not a digest', () => {
+  const search = recordedIdentity({ name: 'Search', kind: 'bot', player_id: 'control:search',
+    version: 'c'.repeat(64), inference: { policy: 'search' } });
+  expect(search).toMatchObject({ digest: null, shortDigest: null, text: 'Search' });
+  const checkpoint = recordedIdentity({ name: 'run/x/model', kind: 'bot', player_id: 'p',
+    version: 'd'.repeat(64), inference: { policy: 'checkpoint' } });
+  expect(checkpoint.shortDigest).toBe('dddddddddd');
 });

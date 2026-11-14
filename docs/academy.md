@@ -735,7 +735,8 @@ this way; one too long for its line ends in an ellipsis.
 The digest is what tells two checkpoints apart. Two files from one run can
 share a short name, and the same file listed from two directories has two
 names and one digest, so the short digest always accompanies a trained
-opponent's name.
+opponent's name. Random, Search and other control bots load no checkpoint and show
+no digest.
 
 For the full identity, open **status and mana** on that player's bar, by mouse
 or with Tab and Enter. It lists the full recorded name, the full SHA-256 as

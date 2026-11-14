@@ -153,6 +153,7 @@
 
 <section class="player-area" class:empty-battlefield={opponent && player.battlefield.length === 0} aria-label={`${label}${deckName ? ` — ${deckName}` : ''}`}>
   <details class="player-status type-caption"><summary>{label} status and mana</summary>
+  {#if identity.digest || identity.producer || identity.full !== identity.compact}
   <div class="identity-details" data-testid="player-identity">
     <p>{identity.full}</p>
     {#if identity.digest}<p>SHA-256: {identity.digest}</p>{/if}
@@ -163,6 +164,7 @@
       {/if}
     {/each}
   </div>
+  {/if}
   {#if player.mana}
     <p class="type-caption py-1" data-testid="mana-pool">{label} mana: {manaText(player.mana)}
       {#if player.restricted_mana?.length}

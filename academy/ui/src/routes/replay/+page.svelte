@@ -7,7 +7,7 @@
   import Feedback from '$lib/components/Feedback.svelte';
   import { tick, untrack } from 'svelte';
 
-  import { playerIdentity } from '$lib/player-identity';
+  import { playerIdentity, recordedIdentity, type PlayerIdentity } from '$lib/player-identity';
   import GameBoard from '$lib/components/GameBoard.svelte';
   import DecisionSurface from '$lib/components/DecisionSurface.svelte';
   import { offerFocus } from '$lib/offer-map';
@@ -462,6 +462,15 @@
     saveNotes();
     editingNote = null;
   }
+  /** A seat's recorded identity, or the configured fallback when the trace predates recorded players. */
+  function recordedOrNamed(
+    seat: number,
+    fallback: Parameters<typeof playerIdentity>[0],
+    extra: { producer?: string; provenance?: Record<string, unknown> } = {},
+  ): PlayerIdentity {
+    const recorded = replayStore.trace?.players?.find(p => p.seat === seat);
+    return recorded ? recordedIdentity(recorded, extra) : playerIdentity({ ...fallback, ...extra });
+  }
 </script>
 
 {#if page.url.searchParams.has('watch')}
@@ -680,13 +689,12 @@
             <div class="mt-3 border-t border-line">
               {#if boardObservation}
                 <GameBoard
-                  heroIdentity={playerIdentity(replayStore.trace.players?.find(p => p.seat === 0) ?? { name: 'Hero' })}
-                  villainIdentity={playerIdentity({
-                    ...(replayStore.trace.players?.find(p => p.seat === 1) ?? {
-                      name: replayStore.trace.config.opponent?.name ?? 'Opponent',
-                      kind: replayStore.trace.config.opponent ? 'bot' : undefined,
-                      version: replayStore.trace.config.opponent?.sha256,
-                    }),
+                  heroIdentity={recordedOrNamed(0, { name: 'Hero' })}
+                  villainIdentity={recordedOrNamed(1, {
+                    name: replayStore.trace.config.opponent?.name ?? 'Opponent',
+                    kind: replayStore.trace.config.opponent ? 'bot' : undefined,
+                    digest: replayStore.trace.config.opponent?.sha256,
+                  }, {
                     producer: replayStore.trace.config.opponent?.producer,
                     provenance: replayStore.trace.config.opponent_checkpoint ?? undefined,
                   })}
