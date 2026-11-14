@@ -64,6 +64,7 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
     assert found == {
         "batch_closure",
         "bf16_behavior_logs",
+        "decision_shapes",
         "elemental",
         "elemental_closure",
         "elemental_lambda",
