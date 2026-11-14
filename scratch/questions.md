@@ -93,3 +93,9 @@ frozen pilot or its launcher database.
 - All-payment aggregation (2026-11-13): keep the new derived summary local and
   reproducible through `summary --all-payments`; retain its tables in the report
   without modifying the published artifact manifest. No new games are needed.
+
+- Concept review at `509878be2f`: merging the recommended decision into the
+  existing `PayOrNot` payment decision is taken as implied by the report's own
+  "no separate entry step", not as a new product choice. The overlap is priced
+  from published rows as an upper bound; no rerun to learn whether each
+  activation was actually offered.

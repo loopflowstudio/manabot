@@ -15,7 +15,10 @@ text, launch notes and per-slice checks are in git `78397f2042` and before
 (`ce074e9d37` for the first concept review).
 
 The report-scope slice from concept review `59c82bc2be` is complete.
-Remaining: gate/review and the caller's delivery steps. No PR created here.
+Next implement slice, report and read-only aggregation only: name the payment
+decision the engine already has and price its overlap (section "The payment
+decision already exists"). Then gate/review and the caller's delivery steps.
+No PR created here.
 
 ## Demo and done when
 
@@ -29,8 +32,9 @@ run logistics sit in a collapsed appendix. Headless:
 Done when the report recommends that single decision with D's costs, names no
 entry step as part of the design, and every number it quotes is one already in
 its tables; the design says which payments it covers and prices the ones that
-are not casts; and the Forest illustration says which review question its
-two-offer menu depends on. Since `caa15caca4` the branch changes only the
+are not casts; the Forest illustration says which review question its
+two-offer menu depends on; and the design names today's payment decision as the
+one it extends, with the decisions D double-counts there priced. Since `caa15caca4` the branch changes only the
 report, `scratch/` and the read-only `summary --all-payments` aggregation in
 `experiments/mana_spending.py`. Published evidence and its manifest stay
 unchanged.
@@ -137,6 +141,49 @@ the recommendation; the figures are under the open choices below.
 The review's 9 Elemental / 2 TLA non-cast prompts count payment boundaries; the
 rows hold 10 / 3 per-unit decisions across them, and the report gives both.
 
+## The payment decision already exists (concept review `509878be2f`)
+
+The report presents the recommended decision as new and says "Existing explicit
+mana-ability decisions stay at their native boundaries". The engine already
+asks at a payment: `PendingChoice::ManaPayment` (`flow/play.rs`,
+`pending_choice_action_space` in `flow/action.rs`) and resolution
+`Decision::Payment` (`flow/decision.rs`) publish kind `PayOrNot` with one
+`ActivateAbility` per activatable mana ability plus `PayCost`, which runs the
+automatic payer; Waterbend adds its taps and a resolution payment may add
+`Decline`. It is shown only when a mana ability can be activated; otherwise
+the payment commits at once.
+
+Read literally, the report's design puts its outcome decision after that one:
+activate-or-`PayCost`, then "automatic plan or another outcome". That is the
+separate entry step the design rejects, at every payment with an activatable
+source. The design implies one decision instead:
+
+- **`PayCost` is the automatic-plan offer.** The recommended decision is
+  today's payment decision, shown whenever its offers differ rather than only
+  when a mana ability is activatable. The other outcomes are sibling offers
+  beside the activations, Waterbend taps and `Decline`; they are recomputed
+  each time the decision returns after an activation, as `PayCost` is today.
+  "Payment-outcome decision" is not a second concept or a new decision kind.
+- **D double-counts there.** D adds one decision per multi-outcome payment to
+  a trajectory that already contains the `PayOrNot` decision. From the
+  published paired rows (2026-11-13, at `509878be2f`), payments with an
+  activated source still present at commit and at least two non-redundant
+  capability outcomes, certified / including capped: Elemental heuristic
+  149 / 154, random 28 / 28; TLA heuristic 320 / 330, random 99 / 99; Heartbeat
+  none. Per game 1.86, 0.35, 4.00, 1.24 (80 games each), against D's
+  all-payment additions of 13.5, 24.8, 12.9, 24.1. The capture records that a
+  source has abilities, not that an activation was offered, so these bound the
+  saving from above; say so.
+
+Direction for the report: in "Recommended design", state the existing decision
+and that the design extends it; replace the "stay at their native boundaries"
+sentence; add the overlap column or sentence with the merged lower bound beside
+D's all-payment figures, keeping published D numbers as they are (they are the
+measured counting rule). Compute the overlap inside `summary --all-payments`
+from `activated_sources`, not by hand. How grouped outcomes sit beside
+activations is for the implementing Task. No games, native code or published
+bytes change.
+
 ## Open product choices (nobody has answered; they do not block this Task)
 
 1. Deliberate surplus tapping: not offered, a priority action, or in the
@@ -179,6 +226,10 @@ Realign at `65fb0de8f0` (2026-11-13): rerunning `summary --all-payments`
 reproduced `all-payments-summary.json` byte-identically (SHA256 `cb66eb31…`);
 its rows give the report's 2.9–11.8%, exact max 28 and 655 identity >64;
 the two focused test files pass (6). Nothing to correct.
+
+For the existing-decision slice: the overlap figures in the report equal the
+derived summary; without `payment_scopes` the output still equals published
+`summary.json` byte-for-byte; the two focused test files pass.
 
 If native code changes again: debug `flow::mana` tests
 (`CARGO_BUILD_JOBS=2 cargo test --manifest-path managym/Cargo.toml -p managym --lib flow::mana -- --test-threads 2`,
