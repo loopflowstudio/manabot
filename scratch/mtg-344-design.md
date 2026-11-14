@@ -187,3 +187,15 @@ Native v9, v10 and v10 + history v1 encodings (C=128), every buffer, over
 at origin/main 452d7b5357 and on this branch with `InputLayout::Legacy`
 are identical — v9 `316c3c20…`, v10 `aa8d499b…`, v10h `fccaf565…`; 0 errors.
 Tool: a throwaway `examples/legacy_digest.rs` built in both trees (not kept).
+
+### Costs measured (2026-11-14, laptop, M-series)
+
+- Native `encode_into`, 6,935 curated observations, C=128, release, median /
+  p90 µs: origin/main v10 5.88 / 8.42; v11 6.29 / 8.92; legacy fork v10
+  13.04 / 20.29 (`legacy_input::view` clones the observation).
+- Python-side `encode_observation_into` ≈109 µs for both layouts (PyO3
+  conversion dominates). CPU torch forward, recipe model, batch 256, 4
+  threads: v10 95.7 ms, v11 86.9 ms (10 repeats; noisy).
+- Elemental rows over 8,507 observations (40 random games): per-side card
+  rows p99 43 → 31 (max 48 → 44, sideboard dominated); permanents max 25;
+  stack rows p99 1 → 3 (abilities now rows), max 5.
