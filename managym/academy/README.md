@@ -158,7 +158,8 @@ Expired roots remain unavailable rather than being reconstructed from the screen
 
 After resolving a spell, open **History and settings** to read its recorded
 consequences by turn. Earlier/later pages and **Latest** let you read older
-events without being pulled away by incoming rows. Narration can be paused,
+events without being pulled away by incoming or recovered rows. Gaps appear
+inline and turn context stays unknown until the next recorded turn change. Narration can be paused,
 accelerated or skipped while the pending choice remains usable. Reloaded active
 games label unavailable earlier history; older recordings without event data say
 **Consequences not recorded**. See

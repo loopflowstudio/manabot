@@ -466,7 +466,13 @@ controls to browse up to 100 events at a time; the counts describe the available
 history. Scroll back to read an earlier event: incoming events leave your reading
 position and keyboard focus in place and increase the unread count. **Latest**
 returns to the newest page and resumes following events while you stay near the
-bottom. Browsing an older page also stops following.
+bottom. Browsing an older page also stops following. Recovered older events also count
+as unread and leave the event you are reading at the same position. Unavailable
+intervals appear where they occur; the turn after a gap stays unknown until a
+recorded turn change. Seeking before the event you are reading moves to the
+nearest earlier available event (or the first available event). A removed
+inspection closes and returns focus to history. Switching match, viewer or Study
+scope starts at Latest with a fresh unread count.
 
 When a consequence offers inspection of a card still available in your permitted
 view, select that subject to inspect the exact object without making a move.

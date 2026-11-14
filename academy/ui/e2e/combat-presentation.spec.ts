@@ -536,3 +536,139 @@ test('player damage emphasizes its exact subject while choices stay focused', as
   await page.clock.runFor(1000);
   await expect(page.locator('[data-player-id="0"]')).not.toHaveAttribute('data-narrated-seq');
 });
+
+test('partial history recovery preserves event pixels, focus and recovered unread identities', async ({ page }) => {
+  const events: PresentationEvent[] = Array.from({ length: 105 }, (_, index) => ({
+    ...structuredClone(combatSequence.events[0]) as PresentationEvent,
+    seq: 900 + index, from_revision: 8, to_revision: 9, suggested_ms: 80,
+  }));
+  events[0].kind = { kind: 'turn_started', player: 0, turn_number: 1 };
+  events[50].kind = { kind: 'turn_started', player: 0, turn_number: 2 };
+  let recover = (_events: PresentationEvent[], _match = 'combat-prompt-proof'): void => { throw new Error('Not connected'); };
+  await page.routeWebSocket('**/ws/play', socket => {
+    recover = (tail, match = 'combat-prompt-proof') => {
+      const frame = frameAt('attack');
+      frame.match_id = match;
+      if (match === 'different-viewer-scope') frame.projection.opponent.battlefield[0].name = 'Scope-only name';
+      socket.send(JSON.stringify({ type: 'observation', data: frame.projection, actions: [],
+        session_id: 'partial-history', resume_token: 'partial-history', recovery: {
+          ...structuredClone(boltFixture.recovery), frame, presentation_tail: tail, presentation_cursor: tail[0]?.seq ?? 0,
+        },
+      }));
+    };
+    socket.onMessage(raw => {
+      if (JSON.parse(String(raw)).type === 'new_game') {
+        // Each transport tail is contiguous; retained history can have intervals
+        // between tails when reconnect misses earlier events.
+        recover(events.slice(0, 1));
+        recover(events.slice(3, 50));
+        recover(events.slice(51));
+      }
+    });
+  });
+  await page.goto('/');
+  await expect(page.getByTestId('connection-badge')).toHaveText('connected');
+  await page.clock.install({ time: 0 });
+  await page.clock.pauseAt(10000);
+  await page.getByRole('button', { name: 'New Game', exact: true }).click();
+  await page.getByText('History and settings', { exact: true }).click();
+  const panel = page.getByTestId('presentation-history');
+  await panel.locator('summary').click();
+  const region = panel.getByRole('list', { name: 'Recorded game events' });
+  await expect(panel).toContainText('Events 950–950 unavailable');
+  await expect(region.getByRole('heading').first()).toHaveText('Turn unknown');
+  await region.evaluate(element => { element.scrollTop = 200; });
+  const anchor = await region.evaluate(element => {
+    const row = Array.from(element.querySelectorAll<HTMLElement>('[data-presentation-seq]'))
+      .find(row => row.getBoundingClientRect().bottom > element.getBoundingClientRect().top)!;
+    return { seq: row.dataset.presentationSeq!, top: row.getBoundingClientRect().top };
+  });
+  const row = panel.locator(`[data-presentation-seq="${anchor.seq}"]`);
+  await row.getByRole('button').first().focus();
+  const top = (await row.boundingBox())!.y;
+  recover(events.slice(1, 3));
+  await expect(panel.getByRole('button', { name: 'Latest (2 unread)' })).toBeVisible();
+  recover(events.slice(50, 51));
+  await expect(panel.getByRole('button', { name: 'Latest (3 unread)' })).toBeVisible();
+  expect(Math.abs((await row.boundingBox())!.y - top)).toBeLessThan(1);
+  await expect(row.getByRole('button').first()).toBeFocused();
+  await expect(panel.locator('[data-history-gap]')).toHaveCount(0);
+  // The same recovery contains no newly available facts and cannot restart motion.
+  await page.getByRole('button', { name: 'Finish', exact: true }).click();
+  recover(events);
+  await expect(page.getByTestId('presentation-stage')).toBeHidden();
+  await expect(panel.getByRole('button', { name: 'Latest (3 unread)' })).toBeVisible();
+  await panel.getByRole('button', { name: 'Latest (3 unread)' }).click();
+  await expect(panel.getByRole('button', { name: 'Latest', exact: true })).toBeVisible();
+  await panel.locator('[data-presentation-seq="1004"]').getByRole('button').first().click();
+  await expect(panel.getByRole('region', { name: 'History card inspection' })).toBeFocused();
+  recover([events[3]], 'different-viewer-scope');
+  await expect(region.locator('[data-presentation-seq]')).toHaveCount(1);
+  await expect(panel.getByRole('button', { name: 'Latest', exact: true })).toBeVisible();
+  await expect(panel.getByRole('region', { name: 'History card inspection' })).toHaveCount(0);
+  await expect(region).toBeFocused();
+  await expect(panel).toContainText('Scope-only name');
+  await expect(panel).not.toContainText('Badgermole Cub');
+  recover([events[3]]);
+  await expect(panel).toContainText('Badgermole Cub');
+  await expect(panel).not.toContainText('Scope-only name');
+  await expect(panel.getByRole('button', { name: 'Latest', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => scrollY)).toBe(0);
+});
+
+test('history seek removes inspection and repositions to a preceding retained event', async ({ page }) => {
+  const observation = combatObservation();
+  const events: PresentationEvent[] = Array.from({ length: 105 }, (_, seq) => ({
+    ...structuredClone(combatSequence.events[0]) as PresentationEvent, seq,
+  }));
+  const trace = {
+    id: 'history-anchor-seek', config: { hero_deck: {}, villain_deck: {}, villain_type: 'passive', seed: 42 },
+    events: [events.slice(0, 10), events.slice(10)].map((presentation, index) => ({
+      actor: 'hero', observation, actions: [], action: 0, action_description: `Choice ${index}`,
+      reward: 0, presentation,
+    })),
+    final_observation: observation, winner: null, end_reason: 'fixture', timestamp: '2026-11-14T00:00:00Z',
+  };
+  await page.route('**/api/traces', route => route.fulfill({ json: [] }));
+  await page.route('**/api/traces/history-anchor-seek', route => route.fulfill({ json: trace }));
+  await page.route('**/api/traces/history-anchor-seek/decisions', route => route.fulfill({ status: 404 }));
+  await page.goto('/replay?trace=history-anchor-seek');
+  const slider = page.getByRole('slider', { name: 'Replay position' });
+  await slider.fill('2');
+  const panel = page.getByTestId('presentation-history');
+  await panel.locator('summary').click();
+  const region = panel.getByRole('list', { name: 'Recorded game events' });
+  const subject = panel.locator('[data-presentation-seq="50"]').getByRole('button').first();
+  await subject.focus();
+  await subject.press('Enter');
+  const inspection = panel.getByRole('region', { name: 'History card inspection' });
+  await expect(inspection).toBeFocused();
+  await region.evaluate(element => {
+    const row = element.querySelector<HTMLElement>('[data-presentation-seq="50"]')!;
+    element.scrollTop += row.getBoundingClientRect().top - element.getBoundingClientRect().top;
+    element.dispatchEvent(new Event('scroll'));
+  });
+  await expect.poll(() => region.evaluate(element => Array.from(element.querySelectorAll<HTMLElement>('[data-presentation-seq]'))
+    .find(row => row.getBoundingClientRect().bottom > element.getBoundingClientRect().top)?.dataset.presentationSeq)).toBe('50');
+  // Select a recorded prefix without moving focus away from the removed inspection.
+  await slider.evaluate((element: HTMLInputElement) => {
+    element.value = '1';
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect(inspection).toHaveCount(0);
+  await expect(region).toBeFocused();
+  await expect(region.locator('[data-presentation-seq]')).toHaveCount(1);
+  await expect(panel.locator('[data-presentation-seq="9"]')).toBeVisible();
+  await slider.fill('0');
+  await expect(panel).toContainText('Consequences not recorded');
+  await slider.fill('1');
+  await expect(panel.locator('[data-presentation-seq="0"]')).toHaveCount(1);
+  await region.getByRole('button').first().click();
+  await expect(inspection).toBeFocused();
+  await slider.evaluate((element: HTMLInputElement) => {
+    element.value = '0';
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect(inspection).toHaveCount(0);
+  await expect(panel.locator('summary')).toBeFocused();
+});
