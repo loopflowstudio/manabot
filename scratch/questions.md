@@ -31,7 +31,9 @@ per-seat `PlayerPolicy` (see Required per-seat API below).
 ## Current state (fourth-review implementation, 2026-11-13)
 
 Draft PR #518 remains the delivery. The four findings from the fourth concept
-review are implemented (details and focused checks below). New captures record
+review are implemented (details and focused checks below). Next implement
+direction: replay reads retained receipt policies without the deprecated
+argument (Fifth concept review, at the end). New captures record
 only per-seat player policies; retained receipts remain unchanged. Remaining:
 gate checks (full debug Rust, clippy, affected Python suites, consumer interpreter
 matrix), normal same-runner Engine Budget for unused-policy cost, full release
@@ -494,3 +496,33 @@ installed cp313 extension (16:31) was built from the rename's source (commit 16:
 rename only). No test was rerun. Gate is unchanged: full debug Rust suite,
 clippy, affected Python suites, consumer interpreter matrix, full release
 training smoke and normal same-runner Engine Budget.
+
+## Fifth concept review (2026-11-13, at 55fb521498)
+
+No open product choice. The four fourth-review directions read as implemented
+(receipt, internal callers, guide split, `player_policy.rs`). One place still
+routes history through the deprecated spelling; it is the next implement
+direction. Python only: no Rust, rebuild, identity-file, fixture or public-API
+change.
+
+Replay reads a retained receipt's policy itself. `manabot/env/replay.py`
+passes `opponent_policy=evidence.opponent_policy` to `managym.VectorEnv` for
+any receipt without `player_policies`, so replaying retained evidence (the
+three `tests/fixtures/tla-pilot-*.jsonl`, all `"none"`) warns the reader to
+change an argument they never wrote, and removing the alias in 0.3.0 would
+stop retained receipts replaying. Reading history is not a deprecated use.
+- One reader on `FailureEvidence` returns the seat tuple: `player_policies`
+  when recorded, else the retained name (`None`/`none` → `(agent, agent)`,
+  any other name → `(agent, name)`). Replay passes `player_policies=` only.
+  `resolve_player_policies` keeps the warning for callers and can share the
+  mapping; there stays one statement of it.
+- A retained `passive` receipt still fails to replay, now through native's
+  per-seat rejection; `test_retained_passive_evidence_is_readable_but_cannot_replay`
+  matches the new message. Retained bytes and round-trip stay identical.
+- Add one check that replaying a retained `opponent_policy` receipt emits no
+  `DeprecationWarning`. The guide's deprecation paragraph needs no change.
+
+Kept: the deprecated argument accepts `heuristic` though main never published
+that value (the Task brief names `VectorEnv(opponent_policy="heuristic")`; it
+costs one literal and leaves with the alias). Two warning sites (native parser,
+Python resolver) never both fire: the wrappers pass native the resolved tuple.

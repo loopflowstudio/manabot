@@ -20,62 +20,64 @@ li{margin:8px 0}
 @media (prefers-color-scheme:dark){:root{--paper:#1a211d;--ink:#ebece4;--muted:#b2c0b6;--line:#53685a;--accent:#add2ba}}
 @media (max-width:540px){main{padding:22px 16px}th,td{padding:8px 4px;font-size:13px}}
 </style></head><body><main>
-<header>MTG-277 · concept-review · 2026-11-13 (fourth pass, at e2f27df807) · built from
+<header>MTG-277 · concept-review · 2026-11-13 (fifth pass, at 55fb521498) · built from
 scratch/questions.md, docs/engine.md, docs/engine-python.md, docs/evaluation.md, manabot/README.md,
-managym/README.md, managym/__init__.pyi, managym/src/agent/{env,opponent,vector_env}.rs,
-managym/src/python/{bindings,vector_env_bindings,heuristic_bindings}.rs,
-manabot/env/{failures,replay,vector_env}.py, manabot/sim/heuristic.py</header>
-<h1>No decision needed: four leftovers of the one-opponent concept go back to implement</h1>
-<p>The per-seat API is built and holds. Nothing below changes behavior, the public API, a world or the
-heuristic source identity. Solid border is built; dashed is proposed.</p>
+managym/README.md, managym/__init__.pyi, managym/src/agent/player_policy.rs,
+managym/src/python/{bindings,vector_env_bindings}.rs,
+manabot/env/{failures,replay,vector_env}.py, manabot/eval/admission.py, manabot/sim/heuristic.py,
+tests/env/test_opponents.py, tests/fixtures/tla-pilot-*.jsonl</header>
+<h1>No decision needed: one change goes back to implement — replay stops using the deprecated argument</h1>
+<p>The per-seat API and the four fourth-review changes are built and hold. The change below is Python
+only: no Rust, rebuild, public API, fixture or heuristic identity-file change. Solid border is built;
+dashed is proposed.</p>
 
 <table>
-<tr><th>Action</th><th>Concept</th><th>State-changing API (built)</th></tr>
-<tr><td>Say who chooses for each seat</td><td>Player policy per chooser seat: <code>agent</code>, <code>random</code>, <code>heuristic</code>; separate from decks and world identity</td><td><code>Env(player_policies=…)</code>, <code>VectorEnv(player_policies=…)</code>; default <code>("agent", "agent")</code></td></tr>
-<tr><td>Play against a built-in</td><td>Env settles built-in decisions until the external seat chooses or the game ends; rewards are the external seat's</td><td><code>reset</code>, <code>step(index)</code></td></tr>
-<tr><td>Watch two built-ins</td><td>One published decision per call; reward is that chooser's</td><td><code>Env.step()</code>, <code>VectorEnv.step([-1, …])</code></td></tr>
-<tr><td>New game / fork</td><td>One heuristic memory per seat, owned by Env</td><td>reset clears both, fork copies both</td></tr>
-<tr><td>Evaluate / register an anchor</td><td>Scalar adapter over the same selector; identity is the source bytes</td><td><code>HeuristicPlayer.act</code>, <code>register_anchor</code> → <code>native-v2</code></td></tr>
-<tr><td>Replay a failure</td><td>Receipt names the seats' policies</td><td><code>FailureEvidence.player_policies</code> (retained receipts: <code>opponent_policy</code>)</td></tr>
+<tr><th>Action</th><th>Concept</th><th>API that changes state</th></tr>
+<tr><td>Play or train against a built-in</td><td>Player policy per chooser seat: <code>agent</code>, <code>random</code>, <code>heuristic</code></td>
+<td><code>Env / VectorEnv(player_policies=(&quot;agent&quot;, &quot;heuristic&quot;))</code>; <code>step()</code> / <code>step([-1, ...])</code> for two built-ins</td></tr>
+<tr><td>Evaluate against the anchor</td><td>Registration <code>native-v2</code> bound to four source files</td>
+<td><code>register_anchor</code>, <code>HeuristicPlayer.act</code> → <code>managym.Heuristic.select_action</code></td></tr>
+<tr><td>Capture a failure</td><td>Receipt records both seats</td><td><code>FailureEvidence.player_policies</code></td></tr>
+<tr><td>Replay a receipt</td><td>Same game from recorded inputs</td><td><code>replay_failure_inputs</code> — the mismatch</td></tr>
 </table>
 
-<h2>Biggest mismatch: a new receipt states two policies</h2>
-<aside>
-<p><strong>Built.</strong> A capture of <code>player_policies=("agent", "heuristic")</code> writes</p>
-<pre>"opponent_policy": "none",
-"player_policies": ["agent", "heuristic"]</pre>
-<p>Replay reads the second, so it replays correctly; the record still says the opponent seat is surfaced.</p>
-</aside>
-<div class="proposed">
-<p><strong>Proposed.</strong> New receipts write <code>player_policies</code> only. <code>opponent_policy</code> is
-read for retained receipts that lack it and is absent on new ones. Retained receipts and the three
-<code>tla-pilot-*.jsonl</code> fixtures keep their bytes and replay as before.</p>
-</div>
+<h2>Biggest mismatch: reading history goes through the deprecated spelling</h2>
+<aside><p>Built. A receipt written before this change has only the retained name, and replay hands it
+to the argument that warns:</p>
+<pre>managym.VectorEnv(..., **(
+    {&quot;player_policies&quot;: evidence.player_policies}
+    if evidence.player_policies is not None
+    else {&quot;opponent_policy&quot;: evidence.opponent_policy}))</pre>
+<p>Replaying any of the three <code>tla-pilot-*.jsonl</code> receipts (<code>&quot;opponent_policy&quot;:&quot;none&quot;</code>)
+tells the reader to change an argument they never wrote. When the argument is removed in 0.3.0, retained
+receipts stop replaying.</p></aside>
+<div class="proposed"><p>Proposed. The receipt answers the question once, and replay never names the old argument:</p>
+<pre>evidence.seat_policies()   # recorded tuple, else none → (agent, agent), name → (agent, name)
+managym.VectorEnv(..., player_policies=evidence.seat_policies())</pre>
+<p>The method name is illustrative. <code>resolve_player_policies</code> keeps the warning for callers and
+shares the mapping.</p></div>
 
-<h2>Three smaller ones</h2>
-<div class="proposed"><ul>
-<li>The repository still calls its own deprecated argument: <code>scripts/bench_breakdown.py</code> and nine test
-files not about the alias. They move to <code>player_policies</code>; only the alias tests and retained-receipt
-replay keep <code>opponent_policy</code>.</li>
-<li><code>docs/engine.md</code> “Built-in heuristic opponent” carries the whole per-seat contract, says rewards,
-auto-reset and memory twice, and uses policy, controller, built-in, opponent and player for one thing. Split into
-“Per-seat players” (stated once) and “Built-in heuristic” (rules and information limits); “player policy” for the
-setting, “built-in” for random/heuristic, no “controller”. Four links repoint.</li>
-<li><code>managym/src/agent/opponent.rs</code> holds only <code>PlayerPolicy</code> → <code>player_policy.rs</code>.
-Not an identity file; needs an extension rebuild.</li>
-</ul></div>
+<h2>Walked through</h2>
+<ul>
+<li>Normal: a new receipt for <code>(agent, heuristic)</code> replays from its tuple, as now.</li>
+<li>Retained: a <code>none</code> or <code>random</code> receipt replays with no warning; its bytes and round trip are unchanged.</li>
+<li>Failure: a retained <code>passive</code> receipt stays readable and still cannot replay; the error now comes
+from the per-seat rejection, so <code>test_retained_passive_evidence_is_readable_but_cannot_replay</code> matches the new message.</li>
+<li>Recovery: unchanged — run a passive receipt from its original source.</li>
+<li>New check: replaying a retained-name receipt emits no <code>DeprecationWarning</code>.</li>
+</ul>
 
 <h2>Checked and kept</h2>
 <ul>
-<li>Normal path: mixed step plays the built-in's decisions and returns the external seat's next decision with its reward.</li>
-<li>Failure: an index at a built-in chooser, an unknown name, both arguments, or 10,000 built-in decisions without an external chooser are errors. No fallback to random.</li>
-<li>Recovery: a Command that leaves a built-in the decision is continued with <code>Env.step()</code>; forks keep both memories and the retained combat events.</li>
-<li>Scalar <code>step()</code> versus vector <code>-1</code> stays: a batch needs an integer.</li>
-<li>The Python <code>resolve_player_policies</code> stays beside the native parser: the wrappers need the tuple for the training-exposure guard and the receipt.</li>
+<li>The deprecated argument accepts <code>heuristic</code>, a value main never published. The Task brief names
+<code>VectorEnv(opponent_policy=&quot;heuristic&quot;)</code>; it is one literal and leaves with the alias.</li>
+<li>Two warning sites (native parser, Python resolver) never both fire: the wrappers pass the resolved tuple.</li>
+<li>Guide: “Per-seat players” then “Built-in heuristic”, each fact once; the four links point at the right heading.</li>
+<li>Rules live in the native module header; the adapter is 43 lines; <code>anchors.py</code> is untouched.</li>
 </ul>
 
 <h2>Questions</h2>
-<ol>
-<li>None open. Names, default and two-built-in stepping were approved (“lg2m, approved”, 2026-11-13).</li>
-</ol>
+<ol><li>None open. If the retained <code>passive</code> error should keep its old wording
+(<code>unsupported opponent_policy: passive</code>), say “1a” and replay raises it itself; otherwise (1b, taken) it
+uses the per-seat message.</li></ol>
 </main></body></html>
