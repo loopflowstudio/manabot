@@ -4,9 +4,11 @@ import base64
 from dataclasses import asdict, replace
 import hashlib
 import json
+import os
 from pathlib import Path
 from typing import Any, Literal
 
+from botocore.exceptions import ClientError
 import pytest
 import torch
 
@@ -40,6 +42,14 @@ from manabot.belief.sampling_data import (
     public_sampler_input,
     read_dataset,
     save_dataset,
+)
+from manabot.belief.sampling_publication import (
+    create_producer,
+    prepare_snapshot,
+    publish_pending_snapshot,
+    read_producer,
+    retain_failure,
+    retain_game,
 )
 from manabot.belief.sampling_runtime import EnvCaptureRuntime
 from manabot.belief.sampling_snapshot import (
@@ -964,3 +974,201 @@ def test_passive_accumulation_preserves_policy_rng_and_capture_results() -> None
     with pytest.raises(ValueError, match="successful native termination"):
         accumulator.finish(tuple(commands), terminated=False)
     assert torch.equal(torch.random.get_rng_state(), rng)
+
+
+def _producer_fixture(directory: Path) -> SplitPlan:
+    plan = SplitPlan(
+        "family", 357, tuple(GroupSplit(f"group-{i}", "train") for i in range(4))
+    )
+    game = _sealed_fixture(0, "train")
+    create_producer(
+        directory,
+        run="producer",
+        schema=game.schema,
+        world_identity=game.world_identity,
+        split_plan=plan,
+    )
+    return plan
+
+
+def test_producer_reopen_keeps_outputs_after_learner_rollback(tmp_path: Path) -> None:
+    plan = _producer_fixture(tmp_path)
+    old_learner_output_cursor = read_producer(tmp_path).watermark
+    first = retain_game(tmp_path, _sealed_fixture(0, "train", rows=0))
+    retain_failure(tmp_path, "a" * 64)
+    retain_failure(tmp_path, "a" * 64)
+    later = retain_game(tmp_path, _sealed_fixture(1, "train", update=2))
+    # Unacknowledged bytes, including a complete orphan, are never discovered.
+    seal_game(tmp_path / "games", _sealed_fixture(2, "train"))
+    (tmp_path / "games" / "unfinished.partial").write_text("incomplete")
+    reopened = create_producer(
+        tmp_path,
+        run="producer",
+        schema=_sealed_fixture(0, "train").schema,
+        world_identity=_sealed_fixture(0, "train").world_identity,
+        split_plan=plan,
+    )
+    assert reopened.watermark != old_learner_output_cursor
+    assert reopened.members == (first, later)
+    assert reopened.failure_references == ("a" * 64,)
+    assert retain_game(tmp_path, _sealed_fixture(1, "train", update=2)) == later
+    pending = prepare_snapshot(
+        tmp_path,
+        selection=(ProducerSelection("producer", 1, 2, ("raw",)),),
+        destination="s3://private/snapshots",
+    )
+    assert pending.binding.games == (first, later)
+    assert pending.binding.failure_references == ("a" * 64,)
+    assert read_producer(tmp_path).verified == ()
+    with pytest.raises(ValueError, match="conflicting bytes"):
+        retain_game(tmp_path, _sealed_fixture(1, "train", update=3))
+    assert read_producer(tmp_path).members == (first, later)
+
+
+def test_producer_fixed_splits_and_bindings_are_not_replaced(tmp_path: Path) -> None:
+    plan = _producer_fixture(tmp_path)
+    game = _sealed_fixture(0, "train")
+    with pytest.raises(ValueError, match="prospective split"):
+        retain_game(tmp_path, replace(game, game=replace(game.game, split="test")))
+    with pytest.raises(ValueError, match="bindings differ"):
+        create_producer(
+            tmp_path,
+            run="producer",
+            schema=game.schema,
+            world_identity=game.world_identity,
+            split_plan=replace(plan, seed=358),
+        )
+    assert read_producer(tmp_path).members == ()
+    with pytest.raises(FileNotFoundError):
+        read_producer(tmp_path / "missing")
+    (tmp_path / "producer.json").unlink()
+    with pytest.raises(FileNotFoundError, match="index is missing"):
+        create_producer(
+            tmp_path,
+            run="producer",
+            schema=game.schema,
+            world_identity=game.world_identity,
+            split_plan=plan,
+        )
+
+
+def test_producer_lost_storage_reply_reconciles_same_pack_and_keeps_a_stable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _producer_fixture(tmp_path)
+    retain_game(tmp_path, _sealed_fixture(0, "train"))
+    selection = (ProducerSelection("producer", 1, 2, ("raw",)),)
+    pending = prepare_snapshot(
+        tmp_path, selection=selection, destination="s3://private/snapshots"
+    )
+    path = tmp_path / "snapshots" / f"{pending.sha256}.json"
+    original = path.read_bytes()
+    first_dataset = read_dataset(path)
+    objects: dict[str, bytes] = {}
+
+    class LostReplyBucket:
+        def put_object(self, **request: Any) -> dict[str, str]:
+            key = request["Key"]
+            if key in objects:
+                raise ClientError(
+                    {
+                        "Error": {"Code": "PreconditionFailed"},
+                        "ResponseMetadata": {"HTTPStatusCode": 412},
+                    },
+                    "PutObject",
+                )
+            objects[key] = request["Body"].read()
+            raise OSError("storage accepted bytes but reply was lost")
+
+        def head_object(self, **request: Any) -> dict[str, object]:
+            data = objects[request["Key"]]
+            return {
+                "ContentLength": len(data),
+                "ChecksumSHA256": base64.b64encode(
+                    hashlib.sha256(data).digest()
+                ).decode(),
+            }
+
+    store = ArtifactStore()
+    monkeypatch.setattr(store, "_client", lambda scheme: LostReplyBucket())
+    with pytest.raises(OSError, match="reply was lost"):
+        publish_pending_snapshot(tmp_path, store=store)
+    assert read_producer(tmp_path).snapshots == (pending,)
+    assert read_producer(tmp_path).verified == ()
+    assert (
+        prepare_snapshot(
+            tmp_path, selection=selection, destination="s3://private/snapshots"
+        )
+        == pending
+    )
+    # Later acknowledged games cannot replace a pending cut during recovery.
+    retain_game(tmp_path, _sealed_fixture(1, "train", update=2))
+    with pytest.raises(ValueError, match="reconcile pending"):
+        prepare_snapshot(
+            tmp_path, selection=selection, destination="s3://private/snapshots"
+        )
+    # Storage verification can succeed while saving the local acknowledgement
+    # fails too. Reopening must still expose only the same pending object.
+    with monkeypatch.context() as fault:
+
+        def lose_local_ack(source: object, target: object) -> None:
+            raise OSError("local acknowledgement was lost")
+
+        fault.setattr(os, "replace", lose_local_ack)
+        with pytest.raises(OSError, match="local acknowledgement"):
+            publish_pending_snapshot(tmp_path, store=store)
+    assert read_producer(tmp_path).verified == ()
+    assert read_producer(tmp_path).snapshots == (pending,)
+    reference = publish_pending_snapshot(tmp_path, store=store)
+    assert len(objects) == 1
+    assert reference.sha256 == pending.sha256
+    assert reference.bytes == len(original)
+    assert read_producer(tmp_path).verified == (reference,)
+    assert publish_pending_snapshot(tmp_path, store=store) == reference
+    second = prepare_snapshot(
+        tmp_path, selection=selection, destination="s3://private/snapshots"
+    )
+    assert len(second.binding.games) == 2
+    assert second.binding.watermark != pending.binding.watermark
+    assert read_producer(tmp_path).verified == (reference,)
+    assert path.read_bytes() == original
+    assert read_dataset(path).identity == first_dataset.identity
+
+
+def test_producer_corrupt_pending_pack_cannot_be_advertised(tmp_path: Path) -> None:
+    _producer_fixture(tmp_path)
+    retain_game(tmp_path, _sealed_fixture(0, "train"))
+    pending = prepare_snapshot(
+        tmp_path,
+        selection=(ProducerSelection("producer", 1, 1, ("raw",)),),
+        destination="s3://private/snapshots",
+    )
+    (tmp_path / "snapshots" / f"{pending.sha256}.json").write_bytes(b"corrupt")
+    with pytest.raises(ValueError, match="bytes differ"):
+        publish_pending_snapshot(tmp_path, store=ArtifactStore())
+    assert read_producer(tmp_path).verified == ()
+
+
+def test_producer_failed_membership_write_does_not_adopt_orphan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _producer_fixture(tmp_path)
+    game = _sealed_fixture(0, "train")
+    with monkeypatch.context() as fault:
+
+        def fail_membership_write(source: object, target: object) -> None:
+            raise OSError("membership persistence failed")
+
+        fault.setattr(os, "replace", fail_membership_write)
+        with pytest.raises(OSError, match="membership persistence"):
+            retain_game(tmp_path, game)
+    assert (tmp_path / "games" / f"{game.key.identity}.json").exists()
+    assert read_producer(tmp_path).members == ()
+    with pytest.raises(ValueError, match="no completed games"):
+        prepare_snapshot(
+            tmp_path,
+            selection=(ProducerSelection("producer", 1, 1, ("raw",)),),
+            destination="s3://private/snapshots",
+        )
+    member = retain_game(tmp_path, game)
+    assert read_producer(tmp_path).members == (member,)

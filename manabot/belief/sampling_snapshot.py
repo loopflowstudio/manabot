@@ -70,8 +70,17 @@ def _publish_bytes(path: Path, data: bytes) -> None:
                 raise ValueError(
                     "conflicting bytes for an immutable belief identity"
                 ) from None
+        _sync_directory(path.parent)
     finally:
         temporary.unlink()
+
+
+def _sync_directory(directory: Path) -> None:
+    descriptor = os.open(directory, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
 
 
 @dataclass(frozen=True, slots=True)

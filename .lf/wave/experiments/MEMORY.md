@@ -23,49 +23,45 @@ The database was preserved and no alternate controller or job was created.
 Failed inventory is unknown capacity/work, not missing credentials or zero cost.
 A compatible control client can remain separate from the frozen worker runtime.
 
-Reusable evidence boundaries: verified available shards and nonempty splits do
-not prove collection is closed or that no worker can still write. A started slot
-and orphan shard prove neither completion nor the cause of a fatal stop.
-Keep job reconciliation, explicit closure, fatal causes and immutable fit data
-distinct from capture continuation. Swapped legs sharing a declared deal seed
-also need group-preserving uncertainty; a whole-game bootstrap alone does not
-preserve their dependence. MTG-357 now has injected-fixture checks for explicit
-closure/source freezing, fatal-prefix retention/restoration, narrow native
-failure classification, omission reasons, fit reuse/refusal and grouped analysis.
-Those checks establish owner behavior, not connected launcher admission or a
-TLA result. Exact `CaptureWork`/`FitWork` allocations now bind schedule slots or
-the frozen dataset/configuration/seed; one root lock covers reservation through
-submission. Injected checks retain lost acknowledgements as consumed work,
-reject overlapping dispatch, distinguish live/unknown work from ended unavailable
-delivery, and keep queued/retry writers from authorizing closure. Schedule-derived
-same-field/reserved panels now preserve zero-row and unattempted games. Retained
-35-check capture/report validation and six final dispatch/worker checks establish
-these local guarantees; they supply no original-runtime admission or trained result.
+Jack Heart, Task comment 13f06c68-0d20-41f2-95f5-fc44d514850c:
+“New design from the Task conversation: reuse completed player-training games through immutable producer-selected snapshots; exercise the real data handoff before expanding orchestration. Read scratch/tla-belief-sampler.md and scratch/design-discussion.md. Preserve prior work and USD25 cap. Stop at interactive demo; no auto-land.”
 
-A controller exit alone does not establish worker interruption. A compatible
-launcher must provide fresh shared inventory, durable pre-submit lookup, writer
-closure, cost and delivered-byte evidence. A filesystem lock coordinates only
-invocations using the same authoritative root. Copied worker roots cannot become
-independent dispatch authorities or return their ledger/closure as controller
-truth. The local owner now binds controller authority to host/path/device/inode,
-stages one-job snapshots and admits returned bytes against fresh launcher
-inventories and semantic bindings. Copied-root, fatal/orphan delivery and fit-input
-fixtures support those boundaries; connected transport remains unverified.
+That direction supersedes the custom controller/dispatch design described at
+`98ff91da1c:.lf/wave/experiments/MEMORY.md`. Its EvidenceRoot, allocations,
+worker staging and copied-root authority are deleted, not prerequisites to
+finish. Historical controller receipts remain evidence. Etude owns jobs,
+inventory and costs; producer completion owns successful shards; immutable
+snapshot membership owns fit input. Failed inventory still means unknown work
+and commitments, never permission to create an alternate database/controller.
 
-Preparation is part of the lost-response boundary too. `JobAllocation.run`
-requires an existing durable key, while the inspected SDK's `prepare_launch`
-returns one. A key visible only in a lost preparation reply cannot support
-recovery, even if subsequent submission is idempotent. The adapter still needs
-a controller-supported request identity, its retained intent before any launcher
-mutation, verified preparation side effects and lookup of that same request.
-Unknown preparation cannot authorize another preparation or new dispatch.
-Source inspection of 0.2.16 preserves supplied `Run.id` values and exposes
-store `launches(run)`, but the controller exposes diagnostics by run rather than
-direct launch-record lookup. Neither establishes exact request/work/cap binding
-or resumable preparation. The candidate APIs have not been proved against the
-preserved controller; compatible read-only inventory remains the first dependency.
-Keep launcher execution, artifact delivery and scientific completion distinct; local fixtures supply none of those
-connected proofs.
+Implemented primitives cover passive both-viewer accumulation, typed behavior
+segments, sealed successful games (including zero-row coverage), canonical
+self-contained snapshot packs, stable group splits, equal-game row draws and
+snapshot-bound checkpoint/report admission. The retained 39-pass fixture receipt
+in the active plan establishes these data boundaries, not native pre-reset
+capture, collector parity, producer restart, remote Input delivery or a fit.
+The current gap is producer-owned durable publication state: membership, split
+plan, frontier and pending/verified references must survive learner rollback.
+Caller-held lists and a string watermark do not establish that ownership.
+
+Reusable lessons: acknowledge publication only after immutable storage verifies
+bytes; descriptive log references may be dropped. Lost acknowledgements must
+reconcile the same content key, not create replacement games. An old learner
+checkpoint cannot erase already acknowledged outputs or failures, and scanning
+files cannot distinguish acknowledged shards from orphans. Select every seat
+and behavior segment explicitly; mixed training-history games are not final-
+player data. Numeric seeds across producers do not define dependent groups.
+Keep both viewers and swapped legs in declared split/uncertainty groups.
+
+MTG-329's current SelfPlay source explicitly resumes with fresh native streams
+and saves no game/RNG state. Its existing recovery checks therefore do not prove
+prefix reconstruction or durable publication for this pipeline. Its source pin
+`9e8fec1268ed` over Etude 0.4.0 requirements differs from this checkout's 0.3.2;
+its notes retain failed local job-input delivery. EXP-66's source contains input
+placement and verification, a contrary source finding that does not prove this
+checkout's installed client or remote delivery. The maintained owner integration,
+real bounded A/B proof and original-runtime TLA admission/fits remain incomplete.
+The active plan owns their acceptance; no trained result or strength claim exists.
 
 ## Self-play metric indexing (MTG-273, 2026-11-11)
 
@@ -852,6 +848,11 @@ Retained empirical limits live in experiments/tla-trophy-pilot.md. Experiments h
 no child directories or child memories at this reconciliation (2026-11-05 UTC).
 
 ## Training consolidation and credit (MTG-179, 2026-10-22)
+
+Historical MTG-179 direction below describes the pre-MTG-329 implementation.
+MTG-329 now moves execution to Etude SelfPlay/Run and retires the executor;
+its integration is still pending here. Do not restore retired owners to follow
+these historical names. Credit and game-evidence invariants remain applicable.
 
 Jack Heart accepted one maintained RL execution path: TrainingRegime,
 execute_regime, SeatRoutedCollector and Learner. Learner owns train-mode policy

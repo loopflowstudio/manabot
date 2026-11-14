@@ -25,6 +25,14 @@ and the Etude jobs described below remain implementation work. There is no
 collector export switch or connected handoff command available yet; `demo` is
 the current experiment CLI.
 
+Local producer publication state is implemented in
+`manabot.belief.sampling_publication`. It retains acknowledged membership, the
+fixed split plan, an output frontier and pending/verified snapshot references
+in `producer.json`, alongside immutable `games/` and `snapshots/` bytes.
+Connecting these outputs to the maintained SelfPlay loop and Etude's saved-output
+restoration remains implementation work; local fixtures do not prove remote
+durability or learner recovery.
+
 The reusable APIs are `seal_game`, `seal_snapshot` and `publish_snapshot` in
 `manabot.belief.sampling_snapshot`. `read_dataset` admits the self-contained
 snapshot; `fit_saved_sampler` takes that file and an attempt output directory.
@@ -76,6 +84,22 @@ verifies its bytes. A metric or log message describing it is not a delivery
 acknowledgement. Etude supplies the selected file to a fit as a named `Input`
 with its exact URI, digest and size. The fitter reads those bytes rather than a
 changing producer directory. Missing, corrupt or mismatched input fails admission.
+
+The producer must retain its acknowledged game index, fixed split plan,
+publication frontier and pending snapshot identity with its saved outputs.
+Record the verified storage reference before making a snapshot available to
+fits. Job declarations use that retained reference; they cannot infer successful
+publication from logs or reconstruct membership by scanning files.
+
+The internal producer API fixes bindings with `create_producer`, acknowledges
+successful closures with `retain_game`, and retains already-persisted failure
+evidence digests with `retain_failure`. `prepare_snapshot` derives the cut from
+that index and retains exact pending bytes. `publish_pending_snapshot` reconciles
+the same content key after a lost reply and saves its verified reference before
+returning it. Fit declarations read only `read_producer(...).verified`.
+These functions supply no game loop or launcher. The producer output directory
+must survive independently of learner saves; reopening fixes neither a missing
+output index nor missing shard bytes by scanning for files.
 
 Declare Etude training jobs in `experiments/tla_belief_sampler.py` for the player,
 snapshot fits and frozen-player reference. Each fit selects an already published
@@ -195,6 +219,12 @@ retains original game identities and must not publish replayed prefixes as new
 games. Strict batch failures cannot publish an unverified successful subset.
 Export errors stop before the next optimizer update while preserving completed
 prior work.
+
+Restoring an older learner checkpoint must preserve later acknowledged game
+outputs and failure evidence. Reconcile those outputs with the restored cursor;
+never advance learner state from a publication frontier. If the maintained loop
+starts fresh native streams on resume, retain abandoned games as incomplete and
+give newly started games distinct identities. That is not exact game continuation.
 
 An interrupted upload may resume the same content key after verification. It
 does not authorize more games or a new fit attempt. Etude owns attempt identity
