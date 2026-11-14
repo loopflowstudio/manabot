@@ -1,8 +1,0 @@
-base: 3 processes, learner rows {52226}, damped steps {(204, 204, 204)}
-head: 3 processes, learner rows {52226}, damped steps {(204, 204, 204)}
-damped steps/s     base 6.162 [6.038, 6.191]  head 4.57 [4.555, 4.679]  head/base 0.742  REGRESSION
-ppo steps/s        base 0.2196 [0.2189, 0.2197]  head 0.157 [0.1547, 0.1571]  head/base 0.715  REGRESSION
-inference obs/s    base 821.7 [808.6, 822.8]  head 1087 [1061, 1089]  head/base 1.323  within spread
-save s             base 0.03224 [0.03213, 0.03546]  head 0.03191 [0.03105, 0.033]  head/base 0.990  within spread
-load s             base 0.1688 [0.1677, 0.1709]  head 0.1679 [0.1677, 0.1707]  head/base 0.995  within spread
-collection s       base 135.7 [130, 156.9]  head 109.2 [107.9, 173.6]  head/base 0.805  within spread
