@@ -26,7 +26,7 @@ from manabot.infra.config import (
 )
 from manabot.model.catalog import checkpoint_incompatibility, inspect_checkpoint
 from manabot.sim.replay import replay_environment
-from managym.academy.villain import CheckpointVillain
+from manabot.sim.table_bots import CheckpointVillain
 
 SETUP = "ur-lessons-vs-gw-allies"
 

@@ -13,7 +13,7 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.infra.source import source_commit
 from manabot.model.world import checkpoint_world, validate_checkpoint_world
-from managym.academy.villain import CheckpointVillain
+from manabot.sim.table_bots import CheckpointVillain
 
 
 def selected_match():

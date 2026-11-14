@@ -190,6 +190,12 @@ exact paths in `.github/workflows/manabot-integration.yml` and run
 Moves between Academy and checkout-only conformance tools also require
 `uv run --extra dev pytest --collect-only tests/academy/test_authored_match_authority.py tests/academy/test_authored_match_parity.py tests/academy/test_public_commitment_parity.py tests/academy/test_learn_evidence.py -q`
 to catch stale module-level imports before running the affected behavior checks.
+Academy package, bot or fixture moves also require
+`uv run --extra dev pytest tests/model/test_world.py tests/model/test_policy_input_rejection.py -q`
+and `npm --prefix academy/ui run test:e2e -- --config playwright.release.config.ts --list`.
+These cover checkpoint admission consumers outside Academy's test directory and
+browser fixture imports, which Svelte checks and Vitest do not collect. Run the
+affected browser specs against the built frontend after collection succeeds.
 Package initializer changes also require
 `uv run --extra dev --extra artifacts --extra evaluation pytest tests/test_package_boundaries.py tests/eval/test_inference_receipts.py -q`;
 offline receipt reports must work without probing the native engine, even to
