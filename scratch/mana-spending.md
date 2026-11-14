@@ -45,6 +45,15 @@ report, `scratch/` and the read-only `summary --all-payments` aggregation in
 `experiments/mana_spending.py`. Published evidence and its manifest stay
 unchanged.
 
+## Docs
+
+The docs that ship with this Task are `experiments/mana_spending.md` (the
+report), its row in `experiments/README.md` (`count` / `shapes` / `summary`)
+and "Offline payment-shape measurement" in `managym/README.md` (the capture
+API and `MANAGYM_EXPERIMENT_AUTOSPEND`). The recommended chooser is not built
+here, so no guide describes it; `docs/academy.md` and the engine guides stay
+as they are until the implementing Task.
+
 ## What people said
 
 - Jack Heart, 2026-11-13 (Task): "then start a task where we run experiments

@@ -1,7 +1,8 @@
 """Measure mana decision frequency, fixed-source outcomes and early learning.
 
 `count` retains exact decks and per-game decisions. `shapes` replays them and
-enumerates bounded counterfactuals through the native payment authority. Etude
+enumerates bounded counterfactuals through the native payment authority;
+`summary` aggregates those rows without playing games. Etude
 `runs` and `eval` compare unit spending with first-feasible automatic spending.
 """
 
