@@ -2,7 +2,6 @@
 
 import random
 
-from managym.experience_projection import describe_actions, serialize_observation
 import numpy as np
 import pytest
 
@@ -11,6 +10,7 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import PERMANENT_DIM, ObservationSpace
 from manabot.infra.config import MatchConfig, RewardConfig
 import managym
+from managym.experience_projection import describe_actions, serialize_observation
 
 
 def candidate_match():

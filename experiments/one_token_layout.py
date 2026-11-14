@@ -27,14 +27,12 @@ import time
 from typing import Literal
 import warnings
 
-import numpy as np
-import torch
-
 from etude.eval.records import Inference, Seating
 from etude.experiment import ExperimentState, TrainingRun
 from etude.launch.records import Job, Run
 from etude.report import Curve, Matches, Ranking, Report, Score
-import managym
+import numpy as np
+import torch
 
 from experiments.elemental_variants import elemental_recipe
 from experiments.learning_signal import (
@@ -55,6 +53,7 @@ from manabot.infra.runtime import regime_tag
 from manabot.model.admission import admit_observation
 from manabot.training.panels import ML, PERF
 from manabot.training.regime import TrainingRegime
+import managym
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENT = Path(__file__).stem

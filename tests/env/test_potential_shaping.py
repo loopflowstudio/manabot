@@ -237,7 +237,9 @@ def _stub_obs(
 ):
     # A battlefield stub card is a permanent's card record; other cards are listed.
     def permanents(cards: Any) -> list[SimpleNamespace]:
-        return [SimpleNamespace(card=card) for card in cards if card.zone == BATTLEFIELD]
+        return [
+            SimpleNamespace(card=card) for card in cards if card.zone == BATTLEFIELD
+        ]
 
     return SimpleNamespace(
         agent=SimpleNamespace(life=agent_life),

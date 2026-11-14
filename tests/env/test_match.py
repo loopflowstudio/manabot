@@ -79,6 +79,7 @@ def test_reward_progress_shaping():
             opponent_life_loss_reward=1.0,
         )
     )
+
     def permanent(*, is_land: bool, is_creature: bool) -> SimpleNamespace:
         types = SimpleNamespace(is_land=is_land, is_creature=is_creature)
         return SimpleNamespace(card=SimpleNamespace(card_types=types))

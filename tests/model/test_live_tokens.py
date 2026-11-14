@@ -71,9 +71,7 @@ def test_outputs_and_gradients_match_padded(
             torch.testing.assert_close(b.grad, a.grad, atol=1e-5, rtol=1e-4)
     with torch.no_grad(), PolicyInference(live) as scope:
         prepared = scope.prepare(obs)
-        present = sum(
-            int(obs[key].count_nonzero()) for key in live._validity_keys()
-        )
+        present = sum(int(obs[key].count_nonzero()) for key in live._validity_keys())
         tokens = len(obs["actions_valid"]) if value_aggregation == "value_token" else 0
         assert prepared.live_token_count == present + tokens
         totals: list[int | None] = []

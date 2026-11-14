@@ -46,7 +46,9 @@ def test_bucketed_and_live_forwards_match_plain(input_version: int) -> None:
     if input_version == 11:
         assert case.agent.stack_tokens
         assert obs["stack_valid"].any(), "fixture should put a spell on the stack"
-        assert (obs["stack"][..., STACK_DEFINITION_INDEX][obs["stack_valid"] > 0] > 0).all()
+        assert (
+            obs["stack"][..., STACK_DEFINITION_INDEX][obs["stack_valid"] > 0] > 0
+        ).all()
     else:
         assert not case.agent.stack_tokens and "stack" not in obs
     outputs = []

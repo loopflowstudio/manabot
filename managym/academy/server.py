@@ -464,7 +464,10 @@ def _encountered_definition_ids(
     before_taps: dict[int, tuple[int, bool]] = {}
     after_taps: dict[int, tuple[int, bool]] = {}
     for observation, target in ((before, before_taps), (after, after_taps)):
-        for permanent in (*observation.agent_permanents, *observation.opponent_permanents):
+        for permanent in (
+            *observation.agent_permanents,
+            *observation.opponent_permanents,
+        ):
             if permanent.card is not None:
                 target[int(permanent.id)] = (
                     int(permanent.card.registry_key),

@@ -22,13 +22,14 @@ from typing import Any, Dict, ItemsView, KeysView, List, Tuple, ValuesView
 import gymnasium as gym
 import numpy as np
 
+from manabot.env.legacy_input import LEGACY_PERMANENT_DIM, legacy_card_lists
+
 # Local imports
 from manabot.env.shared_effects import (
     DURATION_CODES,
     SHARED_EFFECT_SHAPES,
     encode_shared_effects,
 )
-from manabot.env.legacy_input import LEGACY_PERMANENT_DIM, legacy_card_lists
 from manabot.infra.config import ObservationConfig, UnsupportedPolicyInput
 from manabot.infra.log import getLogger
 import managym

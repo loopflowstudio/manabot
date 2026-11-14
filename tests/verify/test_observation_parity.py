@@ -8,6 +8,8 @@ import json
 import numpy as np
 import pytest
 
+from manabot.env.match import Match
+
 # Local imports
 from manabot.env.observation import (
     CARD_DIM,
@@ -33,7 +35,6 @@ from manabot.env.observation import (
     ObservationConfig,
     ObservationEncoder,
 )
-from manabot.env.match import Match
 from manabot.infra.config import MatchConfig, UnsupportedPolicyInput
 from manabot.managym.enums import ActionEnum
 from manabot.semantic.text_observation import capture_text_decision, submit_response
