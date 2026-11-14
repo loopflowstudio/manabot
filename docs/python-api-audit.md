@@ -87,9 +87,10 @@ They inherit the originating reset seed, independently of materialization RNG
 seeds. Capture-origin checks and reset invalidation remain intact; portable
 state, replay and world identities exclude this bookkeeping.
 
-Separate follow-ups: **MTG-277** adds a native heuristic opponent; **MTG-276**
-adds [fixed-seat batched observations](engine.md#fixed-seat-observations); **MTG-275** covers batched fork/search.
-None is implemented in this PR.
+**MTG-276** supplies [fixed-seat batched observations](engine.md#fixed-seat-observations)
+through native VectorEnv and both wrappers. These viewer-safe writes pair with
+hand snapshots by slot, game ID and revision, without changing chooser buffers
+or capture prefixes. Batched fork/search remains separate work (**MTG-275**).
 
 No claims of throughput improvement, terminal-hand retention, GPU validation or
 full scalar-helper parity follow from this change. Hand reads perform work only

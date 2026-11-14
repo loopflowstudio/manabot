@@ -329,6 +329,17 @@ class VectorEnv:
         infos = [dict(info) for info in self._rust_env.get_last_info()]
         return self._stack_infos(infos)
 
+    def write_observations_for_players(
+        self,
+        players: list[int],
+        buffers: dict[str, np.ndarray],
+        action_overflow: str = "error",
+    ) -> list[managym.ObservationRead]:
+        """Write viewer-safe NumPy rows without changing execution or capture buffers."""
+        return self._rust_env.write_observations_for_players(
+            players, buffers, action_overflow=action_overflow
+        )
+
     def hand_snapshots(self, players: list[int]) -> list[managym.HandSnapshot]:
         """Privileged CPU hand snapshots of the current games, including autoresets."""
         return self._rust_env.hand_snapshots(players)

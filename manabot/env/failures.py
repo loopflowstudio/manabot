@@ -639,6 +639,17 @@ class CapturedVector(_Capture):
             "evidence stays aligned with the games"
         )
 
+    def write_observations_for_players(
+        self,
+        players: list[int],
+        buffers: dict[str, np.ndarray],
+        action_overflow: str = "error",
+    ) -> list[managym.ObservationRead]:
+        """Write viewer-safe NumPy rows without changing execution or capture buffers."""
+        return self.native.write_observations_for_players(
+            players, buffers, action_overflow=action_overflow
+        )
+
     def hand_snapshots(self, players: list[int]) -> list[managym.HandSnapshot]:
         """Read privileged current hands without adding them to failure evidence."""
         return self.native.hand_snapshots(players)
