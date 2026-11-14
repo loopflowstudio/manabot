@@ -138,7 +138,9 @@ Gate, for the report-text slice:
 - `grep -c 'C followed by D' experiments/mana_spending.md`: 0.
 - `uv run --extra dev pytest tests/eval/test_experiment_files.py tests/infra/test_experiment_data_untracked.py -q`: pass.
 - Each figure quoted in the recommendation and questions appears in a table of
-  the same report (317.39, 321.69, 22, 493, 422, 420, 75, 13).
+  the same report (317.39, 321.69, 22, 493, 422, 420, 75, 13, 712, 49–59);
+  percentages are ratios of its columns (question 1's 4–11% is surplus D over
+  A, 1.037–1.112; 2.5–7.0% is non-redundant D over A; 26 is 2 × 13).
 
 If code changes again: debug `flow::mana` tests
 (`CARGO_BUILD_JOBS=2 cargo test --manifest-path managym/Cargo.toml -p managym --lib flow::mana -- --test-threads 2`,
