@@ -6,6 +6,10 @@ Install the `managym` distribution for `import managym` without the training
 stack. `manabot` depends on the exact same version and keeps `manabot.managym`
 as a compatibility alias. Rust sources stay in this directory. Start with the
 [Python installation example](https://github.com/loopflowstudio/manabot/blob/main/docs/engine-python.md).
+Both `Env` and `VectorEnv` accept `player_policies=("agent", "heuristic")`:
+each native seat can use an external agent, random play or the built-in
+heuristic, without installing `manabot`. See
+[per-seat players](https://github.com/loopflowstudio/manabot/blob/main/docs/engine.md#per-seat-players).
 
 ## Play in the browser
 

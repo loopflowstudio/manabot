@@ -24,6 +24,7 @@ import time
 import traceback
 from typing import Any, Literal
 from uuid import uuid4
+import warnings
 
 import numpy as np
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
@@ -112,8 +113,11 @@ class FailureEvidence(BaseModel):
     operation: Literal["reset", "step"]
     games: list[GameInputs]
     skip_trivial: bool = True
-    # Retain historical names verbatim; native construction admits replay policies.
-    opponent_policy: str = "none"
+    # Only retained receipts use this field; new vector captures name both seats.
+    opponent_policy: str | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    player_policies: tuple[str, str] | None = None
     seed_stride: int = 1
     identities: dict[str, object]
     context: dict[str, object]
@@ -124,6 +128,11 @@ class FailureEvidence(BaseModel):
     execution_outcome: Literal[
         "failed", "execution_outcome_unknown", "last_command_succeeded"
     ] = "execution_outcome_unknown"
+
+    @property
+    def resolved_player_policies(self) -> tuple[str, str]:
+        """Read either receipt spelling without deprecating retained evidence."""
+        return self.player_policies or _retained_player_policies(self.opponent_policy)
 
 
 class NativeTrainingTrace(BaseModel):
@@ -536,6 +545,37 @@ _VECTOR_READS = frozenset(
 )
 
 
+def _retained_player_policies(opponent_policy: str | None) -> tuple[str, str]:
+    """Translate retained names; native construction validates the resulting seats."""
+    return (
+        "agent",
+        "agent" if opponent_policy in (None, "none") else opponent_policy,
+    )
+
+
+def resolve_player_policies(
+    opponent_policy: str | None, player_policies: tuple[str, str] | None
+) -> tuple[str, str]:
+    """Per-seat chooser policies from either spelling of the argument.
+
+    The legacy ``opponent_policy`` warns (removal in 0.3.0): ``none`` surfaces
+    both seats and any other name plays seat 1 natively. Native construction
+    rejects unknown per-seat names.
+    """
+    if opponent_policy is None:
+        return player_policies or ("agent", "agent")
+    if opponent_policy not in ("none", "random", "heuristic"):
+        raise ValueError(f"unsupported opponent_policy: {opponent_policy}")
+    if player_policies is not None:
+        raise ValueError("use player_policies or opponent_policy, not both")
+    warnings.warn(
+        "opponent_policy is deprecated; use player_policies; removal in 0.3.0",
+        DeprecationWarning,
+        stacklevel=3,
+    )
+    return _retained_player_policies(opponent_policy)
+
+
 class CapturedVector(_Capture):
     """Instrument the strict native vector API without isolating or retrying rows.
 
@@ -551,25 +591,26 @@ class CapturedVector(_Capture):
         num_envs: int,
         seed: int = 0,
         skip_trivial: bool = True,
-        opponent_policy: str = "none",
+        opponent_policy: str | None = None,
+        player_policies: tuple[str, str] | None = None,
         seed_stride: int | None = None,
         stream_offset: int = 0,
     ) -> None:
         super().__init__()
         self.stride = seed_stride or num_envs
         self.skip_trivial = skip_trivial
-        self.opponent_policy = opponent_policy
+        self.player_policies = resolve_player_policies(opponent_policy, player_policies)
         self.native = managym.VectorEnv(
             num_envs=num_envs,
             seed=seed,
             skip_trivial=skip_trivial,
-            opponent_policy=opponent_policy,
+            player_policies=self.player_policies,
             seed_stride=self.stride,
         )
         self._exposure = bool(self.scope and self.scope.training_exposure)
         self._closed = False
         if self._exposure:
-            if opponent_policy != "none" or not skip_trivial:
+            if self.player_policies != ("agent", "agent") or not skip_trivial:
                 raise ValueError(
                     "training exposure requires surfaced seats and trivial skipping"
                 )
@@ -665,7 +706,7 @@ class CapturedVector(_Capture):
             operation=operation,
             games=games,
             skip_trivial=self.skip_trivial,
-            opponent_policy=self.opponent_policy,
+            player_policies=self.player_policies,
             seed_stride=self.stride,
         )
 
