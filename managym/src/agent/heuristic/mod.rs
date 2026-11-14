@@ -63,26 +63,21 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 struct Board<'a> {
     raw: &'a Observation,
     actions: &'a [ActionOption],
+    /// Every card record by object id: listed cards, permanents' and spells'.
     cards: HashMap<i32, &'a CardData>,
-    by_key: HashMap<i32, &'a CardData>,
     permanents: HashMap<i32, &'a PermanentData>,
 }
 impl<'a> Board<'a> {
     fn new(raw: &'a Observation, max_actions: Option<usize>) -> Self {
-        let cards = raw.agent_cards.iter().chain(&raw.opponent_cards);
+        let permanents = raw.agent_permanents.iter().chain(&raw.opponent_permanents);
+        let cards = raw.card_records();
         Self {
             raw,
             actions: &raw.action_space.actions[..max_actions
                 .unwrap_or(usize::MAX)
                 .min(raw.action_space.actions.len())],
-            cards: cards.clone().map(|c| (c.id, c)).collect(),
-            by_key: cards.map(|c| (c.registry_key, c)).collect(),
-            permanents: raw
-                .agent_permanents
-                .iter()
-                .chain(&raw.opponent_permanents)
-                .map(|p| (p.id, p))
-                .collect(),
+            cards: cards.map(|c| (c.id, c)).collect(),
+            permanents: permanents.map(|p| (p.id, p)).collect(),
         }
     }
     /// Keep observation order; callers collect only when ranking or reusing a side.
@@ -94,9 +89,8 @@ impl<'a> Board<'a> {
         };
         side.iter().filter(|p| {
             p.is_animated
-                || self
-                    .by_key
-                    .get(&p.registry_key)
+                || p.card
+                    .as_ref()
                     .map_or(p.toughness > 0, |c| c.card_types.is_creature)
         })
     }
@@ -107,20 +101,14 @@ impl<'a> Board<'a> {
         self.raw.turn.active_player_id == self.raw.agent.id
     }
     fn mana_value(&self, p: &PermanentData) -> i32 {
-        self.by_key
-            .get(&p.registry_key)
-            .map_or(0, |c| c.mana_cost.mana_value as i32)
+        p.card.as_ref().map_or(0, |c| c.mana_cost.mana_value as i32)
     }
     fn lands(&self, untapped: bool) -> i32 {
         self.raw
             .agent_permanents
             .iter()
             .filter(|p| {
-                (!untapped || !p.tapped)
-                    && self
-                        .by_key
-                        .get(&p.registry_key)
-                        .is_some_and(|c| c.card_types.is_land)
+                (!untapped || !p.tapped) && p.card.as_ref().is_some_and(|c| c.card_types.is_land)
             })
             .count() as i32
     }
@@ -350,7 +338,7 @@ impl Heuristic {
     ) -> Option<usize> {
         actions.iter().find_map(|(i, id)| {
             let p = b.permanents.get(id)?;
-            let c = b.by_key.get(&p.registry_key)?;
+            let c = p.card.as_ref()?;
             knowledge(&c.name).filter(|k| matches(k)).map(|_| *i)
         })
     }

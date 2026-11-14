@@ -1,5 +1,5 @@
 use super::observation_layout::{
-    action, card, decklist, event, fact, known_hand, name, permanent, player, turn_state,
+    action, card, decklist, event, fact, known_hand, name, permanent, player, stack, turn_state,
 };
 
 use std::{
@@ -11,7 +11,7 @@ use std::{
 use crate::{
     agent::observation::{
         CardData, ContinuousEffectData, EventData, Observation, PermanentData, PlayerData,
-        RestrictedManaData, TurnData,
+        RestrictedManaData, StackObjectData, StackObjectKindData, TurnData,
     },
     cards::tokens::name_value,
     flow::turn::{PhaseKind, StepKind},
@@ -26,6 +26,7 @@ use crate::{
 pub const PLAYER_DIM: usize = player::WIDTH;
 pub const CARD_DIM: usize = card::WIDTH;
 pub const PERMANENT_DIM: usize = permanent::WIDTH;
+pub const STACK_DIM: usize = stack::WIDTH;
 pub const FACT_DIM: usize = fact::WIDTH;
 
 /// What a fact row states.
@@ -143,17 +144,32 @@ pub const DECKLIST_DIM: usize = decklist::WIDTH;
 // 1 for a graveyard card put there from the battlefield this turn.
 pub const TURN_STATE_DIM: usize = turn_state::WIDTH;
 
+/// Which object rows the encoder writes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InputLayout {
+    /// Policy input v11: one row per game thing. Card rows hold cards outside
+    /// the battlefield and stack; a permanent row holds its characteristics;
+    /// the `stack` segment holds every spell and ability. Battlefield object
+    /// and spell ids index their permanent and stack rows.
+    OneToken,
+    /// Deprecated policy inputs v9 and v10 (`legacy_input`), removed in 0.4.0.
+    Legacy,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ObservationEncoderConfig {
     pub max_facts: usize,
     pub max_cards_per_player: usize,
     pub max_permanents_per_player: usize,
+    /// Stack rows (input v11); overflow is a Capacity error.
+    pub max_stack_objects: usize,
+    pub layout: InputLayout,
     pub max_actions: usize,
     pub action_overflow: ActionOverflow,
     pub max_focus_objects: usize,
     pub max_events: usize,
     pub policy_history: bool,
-    /// Policy input v10: write `player_turn_state` and `card_turn_state`.
+    /// Write `player_turn_state` and `card_turn_state` (inputs v10 and v11).
     /// Without them, an observation that needs that state is refused.
     pub turn_state: bool,
 }
@@ -163,12 +179,14 @@ impl Default for ObservationEncoderConfig {
         Self {
             max_cards_per_player: 60,
             max_permanents_per_player: 40,
+            max_stack_objects: 32,
+            layout: InputLayout::OneToken,
             max_actions: 512,
             action_overflow: ActionOverflow::Error,
             max_focus_objects: 2,
             max_events: 32,
             policy_history: false,
-            turn_state: false,
+            turn_state: true,
             max_facts: 512,
         }
     }
@@ -227,8 +245,28 @@ impl ObservationEncoderConfig {
         self.max_cards_per_player * CARD_DIM
     }
 
+    /// Permanent row width: v11's, or the deprecated v9/v10 rows'.
+    pub fn permanent_dim(&self) -> usize {
+        match self.layout {
+            InputLayout::OneToken => PERMANENT_DIM,
+            InputLayout::Legacy => super::legacy_input::PERMANENT_DIM,
+        }
+    }
+
     pub fn permanents_len(&self) -> usize {
-        self.max_permanents_per_player * PERMANENT_DIM
+        self.max_permanents_per_player * self.permanent_dim()
+    }
+
+    /// Stack rows the layout writes; none for v9/v10.
+    pub fn stack_rows(&self) -> usize {
+        match self.layout {
+            InputLayout::OneToken => self.max_stack_objects,
+            InputLayout::Legacy => 0,
+        }
+    }
+
+    pub fn stack_len(&self) -> usize {
+        self.stack_rows() * STACK_DIM
     }
 
     pub fn actions_len(&self) -> usize {
@@ -271,6 +309,7 @@ pub struct EncodedObservation {
     pub opponent_cards: Vec<f32>,
     pub agent_permanents: Vec<f32>,
     pub opponent_permanents: Vec<f32>,
+    pub stack: Vec<f32>,
     pub actions: Vec<f32>,
     pub events: Vec<f32>,
     pub action_focus: Vec<i32>,
@@ -280,6 +319,7 @@ pub struct EncodedObservation {
     pub opponent_cards_valid: Vec<f32>,
     pub agent_permanents_valid: Vec<f32>,
     pub opponent_permanents_valid: Vec<f32>,
+    pub stack_valid: Vec<f32>,
     pub actions_valid: Vec<f32>,
     pub events_valid: Vec<f32>,
 }
@@ -302,6 +342,7 @@ pub struct EncodedObservationMut<'a> {
     pub opponent_cards: &'a mut [f32],
     pub agent_permanents: &'a mut [f32],
     pub opponent_permanents: &'a mut [f32],
+    pub stack: &'a mut [f32],
     pub actions: &'a mut [f32],
     pub events: &'a mut [f32],
     pub action_focus: &'a mut [i32],
@@ -311,6 +352,7 @@ pub struct EncodedObservationMut<'a> {
     pub opponent_cards_valid: &'a mut [f32],
     pub agent_permanents_valid: &'a mut [f32],
     pub opponent_permanents_valid: &'a mut [f32],
+    pub stack_valid: &'a mut [f32],
     pub actions_valid: &'a mut [f32],
     pub events_valid: &'a mut [f32],
 }
@@ -336,6 +378,7 @@ impl EncodedObservation {
             opponent_cards: &mut self.opponent_cards,
             agent_permanents: &mut self.agent_permanents,
             opponent_permanents: &mut self.opponent_permanents,
+            stack: &mut self.stack,
             actions: &mut self.actions,
             events: &mut self.events,
             action_focus: &mut self.action_focus,
@@ -345,6 +388,7 @@ impl EncodedObservation {
             opponent_cards_valid: &mut self.opponent_cards_valid,
             agent_permanents_valid: &mut self.agent_permanents_valid,
             opponent_permanents_valid: &mut self.opponent_permanents_valid,
+            stack_valid: &mut self.stack_valid,
             actions_valid: &mut self.actions_valid,
             events_valid: &mut self.events_valid,
         }
@@ -370,6 +414,9 @@ pub enum ObservationEncodeError {
     /// State the policy input has no columns or rows for; encoding it would
     /// hide a distinction the game makes.
     Unrepresentable(String),
+    /// A historical capture without permanent and spell card records, which
+    /// input v11 needs; only the v9/v10 layout reads it.
+    HistoricalObservation,
 }
 
 impl fmt::Display for ObservationEncodeError {
@@ -384,6 +431,11 @@ impl fmt::Display for ObservationEncodeError {
             Self::Unrepresentable(state) => {
                 write!(f, "the policy input cannot represent {state}")
             }
+            Self::HistoricalObservation => write!(
+                f,
+                "policy input v11 requires permanent and spell card records; \
+                 this historical observation encodes only as input v9/v10"
+            ),
             Self::Capacity {
                 field,
                 capacity,
@@ -430,6 +482,7 @@ pub fn encode(
         opponent_cards: vec![0.0; config.cards_len()],
         agent_permanents: vec![0.0; config.permanents_len()],
         opponent_permanents: vec![0.0; config.permanents_len()],
+        stack: vec![0.0; config.stack_len()],
         actions: vec![0.0; config.actions_len()],
         events: vec![0.0; config.events_len()],
         action_focus: vec![-1; config.action_focus_len()],
@@ -439,6 +492,7 @@ pub fn encode(
         opponent_cards_valid: vec![0.0; config.max_cards_per_player],
         agent_permanents_valid: vec![0.0; config.max_permanents_per_player],
         opponent_permanents_valid: vec![0.0; config.max_permanents_per_player],
+        stack_valid: vec![0.0; config.stack_rows()],
         actions_valid: vec![0.0; config.max_actions],
         events_valid: vec![0.0; config.max_events],
     };
@@ -456,6 +510,28 @@ pub fn encode_into(
     config: &ObservationEncoderConfig,
     out: EncodedObservationMut<'_>,
 ) -> Result<(), ObservationEncodeError> {
+    // Deprecated v9/v10 rows read the card lists they were trained on.
+    let legacy;
+    let obs = match config.layout {
+        InputLayout::Legacy => {
+            legacy = super::legacy_input::view(obs);
+            &legacy
+        }
+        InputLayout::OneToken => {
+            let complete = obs
+                .agent_permanents
+                .iter()
+                .chain(&obs.opponent_permanents)
+                .all(|permanent| permanent.card.is_some())
+                && obs.stack_objects.iter().all(|object| {
+                    (object.kind == StackObjectKindData::Spell) == object.card.is_some()
+                });
+            if !complete {
+                return Err(ObservationEncodeError::HistoricalObservation);
+            }
+            obs
+        }
+    };
     validate_buffer_len(
         "semantic_cards",
         out.semantic_cards.len(),
@@ -503,6 +579,8 @@ pub fn encode_into(
         out.opponent_permanents.len(),
         config.permanents_len(),
     )?;
+    validate_buffer_len("stack", out.stack.len(), config.stack_len())?;
+    validate_buffer_len("stack_valid", out.stack_valid.len(), config.stack_rows())?;
     validate_buffer_len("actions", out.actions.len(), config.actions_len())?;
     validate_buffer_len(
         "name_candidates",
@@ -574,6 +652,15 @@ pub fn encode_into(
             config.max_permanents_per_player,
         ),
         (
+            "stack",
+            if config.layout == InputLayout::OneToken {
+                obs.stack_objects.len()
+            } else {
+                0
+            },
+            config.stack_rows(),
+        ),
+        (
             "actions",
             policy_action_count(
                 obs.action_space.actions.len(),
@@ -641,6 +728,7 @@ pub fn encode_into(
     out.opponent_cards.fill(0.0);
     out.agent_permanents.fill(0.0);
     out.opponent_permanents.fill(0.0);
+    out.stack.fill(0.0);
     out.actions.fill(0.0);
     out.name_candidates.fill(0.0);
     out.events.fill(0.0);
@@ -651,6 +739,7 @@ pub fn encode_into(
     out.opponent_cards_valid.fill(0.0);
     out.agent_permanents_valid.fill(0.0);
     out.opponent_permanents_valid.fill(0.0);
+    out.stack_valid.fill(0.0);
     out.actions_valid.fill(0.0);
     out.events_valid.fill(0.0);
 
@@ -703,8 +792,8 @@ pub fn encode_into(
         2 + obs.agent_cards.len()
             + obs.opponent_cards.len()
             + obs.agent_sideboard.len()
-            + obs.agent_permanents.len()
-            + obs.opponent_permanents.len(),
+            + 2 * (obs.agent_permanents.len() + obs.opponent_permanents.len())
+            + 2 * obs.stack_objects.len(),
     );
     let mut current_object_index: i32 = 0;
 
@@ -779,6 +868,32 @@ pub fn encode_into(
         &mut object_to_index,
         &mut current_object_index,
     );
+    if config.layout == InputLayout::OneToken {
+        // A battlefield object or a spell is one token: its card id names its
+        // permanent or stack row, so actions on the object (sacrifice and tap
+        // payments, selections, its spell's costs and modes), history and
+        // relation sources reach the row that holds its state.
+        let permanent_start = 2 + 2 * config.max_cards_per_player;
+        for (side, permanents) in [&obs.agent_permanents, &obs.opponent_permanents]
+            .into_iter()
+            .enumerate()
+        {
+            for (slot, permanent) in permanents.iter().enumerate() {
+                if let Some(card) = &permanent.card {
+                    let index = permanent_start + side * config.max_permanents_per_player + slot;
+                    object_to_index.insert(card.id, index as i32);
+                }
+            }
+        }
+        encode_stack(
+            &obs.stack_objects,
+            obs.agent.id,
+            out.stack,
+            out.stack_valid,
+            &mut object_to_index,
+            &mut current_object_index,
+        );
+    }
     // Hosts may be listed after their attachments, so links follow indexing.
     let ranks = timestamp_ranks(obs);
     let link = |object: Option<i32>| {
@@ -790,16 +905,20 @@ pub fn encode_into(
         (&obs.agent_permanents, &mut *out.agent_permanents),
         (&obs.opponent_permanents, &mut *out.opponent_permanents),
     ] {
-        for (row, permanent) in out
-            .as_chunks_mut::<PERMANENT_DIM>()
-            .0
-            .iter_mut()
-            .zip(permanents)
-        {
+        for (row, permanent) in out.chunks_mut(config.permanent_dim()).zip(permanents) {
             row[permanent::ATTACHED_TO] = link(permanent.attached_to);
             row[permanent::BLOCKING] = link(permanent.blocking);
             row[permanent::TIMESTAMP] = ranks[&permanent.timestamp()];
         }
+    }
+    for (row, object) in out
+        .stack
+        .as_chunks_mut::<STACK_DIM>()
+        .0
+        .iter_mut()
+        .zip(&obs.stack_objects)
+    {
+        row[stack::SOURCE] = link(object.source_permanent_id);
     }
     encode_facts(obs, &object_to_index, &ranks, out.facts)?;
     super::shared_effects::encode(
@@ -829,11 +948,15 @@ pub fn encode_into(
     );
 
     if config.policy_history {
-        for (index, row) in
-            super::policy_history::encode(obs, config.max_events, config.max_cards_per_player)
-                .iter()
-                .enumerate()
-        {
+        let rows = match config.layout {
+            InputLayout::OneToken => {
+                super::policy_history::encode(obs, config.max_events, &object_to_index)
+            }
+            InputLayout::Legacy => {
+                super::legacy_input::history(obs, config.max_events, config.max_cards_per_player)
+            }
+        };
+        for (index, row) in rows.iter().enumerate() {
             out.events[index * config.event_dim()..(index + 1) * config.event_dim()]
                 .copy_from_slice(row);
             out.events_valid[index] = 1.0;
@@ -1241,14 +1364,14 @@ fn encode_permanents(
     current_object_index: &mut i32,
 ) {
     let max_permanents = config.max_permanents_per_player;
-    let width = PERMANENT_DIM;
+    let width = config.permanent_dim();
     let ordered_permanents = permanents.iter().take(max_permanents);
     let mut encoded_count = 0;
 
     for (i, permanent) in ordered_permanents.enumerate() {
         let start = i * width;
         let end = start + width;
-        encode_permanent_features(permanent, is_mine, &mut out[start..end]);
+        encode_permanent_features(permanent, is_mine, config.layout, &mut out[start..end]);
         out_valid[i] = 1.0;
         object_to_index.insert(permanent.id, *current_object_index);
         *current_object_index += 1;
@@ -1258,7 +1381,12 @@ fn encode_permanents(
     *current_object_index += (max_permanents.saturating_sub(encoded_count)) as i32;
 }
 
-fn encode_permanent_features(permanent: &PermanentData, is_mine: f32, out: &mut [f32]) {
+fn encode_permanent_features(
+    permanent: &PermanentData,
+    is_mine: f32,
+    layout: InputLayout,
+    out: &mut [f32],
+) {
     out[permanent::IS_MINE] = is_mine;
     out[permanent::TAPPED] = bool_to_f32(permanent.tapped);
     out[permanent::DAMAGE] = permanent.damage as f32 / 10.0;
@@ -1299,7 +1427,98 @@ fn encode_permanent_features(permanent: &PermanentData, is_mine: f32, out: &mut 
     out[permanent::GRANTED_LAND] = bool_to_f32(permanent.is_granted_land);
     out[permanent::ABILITIES_LOST] = bool_to_f32(permanent.abilities_lost);
     out[permanent::DEALT_DAMAGE_THIS_TURN] = bool_to_f32(permanent.dealt_damage_this_turn);
+    // Input v11: the characteristics only a card row held in v9/v10.
+    if let (InputLayout::OneToken, Some(card)) = (layout, &permanent.card) {
+        out[permanent::MANA_VALUE] = card.mana_cost.mana_value as f32 / 10.0;
+        out[permanent::IS_LAND] = bool_to_f32(card.card_types.is_land);
+        out[permanent::IS_CREATURE] = bool_to_f32(card.card_types.is_creature);
+        out[permanent::IS_ARTIFACT] = bool_to_f32(card.card_types.is_artifact);
+        out[permanent::IS_ENCHANTMENT] = bool_to_f32(card.card_types.is_enchantment);
+        out[permanent::IS_PLANESWALKER] = bool_to_f32(card.card_types.is_planeswalker);
+        out[permanent::IS_BATTLE] = bool_to_f32(card.card_types.is_battle);
+        out[permanent::IS_LEGENDARY] = bool_to_f32(card.is_legendary);
+        out[permanent::IS_TOKEN] = bool_to_f32(card.is_token);
+        out[permanent::IS_ALLY] = bool_to_f32(card.is_ally);
+        out[permanent::IS_LESSON] = bool_to_f32(card.is_lesson);
+        out[permanent::HAS_WARD] = bool_to_f32(card.ward_cost > 0);
+        out[permanent::WARD_COST] = card.ward_cost as f32 / 10.0;
+    }
     out[out.len() - 1] = 1.0;
+}
+
+/// Stack rows, top first, each indexed by its stack object id; a spell's card
+/// id names the same row.
+fn encode_stack(
+    objects: &[StackObjectData],
+    viewer_id: i32,
+    out: &mut [f32],
+    out_valid: &mut [f32],
+    object_to_index: &mut HashMap<i32, i32>,
+    current_object_index: &mut i32,
+) {
+    let rows = out_valid.len();
+    for (slot, object) in objects.iter().enumerate() {
+        encode_stack_features(
+            object,
+            viewer_id,
+            &mut out[slot * STACK_DIM..(slot + 1) * STACK_DIM],
+        );
+        out_valid[slot] = 1.0;
+        let index = *current_object_index + slot as i32;
+        object_to_index.insert(object.stack_object_id, index);
+        if let Some(card) = &object.card {
+            object_to_index.insert(card.id, index);
+        }
+    }
+    *current_object_index += rows as i32;
+}
+
+fn encode_stack_features(object: &StackObjectData, viewer_id: i32, out: &mut [f32]) {
+    out[stack::IS_MINE] = bool_to_f32(object.controller_id == viewer_id);
+    out[match object.kind {
+        StackObjectKindData::Spell => stack::SPELL,
+        StackObjectKindData::ActivatedAbility => stack::ACTIVATED_ABILITY,
+        StackObjectKindData::TriggeredAbility => stack::TRIGGERED_ABILITY,
+    }] = 1.0;
+    // A spell's definition is its card's; an ability's is its source's.
+    let definition = object
+        .card
+        .as_ref()
+        .map_or(object.source_card_registry_key, |card| card.registry_key);
+    out[stack::DEFINITION] = (definition + 1) as f32;
+    // stack::SOURCE is written once every object is indexed.
+    out[stack::ABILITY] = object.ability_index.map_or(0.0, |index| (index + 1) as f32);
+    out[stack::MODE] = object.chosen_mode.map_or(0.0, |mode| (mode + 1) as f32);
+    let x = match &object.card {
+        Some(card) => card.x,
+        None => (object.x != 0).then_some(object.x),
+    };
+    if let Some(x) = x {
+        out[stack::HAS_X] = 1.0;
+        out[stack::X] = x as f32 / 10.0;
+    }
+    out[stack::KICKED] = bool_to_f32(object.kicked);
+    if let Some(card) = &object.card {
+        out[stack::IS_COPY] = bool_to_f32(card.is_token);
+        out[stack::MANA_VALUE] = card.mana_cost.mana_value as f32 / 10.0;
+        out[stack::POWER] = card.power as f32 / 10.0;
+        out[stack::TOUGHNESS] = card.toughness as f32 / 10.0;
+        out[stack::IS_LAND] = bool_to_f32(card.card_types.is_land);
+        out[stack::IS_CREATURE] = bool_to_f32(card.card_types.is_creature);
+        out[stack::IS_ARTIFACT] = bool_to_f32(card.card_types.is_artifact);
+        out[stack::IS_ENCHANTMENT] = bool_to_f32(card.card_types.is_enchantment);
+        out[stack::IS_PLANESWALKER] = bool_to_f32(card.card_types.is_planeswalker);
+        out[stack::IS_BATTLE] = bool_to_f32(card.card_types.is_battle);
+        out[stack::IS_LEGENDARY] = bool_to_f32(card.is_legendary);
+        // Printed keywords and the ones a static grants it on the stack.
+        let granted = object.granted_keywords.clone().unwrap_or_default().flags();
+        for (column, (printed, granted)) in
+            card.keywords.flags().into_iter().zip(granted).enumerate()
+        {
+            out[stack::FLYING + column] = bool_to_f32(printed || granted);
+        }
+    }
+    out[stack::VALID] = 1.0;
 }
 
 /// The id of an `EffectProgram` on a player that states pooled mana with a
@@ -1878,12 +2097,12 @@ mod tests {
                 effects: Vec::new(),
             },
             agent_sideboard: Vec::new(),
-            agent_cards: vec![
-                make_card(111, ZoneType::Hand, true, 2, 2, 1),
-                make_card(112, ZoneType::Battlefield, true, 3, 3, 2),
-            ],
+            agent_cards: vec![make_card(111, ZoneType::Hand, true, 2, 2, 1)],
             stack_objects: vec![],
-            agent_permanents: vec![make_permanent(333, true)],
+            agent_permanents: vec![PermanentData {
+                card: Some(make_card(112, ZoneType::Battlefield, true, 3, 3, 2)),
+                ..make_permanent(333, true)
+            }],
             opponent: PlayerData {
                 player_index: 1,
                 id: 20,
@@ -1912,7 +2131,10 @@ mod tests {
                 effects: Vec::new(),
             },
             opponent_cards: vec![make_card(221, ZoneType::Hand, false, 1, 1, 1)],
-            opponent_permanents: vec![make_permanent(444, false)],
+            opponent_permanents: vec![PermanentData {
+                card: Some(make_card(445, ZoneType::Battlefield, false, 2, 2, 2)),
+                ..make_permanent(444, false)
+            }],
             policy_history: Default::default(),
             recent_events: vec![
                 EventData {
@@ -2084,10 +2306,10 @@ mod tests {
         assert_eq!(encoded.agent_player[14 + 5], 1.0);
         assert_eq!(encoded.opponent_player[9 + 2], 1.0);
 
-        // Validity flags for populated card/permanent slots.
+        // Validity flags for populated card/permanent slots: the battlefield
+        // object is its permanent row only.
         assert_eq!(encoded.agent_cards[CARD_DIM - 1], 1.0);
-        assert_eq!(encoded.agent_cards[CARD_DIM * 2 - 1], 1.0);
-        assert_eq!(encoded.agent_cards[CARD_DIM * 3 - 1], 0.0);
+        assert_eq!(encoded.agent_cards[CARD_DIM * 2 - 1], 0.0);
         assert_eq!(encoded.agent_permanents[PERMANENT_DIM - 1], 1.0);
         assert_eq!(
             encoded.agent_permanents[PERMANENT_DIM - 1 + PERMANENT_DIM],
@@ -2110,7 +2332,7 @@ mod tests {
         // Validity vectors match populated slots.
         assert_eq!(encoded.agent_player_valid, vec![1.0]);
         assert_eq!(encoded.opponent_player_valid, vec![1.0]);
-        assert_eq!(encoded.agent_cards_valid, vec![1.0, 1.0, 0.0]);
+        assert_eq!(encoded.agent_cards_valid, vec![1.0, 0.0, 0.0]);
         assert_eq!(encoded.opponent_cards_valid, vec![1.0, 0.0, 0.0]);
         assert_eq!(encoded.agent_permanents_valid, vec![1.0, 0.0]);
         assert_eq!(encoded.opponent_permanents_valid, vec![1.0, 0.0]);
@@ -2118,6 +2340,124 @@ mod tests {
         assert_eq!(encoded.events_valid, vec![1.0, 1.0]);
         assert_eq!(encoded.events[0], 3.0);
         assert_eq!(encoded.events[EVENT_DIM], 2.0);
+        // The battlefield card's characteristics are its permanent row's.
+        assert_eq!(
+            encoded.agent_permanents[super::permanent::MANA_VALUE],
+            0.2,
+            "mana value / 10"
+        );
+        assert_eq!(encoded.agent_permanents[super::permanent::IS_CREATURE], 1.0);
+    }
+
+    #[test]
+    fn a_battlefield_object_and_a_spell_are_one_row_each() {
+        use super::{stack, StackObjectData, StackObjectKindData};
+        let mut obs = sample_observation();
+        let spell = make_card(555, ZoneType::Stack, false, 0, 0, 3);
+        obs.stack_objects = vec![
+            StackObjectData {
+                description: None,
+                stack_object_id: 600,
+                kind: StackObjectKindData::Spell,
+                controller_id: 20,
+                source_card_registry_key: 555,
+                source_permanent_id: None,
+                chosen_mode: Some(1),
+                ability_index: None,
+                targets: Vec::new(),
+                x: 0,
+                granted_keywords: None,
+                kicked: true,
+                card: Some(spell),
+            },
+            StackObjectData {
+                description: None,
+                stack_object_id: 601,
+                kind: StackObjectKindData::ActivatedAbility,
+                controller_id: 10,
+                source_card_registry_key: 112,
+                source_permanent_id: Some(333),
+                chosen_mode: None,
+                ability_index: Some(0),
+                targets: Vec::new(),
+                x: 0,
+                granted_keywords: None,
+                kicked: false,
+                card: None,
+            },
+        ];
+        // Focus on the battlefield object's card id, the spell's card id,
+        // its stack id and the ability.
+        for (action, focus) in
+            obs.action_space
+                .actions
+                .iter_mut()
+                .zip([vec![112, 555], vec![600, 601], vec![445]])
+        {
+            action.focus = focus;
+        }
+        let config = ObservationEncoderConfig::default();
+        let encoded = encode(&obs, &config).unwrap();
+        let permanents = 2 + 2 * config.max_cards_per_player as i32;
+        let stack_start = permanents + 2 * config.max_permanents_per_player as i32;
+        assert_eq!(&encoded.action_focus[0..2], &[permanents, stack_start]);
+        assert_eq!(&encoded.action_focus[2..4], &[stack_start, stack_start + 1]);
+        assert_eq!(
+            encoded.action_focus[4],
+            permanents + config.max_permanents_per_player as i32
+        );
+        assert_eq!(encoded.stack_valid[..3], [1.0, 1.0, 0.0]);
+        let spell_row = &encoded.stack[..super::STACK_DIM];
+        assert_eq!(spell_row[stack::IS_MINE], 0.0);
+        assert_eq!(spell_row[stack::SPELL], 1.0);
+        assert_eq!(spell_row[stack::DEFINITION], 556.0);
+        assert_eq!(spell_row[stack::MODE], 2.0);
+        assert_eq!(spell_row[stack::KICKED], 1.0);
+        assert_eq!(spell_row[stack::IS_CREATURE], 1.0);
+        let ability_row = &encoded.stack[super::STACK_DIM..2 * super::STACK_DIM];
+        assert_eq!(ability_row[stack::IS_MINE], 1.0);
+        assert_eq!(ability_row[stack::ACTIVATED_ABILITY], 1.0);
+        assert_eq!(ability_row[stack::DEFINITION], 113.0);
+        assert_eq!(ability_row[stack::ABILITY], 1.0);
+        assert_eq!(ability_row[stack::SOURCE], (permanents + 1) as f32);
+        // No card row holds either object.
+        assert_eq!(encoded.agent_cards_valid.iter().sum::<f32>(), 1.0);
+        assert_eq!(encoded.opponent_cards_valid.iter().sum::<f32>(), 1.0);
+    }
+
+    #[test]
+    fn the_legacy_layout_lists_battlefield_objects_and_spells_as_cards() {
+        use super::InputLayout;
+        let obs = sample_observation();
+        let config = ObservationEncoderConfig {
+            layout: InputLayout::Legacy,
+            turn_state: false,
+            ..ObservationEncoderConfig::default()
+        };
+        let encoded = encode(&obs, &config).unwrap();
+        assert_eq!(&encoded.agent_cards_valid[..3], &[1.0, 1.0, 0.0]);
+        assert_eq!(
+            encoded.agent_permanents.len(),
+            config.max_permanents_per_player * super::super::legacy_input::PERMANENT_DIM
+        );
+        assert!(encoded.stack.is_empty());
+        // The battlefield card row keeps its own object index.
+        let focus = encode(
+            &Observation {
+                action_space: ActionSpaceData {
+                    actions: vec![ActionOption {
+                        focus: vec![112],
+                        ..obs.action_space.actions[0].clone()
+                    }],
+                    ..obs.action_space.clone()
+                },
+                ..obs.clone()
+            },
+            &config,
+        )
+        .unwrap()
+        .action_focus[0];
+        assert_eq!(focus, 3);
     }
 
     #[test]
@@ -2203,6 +2543,10 @@ mod tests {
         let mut opponent_cards = vec![0.0; 2 * CARD_DIM];
         let mut agent_permanents = vec![0.0; PERMANENT_DIM];
         let mut opponent_permanents = vec![0.0; PERMANENT_DIM];
+        let mut player_turn_state = vec![0.0; config.player_turn_state_len()];
+        let mut card_turn_state = vec![0.0; config.card_turn_state_len()];
+        let mut stack = vec![0.0; config.stack_len()];
+        let mut stack_valid = vec![0.0; config.stack_rows()];
         let mut actions = vec![0.0; 2 * ACTION_DIM];
         let mut events = vec![0.0; EVENT_DIM];
         let mut action_focus = vec![-1; 2 * 2];
@@ -2228,14 +2572,16 @@ mod tests {
             semantic_cards: &mut semantic_cards,
             known_hand: &mut known_hand,
             decklists: &mut decklists,
-            player_turn_state: &mut [],
-            card_turn_state: &mut [],
+            player_turn_state: &mut player_turn_state,
+            card_turn_state: &mut card_turn_state,
             agent_player: &mut agent_player,
             opponent_player: &mut opponent_player,
             agent_cards: &mut agent_cards,
             opponent_cards: &mut opponent_cards,
             agent_permanents: &mut agent_permanents,
             opponent_permanents: &mut opponent_permanents,
+            stack: &mut stack,
+            stack_valid: &mut stack_valid,
             actions: &mut actions,
             events: &mut events,
             effects: &mut effects,

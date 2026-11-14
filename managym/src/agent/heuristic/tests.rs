@@ -69,7 +69,7 @@ fn lands(obs: &mut Observation, count: i32) {
         c.zone = ZoneType::Battlefield;
         let mut p = creature(id, 10, 0, 0);
         p.is_animated = false;
-        obs.agent_cards.push(c);
+        p.card = Some(c);
         obs.agent_permanents.push(p);
     }
 }
@@ -324,8 +324,10 @@ fn heuristic_abilities_and_lesson_damage() {
     let mut o = board(Space::Priority);
     let mut c = card(30, "Fabled Passage", 0);
     c.zone = ZoneType::Battlefield;
-    o.agent_cards.push(c);
-    o.agent_permanents.push(creature(30, 10, 0, 0));
+    o.agent_permanents.push(PermanentData {
+        card: Some(c),
+        ..creature(30, 10, 0, 0)
+    });
     o.action_space.actions = vec![
         offer(Action::PriorityPassPriority, &[], None),
         offer(Action::PriorityActivateAbility, &[30], None),

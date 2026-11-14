@@ -136,6 +136,13 @@ impl Serialize for CardsJson<'_> {
 
 struct CardJson<'a>(&'a CardData);
 
+/// Nested card records (`PermanentData::card`) write the card list's bytes.
+impl Serialize for CardData {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        CardJson(self).serialize(serializer)
+    }
+}
+
 impl Serialize for CardJson<'_> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let value = self.0;
@@ -253,11 +260,17 @@ impl Serialize for StackObjectJson<'_> {
         let value = self.0;
         let mut map = serializer.serialize_map(None)?;
         map.serialize_entry("ability_index", &value.ability_index)?;
+        if let Some(card) = &value.card {
+            map.serialize_entry("card", &CardJson(card))?;
+        }
         map.serialize_entry("chosen_mode", &value.chosen_mode)?;
         map.serialize_entry("controller_id", &value.controller_id)?;
         map.serialize_entry("description", &value.description)?;
         if let Some(keywords) = &value.granted_keywords {
             map.serialize_entry("granted_keywords", &sorted_record(keywords))?;
+        }
+        if value.kicked {
+            map.serialize_entry("kicked", &true)?;
         }
         map.serialize_entry("kind", &(value.kind as i32))?;
         map.serialize_entry("source_card_registry_key", &value.source_card_registry_key)?;

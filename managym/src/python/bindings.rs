@@ -238,10 +238,7 @@ fn encoded_to_dict<'py>(
             py,
             &np,
             &encoded.agent_permanents,
-            &[
-                config.max_permanents_per_player,
-                crate::agent::observation_encoder::PERMANENT_DIM,
-            ],
+            &[config.max_permanents_per_player, config.permanent_dim()],
         )?,
     )?;
     dict.set_item(
@@ -250,12 +247,27 @@ fn encoded_to_dict<'py>(
             py,
             &np,
             &encoded.opponent_permanents,
-            &[
-                config.max_permanents_per_player,
-                crate::agent::observation_encoder::PERMANENT_DIM,
-            ],
+            &[config.max_permanents_per_player, config.permanent_dim()],
         )?,
     )?;
+    if config.layout == crate::agent::observation_encoder::InputLayout::OneToken {
+        dict.set_item(
+            "stack",
+            to_numpy_array_f32(
+                py,
+                &np,
+                &encoded.stack,
+                &[
+                    config.max_stack_objects,
+                    crate::agent::observation_encoder::STACK_DIM,
+                ],
+            )?,
+        )?;
+        dict.set_item(
+            "stack_valid",
+            to_numpy_array_f32(py, &np, &encoded.stack_valid, &[config.max_stack_objects])?,
+        )?;
+    }
     dict.set_item(
         "actions",
         to_numpy_array_f32(py, &np, &encoded.actions, &[config.max_actions, ACTION_DIM])?,
@@ -2107,6 +2119,11 @@ pub struct PyPermanent {
     /// The copy effect that made it a copy (CR 707.2); None for an original.
     #[pyo3(get, set)]
     pub copy: Option<PyCopyEffect>,
+    /// Its object's card record on the battlefield (`PermanentData::card`):
+    /// name, rules text, types, token status; None only in historical
+    /// captures, whose card lists held battlefield objects.
+    #[pyo3(get, set)]
+    pub card: Option<PyCard>,
 }
 
 #[cfg(feature = "python")]
@@ -2147,6 +2164,7 @@ impl From<PermanentData> for PyPermanent {
             effects: value.effects.into_iter().map(Into::into).collect(),
             timestamp: value.timestamp,
             copy: value.copy.map(Into::into),
+            card: value.card.map(Into::into),
         }
     }
 }
@@ -2189,6 +2207,7 @@ impl From<PyPermanent> for PermanentData {
             effects: value.effects.into_iter().map(Into::into).collect(),
             timestamp: value.timestamp,
             copy: value.copy.map(Into::into),
+            card: value.card.map(Into::into),
         }
     }
 }
@@ -2457,6 +2476,13 @@ pub struct PyStackObject {
     /// Keywords a static grants this spell on the stack; None when none.
     #[pyo3(get, set)]
     pub granted_keywords: Option<PyKeywords>,
+    /// Whether a spell's kicker cost was paid.
+    #[pyo3(get, set)]
+    pub kicked: bool,
+    /// A spell's card record (zone stack, announced X); None for abilities
+    /// and in historical captures, whose card lists held spells.
+    #[pyo3(get, set)]
+    pub card: Option<PyCard>,
 }
 
 #[cfg(feature = "python")]
@@ -2474,6 +2500,8 @@ impl From<StackObjectData> for PyStackObject {
             targets: value.targets.into_iter().map(PyStackTarget::from).collect(),
             x: value.x,
             granted_keywords: value.granted_keywords.map(PyKeywords::from),
+            kicked: value.kicked,
+            card: value.card.map(PyCard::from),
         }
     }
 }
@@ -2497,6 +2525,8 @@ impl From<PyStackObject> for StackObjectData {
                 .collect(),
             x: value.x,
             granted_keywords: value.granted_keywords.map(KeywordData::from),
+            kicked: value.kicked,
+            card: value.card.map(CardData::from),
         }
     }
 }
@@ -2727,15 +2757,49 @@ impl PyObservation {
         serde_json::to_string(&self.continuation).expect("continuation serializes")
     }
 
-    fn encode_policy_history(&self, capacity: usize, cards_per_player: usize) -> Vec<Vec<f32>> {
+    /// Public history v1 rows, whose contexts are the zero-based object-table
+    /// indexes `object_indexes` gives object ids (input v11's one row each).
+    fn encode_policy_history(
+        &self,
+        capacity: usize,
+        object_indexes: std::collections::HashMap<i32, i32>,
+    ) -> Vec<Vec<f32>> {
         crate::agent::policy_history::encode(
             &Observation::from(self.clone()),
             capacity,
-            cards_per_player,
+            &object_indexes,
         )
         .into_iter()
         .map(|row| row.to_vec())
         .collect()
+    }
+
+    /// Deprecated input v9/v10 rows (removed in 0.4.0): the observation with
+    /// battlefield objects and stack spells listed as cards again, and its
+    /// public history v1 rows over those card rows. Only the v9/v10 encoders
+    /// read them.
+    fn legacy_card_lists(&self) -> (Vec<PyCard>, Vec<PyCard>) {
+        let legacy = crate::agent::legacy_input::view(&Observation::from(self.clone()));
+        (
+            legacy.agent_cards.into_iter().map(PyCard::from).collect(),
+            legacy
+                .opponent_cards
+                .into_iter()
+                .map(PyCard::from)
+                .collect(),
+        )
+    }
+
+    fn encode_legacy_policy_history(
+        &self,
+        capacity: usize,
+        cards_per_player: usize,
+    ) -> Vec<Vec<f32>> {
+        let legacy = crate::agent::legacy_input::view(&Observation::from(self.clone()));
+        crate::agent::legacy_input::history(&legacy, capacity, cards_per_player)
+            .into_iter()
+            .map(|row| row.to_vec())
+            .collect()
     }
     fn validate(&self) -> bool {
         Observation::from(self.clone()).validate()

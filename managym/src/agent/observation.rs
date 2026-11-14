@@ -281,13 +281,14 @@ impl CardTypeData {
     }
 }
 
-/// An object in any zone, under the published `CardData` name. Every field
-/// that states a characteristic (name,
-/// power/toughness, types, supertypes, subtypes, keywords, ward) reads
-/// `Game::characteristics` while the card is on the battlefield and the
-/// printed card elsewhere; identity, token status and the costs paid when
-/// casting are printed by definition. `tests/cards/observability.rs`
-/// classifies each field as layered or printed.
+/// A card object's record. Observation card lists hold cards outside the
+/// battlefield and stack; a permanent's record is `PermanentData::card` and a
+/// spell's is `StackObjectData::card`, so each game thing has one record.
+/// Every field that states a characteristic (name, power/toughness, types,
+/// supertypes, subtypes, keywords, ward) reads `Game::characteristics` while
+/// the card is on the battlefield and the printed card elsewhere; identity,
+/// token status and the costs paid when casting are printed by definition.
+/// `tests/cards/observability.rs` classifies each field as layered or printed.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CardData {
@@ -473,6 +474,13 @@ pub struct StackObjectData {
     /// lifelink); absent when none.
     #[serde(default)]
     pub granted_keywords: Option<KeywordData>,
+    /// Whether a spell's kicker cost was paid (CR 702.33).
+    #[serde(default)]
+    pub kicked: bool,
+    /// A spell's card record (zone stack, with its announced X); absent for
+    /// abilities and in historical captures, whose card lists held spells.
+    #[serde(default)]
+    pub card: Option<CardData>,
 }
 
 /// One continuous-effect record (`state::effect`) affecting a player or
@@ -836,6 +844,14 @@ pub struct PermanentData {
     /// The copy effect that made it a copy; absent for an original.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub copy: Option<CopyData>,
+    /// Its object's card record on the battlefield: name, rules text, types,
+    /// token status, costs and ward, read from the same layered view as the
+    /// fields above (its power, toughness and keywords equal them). `id` is
+    /// the object's id, which actions on the object (sacrifice, payment and
+    /// selection choices) name. Absent only in historical captures, whose
+    /// card lists held battlefield objects.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub card: Option<CardData>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1386,20 +1402,19 @@ impl Observation {
                 }
             }
         }
+    }
 
-        for stack_object in game.state.stack_objects.iter().rev() {
-            if let StackObject::Spell(spell) = stack_object {
-                let mut card = Self::card_data(game, spell.object, ZoneType::Stack);
-                let definition = &game.state.objects[spell.object];
-                // A replicated spell's announced count is its X.
-                if definition.mana_cost.as_ref().is_some_and(|cost| cost.x > 0)
-                    || definition.replicate().is_some()
-                {
-                    card.x = Some(i32::from(spell.x));
-                }
-                self.push_card(card, game.state.objects[spell.object].owner);
-            }
+    /// A spell's card record on the stack, with its announced X.
+    fn spell_card_data(game: &Game, spell: &crate::state::stack_object::SpellOnStack) -> CardData {
+        let mut card = Self::card_data(game, spell.object, ZoneType::Stack);
+        let definition = &game.state.objects[spell.object];
+        // A replicated spell's announced count is its X.
+        if definition.mana_cost.as_ref().is_some_and(|cost| cost.x > 0)
+            || definition.replicate().is_some()
+        {
+            card.x = Some(i32::from(spell.x));
         }
+        card
     }
 
     fn populate_permanents(&mut self, game: &Game, agent_player: PlayerId) {
@@ -1419,8 +1434,7 @@ impl Observation {
         }
     }
 
-    /// List a card on `side`: its owner's, except that battlefield cards
-    /// sit with their permanent's controller, in permanent order.
+    /// List a card on `side`, its owner's.
     fn push_card(&mut self, card_data: CardData, side: PlayerId) {
         if side.0 == self.agent.player_index as usize {
             self.agent_cards.push(card_data);
@@ -1535,6 +1549,11 @@ impl Observation {
                 .copy
                 .as_ref()
                 .map(|copy| CopyData::new(copy, permanent.timestamp.0 as i32)),
+            card: Some(Self::card_data(
+                game,
+                permanent.object,
+                ZoneType::Battlefield,
+            )),
         };
 
         if permanent.controller.0 == self.agent.player_index as usize {
@@ -1542,11 +1561,6 @@ impl Observation {
         } else {
             self.opponent_permanents.push(pdat);
         }
-
-        self.push_card(
-            Self::card_data(game, permanent.object, ZoneType::Battlefield),
-            permanent.controller,
-        );
     }
 
     /// A card's row. On the battlefield every characteristic reads the
@@ -1672,6 +1686,11 @@ impl Observation {
                     (!crate::state::is_zero(&keywords))
                         .then(|| KeywordData::from_keywords(&keywords))
                 }
+                _ => None,
+            },
+            kicked: matches!(stack_object, StackObject::Spell(spell) if spell.kicked),
+            card: match stack_object {
+                StackObject::Spell(spell) => Some(Self::spell_card_data(game, spell)),
                 _ => None,
             },
             targets: stack_object
@@ -2152,6 +2171,27 @@ impl Observation {
         }
     }
 
+    /// Every card record the viewer sees: listed cards, then permanents'
+    /// (agent side first) and stack spells' (top first). Each object appears
+    /// once, except in a historical capture, whose lists repeat its
+    /// battlefield objects and spells.
+    pub fn card_records(&self) -> impl Iterator<Item = &CardData> + Clone + '_ {
+        self.agent_cards
+            .iter()
+            .chain(&self.opponent_cards)
+            .chain(
+                self.agent_permanents
+                    .iter()
+                    .chain(&self.opponent_permanents)
+                    .filter_map(|permanent| permanent.card.as_ref()),
+            )
+            .chain(
+                self.stack_objects
+                    .iter()
+                    .filter_map(|object| object.card.as_ref()),
+            )
+    }
+
     pub fn validate(&self) -> bool {
         if self.agent.id == self.opponent.id {
             return false;
@@ -2164,7 +2204,8 @@ impl Observation {
                 return false;
             }
         }
-        // A battlefield card sits with its controller, who may not own it.
+        // A battlefield card in a historical capture sits with its
+        // controller, who may not own it.
         for (objects, side) in [
             (&self.agent_cards, self.agent.id),
             (&self.opponent_cards, self.opponent.id),

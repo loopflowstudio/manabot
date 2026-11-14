@@ -29,14 +29,16 @@ class ObservationArrayLayout(TypedDict):
     element: NotRequired[ObservationValueLayout]
 
 def observation_layout(
-    *, policy_history: bool = False, turn_state: bool = False
+    *, policy_history: bool = False, turn_state: bool = True, legacy: bool = False
 ) -> dict[str, ObservationArrayLayout]:
     """Column names, value encodings and fixed extents of each encoded array.
 
     Keys match `encode_observation` and the vector env buffers; a None extent
     is a caller-selected capacity. `policy_history` selects the public history
-    rows of `events` instead of raw events; `turn_state` adds policy input
-    v10's `player_turn_state` and `card_turn_state`. Seats are viewer-relative.
+    rows of `events` instead of raw events; `turn_state` adds
+    `player_turn_state` and `card_turn_state` (inputs v10 and v11); `legacy`
+    selects the deprecated v9/v10 object rows (removed in 0.4.0) instead of
+    input v11's one-token rows and `stack`. Seats are viewer-relative.
     No game or buffer is created.
     """
 
@@ -830,6 +832,10 @@ class Permanent:
     timestamp: int | None
     # The copy effect that made it a copy; None for an original.
     copy: CopyEffect | None
+    # Its object's card record on the battlefield: name, rules text, types,
+    # token status. `card.id` is the object id selection and payment actions
+    # focus. None only in historical captures.
+    card: Card | None
 
 class Turn:
     turn_number: int
@@ -877,6 +883,11 @@ class StackObject:
     x: int
     # Keywords a static grants this spell on the stack.
     granted_keywords: Keywords | None
+    # Whether a spell's kicker cost was paid.
+    kicked: bool
+    # A spell's card record (zone stack, announced X); None for abilities and
+    # historical captures.
+    card: Card | None
 
 class EventData:
     event_type: EventTypeEnum
@@ -910,6 +921,14 @@ class Observation:
     stack_objects: List[StackObject]
     recent_events: List[EventData]
 
+    def encode_policy_history(
+        self, capacity: int, object_indexes: dict[int, int]
+    ) -> list[list[float]]: ...
+    # Deprecated input v9/v10 views (removed in 0.4.0).
+    def legacy_card_lists(self) -> tuple[list[Card], list[Card]]: ...
+    def encode_legacy_policy_history(
+        self, capacity: int, cards_per_player: int
+    ) -> list[list[float]]: ...
     def validate(self) -> bool: ...
     def toJSON(self) -> str: ...
 

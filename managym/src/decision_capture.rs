@@ -64,8 +64,9 @@ impl Game {
         self.describe_effect_execution(viewer, &mut agent.continuation);
         // Capture admits only policy history, not the presentation's prose suffix.
         let continuation = self.decision_context_from_frames(viewer, &agent.continuation);
+        let cards: Vec<&crate::agent::observation::CardData> = agent.card_records().collect();
         let mut objects = BTreeMap::new();
-        for visible in agent.agent_cards.iter().chain(&agent.opponent_cards) {
+        for visible in cards.iter().copied() {
             let (index, object) = self
                 .state
                 .objects
@@ -89,7 +90,7 @@ impl Game {
             );
         }
         let mut ids = BTreeSet::new();
-        for object in agent.agent_cards.iter().chain(&agent.opponent_cards) {
+        for object in cards.iter() {
             ids.insert(object.registry_key as u32);
         }
         for object in &agent.agent_sideboard {
@@ -124,13 +125,8 @@ impl Game {
                 } => {
                     ids.insert(*definition);
                     // Same visibility/link admission as the native tensor encoder.
-                    let visible = context_id.filter(|id| {
-                        agent
-                            .agent_cards
-                            .iter()
-                            .chain(&agent.opponent_cards)
-                            .any(|object| object.id == *id)
-                    });
+                    let visible =
+                        context_id.filter(|id| cards.iter().any(|object| object.id == *id));
                     json!({"kind": "card", "definition": definition, "owner": owner.0,
                         "zone": zone.map(|zone| zone as i32), "context_id": visible})
                 }
