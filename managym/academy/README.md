@@ -48,12 +48,14 @@ pending choice with the same legal offers and permitted information.
   before filtering/pagination; only completed shared replays are readable by
   nonparticipants. `ACADEMY_PLAY_RECORD_ORIGIN` distinguishes declared automated
   validation from human play; absent provenance is unknown.
+- **`card_art.py`**: Scryfall art and credits, fetched on first view into a
+  local cache and served from `/api/card-art/`
 - **`villain.py`**: opponent policies for the hero to face
 - **`opponent.py`**: trained opponents — the checkpoint catalog
   (`GET /api/opponents`), chosen by exact SHA-256 and verified before play
 
 Academy never imports manabot or Torch, eagerly or lazily. Trained opponents,
-greedy and heuristic Watch players and arena import come from the one
+greedy and heuristic Watch players and game file import come from the one
 `managym.academy.bots` entry point that manabot declares; without it those
 features report that they need manabot, and play, replay and Study are
 unaffected. Study validates the existing
@@ -72,7 +74,10 @@ uv run --no-project managym academy
 ```
 
 [Running Academy](../../docs/academy.md#running-academy) is the guide: options,
-the URL, stopping, playing, replays, trained bots and troubleshooting. The
+the URL, stopping, playing, replays, trained bots and troubleshooting.
+`managym academy play` and `managym academy replay` open a chosen game or a
+selected replay directly, and `managym.academy.launch` does the same from
+Python ([Launch from Python](../../docs/academy.md#launch-from-python)). The
 commands below are for working on Academy from a checkout.
 
 ```bash
@@ -83,11 +88,15 @@ commands below are for working on Academy from a checkout.
 ./scripts/verify-clean-machine   # the clean-machine proof
 ```
 
-Populate optional local Scryfall art with
-`npm --prefix academy/ui run fetch:card-art`. The downloader caches curated and
-demo cards, preserves artist/source credits, and respects rate-limit cooldowns.
-Play uses the cache without contacting Scryfall; missing art keeps the procedural
-card treatment. Artist credits are available in the footer.
+Card art needs no command. The server resolves a card name to its Scryfall id
+through the content pool, fetches the image and its credit on first view into
+`ACADEMY_CARD_ART_DIR` (default `~/.cache/managym/card-art`) and serves it
+same-origin under `/api/card-art/`; the browser never contacts Scryfall. It
+fetches only names a viewer's frame or deck list already holds and never
+warms the cache from a decklist, so a closed list causes no request. Missing
+art keeps the procedural card treatment, `ACADEMY_CARD_ART=off` disables
+fetching, and artist credits are in the footer. See
+[card art](../../docs/academy.md#card-art).
 
 The Learn demo opens `/?demo=learn`: choose **Take a Lesson**, **Discard and
 draw**, or **Decline Learn**. The first two modes show card previews and a
@@ -190,11 +199,17 @@ Play/Pause and speed control that same operation. Previous decisions read saved
 outputs without rerunning the policy. Completed watched games open from Games
 in this same table. Reloading retains the watch credential in the browser.
 
-`watch.py` admits controllers and verified arena/Tournament game JSON or
-`.jsonl.gz` traces; choose a game when a trace contains several. Import verifies
-the original receipt, Commands and state digests without invoking a player.
+`watch.py` admits controllers and verified exported training games or evaluation
+traces through **Open a game file**; choose a game when a trace contains several.
+Import verifies the original receipt, Commands and state digests without invoking a player.
 The imported Academy replay has its own identity; the source digest is retained
-without rewriting the arena evidence. Missing historical policy outputs are
+without rewriting the arena evidence. A game's stated source kind is kept
+beside it, and Replay is headed **Training game** or **Evaluation game**
+accordingly; a training game is one exported by
+`manabot.sim.recording`
+([guide](../../docs/academy.md#watch-a-game-from-your-training-loop)), in the
+same Command format and through the same verification. A game that states its
+world is refused before replay when that world is not the running one. Missing historical policy outputs are
 marked unavailable. Local-update receipts expose only policy/search vectors
 and an acting-view belief summary, never private sampled hands or branch audits.
 
@@ -222,11 +237,11 @@ original command bindings.
 
 The shared deck browser assigns either seat from all ten exact Elemental setups
 in the additive `elemental-world-v2` pack, including mirrors. Browse the main
-lists and Lesson pools, click cached card artwork for a printed preview, then
+lists and Lesson pools, click card artwork for a printed preview, then
 use the assignment buttons to choose each seat. During play, **Choose decks**
 prepares the next matchup; only **New Game** replaces the current attempt.
 The [local MTG-183 launcher](../../docs/academy.md#playing-a-trained-challenger)
-pins the latest published checkpoint for CPU play and populates the art cache.
+pins the latest published checkpoint for CPU play.
 The decks' 40-card main lists, Lesson pools, local treatments and retained card-identity
 provenance are in the schema-2 roster manifest at
 `managym/academy/packs/elemental-world/v2/manifest.json`. Native compiled setups

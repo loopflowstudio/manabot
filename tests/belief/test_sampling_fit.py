@@ -7,10 +7,6 @@ import pytest
 import torch
 
 from manabot.belief.checkpoint import load_belief_sampler
-from manabot.belief.sampling import (
-    SamplerInput,
-    SamplerSchema,
-)
 from manabot.belief.sampling_data import (
     SamplerDataset,
     SamplerExample,
@@ -22,6 +18,7 @@ from manabot.belief.sampling_fit import (
     fit_belief_sampler,
     save_belief_sampler,
 )
+from manabot.belief.sampling_types import SamplerInput, SamplerSchema
 
 
 def _dataset() -> SamplerDataset:

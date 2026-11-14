@@ -11,8 +11,6 @@ from pathlib import Path
 import tempfile
 from typing import Any
 
-from managym.experience import UNVERSIONED_CONTENT_HASH, Command
-
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
@@ -26,11 +24,12 @@ from manabot.infra.config import MatchConfig, ObservationConfig, RewardConfig
 from manabot.infra.identity import canonical_json, canonical_sha256, file_sha256
 from manabot.infra.provenance import RECORDED_ASSET_MANIFEST_HASH
 from manabot.model.world import expected_world
-from manabot.sim.frames import build_command, build_viewer_frame
+from manabot.sim.frames import build_command, build_viewer_frame, decision_row
 from manabot.verify.games import INTERACTIVE_DECK
 from manabot.verify.scenario_validation import scenario_identity
 from manabot.verify.scenarios import SCENARIOS, build_scenario_env
 import managym
+from managym.experience import UNVERSIONED_CONTENT_HASH, Command
 
 
 @dataclass(frozen=True)
@@ -113,6 +112,10 @@ def replay_environment(
             env.close()
             raise ValueError("scenario world/setup/input mismatch")
         return env, observation
+    if "world" in game and game["world"] != managym.world_identity():
+        raise ValueError(
+            f"recorded world {game['world']} differs from running {managym.world_identity()}"
+        )
     names = game["seat_players"]
     match = Match(
         MatchConfig.model_validate(game["match_hypers"])
@@ -361,12 +364,16 @@ def replay_failure(game: dict[str, Any]) -> dict[str, Any]:
         if offer is None:
             agreement.matches_binding = False
             return {**asdict(agreement), "status": "pending_mismatch"}
+        row = decision_row(env, frame, action)
         bindings = {
-            "frame_sha256": canonical_sha256(frame),
-            "pre_state_digest": env._engine.state_digest(),
-            "chosen_offer": offer,
-            "command": build_command(frame, action),
-            "command_sha256": canonical_sha256(pending["command"]),
+            key: row[key]
+            for key in (
+                "frame_sha256",
+                "pre_state_digest",
+                "chosen_offer",
+                "command",
+                "command_sha256",
+            )
         }
         if any(
             pending[key] != value

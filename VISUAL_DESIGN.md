@@ -294,14 +294,14 @@ Badges state facts or do not exist: an effective 0/0 permanent (a land)
 shows no oval. Every visual state is also stated in the card's accessible
 name.
 
-**Card art is versioned content, not runtime fetches.**
-`academy/ui/scripts/fetch-card-art.mjs` pulls each curated-pack identity's
-art crop from Scryfall exactly once per machine (identified User-Agent,
-150ms pacing, cache-first, never at runtime) into `src/lib/card-art/` (bundler-known, so a missing file is a lookup miss, never a request);
-CardImage layers it over the procedural treatment, which remains the
-automatic fallback for anything missing. Images stay untracked; rights sit
-in `src/lib/card-art/NOTICE.md` under the WotC Fan Content Policy, as do
-the mana symbols in `static/mana/`.
+**Card art loads by default.** Academy fetches art for names the viewer can
+already see, caches it by Scryfall printing id and serves it same-origin.
+CardImage layers a loaded image over its procedural treatment; unavailable
+images keep that treatment. Full previews and the Deckmaster back use the same
+cache. The footer credits the artists for images displayed in this browser.
+Artwork is © Wizards of the Coast LLC, used as unofficial Fan Content under
+the Wizards of the Coast Fan Content Policy, without endorsement. The package
+contains no artwork. See [card art](docs/academy.md#card-art) for cache settings.
 
 ## The Score — Replay and Study
 
