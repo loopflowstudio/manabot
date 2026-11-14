@@ -11,7 +11,7 @@ requires-python = ">=3.12,<3.14"
 dependencies = ["numpy>=1.24.0", "pydantic>=2.12.0"]
 
 [project.optional-dependencies]
-academy = ["fastapi>=0.116.0", "uvicorn[standard]>=0.34.0"]
+academy = ["fastapi>=0.116.0", "typer>=0.12.5", "uvicorn[standard]>=0.34.0"]
 
 [project.scripts]
 managym = "managym.cli:main"

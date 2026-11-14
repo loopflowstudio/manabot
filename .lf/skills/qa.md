@@ -90,6 +90,17 @@ publish, land or choose the next Graph step from here.
   (buttons are disabled while a Command is in flight, and `Pass Turn (F6)` in
   the panel is not an offer). Tapped lands show only in a `fullPage`
   screenshot, not in the board's text.
+- Configured launch (`managym academy play|replay`, `managym.academy.launch.serve`):
+  from a checkout first build the static SPA with
+  `ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build`, then set
+  `ACADEMY_FRONTEND_BUILD=$PWD/academy/ui/build` (otherwise `site.missing`).
+  Plain `npm run build` uses adapter-auto and does not create that directory. Pass `--no-open --port <unused> --traces-dir /tmp/<dir>`;
+  port 8000 is often taken. Open READY's `open` address in Playwright. For a
+  multi-game evaluation trace, call `manabot.eval.match.play_cell` with
+  `tests.eval.arena_fixture.arena_fixture()` anchors, several `deal_seeds` and
+  `legs=(0, 1)` (six games took about 80 s under load). To test Ctrl-C, start the
+  CLI with `start_new_session=True` and SIGINT restored, as below; with `nohup … &`
+  SIGINT is ignored and the server looks hung.
 - Academy table: `./scripts/play --port <unused> --frontend-port <unused>`; wait
   for the `ACADEMY_PLAY_READY` line (it names Python, native ABI and module
   path), open the frontend URL, press New Game, play a land and Pass Turn.
@@ -127,6 +138,18 @@ publish, land or choose the next Graph step from here.
   buttons, or every click times out while the bot plays on. Hover a card name
   to read `[data-testid=card-rules-text]`. Search 64 with a fast creature deck
   usually wins before a slow card is used; give the opponent a light deck.
+- Live network recovery: browser offline emulation may leave an existing
+  WebSocket connected. To prove recovery, put a local TCP forwarder between the
+  browser and the real server, destroy its active socket pairs, stop listening
+  until the disconnected/reconnecting badge appears, then listen again. Keep
+  the backend process alive so its real session survives. Compare match,
+  revision, frame hash, projection and offers after recovery; do not retain
+  resume credentials in receipts. Close the forwarder after the browser exits.
+  Accepted Commands carry their next frame in `update.frame`; recovery carries
+  it in `recovery.frame`. Capture both when observing the wire. At game end the
+  result deliberately receives focus and may scroll; assert document stability
+  during active decisions. After Play Again, select the completed replay by its
+  result label, since the newest entry is the unfinished next game.
 - First-time clone: copy tracked plus untracked non-ignored files
   (`git ls-files -co --exclude-standard`) to an empty `/tmp` directory and run
   `ACADEMY_CLEAN_API_PORT=… ACADEMY_CLEAN_FRONTEND_PORT=… ./scripts/verify-clean-machine`
@@ -326,3 +349,53 @@ publish, land or choose the next Graph step from here.
   `ETUDE_OUTPUT_DIR=<dir> MTG301_WORK=<dir> MTG301_CANDIDATE=<c> uv run python
   experiments/l4_step_profile.py job --smoke`. For `live` it took about 6
   minutes and 2.2 GB and runs every stage as a real child process.
+
+- Live Academy QA without fixtures: build first, then start the ordinary
+  `managym.academy.server:app` with `ACADEMY_TRACES_DIR` pointing into an ignored
+  `.runs/` directory and `ACADEMY_PLAY_RECORD_ORIGIN=automated_validation`.
+  Run `ACADEMY_API_PORT=<api> npm run preview -- --host 127.0.0.1 --port <ui>
+  --strictPort` from `academy/ui`. Browser frame probes must read accepted
+  Commands from `message.update.frame` as well as `message.recovery.frame`;
+  otherwise a reload comparison uses a stale opening frame. For a short real
+  target/recovery game, import `20 Mountain\n40 Lightning Bolt` against
+  `40 Plains`, select Passive, play Mountains and cast Bolts at Villain.
+  Replay's newest entry can be an unfinished Play Again attempt: select the
+  completed result explicitly before checking Next frame. Playwright offline
+  mode did not close an existing localhost WebSocket in the MTG-355 run; it
+  alone does not prove disconnect/reconnect behavior.
+- For a genuine local connection interruption, put a TCP forwarder between the
+  browser and the ordinary same-origin Academy CLI server. Stop its listener and
+  destroy both sockets of every forwarded pair; observe disconnected/reconnecting
+  and disabled offers, then restore the listener. Compare the pending frame and
+  recorded event identities before and after. Keep credentials out of receipts.
+  Also reload the whole page: a delta reconnect alone cannot detect a persisted
+  presentation cursor suppressing the tail when in-memory history is empty.
+  Fresh reload can recover older facts absent from an authored demo's initial
+  prefix; require committed facts to remain, with unique rows and no old motion.
+  Let keyboard Home scrolling settle before measuring a reading anchor. Prompt
+  kinds in frames are lowercase; `data-action-space-kind` uses uppercase names
+  such as `CHOOSE_TARGET` and `LOOK_AND_SELECT`. Identical card copies have
+  separate cast offers, so choose an explicit occurrence in browser scripts.
+  In Replay, open Consequences with a real pointer click at the final frame;
+  setting `<details>.open` cannot detect a hand overflowing over its summary.
+  Check the hand ends above history. Recorded terminal results have no next-game
+  action and must leave keyboard navigation available; the live Play Again
+  dialog retains its focus behavior.
+- Play/Inspect QA: fresh storage starts in Inspect. In Play, activate the exact
+  hand `[data-object-id]` by pointer or Enter, then commit its labeled
+  `[data-offer-id]`; selection, Inspect card, mode switches and Escape send no
+  Command. Only an unambiguous cast/play-land source supports drag: move at
+  least 8 CSS px and release in `[data-testid=play-drop-area]`. Verify outside
+  release and Escape during capture send nothing and leave no selection after
+  the compatibility click. Observe WebSocket frames without rewriting them and
+  compare each deliberate Command's match, revision, prompt and offer.
+  Open History and settings before selecting a card and before a payment choice
+  at 1280×800: inspect screenshots and compare `.decision-controls`, `.offer-list`
+  and `[data-testid=automation-status]` rectangles. Parent panel bounds alone
+  miss overflowing children. Repeat with 100 offers; the list must scroll
+  independently while controls remain visible. Use Edit stops, change a whose-turn
+  checkbox, wait for the authority update, then reload; check settings and pending
+  frame as well as the separate persisted Play preference. A second tab must
+  have no resumed game. Initial automatic history may precede a launch's received
+  tail; compare that tail exactly to the saved source and the full saved prefix
+  to Replay, retaining explicit unavailable-prefix labels.

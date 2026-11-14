@@ -7,7 +7,8 @@ from typing import Any
 
 import torch
 
-from manabot.belief.sampling import AutoregressiveBeliefSampler, SamplerSchema
+from manabot.belief.sampling import AutoregressiveBeliefSampler
+from manabot.belief.sampling_types import SamplerSchema
 
 
 def load_belief_sampler(

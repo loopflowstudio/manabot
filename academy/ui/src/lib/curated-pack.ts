@@ -1,4 +1,5 @@
 import manifestData from '$packs/tla-ur-lessons-vs-gw-allies/v2/manifest.json';
+import jeongData from '$packs/tla-gw-allies-jeong-vs-ur-lessons/v2/manifest.json';
 import elementalData from '$packs/elemental-world/v2/manifest.json';
 
 export interface PackDeck {
@@ -305,6 +306,7 @@ export function validateCuratedPack(value: unknown): CuratedPackManifest {
 }
 
 export const CURATED_PACK = validateCuratedPack(manifestData);
+export const JEONG_INCREMENT_PACK = validateCuratedPack(jeongData);
 export const ELEMENTAL_WORLD_PACK = validateCuratedPack(elementalData);
 
 export function fnv1a32(value: string): number {

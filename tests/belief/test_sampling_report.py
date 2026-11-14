@@ -9,11 +9,7 @@ from pathlib import Path
 import pytest
 import torch
 
-from manabot.belief.sampling import (
-    AutoregressiveBeliefSampler,
-    SamplerInput,
-    SamplerSchema,
-)
+from manabot.belief.sampling import AutoregressiveBeliefSampler
 from manabot.belief.sampling_cohort import CohortSpec, FitAttempt, report_sampler_cohort
 from manabot.belief.sampling_data import (
     SamplerDataset,
@@ -23,6 +19,7 @@ from manabot.belief.sampling_data import (
     save_dataset,
 )
 from manabot.belief.sampling_fit import CalibrationBin, SamplerArmMetrics
+from manabot.belief.sampling_types import SamplerInput, SamplerSchema
 from manabot.reports.belief import _pool_games, main, report_saved_sampler
 
 

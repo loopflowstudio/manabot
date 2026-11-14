@@ -27,10 +27,10 @@ from manabot.sim.native_game import execute_game
 from manabot.sim.registration import PlayerRegistration, SearchSemantics
 from manabot.sim.replay import replay_games
 from manabot.sim.search import local_update
-from manabot.sim.search.local_update import (
+from manabot.sim.search.local_update import LocalUpdateTeacher
+from manabot.sim.search.local_update_receipt import (
     LocalSearchConfig,
     LocalUpdateReceipt,
-    LocalUpdateTeacher,
     SamplerArtifact,
     regularized_update,
 )
@@ -94,6 +94,9 @@ def make_teacher(
         "manabot/backends/torch/_facts.py",
         "manabot/sim/search/rollout.py",
         "manabot/sim/search/rollout_receipt.py",
+        "manabot/sim/search/local_update_receipt.py",
+        "manabot/sim/search/sampling_receipt.py",
+        "manabot/belief/sampling_types.py",
     ],
 )
 def test_teacher_identity_tracks_implementation_owners(

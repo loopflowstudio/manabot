@@ -1,5 +1,5 @@
 import type { AddressedReplayDecision } from './replay-index';
-import type { Observation, RecordedPlayer } from './types';
+import type { Observation, PresentationEvent, RecordedPlayer } from './types';
 
 export interface BotDecision {
   action: number;
@@ -15,10 +15,12 @@ export interface BotDecision {
 export interface WatchDecision {
   id: string;
   players: string[];
+  source_kind?: string;
   identities: RecordedPlayer[];
   decision: AddressedReplayDecision;
   observation: Observation;
   outputs: BotDecision | null;
+  presentation?: PresentationEvent[];
   count: number;
   finished: boolean;
   revealed: boolean;

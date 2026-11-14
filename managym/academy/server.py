@@ -16,7 +16,7 @@ import logging
 from pathlib import Path
 import secrets
 import sqlite3
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 from fastapi import (
     FastAPI,
@@ -27,10 +27,11 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import ValidationError
 
 import managym
+from managym.academy.card_art import card_art
 from managym.bots import BotDecision, BotPolicy, choose_bot
 from managym.decision import (
     Command as SemanticCommand,
@@ -303,6 +304,8 @@ class SessionRecord:
 
 
 SESSION_REGISTRY: dict[str, SessionRecord] = {}
+# Private, process-local configurations. Never included in viewer frames.
+LAUNCH_CONFIGS: dict[str, dict[str, Any]] = {}
 
 
 @dataclass(frozen=True)
@@ -918,6 +921,17 @@ class GameSession:
         self._study_attempt_seq = 0
 
     def new_game(self, raw_config: Any) -> dict[str, Any]:
+        launch_id = raw_config.get("launch") if isinstance(raw_config, dict) else None
+        if launch_id is not None:
+            if not isinstance(launch_id, str) or launch_id not in LAUNCH_CONFIGS:
+                raise ValueError(
+                    "launch_unknown: This launch is unknown; run the launch command again or choose a new game."
+                )
+            raw_config = {
+                **raw_config,
+                **LAUNCH_CONFIGS[launch_id],
+                "request_id": f"launch.{launch_id}",
+            }
         request_id = (
             raw_config.get("request_id") if isinstance(raw_config, dict) else None
         )
@@ -1080,6 +1094,8 @@ class GameSession:
             update = self._wire_message(reason="initial_connect")
         if request_id is not None:
             self._new_game_requests.add(request_id)
+        if launch_id is not None:
+            update["launch"] = launch_id
         return update
 
     def hero_action(self, raw_index: Any) -> dict[str, Any]:
@@ -2593,6 +2609,8 @@ def _response_with_participant(
     watcher_invite: str | None = None,
 ) -> dict[str, Any]:
     payload = deepcopy(response)
+    # Launch metadata belongs only to the browser that submitted the setup.
+    payload.pop("launch", None)
     payload["table"] = _table_snapshot(
         record, participant, watcher_invite=watcher_invite
     )
@@ -2962,6 +2980,14 @@ async def _send_table_response(
             recipient,
             watcher_invite=(watcher_invite if recipient is initiator else None),
         )
+        if recipient is initiator and response.get("launch") in LAUNCH_CONFIGS:
+            launch_id = response["launch"]
+            payload["launch"] = launch_id
+            payload["launch_setup"] = {
+                key: value
+                for key, value in LAUNCH_CONFIGS[launch_id].items()
+                if key != "seed"
+            }
         try:
             await socket.send_json(payload)
         except Exception:
@@ -3102,6 +3128,33 @@ async def play_socket(websocket: WebSocket) -> None:
             await websocket.send_json(_error_message(message))
         with suppress(Exception):
             await websocket.close()
+
+
+@app.get("/api/card-art/credits")
+def card_art_credits(names: list[str] = Query(default=[])) -> Response:
+    return JSONResponse(
+        card_art().credits(names[:1024]), headers={"Cache-Control": "no-store"}
+    )
+
+
+def _art_response(path: Path | None) -> Response:
+    if path is None:
+        return Response(status_code=204, headers={"Cache-Control": "no-store"})
+    return FileResponse(
+        path,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
+
+
+@app.get("/api/card-art/back.jpg")
+def card_back() -> Response:
+    return _art_response(card_art().back())
+
+
+@app.get("/api/card-art/{kind}/{slug}.jpg")
+def card_image(kind: Literal["art", "full"], slug: str) -> Response:
+    return _art_response(card_art().image(slug, kind))
 
 
 @app.get("/api/opponents")
@@ -3561,8 +3614,10 @@ def import_arena_watch(payload: dict[str, Any]) -> dict[str, Any]:
 
     try:
         return import_arena(payload)
-    except (ValueError, KeyError, TypeError) as exc:
-        raise HTTPException(400, "arena_import_invalid") from exc
+    except ValueError as exc:
+        raise HTTPException(400, f"Game file rejected: {exc}") from exc
+    except (KeyError, TypeError) as exc:
+        raise HTTPException(400, "Game file rejected: invalid game fields.") from exc
 
 
 @app.post("/api/decklists/validate")

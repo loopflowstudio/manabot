@@ -241,6 +241,7 @@ class CaptureScope:
     context: Callable[[], dict[str, object]] = dict
     paths: list[Path] = field(default_factory=list)
     training_exposure: bool = False
+    exposure_directory: Path | None = None
 
 
 _scope: ContextVar[CaptureScope | None] = ContextVar("game_failure_scope", default=None)
@@ -638,6 +639,20 @@ class CapturedVector(_Capture):
             "evidence stays aligned with the games"
         )
 
+    def write_observations_for_players(
+        self,
+        players: list[int],
+        buffers: dict[str, np.ndarray],
+        action_overflow: Literal["error", "first-legal"] = "error",
+    ) -> list[managym.ObservationRead]:
+        """Write viewer-safe NumPy rows; discard every output row after an error.
+
+        Execution and capture buffers stay unchanged. Seats are native indices.
+        """
+        return self.native.write_observations_for_players(
+            players, buffers, action_overflow=action_overflow
+        )
+
     def hand_snapshots(self, players: list[int]) -> list[managym.HandSnapshot]:
         """Read privileged current hands without adding them to failure evidence."""
         return self.native.hand_snapshots(players)
@@ -674,7 +689,9 @@ class CapturedVector(_Capture):
         if current:
             for rows, raw in zip(retained, self.native.current_exposure(), strict=True):
                 rows.append(raw)
-        directory = self.scope.directory.parent / "exposure"
+        directory = (
+            self.scope.exposure_directory or self.scope.directory.parent / "exposure"
+        )
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         for inputs, rows in zip(self.games, retained, strict=True):
             for raw in rows:

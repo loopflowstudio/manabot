@@ -8,30 +8,25 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.belief.sampling import AutoregressiveBeliefSampler, SamplerSchema
-from manabot.belief.sampling_data import _digest
+from manabot.belief.sampling import AutoregressiveBeliefSampler
+from manabot.belief.sampling_types import SamplerSchema, _digest
 from manabot.belief.state import ViewerHistory
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import file_sha256
 from manabot.policy.prepare import Prepared
 from manabot.sim.search.branch import BranchSession
-from manabot.sim.search.local_update import (
+from manabot.sim.search.local_update import LocalUpdatePlayer, LocalUpdateTeacher
+from manabot.sim.search.local_update_receipt import (
     FloatArray,
     LocalSearchConfig,
-    LocalUpdatePlayer,
     LocalUpdateReceipt,
-    LocalUpdateTeacher,
     SamplerArtifact,
 )
 from manabot.sim.search.rollout import Rollout
 from manabot.sim.search.rollout_receipt import RolloutReceipt
-from manabot.sim.search.sampling import (
-    HandBatch,
-    HandSample,
-    PhysicalHandSampler,
-    PreparedHands,
-)
+from manabot.sim.search.sampling import PhysicalHandSampler
+from manabot.sim.search.sampling_receipt import HandBatch, HandSample, PreparedHands
 import managym
 from managym.decision import (
     PUBLIC_COMMITMENT_KINDS,
