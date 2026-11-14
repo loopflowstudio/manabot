@@ -545,3 +545,24 @@ with `-W error::DeprecationWarning`: no warning; all three still end in
 `402dfd5b2`, not caused by this Task and not a gate waiver. Focused Ruff
 lint/format and `git diff --check` passed. Full suites, release training smoke,
 consumer matrix and normal Engine Budget remain for gate.
+
+## Sixth concept review (2026-11-13, at 57bf4060e8)
+
+Nothing to change, no open product choice. The fifth-review direction reads as
+implemented: `FailureEvidence.resolved_player_policies` is the one reader of
+either receipt spelling, replay passes only `player_policies`, and the alias
+warning is left to callers who write `opponent_policy`. Reread the per-seat
+guide, both stubs' signatures, the native parser, the Python resolver, the
+adapter and every remaining `opponent_policy` use; each is the alias, its
+tests, the retained-receipt field or pre-existing/frozen text.
+
+Walked: mixed step (settles to the external seat), failure (unknown name,
+both arguments, index at a built-in chooser: errors), recovery (fork copies
+both memories, reset clears, retained and new receipts replay warning-free;
+retained `passive` is readable and refuses to replay).
+
+Noted, not changed: the training collectors construct `("agent", "agent")`
+only, so no recipe selects a native built-in opponent yet. The Task's outcome
+is the engine/VectorEnv capability and the arena anchor; a training-recipe
+setting is separate work, not requested here. The native and Python alias
+warnings word their hint differently; both leave with the alias in 0.3.0.
