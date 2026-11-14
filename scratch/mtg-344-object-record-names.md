@@ -134,6 +134,9 @@ in this Task.
 All rename slices, the three concept-review follow-ups and the acceptance checks
 are done (history: `git log e363e4058e..HEAD`). Remaining: publish the PR, and
 file the linked alias-removal Task when it lands.
+Realign (2026-11-13): the branch contains `origin/main` (latest tag still
+`v0.2.3`); no PR exists yet; old names in repository Python remain only in
+the alias test and MLX buffer fields (`batch.agent_cards`, frozen keys).
 
 Decisions taken during implementation, beyond the rename table:
 
