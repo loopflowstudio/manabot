@@ -342,6 +342,11 @@ class Academy:
                 f"No recording {source!r} in {self.traces_dir}."
                 + _file_hint(source, _TRACE_SUFFIXES),
             )
+        if game is not None:
+            raise AcademyLaunchError(
+                "replay.game_unknown",
+                "A recording id names one game; a game selection applies only within a trace file.",
+            )
         return Launched(f"{self.url}/replay?{urlencode({'trace': source})}")
 
 

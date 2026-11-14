@@ -253,6 +253,26 @@ def test_trace_read_selection_and_errors(academy: Academy, tmp_path: Path) -> No
         assert error.value.code == "replay.missing"
 
 
+def test_recording_id_rejects_game_selection_after_missing_check(
+    academy: Academy,
+) -> None:
+    launch_id = _launch_id(academy.new_game(opponent="passive", seed=7).url)
+    with connect(academy.url.replace("http:", "ws:") + "/ws/play") as ws:
+        ws.send(json.dumps({"type": "new_game", "config": {"launch": launch_id}}))
+        message = json.loads(ws.recv(timeout=20))
+        trace_id = message["table"]["attempt_id"]
+    assert academy.replay(trace_id).url.endswith(f"trace={trace_id}")
+    for selection in (0, 3, "3"):
+        with pytest.raises(AcademyLaunchError) as error:
+            academy.replay(trace_id, game=selection)
+        assert error.value.code == "replay.game_unknown"
+        assert "recording id names one game" in error.value.message
+        assert "trace file" in error.value.message
+        with pytest.raises(AcademyLaunchError) as error:
+            academy.replay("absent", game=selection)
+        assert error.value.code == "replay.missing"
+
+
 @pytest.mark.parametrize(
     ("selection", "expected"),
     [("111111111111", 0), ("1", 1), ("0", 0), (0, 0), (1, 1)],

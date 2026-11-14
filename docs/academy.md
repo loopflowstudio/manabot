@@ -33,7 +33,7 @@ uv run --no-project managym academy
 ```
 
 ```text
-ACADEMY_PLAY_READY {"traces_dir": "/home/you/academy/traces", "url": "http://127.0.0.1:8000"}
+ACADEMY_PLAY_READY {"open": "http://127.0.0.1:8000", "traces_dir": "/home/you/academy/traces", "url": "http://127.0.0.1:8000"}
   Academy: http://127.0.0.1:8000
   Ctrl-C stops the server
 ```
@@ -399,7 +399,7 @@ and a message, and exits with status 2. From Python the same `code` and
 | `participant_credential_required` in the browser after READY | The recording is private or unfinished and this browser at this address has no participant credential. Use the same browser and address (including port) where **Games** lists it, or open a shared, finished recording. |
 | `replay.unreadable` | The file is not a command trace: not JSON, JSONL or gzip of either, or it holds no game records. Use `traces/<cell-id>.commands.jsonl.gz`, not the metrics or summary file. |
 | `replay.ambiguous` | The trace holds several games and none was selected. Select one by index or trace digest: `--game` in the CLI, or `game=` in Python. |
-| `replay.game_unknown` | `--game` is past the end of the file, or matches no digest or more than one. |
+| `replay.game_unknown` | The selection is past the end of the file, or matches no digest or more than one. A recording id already names one game; omit `--game` (Python `game=`) when opening it. Selection applies only within a trace file. |
 | `replay.needs_manabot` | Evaluation traces are verified by manabot. Install it at the same version: `uv pip install --python .venv/bin/python --only-binary :all: --torch-backend cpu manabot`. |
 | `replay.rejected` | Verification failed: the trace was recorded in another world, or its Commands or digests do not replay. Open it with the revision that produced it. |
 | `server.running` | (Python) `serve` was called while an Academy from this process is still open. Close it first. |
