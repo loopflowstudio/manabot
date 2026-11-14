@@ -3615,9 +3615,9 @@ def import_arena_watch(payload: dict[str, Any]) -> dict[str, Any]:
     try:
         return import_arena(payload)
     except ValueError as exc:
-        raise HTTPException(400, f"Arena import rejected: {exc}") from exc
+        raise HTTPException(400, f"Game file rejected: {exc}") from exc
     except (KeyError, TypeError) as exc:
-        raise HTTPException(400, "Arena import rejected: invalid game fields.") from exc
+        raise HTTPException(400, "Game file rejected: invalid game fields.") from exc
 
 
 @app.post("/api/decklists/validate")

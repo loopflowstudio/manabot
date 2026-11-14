@@ -85,7 +85,7 @@ position in the file, counted from 0, or the start of its trace digest; run
 the command without it to list the file's games. `managym academy replay
 <recording-id>` reopens a game from **Games**, with or without manabot, in the
 same browser and address (including port), or when it is shared and finished. In
-the browser, the same import is **Open arena / Tournament game** under
+the browser, the same import is **Open a game file** under
 **Watch** (`/replay?watch=1`). Import verifies the
 recorded actions and state digests without running the original players or
 loading their checkpoints. Incompatible historical worlds need their original

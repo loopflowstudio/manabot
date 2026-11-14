@@ -55,7 +55,7 @@ pending choice with the same legal offers and permitted information.
   (`GET /api/opponents`), chosen by exact SHA-256 and verified before play
 
 Academy never imports manabot or Torch, eagerly or lazily. Trained opponents,
-greedy and heuristic Watch players and arena import come from the one
+greedy and heuristic Watch players and game file import come from the one
 `managym.academy.bots` entry point that manabot declares; without it those
 features report that they need manabot, and play, replay and Study are
 unaffected. Study validates the existing
@@ -199,9 +199,9 @@ Play/Pause and speed control that same operation. Previous decisions read saved
 outputs without rerunning the policy. Completed watched games open from Games
 in this same table. Reloading retains the watch credential in the browser.
 
-`watch.py` admits controllers and verified arena/Tournament game JSON or
-`.jsonl.gz` traces; choose a game when a trace contains several. Import verifies
-the original receipt, Commands and state digests without invoking a player.
+`watch.py` admits controllers and verified exported training games or evaluation
+traces through **Open a game file**; choose a game when a trace contains several.
+Import verifies the original receipt, Commands and state digests without invoking a player.
 The imported Academy replay has its own identity; the source digest is retained
 without rewriting the arena evidence. A game's stated source kind is kept
 beside it, and Replay is headed **Training game** or **Evaluation game**

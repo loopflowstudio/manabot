@@ -35,7 +35,7 @@ def captured(tmp_path_factory: pytest.TempPathFactory) -> Path:
 def test_actual_training_games_export_and_replay_without_policy(
     captured: Path, tmp_path: Path
 ) -> None:
-    games = TrainingGames(captured)
+    games = TrainingGames(source=captured)
     assert len(games.games()) >= 2
     assert games.sample(seed=0) == games.sample(seed=0)
     for index, game in enumerate(games.games()):
@@ -107,7 +107,7 @@ def test_cut_off_edited_and_foreign_receipts_are_refused(
     edited = tmp_path / game.path.name
     edited.write_text(game.path.read_text().replace("learner", "edited"))
     with pytest.raises(ValueError, match="digest mismatch"):
-        TrainingGames(edited).games()
+        TrainingGames(source=edited).games()
     payload = json.loads(game.path.read_text())
     payload["identities"]["world"] = "foreign-world"
     foreign = _write_receipt(tmp_path / "foreign", payload)

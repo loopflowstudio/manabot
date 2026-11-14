@@ -221,7 +221,13 @@
         <label class="flex flex-col gap-2 type-label">Deal seed<input class="w-32 rounded border border-line bg-field p-2" bind:value={seed} inputmode="numeric" /></label>
         <button class="btn btn-primary" onclick={() => void start()}>Start watching</button>
         {#if extension === null}<p class="type-caption">Trained bots need manabot installed on this server.</p>{/if}
-        {#if extension}<label class="flex flex-col gap-2 type-caption">Open arena / Tournament game<input aria-label="Open arena game" type="file" accept=".json,.jsonl,.gz" onchange={e => void importGame(e)} /></label>{/if}
+        {#if extension}
+          <div class="flex flex-col gap-2 type-caption">
+            <label for="game-file">Open a game file</label>
+            <input id="game-file" aria-describedby="game-file-caption" type="file" accept=".json,.jsonl,.gz" onchange={e => void importGame(e)} />
+            <p id="game-file-caption">An exported training game or an evaluation trace</p>
+          </div>
+        {/if}
         {#if importedGames.length > 1}
           <label>Recorded game <select bind:value={selectedGame}>{#each importedGames as _, index}<option value={index}>Game {index + 1}</option>{/each}</select></label>
           <button class="btn btn-secondary" onclick={() => void openImportedGame()}>Open selected game</button>

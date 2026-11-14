@@ -177,7 +177,7 @@ def inspect_watch(
 
 
 def import_arena(game_record: dict[str, Any]) -> dict[str, Any]:
-    """Verify an arena/Tournament game, then project its Commands without policies.
+    """Verify a training or evaluation game, then project its Commands without policies.
 
     Source digests and receipt stay in their original namespace; the imported
     Academy match gets its own identity and retained Study roots.

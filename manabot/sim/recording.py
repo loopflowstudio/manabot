@@ -181,16 +181,16 @@ def _read_receipt(path: Path) -> TrainingExposureReceipt:
 class TrainingGames:
     """Read a capture directory or one receipt, without importing a learner."""
 
-    def __init__(self, directory: Path) -> None:
-        self.directory = directory
+    def __init__(self, source: Path) -> None:
+        self.source = source
 
     def _receipts(self) -> list[tuple[Path, TrainingExposureReceipt]]:
-        if not self.directory.exists():
-            raise ValueError(f"receipt source does not exist: {self.directory}")
+        if not self.source.exists():
+            raise ValueError(f"receipt source does not exist: {self.source}")
         paths = (
-            [self.directory]
-            if self.directory.is_file()
-            else sorted(self.directory.glob("*.jsonl"))
+            [self.source]
+            if self.source.is_file()
+            else sorted(self.source.glob("*.jsonl"))
         )
         return [(path, _read_receipt(path)) for path in paths]
 

@@ -310,7 +310,7 @@ uv run manabot export-game runs/jace/games --game 0 --out jace.game.jsonl.gz
 uv run --no-project managym academy replay jace.game.jsonl.gz
 ```
 
-The file also opens in the browser through **Open arena / Tournament game**
+The file also opens in the browser through **Open a game file**
 under **Watch**. All three routes need manabot beside Academy, as an
 evaluation trace does.
 
@@ -318,8 +318,8 @@ evaluation trace does.
 played by collectors built inside the `with` block: the deal seed, both decks
 and each decision's chosen action, one receipt file per game in `directory`.
 It adds no decisions and changes none; the loop trains as it would without
-it. The directory can be read again later with `TrainingGames(directory)`. A
-`TrainingJob` run with `training_exposure` writes the same receipts under its
+it. The receipts can be read again later with `TrainingGames(source)`, where
+`source` is a directory or a single receipt file. A `TrainingJob` run with `training_exposure` writes the same receipts under its
 `training/exposure`; download that directory and open it the same way.
 
 **Choosing a game.** `games.games()` lists the complete games as
@@ -479,7 +479,7 @@ candidate, install both wheels from the same release build instead.
    ([Open a replay directly](#open-a-replay-directly)) and skip to step 4, or
    launch `uv run --no-project managym academy`, open **Watch** at
    `http://127.0.0.1:8000/replay?watch=1` and use
-   **Open arena / Tournament game** to select the trace. Individual game JSON
+   **Open a game file** to select the trace. Individual game JSON
    and uncompressed JSONL are also accepted.
 3. If it contains several games, select a **Recorded game** and click
    **Open selected game**. A single game opens automatically.
@@ -515,7 +515,8 @@ It adds:
   checkpoint trained in another world or on other decks stays listed,
   disabled, with the reason.
 - **Greedy** and **Heuristic** players in Watch.
-- **Arena import**: verified arena and Tournament game files open as replays.
+- **Open a game file**: exported training games and evaluation traces open as
+  verified replays.
 
 Without manabot the Opponent menu and Watch show a line saying trained bots
 need it, and a saved game that was played against a checkpoint still replays;

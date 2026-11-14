@@ -38,6 +38,6 @@ test('installed Academy plays and opens its recorded decisions', async ({ page }
     await expect(page.getByRole('combobox', { name: seat, exact: true }).locator('option')).toHaveText(['random', 'search']);
   }
   await expect(page.getByText('Trained bots need manabot installed on this server.')).toBeVisible();
-  await expect(page.getByLabel('Open arena game')).toHaveCount(0);
+  await expect(page.getByLabel('Open a game file')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
