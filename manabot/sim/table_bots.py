@@ -162,7 +162,7 @@ class TrainingBots:
                 if name not in {"games", "decisions", "passed"} and value
             )
             raise ValueError(
-                f"Arena replay verification failed: {mismatches}. "
+                f"Replay verification failed: {mismatches}. "
                 "This revision may deal or build a different game; open the trace with the revision that wrote it."
             )
         arena, _ = replay_environment(record)
@@ -171,7 +171,7 @@ class TrainingBots:
             index = int(expected["command"]["offer_id"])
             decision = BotDecision(
                 index,
-                unavailable="Policy, value and search outputs were not retained in this arena recording.",
+                unavailable="Policy, value and search outputs were not retained in this recorded game.",
             )
             if expected.get("local_update_receipt") is not None:
                 retained = LocalUpdateReceipt.from_json(

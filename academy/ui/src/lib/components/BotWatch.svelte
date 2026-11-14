@@ -176,7 +176,11 @@
         const parsed: unknown = JSON.parse(buffer);
         games = Array.isArray(parsed) ? parsed : [parsed];
       } catch {
-        games = buffer.trim().split('\n').map(line => JSON.parse(line));
+        try {
+          games = buffer.trim().split('\n').map(line => JSON.parse(line));
+        } catch {
+          throw new Error(`${file.name} is not a game file: expected JSON or JSON Lines game records, such as an evaluation trace or an exported .game.jsonl.gz.`);
+        }
       }
       importedGames = games;
       selectedGame = 0;

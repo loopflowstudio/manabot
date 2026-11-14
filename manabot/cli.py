@@ -365,14 +365,19 @@ def export_game_command(
     try:
         recorded = TrainingGames(source)
         games = recorded.games()
+        if not games:
+            raise ValueError(
+                f"{source} holds no complete game ({recorded.cut_off} cut off)"
+            )
         if game is None and len(games) != 1:
             typer.echo(
                 f"{source} holds {len(games)} complete games ({recorded.cut_off} cut off); select one with --game <index-or-digest>."
             )
-            typer.echo("  game  seed  stream  decisions  receipt")
+            seed_width = max(4, *(len(str(item.seed)) for item in games))
+            typer.echo(f"  game  {'seed':<{seed_width}}  stream  decisions  receipt")
             for index, item in enumerate(games):
                 typer.echo(
-                    f"  {index:4}  {item.seed}  {item.stream}  {item.decisions}  {item.receipt_sha256[:12]}"
+                    f"  {index:4}  {item.seed:<{seed_width}}  {item.stream:<6}  {item.decisions:<9}  {item.receipt_sha256[:12]}"
                 )
             raise typer.Exit(2)
         if game is None:

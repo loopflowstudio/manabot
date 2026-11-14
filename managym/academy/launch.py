@@ -73,6 +73,15 @@ def _file_hint(value: str, suffixes: set[str]) -> str:
     return ""
 
 
+def refuse_training_receipt(record: object) -> None:
+    """Name the export step when a training exposure receipt is offered as a game."""
+    if isinstance(record, dict) and {"schema", "stream", "game"} <= record.keys():
+        raise ValueError(
+            "this is a training game receipt, not a game file; export it first with "
+            "`uv run manabot export-game <receipt or directory> --out <name>.game.jsonl.gz`"
+        )
+
+
 def read_games(path: Path) -> list[RecordedGame]:
     """Read a JSON, JSONL or gzip game file without altering its retained bytes."""
     try:
@@ -95,6 +104,7 @@ def read_games(path: Path) -> list[RecordedGame]:
             records = [json.loads(line) for line in source.splitlines() if line.strip()]
         games = []
         for index, record in enumerate(records):
+            refuse_training_receipt(record)
             if not isinstance(record, dict) or not isinstance(
                 record.get("decisions"), list
             ):

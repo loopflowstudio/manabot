@@ -527,3 +527,19 @@ def test_exported_game_source_label_and_import_rejection_messages(
         assert rejected.status_code == 400
         assert "foreign-world" in rejected.json()["detail"]
         assert "differs from running" in rejected.json()["detail"]
+
+
+def test_a_training_receipt_offered_as_a_game_names_the_export_step(
+    academy: Academy, tmp_path: Path
+) -> None:
+    receipt = {"schema": 1, "stream": 0, "game": {}, "context": {}}
+    path = tmp_path / "receipt.jsonl"
+    path.write_text(json.dumps(receipt) + "\n")
+    with pytest.raises(AcademyLaunchError) as raised:
+        academy.replay(path)
+    assert raised.value.code == "replay.unreadable"
+    assert "manabot export-game" in raised.value.message
+    with TestClient(server.app) as client:
+        rejected = client.post("/api/watch/import", json=receipt)
+        assert rejected.status_code == 400
+        assert "manabot export-game" in rejected.json()["detail"]

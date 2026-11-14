@@ -178,3 +178,18 @@ def test_export_game_cli_lists_selects_and_names_seats(
     )
     assert result.exit_code == 0, result.output
     assert read_trace(output)[0]["seat_players"] == ["alpha", "beta"]
+
+
+def test_export_game_cli_refuses_a_directory_without_complete_games(
+    tmp_path: Path,
+) -> None:
+    from manabot.cli import app
+
+    empty = tmp_path / "games"
+    empty.mkdir()
+    result = CliRunner().invoke(
+        app, ["export-game", str(empty), "--out", str(tmp_path / "out.gz")]
+    )
+    assert result.exit_code == 2, result.output
+    assert "no complete game" in result.output
+    assert "--game" not in result.output

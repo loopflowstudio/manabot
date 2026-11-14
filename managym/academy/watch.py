@@ -15,6 +15,7 @@ from managym.bots import BotPolicy, choose_bot
 from . import server
 from .attempts import AttemptStore, RecordedPlayer, bot_player
 from .extensions import bot_extension
+from .launch import refuse_training_receipt
 from .replay_index import DecisionAddressV2, load_canonical_replay
 from .trace import load_trace
 from .villain import NATIVE_WATCH_PLAYERS, build_villain_policy
@@ -187,6 +188,7 @@ def import_arena(game_record: dict[str, Any]) -> dict[str, Any]:
     extension = bot_extension()
     if extension is None:
         raise HTTPException(400, "arena_import_unavailable")
+    refuse_training_receipt(game_record)
     arena = extension.verify_arena(game_record)
     # Verify the supplied bytes even when the source identity was imported before.
     existing = AttemptStore(
