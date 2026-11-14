@@ -1,5 +1,6 @@
 //! Tests for cards filed in `src/mh1.rs`, in card order.
 
+use crate::support::inspect::now;
 use crate::support::{
     game::five_color_setup,
     inspect::{find_owned_card, has_action, offered_cards, offered_targets, zone_of},
@@ -41,8 +42,8 @@ fn force_of_negation_exiles_a_blue_card_and_the_countered_spell() {
     s.pass_priority();
     choose(&mut s, casts(force));
     // Unpayable mana: the alternative is used without asking.
-    assert_eq!(offered_targets(&s), vec![Target::StackSpell(bolt)]);
-    assert!(s.choose_target(Target::StackSpell(bolt)));
+    assert_eq!(offered_targets(&s), vec![Target::StackSpell(now(&s, bolt))]);
+    assert!(s.choose_target(Target::StackSpell(now(&s, bolt))));
     // Lightning Bolt is red: only Counterspell can be exiled, so the single
     // choice is skipped.
     settle(&mut s);
@@ -81,7 +82,7 @@ fn force_of_negation_offers_its_alternative_only_outside_your_turn() {
     choose(&mut s, casts(force));
     assert_eq!(s.action_space().kind, ActionSpaceKind::PayOrNot);
     choose(&mut s, |action| matches!(action, Action::PayCost { .. }));
-    assert!(s.choose_target(Target::StackSpell(theirs)));
+    assert!(s.choose_target(Target::StackSpell(now(&s, theirs))));
     let mut exiled = offered_cards(&s);
     exiled.sort();
     let mut blue = vec![find_owned_card(&s, 1, "Counterspell"), visions];

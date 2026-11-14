@@ -97,8 +97,11 @@ impl Game {
                 self.shuffle_private_library(opponent, &mut rng);
             } else {
                 let (mut known, mut residual) = self.hidden_hand_partition(opponent, commitments);
-                residual.extend(self.foretold_cards(opponent).map(ObjectId::from));
-                residual.sort_unstable_by_key(|object| object.0);
+                residual.extend(
+                    self.foretold_cards(opponent)
+                        .map(|card| self.state.object_of(card)),
+                );
+                residual.sort_unstable_by_key(|object| object.slot());
                 residual.shuffle(&mut rng);
                 assert!(
                     self.fill_foretold_slots(opponent, &mut residual),
@@ -217,7 +220,7 @@ impl Game {
                         .contains(*object, ZoneType::Library, player)
             })
             .collect();
-        pool.sort_unstable_by_key(|object| object.0);
+        pool.sort_unstable_by_key(|object| object.slot());
         let mut counts = self.state.players[player.0].known_hand.clone();
         let mut known = Vec::new();
         let mut residual = Vec::new();

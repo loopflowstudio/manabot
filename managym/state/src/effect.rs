@@ -26,7 +26,7 @@ use super::{
         ActivatedAbilityDefinition, CardDefId, CardType, Keywords, PrintedCharacteristics,
         StaticAbility,
     },
-    game_object::{ObjectRef, PlayerId, PublicId},
+    game_object::{ObjectId, PlayerId, PublicId},
     mana::{Color, Colors},
 };
 
@@ -303,7 +303,7 @@ pub enum Affected {
     /// One battlefield incarnation; the record ends when it changes zones
     /// (CR 400.7). An effect affecting a set fixed at resolution (CR 611.2c)
     /// is one record per object, sharing a timestamp.
-    Object(ObjectRef),
+    Object(#[serde(serialize_with = "crate::game_object::exact")] ObjectId),
 }
 
 /// One continuous effect from a resolved spell or ability.
@@ -321,11 +321,12 @@ pub struct ContinuousEffect {
     pub duration: EffectDuration,
     /// The exact source object a `WhileYouControlSource` duration follows.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub source_object: Option<ObjectRef>,
+    #[serde(serialize_with = "crate::game_object::exact")]
+    pub source_object: Option<ObjectId>,
 }
 
 impl ContinuousEffect {
-    pub fn affects_object(&self, object: ObjectRef) -> bool {
+    pub fn affects_object(&self, object: ObjectId) -> bool {
         self.affected == Affected::Object(object)
     }
 
@@ -342,7 +343,7 @@ impl ContinuousEffect {
 pub struct EffectRecords {
     records: Vec<ContinuousEffect>,
     /// Indices into `records` by affected object, ascending.
-    by_object: BTreeMap<ObjectRef, Vec<usize>>,
+    by_object: BTreeMap<ObjectId, Vec<usize>>,
     /// Indices into `records` by affected player, ascending.
     by_player: [Vec<usize>; 2],
     /// How many records are `PhasedOut`, so battlefield readers skip the
@@ -369,7 +370,7 @@ impl EffectRecords {
 
     /// Records affecting `object`, in timestamp order.
     #[inline]
-    pub fn on(&self, object: ObjectRef) -> impl Iterator<Item = &ContinuousEffect> {
+    pub fn on(&self, object: ObjectId) -> impl Iterator<Item = &ContinuousEffect> {
         self.by_object
             .get(&object)
             .into_iter()

@@ -1,5 +1,6 @@
 //! Tests for cards filed in `src/zen.rs`, in card order.
 
+use crate::support::game::move_card;
 use crate::support::{
     game::five_color_setup,
     inspect::{counters, library_card, permanent_named},
@@ -28,7 +29,7 @@ fn landfall_creates_resources_and_counters() {
     }
     // The Cobra's color and Provisioner's token are separate resolution choices.
     let land = library_card(&s, 0, "Forest");
-    s.game_mut().move_object(land, ZoneType::Battlefield);
+    move_card(&mut s, land, ZoneType::Battlefield);
     s.game_mut().scenario_refresh_priority().unwrap();
     s.pass_priority();
     for _ in 0..20 {
@@ -152,8 +153,7 @@ fn valakut_deals_three_when_a_sixth_mountain_enters() {
         }
         s.game_mut().scenario_refresh_priority().unwrap();
         let id = crate::support::inspect::library_card(&s, 0, "Mountain");
-        s.game_mut()
-            .move_object(id, managym::state::zone::ZoneType::Battlefield);
+        move_card(&mut s, id, managym::state::zone::ZoneType::Battlefield);
         s.game_mut().scenario_refresh_priority().unwrap();
         for _ in 0..8 {
             let space = s.action_space();

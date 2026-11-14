@@ -966,7 +966,7 @@ impl<'a> Context<'a> {
                 let mut granted = ability.clone();
                 granted.granted_by = self
                     .game
-                    .permanent_object_ref(source)
+                    .permanent_object(source)
                     .map(|grantor| AbilityGrant { grantor, index });
                 add(
                     Layer::Ability,

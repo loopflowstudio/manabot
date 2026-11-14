@@ -17,7 +17,7 @@ use managym::{
 };
 
 use crate::support::game::*;
-use crate::support::inspect::card_of;
+use crate::support::inspect::{card_of, permanent_of, zone_of};
 use managym::state::game_object::ObjectKind;
 
 /// Player 0's Gray Ogre (no printed keywords) in player 0's main phase.
@@ -125,9 +125,9 @@ fn cr_400_7_an_indefinite_record_ends_when_its_object_changes_zones() {
     assert!(s.game().characteristics(ogre).keywords.has(Keyword::Flying));
 
     let object = card_of(&s, ogre);
-    s.game_mut().move_object(object, ZoneType::Hand);
-    s.game_mut().move_object(object, ZoneType::Battlefield);
-    let returned = s.game().state.object_to_permanent[object].expect("returned");
+    let object = move_card(&mut s, object, ZoneType::Hand);
+    let object = move_card(&mut s, object, ZoneType::Battlefield);
+    let returned = permanent_of(&s, object).expect("returned");
     assert_ne!(s.game().affected_permanent(returned), Some(old));
     assert!(s.game().state.effects.is_empty());
     assert_eq!(s.game().effects_on(returned).count(), 0);
@@ -229,10 +229,7 @@ fn a_nonlegendary_record_exempts_its_permanent_from_the_legend_rule() {
     s.pass_priority();
     assert_ne!(s.action_space().kind, ActionSpaceKind::LegendRule);
     for id in [first, second] {
-        assert_eq!(
-            s.game().state.zones.zone_of(card_of(&s, id)),
-            Some(ZoneType::Battlefield)
-        );
+        assert_eq!(zone_of(&s, card_of(&s, id)), Some(ZoneType::Battlefield));
     }
 }
 
@@ -378,7 +375,7 @@ fn shared_effects_bind_exact_sources_before_and_after_a_zone_change() {
             affected,
             modification: flying(),
             duration: EffectDuration::WhileYouControlSource,
-            source_object: game.permanent_object_ref(source),
+            source_object: game.permanent_object(source),
         };
         game.state.effects.push(record);
         assert!(game.characteristics(target).keywords.has(Keyword::Flying));
@@ -494,7 +491,7 @@ fn cr_613_dependency_overrides_timestamps_and_continues_across_layers() {
         indefinitely(&mut s, moon_id, Modification::LoseAllAbilities);
         assert!(s.game().characteristics(urborg_id).has_subtype("Mountain"));
         let object = card_of(&s, moon_id);
-        s.game_mut().move_object(object, ZoneType::Graveyard);
+        move_card(&mut s, object, ZoneType::Graveyard);
         assert!(s.game().characteristics(urborg_id).has_subtype("Swamp"));
     }
     // Lattice/March: March depends on Lattice, even with the older timestamp.
@@ -638,7 +635,7 @@ fn cr_613_humility_opalescence_and_dress_down_cda_timestamp_orders() {
     goyf.toughness = Some(1);
     let g = layer_fixture(&mut s, "Gray Ogre", goyf);
     let object = crate::support::inspect::library_card(&s, 0, "Mountain");
-    s.game_mut().move_object(object, ZoneType::Graveyard);
+    move_card(&mut s, object, ZoneType::Graveyard);
     assert_eq!(s.game().characteristics(g).pt(), (1, 2));
     let dress = layer_fixture(
         &mut s,
@@ -655,7 +652,7 @@ fn cr_613_humility_opalescence_and_dress_down_cda_timestamp_orders() {
     );
     assert_eq!(s.game().characteristics(g).pt(), (0, 1));
     let object = card_of(&s, dress);
-    s.game_mut().move_object(object, ZoneType::Graveyard);
+    move_card(&mut s, object, ZoneType::Graveyard);
     assert_eq!(s.game().characteristics(g).pt(), (2, 3));
 }
 
@@ -725,7 +722,7 @@ fn cr_613_ygra_imprisoned_retains_food_grants_and_painter_retains_color() {
         s.game_mut().state.permanents[a]
             .as_mut()
             .unwrap()
-            .attached_to = s.game().permanent_object_ref(y);
+            .attached_to = s.game().permanent_object(y);
         let view = s.game().characteristics(y);
         assert!(view.is_land() && !view.is_creature() && view.ward.is_none());
         assert_eq!(view.activated_abilities.len(), 1);
@@ -750,7 +747,7 @@ fn cr_613_ygra_imprisoned_retains_food_grants_and_painter_retains_color() {
     indefinitely(&mut s, p, Modification::LoseAllAbilities);
     assert!(s.game().characteristics(ogre).colors.contains(&Color::Blue));
     let object = card_of(&s, p);
-    s.game_mut().move_object(object, ZoneType::Graveyard);
+    move_card(&mut s, object, ZoneType::Graveyard);
     assert!(!s.game().characteristics(ogre).colors.contains(&Color::Blue));
     // Modifiers and counters precede the layer-7d switch.
     indefinitely(
@@ -946,12 +943,12 @@ fn cr_613_dress_down_enters_animated_without_draw_or_end_step_trigger() {
     ];
     let d = layer_fixture(&mut s, "Gray Ogre", dress);
     let object = card_of(&s, d);
-    s.game_mut().move_object(object, ZoneType::Hand);
+    let object = move_card(&mut s, object, ZoneType::Hand);
     let hand = s.game().state.zones.size(ZoneType::Hand, PlayerId(0));
-    s.game_mut().move_object(object, ZoneType::Battlefield);
+    let object = move_card(&mut s, object, ZoneType::Battlefield);
     s.game_mut().scenario_refresh_priority().unwrap();
     crate::support::play::settle(&mut s);
-    let id = s.game().state.object_to_permanent[object].unwrap();
+    let id = permanent_of(&s, object).unwrap();
     assert_eq!(s.game().characteristics(id).pt(), (2, 2));
     assert!(s.game().characteristics(id).triggered_abilities.is_empty());
     assert_eq!(
@@ -959,10 +956,7 @@ fn cr_613_dress_down_enters_animated_without_draw_or_end_step_trigger() {
         hand - 1
     );
     s.advance_to_active_step(1, StepKind::Main);
-    assert_eq!(
-        s.game().state.zones.zone_of(object),
-        Some(ZoneType::Battlefield)
-    );
+    assert_eq!(zone_of(&s, object), Some(ZoneType::Battlefield));
 }
 
 #[test]
@@ -1161,12 +1155,12 @@ fn cr_613_moon_after_saga_chapters_preserves_their_resolved_abilities() {
     });
     let old = layer_fixture(&mut s, "Mountain", saga);
     let object = card_of(&s, old);
-    s.game_mut().move_object(object, ZoneType::Hand);
-    s.game_mut().move_object(object, ZoneType::Battlefield);
+    let object = move_card(&mut s, object, ZoneType::Hand);
+    let object = move_card(&mut s, object, ZoneType::Battlefield);
     s.game_mut().scenario_refresh_priority().unwrap();
     s.pass_priority();
     crate::support::play::settle(&mut s);
-    let saga = s.game().state.object_to_permanent[object].unwrap();
+    let saga = permanent_of(&s, object).unwrap();
     assert_eq!(
         s.game().state.permanents[saga]
             .as_ref()
@@ -1218,10 +1212,7 @@ fn cr_613_moon_after_saga_chapters_preserves_their_resolved_abilities() {
             .counter_count(CounterKind::Lore),
         2
     );
-    assert_eq!(
-        s.game().state.zones.zone_of(object),
-        Some(ZoneType::Battlefield)
-    );
+    assert_eq!(zone_of(&s, object), Some(ZoneType::Battlefield));
 }
 
 #[test]

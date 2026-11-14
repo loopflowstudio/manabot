@@ -324,7 +324,7 @@ impl Game {
                             provenance: crate::flow::proposed_event::CounterProvenance::new(
                                 crate::flow::proposed_event::EventCause::TurnAction,
                             ),
-                            target: self.permanent_object_ref(id).expect("battlefield"),
+                            target: self.permanent_object(id).expect("battlefield"),
                             kind: CounterKind::Lore,
                             delta: 1,
                             by: Some(active),

@@ -1,5 +1,6 @@
 //! Tests for cards filed in `src/soi.rs`, in card order.
 
+use crate::support::inspect::permanent_of;
 use crate::support::{
     game::five_color_setup,
     inspect::{assert_choice_contract, library_card, permanent_named},
@@ -25,7 +26,7 @@ fn fetch_land_counts_the_found_land_and_triggers_tracker_twice() {
     let found = library_card(&s, 0, "Forest");
     select_card(&mut s, found);
     settle(&mut s);
-    let id = s.game().state.object_to_permanent[found].unwrap();
+    let id = permanent_of(&s, found).unwrap();
     assert!(!s.game().state.permanents[id].as_ref().unwrap().tapped);
     assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 2);
 }

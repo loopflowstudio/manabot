@@ -8,17 +8,19 @@ use managym::{
 };
 
 use crate::support::game::*;
-use crate::support::inspect::owned_card;
+use crate::support::inspect::{now, owned_card, permanent_of, zone_of};
 
 fn put_owned_card_on_battlefield(s: &mut Scenario, player: usize, name: &str) -> PermanentId {
     let object_id = owned_card(s, player, name);
     let game = s.game_mut();
-    game.move_object(object_id, ZoneType::Battlefield);
+    let object_id = game.move_object(object_id, ZoneType::Battlefield);
     // Drain events and triggers so the engine doesn't process ETB triggers from setup
     game.state.pending_events.clear();
     game.state.pending_triggers.clear();
     game.state.observation_events.clear();
-    game.state.object_to_permanent[object_id].expect("permanent should exist after move_object")
+    game.state
+        .permanent_of(object_id)
+        .expect("permanent should exist after move_object")
 }
 
 fn count_cards_named(s: &Scenario, player: usize, zone: ZoneType, name: &str) -> usize {
@@ -35,11 +37,9 @@ fn cast_manowar_and_reach_target_choice(s: &mut Scenario) {
     let islands: Vec<ObjectId> = s
         .game()
         .state
-        .objects
-        .iter()
-        .enumerate()
+        .latest_objects()
         .filter(|(_, object)| object.owner == PlayerId(0) && object.name == "Island")
-        .map(|(idx, _)| ObjectId(idx))
+        .map(|(idx, _)| idx)
         .take(3)
         .collect();
     assert_eq!(islands.len(), 3, "expected at least three Islands in deck");
@@ -220,35 +220,43 @@ fn cr_400_7_manowar_target_does_not_follow_reentered_card() {
         .as_ref()
         .expect("old permanent")
         .object;
-    let old_ref = s.game().current_object_ref(object).expect("old object ref");
+    let old_ref = s
+        .game()
+        .state
+        .live(now(&s, object))
+        .expect("old object ref");
 
-    s.game_mut().move_object(object, ZoneType::Hand);
-    s.game_mut().move_object(object, ZoneType::Battlefield);
+    let object = move_card(&mut s, object, ZoneType::Hand);
+    let object = move_card(&mut s, object, ZoneType::Battlefield);
     // Ignore the new object's own ETB trigger; this scenario is specifically
     // resolving the already-stacked trigger that targeted the old object.
     s.game_mut().state.pending_triggers.clear();
-    let new_ref = s.game().current_object_ref(object).expect("new object ref");
-    let new_permanent = s.game().state.object_to_permanent[object].expect("new permanent");
+    let new_ref = s
+        .game()
+        .state
+        .live(now(&s, object))
+        .expect("new object ref");
+    let new_permanent = permanent_of(&s, object).expect("new permanent");
 
-    assert_eq!(old_ref.entity, new_ref.entity);
-    assert_ne!(old_ref.incarnation, new_ref.incarnation);
+    assert_ne!(old_ref, new_ref);
+    assert_eq!(
+        s.game().state.card_id(old_ref),
+        s.game().state.card_id(new_ref)
+    );
     assert_eq!(
         s.game().lookup_current_permanent(old_ref),
-        Err(ObjectLookupError::StaleIncarnation)
+        Err(ObjectLookupError::Stale)
     );
 
     s.pass_priority();
     s.pass_priority();
 
     assert_eq!(
-        s.game().state.object_to_permanent[object],
+        permanent_of(&s, object),
         Some(new_permanent),
         "the new incarnation must remain on the battlefield"
     );
-    assert_eq!(
-        s.game().state.zones.zone_of(object),
-        Some(ZoneType::Battlefield)
-    );
+    assert_eq!(zone_of(&s, object), Some(ZoneType::Battlefield));
 }
 
 /// CR 117.5, 704.3, 603.3 — SBAs are checked before pending triggers are flushed.

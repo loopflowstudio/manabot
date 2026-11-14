@@ -13,7 +13,7 @@ use managym::{
         },
         card::{Keyword, Keywords},
         effect::Modification,
-        game_object::{ObjectRef, PlayerId},
+        game_object::{ObjectId, PlayerId},
         predicate::CardPredicate,
         stack_object::StackObject,
         zone::ZoneType,
@@ -21,9 +21,9 @@ use managym::{
 };
 
 use crate::support::game::*;
-use crate::support::inspect::owned_card;
+use crate::support::inspect::{owned_card, permanent_of, zone_of};
 
-fn dragonfly_sba_scenario(seed: u64) -> (Scenario, ObjectRef) {
+fn dragonfly_sba_scenario(seed: u64) -> (Scenario, ObjectId) {
     let swarm = deck(&[
         ("Dragonfly Swarm", 1),
         ("Firebending Lesson", 1),
@@ -33,11 +33,11 @@ fn dragonfly_sba_scenario(seed: u64) -> (Scenario, ObjectRef) {
     s.advance_to_active_step(0, StepKind::Main);
 
     let lesson = owned_card(&s, 0, "Firebending Lesson");
-    s.game_mut().move_object(lesson, ZoneType::Graveyard);
+    move_card(&mut s, lesson, ZoneType::Graveyard);
     let swarm = s.force_permanent_on_battlefield(0, "Dragonfly Swarm");
     let swarm_ref = s
         .game()
-        .permanent_object_ref(swarm)
+        .permanent_object(swarm)
         .expect("Dragonfly object ref");
 
     // The death trigger's draw will attempt to draw from an empty library.
@@ -194,8 +194,8 @@ fn cr_704_3_multiple_simultaneous_sbas_commit_in_object_order() {
         .damage = 2;
 
     let mut expected = [
-        s.game().permanent_object_ref(land).expect("land ref"),
-        s.game().permanent_object_ref(ogre).expect("ogre ref"),
+        s.game().permanent_object(land).expect("land ref"),
+        s.game().permanent_object(ogre).expect("ogre ref"),
     ];
     expected.sort();
     let _ = s.game_mut().drain_events();
@@ -209,7 +209,7 @@ fn cr_704_3_multiple_simultaneous_sbas_commit_in_object_order() {
         .iter()
         .filter_map(|event| match event {
             GameEvent::CardMoved {
-                object_id: managym::state::game_object::ObjectRef { entity: object, .. },
+                departed: Some(object),
                 from: Some(ZoneType::Battlefield),
                 to: ZoneType::Graveyard,
                 ..
@@ -217,11 +217,7 @@ fn cr_704_3_multiple_simultaneous_sbas_commit_in_object_order() {
             _ => None,
         })
         .collect();
-    let expected_cards: Vec<_> = expected
-        .iter()
-        .map(|object_ref| object_ref.entity)
-        .collect();
-    assert_eq!(committed, expected_cards);
+    assert_eq!(committed, expected);
     assert!(expected
         .iter()
         .all(|object_ref| s.game().object_lki(*object_ref).is_some()));
@@ -252,10 +248,7 @@ fn cr_704_3_simultaneous_departures_share_trigger_source_snapshot() {
     };
     let mut expected_sources = Vec::new();
     for permanent_id in [first, second] {
-        let object_ref = s
-            .game()
-            .permanent_object_ref(permanent_id)
-            .expect("ogre ref");
+        let object_ref = s.game().permanent_object(permanent_id).expect("ogre ref");
         expected_sources.push(object_ref);
         let object_id = s.game().state.permanents[permanent_id]
             .as_ref()
@@ -304,18 +297,12 @@ fn cr_400_7_stale_delayed_trigger_reference_is_rejected() {
         .as_ref()
         .expect("old ogre")
         .object;
-    let old_ref = s
-        .game()
-        .permanent_object_ref(old_permanent)
-        .expect("old ref");
+    let old_ref = s.game().permanent_object(old_permanent).expect("old ref");
 
-    s.game_mut().move_object(object, ZoneType::Hand);
-    s.game_mut().move_object(object, ZoneType::Battlefield);
-    let new_permanent = s.game().state.object_to_permanent[object].expect("new permanent");
-    let new_ref = s
-        .game()
-        .permanent_object_ref(new_permanent)
-        .expect("new ref");
+    let object = move_card(&mut s, object, ZoneType::Hand);
+    let object = move_card(&mut s, object, ZoneType::Battlefield);
+    let new_permanent = permanent_of(&s, object).expect("new permanent");
+    let new_ref = s.game().permanent_object(new_permanent).expect("new ref");
     assert_ne!(old_ref, new_ref);
 
     s.game_mut().state.delayed_triggers.push(DelayedTrigger {
@@ -347,11 +334,9 @@ fn cr_400_7_stale_delayed_trigger_reference_is_rejected() {
 
     s.pass_priority();
 
-    assert_eq!(
-        s.game().state.zones.zone_of(object),
-        Some(ZoneType::Graveyard)
-    );
-    assert!(s.game().state.delayed_triggers.is_empty());
+    assert_eq!(zone_of(&s, object), Some(ZoneType::Graveyard));
+    // The watcher names the departed object, so the new one's death is not
+    // its event: nothing fires and nothing returns.
     assert!(s.game().state.pending_triggers.is_empty());
     assert!(s.game().state.stack_objects.is_empty());
 }
@@ -428,7 +413,7 @@ fn audit_sba_toughness_damage_indestructible_boundary_matrix() {
                                 && damage > 0
                                 && (damage >= toughness || deathtouch));
                         assert_eq!(
-                            s.game().state.zones.zone_of(object),
+                            zone_of(&s, object),
                             Some(if dies { ZoneType::Graveyard } else { ZoneType::Battlefield }),
                             "controller={controller}, toughness={toughness}, damage={damage}, deathtouch={deathtouch}, indestructible={indestructible}"
                         );

@@ -12,6 +12,8 @@
 //! an otherwise equal baseline.
 //! Viewer-safety tests check hidden cards change neither.
 
+use crate::support::game::move_card;
+use crate::support::inspect::zone_of;
 use crate::support::{
     game::{
         clear_summoning_sickness, deck, five_color_setup, five_color_unfunded_setup, move_to_hand,
@@ -2628,7 +2630,7 @@ fn no_maximum_hand_size_keeps_the_hand_count_column_through_cleanup() {
         resolve_top(&mut s);
         if !has_static {
             let object = card_of(&s, proft);
-            s.game_mut().move_object(object, ZoneType::Hand);
+            move_card(&mut s, object, ZoneType::Hand);
         }
         s.game_mut().draw_cards(PlayerId(0), 5);
         s.advance_to_active_step(0, StepKind::End);
@@ -3380,7 +3382,7 @@ fn card_rows_off_the_battlefield_read_the_printed_card() {
     assert!(s.game().state.objects[object].is_legendary());
     until_end_of_turn(&mut s, gran, Modification::Nonlegendary);
     assert_eq!(card_json(&s, 0, gran)["is_legendary"], false);
-    s.game_mut().move_object(object, ZoneType::Graveyard);
+    let object = move_card(&mut s, object, ZoneType::Graveyard);
     let id = s.game().state.objects[object].id.0 as i32;
     let observation = Observation::for_player(s.game(), PlayerId(0));
     let row = observation
@@ -3412,10 +3414,7 @@ fn a_nonlegendary_record_clears_the_legend_rule_and_card_column_39_together() {
     s.pass_priority();
     assert_ne!(s.action_space().kind, ActionSpaceKind::LegendRule);
     for id in [first, second] {
-        assert_eq!(
-            s.game().state.zones.zone_of(card_of(&s, id)),
-            Some(ZoneType::Battlefield)
-        );
+        assert_eq!(zone_of(&s, card_of(&s, id)), Some(ZoneType::Battlefield));
     }
 }
 
@@ -3653,7 +3652,7 @@ fn equipped(on_first: bool) -> (Scenario, PermanentId, [PermanentId; 2]) {
     let boomerang = s.force_permanent_on_battlefield(0, "Trusty Boomerang");
     let host = s
         .game()
-        .permanent_object_ref(if on_first { first } else { second });
+        .permanent_object(if on_first { first } else { second });
     s.game_mut().state.permanents[boomerang]
         .as_mut()
         .unwrap()
@@ -3885,10 +3884,7 @@ fn delayed_event_seen(event: &DelayedTriggerEvent) -> (u8, bool) {
 
 #[test]
 fn every_delayed_trigger_event_has_its_own_relation_code() {
-    let watched = managym::state::game_object::ObjectRef {
-        entity: managym::state::game_object::ObjectId(1),
-        incarnation: managym::state::game_object::Incarnation(0),
-    };
+    let watched = managym::state::zone::ZoneManager::default().allocate();
     let events = [
         DelayedTriggerEvent::Leaves {
             watched,
@@ -4047,7 +4043,7 @@ fn definitions_seen(s: &Scenario, viewer: usize) -> BTreeSet<u32> {
 fn foretold_and_hand_cards_never_reach_the_opponents_encoding() {
     let mut s = five_color_setup(&["Sozin's Comet", "United Front"]);
     let comet = library_card(&s, 0, "Sozin's Comet");
-    s.game_mut().move_object(comet, ZoneType::Hand);
+    let comet = move_card(&mut s, comet, ZoneType::Hand);
     let front = move_to_hand(&mut s, "United Front");
     s.set_player_mana_pool(0, "3");
     s.game_mut().scenario_refresh_priority().unwrap();
@@ -4055,7 +4051,7 @@ fn foretold_and_hand_cards_never_reach_the_opponents_encoding() {
         &mut s,
         |a| matches!(a, Action::Foretell { object, .. } if *object == comet),
     );
-    assert_eq!(s.game().state.zones.zone_of(comet), Some(ZoneType::Exile));
+    assert_eq!(zone_of(&s, comet), Some(ZoneType::Exile));
     let hidden = [comet, front].map(|object| s.game().state.objects[object].definition_id.0);
 
     let owner = encoded(&s, 0);
@@ -4485,7 +4481,7 @@ fn announced_x_reaches_the_stack_card_row() {
 fn foretold_card_and_permission_reach_only_the_owner() {
     let mut s = five_color_setup(&["Sozin's Comet"]);
     let comet = library_card(&s, 0, "Sozin's Comet");
-    s.game_mut().move_object(comet, ZoneType::Hand);
+    let comet = move_card(&mut s, comet, ZoneType::Hand);
     s.set_player_mana_pool(0, "2");
     let opponent_before = encoded_default(&Observation::for_player(s.game(), PlayerId(1)));
     s.game_mut().scenario_refresh_priority().unwrap();
@@ -4566,7 +4562,7 @@ fn a_token_copy_reaches_copy_and_exception_fact_rows_for_both_viewers() {
     let mut s = five_color_setup(&["Ran and Shaw", "Waterbending Lesson"]);
     for _ in 0..3 {
         let lesson = library_card(&s, 0, "Waterbending Lesson");
-        s.game_mut().move_object(lesson, ZoneType::Graveyard);
+        move_card(&mut s, lesson, ZoneType::Graveyard);
     }
     cast(&mut s, "Ran and Shaw");
     settle(&mut s);

@@ -6,7 +6,7 @@ use crate::state::binding::ObjectBinding;
 
 use crate::state::{
     ability::{DelayedExpiry, DelayedFrequency, Effect},
-    game_object::{ObjectId, ObjectLki, ObjectRef, PlayerId, Target},
+    game_object::{ObjectId, ObjectLki, PlayerId, Target},
     predicate::CardPredicate,
 };
 
@@ -63,7 +63,8 @@ pub struct PendingTrigger {
     pub requirement_index: usize,
     /// Exact source object captured when the ability triggered. Synthetic
     /// test/delayed triggers may have no battlefield source.
-    pub source_ref: Option<ObjectRef>,
+    #[serde(serialize_with = "crate::state::game_object::exact")]
+    pub source_ref: Option<ObjectId>,
     /// Definition/controller/presentation facts for that exact source.
     pub source_lki: Option<ObjectLki>,
     pub ability_index: usize,
@@ -108,7 +109,8 @@ pub struct DelayedTrigger {
     pub controller: PlayerId,
     #[serde(rename = "source_card")]
     pub source_object: ObjectId,
-    pub source_ref: Option<ObjectRef>,
+    #[serde(serialize_with = "crate::state::game_object::exact")]
+    pub source_ref: Option<ObjectId>,
     pub effects: Vec<Effect>,
     pub frequency: DelayedFrequency,
     pub expiry: DelayedExpiry,
@@ -120,7 +122,11 @@ pub enum DelayedTriggerEvent {
     /// The exact object dies (or, `or_exiled`, is exiled: earthbend's "when
     /// it dies or is exiled"). Removed once it leaves the battlefield any
     /// way; the departed permanent is the trigger's context.
-    Leaves { watched: ObjectRef, or_exiled: bool },
+    Leaves {
+        #[serde(serialize_with = "crate::state::game_object::exact")]
+        watched: ObjectId,
+        or_exiled: bool,
+    },
     /// "Whenever a creature dies".
     CreatureDies,
     /// "At the beginning of the end step", optionally only the controller's.
@@ -142,23 +148,16 @@ pub enum DelayedTriggerEvent {
 /// card is not the source.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ExileLink {
-    pub source: ObjectRef,
+    #[serde(serialize_with = "crate::state::game_object::exact")]
+    pub source: ObjectId,
     /// The appearance found by the exiling effect (CR 400.7j), not any
     /// later appearance of the same physical card.
-    #[serde(rename = "exiled_card", serialize_with = "serialize_exiled_object")]
-    pub exiled_object: ObjectRef,
+    /// V16 recorded a row here, so its bytes keep the slot alone.
+    #[serde(rename = "exiled_card")]
+    pub exiled_object: ObjectId,
     /// The card returns as the source leaves the battlefield.
     #[serde(skip_serializing_if = "is_true")]
     pub returns: bool,
-}
-
-// v16 retained a row here. Preserve those bytes while the rules use the
-// exact appearance; the next hash contract can include its incarnation.
-fn serialize_exiled_object<S: serde::Serializer>(
-    object: &ObjectRef,
-    serializer: S,
-) -> Result<S::Ok, S::Error> {
-    serde::Serialize::serialize(&object.entity, serializer)
 }
 
 fn is_true(value: &bool) -> bool {

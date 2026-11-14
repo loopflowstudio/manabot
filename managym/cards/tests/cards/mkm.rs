@@ -1,5 +1,7 @@
 //! Tests for cards filed in `src/mkm.rs`, in card order.
 
+use crate::support::game::move_card;
+use crate::support::inspect::{permanent_of, zone_of};
 use crate::support::{
     game::{put_onto_battlefield, ur_lessons_setup},
     inspect::{card_of, counters},
@@ -24,10 +26,7 @@ fn proft_etb_draw_and_combat_counts_at_resolution() {
     let object = cast_owned(&mut s, "Proft's Eidetic Memory");
     let before = s.zone_size(0, ZoneType::Hand);
     resolve_top(&mut s); // permanent enters, ETB on stack
-    assert_eq!(
-        s.game().state.zones.zone_of(object),
-        Some(ZoneType::Battlefield)
-    );
+    assert_eq!(zone_of(&s, object), Some(ZoneType::Battlefield));
     resolve_top(&mut s);
     assert_eq!(s.zone_size(0, ZoneType::Hand), before + 1);
     s.advance_to_active_step(0, StepKind::BeginningOfCombat);
@@ -79,14 +78,8 @@ fn proft_hand_limit_only_while_controlled_and_legend_rule_for_both_card_types() 
             .position(|a| matches!(a, Action::SelectCard { object, .. } if *object == second_card))
             .unwrap();
         s.step_action(index);
-        assert_eq!(
-            s.game().state.zones.zone_of(first_card),
-            Some(ZoneType::Graveyard)
-        );
-        assert_eq!(
-            s.game().state.zones.zone_of(second_card),
-            Some(ZoneType::Battlefield)
-        );
+        assert_eq!(zone_of(&s, first_card), Some(ZoneType::Graveyard));
+        assert_eq!(zone_of(&s, second_card), Some(ZoneType::Battlefield));
     }
     let mut s = ur_lessons_setup();
     let proft = put_onto_battlefield(&mut s, 0, "Proft's Eidetic Memory");
@@ -99,7 +92,7 @@ fn proft_hand_limit_only_while_controlled_and_legend_rule_for_both_card_types() 
     resolve_top(&mut s);
     assert_eq!(s.zone_size(0, ZoneType::Hand), before);
     let object = card_of(&s, proft);
-    s.game_mut().move_object(object, ZoneType::Hand);
+    move_card(&mut s, object, ZoneType::Hand);
     s.advance_to_active_step(0, StepKind::End);
     resolve_top(&mut s);
     assert_eq!(s.action_space().kind, ActionSpaceKind::Discard);
@@ -120,9 +113,9 @@ fn proft_has_no_effect_if_its_only_target_leaves() {
     s.advance_to_active_step(0, StepKind::BeginningOfCombat);
     assert!(s.choose_target(Target::Permanent(gran)));
     let object = card_of(&s, gran);
-    s.game_mut().move_object(object, ZoneType::Hand);
-    s.game_mut().move_object(object, ZoneType::Battlefield);
-    let new = s.game().state.object_to_permanent[object].unwrap();
+    let object = move_card(&mut s, object, ZoneType::Hand);
+    let object = move_card(&mut s, object, ZoneType::Battlefield);
+    let new = permanent_of(&s, object).unwrap();
     resolve_top(&mut s);
     assert_eq!(counters(&s, new), 0);
 }

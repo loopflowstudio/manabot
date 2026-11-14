@@ -1,5 +1,6 @@
 //! Tests for cards filed in `src/eld.rs`, in card order.
 
+use crate::support::inspect::permanent_of;
 use crate::support::{
     game::{five_color_setup, five_color_unfunded_setup, move_to_hand, Scenario},
     inspect::{counters_of, has_action, library_card, permanent_named, zone_of},
@@ -24,7 +25,7 @@ fn fetch_lands_have_distinct_entry_and_life_rules() {
         let found = library_card(&s, 0, "Forest");
         select_card(&mut s, found);
         settle(&mut s);
-        let id = s.game().state.object_to_permanent[found].unwrap();
+        let id = permanent_of(&s, found).unwrap();
         assert_eq!(
             s.game().state.permanents[id].as_ref().unwrap().tapped,
             tapped

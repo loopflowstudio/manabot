@@ -32,7 +32,7 @@ use crate::{
             ActivatedAbilityDefinition, ReplacementEffect, TriggeredManaAbility,
             TriggeredManaOutput,
         },
-        game_object::{ObjectId, ObjectRef, PermanentId, PlayerId},
+        game_object::{ObjectId, PermanentId, PlayerId},
         mana::{Color, Mana, ManaCost, ManaSpendChoice, ManaSpent},
     },
 };
@@ -1893,7 +1893,7 @@ impl Game {
         {
             return Err(AgentError("illegal mana tap cost selection".into()));
         }
-        let permanent = self.state.object_to_permanent[object].unwrap();
+        let permanent = self.state.permanent_of(object).unwrap();
         self.tap_permanent(permanent, false);
         if let Some(SuspendedResolution {
             decision: Decision::ManaUpfront { tap_remaining, .. },
@@ -1990,7 +1990,7 @@ impl Game {
         // Retain the output and original payment frame before any cost
         // effect can suspend. Resumption must not spend mana, tap or pay life
         // again, nor expose this output before sacrifice/zone work finishes.
-        let source_ref = self.permanent_object_ref(permanent);
+        let source_ref = self.permanent_object(permanent);
         caller.decision = Decision::ManaChoice {
             player,
             choices: ability.mana_choices().unwrap(),
@@ -2029,7 +2029,7 @@ impl Game {
         let tapped = self.tapped_for_mana(permanent);
         let bonuses = self.production_bonuses(player, &tapped);
         let source = self
-            .permanent_object_ref(permanent)
+            .permanent_object(permanent)
             .expect("a tapped fixed source is on the battlefield");
         let resolved = self.resolve_mana_bonuses(player, source, &produced, bonuses, None);
         assert!(
@@ -2126,7 +2126,7 @@ impl Game {
             })
             .filter_map(|trigger| {
                 Some(PendingManaBonus {
-                    source: self.permanent_object_ref(trigger.source)?,
+                    source: self.permanent_object(trigger.source)?,
                     output: trigger.ability.output,
                 })
             })
@@ -2141,7 +2141,7 @@ impl Game {
     pub(crate) fn resolve_mana_bonuses(
         &mut self,
         player: PlayerId,
-        tapped: ObjectRef,
+        tapped: ObjectId,
         produced: &Mana,
         bonuses: Vec<PendingManaBonus>,
         resume: Option<Box<Decision>>,
@@ -2560,7 +2560,7 @@ mod tests {
     fn source(index: usize, fixed: Option<&str>, abilities: Vec<ManaActivation>) -> ManaSource {
         ManaSource {
             permanent: PermanentId(index),
-            object: ObjectId(index),
+            object: ObjectId::in_slot(index, 0),
             untapped: true,
             fixed: fixed.map(Mana::parse),
             abilities,
@@ -2680,7 +2680,7 @@ mod tests {
                         let untapped = rng.gen_bool(0.85);
                         ManaSource {
                             permanent: PermanentId(index),
-                            object: ObjectId(index),
+                            object: ObjectId::in_slot(index, 0),
                             untapped,
                             fixed: outputs.choose(&mut rng).unwrap().clone(),
                             abilities: Vec::new(),
@@ -2914,7 +2914,7 @@ mod tests {
             // One Herbalist-shaped source: any color, or two restricted mana.
             model.sources.push(ManaSource {
                 permanent: PermanentId(count),
-                object: ObjectId(count),
+                object: ObjectId::in_slot(count, 0),
                 untapped: true,
                 fixed: None,
                 waterbend: true,
@@ -3105,7 +3105,7 @@ mod tests {
         let sources = (0..4)
             .map(|index| ManaSource {
                 permanent: PermanentId(index),
-                object: ObjectId(index),
+                object: ObjectId::in_slot(index, 0),
                 untapped: true,
                 fixed: Some(Mana::parse("G")),
                 abilities: vec![
@@ -3168,7 +3168,7 @@ mod tests {
         let model = PaymentModel {
             sources: vec![ManaSource {
                 permanent: PermanentId(0),
-                object: ObjectId(0),
+                object: ObjectId::in_slot(0, 0),
                 untapped: true,
                 fixed: Some(Mana::parse("G")),
                 abilities: vec![sacrifice],

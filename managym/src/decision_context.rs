@@ -21,23 +21,22 @@ use crate::{
 };
 
 impl Game {
-    fn decision_object(&self, object: impl Into<ObjectId>) -> Option<DecisionObjectView> {
-        let object: ObjectId = object.into();
-        let reference = self.current_object_ref(object)?;
+    fn decision_object(&self, object: ObjectId) -> Option<DecisionObjectView> {
+        let reference = self.state.live(object)?;
         let display_id = self
             .state
             .object_to_permanent
-            .get(object.0)
+            .get(object.slot())
             .and_then(|permanent| *permanent)
             .and_then(|permanent| self.state.permanents[permanent].as_ref())
             .map_or(self.state.objects[object].id.0, |permanent| permanent.id.0);
         let object = &self.state.objects[object];
         Some(DecisionObjectView {
-            entity_id: reference.entity.0 as u32,
+            entity_id: reference.slot() as u32,
             subject: SubjectRef::Object {
                 id: ObjectRenderId {
                     entity: display_id,
-                    incarnation: reference.incarnation.0,
+                    incarnation: reference.generation(),
                 },
             },
             display_id,
@@ -67,12 +66,12 @@ impl Game {
             Target::StackSpell(object) => self.decision_object(*object),
             Target::StackAbility(id) => self.decision_object(self.stack_ability_source(*id)?),
             Target::GraveyardCard(reference) => {
-                let mut view = self.decision_object(reference.entity)?;
+                let mut view = self.decision_object(*reference)?;
                 // Keep the announced incarnation even if the card later moved.
                 view.subject = SubjectRef::Object {
                     id: ObjectRenderId {
                         entity: view.display_id,
-                        incarnation: reference.incarnation.0,
+                        incarnation: reference.generation(),
                     },
                 };
                 Some(view)
@@ -128,10 +127,9 @@ impl Game {
                                 .find(|card| card.id == id.0 as i32)
                                 .and_then(|_| {
                                     self.state
-                                        .objects
-                                        .iter()
-                                        .position(|object| object.id == *id)
-                                        .and_then(|index| self.decision_object(ObjectId(index)))
+                                        .latest_objects()
+                                        .find(|(_, object)| object.id == *id)
+                                        .and_then(|(object, _)| self.decision_object(object))
                                 })
                         }?;
                         let role = match action {
@@ -169,14 +167,14 @@ impl Game {
         for (index, permanent) in self.state.permanents.iter().enumerate() {
             if let Some(permanent) = permanent {
                 if let Some(reference) =
-                    self.permanent_object_ref(crate::state::game_object::PermanentId(index))
+                    self.permanent_object(crate::state::game_object::PermanentId(index))
                 {
                     subjects.insert(
                         format!("permanent:{index}"),
                         SubjectRef::Object {
                             id: ObjectRenderId {
                                 entity: permanent.id.0,
-                                incarnation: reference.incarnation.0,
+                                incarnation: reference.generation(),
                             },
                         },
                     );
@@ -284,14 +282,10 @@ impl Game {
                     return self.decision_target(&Target::Player(PlayerId(player)));
                 }
                 let display_id = reference.object? as u32;
-                self.state
-                    .objects
-                    .iter()
-                    .enumerate()
-                    .find_map(|(index, _)| {
-                        self.decision_object(ObjectId(index))
-                            .filter(|view| view.display_id == display_id)
-                    })
+                self.state.latest_objects().find_map(|(object, _)| {
+                    self.decision_object(object)
+                        .filter(|view| view.display_id == display_id)
+                })
             };
             view.source = RequiredNullable(object(frame.source));
             view.targets = frame

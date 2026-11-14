@@ -11,6 +11,7 @@ use managym::{
     },
 };
 
+use crate::support::game::move_card;
 use crate::support::{
     game::*,
     inspect::{card_of, find_owned_card_off_battlefield, permanent},
@@ -715,7 +716,7 @@ fn cr_702_ward_counters_an_opponents_triggered_ability() {
             )],
         },
     );
-    s.game_mut().move_object(ogre, ZoneType::Battlefield);
+    move_card(&mut s, ogre, ZoneType::Battlefield);
     s.game_mut().scenario_refresh_priority().unwrap();
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Permanent(aerialist)));

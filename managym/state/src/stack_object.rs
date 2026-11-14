@@ -1,6 +1,6 @@
 use super::ability::Effect;
 use super::card::{AbilityGrant, CardDefId};
-use super::game_object::{ObjectId, ObjectLki, ObjectRef, PlayerId, PublicId, Target};
+use super::game_object::{ObjectId, ObjectLki, PlayerId, PublicId, Target};
 use crate::binding::ObjectBinding;
 use crate::mana::ManaSpent;
 
@@ -51,7 +51,8 @@ pub struct ActivatedAbilityOnStack {
     pub source_definition_id: CardDefId,
     #[serde(rename = "source_card")]
     pub source_object: ObjectId,
-    pub source_ref: ObjectRef,
+    #[serde(serialize_with = "crate::game_object::exact")]
+    pub source_ref: ObjectId,
     pub ability_index: usize,
     pub targets: Vec<Target>,
     /// The clause of each target when the ability has several; empty means
@@ -61,7 +62,8 @@ pub struct ActivatedAbilityOnStack {
     /// The exact object the source Aura or Equipment was attached to when
     /// the ability was activated, before costs such as sacrificing it.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub attached: Option<ObjectRef>,
+    #[serde(serialize_with = "crate::game_object::exact")]
+    pub attached: Option<ObjectId>,
     /// The announced value of X (CR 602.2b, 601.2b).
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub x: u8,
@@ -84,7 +86,8 @@ pub struct TriggeredAbilityOnStack {
     pub controller: PlayerId,
     #[serde(rename = "source_card")]
     pub source_object: ObjectId,
-    pub source_ref: Option<ObjectRef>,
+    #[serde(serialize_with = "crate::game_object::exact")]
+    pub source_ref: Option<ObjectId>,
     pub source_lki: Option<ObjectLki>,
     #[serde(rename = "source_card_registry_key")]
     pub source_definition_id: CardDefId,
@@ -151,7 +154,7 @@ impl StackObject {
     }
 
     /// The exact source object of an ability; spells have none.
-    pub fn source_ref(&self) -> Option<ObjectRef> {
+    pub fn source_ref(&self) -> Option<ObjectId> {
         match self {
             StackObject::Spell(_) => None,
             StackObject::ActivatedAbility(ability) => Some(ability.source_ref),

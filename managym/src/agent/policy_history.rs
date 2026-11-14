@@ -63,8 +63,7 @@ fn public(zone: ZoneType) -> bool {
     )
 }
 
-fn object_reference(game: &Game, object: impl Into<ObjectId>) -> HistoryReference {
-    let object: ObjectId = object.into();
+fn object_reference(game: &Game, object: ObjectId) -> HistoryReference {
     let Some(zone) = game
         .state
         .zones
@@ -111,10 +110,10 @@ fn target_reference(game: &Game, target: Target) -> HistoryReference {
             .stack_ability_source(id)
             .map(|object_id| object_reference(game, object_id))
             .unwrap_or(HistoryReference::Unavailable),
-        Target::GraveyardCard(object) => object_reference(game, object.entity),
+        Target::GraveyardCard(object) => object_reference(game, object),
         Target::Permanent(id) => game
-            .permanent_object_ref(id)
-            .map(|exact| object_reference(game, exact.entity))
+            .permanent_object(id)
+            .map(|exact| object_reference(game, exact))
             .unwrap_or(HistoryReference::Unavailable),
     }
 }
@@ -126,8 +125,7 @@ fn target_reference(game: &Game, target: Target) -> HistoryReference {
 pub(crate) fn record(game: &mut Game, event: &GameEvent) {
     use HistoryKind::*;
     if let GameEvent::CardMoved {
-        object_id: crate::state::game_object::ObjectRef { entity: object, .. },
-        ..
+        object_id: object, ..
     } = event
     {
         let id = game.state.objects[*object].id.0 as i32;
@@ -156,7 +154,7 @@ pub(crate) fn record(game: &mut Game, event: &GameEvent) {
     let unknown = HistoryReference::Unavailable;
     let (kind, amount, source, targets) = match event {
         GameEvent::CardMoved {
-            object_id: crate::state::game_object::ObjectRef { entity: object, .. },
+            object_id: object,
             to,
             face_down,
             ..
@@ -332,11 +330,11 @@ mod tests {
     #[test]
     fn history_survives_drain_departure_reentry_and_hidden_reassignment() {
         let mut game = game();
-        let object = ObjectId(0);
-        let other = ObjectId(40);
-        game.move_object(object, ZoneType::Stack);
-        game.move_object(other, ZoneType::Battlefield);
-        let target = game.state.object_to_permanent[other].unwrap();
+        let objects: Vec<_> = game.state.zones.latest().collect();
+        let (object, other) = (objects[0], objects[40]);
+        let object = game.move_object(object, ZoneType::Stack);
+        let other = game.move_object(other, ZoneType::Battlefield);
+        let target = game.state.permanent_of(other).unwrap();
         game.emit(GameEvent::SpellCast {
             object_id: object,
             targets: vec![Target::Permanent(target)],
@@ -382,8 +380,8 @@ mod tests {
             expected,
             encode(&Observation::for_player(&game, PlayerId(0)), 32, 60)
         );
-        game.move_object(object, ZoneType::Hand);
-        game.move_object(other, ZoneType::Graveyard);
+        let object = game.move_object(object, ZoneType::Hand);
+        let other = game.move_object(other, ZoneType::Graveyard);
         game.move_object(other, ZoneType::Battlefield);
         let projected = Observation::for_player(&game, PlayerId(0));
         let cast = projected
@@ -426,7 +424,8 @@ mod tests {
                 old: 20,
                 new: 20 - index,
             });
-            game.move_object(ObjectId(index as usize), ZoneType::Hand);
+            let object = game.state.zones.latest().nth(index as usize).unwrap();
+            game.move_object(object, ZoneType::Hand);
         }
         let first = Observation::for_player(&game, PlayerId(0));
         let second = Observation::for_player(&game, PlayerId(1));
@@ -449,8 +448,8 @@ mod tests {
     fn observations_share_bounded_suffix_and_forks_isolate_it() {
         let mut game = game();
         game.create_token("token.ally", PlayerId(0), false);
-        let token = ObjectId(game.state.objects.len() - 1);
-        let permanent = game.state.object_to_permanent[token].unwrap();
+        let token = game.state.zones.latest().last().unwrap();
+        let permanent = game.state.permanent_of(token).unwrap();
         game.emit(GameEvent::DamageDealt {
             source: Some(token),
             target: DamageTarget::Permanent(permanent),
@@ -495,13 +494,16 @@ mod tests {
     }
     #[test]
     fn physical_card_slots_are_only_routing() {
-        let root = |source: ObjectId, destination: ObjectId| {
+        let root = |source: usize, destination: usize| {
             let mut game = game();
+            let objects: Vec<_> = game.state.zones.latest().collect();
+            let (source, destination) = (objects[source], objects[destination]);
             game.scenario_clear_hand(PlayerId(0));
             game.scenario_clear_hand(PlayerId(1));
-            game.push_spell_to_stack(source, PlayerId(0), vec![], vec![], Default::default());
-            game.move_object(destination, ZoneType::Battlefield);
-            let target = game.state.object_to_permanent[destination].unwrap();
+            let source =
+                game.push_spell_to_stack(source, PlayerId(0), vec![], vec![], Default::default());
+            let destination = game.move_object(destination, ZoneType::Battlefield);
+            let target = game.state.permanent_of(destination).unwrap();
             game.emit(GameEvent::SpellCast {
                 object_id: source,
                 targets: vec![Target::Permanent(target)],
@@ -509,8 +511,8 @@ mod tests {
             Observation::for_player(&game, PlayerId(0))
         };
         // Identical public definitions instantiated in different physical slots.
-        let first = root(ObjectId(0), ObjectId(40));
-        let second = root(ObjectId(1), ObjectId(41));
+        let first = root(0, 40);
+        let second = root(1, 41);
         assert_ne!(first.agent_cards[0].id, second.agent_cards[0].id);
         assert_eq!(encode(&first, 32, 60), encode(&second, 32, 60));
     }

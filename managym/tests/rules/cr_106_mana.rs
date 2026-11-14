@@ -5,6 +5,7 @@ use managym::{
 };
 
 use crate::support::game::*;
+use crate::support::inspect::zone_of;
 
 /// CR 106.12a: a produced type is present regardless of its amounts or
 /// spending restrictions. Adding class totals here would overflow at 256.
@@ -265,7 +266,7 @@ fn restrictions_on_any_subtype_pay_exactly_their_purposes() {
     );
     // The restricted pool pays the whole cost, so payment is automatic.
     assert_eq!(s.game().state.players[0].mana_pool, Mana::default());
-    assert_eq!(s.game().state.zones.zone_of(ogre), Some(ZoneType::Stack));
+    assert_eq!(zone_of(&s, ogre), Some(ZoneType::Stack));
 
     for (restriction, activates) in [
         (ManaRestriction::only([], ["Scarecrow"]), true),

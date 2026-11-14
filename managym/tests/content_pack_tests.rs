@@ -4,7 +4,7 @@ use managym::{
     cards::content_pack::{default_content_pack, ContentPack, CONTENT_PACK_SCHEMA_VERSION},
     state::{
         card::{PrintedCharacteristics, TokenDefinition},
-        game_object::{ObjectId, ObjectKind, PlayerId, PublicId},
+        game_object::{ObjectKind, PlayerId, PublicId},
         player::PlayerConfig,
         zone::{ZoneManager, ZoneType},
     },
@@ -55,7 +55,7 @@ fn zone_trace(zones: &ZoneManager) -> Vec<(ZoneType, PlayerId, Vec<usize>)> {
                 zones
                     .zone_objects(zone, player)
                     .iter()
-                    .map(|object| object.0)
+                    .map(|object| object.slot())
                     .collect(),
             ));
         }
@@ -196,7 +196,7 @@ fn matches_and_search_clones_share_one_immutable_content_pack() {
     let expected_digest = admitted.content_digest();
     let mut branch = game.clone();
     let sibling = game.clone();
-    let first_card = ObjectId(0);
+    let first_card = game.state.zones.latest().next().unwrap();
 
     assert!(std::ptr::eq(admitted, default_content_pack()));
     assert_eq!(admitted.schema_version, CONTENT_PACK_SCHEMA_VERSION);

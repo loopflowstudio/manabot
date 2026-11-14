@@ -165,7 +165,7 @@ fn viewer_relative_slice_preserves_observation_and_hides_truth() {
         .zones
         .zone_objects(ZoneType::Hand, OPPONENT)
         .iter()
-        .map(|c| c.0)
+        .map(|c| c.slot())
         .collect();
     let branch = space
         .materialize(&game, world, 0)
@@ -185,7 +185,7 @@ fn viewer_relative_slice_preserves_observation_and_hides_truth() {
         .zones
         .zone_objects(ZoneType::Hand, OPPONENT)
         .iter()
-        .map(|c| c.0)
+        .map(|c| c.slot())
         .collect();
     assert_eq!(
         after_opponent_hand, source_opponent_hand,
@@ -199,7 +199,7 @@ fn viewer_relative_slice_preserves_observation_and_hides_truth() {
         .zones
         .zone_objects(ZoneType::Hand, OPPONENT)
         .iter()
-        .map(|c| c.0 as i32)
+        .map(|c| c.slot() as i32)
         .collect();
     let viewer_state = &branch_obs["viewer_state"];
     let projected_ids: HashSet<i32> = viewer_state["agent_cards"]

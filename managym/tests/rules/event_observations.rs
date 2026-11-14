@@ -55,11 +55,9 @@ fn cast_manowar_to_trigger(seed: u64) -> Vec<GameEvent> {
     let islands: Vec<_> = s
         .game()
         .state
-        .objects
-        .iter()
-        .enumerate()
+        .latest_objects()
         .filter(|(_, object)| object.owner == PlayerId(0) && object.name == "Island")
-        .map(|(idx, _)| managym::state::game_object::ObjectId(idx))
+        .map(|(idx, _)| idx)
         .take(3)
         .collect();
     for island in islands {
@@ -90,7 +88,9 @@ fn cast_manowar_to_trigger(seed: u64) -> Vec<GameEvent> {
 
 #[test]
 fn spell_events_are_observable_for_creature_spells() {
-    let (_s, elf, events) = cast_llanowar_elves(7101);
+    let (s, elf, events) = cast_llanowar_elves(7101);
+    // Each zone change makes a new object of the same card (CR 400.7).
+    let card = s.game().state.card_id(elf);
 
     assert!(events.contains(&GameEvent::SpellCast {
         object_id: elf,
@@ -107,7 +107,7 @@ fn spell_events_are_observable_for_creature_spells() {
                 to,
                 controller,
                 face_down,
-            } if object_id.entity == elf => {
+            } if s.game().state.card_id(*object_id) == card => {
                 Some((*object_id, *departed, *from, *to, *controller, *face_down))
             }
             _ => None,

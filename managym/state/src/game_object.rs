@@ -1,7 +1,7 @@
 //! Runtime objects, checked card ids, and exact identities across zone changes.
 //!
 //! `CardVec` owns the immutable physical-card roster; `ObjectVec` owns runtime
-//! rows. `ObjectRef` binds an appearance. `PublicId` joins observations and
+//! rows. `ObjectId` names one appearance. `PublicId` joins observations and
 //! orders timestamps.
 
 use std::{collections::BTreeMap, num::NonZeroU32, sync::Arc};
@@ -16,8 +16,114 @@ use super::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub struct PublicId(pub u32);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
-pub struct ObjectId(pub usize);
+/// One zone appearance of a card, token or copy (CR 109, 400.7). It goes
+/// stale when that object changes zones; only the zone move's returned id
+/// names the successor.
+///
+/// `slot` is private storage, shared by a card's successive appearances and
+/// never reused by another card or token. It orders ids as creation did.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ObjectId {
+    slot: u32,
+    generation: u32,
+}
+
+const _: () = assert!(std::mem::size_of::<ObjectId>() == 8);
+
+impl ObjectId {
+    /// Storage only: the object store and zone manager name the appearance
+    /// they hold. Rules code takes ids from the game, never from numbers.
+    #[doc(hidden)]
+    pub fn in_slot(slot: usize, generation: u32) -> Self {
+        Self {
+            slot: u32::try_from(slot).expect("object store exceeds u32"),
+            generation,
+        }
+    }
+
+    /// Storage row, for the stores, the state hash and viewer captures.
+    #[doc(hidden)]
+    pub fn slot(self) -> usize {
+        self.slot as usize
+    }
+
+    /// How many zone changes preceded this appearance in its slot.
+    pub fn generation(self) -> u32 {
+        self.generation
+    }
+}
+
+/// Recorded bytes name an appearance by its slot alone wherever a bare row
+/// was recorded before the identity split; `exact` writes both halves.
+impl serde::Serialize for ObjectId {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_u32(self.slot)
+    }
+}
+
+/// Values whose object ids are recorded whole, as `{"entity","incarnation"}`.
+pub trait ExactIds {
+    fn serialize_exact<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error>;
+}
+
+struct Exact<'a, T: ?Sized>(&'a T);
+
+impl<T: ExactIds + ?Sized> serde::Serialize for Exact<'_, T> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.serialize_exact(serializer)
+    }
+}
+
+/// `#[serde(serialize_with = "exact")]` for a field holding whole object ids.
+pub fn exact<T: ExactIds + ?Sized, S: serde::Serializer>(
+    value: &T,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    value.serialize_exact(serializer)
+}
+
+impl ExactIds for ObjectId {
+    fn serialize_exact<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let mut id = serializer.serialize_struct("ObjectId", 2)?;
+        id.serialize_field("entity", &self.slot)?;
+        id.serialize_field("incarnation", &self.generation)?;
+        id.end()
+    }
+}
+
+impl<T: ExactIds> ExactIds for Option<T> {
+    fn serialize_exact<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Some(value) => serializer.serialize_some(&Exact(value)),
+            None => serializer.serialize_none(),
+        }
+    }
+}
+
+impl<T: ExactIds> ExactIds for [T] {
+    fn serialize_exact<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_seq(self.iter().map(Exact))
+    }
+}
+
+impl<T: ExactIds> ExactIds for Vec<T> {
+    fn serialize_exact<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.as_slice().serialize_exact(serializer)
+    }
+}
+
+impl<T: ExactIds, U: serde::Serialize> ExactIds for (T, U) {
+    fn serialize_exact<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serde::Serialize::serialize(&(Exact(&self.0), &self.1), serializer)
+    }
+}
+
+impl<T: ExactIds, U: serde::Serialize, V: serde::Serialize> ExactIds for (T, U, V) {
+    fn serialize_exact<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serde::Serialize::serialize(&(Exact(&self.0), &self.1, &self.2), serializer)
+    }
+}
 
 /// A physical-card roster index (CR 108.2), independent of appearance ids.
 ///
@@ -38,7 +144,7 @@ impl CardId {
     }
 
     /// Zero-based roster position, which is also the card's storage slot.
-    fn index(self) -> usize {
+    pub(crate) fn index(self) -> usize {
         (self.0.get() - 1) as usize
     }
 }
@@ -46,12 +152,6 @@ impl CardId {
 impl serde::Serialize for CardId {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_u32(self.0.get() - 1)
-    }
-}
-
-impl From<CardId> for ObjectId {
-    fn from(card: CardId) -> Self {
-        Self(card.index())
     }
 }
 
@@ -102,31 +202,12 @@ impl std::ops::Index<CardId> for CardVec {
     }
 }
 
-/// Monotonic rules-object generation for one physical entity.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
-pub struct Incarnation(pub u32);
-
-impl Incarnation {
-    pub const INITIAL: Self = Self(0);
-
-    pub fn checked_next(self) -> Option<Self> {
-        self.0.checked_add(1).map(Self)
-    }
-}
-
-/// An exact rules object. A zone change preserves `entity` but advances
-/// `incarnation` (CR 400.7), so old continuations cannot bind to a later
-/// object represented by the same physical card.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
-pub struct ObjectRef {
-    pub entity: ObjectId,
-    pub incarnation: Incarnation,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum ObjectLookupError {
-    MissingEntity,
-    StaleIncarnation,
+    /// No object was ever stored there.
+    Missing,
+    /// The object changed zones or ceased to exist (CR 400.7).
+    Stale,
     WrongZone,
 }
 
@@ -169,8 +250,8 @@ pub struct ObjectLki {
     /// Its counters as it last existed ("put its counters on ...").
     #[serde(skip_serializing_if = "crate::permanent::Counters::is_empty")]
     pub counters: crate::permanent::Counters,
-    pub object_ref: ObjectRef,
-    #[serde(rename = "card")]
+    /// The departed appearance; recorded as `object_ref` and its slot as `card`.
+    #[serde(flatten, serialize_with = "serialize_lki_object")]
     pub object: ObjectId,
     pub from_zone: ZoneType,
     pub owner: PlayerId,
@@ -179,21 +260,32 @@ pub struct ObjectLki {
     pub presentation_id: PublicId,
 }
 
+fn serialize_lki_object<S: serde::Serializer>(
+    object: &ObjectId,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    use serde::ser::SerializeMap;
+    let mut map = serializer.serialize_map(Some(2))?;
+    map.serialize_entry("object_ref", &Exact(object))?;
+    map.serialize_entry("card", object)?;
+    map.end()
+}
+
 /// Last-known battlefield facts of departed exact objects, keyed by object,
 /// with each battlefield slot's departed object at hand. Zone-change
 /// events carry their own departure identity, never a latest-by-row query.
 /// Iterates in object order; the canonical state hash serializes that.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ObjectLkiLog {
-    by_object: BTreeMap<ObjectRef, ObjectLki>,
+    by_object: BTreeMap<ObjectId, ObjectLki>,
     /// The departed object that occupied each battlefield slot, by
     /// `PermanentId`; a slot is never reused.
-    by_permanent: Vec<Option<ObjectRef>>,
+    by_permanent: Vec<Option<ObjectId>>,
 }
 
 impl ObjectLkiLog {
     pub fn insert(&mut self, lki: ObjectLki) {
-        let object = lki.object_ref;
+        let object = lki.object;
         let slot = lki.permanent.0;
         if self.by_permanent.len() <= slot {
             self.by_permanent.resize(slot + 1, None);
@@ -202,11 +294,11 @@ impl ObjectLkiLog {
         self.by_object.insert(object, lki);
     }
 
-    pub fn get(&self, object: ObjectRef) -> Option<&ObjectLki> {
+    pub fn get(&self, object: ObjectId) -> Option<&ObjectLki> {
         self.by_object.get(&object)
     }
 
-    pub fn contains(&self, object: ObjectRef) -> bool {
+    pub fn contains(&self, object: ObjectId) -> bool {
         self.by_object.contains_key(&object)
     }
 
@@ -219,7 +311,7 @@ impl ObjectLkiLog {
             .and_then(|object| self.by_object.get(&object))
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&ObjectRef, &ObjectLki)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&ObjectId, &ObjectLki)> {
         self.by_object.iter()
     }
 }
@@ -237,7 +329,7 @@ pub enum Target {
     StackSpell(ObjectId),
     /// An activated or triggered ability on the stack, by its stack object id.
     StackAbility(PublicId),
-    GraveyardCard(ObjectRef),
+    GraveyardCard(#[serde(serialize_with = "exact")] ObjectId),
 }
 
 // Typed index wrappers — prevent accidental cross-collection indexing.
@@ -265,34 +357,34 @@ impl<T> std::ops::DerefMut for ObjectVec<T> {
 impl<T> std::ops::Index<ObjectId> for ObjectVec<T> {
     type Output = T;
     fn index(&self, id: ObjectId) -> &T {
-        &self.0[id.0]
+        &self.0[id.slot()]
     }
 }
 impl<T> std::ops::Index<&ObjectId> for ObjectVec<T> {
     type Output = T;
     fn index(&self, id: &ObjectId) -> &T {
-        &self.0[id.0]
+        &self.0[id.slot()]
     }
 }
 impl<T> std::ops::IndexMut<ObjectId> for ObjectVec<T> {
     fn index_mut(&mut self, id: ObjectId) -> &mut T {
-        &mut self.0[id.0]
+        &mut self.0[id.slot()]
     }
 }
 
 impl ObjectVec<Object> {
     /// Narrow a storage id once; missing rows, tokens and spell copies are not cards.
     pub fn card_id(&self, object: ObjectId) -> Option<CardId> {
-        self.get(object.0)
+        self.get(object.slot())
             .filter(|value| value.is_card())
-            .map(|_| CardId::from_index(object.0))
+            .map(|_| CardId::from_index(object.slot()))
     }
 }
 
 impl std::ops::Index<CardId> for ObjectVec<Object> {
     type Output = Object;
     fn index(&self, card: CardId) -> &Object {
-        let object = &self[ObjectId::from(card)];
+        let object = &self.0[card.index()];
         debug_assert!(object.is_card(), "CardId must still name a card");
         object
     }
@@ -305,7 +397,7 @@ impl std::ops::Index<&CardId> for ObjectVec<Object> {
 }
 impl std::ops::IndexMut<CardId> for ObjectVec<Object> {
     fn index_mut(&mut self, card: CardId) -> &mut Object {
-        let object = &mut self[ObjectId::from(card)];
+        let object = &mut self.0[card.index()];
         debug_assert!(object.is_card(), "CardId must still name a card");
         object
     }

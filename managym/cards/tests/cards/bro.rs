@@ -1,5 +1,6 @@
 //! Tests for cards filed in `src/bro.rs`, in card order.
 
+use crate::support::inspect::zone_of;
 use crate::support::{
     game::{five_color_setup, five_color_unfunded_setup, plant_in_graveyard, Scenario},
     inspect::{can_cast, find_owned_card, offered_targets, permanent, permanent_named},
@@ -101,7 +102,7 @@ fn unearthed_cityscape_leveler_has_haste_and_is_exiled_instead_of_destroyed() {
     // Its attack trigger destroys the Leveler itself: it is exiled instead,
     // and its controller still creates the Powerstone.
     settle_targeting(&mut s, Target::Permanent(leveler));
-    assert_eq!(s.game().state.zones.zone_of(object), Some(ZoneType::Exile));
+    assert_eq!(zone_of(&s, object), Some(ZoneType::Exile));
     assert_eq!(powerstones(&s, 0), vec![true]);
 }
 
@@ -112,11 +113,8 @@ fn unearthed_cityscape_leveler_is_exiled_at_the_next_end_step() {
     activate_card(&mut s, object, 0);
     spend_colorless(&mut s);
     settle_targeting(&mut s, Target::Player(PlayerId(1)));
-    assert_eq!(
-        s.game().state.zones.zone_of(object),
-        Some(ZoneType::Battlefield)
-    );
+    assert_eq!(zone_of(&s, object), Some(ZoneType::Battlefield));
     s.advance_to_step(StepKind::End);
     settle_targeting(&mut s, Target::Player(PlayerId(1)));
-    assert_eq!(s.game().state.zones.zone_of(object), Some(ZoneType::Exile));
+    assert_eq!(zone_of(&s, object), Some(ZoneType::Exile));
 }

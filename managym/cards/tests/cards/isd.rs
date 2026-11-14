@@ -1,5 +1,6 @@
 //! Tests for cards filed in `src/isd.rs`, in card order.
 
+use crate::support::game::move_card;
 use crate::support::{
     game::five_color_unfunded_setup,
     inspect::{can_cast, owned_card},
@@ -11,7 +12,7 @@ use managym::state::zone::ZoneType;
 fn blasphemous_act_costs_one_less_per_creature_on_the_battlefield() {
     let mut s = five_color_unfunded_setup(&["Blasphemous Act", "Gray Ogre"]);
     let act = owned_card(&s, 0, "Blasphemous Act");
-    s.game_mut().move_object(act, ZoneType::Hand);
+    let act = move_card(&mut s, act, ZoneType::Hand);
     s.force_permanent_on_battlefield(0, "Gray Ogre");
     s.force_permanent_on_battlefield(0, "Gray Ogre");
     s.force_permanent_on_battlefield(1, "Gray Ogre");

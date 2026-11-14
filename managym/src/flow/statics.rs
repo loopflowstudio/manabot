@@ -14,7 +14,7 @@ use crate::{
             ActivatedAbilityDefinition, CardTypes, Keyword, Keywords, PowerCda, Restriction,
             StaticAbility, StaticScope,
         },
-        game_object::{ObjectId, ObjectRef, PermanentId, PlayerId, Target},
+        game_object::{ObjectId, PermanentId, PlayerId, Target},
         permanent::CounterKind,
         predicate::CardPredicate,
         zone::ZoneType,
@@ -399,16 +399,15 @@ impl Game {
             condition,
             controller,
             None,
-            self.permanent_object_ref(source),
+            self.permanent_object(source),
             None,
         )
     }
     /// Power in the object's current zone (CR 604.3). On the stack "you"
     /// means the spell's controller; elsewhere off the battlefield it means
     /// the owner (CR 109.5), including owned outside-game copies.
-    pub fn object_power(&self, object_id: impl Into<ObjectId>) -> i32 {
-        let object_id: ObjectId = object_id.into();
-        if let Some(permanent) = self.state.object_to_permanent[object_id] {
+    pub fn object_power(&self, object_id: ObjectId) -> i32 {
+        if let Some(permanent) = self.state.permanent_of(object_id) {
             return self.characteristics(permanent).power;
         }
         let object = &self.state.objects[object_id];
@@ -425,12 +424,11 @@ impl Game {
     /// placeholder. Layer computation itself uses its explicit board context.
     pub(crate) fn object_matches_predicate(
         &self,
-        object_id: impl Into<ObjectId>,
+        object_id: ObjectId,
         predicate: &CardPredicate,
     ) -> bool {
-        let object_id: ObjectId = object_id.into();
         if predicate.from_battlefield_this_turn {
-            let Some(object) = self.current_object_ref(object_id) else {
+            let Some(object) = self.state.live(object_id) else {
                 return false;
             };
             return self.state.zones.zone_of(object_id) == Some(ZoneType::Graveyard)
@@ -443,7 +441,7 @@ impl Game {
                     },
                 );
         }
-        if let Some(permanent) = self.state.object_to_permanent[object_id] {
+        if let Some(permanent) = self.state.permanent_of(object_id) {
             return self.permanent_matches_predicate(permanent, predicate);
         }
         let power = if predicate.reads_power() {
@@ -585,8 +583,7 @@ impl Game {
     }
     /// Instant timing for `player` casting `card`: printed instant or flash,
     /// or a conditional "as though it had flash" that currently holds.
-    pub(crate) fn has_instant_timing(&self, player: PlayerId, object: impl Into<ObjectId>) -> bool {
-        let object: ObjectId = object.into();
+    pub(crate) fn has_instant_timing(&self, player: PlayerId, object: ObjectId) -> bool {
         let granted_flash = self
             .exile_grant(player, object)
             .is_some_and(|grant| grant.flash);
@@ -622,7 +619,7 @@ impl Game {
         &self,
         condition: &Condition,
         controller: PlayerId,
-        source: Option<ObjectRef>,
+        source: Option<ObjectId>,
         triggering: Option<Target>,
     ) -> bool {
         debug_assert!(
@@ -657,7 +654,7 @@ impl Game {
         condition: &Condition,
         controller: PlayerId,
         frame: Option<&EffectFrame>,
-        source: Option<ObjectRef>,
+        source: Option<ObjectId>,
         triggering: Option<Target>,
     ) -> bool {
         let source_permanent = || {
@@ -757,7 +754,7 @@ impl Game {
                 frame
                     .this_way
                     .iter()
-                    .any(|object| self.object_matches_predicate(object.entity, predicate))
+                    .any(|object| self.object_matches_predicate(*object, predicate))
             }),
             Condition::TriggeringSpellMatches(predicate) => matches!(
                 frame.and_then(|frame| frame.context_target),
@@ -769,10 +766,11 @@ impl Game {
                 else {
                     return false;
                 };
-                let object_id = object.entity;
-                self.current_object_ref(object_id) != Some(object)
-                    && self.state.zones.zone_of(object_id) == Some(ZoneType::Exile)
-                    && self.object_matches_predicate(object_id, predicate)
+                // CR 400.7j: the exiled object the targeted card became.
+                self.state.zones.successor(object).is_some_and(|exiled| {
+                    self.state.zones.zone_of(exiled) == Some(ZoneType::Exile)
+                        && self.object_matches_predicate(exiled, predicate)
+                })
             }
             Condition::TargetDealtDamageThisTurn => {
                 let Some(Target::Permanent(permanent_id)) =

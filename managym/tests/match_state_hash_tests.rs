@@ -7,7 +7,7 @@ use managym::{
     cards::content_pack::{default_content_pack, ContentPack},
     state::{
         card::{CardDefId, CardDefinition, Keyword, Keywords, PrintedCharacteristics},
-        game_object::{ObjectId, PlayerId, PublicId},
+        game_object::{PlayerId, PublicId},
         permanent::{CounterKind, Counters},
         stack_object::{SpellOnStack, StackObject},
         zone::ZoneType,
@@ -176,7 +176,7 @@ fn meaningful_mutable_facts_change_the_hash() {
     assert_ne!(baseline, library_order.state.deterministic_hash());
 
     let mut definition = game.clone();
-    let object = ObjectId(0);
+    let object = game.state.zones.latest().next().unwrap();
     let original_id = definition.state.objects[object].definition_id;
     definition.state.objects[object].definition_id =
         CardDefId((original_id.0 + 1) % default_content_pack().len() as u32);
@@ -215,7 +215,8 @@ fn content_schema_and_content_change_the_hash() {
 fn card_names_are_compatibility_data_not_state_identity() {
     let game = make_game(23);
     let mut renamed = game.clone();
-    renamed.state.objects[ObjectId(0)].name = "Compatibility-only rename".to_string();
+    renamed.state.objects[game.state.players[0].deck[0]].name =
+        "Compatibility-only rename".to_string();
 
     assert_eq!(
         game.state.deterministic_hash(),
@@ -229,7 +230,7 @@ fn stack_identity_is_typed_while_legacy_serialization_is_preserved() {
         cast_from: managym::state::zone::ZoneType::Hand,
         flashback: false,
         id: PublicId(101),
-        object: ObjectId(3),
+        object: make_game(23).state.zones.latest().nth(3).unwrap(),
         controller: PlayerId(0),
         source_definition_id: CardDefId(7),
         targets: Vec::new(),

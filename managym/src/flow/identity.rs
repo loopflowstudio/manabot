@@ -7,63 +7,42 @@ use crate::{
     flow::{event::ObjectEventRef, game::Game},
     state::{
         card::ObjectDefinition,
-        game_object::{ObjectId, ObjectLki, ObjectLookupError, ObjectRef, PermanentId, PlayerId},
+        game_object::{ObjectId, ObjectLki, ObjectLookupError, PermanentId, PlayerId},
         zone::ZoneType,
     },
 };
 
 impl Game {
-    /// Exact identity of `object` in its current zone. An object removed
-    /// from every zone has no current rules identity.
-    pub fn current_object_ref(&self, object: impl Into<ObjectId>) -> Option<ObjectRef> {
-        self.state.current_object_ref(object.into())
+    /// The object a live battlefield permanent is.
+    pub fn permanent_object(&self, permanent_id: PermanentId) -> Option<ObjectId> {
+        let object = self.state.permanents.get(permanent_id.0)?.as_ref()?.object;
+        (self.lookup_current_permanent(object) == Ok(permanent_id)).then_some(object)
     }
 
-    /// Exact identity of a live battlefield permanent.
-    pub fn permanent_object_ref(&self, permanent_id: PermanentId) -> Option<ObjectRef> {
-        let permanent = self.state.permanents.get(permanent_id.0)?.as_ref()?;
-        let object_ref = self.current_object_ref(permanent.object)?;
-        (self.lookup_current_permanent(object_ref) == Ok(permanent_id)).then_some(object_ref)
-    }
-
-    /// Resolve an exact ref to the current battlefield representation.
-    /// Never follows the physical card into a newer incarnation.
+    /// Resolve an object to its battlefield permanent. Never follows the
+    /// physical card to a later appearance.
     pub fn lookup_current_permanent(
         &self,
-        object_ref: ObjectRef,
+        object: ObjectId,
     ) -> Result<PermanentId, ObjectLookupError> {
-        self.state.object(object_ref)?;
-        let object = object_ref.entity;
-        if self.state.zones.zone_of(object) != Some(ZoneType::Battlefield) {
-            return Err(ObjectLookupError::WrongZone);
-        }
-        let permanent_id = self
-            .state
+        self.state.object(object)?;
+        self.state
             .object_to_permanent
-            .get(object.0)
+            .get(object.slot())
             .copied()
             .flatten()
-            .ok_or(ObjectLookupError::WrongZone)?;
-        let permanent = self
-            .state
-            .permanents
-            .get(permanent_id.0)
-            .and_then(Option::as_ref)
-            .ok_or(ObjectLookupError::WrongZone)?;
-        if permanent.object != object {
-            return Err(ObjectLookupError::WrongZone);
-        }
-        Ok(permanent_id)
+            .filter(|id| {
+                self.state.zones.zone_of(object) == Some(ZoneType::Battlefield)
+                    && self.state.permanents[*id]
+                        .as_ref()
+                        .is_some_and(|permanent| permanent.object == object)
+            })
+            .ok_or(ObjectLookupError::WrongZone)
     }
 
     /// Snapshot the current battlefield object for triggers and LKI.
-    pub(crate) fn snapshot_current_permanent(
-        &self,
-        object: impl Into<ObjectId>,
-    ) -> Option<ObjectLki> {
-        let object: ObjectId = object.into();
-        let object_ref = self.current_object_ref(object)?;
-        let permanent_id = self.lookup_current_permanent(object_ref).ok()?;
+    pub(crate) fn snapshot_current_permanent(&self, object: ObjectId) -> Option<ObjectLki> {
+        let permanent_id = self.lookup_current_permanent(object).ok()?;
         let permanent = self.state.permanents[permanent_id].as_ref()?;
         let definition = &self.state.objects[object];
         let characteristics = self.characteristics(permanent_id);
@@ -89,7 +68,6 @@ impl Game {
             power: characteristics.power,
             toughness: characteristics.toughness,
             counters: permanent.counters.clone(),
-            object_ref,
             object,
             from_zone: ZoneType::Battlefield,
             owner: definition.owner,
@@ -99,7 +77,7 @@ impl Game {
         })
     }
 
-    pub fn object_lki(&self, object_ref: ObjectRef) -> Option<&ObjectLki> {
+    pub fn object_lki(&self, object_ref: ObjectId) -> Option<&ObjectLki> {
         self.state.object_lki.get(object_ref)
     }
 
@@ -110,28 +88,28 @@ impl Game {
     }
 
     /// Capture the stable viewer identity for a current or departed object.
-    pub(crate) fn object_event_ref(&self, object_ref: ObjectRef) -> Option<ObjectEventRef> {
+    pub(crate) fn object_event_ref(&self, object_ref: ObjectId) -> Option<ObjectEventRef> {
         let entity = if let Ok(permanent_id) = self.lookup_current_permanent(object_ref) {
             self.state.permanents[permanent_id].as_ref()?.id
         } else if let Some(lki) = self.object_lki(object_ref) {
             lki.presentation_id
         } else {
-            self.state.objects.get(object_ref.entity.0)?.id
+            self.state.objects.get(object_ref.slot())?.id
         };
         Some(ObjectEventRef {
             entity,
-            incarnation: object_ref.incarnation,
+            incarnation: object_ref.generation(),
         })
     }
 
     pub(crate) fn permanent_event_ref(&self, permanent_id: PermanentId) -> Option<ObjectEventRef> {
-        self.object_event_ref(self.permanent_object_ref(permanent_id)?)
+        self.object_event_ref(self.permanent_object(permanent_id)?)
     }
 
     /// Resolve a departed object's immutable meaning through the match's
     /// shared content pack. LKI stores only `CardDefId`, never a definition
     /// clone.
-    pub fn object_lki_definition(&self, object_ref: ObjectRef) -> Option<&ObjectDefinition> {
+    pub fn object_lki_definition(&self, object_ref: ObjectId) -> Option<&ObjectDefinition> {
         let lki = self.object_lki(object_ref)?;
         default_content_pack().definition(lki.definition_id)
     }

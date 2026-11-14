@@ -1,5 +1,7 @@
 //! Tests for cards filed in `src/afr.rs`, in card order.
 
+use crate::support::game::move_card;
+use crate::support::inspect::zone_of;
 use crate::support::{
     game::{five_color_setup, ready},
     inspect::{can_cast, library_card, permanent_named},
@@ -26,10 +28,7 @@ fn dispute_sacrifices_before_responses_draws_two_and_makes_live_treasure() {
     let hand = s.game().state.zones.size(ZoneType::Hand, PlayerId(0));
     select_card(&mut s, food_card);
     spend_colorless(&mut s);
-    assert_ne!(
-        s.game().state.zones.zone_of(food_card),
-        Some(ZoneType::Battlefield)
-    );
+    assert_ne!(zone_of(&s, food_card), Some(ZoneType::Battlefield));
     settle(&mut s);
     assert_eq!(
         s.game().state.zones.size(ZoneType::Hand, PlayerId(0)),
@@ -60,7 +59,7 @@ fn selected_sacrifice_cannot_also_fund_the_announced_spell() {
         let treasure_card = s.game().state.permanents[treasure].as_ref().unwrap().object;
         s.set_player_mana_pool(0, if mode == 1 { "BB" } else { "B" });
         let dispute = library_card(&s, 0, "Deadly Dispute");
-        s.game_mut().move_object(dispute, ZoneType::Hand);
+        let dispute = move_card(&mut s, dispute, ZoneType::Hand);
         s.game_mut().scenario_refresh_priority().unwrap();
         assert_eq!(
             can_cast(&s, dispute),
@@ -99,7 +98,7 @@ fn selected_sacrifice_cannot_also_fund_the_announced_spell() {
             choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
         }
         assert!(s.game().state.permanents[treasure].is_none());
-        assert_eq!(s.game().state.zones.zone_of(dispute), Some(ZoneType::Stack));
+        assert_eq!(zone_of(&s, dispute), Some(ZoneType::Stack));
         assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
     }
 }
@@ -113,7 +112,7 @@ fn a_mana_tap_can_precede_a_distinct_sacrifice_cost() {
         let elves = permanent_named(&s, "Llanowar Elves");
         s.set_player_mana_pool(0, pool);
         let dispute = library_card(&s, 0, "Deadly Dispute");
-        s.game_mut().move_object(dispute, ZoneType::Hand);
+        let dispute = move_card(&mut s, dispute, ZoneType::Hand);
         s.game_mut().scenario_refresh_priority().unwrap();
         assert_eq!(can_cast(&s, dispute), pool == "B");
         if pool == "B" {
@@ -128,11 +127,8 @@ fn a_mana_tap_can_precede_a_distinct_sacrifice_cost() {
             // Tap and sacrifice are different costs: G plus pooled B pays 1B,
             // then the still-present tapped creature pays the sacrifice.
             assert!(s.game().state.permanents[elves].is_none());
-            assert_eq!(
-                s.game().state.zones.zone_of(elves_card),
-                Some(ZoneType::Graveyard)
-            );
-            assert_eq!(s.game().state.zones.zone_of(dispute), Some(ZoneType::Stack));
+            assert_eq!(zone_of(&s, elves_card), Some(ZoneType::Graveyard));
+            assert_eq!(zone_of(&s, dispute), Some(ZoneType::Stack));
             assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
         }
     }
@@ -159,7 +155,7 @@ fn removal_respects_mana_value_and_excluded_creature_types() {
         assert!(s.choose_target(Target::Permanent(big)));
         settle(&mut s);
         assert_eq!(
-            s.game().state.zones.zone_of(target_card),
+            zone_of(&s, target_card),
             Some(if name == "Epic Downfall" {
                 ZoneType::Exile
             } else {

@@ -16,7 +16,7 @@ use crate::{
     },
     state::{
         ability::{DelayedExpiry, DelayedFrequency, PaymentCost},
-        game_object::{ObjectId, ObjectRef, PlayerId, Target},
+        game_object::{ObjectId, PlayerId, Target},
         mana::{ManaCost, ManaSpent},
         stack_object::StackObject,
         zone::ZoneType,
@@ -223,7 +223,7 @@ impl Game {
         effects: &[crate::state::ability::Effect],
     ) -> bool {
         let definition = if let Some(grant) = grant {
-            self.state.objects[grant.grantor.entity]
+            self.state.objects[grant.grantor]
                 .attached_grants()
                 .nth(grant.index)
         } else {
@@ -238,20 +238,15 @@ impl Game {
         };
         definition.is_some_and(|definition| definition.effects == effects)
     }
-    pub(crate) fn visible_reference(
-        &self,
-        object: ObjectRef,
-        viewer: PlayerId,
-    ) -> VisibleReference {
-        let object_id = object.entity;
-        if self.current_object_ref(object_id) != Some(object) {
+    pub(crate) fn visible_reference(&self, object: ObjectId, viewer: PlayerId) -> VisibleReference {
+        if self.state.live(object).is_none() {
             return VisibleReference {
                 definition: self.object_lki(object).map(|lki| lki.definition_id.0),
                 ..VisibleReference::default()
             };
         }
-        let record = &self.state.objects[object_id];
-        let zone = self.state.zones.zone_of(object_id);
+        let record = &self.state.objects[object];
+        let zone = self.state.zones.zone_of(object);
         // Ordinary visibility needs no walk of retained event batches. Only
         // otherwise hidden objects need the prospective-entry permission.
         let visible = matches!(
@@ -267,10 +262,9 @@ impl Game {
             && self.shares_information(viewer, record.owner))
             || (matches!(zone, Some(ZoneType::Hand | ZoneType::Library))
                 && (self.searches_private_zones(viewer, record.owner)
-                    || self.decision_reveals(object_id, viewer)))
+                    || self.decision_reveals(object, viewer)))
             || self.pending_public_entries().contains(&object);
-        if !visible
-            || (self.is_foretold(object_id) && !self.shares_information(viewer, record.owner))
+        if !visible || (self.is_foretold(object) && !self.shares_information(viewer, record.owner))
         {
             return VisibleReference::default();
         }
@@ -308,10 +302,11 @@ impl Game {
 
     pub(crate) fn object_reference(
         &self,
-        object_id: impl Into<ObjectId>,
+        object_id: ObjectId,
         viewer: PlayerId,
     ) -> VisibleReference {
-        self.current_object_ref(object_id)
+        self.state
+            .live(object_id)
             .map(|object| self.visible_reference(object, viewer))
             .unwrap_or_default()
     }
@@ -321,7 +316,9 @@ impl Game {
             ActivationSource::Permanent(permanent) => {
                 self.target_reference(Target::Permanent(permanent), viewer)
             }
-            ActivationSource::Card(card) => self.object_reference(card, viewer),
+            ActivationSource::Card(card) => {
+                self.object_reference(self.state.object_of(card), viewer)
+            }
         }
     }
 
@@ -332,7 +329,7 @@ impl Game {
                 ..VisibleReference::default()
             },
             Target::Permanent(id) => self
-                .permanent_object_ref(id)
+                .permanent_object(id)
                 .map(|object| self.visible_reference(object, viewer))
                 .unwrap_or_default(),
             Target::StackSpell(object_id) => {
@@ -1245,13 +1242,13 @@ mod tests {
         let permanent = game
             .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
             .unwrap();
-        let reference = game.permanent_object_ref(permanent).unwrap();
+        let reference = game.permanent_object(permanent).unwrap();
         assert!(game
             .visible_reference(reference, PlayerId(0))
             .object
             .is_some());
-        let object_id = reference.entity;
-        game.move_object(object_id, ZoneType::Hand);
+        let object_id = reference;
+        let object_id = game.move_object(object_id, ZoneType::Hand);
         assert!(game
             .visible_reference(reference, PlayerId(0))
             .object
@@ -1331,9 +1328,7 @@ mod tests {
                 player,
                 cost: ManaCost::default(),
                 spent: crate::state::mana::ManaSpent::default(),
-                completion: Box::new(SpendCompletion::Foretell(
-                    game.state.card_id(ObjectId(0)).unwrap(),
-                )),
+                completion: Box::new(SpendCompletion::Foretell(game.state.players[0].deck[0])),
             },
             Decision::OrderReplacement {
                 player: PlayerId(0),
@@ -1500,7 +1495,7 @@ mod tests {
             },
             Decision::EnterAsCopy {
                 player,
-                object_id: ObjectId(0),
+                object_id: game.state.zones.latest().next().unwrap(),
                 candidates: vec![],
             },
         ];

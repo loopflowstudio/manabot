@@ -179,8 +179,10 @@ impl Game {
             permanent.tapped = false;
         }
         self.state.permanents.push(Some(permanent));
-        if self.state.object_to_permanent.len() <= object_id.0 {
-            self.state.object_to_permanent.resize(object_id.0 + 1, None);
+        if self.state.object_to_permanent.len() <= object_id.slot() {
+            self.state
+                .object_to_permanent
+                .resize(object_id.slot() + 1, None);
         }
         self.state.object_to_permanent[object_id] = Some(permanent_id);
         self.invalidate_mana_cache(player);

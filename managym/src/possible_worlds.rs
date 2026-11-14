@@ -547,8 +547,9 @@ impl HiddenHandConstraints {
                     .push(object);
             }
             for objects in by_name.values_mut() {
-                objects
-                    .sort_unstable_by_key(|object| (!commitments.pins_object(*object), object.0));
+                objects.sort_unstable_by_key(|object| {
+                    (!commitments.pins_object(*object), object.slot())
+                });
             }
 
             let mut new_hand: Vec<ObjectId> = Vec::with_capacity(self.hand_size as usize);
@@ -565,7 +566,7 @@ impl HiddenHandConstraints {
                 return Err(MaterializeError::InconsistentWorld);
             }
 
-            new_hand.sort_unstable_by_key(|c| c.0);
+            new_hand.sort_unstable_by_key(|c| c.slot());
             new_library.shuffle(&mut rng);
 
             if commitments.constrains()

@@ -1,5 +1,7 @@
 //! Tests for cards filed in `src/iko.rs`, in card order.
 
+use crate::support::game::move_card;
+use crate::support::inspect::zone_of;
 use crate::support::{
     game::{animate, five_color_setup, until_end_of_turn},
     inspect::permanent_named,
@@ -34,16 +36,10 @@ fn death_rewards_and_selected_activation_costs() {
     let weapon = permanent_named(&s, "Weaponize the Monsters");
     activate_first(&mut s, weapon);
     target_opponent(&mut s);
-    assert_eq!(
-        s.game().state.zones.zone_of(fodder),
-        Some(ZoneType::Battlefield)
-    );
+    assert_eq!(zone_of(&s, fodder), Some(ZoneType::Battlefield));
     select_card(&mut s, fodder);
     spend_colorless(&mut s);
-    assert_eq!(
-        s.game().state.zones.zone_of(fodder),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, fodder), Some(ZoneType::Graveyard));
     settle(&mut s);
     assert_eq!(s.game().state.players[1].life, 17);
     assert_eq!(s.game().state.players[0].life, life);
@@ -85,7 +81,7 @@ fn weaponize_keeps_its_exact_damage_source_after_removal() {
     select_card(&mut s, fodder);
     spend_colorless(&mut s);
     // Model a completed removal response before the activated ability resolves.
-    s.game_mut().move_object(weapon, ZoneType::Graveyard);
+    move_card(&mut s, weapon, ZoneType::Graveyard);
     settle(&mut s);
     assert_eq!(s.game().state.players[0].life, 21); // Inspector -1, Weaponize lifelink +2.
     assert_eq!(s.game().state.players[1].life, 18);
@@ -109,8 +105,7 @@ fn drannith_magistrate_stops_opponents_casting_from_the_graveyard() {
             .as_ref()
             .unwrap()
             .object;
-        s.game_mut()
-            .move_object(object, managym::state::zone::ZoneType::Graveyard);
+        move_card(&mut s, object, managym::state::zone::ZoneType::Graveyard);
     }
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(can_cast(&s, dance));

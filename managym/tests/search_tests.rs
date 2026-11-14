@@ -69,7 +69,7 @@ fn zone_snapshot(game: &Game, zone: ZoneType, player: PlayerId) -> Vec<ObjectId>
 fn hidden_pool(game: &Game, player: PlayerId) -> BTreeSet<usize> {
     let mut pool = BTreeSet::new();
     for object in game.state.zones.zone_objects(ZoneType::Hand, player).iter() {
-        pool.insert(object.0);
+        pool.insert(object.slot());
     }
     for object in game
         .state
@@ -77,7 +77,7 @@ fn hidden_pool(game: &Game, player: PlayerId) -> BTreeSet<usize> {
         .zone_objects(ZoneType::Library, player)
         .iter()
     {
-        pool.insert(object.0);
+        pool.insert(object.slot());
     }
     pool
 }
@@ -140,7 +140,7 @@ fn determinize_preserves_public_state_and_hand_sizes() {
     let villain_library_size = game.state.zones.size(ZoneType::Library, villain);
     let hero_library_before: BTreeSet<usize> = zone_snapshot(&game, ZoneType::Library, hero)
         .iter()
-        .map(|c| c.0)
+        .map(|c| c.slot())
         .collect();
     let villain_pool_before = hidden_pool(&game, villain);
     let life_before = [game.state.players[0].life, game.state.players[1].life];
@@ -178,7 +178,7 @@ fn determinize_preserves_public_state_and_hand_sizes() {
     // Hero's library is the same multiset (only order may change).
     let hero_library_after: BTreeSet<usize> = zone_snapshot(&game, ZoneType::Library, hero)
         .iter()
-        .map(|c| c.0)
+        .map(|c| c.slot())
         .collect();
     assert_eq!(hero_library_after, hero_library_before);
     // Villain's hidden pool (hand + library) is conserved.

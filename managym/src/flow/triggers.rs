@@ -21,7 +21,7 @@ use crate::{
         },
         card::CardType,
         effect::{EffectDuration, Modification},
-        game_object::{ObjectId, ObjectLki, ObjectRef, PermanentId, PlayerId, Target},
+        game_object::{ObjectId, ObjectLki, PermanentId, PlayerId, Target},
         mana::{Color, Mana},
         permanent::CounterKind,
         stack_object::{StackObject, TriggeredAbilityOnStack},
@@ -199,7 +199,7 @@ impl Game {
     /// Whether `target` is the exact permanent whose ability triggered.
     fn is_trigger_source(&self, trigger: &PendingTrigger, target: Target) -> bool {
         matches!(target, Target::Permanent(id)
-            if trigger.source_ref.is_some() && self.permanent_object_ref(id) == trigger.source_ref)
+            if trigger.source_ref.is_some() && self.permanent_object(id) == trigger.source_ref)
     }
 
     fn trigger_requirements(
@@ -274,7 +274,7 @@ impl Game {
 
     pub(crate) fn target_mana_value(&self, target: Target) -> u32 {
         match target {
-            Target::GraveyardCard(object) => u32::from(self.object_mana_value(object.entity)),
+            Target::GraveyardCard(object) => u32::from(self.object_mana_value(object)),
             Target::Permanent(id) => self.state.permanents[id]
                 .as_ref()
                 .map_or(0, |p| u32::from(self.object_mana_value(p.object))),
@@ -512,7 +512,7 @@ impl Game {
         match self
             .state
             .objects
-            .get(trigger.source_object.0)?
+            .get(trigger.source_object.slot())?
             .abilities
             .get(trigger.ability_index)?
             .effects()
@@ -781,14 +781,14 @@ impl Game {
             | TargetSpec::GraveyardCardYouOwnWithinSourcePower { .. } => self
                 .state
                 .zone_cards(ZoneType::Graveyard, controller)
-                .filter_map(|card| self.current_object_ref(card))
+                .filter_map(|card| self.state.live(self.state.object_of(card)))
                 .map(Target::GraveyardCard)
                 .collect(),
             TargetSpec::GraveyardCard { .. } | TargetSpec::GraveyardCardOpponentOwns { .. } => {
                 [PlayerId(0), PlayerId(1)]
                     .into_iter()
                     .flat_map(|player| self.state.zone_cards(ZoneType::Graveyard, player))
-                    .filter_map(|card| self.current_object_ref(card))
+                    .filter_map(|card| self.state.live(self.state.object_of(card)))
                     .map(Target::GraveyardCard)
                     .collect()
             }
@@ -848,7 +848,7 @@ impl Game {
                     .zone_objects(ZoneType::Battlefield, player)
                     .iter()
                 {
-                    if let Some(permanent_id) = self.state.object_to_permanent[object_id] {
+                    if let Some(permanent_id) = self.state.permanent_of(*object_id) {
                         candidates.push(Target::Permanent(permanent_id));
                     }
                 }
@@ -933,7 +933,7 @@ impl Game {
                     self.check_intervening_if(
                         condition,
                         source.controller,
-                        Some(source.lki.object_ref),
+                        Some(source.lki.object),
                         self.triggering_permanent(event),
                     )
                 }) && (!matches!(condition, TriggerCondition::OnceEachTurn { .. })
@@ -941,7 +941,7 @@ impl Game {
                         .state
                         .turn
                         .ability_triggers_this_turn
-                        .contains_key(&(source.lki.object_ref, ability_index)))
+                        .contains_key(&(source.lki.object, ability_index)))
                 {
                     let times = self.trigger_occurrences(condition, source, event);
                     fired.extend(std::iter::repeat_n(
@@ -966,7 +966,7 @@ impl Game {
                     !self.check_intervening_if(
                         condition,
                         source.controller,
-                        Some(source.lki.object_ref),
+                        Some(source.lki.object),
                         self.triggering_permanent(event),
                     )
                 }) {
@@ -1022,7 +1022,7 @@ impl Game {
                     }
                 )
             {
-                self.spend_once_each_turn((source_lki.object_ref, ability_index));
+                self.spend_once_each_turn((source_lki.object, ability_index));
             }
             let effects = match &granted {
                 Some(effects) => effects.as_slice(),
@@ -1054,7 +1054,7 @@ impl Game {
                 GameEvent::CardDrawn { player, .. } => Some(*player),
                 // "that player": whose graveyard the card was put into.
                 GameEvent::CardMoved {
-                    object_id: ObjectRef { entity: object, .. },
+                    object_id: object,
                     to: ZoneType::Graveyard,
                     ..
                 } => Some(self.state.objects[*object].owner),
@@ -1071,10 +1071,12 @@ impl Game {
                     (u8::try_from(*count).unwrap_or(u8::MAX), Default::default())
                 }
                 GameEvent::CardMoved {
-                    object_id: ObjectRef { entity: object, .. },
+                    object_id: object,
                     to: ZoneType::Battlefield,
                     ..
-                } if *object == source_object => self.state.object_to_permanent[*object]
+                } if *object == source_object => self
+                    .state
+                    .permanent_of(*object)
                     .and_then(|id| self.state.permanents[id].as_ref())
                     .map_or(Default::default(), |permanent| {
                         (permanent.cast_x, permanent.cast_spent)
@@ -1085,7 +1087,7 @@ impl Game {
                 GameEvent::AttackersDeclared { attackers, .. } => attackers
                     .iter()
                     .copied()
-                    .find(|id| self.permanent_object_ref(*id) == Some(source_lki.object_ref)),
+                    .find(|id| self.permanent_object(*id) == Some(source_lki.object)),
                 _ => None,
             };
             let id = self.next_trigger_id();
@@ -1095,7 +1097,7 @@ impl Game {
                 target_req_indices: Vec::new(),
                 requirement_index: 0,
                 source_object,
-                source_ref: Some(source_lki.object_ref),
+                source_ref: Some(source_lki.object),
                 source_lki: Some(source_lki),
                 ability_index,
                 controller,
@@ -1164,7 +1166,7 @@ impl Game {
     /// each permanent its controller controls whose "triggers an additional
     /// time" covers the source (CR 603.2d), as the source is or last was.
     fn additional_trigger_times(&self, source: &TriggerSourceSnapshot) -> usize {
-        let current = self.lookup_current_permanent(source.lki.object_ref).ok();
+        let current = self.lookup_current_permanent(source.lki.object).ok();
         let object = &self.state.objects[source.object];
         self.static_sources()
             .filter(|(_, controller, _)| *controller == source.controller)
@@ -1203,7 +1205,7 @@ impl Game {
             if amount == 0 {
                 continue;
             }
-            let Some(source) = self.permanent_object_ref(attacker) else {
+            let Some(source) = self.permanent_object(attacker) else {
                 continue;
             };
             let mut mana = Mana::default();
@@ -1229,7 +1231,7 @@ impl Game {
     fn delayed_triggers_for_event(&mut self, event: &GameEvent) {
         let creature_died = match event {
             GameEvent::CardMoved {
-                object_id: ObjectRef { entity: object, .. },
+                object_id: object,
                 from: Some(ZoneType::Battlefield),
                 to: ZoneType::Graveyard,
                 ..
@@ -1323,14 +1325,14 @@ impl Game {
     pub(crate) fn enqueue_inline_trigger(
         &mut self,
         source_object: ObjectId,
-        source_ref: Option<ObjectRef>,
+        source_ref: Option<ObjectId>,
         controller: PlayerId,
         effects: Vec<Effect>,
         context: Option<Target>,
     ) -> &mut PendingTrigger {
         let source_lki = source_ref.and_then(|source| {
             self.object_lki(source).cloned().or_else(|| {
-                (self.current_object_ref(source_object) == Some(source))
+                (self.state.live(source_object) == Some(source))
                     .then(|| self.snapshot_current_permanent(source_object))
                     .flatten()
             })
@@ -1368,7 +1370,9 @@ impl Game {
     pub(crate) fn check_state_triggers(&mut self) {
         let mut fired = Vec::new();
         for source in self.indexed_sources(EventKinds::of(EventKind::CountersPut)) {
-            let Some(permanent) = self.state.object_to_permanent[source.object]
+            let Some(permanent) = self
+                .state
+                .permanent_of(source.object)
                 .and_then(|id| self.state.permanents[id].as_ref())
             else {
                 continue;
@@ -1384,7 +1388,7 @@ impl Game {
                 else {
                     continue;
                 };
-                let object = Some(source.lki.object_ref);
+                let object = Some(source.lki.object);
                 let waiting = self.state.pending_triggers.iter().any(|trigger| {
                     trigger.source_ref == object && trigger.ability_index == ability_index
                 }) || self.state.stack_objects.iter().any(|item| {
@@ -1405,7 +1409,7 @@ impl Game {
                 target_req_indices: Vec::new(),
                 requirement_index: 0,
                 source_object: source.object,
-                source_ref: Some(source.lki.object_ref),
+                source_ref: Some(source.lki.object),
                 source_lki: Some(source.lki),
                 ability_index,
                 controller: source.controller,
@@ -1442,7 +1446,7 @@ impl Game {
             })
             .map(|ability| ability.effects().to_vec())
             .collect();
-        let source_ref = self.current_object_ref(object);
+        let source_ref = self.state.live(object);
         for effects in fired {
             self.enqueue_inline_trigger(object, source_ref, caster, effects, None);
         }
@@ -1497,7 +1501,7 @@ impl Game {
             }
         }
         for (object, ability_index, owner) in fired {
-            let source_ref = self.current_object_ref(object);
+            let source_ref = self.state.live(object);
             let id = self.next_trigger_id();
             self.state.pending_triggers_mut().push(PendingTrigger {
                 program: false,
@@ -1552,7 +1556,7 @@ impl Game {
                     })
             })
             .collect();
-        sources.sort_by_key(|source| source.lki.object_ref);
+        sources.sort_by_key(|source| source.lki.object);
         sources
     }
 
@@ -1627,8 +1631,8 @@ impl Game {
             }
         }
 
-        sources.sort_by_key(|source| source.lki.object_ref);
-        sources.dedup_by_key(|source| source.lki.object_ref);
+        sources.sort_by_key(|source| source.lki.object);
+        sources.dedup_by_key(|source| source.lki.object);
         sources
     }
 
@@ -1642,7 +1646,8 @@ impl Game {
     ) -> bool {
         match (condition, event) {
             (TriggerCondition::WasCast { condition }, _) => {
-                self.state.object_to_permanent[source_object]
+                self.state
+                    .permanent_of(source_object)
                     .and_then(|id| self.state.permanents[id].as_ref())
                     .is_some_and(|source| source.was_cast)
                     && self.trigger_condition_fires(
@@ -1680,7 +1685,8 @@ impl Game {
                 )
             }
             (TriggerCondition::WhileSourceAttacking { condition }, _) => {
-                self.state.object_to_permanent[source_object]
+                self.state
+                    .permanent_of(source_object)
                     .and_then(|id| self.state.permanents[id].as_ref())
                     .is_some_and(|source| source.attacking)
                     && self.trigger_condition_fires(
@@ -1700,7 +1706,10 @@ impl Game {
                     object_id: object, ..
                 },
             ) => {
-                let this = self.state.object_to_permanent[source_object].map(Target::Permanent);
+                let this = self
+                    .state
+                    .permanent_of(source_object)
+                    .map(Target::Permanent);
                 self.object_matches_predicate(*object, predicate)
                     && this.is_some()
                     && self
@@ -1836,7 +1845,7 @@ impl Game {
                 },
             ) => {
                 let chapter = i32::from(*chapter);
-                self.state.object_to_permanent[source_object] == Some(*permanent)
+                self.state.permanent_of(source_object) == Some(*permanent)
                     && total - count < chapter
                     && chapter <= *total
             }
@@ -1898,7 +1907,7 @@ impl Game {
             (
                 TriggerCondition::PutIntoGraveyard { whose, predicate },
                 GameEvent::CardMoved {
-                    object_id: ObjectRef { entity: object, .. },
+                    object_id: object,
                     to: ZoneType::Graveyard,
                     ..
                 },
@@ -2004,7 +2013,7 @@ impl Game {
                 object_id,
                 controller,
                 ..
-            } => (object_id.entity, *controller),
+            } => (*object_id, *controller),
             GameEvent::PermanentSacrificed {
                 object_id,
                 controller,
@@ -2016,7 +2025,8 @@ impl Game {
             .and_then(|object| self.object_lki(object))
             .map(|lki| lki.animated_creature)
             .unwrap_or_else(|| {
-                self.state.object_to_permanent[moved_object]
+                self.state
+                    .permanent_of(moved_object)
                     .filter(|id| self.state.permanents[*id].is_some())
                     .is_some_and(|id| self.characteristics(id).is_animated)
             });
@@ -2027,8 +2037,11 @@ impl Game {
                 if animated { &[CardType::Creature] } else { &[] },
             )
         };
+        // The source is the moved object as it entered, or as it was before
+        // it left (CR 603.10a looks back to the departed object).
+        let is_source = moved_object == source_object || departed == Some(source_object);
         match subject {
-            TriggerSubject::This => moved_object == source_object,
+            TriggerSubject::This => is_source,
             TriggerSubject::Matching {
                 controlled_by,
                 predicate,
@@ -2036,12 +2049,14 @@ impl Game {
             } => {
                 source_was_on_battlefield
                     && controlled_by.includes(source_controller, moved_controller)
-                    && !(*another && moved_object == source_object)
+                    && !(*another && is_source)
                     && matches(predicate)
             }
             // The Aura is still attached to the departed object as the
             // event is matched (CR 603.10a).
-            TriggerSubject::EnchantedCreature => self.state.object_to_permanent[source_object]
+            TriggerSubject::EnchantedCreature => self
+                .state
+                .permanent_of(source_object)
                 .and_then(|aura| self.state.permanents[aura].as_ref())
                 .and_then(|aura| aura.attached_to)
                 .is_some_and(|attached| {
@@ -2078,7 +2093,9 @@ impl Game {
     /// Whether the Aura card `aura` is on the battlefield attached to the
     /// permanent.
     fn is_enchanted_by(&self, permanent_id: PermanentId, aura: ObjectId) -> bool {
-        self.state.object_to_permanent[aura].and_then(|aura| self.attached_permanent(aura))
+        self.state
+            .permanent_of(aura)
+            .and_then(|aura| self.attached_permanent(aura))
             == Some(permanent_id)
     }
 }

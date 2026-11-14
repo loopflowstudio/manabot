@@ -78,7 +78,7 @@ impl Game {
                 match &self.state.suspended_decision.as_ref()?.decision {
                     Decision::OrderReplacement { candidates, .. } => {
                         let candidate = candidates.get(*mode)?;
-                        let object_id = candidate.source().entity;
+                        let object_id = candidate.source();
                         Some(format!(
                             "{}: {}",
                             self.state.objects[object_id].name,
@@ -375,7 +375,7 @@ impl Game {
                 .filter(|card| self.can_foretell(player, *card))
                 .map(|card| Action::Foretell {
                     player,
-                    object: card.into(),
+                    object: self.state.object_of(card),
                 }),
         );
         actions
@@ -408,7 +408,7 @@ impl Game {
                     {
                         actions.push(Action::ActivateCardAbility {
                             player,
-                            object: card.into(),
+                            object: self.state.object_of(card),
                             ability_index,
                         });
                     }
@@ -420,20 +420,20 @@ impl Game {
 
     fn priority_action_for_card(&self, player: PlayerId, card: CardId) -> Option<Action> {
         let object = &self.state.objects[card];
-        if !self.may_play_from_zone(player, card) {
+        if !self.may_play_from_zone(player, self.state.object_of(card)) {
             return None;
         }
         if object.types.is_land() {
             return self.can_play_land(player).then_some(Action::PlayLand {
                 player,
-                object: card.into(),
+                object: self.state.object_of(card),
             });
         }
         if !object.types.is_castable() {
             return None;
         }
 
-        let can_cast_now = if self.has_instant_timing(player, card) {
+        let can_cast_now = if self.has_instant_timing(player, self.state.object_of(card)) {
             self.can_cast_instants(player)
         } else {
             self.can_cast_sorceries(player)
@@ -444,7 +444,7 @@ impl Game {
         self.can_cast_with(player, card, Default::default())
             .then_some(Action::CastSpell {
                 player,
-                object: card.into(),
+                object: self.state.object_of(card),
             })
     }
 
@@ -453,31 +453,36 @@ impl Game {
     /// permission are the caller's.
     pub(crate) fn can_cast_with(&self, player: PlayerId, card: CardId, cast: CastChoices) -> bool {
         let object = &self.state.objects[card];
-        if object.spell_modes().is_some() && self.legal_spell_modes(player, card).is_empty() {
+        if object.spell_modes().is_some()
+            && self
+                .legal_spell_modes(player, self.state.object_of(card))
+                .is_empty()
+        {
             return false;
         }
         // Every mandatory targeting requirement needs a legal target.
         for requirement in object.target_requirements() {
             if requirement.min > 0
                 && self
-                    .legal_targets_for_requirement(player, card, &requirement)
+                    .legal_targets_for_requirement(player, self.state.object_of(card), &requirement)
                     .is_empty()
             {
                 return false;
             }
         }
 
-        let Some(cost) = self.effective_spell_cost(player, card, cast, None) else {
+        let Some(cost) = self.effective_spell_cost(player, self.state.object_of(card), cast, None)
+        else {
             return true;
         };
         // Castability gating sees pooled mana too — until-end-of-combat mana
         // (firebending) must make spells castable.
         let Some(additional) = object.sacrifice_cost() else {
-            return self.can_pay_cast(player, card, cast)
+            return self.can_pay_cast(player, self.state.object_of(card), cast)
                 || (object.exile_alternative().is_some()
                     && self.can_pay_cast(
                         player,
-                        card,
+                        self.state.object_of(card),
                         CastChoices {
                             kicked: true,
                             ..cast
@@ -485,7 +490,7 @@ impl Game {
                     ));
         };
         let payment = Payment::Spell {
-            object: card.into(),
+            object: self.state.object_of(card),
             cast,
             mode: None,
             targets: Vec::new(),
@@ -602,7 +607,7 @@ impl Game {
                     .into_iter()
                     .map(|card| Action::SelectCard {
                         player: *player,
-                        object: card.into(),
+                        object: self.state.object_of(card),
                     })
                     .collect(),
                 focus: Vec::new(),
@@ -615,7 +620,7 @@ impl Game {
                     .zone_cards(ZoneType::Hand, *player)
                     .map(|card| Action::SelectCard {
                         player: *player,
-                        object: card.into(),
+                        object: self.state.object_of(card),
                     })
                     .collect(),
                 focus: Vec::new(),

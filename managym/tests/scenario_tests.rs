@@ -13,11 +13,7 @@ use managym::{
         observation::{EventType, Observation},
     },
     flow::event::GameEvent,
-    state::{
-        game_object::{ObjectId, PlayerId},
-        player::PlayerConfig,
-        zone::ZoneType,
-    },
+    state::{game_object::PlayerId, player::PlayerConfig, zone::ZoneType},
     Game,
 };
 
@@ -56,7 +52,7 @@ fn observation_preserves_committed_card_move_zones() {
     let observation = Observation::new(
         &game,
         &[GameEvent::CardMoved {
-            object_id: game.current_object_ref(ObjectId(0)).unwrap(),
+            object_id: game.state.zones.latest().next().unwrap(),
             departed: None,
             from: Some(ZoneType::Battlefield),
             to: ZoneType::Graveyard,

@@ -287,7 +287,7 @@ fn build(recipe: &Recipe) -> Env {
                 .collect();
             let targets: Vec<_> = creatures
                 .iter()
-                .map(|card| game.current_object_ref(*card).unwrap())
+                .map(|card| game.state.live(*card).unwrap())
                 .collect();
             let mut index = 0;
             let state = &mut *game.state;
@@ -627,9 +627,7 @@ fn run(
                         benchmark_layers::triggers(
                             game,
                             GameEvent::CardMoved {
-                                object_id: game
-                                    .current_object_ref(card)
-                                    .expect("battlefield appearance"),
+                                object_id: game.state.live(card).expect("battlefield appearance"),
                                 departed: None,
                                 from: Some(ZoneType::Hand),
                                 to: ZoneType::Battlefield,

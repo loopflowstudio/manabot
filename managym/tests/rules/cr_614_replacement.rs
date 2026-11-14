@@ -13,7 +13,8 @@ use managym::{
 };
 
 use crate::support::game::*;
-use crate::support::inspect::{card_of, find_owned_card_off_battlefield};
+use crate::support::inspect::{card_of, find_owned_card_off_battlefield, now};
+use crate::support::inspect::{permanent_of, zone_of};
 
 fn resolve_bolt_with_drivers(
     seed: u64,
@@ -160,7 +161,7 @@ fn cr_614_1c_enters_tapped_and_with_counters_before_card_moved_commits() {
         614_004,
     );
     let object = find_owned_card_off_battlefield(&s, 0, "Gray Ogre");
-    s.game_mut().move_object(object, ZoneType::Hand);
+    let object = move_card(&mut s, object, ZoneType::Hand);
     s.game_mut().state.objects[object].replacement_effects = vec![
         ReplacementEffect::EntersTapped,
         ReplacementEffect::EntersWithPlusOneCounters {
@@ -176,20 +177,21 @@ fn cr_614_1c_enters_tapped_and_with_counters_before_card_moved_commits() {
     s.game_mut().scenario_refresh_priority().unwrap();
     crate::support::play::cast_card(&mut s, object);
     let from = Some(ZoneType::Stack);
-    let old_ref = s.game().current_object_ref(object).expect("spell object");
+    let old_ref = now(&s, object);
+    assert_eq!(s.game().state.live(old_ref), Some(old_ref), "spell object");
     s.pass_priority();
     s.pass_priority();
-    assert_eq!(s.game().state.zones.zone_of(object), Some(ZoneType::Stack));
+    assert_eq!(zone_of(&s, object), Some(ZoneType::Stack));
     crate::support::play::choose_mode(&mut s, 0);
 
-    let permanent_id = s.game().state.object_to_permanent[object].expect("entered permanent");
+    let entered = now(&s, object);
+    let permanent_id = permanent_of(&s, entered).expect("entered permanent");
     let permanent = s.game().state.permanents[permanent_id]
         .as_ref()
         .expect("entered permanent facts");
     assert!(permanent.tapped);
     assert_eq!(permanent.counter_count(CounterKind::PlusOnePlusOne), 2);
-    assert_ne!(s.game().current_object_ref(object), Some(old_ref));
-    let entered = s.game().current_object_ref(object).unwrap();
+    assert_ne!(entered, old_ref);
     assert!(s.drain_events().contains(&GameEvent::CardMoved {
         object_id: entered,
         departed: Some(old_ref),
@@ -215,12 +217,12 @@ fn entry_replacements_do_not_modify_other_objects_or_nonbattlefield_moves() {
             condition: None,
         },
     ];
-    s.game_mut().move_object(driver, ZoneType::Graveyard);
-    assert_eq!(s.game().state.object_to_permanent[driver], None);
+    let driver = move_card(&mut s, driver, ZoneType::Graveyard);
+    assert_eq!(permanent_of(&s, driver), None);
 
     let mountain = find_owned_card_off_battlefield(&s, 0, "Mountain");
-    s.game_mut().move_object(mountain, ZoneType::Battlefield);
-    let permanent_id = s.game().state.object_to_permanent[mountain].expect("mountain permanent");
+    let mountain = move_card(&mut s, mountain, ZoneType::Battlefield);
+    let permanent_id = permanent_of(&s, mountain).expect("mountain permanent");
     let permanent = s.game().state.permanents[permanent_id]
         .as_ref()
         .expect("mountain facts");

@@ -622,8 +622,8 @@ Flicker a Gray Ogre (exile it, then return it to the battlefield):
 let ogre = game.state.permanents[permanent].as_ref().unwrap().object; // ObjectId
 let card = game.state.card_of(ogre).unwrap();                         // CardId
 
-let exiled = game.move_object(ogre, ZoneType::Exile).unwrap();
-let returned = game.move_object(exiled, ZoneType::Battlefield).unwrap();
+let exiled = game.move_object(ogre, ZoneType::Exile);
+let returned = game.move_object(exiled, ZoneType::Battlefield);
 
 // The object that left is gone. Nothing that held its id can follow it.
 assert_eq!(game.state.object(ogre).err(), Some(ObjectLookupError::Stale));
@@ -631,7 +631,7 @@ assert_eq!(game.lookup_current_permanent(ogre), Err(ObjectLookupError::Stale));
 assert_ne!(returned, ogre);
 
 // The card is the same card, and names the object it is now.
-assert_eq!(game.state.object_of(card), Some(returned));
+assert_eq!(game.state.object_of(card), returned);
 assert_eq!(game.state.cards[card].owner, PlayerId(0));
 
 // What the old object was is last known information (CR 608.2h).
@@ -707,12 +707,19 @@ object, and it does not survive the object leaving its zone.
 Two functions connect cards and objects, and both read current state:
 
 ```rust
-/// The object this card currently is; `None` while the card is in no zone.
-pub fn object_of(&self, card: CardId) -> Option<ObjectId>
+/// The object this card currently is. A card outside the game (a sideboard)
+/// is in no zone: this is the id it would enter with.
+pub fn object_of(&self, card: CardId) -> ObjectId
 
 /// The card behind this object; `None` for a token, a copy or a stale id.
 pub fn card_of(&self, object: ObjectId) -> Option<CardId>
 ```
+
+`GameState::live(id)` returns the id while it still names an object in a zone,
+and `ZoneManager::successor(id)` returns the object `id` became by its one next
+zone change while that object is still there (CR 400.7e, j). `GameState::card_id`
+reads which card an object is or was without checking that the object still
+exists; it is for asking "is this a card", not for following one.
 
 Every lookup by `ObjectId` checks that the id is current:
 
@@ -747,8 +754,8 @@ object from its base (the card's printing, or a token's or copy's copiable
 values) and returns the new `ObjectId`. Everything else about the old object
 is dropped: damage, counters, attachments, copy effects, a transformed face,
 continuous effects that named it, and every id held elsewhere.
-A request to move to the object's current zone is a no-op and returns its
-unchanged identity.
+A move that does not happen (the object is already in that zone, or the id is
+already stale) changes nothing and returns the id it was given.
 
 What the rules let the new object know arrives in one `CarryOver` value, built
 by whatever caused the move. A fact crosses a zone change only as a field of
@@ -759,7 +766,7 @@ it, with the rule that allows it:
 | CR 400.7d | a permanent knows how its spell was cast: that it was cast, the value of X and the mana spent | `CarryOver::cast` |
 | CR 400.7e, f | a zone-change trigger (dies, leaves the battlefield, an Aura put into the graveyard) finds the object in the public zone it moved to | `CardMoved.object_id` is the successor; `departed` names its exact pre-move appearance for LKI |
 | CR 400.7g, h | a permission to cast a card, and the effect that granted it, find the spell on the stack | casting returns the spell's `ObjectId`; `CarryOver::cast_from` |
-| CR 400.7i | an effect that lets a land be played finds the land on the battlefield | playing returns the permanent's `ObjectId` |
+| CR 400.7i | an effect that lets a land be played finds the land on the battlefield | the entry batch's `EventResult.moved`, bound when the batch completes (an entry replacement may suspend it first) |
 | CR 400.7j | an effect or cost that moves an object to a public zone finds it there ("exile it, then return it", "if you do") | the move's returned `ObjectId`, held by the effect frame (`Moved`, `CreatedThisWay`) or the exile link |
 | CR 111.12, 608.3f | a copy of a permanent spell becomes a token | the new object's kind |
 
@@ -781,9 +788,11 @@ A creature exiled "until this leaves the battlefield" that leaves exile and is
 exiled again by something else is a different object, so it stays in exile
 when the first source leaves.
 
-Card tests see the same rule. `force_permanent_on_battlefield` and
-`enter_and_settle` return the id of the object they placed; after moving it,
-use the id the move returned or go through the card.
+Card tests see the same rule. `force_permanent_on_battlefield`, `cast` and
+`enter_and_settle` return the id of the object the card is when they return;
+after a later move, use the id the move returned. A test that follows one card
+through moves the engine made asks the support helpers `now`, `zone_of` and
+`permanent_of` (`tests/support/inspect.rs`), which go through the card.
 
 #### Names
 
@@ -801,7 +810,7 @@ The parameter type says which of the two a function works on:
 pub fn zone_of(&self, object: ObjectId) -> Option<ZoneType>
 
 // Works on cards alone: a token or a spell copy cannot be passed.
-pub(crate) fn play_land(&mut self, player: PlayerId, card: CardId) -> Result<ObjectId, AgentError>
+pub(crate) fn play_land(&mut self, player: PlayerId, card: CardId) -> Result<(), AgentError>
 ```
 
 A caller holding an `ObjectId` narrows once with `card_of` and passes the
@@ -821,8 +830,9 @@ and values for recorded evidence.
 A new object does not get a new storage row. Each card, token or copy has one
 slot in `GameState::objects`, a flat vector, and a zone change rebuilds the
 object in that slot and advances the slot's generation. An `ObjectId` is the
-slot and the generation it was issued for (8 bytes, `Copy`); a lookup compares
-generations and reads the vector, with no hash map. The store grows only when
+slot and the generation it was issued for (8 bytes, `Copy`); the zone manager
+owns each slot's generation, and a lookup compares generations and reads the
+vector, with no hash map. The store grows only when
 a token or copy is created, and a zone change allocates nothing.
 
 Slots are private to the store, the zone lists and the match-state hash. Cards
@@ -862,7 +872,7 @@ for object in game.state.zones.zone_objects(ZoneType::Graveyard, player).iter() 
     // object: &ObjectId; a token that just died may be here
 }
 // One card, wherever it is now:
-let zone = game.state.object_of(card).and_then(|object| game.state.zones.zone_of(object));
+let zone = game.state.zones.zone_of(game.state.object_of(card));
 ```
 
 A token or copy that leaves the battlefield or stack is briefly in another

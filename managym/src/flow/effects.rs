@@ -21,7 +21,7 @@ use crate::{
     state::{
         card::{CardDefId, Keyword, Keywords, PrintedCharacteristics},
         effect::{Affected, ContinuousEffect, EffectDuration, Modification},
-        game_object::{ObjectId, ObjectRef, PermanentId, PlayerId},
+        game_object::{ObjectId, PermanentId, PlayerId},
         mana::Color,
     },
 };
@@ -45,7 +45,7 @@ impl Game {
     pub(crate) fn record_continuous(
         &mut self,
         source: Option<ObjectId>,
-        source_object: Option<ObjectRef>,
+        source_object: Option<ObjectId>,
         controller: PlayerId,
         affected: impl IntoIterator<Item = Affected>,
         modification: Modification,
@@ -76,7 +76,7 @@ impl Game {
         source: Option<ObjectId>,
         controller: PlayerId,
     ) {
-        let Some(object) = self.permanent_object_ref(permanent_id) else {
+        let Some(object) = self.permanent_object(permanent_id) else {
             return;
         };
         let timestamp = self.state.id_gen_mut().next_id();
@@ -116,14 +116,13 @@ impl Game {
 
     /// The `Affected` of a battlefield permanent's current incarnation.
     pub fn affected_permanent(&self, permanent_id: PermanentId) -> Option<Affected> {
-        self.permanent_object_ref(permanent_id)
-            .map(Affected::Object)
+        self.permanent_object(permanent_id).map(Affected::Object)
     }
 
     /// Records affecting the permanent's current incarnation, in timestamp
     /// order.
     pub fn effects_on(&self, permanent_id: PermanentId) -> impl Iterator<Item = &ContinuousEffect> {
-        self.permanent_object_ref(permanent_id)
+        self.permanent_object(permanent_id)
             .into_iter()
             .flat_map(|object| self.state.effects.on(object))
     }
@@ -314,7 +313,7 @@ impl Game {
         if !self.state.effects.any_phased_out() {
             return;
         }
-        let phased: Vec<(ObjectRef, PlayerId, Option<ObjectRef>)> = self
+        let phased: Vec<(ObjectId, PlayerId, Option<ObjectId>)> = self
             .state
             .effects
             .iter()
@@ -328,8 +327,8 @@ impl Game {
                 Affected::Player(_) => None,
             })
             .collect();
-        let is_phased = |object: ObjectRef| phased.iter().any(|(other, ..)| *other == object);
-        let mut phasing_in: Vec<ObjectRef> = phased
+        let is_phased = |object: ObjectId| phased.iter().any(|(other, ..)| *other == object);
+        let mut phasing_in: Vec<ObjectId> = phased
             .iter()
             .filter(|(_, controller, attached)| {
                 *controller == player && !attached.is_some_and(is_phased)
@@ -366,7 +365,7 @@ impl Game {
 
     /// CR 400.7: the object that left is a new object; effects on it end,
     /// as do effects lasting while their controller controls it.
-    pub(crate) fn end_effects_on(&mut self, object: ObjectRef) {
+    pub(crate) fn end_effects_on(&mut self, object: ObjectId) {
         self.end_effects(|effect| {
             effect.affects_object(object) || effect.source_object == Some(object)
         });
@@ -376,7 +375,7 @@ impl Game {
     /// passes to another player.
     pub(crate) fn end_effects_for_control_change(
         &mut self,
-        object: ObjectRef,
+        object: ObjectId,
         controller: PlayerId,
     ) {
         self.end_effects(|effect| {

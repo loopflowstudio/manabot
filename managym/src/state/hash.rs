@@ -17,8 +17,7 @@ use crate::{
     state::{
         card::CardDefId,
         game_object::{
-            Incarnation, ObjectLki, ObjectRef, ObjectVec, PermanentId, PermanentVec, PlayerId,
-            PublicId,
+            ObjectId, ObjectLki, ObjectVec, PermanentId, PermanentVec, PlayerId, PublicId,
         },
     },
 };
@@ -79,7 +78,8 @@ struct CanonicalTurn {
     spells_cast: [Vec<crate::state::game_object::ObjectId>; 2],
     history: [crate::flow::turn::PlayerTurnHistory; 2],
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    ability_triggers_this_turn: Vec<(crate::state::game_object::ObjectRef, usize, u32)>,
+    #[serde(serialize_with = "crate::state::game_object::exact")]
+    ability_triggers_this_turn: Vec<(crate::state::game_object::ObjectId, usize, u32)>,
     ability_resolutions_this_turn: Vec<(usize, usize, u32)>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     extra_turns: Vec<PlayerId>,
@@ -161,8 +161,9 @@ struct CanonicalMatchState<'a> {
     permanents: &'a PermanentVec<Option<crate::state::permanent::Permanent>>,
     #[serde(rename = "card_to_permanent")]
     object_to_permanent: &'a ObjectVec<Option<PermanentId>>,
-    object_incarnations: &'a ObjectVec<Incarnation>,
-    object_lki: Vec<(ObjectRef, ObjectLki)>,
+    object_incarnations: &'a [u32],
+    #[serde(serialize_with = "crate::state::game_object::exact")]
+    object_lki: Vec<(ObjectId, ObjectLki)>,
     players: &'a [crate::state::player::Player; 2],
     zones: &'a crate::state::zone::ZoneManager,
     turn: CanonicalTurn,
@@ -201,7 +202,6 @@ impl<'a> CanonicalMatchState<'a> {
             objects,
             permanents,
             object_to_permanent,
-            object_incarnations,
             object_lki,
             players,
             zones,
@@ -252,7 +252,7 @@ impl<'a> CanonicalMatchState<'a> {
             objects,
             permanents,
             object_to_permanent,
-            object_incarnations,
+            object_incarnations: zones.generations(),
             object_lki,
             players,
             zones,

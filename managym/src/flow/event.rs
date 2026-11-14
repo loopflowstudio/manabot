@@ -4,7 +4,7 @@ use crate::{
     flow::turn::StepKind,
     state::{
         card::CardDefId,
-        game_object::{Incarnation, ObjectId, ObjectRef, PermanentId, PlayerId, PublicId, Target},
+        game_object::{ObjectId, PermanentId, PlayerId, PublicId, Target},
         permanent::CounterKind,
         zone::ZoneType,
     },
@@ -17,7 +17,7 @@ use crate::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ObjectEventRef {
     pub entity: PublicId,
-    pub incarnation: Incarnation,
+    pub incarnation: u32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
@@ -48,12 +48,12 @@ pub enum GameEvent {
     CardMoved {
         /// CR 400.7e, f, j: the object this move made, never a later
         /// appearance of the same physical card. V16 records its slot only.
-        #[serde(rename = "card", serialize_with = "serialize_moved_object")]
-        object_id: ObjectRef,
+        #[serde(rename = "card")]
+        object_id: ObjectId,
         /// The exact departure for pre-move facts (CR 603.10a). The v16
         /// event projection has no generation fields; see state/hash.rs.
         #[serde(skip)]
-        departed: Option<ObjectRef>,
+        departed: Option<ObjectId>,
         from: Option<ZoneType>,
         to: ZoneType,
         controller: PlayerId,
@@ -189,13 +189,6 @@ pub enum GameEvent {
     },
 }
 
-fn serialize_moved_object<S: serde::Serializer>(
-    object: &ObjectRef,
-    serializer: S,
-) -> Result<S::Ok, S::Error> {
-    serde::Serialize::serialize(&object.entity, serializer)
-}
-
 /// The variant of a `GameEvent`, which trigger conditions are indexed by
 /// (`flow/triggers.rs`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -231,7 +224,7 @@ pub enum EventKind {
 impl GameEvent {
     /// The exact pre-move appearance, including after the successor moves
     /// again. Rules readers never recover this from a storage row.
-    pub(crate) fn departed_object(&self) -> Option<ObjectRef> {
+    pub(crate) fn departed_object(&self) -> Option<ObjectId> {
         match self {
             Self::CardMoved { departed, .. } => *departed,
             _ => None,

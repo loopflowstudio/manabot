@@ -50,18 +50,17 @@ fn fixture() -> (Game, ObjectId, ObjectId, Target, Target) {
         .scenario_force_battlefield(PlayerId(0), "Mountain", true)
         .unwrap();
     let card_named = |name: &str| {
-        ObjectId(
-            game.state
-                .objects
-                .iter()
-                .position(|object| object.owner == PlayerId(1) && object.name == name)
-                .unwrap(),
-        )
+        game.state
+            .latest_objects()
+            .find(|(_, object)| object.owner == PlayerId(1) && object.name == name)
+            .unwrap()
+            .0
     };
     let bolt = card_named("Lightning Bolt");
     let ogre_spell = card_named("Gray Ogre");
-    game.push_spell_to_stack(bolt, PlayerId(1), vec![], vec![], Default::default());
-    game.push_spell_to_stack(ogre_spell, PlayerId(1), vec![], vec![], Default::default());
+    let bolt = game.push_spell_to_stack(bolt, PlayerId(1), vec![], vec![], Default::default());
+    let ogre_spell =
+        game.push_spell_to_stack(ogre_spell, PlayerId(1), vec![], vec![], Default::default());
     (
         game,
         bolt,
@@ -103,8 +102,8 @@ fn cr_400_zone_event_keeps_its_departure_after_a_later_death() {
         unreachable!()
     };
     let object = game.state.permanents[first].as_ref().unwrap().object;
-    let original = game.current_object_ref(object).unwrap();
-    game.move_object(object, ZoneType::Graveyard);
+    let original = game.state.live(game.state.now(object)).unwrap();
+    let object = game.move_object(object, ZoneType::Graveyard);
     let event = game.state.events.iter().last().unwrap().clone();
     let GameEvent::CardMoved {
         object_id: became,
@@ -117,31 +116,29 @@ fn cr_400_zone_event_keeps_its_departure_after_a_later_death() {
     assert_eq!(*departed, Some(original));
     assert_eq!(
         game.state.object_of(game.state.card_id(object).unwrap()),
-        Some(*became)
+        *became
     );
     assert_ne!(*became, original);
     assert_eq!(
         serde_json::to_value(&event).unwrap(),
         serde_json::json!({"CardMoved": {
-            "card": object.0,
+            "card": object.slot(),
             "from": "Battlefield",
             "to": "Graveyard",
             "controller": 0
         }})
     );
 
-    game.move_object(object, ZoneType::Battlefield);
-    let second = game.state.object_to_permanent[object].unwrap();
-    game.move_object(object, ZoneType::Graveyard);
+    let object = game.move_object(object, ZoneType::Battlefield);
+    let second = game.state.permanent_of(game.state.now(object)).unwrap();
+    let object = game.move_object(object, ZoneType::Graveyard);
     assert_ne!(first, second);
     assert_eq!(
         game.triggering_permanent(&event),
         Some(Target::Permanent(first))
     );
     let sources = game.trigger_ability_sources(&event);
-    assert!(sources
-        .iter()
-        .any(|source| source.lki.object_ref == original));
+    assert!(sources.iter().any(|source| source.lki.object == original));
     assert!(!sources.iter().any(|source| source.lki.permanent == second));
     assert!(game.state.object(*became).is_err());
     let fork = game.clone();
@@ -150,7 +147,7 @@ fn cr_400_zone_event_keeps_its_departure_after_a_later_death() {
         Some(Target::Permanent(first))
     );
 
-    game.move_object(object, ZoneType::Hand);
+    let object = game.move_object(object, ZoneType::Hand);
     let hand_event = game.state.events.iter().last().unwrap();
     assert!(!game
         .trigger_ability_sources(hand_event)
@@ -232,8 +229,8 @@ fn player_and_graveyard_targets_preserve_scope_and_order() {
             ]
         );
     }
-    game.move_object(bolt, ZoneType::Graveyard);
-    game.move_object(ogre, ZoneType::Graveyard);
+    let bolt = game.move_object(bolt, ZoneType::Graveyard);
+    let ogre = game.move_object(ogre, ZoneType::Graveyard);
     let spec = TargetSpec::GraveyardCardYouOwn {
         predicate: CardPredicate::default(),
     };
@@ -241,8 +238,8 @@ fn player_and_graveyard_targets_preserve_scope_and_order() {
     assert_eq!(
         game.legal_targets_for_spec(&spec, PlayerId(1)),
         vec![
-            Target::GraveyardCard(game.current_object_ref(bolt).unwrap()),
-            Target::GraveyardCard(game.current_object_ref(ogre).unwrap()),
+            Target::GraveyardCard(game.state.live(game.state.now(bolt)).unwrap()),
+            Target::GraveyardCard(game.state.live(game.state.now(ogre)).unwrap()),
         ]
     );
     assert_eq!(
@@ -253,7 +250,7 @@ fn player_and_graveyard_targets_preserve_scope_and_order() {
             PlayerId(1)
         ),
         vec![Target::GraveyardCard(
-            game.current_object_ref(ogre).unwrap()
+            game.state.live(game.state.now(ogre)).unwrap()
         )]
     );
 }
@@ -277,8 +274,14 @@ fn restricted_trigger_rejects_low_value_spell_and_counters_legal_spell() {
         .unwrap();
     assert!(game.flush_triggers().is_none());
     game.resolve_top_of_stack();
-    assert_eq!(game.state.zones.zone_of(ogre), Some(ZoneType::Graveyard));
-    assert_eq!(game.state.zones.zone_of(bolt), Some(ZoneType::Stack));
+    assert_eq!(
+        game.state.zones.zone_of(game.state.now(ogre)),
+        Some(ZoneType::Graveyard)
+    );
+    assert_eq!(
+        game.state.zones.zone_of(game.state.now(bolt)),
+        Some(ZoneType::Stack)
+    );
 }
 
 #[test]
@@ -299,18 +302,21 @@ fn departed_only_target_prevents_even_untargeted_gain_life() {
     game.choose_trigger_target(PlayerId(0), Target::StackSpell(ogre))
         .unwrap();
     assert!(game.flush_triggers().is_none());
-    game.move_object(ogre, ZoneType::Hand);
+    let ogre = game.move_object(ogre, ZoneType::Hand);
     // CR 608.2b: with every target illegal the whole ability fails to resolve,
     // including its untargeted instruction. This is more than skipping countering.
     game.resolve_top_of_stack();
     assert_eq!(game.state.players[0].life, 20);
-    assert_eq!(game.state.zones.zone_of(ogre), Some(ZoneType::Hand));
+    assert_eq!(
+        game.state.zones.zone_of(game.state.now(ogre)),
+        Some(ZoneType::Hand)
+    );
 }
 
 #[test]
 fn recast_spell_resolves_before_the_old_targeted_ability() {
     let (mut game, source, ogre, _, _) = fixture();
-    let original = game.current_object_ref(ogre).unwrap();
+    let original = game.state.live(game.state.now(ogre)).unwrap();
     game.state.pending_triggers.push(trigger(
         source,
         vec![
@@ -326,17 +332,23 @@ fn recast_spell_resolves_before_the_old_targeted_ability() {
     game.choose_trigger_target(PlayerId(0), Target::StackSpell(ogre))
         .unwrap();
     assert!(game.flush_triggers().is_none());
-    game.move_object(ogre, ZoneType::Hand);
+    let ogre = game.move_object(ogre, ZoneType::Hand);
     game.push_spell_to_stack(ogre, PlayerId(1), vec![], vec![], Default::default());
-    assert_ne!(game.current_object_ref(ogre).unwrap(), original);
+    assert_ne!(game.state.live(game.state.now(ogre)).unwrap(), original);
 
     // CR 405.2 / 608.2b: the recast object is above the older ability, so
     // resolves first. ObjectId-only targets remain an identity limitation;
     // this ordinary LIFO sequence does not expose a stale-target effect.
     game.resolve_top_of_stack();
-    assert_eq!(game.state.zones.zone_of(ogre), Some(ZoneType::Battlefield));
+    assert_eq!(
+        game.state.zones.zone_of(game.state.now(ogre)),
+        Some(ZoneType::Battlefield)
+    );
     game.resolve_top_of_stack();
-    assert_eq!(game.state.zones.zone_of(ogre), Some(ZoneType::Battlefield));
+    assert_eq!(
+        game.state.zones.zone_of(game.state.now(ogre)),
+        Some(ZoneType::Battlefield)
+    );
     assert_eq!(game.state.players[0].life, 20);
 }
 
@@ -568,7 +580,7 @@ fn response_hexproof_rechecks_selected_targets_and_all_invalid_stops_ability() {
             game.resolve_top_of_stack();
             assert!(game.state.permanents[first].is_some());
             assert_eq!(
-                game.state.zones.zone_of(second_card),
+                game.state.zones.zone_of(game.state.now(second_card)),
                 Some(if mixed {
                     ZoneType::Hand
                 } else {
@@ -592,7 +604,7 @@ fn spell_or_permanent_target_does_not_follow_a_reentered_card() {
             .scenario_force_battlefield(owner, "Gray Ogre", true)
             .unwrap();
         let object = game.state.permanents[id].as_ref().unwrap().object;
-        let before = game.current_object_ref(object).unwrap();
+        let before = game.state.live(game.state.now(object)).unwrap();
         let spec = TargetSpec::SpellOrPermanent { min_mana_value: 3 };
         let mut pending = trigger(
             source,
@@ -608,16 +620,16 @@ fn spell_or_permanent_target_does_not_follow_a_reentered_card() {
         game.choose_trigger_target(controller, Target::Permanent(id))
             .unwrap();
         assert!(game.flush_triggers().is_none());
-        game.move_object(object, ZoneType::Hand);
-        game.move_object(object, ZoneType::Battlefield);
-        let replacement = game.state.object_to_permanent[object].unwrap();
-        assert_ne!(game.current_object_ref(object).unwrap(), before);
+        let object = game.move_object(object, ZoneType::Hand);
+        let object = game.move_object(object, ZoneType::Battlefield);
+        let replacement = game.state.permanent_of(game.state.now(object)).unwrap();
+        assert_ne!(game.state.live(game.state.now(object)).unwrap(), before);
         assert_ne!(replacement, id);
         assert!(!game.target_is_legal(Target::Permanent(id), &spec, controller));
         assert!(game.target_is_legal(Target::Permanent(replacement), &spec, controller));
         game.resolve_top_of_stack();
         assert_eq!(
-            game.state.zones.zone_of(object),
+            game.state.zones.zone_of(game.state.now(object)),
             Some(ZoneType::Battlefield)
         );
         assert_eq!(game.state.players[controller.0].life, 20);
@@ -757,7 +769,7 @@ fn trigger_order_same_source_joins_preserve_ability_and_causal_context() {
     use crate::agent::{observation::Observation, observation_encoder};
     let (mut game, source, other, ..) = fixture();
     let mut first = trigger(source, vec![Effect::gain_life(1)], 900);
-    first.source_ref = game.current_object_ref(source);
+    first.source_ref = game.state.live(game.state.now(source));
     first.context = Some(Target::StackSpell(source));
     let mut second = first.clone();
     second.id = crate::flow::trigger::TriggerId(901);
@@ -811,7 +823,7 @@ fn trigger_order_target_resume_and_nested_fork_preserve_round() {
         trigger(source, vec![Effect::gain_life(2)], 1),
         trigger(source, vec![Effect::gain_life(3)], 2),
     ];
-    game.state.pending_triggers[0].source_ref = game.current_object_ref(source);
+    game.state.pending_triggers[0].source_ref = game.state.live(game.state.now(source));
     game.current_action_space = game.flush_triggers();
     let root = witness(&game);
     let mut branch = game.clone();

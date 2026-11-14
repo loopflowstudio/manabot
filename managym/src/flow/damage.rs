@@ -11,7 +11,7 @@ use crate::{
     state::{
         ability::DelayedExpiry,
         card::StaticAbility,
-        game_object::{ObjectRef, PermanentId, PlayerId},
+        game_object::{ObjectId, PermanentId, PlayerId},
         permanent::CounterKind,
     },
 };
@@ -21,7 +21,7 @@ impl Game {
     /// Deathtouch makes one remaining damage lethal (CR 120.4a).
     pub(crate) fn excess_for_damage(
         &self,
-        source: Option<ObjectRef>,
+        source: Option<ObjectId>,
         permanent_id: PermanentId,
         amount: i32,
     ) -> i32 {
@@ -47,7 +47,7 @@ impl Game {
 
     pub(crate) fn commit_damage(
         &mut self,
-        source: Option<ObjectRef>,
+        source: Option<ObjectId>,
         target: ProposedDamageTarget,
         amount: i32,
         combat: bool,
@@ -55,7 +55,6 @@ impl Game {
         if amount <= 0 {
             return false;
         }
-        let source_object = source.map(|object_ref| object_ref.entity);
         let source_has_deathtouch = source.is_some_and(|object_ref| {
             self.source_keywords(object_ref)
                 .is_some_and(|keywords| keywords.has(Keyword::Deathtouch))
@@ -89,7 +88,7 @@ impl Game {
                 let new_life = *life;
 
                 self.emit(GameEvent::DamageDealt {
-                    source: source_object,
+                    source,
                     target: DamageTarget::Player(player),
                     amount: amount as u32,
                 });
@@ -132,7 +131,7 @@ impl Game {
                     self.commit_counter_change(object_ref, CounterKind::Defense, -amount, None);
                 }
                 self.emit(GameEvent::DamageDealt {
-                    source: source_object,
+                    source,
                     target: DamageTarget::Permanent(permanent_id),
                     amount: amount as u32,
                 });
@@ -197,24 +196,24 @@ impl Game {
     /// Damage-source keywords include until-EOT grants while the source is
     /// on the battlefield (Enter the Avatar State's lifelink), and static
     /// grants to a resolving spell (Lo and Li's Lesson spells).
-    fn source_keywords(&self, source: ObjectRef) -> Option<crate::state::card::Keywords> {
+    fn source_keywords(&self, source: ObjectId) -> Option<crate::state::card::Keywords> {
         if let Ok(permanent_id) = self.lookup_current_permanent(source) {
             return Some(self.characteristics(permanent_id).keywords);
         }
         if let Some(lki) = self.object_lki(source) {
             return Some(lki.keywords);
         }
-        let object = source.entity;
+        let object = source;
         if let Some(controller) = self.stack_spell_controller(object) {
             return Some(self.spell_keywords(object, controller));
         }
         self.state
             .objects
-            .get(object.0)
+            .get(object.slot())
             .map(|object| object.keywords)
     }
 
-    fn source_controller(&self, source: ObjectRef) -> Option<PlayerId> {
+    fn source_controller(&self, source: ObjectId) -> Option<PlayerId> {
         if let Ok(permanent_id) = self.lookup_current_permanent(source) {
             return self.state.permanents[permanent_id]
                 .as_ref()
@@ -223,8 +222,11 @@ impl Game {
         if let Some(lki) = self.object_lki(source) {
             return Some(lki.controller);
         }
-        let object = source.entity;
-        self.state.objects.get(object.0).map(|object| object.owner)
+        let object = source;
+        self.state
+            .objects
+            .get(object.slot())
+            .map(|object| object.owner)
     }
 
     pub(crate) fn gain_life(&mut self, player: PlayerId, amount: i32) {

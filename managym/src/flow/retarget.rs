@@ -115,7 +115,7 @@ impl Game {
             .filter(|target| {
                 !requirement.another
                     || !matches!((target, source), (Target::Permanent(id), Some(source))
-                        if self.permanent_object_ref(*id) == Some(source))
+                        if self.permanent_object(*id) == Some(source))
             })
             .filter(|target| {
                 self.within_source_bound(*target, &requirement.spec, source_object, source)

@@ -2,7 +2,7 @@ use smallvec::SmallVec;
 
 use super::{
     card::{ActivatedAbilityDefinition, Keyword},
-    game_object::{Object, ObjectId, ObjectRef, PlayerId, PublicId},
+    game_object::{Object, ObjectId, PlayerId, PublicId},
 };
 
 /// Counter kinds the engine knows (CR 122). A new kind is one variant here.
@@ -182,7 +182,8 @@ pub struct Permanent {
     /// The exact object this Equipment is attached to (CR 301.5). State-based
     /// actions clear it once that object is gone or no longer a creature.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub attached_to: Option<ObjectRef>,
+    #[serde(serialize_with = "crate::game_object::exact")]
+    pub attached_to: Option<ObjectId>,
     /// Exhaust abilities (indices into the card's activated abilities) this
     /// object has activated; a new object starts fresh (CR 400.7).
     #[serde(skip_serializing_if = "Vec::is_empty")]

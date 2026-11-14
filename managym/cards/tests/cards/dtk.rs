@@ -1,5 +1,6 @@
 //! Tests for cards filed in `src/dtk.rs`, in card order.
 
+use crate::support::inspect::now;
 use crate::support::{
     game::five_color_setup,
     inspect::offered_targets,
@@ -63,7 +64,7 @@ fn rending_volley_targets_white_or_blue_creatures_and_cannot_be_countered() {
             }
         )
     });
-    assert!(s.choose_target(Target::StackSpell(volley)));
+    assert!(s.choose_target(Target::StackSpell(now(&s, volley))));
     settle(&mut s);
     assert!(s.game().state.permanents[blue].is_none());
     assert!(s.game().state.permanents[red].is_some());
