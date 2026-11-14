@@ -107,3 +107,22 @@ test('imported launch setup shows selected sources and switches back to bundled 
   expect(page.url()).not.toContain('launch=');
   await expect(page.getByTestId('deck-names')).toContainText('Imported deck');
 });
+
+
+test('an exported collector game opens with both policy names, training label and default art', async ({ page }) => {
+  const addresses = JSON.parse(readFileSync(proof, 'utf8')) as { training_replay: string };
+  await page.goto(addresses.training_replay);
+  await expect(page.getByRole('heading', { name: 'Replay', exact: true })).toBeVisible();
+  await expect(page.getByText('Training game', { exact: true })).toBeVisible();
+  await expect(page.getByText('Seat 1: learner · Seat 2: learner', { exact: true })).toBeVisible();
+  const visibleCard = page.locator('[data-testid="card-treatment"]:visible').first();
+  await visibleCard.scrollIntoViewIfNeeded();
+  await expect(visibleCard).toHaveAttribute('data-art-source', 'scryfall');
+  await expect(page.getByText('Card art credits', { exact: true })).toBeVisible();
+  await page.getByText('Card art credits', { exact: true }).click();
+  await expect(page.getByRole('contentinfo')).toContainText('Proof Artist');
+  // Failed art remains usable and has an identifiable procedural fallback.
+  await page.route('**/api/card-art/**', route => route.fulfill({ status: 404 }));
+  await page.reload();
+  await expect(page.locator('[data-testid="card-treatment"]:visible').first()).toHaveAttribute('data-art-source', 'procedural');
+});

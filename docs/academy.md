@@ -10,7 +10,7 @@ the wire contract is
 [experience protocol v1](../protocol/experience-protocol-v1.md), with state
 digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 
-- [Running Academy](#running-academy): install, launch, chosen games and replays, Python, trained bots, troubleshooting
+- [Running Academy](#running-academy): install, launch, chosen games and replays, Python, training games, card art, trained bots, troubleshooting
 - [Shared decision surface](#shared-decision-surface)
 - [Choice navigation](#choice-navigation)
 - [Presentation runtime](#presentation-runtime)
@@ -41,8 +41,10 @@ ACADEMY_PLAY_READY {"open": "http://127.0.0.1:8000", "traces_dir": "/home/you/ac
 Your browser opens on the table at `http://127.0.0.1:8000`, with a game ready
 against the Search 64 opponent. That is the whole installation: no manabot,
 Torch, Node or Rust, and no checkout of this repository. The wheel carries the
-compiled engine, the server and the built client, and the server makes no
-network requests while you play.
+compiled engine, the server and the built client. Cards show their Scryfall
+art, which the server fetches the first time a card is shown and keeps on
+disk ([Card art](#card-art)); it makes no other network requests while you
+play.
 
 To skip the setup screens, name the game or the replay on the command line:
 
@@ -55,7 +57,9 @@ The first opens the table already in that game; the second opens game 3 of an
 evaluation's command trace at its first decision. See
 [Start in a chosen game](#start-in-a-chosen-game),
 [Open a replay directly](#open-a-replay-directly) and
-[Launch from Python](#launch-from-python).
+[Launch from Python](#launch-from-python). To look at a game your own training
+loop played, see
+[Watch a game from your training loop](#watch-a-game-from-your-training-loop).
 
 ### Install
 
@@ -168,12 +172,17 @@ launch is unknown and shows ordinary setup, so run the command again.
 
 ```bash
 uv run --no-project managym academy replay out/traces/<cell-id>.commands.jsonl.gz --game 3
+uv run --no-project managym academy replay jace.game.jsonl.gz
 uv run --no-project managym academy replay <recording-id>
 ```
 
 The first command opens one game of an evaluation's command trace; the second
-reopens a game already in **Games**, by the id shown there. Both land in
-**Replay** on decision 1, ready to step.
+opens one exported training game
+([Watch a game from your training loop](#watch-a-game-from-your-training-loop));
+the third reopens a game already in **Games**, by the id shown there. All land
+in **Replay** on decision 1, ready to step. The heading names both players and
+says which kind of game it is: **Training game**, one the training loop itself
+played, or **Evaluation game**, one played afterwards to measure policies.
 
 A recording id keeps the recording's existing access rules: open it in the
 same browser and at the same address (including port) where **Games** lists
@@ -183,15 +192,16 @@ launcher checks that the id exists; access is checked when the browser opens
 it. Imported evaluation games are shared, finished recordings and can open in
 any browser that can reach the server.
 
-An evaluation trace needs manabot installed beside Academy, at the same
-release version
+An evaluation trace or an exported training game needs manabot installed
+beside Academy, at the same release version
 ([Watch a game from an evaluation](#watch-a-game-from-an-evaluation) has the
 install command and where traces are written). Opening one verifies its
 recorded Commands and state digests and saves the game to this traces
 directory as a finished recording. It runs no policy and loads no checkpoint,
 and it never changes the trace file. Opening the same game again returns to
 the recording made the first time. `.json`, `.jsonl` and gzipped files are
-accepted. Recordings in **Games** open without manabot.
+accepted, `.game.jsonl.gz` among them. Recordings in **Games** open without
+manabot.
 
 A trace file usually holds many games. `--game` takes either the game's
 zero-based position in the file (the order **Recorded game** lists in the
@@ -210,7 +220,8 @@ ACADEMY_PLAY_ERROR {"code": "replay.ambiguous", "message": "out/traces/c41.comma
 ```
 
 A trace recorded in another world is refused with `replay.rejected`, naming
-the mismatch; open it with the revision that produced it.
+the mismatch; open it with the revision that produced it. An exported training
+game states its world, so the message names both worlds.
 
 ### Launch from Python
 
@@ -265,6 +276,101 @@ Every failure is an `AcademyLaunchError` with a `code` and a `message`, the
 codes listed under [Troubleshooting](#troubleshooting); nothing is opened
 when one is raised.
 
+### Watch a game from your training loop
+
+Wrap the loop in `record_games`, pick one of the games it played, export it and
+open it:
+
+```python
+from pathlib import Path
+
+from manabot.sim.recording import record_games
+from manabot.training.loops.minimal import train
+from managym.academy.launch import serve
+
+with record_games(Path("runs/jace/games"), players=("jace", "jace")) as games:
+    train(8)                                  # the loop's own self-play games
+game = games.sample(seed=0)                   # one complete game it played
+path = game.export(Path("jace.game.jsonl.gz"))
+
+with serve(port=0) as academy:
+    academy.open(academy.replay(path).url)
+    academy.wait()
+```
+
+The browser opens in **Replay** on decision 1 of that game, headed **Training
+game** with `jace vs jace`. Every decision the two seats made is there to step
+through, with the board and the legal actions each was offered. The original policy is never rerun and no checkpoint is loaded,
+so the file opens on a machine that has never seen the model.
+
+The same two steps from the command line, on a directory recorded earlier:
+
+```bash
+uv run manabot export-game runs/jace/games --game 0 --out jace.game.jsonl.gz
+uv run --no-project managym academy replay jace.game.jsonl.gz
+```
+
+The file also opens in the browser through **Open arena / Tournament game**
+under **Watch**. All three routes need manabot beside Academy, as an
+evaluation trace does.
+
+**Recording.** `record_games(directory, players=None)` records every game
+played by collectors built inside the `with` block: the deal seed, both decks
+and each decision's chosen action, one receipt file per game in `directory`.
+It adds no decisions and changes none; the loop trains as it would without
+it. The directory can be read again later with `TrainingGames(directory)`. A
+`TrainingJob` run with `training_exposure` writes the same receipts under its
+`training/exposure`; download that directory and open it the same way.
+
+**Choosing a game.** `games.games()` lists the complete games as
+`TrainingGame` values (`receipt_sha256`, `seed`, `stream`, `decks`,
+`decisions`); `games.sample(seed=None)` picks one uniformly, the same one for
+the same seed. A game the loop stopped in the middle of is counted and never
+offered: a replay needs a finished game. `sample` raises when the directory
+holds no complete game, saying how many were cut off.
+
+**Exporting.** `game.export(path, players=None)` replays the recorded actions
+through the engine, checks at every decision that the engine offers the number
+of options the loop saw, and writes one `.game.jsonl.gz` holding the game, its
+world and where it came from. The receipt is not changed. Export needs
+manabot but loads no Torch and no policy. `manabot export-game <directory>
+--out <path>` does the same; on a directory with several games, leave off
+`--game` to list them:
+
+```text
+runs/jace/games holds 6 complete games (2 cut off); select one with --game <index-or-digest>.
+  game  seed  stream  decisions  receipt
+     0  3     0       41         9c1f07ab52e0
+     1  3     1       57         03be77d1a94c
+     …
+```
+
+`--game` takes the position in that list or the first characters of the
+receipt digest, and `--players A B` names the seats.
+
+**Who played.** The two names are labels you supply, first seat first,
+because only your code knows which policy sat where. In one-model self-play
+both seats are the learner, so both carry its name. When a loop seats a frozen
+opponent or a league member, pass that game's names to `export(players=...)`.
+Without names the heading shows the deck seats' own names.
+
+**A training game is not an evaluation game.** An exported training game is a
+game the collector played, with its exploration and whatever the policy was
+at that update. To see how the current policy plays, run an evaluation and
+open one of its games
+([Watch a game from an evaluation](#watch-a-game-from-an-evaluation)); those
+are labelled **Evaluation game**. Neither is ever relabelled as the other.
+
+| What you see | Cause and fix |
+|---|---|
+| Export stops with "action not offered" or a different option count at a decision | The engine no longer plays this game as recorded: the receipt was edited, or it was recorded in another world or revision. Export from the revision that recorded it. |
+| Export or `sample` reports only cut-off games | The loop stopped before any game ended. Let it collect at least one complete game. |
+| `replay.rejected` when opening | The file's world is not the running one, or the file was edited after export; the message says which. Open it with the revision that exported it. |
+| `replay.needs_manabot` | Install manabot beside Academy at the same version. |
+
+The exported file holds the deal seed and so both players' hidden cards. Share
+it as you would share both hands.
+
 ### Play a game
 
 The table opens with UR Lessons (you) against GW Allies. Before starting:
@@ -293,8 +399,37 @@ card inspects it and sends nothing; choosing one of the listed legal actions
 commits it. Decisions with a single legal action are taken for you and never
 shown. Reloading the page restores the pending decision.
 
-Cards are drawn with Academy's own procedural treatments. The package contains
-no card images and fetches none.
+### Card art
+
+Cards on the table, in replays and in the deck browser show their Scryfall
+art. There is nothing to run first: the first time a card is shown, the
+Academy server fetches its image and artist credit from Scryfall, saves them
+and serves them to the browser itself. Later views, and later launches, read
+the saved copy. The browser never contacts Scryfall.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `ACADEMY_CARD_ART` | on | `off` serves no art and makes no network request |
+| `ACADEMY_CARD_ART_DIR` | `$XDG_CACHE_HOME/managym/card-art`, else `~/.cache/managym/card-art` | Where images and credits are kept |
+
+```bash
+ACADEMY_CARD_ART=off uv run --no-project managym academy
+```
+
+A card is drawn with Academy's own procedural treatment until its image
+arrives, and keeps it when there is none: with art off, without a network
+connection, and for the few objects that have no printing (back faces and one
+token). A failed fetch is tried again after ten minutes. The first view of a
+new deck is therefore slower than later ones; requests to Scryfall are spaced
+100 ms apart.
+
+Art is requested only for cards your view already shows. An opponent's closed
+decklist causes no request, so the cache and its timing say nothing about
+cards you have not seen.
+
+**Card art credits** in the page footer lists the artist, source and copyright
+of every image shown so far. The package itself contains no card images, and
+deleting the cache directory is safe.
 
 ### Inspect a replay
 
@@ -415,6 +550,7 @@ and a message, and exits with status 2. From Python the same `code` and
 | `server.running` | (Python) `serve` was called while an Academy from this process is still open. Close it first. |
 | `server.closed` | (Python) This Academy has already closed. Call `serve` again. |
 | `server.startup` / `server.shutdown` | The server could not start or finish stopping. The message names the failure. |
+| Cards show drawn plates instead of art | The server could not reach Scryfall, or `ACADEMY_CARD_ART=off` is set. Check the connection; a failed card is tried again after ten minutes. See [Card art](#card-art). |
 | No browser window opens | Open the printed `open` address yourself. On a remote machine, forward the port (`ssh -L 8000:127.0.0.1:8000 host`) and use `--no-open`. |
 | Trained opponents are not listed | manabot is not installed in the environment that runs Academy; the Opponent menu says so. Install it there and restart. If the menu reports a catalog error instead, manabot is present but Torch failed to import. |
 | A checkpoint is listed but disabled | It was trained in another world or for other decks; the row states the mismatch (for example `trained in w5, engine is w6`). Run it from the revision that wrote it. |
@@ -439,10 +575,11 @@ installed in the development environment. `uv run --no-project managym academy` 
 `academy/ui` (`ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build`); the
 released wheel is the one place that build is packaged.
 
-`npm --prefix academy/ui run fetch:card-art` populates the optional local
-Scryfall art cache for checkout and hosted builds; play never contacts Scryfall
-and missing art keeps the procedural card treatment. Clean-machine and release
-checks are in [development.md](development.md).
+A checkout shows [card art](#card-art) the same way an installed package
+does, from the same cache directory. Tests and CI run with
+`ACADEMY_CARD_ART=off` or a seeded `ACADEMY_CARD_ART_DIR` and never contact
+Scryfall. Clean-machine and release checks are in
+[development.md](development.md).
 
 ## Shared decision surface
 

@@ -147,6 +147,10 @@ class TrainingBots:
         from manabot.sim.search.local_update_receipt import LocalUpdateReceipt
 
         receipt = replay_games([record])
+        if receipt.trace_mismatches:
+            raise ValueError(
+                "Game trace digest mismatches: the file was edited after recording."
+            )
         if record.get("failure") is not None:
             raise ValueError(
                 "This evaluation game retained a failure; import rejected."

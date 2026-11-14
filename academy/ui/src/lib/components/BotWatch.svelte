@@ -202,6 +202,7 @@
   <div class="rounded-sm border border-line bg-panel p-6 shadow-sheet">
     <h1 class="type-title text-display">{finished ? 'Replay' : 'Watch two bots'}</h1>
     {#if current}
+      {#if current.source_kind}<p class="type-label mt-2 text-ink-2">{current.source_kind === 'training' ? 'Training game' : 'Evaluation game'}</p>{/if}
       <p class="type-annotation mt-2 text-ink-2">Seat 1: {current.players[0]} · Seat 2: {current.players[1]}</p>
     {/if}
     <p class="type-annotation mt-2 text-ink-2">Start with the acting bot's view; Show both hands opens spectator analysis. Each bot chooses using only its own information.</p>

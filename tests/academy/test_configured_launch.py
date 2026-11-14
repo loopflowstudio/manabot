@@ -493,3 +493,37 @@ def test_launch_setup_stays_with_initiator_and_shutdown_keeps_history(
     assert retained is not None
     assert retained["end_reason"] == "server_restart"
     assert retained["winner"] is None
+
+
+def test_exported_game_source_label_and_import_rejection_messages(
+    academy: Academy, tmp_path: Path
+) -> None:
+    from manabot.infra.identity import canonical_sha256
+    from manabot.sim.replay import read_trace, write_trace
+    from managym.academy.watch import inspect_watch
+    from scripts.release.academy_replay_smoke import write_example_trace
+
+    source = tmp_path / "source.game.jsonl.gz"
+    write_example_trace(source)
+    # This synthetic source-kind fixture checks transport; test_recording owns
+    # actual collector provenance and the browser proof exports a training game.
+    game = read_trace(source)[0]
+    game["source"] = {"kind": "training"}
+    game.pop("game_trace_sha256")
+    game["game_trace_sha256"] = canonical_sha256(game)
+    write_trace(source, [game])
+    launched = academy.replay(source)
+    trace_id = parse_qs(urlparse(launched.url).query)["trace"][0]
+    assert inspect_watch(trace_id, 0, None)["source_kind"] == "training"
+    with TestClient(server.app) as client:
+        edited = copy.deepcopy(game)
+        edited["source"]["kind"] = "evaluation"
+        rejected = client.post("/api/watch/import", json=edited)
+        assert rejected.status_code == 400
+        assert "edited" in rejected.json()["detail"]
+        foreign = copy.deepcopy(game)
+        foreign["world"] = {"world_version": "foreign-world"}
+        rejected = client.post("/api/watch/import", json=foreign)
+        assert rejected.status_code == 400
+        assert "foreign-world" in rejected.json()["detail"]
+        assert "differs from running" in rejected.json()["detail"]

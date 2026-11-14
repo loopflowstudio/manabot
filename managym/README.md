@@ -23,7 +23,10 @@ ready; Ctrl-C stops it. It needs CPython 3.12 or 3.13 and nothing else: no
 manabot, Torch, Node or Rust. Finished and unfinished games are listed under
 **Games** and open in **Replay**. `uv run --no-project python -m managym.academy` is the same
 command, and `uv run --no-project managym academy --help` lists the port, host and storage
-options. Installing `manabot` in the same environment adds trained opponents.
+options. Cards show their Scryfall art with no extra step: the server fetches
+each image the first time it is shown and keeps it in `~/.cache/managym/card-art`;
+`ACADEMY_CARD_ART=off` turns that off ([card art](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#card-art)).
+Installing `manabot` in the same environment adds trained opponents.
 The [Academy guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#running-academy)
 covers playing, replays, trained bots and launch troubleshooting.
 
@@ -84,6 +87,22 @@ recorded actions and state digests without running the original players or
 loading their checkpoints. Incompatible historical worlds need their original
 revision. The [evaluation replay guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#watch-a-game-from-an-evaluation)
 covers supported files and troubleshooting.
+
+### Watch a game from your training loop
+
+A game the training loop itself played opens the same way, once manabot has
+exported it:
+
+```bash
+uv run manabot export-game runs/jace/games --game 0 --out jace.game.jsonl.gz
+uv run --no-project managym academy replay jace.game.jsonl.gz
+```
+
+**Replay** opens headed **Training game** with both players' names, on the
+first of the decisions the loop actually made; an evaluation's game is headed
+**Evaluation game**. Recording the games is one `with record_games(...)` block
+around the loop:
+[Watch a game from your training loop](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#watch-a-game-from-your-training-loop).
 
 ### Launch from Python
 

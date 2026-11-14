@@ -17,6 +17,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+env:
+  ACADEMY_CARD_ART: "off"
+
 jobs:
   # Job-level filters keep the required aggregate present, even for docs-only
   # PRs. Renames select both old and new paths; manual runs exercise all jobs.

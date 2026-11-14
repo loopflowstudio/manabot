@@ -232,6 +232,7 @@ class CaptureScope:
     context: Callable[[], dict[str, object]] = dict
     paths: list[Path] = field(default_factory=list)
     training_exposure: bool = False
+    exposure_directory: Path | None = None
 
 
 _scope: ContextVar[CaptureScope | None] = ContextVar("game_failure_scope", default=None)
@@ -633,7 +634,9 @@ class CapturedVector(_Capture):
         if current:
             for rows, raw in zip(retained, self.native.current_exposure(), strict=True):
                 rows.append(raw)
-        directory = self.scope.directory.parent / "exposure"
+        directory = (
+            self.scope.exposure_directory or self.scope.directory.parent / "exposure"
+        )
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         for inputs, rows in zip(self.games, retained, strict=True):
             for raw in rows:

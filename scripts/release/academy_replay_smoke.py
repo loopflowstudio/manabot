@@ -12,77 +12,39 @@ import subprocess
 import sys
 import tempfile
 from threading import Thread
-from typing import Any
 from urllib.parse import parse_qs, urlparse
 from urllib.request import urlopen
 
-from manabot.infra.config import MatchConfig, ObservationConfig
-from manabot.infra.identity import canonical_sha256
-from manabot.infra.provenance import RECORDED_ASSET_MANIFEST_HASH
-from manabot.sim.frames import build_command, build_viewer_frame
-from manabot.sim.replay import replay_environment, write_trace
+from manabot.env.failures import GameInputs, PlayerSetup
+from manabot.sim.recording import record_actions
+from manabot.sim.replay import write_trace
 from managym.academy.launch import serve
-from managym.experience import UNVERSIONED_CONTENT_HASH
 
 
 def write_example_trace(path: Path) -> None:
     """Write one complete evaluation-format game with explicit policy input."""
-    game: dict[str, Any] = {
-        "match_id": "academy-release-proof",
-        "deal_seed": 7,
-        "leg": 0,
-        "seat_players": ["first-legal-a", "first-legal-b"],
-        "match_hypers": MatchConfig(
-            hero="first-legal-a",
-            villain="first-legal-b",
-            hero_deck={"Mountain": 1, "Gray Ogre": 1},
-            villain_deck={"Forest": 1, "Llanowar Elves": 1},
-        ).model_dump(),
-        "observation_hypers": ObservationConfig().model_dump(),
-        "winner": None,
-        "terminated": False,
-        "truncated": False,
-        "failure": None,
-        "decisions": [],
-    }
-    env, _ = replay_environment(game)
-    try:
-        for revision in range(100):
-            frame = build_viewer_frame(
-                env.last_raw_obs,
-                match_id=game["match_id"],
-                revision=revision,
-                content_hash=UNVERSIONED_CONTENT_HASH,
-                asset_manifest_hash=RECORDED_ASSET_MANIFEST_HASH,
-            )
-            offer = frame["offers"][0]
-            command = build_command(frame, offer["id"])
-            actor = int(env.last_raw_obs.agent.player_index)
-            before = env._engine.state_digest()
-            _, _, terminated, truncated, _ = env.step(offer["id"])
-            game["decisions"].append(
-                {
-                    "actor": actor,
-                    "player_id": game["seat_players"][actor],
-                    "frame_sha256": canonical_sha256(frame),
-                    "command": command,
-                    "command_sha256": canonical_sha256(command),
-                    "chosen_offer": offer,
-                    "action_space_kind": frame["action_space"],
-                    "pre_state_digest": before,
-                    "post_state_digest": env._engine.state_digest(),
-                }
-            )
-            assert not truncated
-            if terminated:
-                game["winner"] = env._engine.winner_index()
-                game["terminated"] = True
-                break
-        else:
-            raise AssertionError("Example game exceeded its decision bound")
-    finally:
-        env.close()
-    game["game_trace_sha256"] = canonical_sha256(game)
+    setup = GameInputs(
+        seed=7,
+        players=[
+            PlayerSetup(
+                name="first-legal-a",
+                decklist={"Mountain": 1, "Gray Ogre": 1},
+                sideboard={},
+            ),
+            PlayerSetup(
+                name="first-legal-b",
+                decklist={"Forest": 1, "Llanowar Elves": 1},
+                sideboard={},
+            ),
+        ],
+    )
+    # Tiny decks lose to the first draw after their opening hand.
+    game = record_actions(
+        setup,
+        [0],
+        players=("first-legal-a", "first-legal-b"),
+        source={"kind": "evaluation"},
+    )
     write_trace(path, [game])
 
 

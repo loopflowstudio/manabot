@@ -1,5 +1,6 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte';
+  import { onMount, type Snippet } from 'svelte';
+  import { artCredits as getArtCredits, type ArtCredit } from '$lib/card-art';
 
   import { page } from '$app/state';
 
@@ -7,12 +8,18 @@
 
   let { children }: { children?: Snippet } = $props();
 
-  type ArtCredit = { artist: string; source: string; copyright: string };
-  const creditFiles = import.meta.glob('/src/lib/card-art/credits.json', {
-    eager: true, import: 'default',
-  }) as Record<string, Record<string, ArtCredit>>;
-  const artCredits = Object.entries(Object.values(creditFiles)[0] ?? {})
-    .sort(([left], [right]) => left.localeCompare(right));
+  let artCredits = $state<[string, ArtCredit][]>([]);
+  onMount(() => {
+    let active = true;
+    let revision = 0;
+    const update = () => {
+      const current = ++revision;
+      void getArtCredits().then(credits => { if (active && current === revision) artCredits = credits; }).catch(() => {});
+    };
+    update();
+    window.addEventListener('academy-art-loaded', update);
+    return () => { active = false; window.removeEventListener('academy-art-loaded', update); };
+  });
 
   const NAV = [
     { href: '/', label: 'Play' },

@@ -16,7 +16,7 @@ import logging
 from pathlib import Path
 import secrets
 import sqlite3
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 from fastapi import (
     FastAPI,
@@ -27,10 +27,11 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import ValidationError
 
 import managym
+from managym.academy.card_art import card_art
 from managym.bots import BotDecision, BotPolicy, choose_bot
 from managym.decision import (
     Command as SemanticCommand,
@@ -3129,6 +3130,33 @@ async def play_socket(websocket: WebSocket) -> None:
             await websocket.close()
 
 
+@app.get("/api/card-art/credits")
+def card_art_credits(names: list[str] = Query(default=[])) -> Response:
+    return JSONResponse(
+        card_art().credits(names[:1024]), headers={"Cache-Control": "no-store"}
+    )
+
+
+def _art_response(path: Path | None) -> Response:
+    if path is None:
+        return Response(status_code=404, headers={"Cache-Control": "no-store"})
+    return FileResponse(
+        path,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
+
+
+@app.get("/api/card-art/back.jpg")
+def card_back() -> Response:
+    return _art_response(card_art().back())
+
+
+@app.get("/api/card-art/{kind}/{slug}.jpg")
+def card_image(kind: Literal["art", "full"], slug: str) -> Response:
+    return _art_response(card_art().image(slug, kind))
+
+
 @app.get("/api/opponents")
 async def get_opponents() -> dict[str, Any]:
     # Reading checkpoints touches the filesystem and Torch; keep the loop free.
@@ -3586,8 +3614,10 @@ def import_arena_watch(payload: dict[str, Any]) -> dict[str, Any]:
 
     try:
         return import_arena(payload)
-    except (ValueError, KeyError, TypeError) as exc:
-        raise HTTPException(400, "arena_import_invalid") from exc
+    except ValueError as exc:
+        raise HTTPException(400, f"Arena import rejected: {exc}") from exc
+    except (KeyError, TypeError) as exc:
+        raise HTTPException(400, "Arena import rejected: invalid game fields.") from exc
 
 
 @app.post("/api/decklists/validate")

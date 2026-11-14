@@ -18,7 +18,8 @@ export default defineConfig({
     env: {
       ACADEMY_LAUNCH_PORT: port,
       ACADEMY_LAUNCH_PROOF: proof,
-      ACADEMY_FRONTEND_BUILD: fileURLToPath(new URL('./build', import.meta.url)),
+      ACADEMY_FRONTEND_BUILD: process.env.ACADEMY_FRONTEND_BUILD ?? fileURLToPath(new URL('./build', import.meta.url)),
+      ACADEMY_CARD_ART: 'off',
     },
     wait: { stdout: /ACADEMY_LAUNCH_PROOF_READY/ },
     gracefulShutdown: { signal: 'SIGINT', timeout: 15_000 },

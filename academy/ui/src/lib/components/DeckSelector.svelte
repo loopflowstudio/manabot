@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { artUrl, loadArt } from '$lib/card-art';
   import { CURATED_PACK, ELEMENTAL_WORLD_PACK, JEONG_INCREMENT_PACK } from '$lib/curated-pack';
   import { DECK_CHOICES, type DeckChoice } from '$lib/decks';
   import CardImage from './CardImage.svelte';
@@ -24,14 +25,19 @@
   const deck = $derived(allDecks.find((row) => row.deck_id === inspectedKey));
   const cards = $derived(Object.entries(deck?.cards ?? {}).sort(([a], [b]) => a.localeCompare(b)));
   const lessons = $derived(Object.entries(deck?.sideboard ?? {}).sort(([a], [b]) => a.localeCompare(b)));
-  const fullArt = import.meta.glob('/src/lib/card-art/full/*.jpg', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
   let preview = $state<string | null>(null);
   let previewDialog: HTMLDialogElement;
 
-  function imageFor(name: string): string | undefined {
-    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    return fullArt[`/src/lib/card-art/full/${slug}.jpg`];
-  }
+  let previewUrl = $state<string | null>(null);
+  $effect(() => {
+    const name = preview;
+    previewUrl = null;
+    if (!name) return;
+    let active = true;
+    const url = artUrl(name, 'full');
+    void loadArt(url, name).then(loaded => { if (active && loaded) previewUrl = url; });
+    return () => { active = false; };
+  });
 
   function inspectCard(name: string): void {
     preview = name;
@@ -119,8 +125,8 @@
 <dialog bind:this={previewDialog} class="m-auto max-h-[95dvh] max-w-[95vw] rounded-lg border border-line bg-panel p-4 text-ink shadow-sheet backdrop:bg-black/70" aria-label={preview ? `Card preview: ${preview}` : 'Card preview'}>
   <div class="mb-3 flex items-center justify-between gap-4"><h3 class="type-title">{preview}</h3><button class="btn border border-line bg-field" onclick={() => previewDialog.close()}>Close preview</button></div>
   {#if preview}
-    {#if imageFor(preview)}
-      <img src={imageFor(preview)} alt={preview} class="mx-auto max-h-[75dvh] max-w-full rounded-lg" data-testid="full-card-preview" />
+    {#if previewUrl}
+      <img src={previewUrl} alt={preview} class="mx-auto max-h-[75dvh] max-w-full rounded-lg" data-testid="full-card-preview" />
     {:else}
       <CardImage name={preview} size="normal" className="mx-auto h-72 w-52 rounded-lg" />
       <p class="type-caption mt-3">Printed card image unavailable.</p>

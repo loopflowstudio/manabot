@@ -26,6 +26,9 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+env:
+  ACADEMY_CARD_ART: "off"
+
 jobs:
   preflight:
     runs-on: ubuntu-latest
