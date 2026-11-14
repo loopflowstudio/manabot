@@ -18,26 +18,32 @@
   const groups = $derived(groupBattlefield(permanents));
   const lanes: { lane: BattlefieldLane; label: string }[] = [
     { lane: 'creatures', label: 'Creatures' },
-    { lane: 'other', label: 'Other permanents' },
     { lane: 'lands', label: 'Lands' },
+    { lane: 'other', label: 'Other permanents' },
     { lane: 'tokens', label: 'Artifact tokens' },
   ];
 </script>
 
 <div class="battlefield-grid" data-testid="battlefield">
-  {#each lanes as { lane, label }}
+  {#each lanes.filter(({ lane }) => groups[lane].length > 0) as { lane, label }}
     <BattlefieldZone {lane} {label} permanents={groups[lane]} allPermanents={permanents} {tablePermanents}
       {focusedIds} {clickableTargets} {onSelectTarget} {onHoverTarget} {onPreviewCard} />
+  {/each}
+</div>
+<div class="empty-lanes flex flex-wrap gap-x-3 type-caption text-ink-2">
+  {#each lanes.filter(({ lane }) => groups[lane].length === 0) as { lane, label }}
+    <span role="group" aria-label={label} data-battlefield-lane={lane}>{label} · 0</span>
   {/each}
 </div>
 
 <style>
   .battlefield-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(5.5rem, 30%);
-    grid-template-rows: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.5rem;
-    height: clamp(20rem, 34vh, 23rem);
     min-width: 0;
+    flex: 1;
+    grid-auto-rows: minmax(126px, 1fr);
   }
+  .battlefield-grid:empty, .empty-lanes:empty { display: none; }
 </style>

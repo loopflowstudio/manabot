@@ -1,6 +1,12 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { revealWithinScrollRegions } from '$lib/scroll-regions';
+  import { onMount, tick, untrack } from 'svelte';
 
+  import {
+    dragMoved, dragOffer, loadTableMode, saveTableMode, selectForPlay, selectedOffers,
+    selectionMatches, type HandDrag, type PlaySelection, type TableMode,
+  } from '$lib/play-selection';
+  import { visibleCardLabel } from '$lib/decision-labels';
   import { offerFocus, offerTargets } from '$lib/offer-map';
   import DecisionSurface from '$lib/components/DecisionSurface.svelte';
   import DecisionContext from '$lib/components/DecisionContext.svelte';
@@ -19,7 +25,7 @@
   import { fetchAdviceMeta, postAdvice, type AdviceMeta, type AdviceResponse } from '$lib/advice';
   import { checkpointChoice, gameStore } from '$lib/game.svelte';
   import { sanitizeDeckSelection } from '$lib/decks';
-  import { presentationPlayer } from '$lib/presentation.svelte';
+  import { presentationPlayer, studyPresentationPlayer } from '$lib/presentation.svelte';
   import {
     connect,
     disconnect,
@@ -61,9 +67,17 @@
     }
   }
 
+  let tableMode = $state<TableMode>('inspect');
+  let selection = $state<PlaySelection | null>(null);
+  let drag = $state<HandDrag | null>(null);
+  let suppressClick = false;
+  let stopsPending = $state<number | null>(null);
+  let stopsOpen = $state(false);
+  let stopsPanel: HTMLDetailsElement | null = $state(null);
   let hoveredTargetId = $state<number | null>(null);
 
   onMount(() => {
+    tableMode = loadTableMode();
     const params = new URLSearchParams(window.location.search);
     demoName = params.get('demo');
     if (!demoName) {
@@ -95,15 +109,17 @@
   let adviceResponse = $state<AdviceResponse | null>(null);
   let adviceSelectedScenario = $state('');
   let adviceStatus = $state<'ok' | 'unavailable' | 'loading'>('loading');
+  let secondaryOpen = $state(false);
   let adviceOpen = $state(false);
   let advicePanel: HTMLDetailsElement | null = $state(null);
 
   async function compareBelief(scenarioId: string): Promise<void> {
+    secondaryOpen = true;
     adviceOpen = true;
     void loadAdvice(scenarioId);
     await tick();
-    advicePanel?.querySelector('summary')?.focus();
-    advicePanel?.scrollIntoView({ block: 'start' });
+    advicePanel?.querySelector('summary')?.focus({ preventScroll: true });
+    if (advicePanel) revealWithinScrollRegions(advicePanel);
   }
 
   async function loadAdviceMeta(): Promise<void> {
@@ -178,14 +194,95 @@
   const gameActive = $derived(gameStore.observation !== null && !gameStore.gameOver);
   const pilotCanAct = $derived(gameStore.hasCapability('submit_live_command'));
   const participantStudying = $derived(gameStore.restoredDecision !== null);
-  const canPassTurn = $derived(
-    gameActive && offers.length > 0 && pilotCanAct && !participantStudying && !gameStore.commandPending && gameStore.connection === 'connected',
-  );
+  const tablePresentation = $derived(participantStudying ? studyPresentationPlayer : presentationPlayer);
+  const inputReady = $derived(!gameStore.commandPending && stopsPending === null && gameStore.connection === 'connected');
+  // Both table modes submit through the same live authority gate. Play only
+  // adds selection and gestures; Study retains its separate retry capability.
+  const canSubmitLive = $derived(gameActive && pilotCanAct && !participantStudying
+    && !gameStore.branchProjection && !gameStore.newGamePending && inputReady);
+  const canPassTurn = $derived(canSubmitLive && offers.length > 0);
   const boardObservation = $derived(
     gameStore.branchProjection
       ?? gameStore.restoredDecision?.frame.projection
       ?? gameStore.observation,
   );
+
+  const liveInput = $derived(tableMode === 'play' && canSubmitLive);
+  const draggingOffer = $derived(drag && tableFrame ? dragOffer(drag.selection, tableFrame) : null);
+
+  $effect(() => {
+    gameStore.updateSeq;
+    untrack(clearPlaySelection);
+  });
+  $effect(() => {
+    if (!liveInput || (selection && !selectionMatches(selection, tableFrame))) untrack(clearPlaySelection);
+  });
+  $effect(() => {
+    if (stopsPending !== null && (gameStore.updateSeq !== stopsPending || gameStore.connection !== 'connected')) stopsPending = null;
+  });
+
+  function clearPlaySelection(): void {
+    if (drag?.moved) suppressClick = true;
+    selection = null;
+    drag = null;
+    gameStore.clearSelectedTarget();
+    hoveredTargetId = null;
+    gameStore.clearFocus();
+  }
+  function cancelSelection(): void {
+    const object = selection?.object;
+    const restore = document.activeElement?.closest('.play-selection');
+    clearPlaySelection();
+    if (restore && object !== undefined) void tick().then(() => {
+      document.querySelector<HTMLElement>(`[data-object-id="${object}"]`)?.focus({ preventScroll: true });
+    });
+  }
+  function changeMode(mode: TableMode): void {
+    clearPlaySelection();
+    tableMode = mode;
+    saveTableMode(mode);
+  }
+  function suppressDragClick(event: MouseEvent): void {
+    if (suppressClick && event.detail > 0) {
+      event.preventDefault();
+      event.stopPropagation();
+      suppressClick = false;
+    }
+  }
+  function startHandDrag(event: PointerEvent): void {
+    suppressClick = false;
+    if (!liveInput || event.button !== 0 || !event.isPrimary || !(event.target instanceof Element) || !tableFrame) return;
+    const card = event.target.closest<HTMLElement>('[data-object-id]');
+    if (!card) return;
+    const bound = selectForPlay(tableFrame, Number(card.dataset.objectId));
+    if (!bound || !dragOffer(bound, tableFrame)) return;
+    drag = { selection: bound, pointer: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
+    card.setPointerCapture(event.pointerId);
+  }
+  function moveHandDrag(event: PointerEvent): void {
+    if (!drag || drag.pointer !== event.pointerId) return;
+    drag.moved = dragMoved(drag, event.clientX, event.clientY);
+    if (drag.moved) { event.preventDefault(); selection = drag.selection; }
+  }
+  function endHandDrag(event: PointerEvent): void {
+    const pending = drag;
+    if (!pending || pending.pointer !== event.pointerId) return;
+    const drop = document.querySelector('[data-testid="play-drop-area"]')?.getBoundingClientRect();
+    const offer = liveInput && tableFrame ? dragOffer(pending.selection, tableFrame) : null;
+    if (pending.moved) {
+      suppressClick = true;
+      if (drop && event.clientX >= drop.left && event.clientX <= drop.right && event.clientY >= drop.top && event.clientY <= drop.bottom && offer) handleActionSelect(offer);
+      else clearPlaySelection();
+    }
+    drag = null;
+  }
+  async function editStops(): Promise<void> {
+    secondaryOpen = true;
+    stopsOpen = true;
+    await tick();
+    stopsPanel?.querySelector('summary')?.focus({ preventScroll: true });
+    if (stopsPanel) revealWithinScrollRegions(stopsPanel);
+  }
 
   // The matchup names the players: "You (UR Lessons) vs Search 64 (GW
   // Allies)". Selectors hide while a game runs, so the choice is stable.
@@ -204,6 +301,8 @@
 
   function syncStopsToServer(): void {
     if (gameActive && gameStore.hasCapability('configure_match')) {
+      clearPlaySelection();
+      stopsPending = gameStore.updateSeq;
       sendSetStops();
     }
   }
@@ -240,6 +339,7 @@
   }
 
   function handleKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape') cancelSelection();
     if (event.key === 'F6') {
       event.preventDefault();
       handlePassTurn();
@@ -251,15 +351,15 @@
       if (!gameStore.branchAttemptId && gameStore.hasCapability('explore_study')) sendRetryDecision(action.id);
       return;
     }
-    if (gameStore.gameOver || !pilotCanAct) return;
+    if (!canSubmitLive) return;
+    if (tableMode === 'play' && selection
+      && !selectedOffers(selection, gameStore.protocolFrame).some(offer => offer.id === action.id)) return;
 
     if (!sendAction(action.id)) {
       return;
     }
     gameStore.appendHeroAction(action.label);
-    gameStore.clearSelectedTarget();
-    gameStore.clearFocus();
-    hoveredTargetId = null;
+    clearPlaySelection();
   }
 
   function handleActionHover(action: InteractionOffer | null): void {
@@ -271,6 +371,10 @@
   }
 
   function handleBoardTargetSelect(objectId: number): void {
+    if (tableMode === 'play' && !participantStudying && pilotCanAct) {
+      if (!liveInput || !tableFrame) return;
+      selection = selectForPlay(tableFrame, objectId);
+    }
     const offerIds = targetOfferIds(objectId);
     gameStore.selectTarget(objectId);
     gameStore.setFocus(focusIdsForOffers(offerIds));
@@ -289,7 +393,8 @@
 </script>
 
 <main
-  class="mx-auto w-full max-w-[1400px] px-4 py-6"
+  class:table-active={gameStore.observation !== null && !gameStore.gameOver && !showSetup}
+  class="play-page mx-auto w-full max-w-[1600px] px-4 py-4"
   data-update-seq={gameStore.updateSeq}
   data-frame-revision={gameStore.protocolFrame?.revision ?? -1}
   data-table-revision={gameStore.table?.table_revision ?? -1}
@@ -303,8 +408,8 @@
   {/if}
 
   <!-- The sheet: one continuous leaf. Regions are ruled, never boxed. -->
-  <div class="overflow-hidden rounded-sm border border-line bg-panel shadow-sheet">
-    <div class="px-10 pb-10 pt-6 max-md:px-5 max-md:pb-6">
+  <div class="play-sheet overflow-hidden rounded-sm border border-line bg-panel shadow-sheet">
+    <div class="sheet-content px-5 pb-4 pt-3">
   <!-- The masthead, in levels: the matchup names the players, fields show
        only while they matter, one red action, and the connection is a
        whisper beside it. -->
@@ -338,6 +443,10 @@
         />
       {/if}
       <div class="flex items-center gap-4">
+        <div role="group" aria-label="Table interaction mode" class="flex gap-1">
+          <button class="btn btn-secondary btn-sm" aria-pressed={tableMode === 'play'} onclick={() => changeMode('play')}>Play</button>
+          <button class="btn btn-secondary btn-sm" aria-pressed={tableMode === 'inspect'} onclick={() => changeMode('inspect')}>Inspect</button>
+        </div>
         {#if !demoName && gameStore.observation && !gameStore.gameOver && gameStore.hasCapability('configure_match')}
           <button class="btn" aria-expanded={showSetup} onclick={() => showSetup = !showSetup}>
             {showSetup ? 'Return to game' : 'Choose decks'}
@@ -402,9 +511,20 @@
     <DeckImport />
   {/if}
   {#if gameStore.observation && boardObservation}
-    <div class="grid grid-cols-1 items-start">
-      <div id="table-board" class="min-w-0"><a href="#table-choices" class="type-caption underline">Choose a play</a>
+    <div class="play-workspace" data-testid="play-workspace">
+      <div id="table-board" class="board-region" tabindex="-1"><a href="#table-choices" class="table-jump type-caption underline">Choose a play</a>
       <GameBoard
+        workspace
+        playMode={tableMode === 'play' && !participantStudying}
+        canSelectForPlay={liveInput}
+        selectedId={selection?.object ?? null}
+        onHandClickCapture={suppressDragClick}
+        onHandPointerDown={startHandDrag}
+        onHandPointerMove={moveHandDrag}
+        onHandPointerUp={endHandDrag}
+        onHandPointerCancel={clearPlaySelection}
+        gestureActive={drag?.moved ?? false}
+        dragLabel={draggingOffer?.confirm_label ?? draggingOffer?.label ?? null}
         observation={boardObservation}
         focusedIds={gameStore.focusIds}
         {clickableTargets}
@@ -416,78 +536,94 @@
         villainLabel={opponentLabel}
         overlayActionLabel="Play Again"
         onOverlayAction={startNewGame}
-        {presentationPlayer}
+        presentationPlayer={tablePresentation}
       />
       </div>
 
       <!-- The margin column: actions, stops, and the log as annotations
            beside the score, behind a single vertical rule. -->
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex (keyboard access to the scrolling choices rail) -->
       <div
-        id="table-choices" class="flex min-w-0 flex-col gap-6 border-t-2 border-action pt-6"
+        id="table-choices" tabindex="0" role="region" aria-label="Current choices and game controls" class="choices-region"
       >
-        <a href="#table-board" class="type-caption underline">Inspect board</a>
-        <p data-testid="current-decision" role="status" aria-live="polite" aria-atomic="true" class="text-ink">
+        <a href="#table-board" class="table-jump type-caption underline">Inspect board</a>
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex (keyboard access to long decision status) -->
+        <p tabindex="0" data-testid="current-decision" role="status" aria-live="polite" aria-atomic="true" class="text-ink">
           {gameStore.decisionStatus}
         </p>
+        {#if tableMode === 'play' && selection && !participantStudying}
+          <div class="play-selection border-b border-line pb-2" role="region" aria-label="Selected card actions">
+            <p class="type-caption">Selected: {visibleCardLabel(boardObservation, selection.object) ?? 'player'}. Choose an action below.</p>
+            <button class="btn btn-ghost btn-sm" onclick={cancelSelection}>Cancel selection</button>
+          </div>
+        {/if}
         {#if gameStore.branchProjection}
           <DecisionContext observation={gameStore.branchProjection} actor={gameStore.branchProjection.decision_context?.actor ?? null} />
           <p class="type-caption">Alternate action played. Return to recorded decision to try another choice.</p>
         {:else if tableFrame}
         <DecisionSurface
+          workspace
           frame={tableFrame}
           navigationKey={String(gameStore.updateSeq)}
           selectedTargetId={gameStore.selectedTargetId}
           {highlightedOfferIds}
-          disabled={(participantStudying ? !gameStore.hasCapability('explore_study') : gameStore.gameOver || !pilotCanAct) || gameStore.commandPending || gameStore.connection !== 'connected'}
+          disabled={participantStudying ? !gameStore.hasCapability('explore_study') || !inputReady : !canSubmitLive}
           fastForwarding={gameStore.fastForwarding}
           {canPassTurn}
           onHoverAction={handleActionHover}
           onSelectAction={handleActionSelect}
           onPassTurn={handlePassTurn}
-          onClearSelection={() => {
-            gameStore.clearSelectedTarget();
-            hoveredTargetId = null;
-            gameStore.clearFocus();
-          }}
+          onClearSelection={clearPlaySelection}
         />
         {/if}
 
-        <PresentationHistory player={presentationPlayer} />
+        <p data-testid="automation-status" class="type-caption text-ink-2">Priority-stop automation: {gameStore.stops.auto_pass ? `on · your turn ${gameStore.stops.my.length} / opponent ${gameStore.stops.opponent.length} · stack ${gameStore.stops.stop_on_stack ? 'on' : 'off'}` : 'off · every priority choice'}{gameStore.fastForwarding ? ' · yielding this turn' : ''}{stopsPending !== null ? ' · updating…' : ''} <button class="underline" onclick={editStops}>Edit stops</button></p>
+        <details bind:open={secondaryOpen} class="secondary-panels">
+          <summary class="type-rubric cursor-pointer">History and settings</summary>
+          <div class="secondary-content space-y-4" tabindex="0" role="region" aria-label="History and settings">
+            <PresentationHistory player={tablePresentation} observation={boardObservation} />
+            {#if tableFrame && !gameStore.branchProjection}
+              <DecisionContext observation={tableFrame.projection} actor={tableFrame.prompt?.actor ?? null} />
+            {/if}
 
-        {#if adviceMetaState}
-        <details bind:this={advicePanel} bind:open={adviceOpen} class="border-t border-line pt-4"><summary class="type-rubric cursor-pointer">Advice</summary>
-          <DecisionAdvice
-            mode="live"
-            scenarios={adviceMetaState?.scenarios ?? []}
-            selectedScenarioId={adviceSelectedScenario}
-            frame={adviceResponse?.frame ?? null}
-            offers={adviceResponse?.offers ?? []}
-            evidence={adviceResponse?.evidence ?? null}
-            deltas={adviceResponse?.deltas ?? null}
-            status={adviceStatus}
-            reason={adviceResponse?.reason ?? null}
-            advisorId={adviceMetaState?.identity.advisor_id ?? ''}
-            computeId={adviceMetaState?.identity.compute_id ?? ''}
-            onSelectScenario={(id) => void loadAdvice(id)}
-          />
-        </details>
-        {/if}
+            {#if adviceMetaState}
+            <details bind:this={advicePanel} bind:open={adviceOpen} class="border-t border-line pt-4"><summary class="type-rubric cursor-pointer">Advice</summary>
+              <DecisionAdvice
+                mode="live"
+                scenarios={adviceMetaState?.scenarios ?? []}
+                selectedScenarioId={adviceSelectedScenario}
+                frame={adviceResponse?.frame ?? null}
+                offers={adviceResponse?.offers ?? []}
+                evidence={adviceResponse?.evidence ?? null}
+                deltas={adviceResponse?.deltas ?? null}
+                status={adviceStatus}
+                reason={adviceResponse?.reason ?? null}
+                advisorId={adviceMetaState?.identity.advisor_id ?? ''}
+                computeId={adviceMetaState?.identity.compute_id ?? ''}
+                onSelectScenario={(id) => void loadAdvice(id)}
+              />
+            </details>
+            {/if}
 
-        <div class="border-t border-line pt-4">
-          <fieldset disabled={!gameStore.hasCapability('configure_match')}>
-            <legend class="sr-only">Pilot stop controls</legend>
-            <StopsPanel
-              stops={gameStore.stops}
-              onToggleStop={handleToggleStop}
-              onStopOnStackChange={handleStopOnStackChange}
-              onAutoPassChange={handleAutoPassChange}
-              onReset={handleResetStops}
-            />
-          </fieldset>
-        </div>
+            <div class="border-t border-line pt-4">
+              <fieldset disabled={!gameStore.hasCapability('configure_match') || participantStudying || !inputReady}>
+                <legend class="sr-only">Pilot stop controls</legend>
+                <StopsPanel
+                  bind:open={stopsOpen}
+                  bind:element={stopsPanel}
+                  stops={gameStore.stops}
+                  onToggleStop={handleToggleStop}
+                  onStopOnStackChange={handleStopOnStackChange}
+                  onAutoPassChange={handleAutoPassChange}
+                  onReset={handleResetStops}
+                />
+              </fieldset>
+            </div>
 
-        <details class="border-t border-line pt-4"><summary class="type-rubric cursor-pointer">Decision log</summary>
-          <GameLog entries={gameStore.actionLog} />
+            <details class="border-t border-line pt-4"><summary class="type-rubric cursor-pointer">Decision log</summary>
+              <GameLog entries={gameStore.actionLog} />
+            </details>
+          </div>
         </details>
       </div>
     </div>
@@ -539,3 +675,30 @@
   {#key gameStore.table.attempt_id}<Feedback attemptId={gameStore.table.attempt_id} />{/key}
 {/if}
 
+
+<style>
+  [aria-label="Table interaction mode"] button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+  .play-selection { max-height: 120px; overflow-y: auto; flex-shrink: 0; }
+  .play-workspace { display: grid; gap: 1rem; min-width: 0; }
+  .board-region { min-width: 0; }
+  .choices-region { display: flex; flex-direction: column; gap: 1rem; min-width: 0; border-top: 2px solid var(--accent); padding-top: 1rem; }
+  @media (min-width: 1024px) and (min-height: 650px) {
+    .table-active { height: calc(100dvh - 64px); display: flex; flex-direction: column; }
+    .table-active > :global(*) { flex-shrink: 0; }
+    .table-active .play-sheet { flex: 1; min-height: 0; }
+    .table-active .sheet-content { height: 100%; display: flex; flex-direction: column; }
+    .table-active .sheet-content > :global(*) { flex-shrink: 0; }
+    .table-active .play-workspace { flex: 1; min-height: 0; }
+    .play-workspace { grid-template-columns: minmax(0, 1fr) clamp(19rem, 26vw, 23rem); height: calc(100dvh - 190px); min-height: 0; padding-top: .5rem; }
+    .board-region { min-height: 0; display: flex; flex-direction: column; }
+    .board-region :global([data-testid="game-board"]) { flex: 1; min-height: 0; }
+    .choices-region { min-height: 0; overflow-y: auto; gap: .5rem; border-top: 0; border-left: 1px solid var(--border); padding: 0 .5rem 1rem 1rem; scrollbar-gutter: stable; }
+    .choices-region > :global(*) { flex-shrink: 0; }
+    .choices-region > :global(.workspace-decision) { flex: 1; min-height: min-content; }
+    .secondary-panels { flex-shrink: 1; min-height: 2rem; overflow-y: auto; overscroll-behavior: contain; }
+    [data-testid="current-decision"] { max-height: 3rem; overflow-y: auto; overscroll-behavior: contain; }
+    .secondary-content { max-height: 32dvh; overflow-y: auto; overscroll-behavior: contain; }
+    .table-jump { position: absolute; width: 1px; height: 1px; overflow: hidden; }
+    .table-jump:focus { position: static; width: auto; height: auto; }
+  }
+</style>

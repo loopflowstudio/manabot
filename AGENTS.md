@@ -75,6 +75,9 @@ separate from deliberate human decisions.
 Academy resume credentials and the started-launch marker live in browser
 `sessionStorage`. Keep them scoped together; a launch must not resume another
 tab's or another launch's game.
+Watch history is the selected acting viewer's recorded track strictly before
+that decision's `presentation_cursor`; spectator reveal never supplies history
+labels. Event emphasis stays separate from choice focus and lane navigation.
 This direction does not approve a particular redesign or change frozen worlds,
 checkpoints or experiment evidence.
 

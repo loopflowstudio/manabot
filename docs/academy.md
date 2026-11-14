@@ -12,6 +12,10 @@ digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 
 - [Running Academy](#running-academy): install, launch, chosen games and replays, Python, training games, card art, trained bots, troubleshooting
 - [Shared decision surface](#shared-decision-surface)
+- [Using the laptop table](#using-the-laptop-table)
+- [Play and Inspect modes](#play-and-inspect-modes)
+- [Choosing priority stops](#choosing-priority-stops)
+- [Reading consequences and controlling narration](#reading-consequences-and-controlling-narration)
 - [Choice navigation](#choice-navigation)
 - [Presentation runtime](#presentation-runtime)
 - [Playing a trained challenger](#playing-a-trained-challenger)
@@ -410,10 +414,198 @@ for imported decks. Uncheck the import option to return to bundled decks.
 `managym academy play` starts the same game from the command line
 ([Start in a chosen game](#start-in-a-chosen-game)).
 
-The table reads **Who decides / What is happening / Your choices**. Clicking a
-card inspects it and sends nothing; choosing one of the listed legal actions
-commits it. Decisions with a single legal action are taken for you and never
-shown. Reloading the page restores the pending decision.
+The table reads **Who decides / What is happening / Your choices**. It starts in
+**Inspect** mode: clicking a card inspects it and sends nothing; choosing one of
+the listed legal actions commits it. **Play** adds card selection and a hand-drag
+shortcut ([controls below](#play-and-inspect-modes)). Decisions with a single
+legal action are taken for you and never shown. Reloading the page restores the
+pending decision.
+
+### Using the laptop table
+
+Start a game, inspect a land in your hand, then choose its play action in
+**Your choices**. The board stays in view as the next prompt appears. Inspecting
+the card sends nothing; selecting the legal action commits the play. If a spell
+needs a target or payment choice, follow the next prompt before taking another
+action.
+
+At laptop widths and heights, the board and hand sit beside the current
+decision. Scroll the legal choices while the current instruction, legal count,
+**Show all** and filter controls remain available. Long instructions scroll
+independently. Open **History and settings** for decision details, consequences,
+advice and stop configuration without losing the pending decision. The current
+priority-stop automation setting and **Edit stops** remain visible beside the choices. At narrow or short windows, board and
+choices stack; use the board/choices jump links to move between them. Changing decisions
+moves focus within the choices region without pulling the page away from the
+board.
+
+- **A crowded hand:** scroll the labeled hand region horizontally to reach
+  the remaining cards.
+- **A crowded battlefield:** use the previous/next controls beside each lane heading. Counts show
+  the size of each group; focusing an action reveals the page holding its
+  subject. Occupied lanes come first; empty groups retain compact counts. Scroll the labeled battlefield region to reach further groups and
+  secondary zones. Identical card copies keep their own choices.
+- **Other zones:** open their inspection controls to see viewer-permitted
+  contents. Empty zones keep their labels and counts; hidden cards remain
+  hidden.
+- **Card details:** hover or keyboard-focus a visible card to preview it, or
+  use **Inspect card** in Play; in Inspect, activate the card to open its details
+  and related choices. Inspection leaves the pending decision unchanged.
+  Use **Show all** to return from card-specific
+  choices to the complete list.
+- **Keyboard navigation:** Tab reaches the board, choices and inspection
+  controls, including labeled scrolling regions. Focus a region to scroll it
+  with the keyboard; activate a listed action only when ready to commit it.
+
+The total legal choice count remains visible when narrowing a list. If a text
+filter finds nothing, use **Clear filter** or Escape; neither chooses an action.
+See [Choice navigation](#choice-navigation) for searching larger lists.
+
+While disconnected or waiting for a submitted choice, the board remains
+readable and action submission is disabled. Reconnect or reload in the same
+tab to recover the actual pending decision. If a choice is rejected because
+the game has advanced, inspect the refreshed prompt and choose again. A
+submitted action cannot be cancelled by clearing inspection or going back.
+Reloading a configured launch in its tab resumes that game; a separate tab or
+another launch has its own game.
+
+For bot inspection, open **Watch** or a recording in **Replay**. The shared
+decision surface shows the acting seat's permitted view and the complete legal
+choices for that decision. Recorded policy outputs appear only when available;
+missing outputs are not reconstructed. See [Inspect a replay](#inspect-a-replay).
+
+### Play and Inspect modes
+
+In a live game, choose **Play**, click a land in your hand, then activate its
+labeled play action. The land enters play and the next decision appears on the
+same board. For a spell, read the cast label before committing, then follow any
+target or payment prompts. Selecting the card alone sends no action. Keyboard
+users can focus the card, press Enter to select it, then activate the labeled
+action control.
+
+For a hand card with exactly one current play or cast action, you can also drag
+it into the labeled play area. Move at least 8 CSS pixels to start the drag;
+read the action label and release inside the area to commit. Escape, pointer
+cancellation or releasing outside the area discards the drag. If the card has
+several actions, choose an explicit alternative from the list. A card with no
+current action remains available for inspection.
+
+Hover or focus previews the card; **Inspect card** opens its details without
+committing. Player targets have explicit named controls. During combat, choose
+for the creature named by the current prompt: attack or decline, or select one
+of its legal blocks or decline. Each choice commits separately before the next
+creature's prompt. Mana-source choices likewise follow the offered decisions;
+dragging a spell does not configure manual tapping.
+
+Choose **Inspect** to examine the acting viewer's observation and every legal
+offer. Card selection narrows navigation; **Show all** restores the full list.
+Both modes retain the legal count and complete choices. Switching modes clears
+uncommitted selection, sends no game action and leaves priority automation at
+its configured setting. Inspect is the initial default; an explicit mode
+preference is remembered in this browser.
+
+A new decision, a stop-setting change or connection recovery clears uncommitted
+selection and drags. Wait for the current prompt, then select again. Actions are
+unavailable while disconnected, awaiting a submitted action or changing settings.
+These live-play shortcuts do not submit moves in Watch, recorded Replay or Study;
+use their own decision controls. Cancellation only discards local selection:
+after commitment, costs and revealed information remain committed.
+
+### Choosing priority stops
+
+To hold up a response during the opponent's upkeep, choose **Edit stops**, keep
+**Use priority stops** checked and check **Upkeep** under **Opponent turn**.
+Academy pauses at a priority window there when you have a real choice. The
+automation summary beside the choices keeps the current setting visible.
+
+**Your turn** and **Opponent turn** say whose turn contains the window. A checked
+step stops automatic priority passing there; an unchecked step allows it unless
+the stack-response setting requires a stop. The available steps are upkeep,
+draw, first main, beginning of combat, declare attackers, declare blockers,
+combat damage, second main and end step.
+
+| Setting | Default and effect |
+|---|---|
+| **Use priority stops** | On. Automatically passes priority outside configured stops. Turn it off to see every priority window with a real choice. |
+| **Your turn** | Stops in both main phases. |
+| **Opponent turn** | Stops in the end step. |
+| **Stop when the stack offers a response choice** | On. Stops for a response when the stack is nonempty, even at an unchecked step. |
+| **Reset to defaults** | Restores these settings. |
+
+Changing a stop can immediately advance the game. Target, payment, Learn,
+attack and block decisions still appear whenever they offer a choice; stops
+only govern priority passing. Sole legal actions are skipped in either mode.
+Settings are remembered in this browser, and reconnect restores the active
+game's server settings.
+
+When **Pass Turn (F6)** is available, activating it yields through priority
+windows, including checked stops and stack responses, until the turn ends or
+a non-priority decision needs you. With **Use priority stops** off, priority
+windows continue to appear. Automatic passes retain **Auto** labels in the
+action log and recording. Switching Play/Inspect or pausing narration does not
+change these settings.
+
+### Reading consequences and controlling narration
+
+After casting a targeted damage spell, finish its target and payment prompts,
+then open **History and settings**. Read the recorded cast, target, resolution
+and damage consequences as they occur; if a creature dies, its recorded death
+appears too. The board shows the current position, and **Your choices** remains
+available while narration describes what already happened.
+
+History groups consequences under recorded turns. Use the earlier/later page
+controls to browse up to 100 events at a time; the counts describe the available
+history. Scroll back to read an earlier event: incoming events leave your reading
+position and keyboard focus in place and increase the unread count. **Latest**
+returns to the newest page and resumes following events while you stay near the
+bottom. Browsing an older page also stops following. Recovered older events also count
+as unread and leave the event you are reading at the same position. Unavailable
+intervals appear where they occur; the turn after a gap stays unknown until a
+recorded turn change. Seeking before the event you are reading moves to the
+nearest earlier available event (or the first available event). A removed
+inspection closes and returns focus to history. Switching match, viewer or Study
+scope starts at Latest with a fresh unread count.
+
+When a consequence offers inspection of a card still available in your permitted
+view, select that subject to inspect the exact object without making a move.
+Departed or unavailable subjects keep their recorded text; another copy with the
+same name is not a substitute. Tab reaches history controls, turn headings and
+inspectable subjects; focus the scrolling region to read with the keyboard.
+
+Narration occupies the history area, leaving cards and choices accessible.
+Its controls affect presentation only:
+
+| Control | Result |
+|---|---|
+| **Pause narration** / **Resume narration** | Pause or resume the current narration; live play can continue. |
+| **Fast-forward** | Play narration at 4× speed; toggle again for normal speed. |
+| **Skip beat** | Move past the current narration beat. |
+| **Finish** | Finish the queued narration immediately. |
+| System reduced-motion preference | Remove movement while keeping consequence text and reading controls. |
+
+During live play, narration catches up automatically when its backlog grows;
+skipped motion keeps its history entries. Pausing narration does not pause the
+match or its configured priority-stop automation. Submitted actions, costs and
+revealed information are unaffected by narration controls.
+
+Consequences describe recorded game events. The action log separately identifies
+submitted choices and **Auto** passes; observed-state summaries describe changes
+visible in a frame. An action or a summary alone is not evidence that a spell
+resolved or a creature died.
+
+Reconnect preserves available history already held in this page and avoids
+repeating seen motion. A fresh reload can recover only the latest 256 events of
+an active match; earlier unavailable history and gaps are labeled explicitly.
+An unknown earlier turn stays unknown. To review the saved consequences of a
+completed game, open it from **Games** in **Replay**. History there follows the
+selected decision: stepping back and forward does not duplicate rows.
+**Try another line** has separate history, and **Return to recorded decision**
+restores the recording's history. Watch shows up to 256 preceding events from
+the selected acting bot's permitted track, with unavailable earlier history
+labeled. Spectator reveal does not add names to that history.
+Older recordings without event data say **Consequences not recorded**; missing
+events do not mean that nothing happened. A presentation error leaves the
+current board usable and marks retained history incomplete.
 
 ### Card art
 
@@ -689,22 +881,32 @@ same event list is returned live, persisted on the transition's final trace
 step and replayed through a separate instance of the same player; traces
 without the field replay with no events rather than inferred ones.
 
-Recovery commits the complete frame, cancels current theater and loads
-`presentation_tail` from `presentation_cursor`. The server keeps a bounded
-ledger of the latest 256 events (`MAX_PRESENTATION_EVENTS`), not a durable
-checkpoint. A non-contiguous tail is rejected and a fresh envelope requested; a
-cursor outside the retained window restarts theater at the oldest retained
-event. Malformed presentation clears theater and reports an error without
-touching the committed frame. Skip, Fast-forward, Finish, Pause, reduced motion
-and unmount cannot alter or delay canonical state.
+Retained semantic history is separate from the narration cursor. Validated live
+events append once, scoped by match, canonical or Study branch, and sequence.
+The live narration backlog, including the current beat's remaining duration, is
+bounded to 12 beats and 2,000ms of scheduled duration, even while paused. Older
+optional motion finishes as needed to admit new events; history remains readable.
+Replay plays its selected recorded sequence in order without this live cap.
+
+Recovery commits the complete frame, cancels stale theater and merges validated
+`presentation_tail` events with same-match in-memory history. Only unseen events
+can animate. The server retains the latest 256 events
+(`MAX_PRESENTATION_EVENTS`), so a fresh page labels any unavailable prefix.
+Sequence gaps are explicit. Malformed presentation clears theater and reports an
+error without touching the committed frame; valid retained history is marked
+incomplete. Skip, Fast-forward, Finish, Pause, reduced motion and unmount cannot
+alter or delay canonical state.
 
 Labels come only from viewer-safe frames. The current projection certifies
 incarnation zero and reuses the spell card's ID as the stack render ID;
 references it cannot name stay unnamed.
 
-**Recent consequences** (ETU-76, 2026-10-04) keeps the latest 12 semantic
-events in an expandable, keyboard-scrollable list that cursor movement does not
-erase; reduced motion removes movement without shortening reading time.
+History retains the active match's available events and renders a 100-row page.
+Recorded `turn_started` events establish turn headings; `group` is not a turn or
+spell-chain identifier. Canonical Replay history uses the prefix at its selected
+frame; Study has an isolated scope. See
+[Reading consequences and controlling narration](#reading-consequences-and-controlling-narration)
+for reading, inspection and recovery behavior.
 
 ## Playing a trained challenger
 
@@ -800,24 +1002,34 @@ with no account recovery.
 
 ## Experience proof gate
 
-A repeatable regression gate for UR Lessons (human) versus GW Allies (Search
-64). It is not a parity or release-readiness claim. The single source of truth
-for reference profile, sample counts and budgets is
-[academy/ui/e2e/experience-proof-baseline.ts](../academy/ui/e2e/experience-proof-baseline.ts);
-each run attaches its distribution as `experience-proof.json`.
+The release proof drives ordinary UR Lessons versus GW Allies games at 1440×900
+and 1280×800, with Random and Search 64, normal and reduced motion. It records
+actual browser metadata, per-action samples and distributions in `timing.json`,
+plus a Chromium `timeline.json` with layout, style and paint events.
 
 ```bash
-npm --prefix academy/ui run test:e2e -- experience-proof.spec.ts
-npm --prefix academy/ui run test:e2e:release   # focused decision, Learn, combat, navigation, Elemental checks
+ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build
+npm --prefix academy/ui run test:e2e:release -- experience-proof.spec.ts
 ```
 
-The proof measures warm launch, input latency, frame pacing and renderer heap
-in headless Chromium; force-closes the WebSocket at a decision and requires
-recovery with identical board, legal actions and log; and requires accessible
-names on enabled buttons. It does not cover cold startup, process memory,
-touch, real assistive technology, stale-Command handling or replay
-equivalence. CI selects the release suite for browser code
-and the backend/rules paths it consumes.
+Input acknowledgement is input-to-socket-send. Authority response is input to a
+matching newer frame's arrival before parsing, including policy and network time.
+The client measurements cover arrival-to-synchronous-listener completion and
+arrival-to-second-animation-frame after the matching DOM revision. The latter is
+an upper bound on a rendering opportunity, not physical display latency. The
+receipt reports misses against 100ms client targets, sample counts and probe
+attribution overhead; it does not pretend to measure server-only computation.
+Same-origin art requests and cancellations are reported separately. Normal cache
+state and a fresh isolated art directory must be identified when comparing runs.
+
+The older [baseline](../academy/ui/e2e/experience-proof-baseline.ts) remains frozen
+with its own metric definitions and historical browser/dev-server profile. Its
+DOM update-sequence metric was never paint latency. The current proof does not
+compare different metrics against those historical numbers. Recovery, stale
+Commands, complete choices and Replay equality are covered by the companion
+release workflow specs. This is machine evidence, not an expert endurance or
+human-enjoyment claim. CI selects the release suite for browser code and the
+backend/rules paths it consumes.
 
 History: [choice navigation](https://github.com/loopflowstudio/manabot/blob/a74f31828/docs/choice-navigation.md),
 [experience proof](https://github.com/loopflowstudio/manabot/blob/a74f31828/docs/experience-proof.md),

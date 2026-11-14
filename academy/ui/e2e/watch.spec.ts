@@ -14,12 +14,16 @@ test('watch steps, pauses, reopens a decision, and retries without advancing the
   await expect(page.getByRole('status').filter({ hasText: 'Decision 2 of 2' })).toBeVisible();
   await page.getByRole('button', { name: 'Previous decision' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Decision 1 of 2' })).toBeVisible();
+  const history = page.getByTestId('presentation-history');
+  const canonicalScope = await history.getAttribute('data-scope');
   await page.getByRole('button', { name: 'Try another line' }).click();
   await expect(page.getByTestId('study-panel')).toBeVisible();
   await page.getByTestId('action-option').first().click();
   await expect(page.getByText('Your line is committed')).toBeVisible();
+  await expect(history).not.toHaveAttribute('data-scope', canonicalScope!);
   await page.getByRole('button', { name: 'Return to score' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Decision 1 of 2' })).toBeVisible();
+  await expect(history).toHaveAttribute('data-scope', canonicalScope!);
   await page.getByRole('button', { name: 'Play', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Pause', exact: true }).click();

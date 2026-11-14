@@ -105,16 +105,31 @@ the same prefix. The demo fixes UR Lessons in seat 0 against Random GW Allies;
 its [evidence and remaining integration work](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/learn-lesson.md)
 are separate from complete-game replay certification.
 
-The table reads **Who decides / What is happening / Your choices**. Inspect any
-visible card without submitting; choose an explicit legal offer to commit one
-Command. Card locations and copy labels distinguish same-name choices; focusing an offer highlights its exact board subjects. The complete offer count
-stays visible while a card or text filter narrows navigation; **Show all** and
-**Clear filter** restore the full set. At every width, the board comes first,
-followed by full-width play selection. History, advice and table tools stay
-collapsed until opened; **Compare advice** opens and focuses Advice. Native card
+The table reads **Who decides / What is happening / Your choices**. In **Play**,
+select a hand card, then activate its labeled action; an unambiguous play/cast
+can also be committed by dragging into the play area. Hover, focus and **Inspect
+card** retain inspection without submission. **Inspect**, the initial default,
+keeps card inspection and the complete legal-offer workflow. Switching modes
+clears uncommitted selection without changing the game or priority automation.
+See [Play and Inspect controls](../../docs/academy.md#play-and-inspect-modes)
+for keyboard, drag cancellation, combat and recovery behavior.
+Card locations and copy labels distinguish same-name choices; focusing an offer highlights its exact board subjects. The complete offer count
+is displayed while a card or text filter narrows navigation; **Show all** and
+**Clear filter** restore the full set. In live play at laptop widths and heights,
+the board sits beside independently scrolling offers; instruction, legal count
+and filter navigation stay available. Long instructions have their own scroll
+area. **History and settings** opens decision details, consequences, advice and
+stop configuration while the pending decision stays available. **Edit stops**
+beside the choices opens **Your turn** / **Opponent turn** settings; changing
+them may immediately advance priority. See
+[priority stops](../../docs/academy.md#choosing-priority-stops) for defaults,
+stack responses and F6. Narrow or short windows stack
+the board above choices, with links between them. History, advice and table
+tools can be opened separately; **Compare advice** opens and focuses Advice. Native card
 types group creatures, lands, other
 permanents and artifact tokens into bounded battlefield lanes; dense lanes
-compact their cards, then offer explicit paging. Focusing a legal offer reveals
+compact their cards, then offer explicit paging beside their headings. Occupied
+lanes precede compact empty counts and secondary-zone disclosures. Focusing a legal offer reveals
 its objects' pages without submitting a choice. Public mana
 pools, spending restrictions and chooser-only inspected cards come from native
 observations. Historical frames without those fields say details were not recorded.
@@ -150,6 +165,16 @@ Replay and Study use the same decision renderer. Study executes the exact semant
 offer on a retained isolated root, then **Return to recorded decision** restores
 its original address/frame/Command; **Return to live** is a separate destination.
 Expired roots remain unavailable rather than being reconstructed from the screen.
+
+After resolving a spell, open **History and settings** to read its recorded
+consequences by turn. Earlier/later pages and **Latest** let you read older
+events without being pulled away by incoming or recovered rows. Gaps appear
+inline and turn context stays unknown until the next recorded turn change. Narration can be paused,
+accelerated or skipped while the pending choice remains usable. Reloaded active
+games label unavailable earlier history; older recordings without event data say
+**Consequences not recorded**. See
+[reading consequences and controlling narration](../../docs/academy.md#reading-consequences-and-controlling-narration)
+for controls, exact-subject inspection and Replay/Study behavior.
 
 Long action lists have an optional **Find an action** filter. See the
 [retained choice positions and local walkthrough](../../docs/academy.md#choice-navigation)

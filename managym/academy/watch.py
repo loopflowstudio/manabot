@@ -156,12 +156,23 @@ def inspect_watch(
     observation = row.frame.projection.model_dump(mode="json")
     if reveal:
         observation = event["analysis_observation"]
+    # Only the acting viewer's committed prefix belongs to this decision.
+    # Keep the response bounded; unavailable older history is explicit in the UI.
+    track = next(
+        track for track in replay.presentation_tracks if track.viewer == row.viewer
+    )
+    presentation = track.events[
+        max(
+            0, row.presentation_cursor - server.MAX_PRESENTATION_EVENTS
+        ) : row.presentation_cursor
+    ]
     opponent = payload["config"].get("opponent") or {}
     return {
         "id": trace_id,
         "decision": {**row.model_dump(mode="json"), "address": address},
         "observation": observation,
         "outputs": event.get("bot_decision"),
+        "presentation": [event.model_dump(mode="json") for event in presentation],
         "count": len(replay.decisions),
         "finished": finished,
         "revealed": reveal,
