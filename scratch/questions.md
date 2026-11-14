@@ -99,3 +99,9 @@ frozen pilot or its launcher database.
   "no separate entry step", not as a new product choice. The overlap is priced
   from published rows as an upper bound; no rerun to learn whether each
   activation was actually offered.
+
+- Concept review at `d947e7e425`: the outcome-menu versus per-source-step
+  choice is a product choice nobody has answered. It is taken as a review
+  question for the report, like the other three, rather than a stop: the
+  Task's deliverable is a design for review and the recommendation is not
+  changed by listing the alternative.

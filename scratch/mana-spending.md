@@ -16,8 +16,9 @@ text, launch notes and per-slice checks are in git `78397f2042` and before
 
 The report and read-only aggregation now extend the existing `PayOrNot`
 decision in the recommendation and price D's overlap (section "The payment
-decision already exists"). Remaining: gate/review and the caller's delivery
-steps. No PR created here.
+decision already exists"). Next implement slice: the report-only direction in
+"Per-source steps and the decision's name" below; then gate/review and the
+caller's delivery steps. No PR created here.
 
 ## Demo and done when
 
@@ -33,7 +34,10 @@ entry step as part of the design, and every number it quotes is one already in
 its tables; the design says which payments it covers and prices the ones that
 are not casts; the Forest illustration says which review question its
 two-offer menu depends on; and the design names today's payment decision as the
-one it extends, with the decisions D double-counts there priced. Since `caa15caca4` the branch changes only the
+one it extends, with the decisions D double-counts there priced; the report
+names that decision as the mana-payment decision rather than by its shared
+`PayOrNot` kind, and presents per-source taps inside it as an unanswered
+alternative with its bounds. Since `caa15caca4` the branch changes only the
 report, `scratch/` and the read-only `summary --all-payments` aggregation in
 `experiments/mana_spending.py`. Published evidence and its manifest stay
 unchanged.
@@ -182,6 +186,77 @@ bound minus certified / games, because a capped row's uncertain decision and
 its overlap cancel. How grouped outcomes sit beside activations is for the
 implementing Task. No games, native code or published bytes changed.
 
+## Per-source steps and the decision's name (concept review `d947e7e425`)
+
+Next implement direction. Report text and, if wanted, read-only aggregation
+only; no games, native code or published bytes.
+
+**1. Name the decision for what it is.** `ActionSpaceKind::PayOrNot` is not
+one decision. Its doc comment is "You may pay [cost]"; it is published for the
+mana payment of a cast or activation (`PendingChoice::ManaPayment`), a
+resolution payment (`Decision::Payment`), the kicker opt-in
+(`PendingChoice::KickerChoice`: `PayCost` / `Decline`) and an upfront
+mana-ability fee (`Decision::ManaUpfront`: activations only, no `PayCost`).
+`PayCost` likewise means "run the automatic payer" at a mana payment, "pay the
+kicker" at `KickerChoice`, and "pay mana instead of sacrificing" at
+`PendingChoice::SacrificePayment`. A cast's mana payment has no "or not". The
+report's summary and plan say "today's `PayOrNot` decision ... with `PayCost`
+as the automatic plan", which reads as covering all of these. It should call
+the thing the mana-payment decision (decision context stage `payment`), say
+once that it is published today under kind `PayOrNot`, and say the kicker
+opt-in and the sacrifice-or-mana choice are other decisions whose `PayCost`
+is not a payment plan and which the design leaves alone. Whether the kind or
+action is renamed is for the implementing Task (serialized values).
+
+**2. The decision the design extends already has a second way to choose
+sources, and the report never weighs it.** In the mana-payment decision an
+activated mana ability is a step: `ActivateAbility` commits that source and
+the decision returns (`mana_ability_actions`; offered only while the pending
+obligations stay payable, `activation_witness`). A fixed-output source
+(`PaymentSource.fixed`, `PaymentStep::Fixed`) is never offered; only the
+automatic payer taps it. The recommendation therefore gives two kinds of
+source two controls inside one decision: step offers for activated abilities,
+whole-payment outcome offers for fixed sources. The alternative the existing
+decision implies is one control: offer each fixed source as a tap step too,
+with `PayCost` finishing automatically from what is left. Shapes A–E do not
+include it; "Not recommended" does not mention it; the report's own prior art
+(Arena full control, Forge manual selection) is this shape; and question 1's
+"tap-for-mana action at priority" would bring it into the payment decision
+anyway, because the report says activations are offered "at priority and
+during payment", after which the outcome menu is a shortcut over a control
+that already exists rather than the only control.
+
+Bounds from published `current/non-redundant-shapes/shapes.jsonl`, positive
+cost payments that are capped or have at least two non-redundant identity
+outcomes (local read at this review, not in the report):
+
+| decks, policy | payments | fixed sources median / p95 / max | min(cost, fixed) median / p95 / max | max activated sources |
+| --- | ---: | ---: | ---: | ---: |
+| elemental heuristic | 1645 | 6 / 11 / 15 | 2 / 5 / 7 | 17 |
+| elemental random | 2647 | 6 / 12 / 15 | 2 / 5 / 7 | 8 |
+| tla heuristic | 1435 | 6 / 12 / 16 | 2 / 4 / 7 | 16 |
+| tla random | 2605 | 5 / 10 / 15 | 2 / 5 / 13 | 2 |
+| heartbeat heuristic | 94 | 7 / 17 / 21 | 4 / 4 / 4 | 0 |
+| heartbeat random | 128 | 8 / 21 / 25 | 3 / 4 / 4 | 0 |
+
+So per-source steps keep exact identity in a flat menu of at most 16 fixed
+taps on ordinary decks (25 on Heartbeat) beside the activations and `PayCost`:
+no groups, no outcome enumeration or cap, and question 2 becomes labelling.
+Its price is decisions: a manual payment is one decision per tap, bounded per
+payment by min(cost, fixed sources) only when each source makes one mana, plus
+the finishing `PayCost`; an outcome is one decision. It also leaves which
+pooled unit pays each pip to today's per-pip prompt or to automation, and it
+is the "low-level payment steps" the Task set out to avoid. How often a
+player would override is not measured for either shape.
+
+What the report should do: add this shape beside the outcome menu, under
+question 3 or as its own question, with the bounds above derived from the
+published rows and labelled as bounds; say under question 1's priority option
+that it implies taps during payment; say in the recommended design why the
+outcome menu is recommended over it (one decision per payment, the Task's
+aim) without presenting that as answered. The recommendation stays as it is
+unless someone answers choice 4.
+
 ## Open product choices (nobody has answered; they do not block this Task)
 
 1. Deliberate surplus tapping: not offered, a priority action, or in the
@@ -195,6 +270,12 @@ implementing Task. No games, native code or published bytes changed.
    non-redundant capability, plan visible), or intent at cast selection (no
    added cast decisions unless used, plan not visible; non-casts still need
    control). Learning effects stay with MTG-265.
+4. How a player names the sources to tap: one outcome offer for the whole
+   payment (recommended; one decision, combinatorial menu, groups under exact
+   identity) or per-source tap steps in the same decision (flat menu of at
+   most 16–25 taps, exact identity, one decision per tap, spend receipt left
+   to per-pip prompts or automation). It decides whether outcome enumeration
+   and groups are built at all.
 
 ## Checks
 
