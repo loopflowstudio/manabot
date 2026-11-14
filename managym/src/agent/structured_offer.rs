@@ -104,6 +104,7 @@ pub enum OfferVerb {
     LearnTakeLesson,
     LearnDiscard,
     WaterbendTap,
+    TapForMana,
 }
 
 /// Viewer-observable identity of an admitted public commitment. This is
@@ -1998,5 +1999,6 @@ fn search_offer_verb(action: &Action) -> OfferVerb {
         Action::ChooseMode { .. } => OfferVerb::ChooseMode,
         Action::ChooseTrigger { .. } => OfferVerb::ChooseTrigger,
         Action::WaterbendTap { .. } => OfferVerb::WaterbendTap,
+        Action::TapForMana { .. } => OfferVerb::TapForMana,
     }
 }

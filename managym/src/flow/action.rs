@@ -511,6 +511,7 @@ impl Game {
                 alternative,
             } => {
                 let mut actions = self.mana_ability_actions(*player, *sacrifice);
+                actions.extend(self.fixed_tap_actions(*player));
                 let cost = self.payment_mana_cost(*player, payment, alternative.as_ref());
                 if self.can_pay_mana_cost(*player, &cost) {
                     actions.push(Action::PayCost { player: *player });
@@ -1002,6 +1003,9 @@ impl Game {
                     return self.execute_decision_action(action);
                 }
                 self.waterbend_tap_action(*player, *permanent)
+            }
+            Action::TapForMana { player, permanent } => {
+                self.tap_for_mana_action(*player, *permanent)
             }
         }
     }

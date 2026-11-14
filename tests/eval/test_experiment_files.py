@@ -74,6 +74,7 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
         "mtg183-elemental-eval",
         "precision_ladder",
         "seat_comparison",
+        "source_taps",
         "tla_frontier",
         "tla_frontier_calibration",
         "tla_frontier_vocabulary",

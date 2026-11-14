@@ -536,3 +536,11 @@ payments, the sources that leave the most of the payer's other hand cards and
 battlefield abilities affordable; ties go to the least reluctant sources (basic
 lands, then other lands, lands with another ability, other permanents,
 creatures), then to colorless ones (`flow/mana/tap_choice.rs`).
+
+`MANAGYM_EXPERIMENT_SOURCE_TAPS=1` is the per-source arm of
+`experiments/source_taps.py`. A cast or activation mana payment then offers
+each fixed source whose output the cost can still use as a `TapForMana` step
+(action type `TapForCost`) beside `PayCost`, which finishes automatically.
+Nothing is offered when the pool covers the cost or every offered source is
+needed. Waterbend, resolution payments, upfront fees and foretell stay
+automatic. Replay and evaluation must use the same value.

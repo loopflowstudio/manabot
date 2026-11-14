@@ -130,6 +130,7 @@ impl Game {
             mana_payment_stats: crate::flow::mana::ManaPaymentStats::new(
                 std::env::var("MANAGYM_EXPERIMENT_AUTOSPEND").as_deref() == Ok("1"),
                 true,
+                std::env::var("MANAGYM_EXPERIMENT_SOURCE_TAPS").as_deref() == Ok("1"),
             ),
             derived: Default::default(),
             payment_sources: Default::default(),
