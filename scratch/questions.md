@@ -27,3 +27,6 @@ Each is reversible before the PR lands.
    `viewer_observation_sha256`/`viewer_state_sha256` (270 checkpoints × 3
    surfaces each) and the source manifest changed.
 8. Retained public-commitment receipt regenerated: only tracker history/prior/posterior digests and the source manifest changed; commands, commitments, gaps and consumed counts are identical.
+9. The comparison runs on RunPod RTX A5000 (`mtg344-a5000`, $0.27/h at
+   launch): L4 and RTX 4000 Ada had no capacity at 14:04 UTC. All four runs
+   share the GPU type, so the arms stay matched.
