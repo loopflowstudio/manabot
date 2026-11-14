@@ -192,8 +192,8 @@ class TestVectorEnvPotential:
             done = terminated | truncated
             if bool(done.any()):
                 prev_phi = env._potential(
-                    prev_obs["agent_objects"],
-                    prev_obs["opponent_objects"],
+                    prev_obs["agent_cards"],
+                    prev_obs["opponent_cards"],
                     prev_obs["agent_player"],
                     prev_obs["opponent_player"],
                 )
