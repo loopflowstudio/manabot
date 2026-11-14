@@ -3224,7 +3224,7 @@ fn jailer_does_not_return_a_card_that_left_exile_and_was_exiled_again() {
     s.pass_priority();
     s.pass_priority();
     assert_eq!(zone_of(&s, object), Some(ZoneType::Exile));
-    let exiled = s.game().state.live(now(&s, object)).unwrap();
+    let exiled = now(&s, object);
     assert_eq!(s.game().state.exile_links[0].exiled_object, exiled);
     // Retained v16 link bytes still name the old numeric row.
     let link = serde_json::to_value(&s.game().state.exile_links[0]).unwrap();
@@ -9030,7 +9030,7 @@ fn true_ancestry_returns_only_a_current_permanent_card_and_can_decline() {
         let instant = library_card(&s, 0, "Lightning Strike");
         let land = move_card(&mut s, land, ZoneType::Graveyard);
         move_card(&mut s, instant, ZoneType::Graveyard);
-        let object = s.game().state.live(now(&s, land)).unwrap();
+        let object = now(&s, land);
         cast(&mut s, "True Ancestry");
         assert_eq!(s.action_space().actions.len(), 2);
         if take {
@@ -9062,7 +9062,7 @@ fn ancestry_does_not_follow_a_graveyard_target_into_a_new_incarnation() {
     let mut s = five_color_setup(&["True Ancestry"]);
     let land = library_card(&s, 0, "Forest");
     let land = move_card(&mut s, land, ZoneType::Graveyard);
-    let old = s.game().state.live(now(&s, land)).unwrap();
+    let old = now(&s, land);
     cast(&mut s, "True Ancestry");
     assert!(s.choose_target(Target::GraveyardCard(old)));
     let land = move_card(&mut s, land, ZoneType::Exile);
@@ -12444,9 +12444,9 @@ fn katara_the_fearless_makes_ally_triggers_trigger_an_additional_time() {
 fn raven_eagle_exiles_graveyard_cards_clues_creatures_and_drains_on_your_second_draw() {
     let mut s = five_color_setup(&["Raven Eagle", "Gray Ogre", "Lightning Strike"]);
     let ogre = plant_in_graveyard(&mut s, 1, "Gray Ogre");
-    let ogre_object = s.game().state.live(now(&s, ogre)).unwrap();
+    let ogre_object = now(&s, ogre);
     let strike = plant_in_graveyard(&mut s, 0, "Lightning Strike");
-    let strike_object = s.game().state.live(now(&s, strike)).unwrap();
+    let strike_object = now(&s, strike);
     enter_battlefield(&mut s, "Raven Eagle");
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::GraveyardCard(ogre_object)));
@@ -12863,7 +12863,7 @@ fn toph_hardheaded_teacher_rebuys_a_spell_and_earthbends_on_each_cast() {
     let fodder = move_to_hand(&mut s, "Gray Ogre");
     enter_battlefield(&mut s, "Toph, Hardheaded Teacher");
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
-    let object = s.game().state.live(now(&s, strike)).unwrap();
+    let object = now(&s, strike);
     assert!(s.choose_target(Target::GraveyardCard(object)));
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     select_card(&mut s, fodder);
@@ -12915,8 +12915,8 @@ fn sandbender_scavengers_grows_on_sacrifice_and_reanimates_within_its_power() {
     pass_until(&mut s, ActionSpaceKind::PayOrNot);
     assert!(s.take_action_by_type(ActionType::PayCost));
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
-    let ogre_object = s.game().state.live(now(&s, ogre_card)).unwrap();
-    let wurm_object = s.game().state.live(now(&s, wurm)).unwrap();
+    let ogre_object = now(&s, ogre_card);
+    let wurm_object = now(&s, wurm);
     let offered = offered_targets(&s);
     assert!(
         offered.contains(&Target::GraveyardCard(ogre_object)),
@@ -13331,7 +13331,7 @@ fn boiling_rock_rioter_exiles_with_itself_and_casts_your_exiled_allies() {
     let ty_lee = plant_in_graveyard(&mut s, 0, "Ty Lee, Chi Blocker");
     let theirs = plant_in_graveyard(&mut s, 1, "Gray Ogre");
     for (object_id, payer) in [(ty_lee, ally), (theirs, rioter)] {
-        let object = s.game().state.live(now(&s, object_id)).unwrap();
+        let object = now(&s, object_id);
         activate(&mut s, rioter, 0);
         assert!(s.choose_target(Target::GraveyardCard(object)));
         assert_eq!(
@@ -13970,7 +13970,7 @@ fn foggy_swamp_visions_copies_the_exiled_creature_cards_until_the_end_step() {
     cast(&mut s, "Foggy Swamp Visions");
     choose_mode(&mut s, 2);
     for object_id in [mine, theirs] {
-        let object = s.game().state.live(now(&s, object_id)).unwrap();
+        let object = now(&s, object_id);
         assert!(s.choose_target(Target::GraveyardCard(object)));
     }
     if s.action_space().kind == ActionSpaceKind::Waterbend {
@@ -14312,11 +14312,9 @@ fn the_rise_of_sozin_destroys_names_and_reanimates_as_fire_lord_sozin() {
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     spend_colorless(&mut s);
     assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
-    let object = s.game().state.live(now(&s, theirs_card)).unwrap();
+    let object = now(&s, theirs_card);
     assert!(
-        !offered_targets(&s).contains(&Target::GraveyardCard(
-            s.game().state.live(now(&s, mine_card)).unwrap()
-        )),
+        !offered_targets(&s).contains(&Target::GraveyardCard(now(&s, mine_card))),
         "that player's graveyard only"
     );
     assert!(s.choose_target(Target::GraveyardCard(object)));
@@ -14613,7 +14611,7 @@ fn foggy_swamp_visions_targets_exactly_x() {
         .collect();
     assert_eq!(offered, vec![0, 1, 2], "at most the two cards there are");
     choose_mode(&mut s, 2);
-    let object = s.game().state.live(now(&s, first)).unwrap();
+    let object = now(&s, first);
     assert!(s.choose_target(Target::GraveyardCard(object)));
     assert!(
         !has_action(&s, |a| matches!(a, Action::Decline { .. })),
@@ -14660,9 +14658,7 @@ fn fire_lord_sozin_payment_precedes_targets_and_caps_their_total() {
         let expensive = plant_in_graveyard(&mut s, 1, "Craw Wurm");
         let mine = plant_in_graveyard(&mut s, 0, "Gray Ogre");
         let land = plant_in_graveyard(&mut s, 1, "Forest");
-        let target = |s: &Scenario, object| {
-            Target::GraveyardCard(s.game().state.live(now(s, object)).unwrap())
-        };
+        let target = |s: &Scenario, object| Target::GraveyardCard(now(s, object));
         choose_mode(&mut s, 6);
         assert_eq!(s.action_space().kind, ActionSpaceKind::PayOrNot);
         choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
@@ -14937,9 +14933,7 @@ fn foggy_swamp_visions_waits_for_its_controllers_next_end_step() {
     let grave = plant_in_graveyard(&mut s, 0, "Gray Ogre");
     cast(&mut s, "Foggy Swamp Visions");
     choose_mode(&mut s, 1);
-    assert!(s.choose_target(Target::GraveyardCard(
-        s.game().state.live(now(&s, grave)).unwrap()
-    )));
+    assert!(s.choose_target(Target::GraveyardCard(now(&s, grave))));
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     settle(&mut s);
     let token = s.battlefield_permanents_named(0, "Gray Ogre")[0];

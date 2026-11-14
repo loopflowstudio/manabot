@@ -2804,11 +2804,10 @@ impl Game {
                     object: object_id, ..
                 },
             ) => {
-                let current = self.state.live(*object_id);
-                let choice = candidates
-                    .iter()
-                    .copied()
-                    .find(|object| Some(*object) == current && !selected.contains(object));
+                let choice = (self.state.live(*object_id).is_some()
+                    && candidates.contains(object_id)
+                    && !selected.contains(object_id))
+                .then_some(*object_id);
                 let Some(choice) = choice.filter(|_| selected.len() < *max) else {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("not an available selection candidate".into()));

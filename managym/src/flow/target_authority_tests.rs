@@ -131,7 +131,7 @@ fn cr_400_zone_event_keeps_its_departure_after_a_later_death() {
         unreachable!()
     };
     let object = game.state.permanents[first].as_ref().unwrap().object;
-    let original = game.state.live(game.state.now(object)).unwrap();
+    let original = game.state.now(object);
     let object = game.move_object(object, ZoneType::Graveyard);
     let event = game.state.events.iter().last().unwrap().clone();
     let GameEvent::CardMoved {
@@ -267,8 +267,8 @@ fn player_and_graveyard_targets_preserve_scope_and_order() {
     assert_eq!(
         game.legal_targets_for_spec(&spec, PlayerId(1)),
         vec![
-            Target::GraveyardCard(game.state.live(game.state.now(bolt)).unwrap()),
-            Target::GraveyardCard(game.state.live(game.state.now(ogre)).unwrap()),
+            Target::GraveyardCard(game.state.now(bolt)),
+            Target::GraveyardCard(game.state.now(ogre)),
         ]
     );
     assert_eq!(
@@ -278,9 +278,7 @@ fn player_and_graveyard_targets_preserve_scope_and_order() {
             },
             PlayerId(1)
         ),
-        vec![Target::GraveyardCard(
-            game.state.live(game.state.now(ogre)).unwrap()
-        )]
+        vec![Target::GraveyardCard(game.state.now(ogre))]
     );
 }
 
@@ -345,7 +343,7 @@ fn departed_only_target_prevents_even_untargeted_gain_life() {
 #[test]
 fn recast_spell_resolves_before_the_old_targeted_ability() {
     let (mut game, source, ogre, _, _) = fixture();
-    let original = game.state.live(game.state.now(ogre)).unwrap();
+    let original = game.state.now(ogre);
     game.state.pending_triggers.push(trigger(
         source,
         vec![
@@ -363,7 +361,7 @@ fn recast_spell_resolves_before_the_old_targeted_ability() {
     assert!(game.flush_triggers().is_none());
     let ogre = game.move_object(ogre, ZoneType::Hand);
     game.push_spell_to_stack(ogre, PlayerId(1), vec![], vec![], Default::default());
-    assert_ne!(game.state.live(game.state.now(ogre)).unwrap(), original);
+    assert_ne!(game.state.now(ogre), original);
 
     // CR 405.2 / 608.2b: the recast object is above the older ability, so
     // resolves first. ObjectId-only targets remain an identity limitation;
@@ -633,7 +631,7 @@ fn spell_or_permanent_target_does_not_follow_a_reentered_card() {
             .scenario_force_battlefield(owner, "Gray Ogre", true)
             .unwrap();
         let object = game.state.permanents[id].as_ref().unwrap().object;
-        let before = game.state.live(game.state.now(object)).unwrap();
+        let before = game.state.now(object);
         let spec = TargetSpec::SpellOrPermanent { min_mana_value: 3 };
         let mut pending = trigger(
             source,
@@ -652,7 +650,7 @@ fn spell_or_permanent_target_does_not_follow_a_reentered_card() {
         let object = game.move_object(object, ZoneType::Hand);
         let object = game.move_object(object, ZoneType::Battlefield);
         let replacement = game.state.permanent_of(game.state.now(object)).unwrap();
-        assert_ne!(game.state.live(game.state.now(object)).unwrap(), before);
+        assert_ne!(game.state.now(object), before);
         assert_ne!(replacement, id);
         assert!(!game.target_is_legal(Target::Permanent(id), &spec, controller));
         assert!(game.target_is_legal(Target::Permanent(replacement), &spec, controller));

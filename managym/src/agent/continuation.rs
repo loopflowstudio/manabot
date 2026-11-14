@@ -1242,8 +1242,7 @@ mod tests {
             .visible_reference(reference, PlayerId(0))
             .object
             .is_some());
-        let object_id = reference;
-        let object_id = game.move_object(object_id, ZoneType::Hand);
+        let object_id = game.move_object(reference, ZoneType::Hand);
         assert!(game
             .visible_reference(reference, PlayerId(0))
             .object

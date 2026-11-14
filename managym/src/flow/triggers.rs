@@ -1365,8 +1365,8 @@ impl Game {
     ) -> &mut PendingTrigger {
         let source_lki = source_ref.and_then(|source| {
             self.object_lki(source).cloned().or_else(|| {
-                (self.state.live(source_object) == Some(source))
-                    .then(|| self.snapshot_current_permanent(source_object))
+                (source == source_object && self.state.live(source).is_some())
+                    .then(|| self.snapshot_current_permanent(source))
                     .flatten()
             })
         });

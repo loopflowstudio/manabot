@@ -494,7 +494,7 @@ fn resolution_does_not_follow_departed_permanent_or_graveyard_incarnation() {
                 .unwrap()
                 .0;
             let object_id = game.move_object(object_id, ZoneType::Graveyard);
-            let original = game.state.live(game.state.now(object_id)).unwrap();
+            let original = game.state.now(object_id);
             let spec = TargetSpec::GraveyardCardYouOwn {
                 predicate: CardPredicate::default(),
             };
@@ -996,7 +996,7 @@ fn delayed_capture_projects_only_viewer_visible_incarnations() {
         vec![0],
     );
     game.resolve_top_of_stack();
-    let captured = game.state.live(game.state.now(object_id)).unwrap();
+    let captured = game.state.now(object_id);
     assert_eq!(
         game.state.delayed_triggers[0].remembered[0].object,
         captured
@@ -2712,7 +2712,7 @@ fn retained_batch_linked_entry_suspends_actual_mana_cost_completion() {
         intervening_if: None,
     }];
     let returned = exiled_counter_entry(&mut game, player);
-    let returned_ref = game.state.live(game.state.now(returned)).unwrap();
+    let returned_ref = game.state.now(returned);
     game.state.exile_links.push(ExileLink {
         source: source_ref,
         exiled_object: returned_ref,
@@ -2832,7 +2832,7 @@ fn retained_batch_state_based_departure_retains_linked_entry_and_lki() {
     let source_object = game.state.permanents[source].as_ref().unwrap().object;
     let source_ref = game.permanent_object(source).unwrap();
     let returned = exiled_counter_entry(&mut game, player);
-    let returned_ref = game.state.live(game.state.now(returned)).unwrap();
+    let returned_ref = game.state.now(returned);
     game.state.exile_links.push(ExileLink {
         source: source_ref,
         exiled_object: returned_ref,
@@ -3251,7 +3251,7 @@ fn hidden_selection_merchant_bottoms_source_before_linked_return_and_shuffles_af
     let source_ref = game.permanent_object(merchant).unwrap();
     counter_replacement_drivers(&mut game, player);
     let returned = exiled_counter_entry(&mut game, player);
-    let returned_ref = game.state.live(game.state.now(returned)).unwrap();
+    let returned_ref = game.state.now(returned);
     // The real Merchant program is the consumer; this constructed link isolates
     // a source departure whose consequent entry asks a replacement question.
     game.state.exile_links.push(ExileLink {

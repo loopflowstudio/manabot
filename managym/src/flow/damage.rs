@@ -203,11 +203,10 @@ impl Game {
         if let Some(lki) = self.object_lki(source) {
             return Some(lki.keywords);
         }
-        let object = source;
-        if let Some(controller) = self.stack_spell_controller(object) {
-            return Some(self.spell_keywords(object, controller));
+        if let Some(controller) = self.stack_spell_controller(source) {
+            return Some(self.spell_keywords(source, controller));
         }
-        Some(self.state.source_base(object).1.keywords)
+        Some(self.state.source_base(source).1.keywords)
     }
 
     fn source_controller(&self, source: ObjectId) -> Option<PlayerId> {
@@ -219,10 +218,9 @@ impl Game {
         if let Some(lki) = self.object_lki(source) {
             return Some(lki.controller);
         }
-        let object = source;
         self.state
             .objects
-            .provenance(object)
+            .provenance(source)
             .map(|(_, owner, _)| owner)
     }
 

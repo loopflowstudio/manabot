@@ -975,13 +975,13 @@ impl Game {
                 ..
             } => {
                 *amount > 0
-                    && source.is_none_or(|object_ref| self.object_ref_is_known(object_ref))
+                    && source.is_none_or(|source| self.damage_source_is_known(source))
                     && match target {
                         ProposedDamageTarget::Player(player) => {
                             self.state.players.get(player.0).is_some()
                         }
-                        ProposedDamageTarget::Object(object_ref) => {
-                            self.lookup_current_permanent(*object_ref).is_ok()
+                        ProposedDamageTarget::Object(object) => {
+                            self.lookup_current_permanent(*object).is_ok()
                         }
                     }
             }
@@ -1018,14 +1018,14 @@ impl Game {
     /// information, or an earlier incarnation of a real card: a resolved
     /// spell is the source of the delayed triggers it created (CR 603.7d)
     /// though no battlefield record of it exists.
-    fn object_ref_is_known(&self, object_ref: ObjectId) -> bool {
-        self.state.live(object_ref).is_some()
-            || self.object_lki(object_ref).is_some()
+    fn damage_source_is_known(&self, source: ObjectId) -> bool {
+        self.state.live(source).is_some()
+            || self.object_lki(source).is_some()
             || self
                 .state
                 .zones
-                .generation(object_ref.slot())
-                .is_some_and(|current| object_ref.generation() < current)
+                .generation(source.slot())
+                .is_some_and(|current| source.generation() < current)
     }
 
     fn collect_replacements(&self, event: &ProposedEvent) -> Vec<ReplacementCandidate> {
@@ -1288,9 +1288,8 @@ impl Game {
         if let Ok(id) = self.lookup_current_permanent(source) {
             return self.state.permanents[id].as_ref().map(|p| p.controller);
         }
-        let object = source;
-        if self.state.live(object) == Some(source) {
-            if let Some(controller) = self.stack_spell_controller(object) {
+        if self.state.live(source).is_some() {
+            if let Some(controller) = self.stack_spell_controller(source) {
                 return Some(controller);
             }
         }

@@ -22,7 +22,7 @@ use crate::{
 
 impl Game {
     fn decision_object(&self, object: ObjectId) -> Option<DecisionObjectView> {
-        let reference = self.state.live(object)?;
+        self.state.live(object)?;
         let display_id = self
             .state
             .object_to_permanent
@@ -30,17 +30,16 @@ impl Game {
             .and_then(|permanent| *permanent)
             .and_then(|permanent| self.state.permanents[permanent].as_ref())
             .map_or(self.state[object].id.0, |permanent| permanent.id.0);
-        let object = &self.state[object];
         Some(DecisionObjectView {
-            entity_id: reference.slot() as u32,
+            entity_id: object.slot() as u32,
             subject: SubjectRef::Object {
                 id: ObjectRenderId {
                     entity: display_id,
-                    incarnation: reference.generation(),
+                    incarnation: object.generation(),
                 },
             },
             display_id,
-            label: object.name.clone(),
+            label: self.state[object].name.clone(),
         })
     }
 
