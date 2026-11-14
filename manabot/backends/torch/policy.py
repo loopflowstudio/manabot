@@ -858,15 +858,16 @@ class ActorCritic(nn.Module):
         """
         assert self.stack_source is not None
         start = (
-            2
-            + 2 * obs["agent_cards"].shape[1]
-            + 2 * obs["agent_permanents"].shape[1]
+            2 + 2 * obs["agent_cards"].shape[1] + 2 * obs["agent_permanents"].shape[1]
         )
         sources = obs["stack"][..., STACK_SOURCE_INDEX]
         rows = sources.shape[1]
         linked = (sources > 0).unsqueeze(-1)
-        targets = (sources.long() - 1).clamp_min(0).unsqueeze(-1).expand(
-            -1, -1, objects.shape[2]
+        targets = (
+            (sources.long() - 1)
+            .clamp_min(0)
+            .unsqueeze(-1)
+            .expand(-1, -1, objects.shape[2])
         )
         delta = self.stack_source(objects.gather(1, targets)).masked_fill(~linked, 0)
         return torch.cat(

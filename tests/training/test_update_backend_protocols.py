@@ -20,7 +20,12 @@ from manabot.backends.parity import BACKENDS, backend_module, installed_backends
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
-from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.infra.config import (
+    MatchConfig,
+    ModelConfig,
+    ObservationConfig,
+    RewardConfig,
+)
 from manabot.policy.checkpoint import PolicyCheckpoint, from_torch_state
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
 from manabot.training.updates.backend import (
@@ -120,7 +125,9 @@ def _violations(value: object, protocol: type, path: str) -> list[str]:
 @pytest.fixture(scope="module")
 def captured() -> tuple[PolicyCheckpoint, RolloutBatch]:
     torch.manual_seed(3)
-    space = ObservationSpace()
+    # The framework backends implement input v9 only.
+    with pytest.warns(DeprecationWarning):
+        space = ObservationSpace(ObservationConfig(policy_input_version=9))
     agent = ActorCritic(
         space,
         ModelConfig(

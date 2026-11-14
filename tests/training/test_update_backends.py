@@ -34,7 +34,12 @@ from manabot.backends.parity import (
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import PERMANENT_ATTACHED_INDEX, ObservationSpace
-from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.infra.config import (
+    MatchConfig,
+    ModelConfig,
+    ObservationConfig,
+    RewardConfig,
+)
 from manabot.policy.checkpoint import (
     PolicyCheckpoint,
     canonical_parameters,
@@ -69,7 +74,9 @@ _POLICY_TERMS = ("entropy", "collection_kl", "reference_kl", "advantage_abs_mean
 def captured() -> tuple[PolicyCheckpoint, RolloutBatch]:
     """Initial weights in the shared container and one batch collected with them."""
     torch.manual_seed(7)
-    space = ObservationSpace()
+    # The framework backends implement input v9 only.
+    with pytest.warns(DeprecationWarning):
+        space = ObservationSpace(ObservationConfig(policy_input_version=9))
     agent = ActorCritic(
         space,
         ModelConfig(

@@ -273,9 +273,7 @@ class VectorEnv:
         if config.potential_creature_weight != 0.0:
             phi += config.potential_creature_weight * (
                 self._battlefield_card_count(agent_cards, self._creature_index)
-                - self._battlefield_card_count(
-                    opponent_cards, self._creature_index
-                )
+                - self._battlefield_card_count(opponent_cards, self._creature_index)
             )
         if config.potential_life_weight != 0.0:
             phi += config.potential_life_weight * (

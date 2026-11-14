@@ -28,6 +28,9 @@ PolicyInputVersion = Literal[9, 10, 11]
 POLICY_INPUT_VERSION: PolicyInputVersion = 11
 SUPPORTED_POLICY_INPUTS: tuple[PolicyInputVersion, ...] = (9, 10, 11)
 DEPRECATED_POLICY_INPUTS: tuple[PolicyInputVersion, ...] = (9, 10)
+# What a saved regime's observation settings mean when they omit the version:
+# the fresh default when they were written.
+SAVED_POLICY_INPUT_VERSION: PolicyInputVersion = 9
 # The last revision whose encoders, bindings and model accept inputs v1-v8.
 LAST_MULTI_INPUT_REVISION = "ac601834d"
 # How the critic summarizes the final object board; see ActorCritic._value_from_objects.

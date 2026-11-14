@@ -96,7 +96,9 @@ def require_single_axis(baseline: TrainingRegime, candidate: TrainingRegime) -> 
         dump.pop("id")
         dump["observation"].pop("policy_input_version")
     if left != right:
-        raise ValueError("layout arm changes more than observation.policy_input_version")
+        raise ValueError(
+            "layout arm changes more than observation.policy_input_version"
+        )
 
 
 def runs(
@@ -201,7 +203,9 @@ def report() -> Report:
         clock="updates",
         baseline=regime_id(ARMS[0]),
         evals=(
-            Curve(title="Score against the heuristic", matches=Matches(tag="heuristic")),
+            Curve(
+                title="Score against the heuristic", matches=Matches(tag="heuristic")
+            ),
             Ranking(
                 title="Head-to-head at matched updates, by seat",
                 by="on_play",

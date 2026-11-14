@@ -129,9 +129,7 @@ class BucketSizes:
 
     @property
     def trims_objects(self) -> bool:
-        return any(
-            self.sizes[axis] < self.capacities[axis] for axis in OBJECT_AXES
-        )
+        return any(self.sizes[axis] < self.capacities[axis] for axis in OBJECT_AXES)
 
 
 def _capacities(encoder: ObservationEncoder) -> dict[str, int]:
@@ -220,9 +218,7 @@ def _object_references(obs: Mapping[str, np.ndarray]) -> list[np.ndarray]:
     """Every object reference in zero-based full object coordinates."""
     references = [obs["action_focus"].astype(np.float32)]
     references.extend(
-        obs[key][..., column] - 1
-        for key, column in ONE_BASED_REFERENCES
-        if key in obs
+        obs[key][..., column] - 1 for key, column in ONE_BASED_REFERENCES if key in obs
     )
     if has_history_events(obs):
         references.extend(

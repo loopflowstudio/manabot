@@ -405,7 +405,8 @@ class ObservationEncoder:
                 perm.card is None
                 for perm in (*obs.agent_permanents, *obs.opponent_permanents)
             ) or any(
-                (item.kind == managym.StackObjectKindEnum.SPELL) != (item.card is not None)
+                (item.kind == managym.StackObjectKindEnum.SPELL)
+                != (item.card is not None)
                 for item in obs.stack_objects
             ):
                 raise ValueError(
@@ -424,7 +425,11 @@ class ObservationEncoder:
                 len(obs.opponent_permanents),
                 self.perms_per_player,
             ),
-            ("stack", len(obs.stack_objects) if self.one_token else 0, self.max_stack_objects),
+            (
+                "stack",
+                len(obs.stack_objects) if self.one_token else 0,
+                self.max_stack_objects,
+            ),
         ):
             if size > capacity:
                 raise ValueError(
@@ -544,17 +549,25 @@ class ObservationEncoder:
             # A battlefield object or a spell is one token: its card id names
             # its permanent or stack row.
             start = 2 + 2 * self.cards_per_player
-            for side, perms in enumerate((obs.agent_permanents, obs.opponent_permanents)):
+            for side, perms in enumerate(
+                (obs.agent_permanents, obs.opponent_permanents)
+            ):
                 for slot, perm in enumerate(perms):
                     self.object_to_index[perm.card.id] = (
                         start + side * self.perms_per_player + slot
                     )
-            out["stack"] = np.zeros((self.max_stack_objects, STACK_DIM), dtype=np.float32)
+            out["stack"] = np.zeros(
+                (self.max_stack_objects, STACK_DIM), dtype=np.float32
+            )
             for slot, item in enumerate(obs.stack_objects):
                 out["stack"][slot] = self._encode_stack_features(item, obs.agent.id)
-                self.object_to_index[item.stack_object_id] = self.current_object_index + slot
+                self.object_to_index[item.stack_object_id] = (
+                    self.current_object_index + slot
+                )
                 if item.card is not None:
-                    self.object_to_index[item.card.id] = self.current_object_index + slot
+                    self.object_to_index[item.card.id] = (
+                        self.current_object_index + slot
+                    )
             self.current_object_index += self.max_stack_objects
         # Hosts may be listed after their attachments, so links follow indexing.
         ranks = _timestamp_ranks(obs)
@@ -1140,14 +1153,18 @@ class ObservationEncoder:
         arr[-1] = 1.0
         return arr
 
-    def _encode_stack_features(self, item: managym.StackObject, viewer: int) -> np.ndarray:
+    def _encode_stack_features(
+        self, item: managym.StackObject, viewer: int
+    ) -> np.ndarray:
         """One input v11 stack row (native `encode_stack_features`)."""
         arr = np.zeros(STACK_DIM, dtype=np.float32)
         arr[STACK_IS_MINE_INDEX] = float(item.controller_id == viewer)
         arr[STACK_KIND_INDEX + int(item.kind)] = 1.0
         card = item.card
         # A spell's definition is its card's; an ability's is its source's.
-        definition = item.source_card_registry_key if card is None else card.registry_key
+        definition = (
+            item.source_card_registry_key if card is None else card.registry_key
+        )
         arr[STACK_DEFINITION_INDEX] = definition + 1
         if item.ability_index is not None:
             arr[STACK_ABILITY_INDEX] = item.ability_index + 1
