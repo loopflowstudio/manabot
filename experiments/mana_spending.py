@@ -309,6 +309,21 @@ class ShapeCounts:
     non_redundant_identity_outcomes: int
     work: int
     cap_hit: bool
+    # Follow-up probe (the `stakes` summary). None in rows written before it.
+    followups: int | None = None
+    automatic_known: bool = False
+    automatic_redundant: bool = False
+    automatic_affordable: int = 0
+    best_affordable: int = 0
+    stranded: bool = False
+    stranded_instant: bool = False
+    maximal_affordable_sets: int = 0
+    maximal_instant_sets: int = 0
+    # Hand cards among the follow-ups. None in rows written before battlefield
+    # abilities were probed, whose follow-ups are all hand cards.
+    hand_followups: int | None = None
+    stranded_hand: bool | None = None
+    maximal_hand_sets: int | None = None
 
 
 @dataclass(frozen=True)
@@ -669,9 +684,119 @@ def summarize_shapes(source: Path, *, all_payments: bool = False) -> None:
     (source / filename).write_text(json.dumps(summaries, indent=2) + "\n")
 
 
+def _stakes(
+    payments: list[ShapeCounts], games: int, *, hand_only: bool
+) -> dict[str, object]:
+    """One follow-up definition's counts over `payments`.
+
+    Rows written before abilities were probed hold hand cards only, so both
+    definitions read their original fields.
+    """
+
+    def followups(p: ShapeCounts) -> int:
+        if hand_only and p.hand_followups is not None:
+            return p.hand_followups
+        return p.followups or 0
+
+    def is_stranded(p: ShapeCounts) -> bool:
+        if hand_only and p.stranded_hand is not None:
+            return p.stranded_hand
+        return p.stranded
+
+    def maximal(p: ShapeCounts) -> int:
+        if hand_only and p.maximal_hand_sets is not None:
+            return p.maximal_hand_sets
+        return p.maximal_affordable_sets
+
+    probed = [p for p in payments if p.automatic_known and followups(p)]
+    stranded = [p for p in probed if is_stranded(p)]
+    trade_off = sum(maximal(p) > 1 for p in probed)
+    return {
+        "with_followups": sum(bool(followups(p)) for p in payments),
+        "probed": len(probed),
+        "automatic_unknown": sum(
+            bool(followups(p)) and not p.automatic_known for p in payments
+        ),
+        "stranded": len(stranded),
+        "stranded_without_redundant_tap": sum(
+            not p.automatic_redundant for p in stranded
+        ),
+        "stranded_instant": sum(p.stranded_instant for p in probed),
+        "trade_off": trade_off,
+        "trade_off_instant": sum(p.maximal_instant_sets > 1 for p in probed),
+        "stranded_per_game": len(stranded) / games,
+        "trade_off_per_game": trade_off / games,
+    }
+
+
+def summarize_stakes(source: Path) -> None:
+    """Whether the automatic source choice costs the payer a follow-up.
+
+    A follow-up is another castable card in the payer's hand or a non-mana
+    activated ability with a mana cost on a permanent the payer controls; it
+    is affordable after a payment when its mana cost alone is payable from
+    what the payment leaves. Reads only rows whose automatic source set was
+    reached before the cap. `stranded` payments have a non-redundant
+    alternative that affords a follow-up the automatic set does not;
+    `trade-off` payments have no alternative that affords everything another
+    does. Each group is reported for every follow-up and for hand cards alone,
+    the definition of rows written before abilities were probed.
+    """
+    groups: dict[tuple[str, str], list[ShapeGame]] = defaultdict(list)
+    adapter = TypeAdapter(ShapeGame)
+    for line in (source / "shapes.jsonl").read_text().splitlines():
+        game = adapter.validate_json(line)
+        groups[game.deck_set, game.policy].append(game)
+    summaries: list[dict[str, object]] = []
+    for (deck_set, policy), games in groups.items():
+        payments = [p for g in games for p in g.payments if p.cost > 0]
+        if any(p.followups is None for p in payments):
+            raise SystemExit(f"{source}/shapes.jsonl has no follow-up probe; rerun shapes")
+        summaries.append(
+            {
+                "deck_set": deck_set,
+                "policy": policy,
+                "games": len(games),
+                "payments": len(payments),
+                "abilities_probed": any(p.hand_followups is not None for p in payments),
+                "over_tapped": sum(
+                    p.automatic_known and p.automatic_redundant for p in payments
+                ),
+                **_stakes(payments, len(games), hand_only=False),
+                "hand": _stakes(payments, len(games), hand_only=True),
+            }
+        )
+    (source / "stakes-summary.json").write_text(
+        json.dumps({"groups": summaries}, indent=2, sort_keys=True) + "\n"
+    )
+    for title, hand_only in (
+        ("hand cards and battlefield abilities", False),
+        ("hand cards only", True),
+    ):
+        print(f"follow-ups: {title}")
+        print(
+            "decks      policy     probed  stranded (no redundant tap)  instant"
+            "  trade-off  instant  stranded/game  trade-off/game"
+        )
+        for summary in summaries:
+            row = cast(dict[str, object], summary["hand"]) if hand_only else summary
+            probed_count = cast(int, row["probed"])
+            print(
+                f"{summary['deck_set']:<10} {summary['policy']:<10} {probed_count:>6}"
+                f"  {_ratio(cast(int, row['stranded']), probed_count):>7.2%}"
+                f" ({_ratio(cast(int, row['stranded_without_redundant_tap']), probed_count):.2%})"
+                f"  {_ratio(cast(int, row['stranded_instant']), probed_count):>14.2%}"
+                f"  {_ratio(cast(int, row['trade_off']), probed_count):>9.2%}"
+                f"  {_ratio(cast(int, row['trade_off_instant']), probed_count):>7.2%}"
+                f"  {row['stranded_per_game']:>13.2f}  {row['trade_off_per_game']:>14.2f}"
+            )
+    if not all(summary["abilities_probed"] for summary in summaries):
+        print("rows predate the ability probe: both tables count hand cards only")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["count", "shapes", "summary"])
+    parser.add_argument("command", choices=["count", "shapes", "summary", "stakes"])
     parser.add_argument(
         "--games", type=int, default=8, help="games per deck and policy"
     )
@@ -694,6 +819,9 @@ def main() -> None:
         help="summary: add noncast/all-payment costs in all-payments-summary.json",
     )
     args = parser.parse_args()
+    if args.command == "stakes":
+        summarize_stakes(args.source)
+        return
     if args.command == "summary":
         summarize_shapes(args.source, all_payments=args.all_payments)
         return

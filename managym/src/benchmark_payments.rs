@@ -63,3 +63,68 @@ pub(crate) fn call() {
 pub(crate) fn state() {
     METRICS.with(|m| m.borrow_mut().0.states += 1);
 }
+
+/// MTG-347's smart source choice (`flow/mana/tap_choice.rs`), process-wide:
+/// how many payments ended at each stage, what they read and the wall time
+/// of each phase. Timing is only taken under this feature.
+#[derive(Clone, Default, serde::Serialize)]
+pub struct SmartTapMetrics {
+    pub payments: u64,
+    /// Ended after pruning: saved obligations.
+    pub tail: u64,
+    /// Ended after pruning: nothing tapped, or no source to tap instead.
+    pub no_replacement: u64,
+    /// Read the follow-ups and found none.
+    pub no_followups: u64,
+    /// The kind-preferred payment, or the pruned witness when none is less
+    /// reluctant, keeps every follow-up any payment could.
+    pub witness_at_bound: u64,
+    /// Ran the class search; `exhausted` of them spent its whole budget.
+    pub class_search: u64,
+    pub exhausted: u64,
+    /// Read the source kinds and found a payment less reluctant than the
+    /// pruned witness.
+    pub kind_preferred: u64,
+    pub changed: u64,
+    pub followup_reads: u64,
+    pub followups: u64,
+    pub checks: u64,
+    pub searches: u64,
+    pub prune_ns: u64,
+    pub kinds_ns: u64,
+    pub followups_ns: u64,
+    pub score_ns: u64,
+    pub search_ns: u64,
+    /// The whole switch-on block of `produce_mana`, the phases included.
+    pub total_ns: u64,
+}
+
+static SMART: std::sync::Mutex<Option<SmartTapMetrics>> = std::sync::Mutex::new(None);
+
+pub fn reset_smart_tap() {
+    *SMART.lock().unwrap() = None;
+}
+
+pub fn smart_tap() -> SmartTapMetrics {
+    SMART.lock().unwrap().clone().unwrap_or_default()
+}
+
+pub(crate) fn record_smart_tap(update: impl FnOnce(&mut SmartTapMetrics)) {
+    update(SMART.lock().unwrap().get_or_insert_with(Default::default));
+}
+
+/// Wall time since the previous lap, added to one phase.
+pub(crate) struct SmartTapClock(std::time::Instant);
+
+impl SmartTapClock {
+    pub(crate) fn start() -> Self {
+        Self(std::time::Instant::now())
+    }
+
+    pub(crate) fn lap(&mut self, phase: impl FnOnce(&mut SmartTapMetrics) -> &mut u64) {
+        let now = std::time::Instant::now();
+        let spent = now.duration_since(self.0).as_nanos() as u64;
+        self.0 = now;
+        record_smart_tap(|metrics| *phase(metrics) += spent);
+    }
+}

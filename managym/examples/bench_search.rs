@@ -35,6 +35,8 @@ fn main() {
         managym::benchmark_layers::reset();
         #[cfg(feature = "benchmark")]
         managym::benchmark_payments::reset();
+        #[cfg(feature = "benchmark")]
+        managym::benchmark_payments::reset_smart_tap();
         let mut env = Env::new(seed, true, false, false);
         env.reset(curated::players()).unwrap();
         if layers {
@@ -86,7 +88,7 @@ fn main() {
         #[cfg(feature = "benchmark")]
         println!(
             "{}",
-            serde_json::json!({"attribution_seed":seed, "layer_metrics":managym::benchmark_layers::snapshot(), "payment_metrics":managym::benchmark_payments::snapshot()})
+            serde_json::json!({"attribution_seed":seed, "layer_metrics":managym::benchmark_layers::snapshot(), "payment_metrics":managym::benchmark_payments::snapshot(), "smart_tap":managym::benchmark_payments::smart_tap()})
         );
     }
     println!("{{\"worst_overall_s\":{worst_overall:.3},\"total_overall_s\":{total_overall:.3}}}");
