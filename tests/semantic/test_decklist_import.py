@@ -25,6 +25,7 @@ from manabot.infra.config import (
 )
 from manabot.model.world import validate_agent_setup
 from manabot.sim.player import ModelPlayer
+from manabot.sim import sim
 from manabot.sim.sim import load_player, simulate_models
 import managym
 from managym import DeckImport, DeckImportError, Decklist
@@ -106,7 +107,7 @@ def test_sim_cli_preserves_overrides_with_optional_deck_files(
     def capture(config: SimulationConfig, runtime: RuntimeConfig) -> None:
         configs.append(config)
 
-    monkeypatch.setattr(cli, "run_simulation", capture)
+    monkeypatch.setattr(sim, "run_simulation", capture)
     args = ["sim", "--set", "sim.max_steps=4", "--set", "sim.hero=random"]
     if with_files:
         hero, villain = tmp_path / "hero.txt", tmp_path / "villain.txt"

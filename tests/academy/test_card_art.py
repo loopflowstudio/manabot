@@ -47,12 +47,12 @@ def test_art_miss_hit_full_and_credits_are_scoped(
         art.fetch = _fetch
         assert client.get(f"/api/card-art/full/{slug}.jpg").content == JPEG
         assert client.get("/api/card-art/back.jpg").content == JPEG
-        assert client.get("/api/card-art/art/unknown.jpg").status_code == 404
+        assert client.get("/api/card-art/art/unknown.jpg").status_code == 204
         assert (
             client.get("/api/card-art/art/aang-and-la-ocean-s-fury.jpg").status_code
-            == 404
+            == 204
         )
-        assert client.get("/api/card-art/art/zeppelin.jpg").status_code == 404
+        assert client.get("/api/card-art/art/zeppelin.jpg").status_code == 204
 
 
 def test_failure_is_memoized_and_off_switch_never_fetches(tmp_path: Path) -> None:

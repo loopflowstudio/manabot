@@ -3139,7 +3139,7 @@ def card_art_credits(names: list[str] = Query(default=[])) -> Response:
 
 def _art_response(path: Path | None) -> Response:
     if path is None:
-        return Response(status_code=404, headers={"Cache-Control": "no-store"})
+        return Response(status_code=204, headers={"Cache-Control": "no-store"})
     return FileResponse(
         path,
         media_type="image/jpeg",
