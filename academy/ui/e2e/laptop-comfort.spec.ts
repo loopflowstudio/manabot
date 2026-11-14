@@ -248,11 +248,14 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 800
           const box = (selector: string): DOMRect => document.querySelector(selector)!.getBoundingClientRect();
           return { status: box('[data-testid="current-decision"]').toJSON(),
             decision: box('[data-testid="decision-surface"]').toJSON(),
+            controls: box('.decision-controls').toJSON(), choices: box('.offer-list').toJSON(),
             automation: box('[data-testid="automation-status"]').toJSON(),
             secondary: box('.secondary-panels').toJSON(),
             rail: box('#table-choices').toJSON(), board: box('#table-board').toJSON() };
         });
         expect(boxes.status.bottom).toBeLessThanOrEqual(boxes.decision.top);
+        expect(boxes.controls.bottom).toBeLessThanOrEqual(boxes.choices.top);
+        expect(boxes.choices.bottom).toBeLessThanOrEqual(boxes.decision.bottom);
         expect(boxes.decision.bottom).toBeLessThanOrEqual(boxes.automation.top);
         expect(boxes.automation.bottom).toBeLessThanOrEqual(boxes.secondary.top);
         expect(boxes.secondary.bottom).toBeLessThanOrEqual(boxes.rail.bottom);
@@ -529,6 +532,16 @@ for (const width of [1440, 1280]) {
     expect(commands).toHaveLength(0);
     await card.focus();
     await card.press('Enter');
+    await page.getByText('History and settings', { exact: true }).click();
+    await page.getByTestId('presentation-history').locator('summary').click();
+    const regions = await page.evaluate(() => {
+      const box = (selector: string): DOMRect => document.querySelector(selector)!.getBoundingClientRect();
+      return { controls: box('.decision-controls').toJSON(), choices: box('.offer-list').toJSON(),
+        automation: box('[data-testid="automation-status"]').toJSON() };
+    });
+    expect(regions.controls.bottom).toBeLessThanOrEqual(regions.choices.top);
+    expect(regions.choices.height).toBeGreaterThanOrEqual(64);
+    expect(regions.choices.bottom).toBeLessThanOrEqual(regions.automation.top);
     await page.screenshot({ path: info.outputPath('selected-play.png') });
     await expectInsideViewport(page.getByRole('region', { name: 'You hand', exact: true }));
     await page.getByTestId('action-option').first().press('Enter');

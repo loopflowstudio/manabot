@@ -98,14 +98,13 @@ for (const [seed, width, height, motion] of [
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
     await page.getByTestId('opponent-select').selectOption(seed === 0 ? 'random' : 'search-64');
     await page.getByRole('button', { name: 'New Game', exact: true }).click();
-    const play = page.getByRole('button', { name: 'Play', exact: true });
-    if (await play.count()) await play.click();
+    await page.getByRole('button', { name: 'Play', exact: true }).click();
     for (let input = 0; input < 30; input += 1) {
       await expect.poll(async () => await page.getByTestId('action-option').count() > 0 || await page.getByTestId('learn-mode').count() > 0 || await page.getByTestId('game-result').isVisible()).toBe(true);
       if (await page.getByTestId('game-result').isVisible()) break;
       const actions = page.getByTestId('action-option');
       if (await actions.count() === 0) { await page.getByTestId('learn-mode').first().click(); continue; }
-      if (input === 15 && await play.count()) await page.getByRole('button', { name: 'Inspect', exact: true }).click();
+      if (input === 15) await page.getByRole('button', { name: 'Inspect', exact: true }).click();
       const labels = await actions.allTextContents();
       let pick = labels.findIndex(label => /Play (Island|Mountain)|Cast /.test(label));
       if (pick < 0) pick = input % labels.length;

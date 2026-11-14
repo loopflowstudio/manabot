@@ -195,18 +195,19 @@
   const pilotCanAct = $derived(gameStore.hasCapability('submit_live_command'));
   const participantStudying = $derived(gameStore.restoredDecision !== null);
   const tablePresentation = $derived(participantStudying ? studyPresentationPlayer : presentationPlayer);
-  const canPassTurn = $derived(
-    gameActive && offers.length > 0 && pilotCanAct && !participantStudying && stopsPending === null && !gameStore.commandPending && gameStore.connection === 'connected',
-  );
+  const inputReady = $derived(!gameStore.commandPending && stopsPending === null && gameStore.connection === 'connected');
+  // Both table modes submit through the same live authority gate. Play only
+  // adds selection and gestures; Study retains its separate retry capability.
+  const canSubmitLive = $derived(gameActive && pilotCanAct && !participantStudying
+    && !gameStore.branchProjection && !gameStore.newGamePending && inputReady);
+  const canPassTurn = $derived(canSubmitLive && offers.length > 0);
   const boardObservation = $derived(
     gameStore.branchProjection
       ?? gameStore.restoredDecision?.frame.projection
       ?? gameStore.observation,
   );
 
-  const liveInput = $derived(tableMode === 'play' && gameActive && pilotCanAct && !participantStudying
-    && !gameStore.branchProjection && !gameStore.commandPending && !gameStore.newGamePending
-    && stopsPending === null && gameStore.connection === 'connected');
+  const liveInput = $derived(tableMode === 'play' && canSubmitLive);
   const draggingOffer = $derived(drag && tableFrame ? dragOffer(drag.selection, tableFrame) : null);
 
   $effect(() => {
@@ -241,11 +242,6 @@
     tableMode = mode;
     saveTableMode(mode);
   }
-  function commitSelection(offerId: number, bound: PlaySelection | null = selection): void {
-    if (!liveInput || !bound || !selectionMatches(bound, gameStore.protocolFrame)) return;
-    const offer = selectedOffers(bound, gameStore.protocolFrame).find(offer => offer.id === offerId);
-    if (offer) handleActionSelect(offer);
-  }
   function suppressDragClick(event: MouseEvent): void {
     if (suppressClick && event.detail > 0) {
       event.preventDefault();
@@ -272,10 +268,10 @@
     const pending = drag;
     if (!pending || pending.pointer !== event.pointerId) return;
     const drop = document.querySelector('[data-testid="play-drop-area"]')?.getBoundingClientRect();
-    const offer = tableFrame ? dragOffer(pending.selection, tableFrame) : null;
+    const offer = liveInput && tableFrame ? dragOffer(pending.selection, tableFrame) : null;
     if (pending.moved) {
       suppressClick = true;
-      if (drop && event.clientX >= drop.left && event.clientX <= drop.right && event.clientY >= drop.top && event.clientY <= drop.bottom && offer) commitSelection(offer.id, pending.selection);
+      if (drop && event.clientX >= drop.left && event.clientX <= drop.right && event.clientY >= drop.top && event.clientY <= drop.bottom && offer) handleActionSelect(offer);
       else clearPlaySelection();
     }
     drag = null;
@@ -355,9 +351,9 @@
       if (!gameStore.branchAttemptId && gameStore.hasCapability('explore_study')) sendRetryDecision(action.id);
       return;
     }
-    if (gameStore.gameOver || !pilotCanAct || stopsPending !== null) return;
-    if (tableMode === 'play' && selection && (!liveInput
-      || !selectedOffers(selection, gameStore.protocolFrame).some(offer => offer.id === action.id))) return;
+    if (!canSubmitLive) return;
+    if (tableMode === 'play' && selection
+      && !selectedOffers(selection, gameStore.protocolFrame).some(offer => offer.id === action.id)) return;
 
     if (!sendAction(action.id)) {
       return;
@@ -571,7 +567,7 @@
           navigationKey={String(gameStore.updateSeq)}
           selectedTargetId={gameStore.selectedTargetId}
           {highlightedOfferIds}
-          disabled={(participantStudying ? !gameStore.hasCapability('explore_study') : gameStore.gameOver || !pilotCanAct) || gameStore.commandPending || stopsPending !== null || gameStore.connection !== 'connected'}
+          disabled={participantStudying ? !gameStore.hasCapability('explore_study') || !inputReady : !canSubmitLive}
           fastForwarding={gameStore.fastForwarding}
           {canPassTurn}
           onHoverAction={handleActionHover}
@@ -610,7 +606,7 @@
             {/if}
 
             <div class="border-t border-line pt-4">
-              <fieldset disabled={!gameStore.hasCapability('configure_match') || participantStudying || gameStore.commandPending || stopsPending !== null || gameStore.connection !== 'connected'}>
+              <fieldset disabled={!gameStore.hasCapability('configure_match') || participantStudying || !inputReady}>
                 <legend class="sr-only">Pilot stop controls</legend>
                 <StopsPanel
                   bind:open={stopsOpen}
@@ -696,9 +692,10 @@
     .play-workspace { grid-template-columns: minmax(0, 1fr) clamp(19rem, 26vw, 23rem); height: calc(100dvh - 190px); min-height: 0; padding-top: .5rem; }
     .board-region { min-height: 0; display: flex; flex-direction: column; }
     .board-region :global([data-testid="game-board"]) { flex: 1; min-height: 0; }
-    .choices-region { min-height: 0; gap: .5rem; border-top: 0; border-left: 1px solid var(--border); padding: 0 .5rem 1rem 1rem; scrollbar-gutter: stable; }
+    .choices-region { min-height: 0; overflow-y: auto; gap: .5rem; border-top: 0; border-left: 1px solid var(--border); padding: 0 .5rem 1rem 1rem; scrollbar-gutter: stable; }
     .choices-region > :global(*) { flex-shrink: 0; }
-    .choices-region > :global(.workspace-decision) { flex: 1; min-height: 0; }
+    .choices-region > :global(.workspace-decision) { flex: 1; min-height: min-content; }
+    .secondary-panels { flex-shrink: 1; min-height: 2rem; overflow-y: auto; overscroll-behavior: contain; }
     [data-testid="current-decision"] { max-height: 3rem; overflow-y: auto; overscroll-behavior: contain; }
     .secondary-content { max-height: 32dvh; overflow-y: auto; overscroll-behavior: contain; }
     .table-jump { position: absolute; width: 1px; height: 1px; overflow: hidden; }

@@ -273,10 +273,11 @@
 
 <style>
   .decision-instruction { overflow-wrap: anywhere; }
-  :global(.workspace-decision) .action-panel { display: flex; flex-direction: column; min-height: 0; flex: 1; gap: .5rem; }
+  :global(.workspace-decision) .action-panel { display: flex; flex-direction: column; min-height: min-content; flex: 1; gap: .5rem; }
   @media (min-width: 1024px) and (min-height: 650px) {
     :global(.workspace-decision) .decision-controls { flex-shrink: 0; }
     :global(.workspace-decision) .decision-instruction { max-height: 12dvh; overflow-y: auto; overscroll-behavior: contain; }
-    :global(.workspace-decision) .offer-list { min-height: 4rem; flex: 1; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding: .25rem; }
+    /* Reserve controls plus one offer without sizing the rail to every choice. */
+    :global(.workspace-decision) .offer-list { contain: size; min-height: 4rem; flex: 1; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding: .25rem; }
   }
 </style>
