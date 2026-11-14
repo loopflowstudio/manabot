@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { getContext } from 'svelte';
+  import { PRESENTATION_CONTEXT, presentationSubjects, type PresentationEvent } from '$lib/presentation';
   import { revealWithinScrollRegions } from '$lib/scroll-regions';
   import { copyLabel } from '$lib/decision-labels';
   import { effectNote } from '$lib/permanent-notes';
@@ -46,6 +48,12 @@
     onHoverTarget = undefined,
     onPreviewCard = undefined,
   }: Props = $props();
+
+  const narratedEvent = getContext<(() => PresentationEvent | null) | undefined>(PRESENTATION_CONTEXT);
+  const narrated = $derived.by(() => {
+    const event = narratedEvent?.();
+    return event && presentationSubjects(event).some(subject => subject.kind === 'player' && subject.id === player.id) ? event.seq : undefined;
+  });
 
   const hiddenHandCount = $derived(
     player.hand_hidden_count ?? player.zone_counts.HAND ?? player.hand.length,
@@ -186,6 +194,8 @@
   </details>
   <!-- Identity and life stay above the scrolling battlefield and zones. -->
   <div
+    data-player-id={player.id}
+    data-narrated-seq={narrated}
     class={`rounded-sm px-4 py-2 ${pieColors.length > 0 ? 'border border-black/30' : 'border border-line bg-field/70'}`}
     style:background={barBackground || undefined}
   >
@@ -267,8 +277,9 @@
         {/if}
         {#each player.graveyard as card}
           <Card
+            objectId={card.id}
             name={card.name}
-              copyDescription={copyLabel(player.graveyard, card.id)}
+            copyDescription={copyLabel(player.graveyard, card.id)}
             power={card.types.is_creature ? card.power : null}
             toughness={card.types.is_creature ? card.toughness : null}
             focused={focusedIds.has(card.id)}
@@ -293,6 +304,7 @@
           {/if}
           {#each player.exile as card}
             <Card
+              objectId={card.id}
               name={card.name}
               copyDescription={exileDescription(card)}
               power={card.types.is_creature ? card.power : null}
@@ -323,6 +335,7 @@
           {/if}
           {#each player.hand as card}
             <Card
+              objectId={card.id}
               name={card.name}
               copyDescription={copyLabel(player.hand, card.id)}
               power={card.types.is_creature ? card.power : null}
@@ -346,6 +359,7 @@
 </section>
 
 <style>
+  [data-narrated-seq] { outline: 2px solid var(--info); outline-offset: 2px; }
   .player-area { min-width: 0; padding: .25rem 0; }
   .hand-cards { display: flex; align-items: end; gap: .5rem; overflow-x: auto; overscroll-behavior: contain; padding: .25rem; }
   .hand-cards > :global(*) { flex-shrink: 0; }

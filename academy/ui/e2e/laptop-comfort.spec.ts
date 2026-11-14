@@ -2,7 +2,8 @@ import { writeFile } from 'node:fs/promises';
 import { finishBoardNarration } from './presentation-readiness';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import boltJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
-import type { Command, ExperienceFrame, RecoveryEnvelope } from '../src/lib/types';
+import type { Command, ExperienceFrame, FrameUpdate, PresentationEvent, RecoveryEnvelope, Trace } from '../src/lib/types';
+import type { SharedTableControlEvent, TableSnapshot } from '../src/lib/shared-table-protocol';
 import { denseFrame } from './fixtures/laptop-table';
 
 interface TableOptions {
@@ -10,10 +11,12 @@ interface TableOptions {
   offerCount?: number;
   longInstruction?: boolean;
   holdCommand?: boolean;
+  handActions?: number;
 }
 
 async function installTable(page: Page, options: TableOptions = {}): Promise<{
-  commands: Command[]; frame: ExperienceFrame; rejectPending: () => void;
+  commands: Command[]; frame: ExperienceFrame; rejectPending: () => void; publish: (advance?: boolean) => void;
+  control: (message: SharedTableControlEvent) => void; closeSocket: () => void;
 }> {
   const frame = denseFrame();
   if (options.sparse) {
@@ -34,19 +37,39 @@ async function installTable(page: Page, options: TableOptions = {}): Promise<{
       focus: [card.id],
     };
   });
+  if (options.handActions) {
+    const card = frame.projection.agent.hand[0];
+    frame.projection.agent.hand[1].name = card.name;
+    frame.offers = Array.from({ length: options.handActions }, (_, index) => ({ ...frame.offers[0],
+      id: 9000 + index, verb: 'cast', label: `Cast ${card.name} option ${index + 1}`,
+      confirm_label: `Cast ${card.name} option ${index + 1}`, focus: [card.id], subjects: [],
+      source: { kind: 'object', id: { entity: card.id, incarnation: 0 } } }));
+  }
   if (options.longInstruction) {
     frame.prompt!.instruction = `${'Read this instruction before choosing. '.repeat(60)}End of the complete instruction.`;
   }
   let rejectPending = (): void => { throw new Error('No pending command'); };
+  let publish = (_advance = true): void => { throw new Error('Socket not ready'); };
+  let control = (_message: SharedTableControlEvent): void => { throw new Error('Socket not ready'); };
+  let closeSocket = (): void => { throw new Error('Socket not ready'); };
   const commands: Command[] = [];
   await page.routeWebSocket('**/ws/play', socket => {
     const recover = (): RecoveryEnvelope => ({ ...boltJson.recovery as RecoveryEnvelope,
       frame, presentation_tail: [], accepted_commands: [], replay_cursor: frame.revision });
+    control = message => socket.send(JSON.stringify(message));
+    closeSocket = () => { void socket.close({ code: 4101, reason: 'Controlled disconnect' }); };
+    publish = (advance = true) => {
+      if (advance) { frame.revision += 1; frame.frame_hash = `changed-${frame.revision}`; }
+      socket.send(JSON.stringify({ type: 'observation', data: frame.projection, actions: [], recovery: recover() }));
+    };
     socket.onMessage(raw => {
       const message = JSON.parse(String(raw));
-      if (message.type === 'new_game') {
+      if (message.type === 'new_game' || message.type === 'resume') {
         socket.send(JSON.stringify({ type: 'observation', data: frame.projection, actions: [],
           session_id: 'laptop', resume_token: 'laptop', recovery: recover() }));
+      } else if (message.type === 'set_stops') {
+        frame.stops = { ...message.stops, auto_pass: message.auto_pass, stop_on_stack: message.stop_on_stack };
+        publish();
       } else if (message.type === 'command') {
         commands.push(message.command);
         rejectPending = () => {
@@ -66,7 +89,7 @@ async function installTable(page: Page, options: TableOptions = {}): Promise<{
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByRole('button', { name: 'New Game', exact: true }).click();
   await expect(page.getByTestId('action-option')).toHaveCount(frame.offers.length);
-  return { commands, frame, rejectPending: () => rejectPending() };
+  return { commands, frame, rejectPending: () => rejectPending(), publish: (advance = true) => publish(advance), control: message => control(message), closeSocket: () => closeSocket() };
 }
 
 for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 800 }]) {
@@ -225,11 +248,14 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 800
           const box = (selector: string): DOMRect => document.querySelector(selector)!.getBoundingClientRect();
           return { status: box('[data-testid="current-decision"]').toJSON(),
             decision: box('[data-testid="decision-surface"]').toJSON(),
+            controls: box('.decision-controls').toJSON(), choices: box('.offer-list').toJSON(),
             automation: box('[data-testid="automation-status"]').toJSON(),
             secondary: box('.secondary-panels').toJSON(),
             rail: box('#table-choices').toJSON(), board: box('#table-board').toJSON() };
         });
         expect(boxes.status.bottom).toBeLessThanOrEqual(boxes.decision.top);
+        expect(boxes.controls.bottom).toBeLessThanOrEqual(boxes.choices.top);
+        expect(boxes.choices.bottom).toBeLessThanOrEqual(boxes.decision.bottom);
         expect(boxes.decision.bottom).toBeLessThanOrEqual(boxes.automation.top);
         expect(boxes.automation.bottom).toBeLessThanOrEqual(boxes.secondary.top);
         expect(boxes.secondary.bottom).toBeLessThanOrEqual(boxes.rail.bottom);
@@ -314,11 +340,25 @@ for (const [seed, viewport] of [
   test(`ordinary seeded laptop game ${seed}`, async ({ page }, testInfo) => {
     test.setTimeout(120_000);
     await page.setViewportSize(viewport);
+    const observed = new Map<number, PresentationEvent>();
+    let matchId = '';
+    let liveFrame: ExperienceFrame | null = null;
+    const submitted: Command[] = [];
+    let reloadedTarget = false;
+    let selectedSources = 0;
     await page.routeWebSocket('**/ws/play', socket => {
       const server = socket.connectToServer();
+      server.onMessage(raw => {
+        const message = JSON.parse(String(raw)) as { recovery?: RecoveryEnvelope; update?: FrameUpdate };
+        const frame = message.recovery?.frame ?? message.update?.frame;
+        if (frame) { matchId = frame.match_id; liveFrame = frame; }
+        for (const event of message.recovery?.presentation_tail ?? message.update?.presentation ?? []) observed.set(event.seq, event);
+        socket.send(raw);
+      });
       socket.onMessage(raw => {
         const message = JSON.parse(String(raw));
         if (message.type === 'new_game') message.config.seed = seed;
+        if (message.type === 'command') submitted.push(message.command);
         server.send(JSON.stringify(message));
       });
     });
@@ -326,14 +366,57 @@ for (const [seed, viewport] of [
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
     await page.getByTestId('opponent-select').selectOption('random');
     await page.getByRole('button', { name: 'New Game', exact: true }).click();
+    await page.getByRole('group', { name: 'Table interaction mode' }).getByRole('button', { name: 'Play', exact: true }).click();
     const receipts: { kind: string | null; label: string | null; scroll: number }[] = [];
     try {
       for (let input = 0; input < 120; input += 1) {
         const options = page.getByTestId('action-option');
         const result = page.getByTestId('game-result');
         await expect(page.locator('[data-testid="action-option"], [data-testid="learn-mode"]:not(:disabled), [data-testid="game-result"]').first()).toBeVisible();
-        if (await result.isVisible()) return;
-        await finishBoardNarration(page);
+        if (await result.isVisible()) {
+          expect(selectedSources).toBeGreaterThan(0);
+          expect(reloadedTarget).toBe(true);
+          const sourceEvents = [...observed.values()].sort((left, right) => left.seq - right.seq);
+          expect(sourceEvents.length).toBeGreaterThan(0);
+          const history = page.getByTestId('presentation-history');
+          await page.locator('details.secondary-panels').evaluate((element: HTMLDetailsElement) => { element.open = true; });
+          await history.locator('details').evaluate((element: HTMLDetailsElement) => { element.open = true; });
+          const sequences = (): Promise<number[]> => history.locator('li[data-presentation-seq]').evaluateAll(rows => rows.map(row => Number(row.getAttribute('data-presentation-seq'))));
+          await expect.poll(sequences).toEqual(sourceEvents.slice(-100).map(event => event.seq));
+          await page.screenshot({ path: testInfo.outputPath('game-final.png') });
+          // The saved transport cursor must not erase history on a fresh page.
+          // Reload has no in-memory facts, so it needs the server's retained tail.
+          await page.reload();
+          await expect(page.getByTestId('game-result')).toBeVisible();
+          await page.locator('details.secondary-panels').evaluate((element: HTMLDetailsElement) => { element.open = true; });
+          await history.locator('details').evaluate((element: HTMLDetailsElement) => { element.open = true; });
+          await expect.poll(sequences).toEqual(sourceEvents.slice(-100).map(event => event.seq));
+          await expect(page.getByTestId('presentation-stage')).toHaveCount(0);
+          const saved = await page.evaluate(async id => {
+            const tokens = JSON.parse(localStorage.getItem('etude.play.record-credentials') ?? '[]') as string[];
+            const response = await fetch(`/api/traces/${id}`, { headers: { 'x-etude-participant-tokens': tokens.join(',') } });
+            if (!response.ok) throw new Error(`Saved trace unavailable: ${response.status}`);
+            return await response.json() as Trace;
+          }, matchId);
+          expect(saved.events.flatMap(event => event.presentation ?? [])).toEqual(sourceEvents);
+          await page.goto(`/replay?trace=${encodeURIComponent(matchId)}`);
+          await expect(page.getByRole('slider', { name: 'Replay position' })).toBeVisible();
+          await page.getByRole('slider', { name: 'Replay position' }).fill(String(saved.events.length));
+          await expect(page.getByTestId('game-result-dialog')).toHaveAttribute('role', 'status');
+          await history.locator('summary').click();
+          const replayHand = page.getByTestId('game-board').locator('.hand-cards').last();
+          const handBounds = (await replayHand.boundingBox())!;
+          const historyBounds = (await history.boundingBox())!;
+          expect(handBounds.y + handBounds.height).toBeLessThanOrEqual(historyBounds.y);
+          await expect.poll(sequences).toEqual(sourceEvents.slice(-100).map(event => event.seq));
+          await writeFile(testInfo.outputPath('history-source.json'), JSON.stringify({
+            matchId, events: sourceEvents.length, kinds: [...new Set(sourceEvents.map(event => event.kind.kind))],
+            live: true, saved: true, replay: true, selectedSources, reloadedTarget,
+            commands: submitted,
+          }, null, 2));
+          return;
+        }
+        // Live offers stay usable while optional narration catches up.
         if (await options.count() === 0) {
           await page.getByTestId('learn-mode').first().click();
           continue;
@@ -346,15 +429,52 @@ for (const [seed, viewport] of [
         const chosen = options.nth(pick);
         receipts.push({ kind: await page.getByTestId('action-panel').getAttribute('data-action-space-kind'),
           label: await chosen.textContent(), scroll: await page.evaluate(() => scrollY) });
-        await chosen.focus();
-        await chosen.press('Enter');
+        const authority = liveFrame as ExperienceFrame | null;
+        expect(authority).not.toBeNull();
+        const chosenId = Number(await chosen.getAttribute('data-offer-id'));
+        const offer = authority!.offers.find(offer => offer.id === chosenId);
+        expect(offer).toBeDefined();
+        if (!reloadedTarget && authority!.action_space === 'CHOOSE_TARGET') {
+          const identity = { match: authority!.match_id, revision: authority!.revision, hash: authority!.frame_hash, offers: authority!.offers };
+          await page.reload();
+          await expect(page.getByTestId('connection-badge')).toHaveText('connected');
+          await expect(page.getByTestId('decision-surface')).toHaveAttribute('data-revision', String(identity.revision));
+          const recovered = liveFrame as ExperienceFrame | null;
+          expect({ match: recovered!.match_id, revision: recovered!.revision, hash: recovered!.frame_hash, offers: recovered!.offers }).toEqual(identity);
+          reloadedTarget = true;
+        }
+        const count = submitted.length;
+        const modes = page.getByRole('group', { name: 'Table interaction mode' });
+        await modes.getByRole('button', { name: 'Inspect', exact: true }).click();
+        if (authority!.action_space !== 'LEARN') await expect(options).toHaveCount(authority!.offers.length);
+        await expect(page.getByTestId('legal-choice-count')).toContainText(`of ${authority!.offers.length} legal choices`);
+        await modes.getByRole('button', { name: 'Play', exact: true }).click();
+        expect(submitted).toHaveLength(count);
+        const source = offer!.subjects?.find(subject => subject.role === 'source')?.object.subject ?? offer!.source;
+        const playerTarget = offer!.subjects?.find(subject => subject.role === 'target' && subject.object.subject.kind === 'player')?.object.subject;
+        if (source?.kind === 'object' && authority!.projection.agent.hand.some(card => card.id === source.id.entity)) {
+          await page.locator(`[data-object-id="${source.id.entity}"]`).click();
+          expect(submitted).toHaveLength(count);
+          await page.locator(`[data-testid="action-option"][data-offer-id="${offer!.id}"]`).click();
+          selectedSources += 1;
+        } else if (playerTarget?.kind === 'player') {
+          await page.getByRole('button', { name: playerTarget.id === authority!.projection.agent.id ? 'Target You' : 'Target Random', exact: true }).click();
+          expect(submitted).toHaveLength(count);
+          await page.locator(`[data-testid="action-option"][data-offer-id="${offer!.id}"]`).click();
+        } else {
+          await chosen.focus();
+          await chosen.press('Enter');
+        }
         await expect.poll(() => page.getByTestId('decision-surface').getAttribute('data-revision')).not.toBe(before);
+        expect(submitted).toHaveLength(count + 1);
+        expect(submitted.at(-1)).toMatchObject({ match_id: authority!.match_id, expected_revision: authority!.revision,
+          prompt_id: authority!.prompt!.id, offer_id: offer!.id });
       }
       throw new Error('Seeded game did not finish within 120 deliberate inputs');
     } finally {
       await writeFile(testInfo.outputPath('game-receipt.json'), JSON.stringify({ seed, viewport, receipts }, null, 2));
       await finishBoardNarration(page);
-      await page.screenshot({ path: testInfo.outputPath('game-final.png') });
+      await page.screenshot({ path: testInfo.outputPath('workflow-final.png') });
     }
   });
 }
@@ -368,4 +488,176 @@ test('narrow table keeps explicit board and choices navigation', async ({ page }
   await page.getByRole('link', { name: 'Inspect board', exact: true }).click();
   await expect(page.locator('#table-board')).toBeInViewport();
   expect(commands).toEqual([]);
+});
+
+test.describe('Play input', () => {
+test.use({ actionTimeout: 10_000 });
+
+for (const width of [1440, 1280]) {
+  test(`Play selection, explicit commitment and canceled drags ${width}`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: width === 1440 ? 900 : 800 });
+    await page.emulateMedia({ colorScheme: width === 1280 ? 'light' : 'dark' });
+    const { commands, frame } = await installTable(page, { handActions: 1, holdCommand: true });
+    const mode = page.getByRole('group', { name: 'Table interaction mode' });
+    await mode.getByRole('button', { name: 'Play', exact: true }).click();
+    const card = page.locator(`[data-object-id="${frame.projection.agent.hand[0].id}"]`);
+    const selected = page.getByRole('region', { name: 'Selected card actions' });
+    await card.focus();
+    await card.press('Enter');
+    await expect(selected).toBeVisible();
+    expect(commands).toHaveLength(0);
+    await page.getByRole('button', { name: 'Inspect card', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Inspected card' })).toBeVisible();
+    await page.getByRole('button', { name: 'Close inspection' }).click();
+    await page.keyboard.press('Escape');
+    await expect(selected).toHaveCount(0);
+    // Same-name sibling is inspectable but cannot borrow this source's action.
+    await page.locator(`[data-object-id="${frame.projection.agent.hand[1].id}"]`).click();
+    await expect(page.getByTestId('action-option')).toHaveCount(0);
+    await card.click();
+    const from = (await card.boundingBox())!;
+    const drop = (await page.getByTestId('play-drop-area').boundingBox())!;
+    await page.mouse.move(from.x + 20, from.y + 20);
+    await page.mouse.down();
+    await page.mouse.move(drop.x + 20, drop.y + 10, { steps: 3 });
+    await expect(page.getByTestId('play-drop-area')).toContainText('Release to Cast');
+    await page.keyboard.press('Escape');
+    await page.mouse.up();
+    await expect(selected).toHaveCount(0);
+    expect(commands).toHaveLength(0);
+    await page.mouse.move(from.x + 20, from.y + 20);
+    await page.mouse.down();
+    await page.mouse.move(2, 2, { steps: 3 });
+    await page.mouse.up();
+    expect(commands).toHaveLength(0);
+    await card.focus();
+    await card.press('Enter');
+    await page.getByText('History and settings', { exact: true }).click();
+    await page.getByTestId('presentation-history').locator('summary').click();
+    const regions = await page.evaluate(() => {
+      const box = (selector: string): DOMRect => document.querySelector(selector)!.getBoundingClientRect();
+      return { controls: box('.decision-controls').toJSON(), choices: box('.offer-list').toJSON(),
+        automation: box('[data-testid="automation-status"]').toJSON() };
+    });
+    expect(regions.controls.bottom).toBeLessThanOrEqual(regions.choices.top);
+    expect(regions.choices.height).toBeGreaterThanOrEqual(64);
+    expect(regions.choices.bottom).toBeLessThanOrEqual(regions.automation.top);
+    await page.screenshot({ path: info.outputPath('selected-play.png') });
+    await expectInsideViewport(page.getByRole('region', { name: 'You hand', exact: true }));
+    await page.getByTestId('action-option').first().press('Enter');
+    await expect.poll(() => commands.length).toBe(1);
+    expect(commands[0]).toMatchObject({ match_id: frame.match_id, expected_revision: frame.revision, prompt_id: frame.prompt!.id, offer_id: 9000 });
+    expect(await page.evaluate(() => scrollY)).toBe(0);
+    await page.screenshot({ path: info.outputPath('play-table.png') });
+  });
+}
+
+test('Play drag commits exactly once; ambiguity and changed authority cancel', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const { commands, frame, publish } = await installTable(page, { handActions: 2, holdCommand: true });
+  const mode = page.getByRole('group', { name: 'Table interaction mode' });
+  await mode.getByRole('button', { name: 'Play', exact: true }).click();
+  const card = page.locator(`[data-object-id="${frame.projection.agent.hand[0].id}"]`);
+  const drag = async (beforeRelease?: () => Promise<void>): Promise<void> => {
+    const from = (await card.boundingBox())!;
+    const drop = (await page.getByTestId('play-drop-area').boundingBox())!;
+    await page.mouse.move(from.x + 20, from.y + 20);
+    await page.mouse.down();
+    await page.mouse.move(drop.x + 20, drop.y + 10, { steps: 3 });
+    if (beforeRelease) await beforeRelease();
+    await page.mouse.up();
+  };
+  await drag();
+  expect(commands).toHaveLength(0);
+  await card.click();
+  await expect(page.getByTestId('action-option')).toHaveCount(2);
+  frame.offers = frame.offers.slice(0, 1);
+  publish();
+  await expect(page.getByRole('region', { name: 'Selected card actions' })).toHaveCount(0);
+  await drag(async () => { publish(); await expect(page.getByTestId('decision-surface')).toHaveAttribute('data-revision', String(frame.revision)); });
+  expect(commands).toHaveLength(0);
+  await drag(async () => {
+    const inspect = mode.getByRole('button', { name: 'Inspect', exact: true });
+    await inspect.focus();
+    await inspect.press('Enter');
+    await expect(inspect).toHaveAttribute('aria-pressed', 'true');
+  });
+  expect(commands).toHaveLength(0);
+  await mode.getByRole('button', { name: 'Play', exact: true }).click();
+  await card.click();
+  await page.getByRole('button', { name: 'Edit stops' }).click();
+  await expect(page.getByTestId('stops-panel')).toHaveAttribute('open', '');
+  await page.getByTestId('auto-pass-toggle').check();
+  await expect(page.getByTestId('stop-my-upkeep')).toBeEnabled();
+  await page.getByTestId('stop-my-upkeep').click();
+  await expect(page.getByRole('region', { name: 'Selected card actions' })).toHaveCount(0);
+  expect(commands).toHaveLength(0);
+  await page.getByText('History and settings', { exact: true }).click();
+  const revision = frame.revision;
+  await drag();
+  await expect.poll(() => commands.length).toBe(1);
+  expect(commands[0]).toMatchObject({ match_id: frame.match_id, expected_revision: revision, prompt_id: frame.prompt!.id, offer_id: 9000 });
+});
+
+for (const invalidation of ['capability', 'Study', 'disconnect', 'match', 'same-frame recovery', 'pointercancel'] as const) {
+  test(`Play drag canceled by ${invalidation}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const { frame, commands, publish, control, closeSocket } = await installTable(page, { handActions: 1, holdCommand: true });
+    await page.getByRole('group', { name: 'Table interaction mode' }).getByRole('button', { name: 'Play', exact: true }).click();
+    const card = page.locator(`[data-object-id="${frame.projection.agent.hand[0].id}"]`);
+    const from = (await card.boundingBox())!;
+    const drop = (await page.getByTestId('play-drop-area').boundingBox())!;
+    await page.mouse.move(from.x + 20, from.y + 20);
+    await page.mouse.down();
+    await page.mouse.move(drop.x + 20, drop.y + 10, { steps: 3 });
+    await expect(page.getByTestId('play-drop-area')).toContainText('Release to Cast');
+    if (invalidation === 'capability') {
+      const table: TableSnapshot = { contract: 'testing-house-v1', table_id: 'gesture', table_revision: 1, mode: 'live',
+        access: { identity: { viewer_id: 'viewer', table_id: 'gesture', rules_viewer: 0 }, role: 'watcher',
+          capabilities: ['view_table'], grant_revision: 1 }, participants: [], beliefs: [], decisions: [],
+        opponent_label: null, watcher_invite: null };
+      control({ type: 'role_changed', table });
+    } else if (invalidation === 'Study') {
+      control({ type: 'decision_restored', address: 'gesture-study', restored: {
+        address: 'gesture-study', ordinal: 0, viewer: 0, revision: frame.revision, presentation_cursor: 0,
+        frame, offer: frame.offers[0], continuation: [], command: { command_id: 'recorded', match_id: frame.match_id,
+          expected_revision: frame.revision, prompt_id: frame.prompt!.id, offer_id: frame.offers[0].id, answers: [] } } });
+    } else if (invalidation === 'disconnect') {
+      closeSocket();
+      await expect(page.getByTestId('connection-badge')).toHaveText('disconnected');
+    } else if (invalidation === 'pointercancel') {
+      await card.dispatchEvent('pointercancel', { pointerId: 1 });
+    } else {
+      if (invalidation === 'match') frame.match_id = 'replacement-match';
+      publish(invalidation !== 'same-frame recovery');
+    }
+    await expect(page.getByRole('region', { name: 'Selected card actions' })).toHaveCount(0);
+    await page.mouse.up();
+    await expect(page.getByRole('region', { name: 'Selected card actions' })).toHaveCount(0);
+    expect(commands).toHaveLength(0);
+    if (invalidation === 'capability' || invalidation === 'Study') {
+      await card.focus();
+      await card.press('Enter');
+      await expect(page.getByRole('region', { name: 'Inspected card' })).toBeVisible();
+      expect(commands).toHaveLength(0);
+    }
+  });
+}
+
+for (const zone of ['stack', 'private'] as const) {
+  test(`Inspect ${zone} cards retains choice navigation`, async ({ page }) => {
+    const { frame, commands, publish } = await installTable(page, { handActions: 1 });
+    const card = { ...frame.projection.agent.hand[0], id: 80000, zone: 'STACK' };
+    if (zone === 'stack') frame.projection.agent.stack = [card];
+    else frame.projection.agent.inspected = [card];
+    frame.offers = [{ ...frame.offers[0], focus: [card.id], source: { kind: 'object', id: { entity: card.id, incarnation: 0 } } }];
+    publish();
+    const region = zone === 'stack' ? page.getByRole('region', { name: 'The stack', exact: true }) : page.getByRole('region', { name: 'Private inspection', exact: true });
+    await region.getByRole('button').filter({ hasText: card.name }).click();
+    await expect(page.getByRole('region', { name: 'Inspected card', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Show all', exact: true })).toBeVisible();
+    expect(commands).toHaveLength(0);
+  });
+}
+
 });
