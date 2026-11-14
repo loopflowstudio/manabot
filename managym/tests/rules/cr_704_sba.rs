@@ -13,7 +13,7 @@ use managym::{
         },
         card::{Keyword, Keywords},
         effect::Modification,
-        game_object::{ObjectId, ObjectRef, PlayerId},
+        game_object::{ObjectRef, PlayerId},
         predicate::CardPredicate,
         stack_object::StackObject,
         zone::ZoneType,
@@ -209,7 +209,7 @@ fn cr_704_3_multiple_simultaneous_sbas_commit_in_object_order() {
         .iter()
         .filter_map(|event| match event {
             GameEvent::CardMoved {
-                object_id: object,
+                object_id: managym::state::game_object::ObjectRef { entity: object, .. },
                 from: Some(ZoneType::Battlefield),
                 to: ZoneType::Graveyard,
                 ..
@@ -219,7 +219,7 @@ fn cr_704_3_multiple_simultaneous_sbas_commit_in_object_order() {
         .collect();
     let expected_cards: Vec<_> = expected
         .iter()
-        .map(|object_ref| ObjectId::from(object_ref.entity))
+        .map(|object_ref| object_ref.entity)
         .collect();
     assert_eq!(committed, expected_cards);
     assert!(expected

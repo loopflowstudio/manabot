@@ -4393,7 +4393,7 @@ fn sozins_comet_foretells_face_down_and_casts_on_a_later_turn() {
     // The arrival is public but names no card.
     let events = s.drain_events();
     assert!(events.iter().any(
-        |e| matches!(e, GameEvent::CardMoved { object_id: object, face_down: true, .. } if *object == comet)
+        |e| matches!(e, GameEvent::CardMoved { object_id: managym::state::game_object::ObjectRef { entity: object, .. }, face_down: true, .. } if *object == comet)
     ));
     let recent = Observation::new(s.game(), &events).recent_events;
     let arrival = recent
@@ -10423,10 +10423,10 @@ fn zukos_conviction_returns_a_creature_to_hand_or_kicked_onto_the_battlefield() 
         let targets = offered_targets(&s);
         assert!(!targets
             .iter()
-            .any(|t| matches!(t, Target::GraveyardCard(o) if ObjectId::from(o.entity) == strike)));
+            .any(|t| matches!(t, Target::GraveyardCard(o) if o.entity == strike)));
         choose(&mut s, |a| {
             matches!(a, Action::ChooseTarget { target: Target::GraveyardCard(o), .. }
-                if ObjectId::from(o.entity) == ogre)
+                if o.entity == ogre)
         });
         settle(&mut s);
         if kicked {

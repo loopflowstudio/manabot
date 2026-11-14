@@ -479,7 +479,7 @@ impl Game {
             .exile_grants
             .iter()
             .filter(|grant| grant.player == player)
-            .filter_map(|grant| self.state.card_id(grant.object.entity.into()))
+            .filter_map(|grant| self.state.card_id(grant.object.entity))
             .collect()
     }
 }

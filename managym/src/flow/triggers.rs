@@ -274,9 +274,7 @@ impl Game {
 
     pub(crate) fn target_mana_value(&self, target: Target) -> u32 {
         match target {
-            Target::GraveyardCard(object) => {
-                u32::from(self.object_mana_value(ObjectId::from(object.entity)))
-            }
+            Target::GraveyardCard(object) => u32::from(self.object_mana_value(object.entity)),
             Target::Permanent(id) => self.state.permanents[id]
                 .as_ref()
                 .map_or(0, |p| u32::from(self.object_mana_value(p.object))),
@@ -1056,7 +1054,7 @@ impl Game {
                 GameEvent::CardDrawn { player, .. } => Some(*player),
                 // "that player": whose graveyard the card was put into.
                 GameEvent::CardMoved {
-                    object_id: object,
+                    object_id: ObjectRef { entity: object, .. },
                     to: ZoneType::Graveyard,
                     ..
                 } => Some(self.state.objects[*object].owner),
@@ -1073,7 +1071,7 @@ impl Game {
                     (u8::try_from(*count).unwrap_or(u8::MAX), Default::default())
                 }
                 GameEvent::CardMoved {
-                    object_id: object,
+                    object_id: ObjectRef { entity: object, .. },
                     to: ZoneType::Battlefield,
                     ..
                 } if *object == source_object => self.state.object_to_permanent[*object]
@@ -1141,16 +1139,19 @@ impl Game {
     fn triggering_permanent(&self, event: &GameEvent) -> Option<Target> {
         match event {
             GameEvent::CardMoved {
-                object_id: object,
+                object_id,
                 to: ZoneType::Battlefield,
                 ..
-            } => self.state.object_to_permanent[*object].map(Target::Permanent),
+            } => self
+                .lookup_current_permanent(*object_id)
+                .ok()
+                .map(Target::Permanent),
             GameEvent::CardMoved {
-                object_id: object,
                 from: Some(ZoneType::Battlefield),
                 ..
-            } => self
-                .latest_object_lki(*object)
+            } => event
+                .departed_object()
+                .and_then(|object| self.object_lki(object))
                 .map(|lki| Target::Permanent(lki.permanent)),
             GameEvent::AttackersDeclared { attackers, .. } if attackers.len() == 1 => {
                 Some(Target::Permanent(attackers[0]))
@@ -1228,14 +1229,15 @@ impl Game {
     fn delayed_triggers_for_event(&mut self, event: &GameEvent) {
         let creature_died = match event {
             GameEvent::CardMoved {
-                object_id: object,
+                object_id: ObjectRef { entity: object, .. },
                 from: Some(ZoneType::Battlefield),
                 to: ZoneType::Graveyard,
                 ..
             } => {
                 self.state.objects[*object].types.is_creature()
-                    || self
-                        .latest_object_lki(*object)
+                    || event
+                        .departed_object()
+                        .and_then(|object| self.object_lki(object))
                         .is_some_and(|lki| lki.animated_creature)
             }
             _ => false,
@@ -1244,14 +1246,14 @@ impl Game {
         let mut spent = Vec::new();
         for (index, trigger) in self.state.delayed_triggers.iter().enumerate() {
             let context = match (&trigger.event, event) {
-                (
-                    DelayedTriggerEvent::CreatureDies,
-                    GameEvent::CardMoved {
-                        object_id: object, ..
-                    },
-                ) if creature_died => self
-                    .latest_object_lki(*object)
-                    .map(|lki| Target::Permanent(lki.permanent)),
+                (DelayedTriggerEvent::CreatureDies, GameEvent::CardMoved { .. })
+                    if creature_died =>
+                {
+                    event
+                        .departed_object()
+                        .and_then(|object| self.object_lki(object))
+                        .map(|lki| Target::Permanent(lki.permanent))
+                }
                 (
                     DelayedTriggerEvent::EndStep { your_turn },
                     GameEvent::StepStarted {
@@ -1608,21 +1610,20 @@ impl Game {
         let mut sources = self.indexed_sources(EventKinds::of(event.kind()));
 
         if let GameEvent::CardMoved {
-            object_id: object,
+            from: Some(ZoneType::Battlefield),
             controller,
             ..
         } = event
         {
-            let on_battlefield = self.state.zones.zone_of(*object) == Some(ZoneType::Battlefield);
-            if !on_battlefield {
-                let source_lki = self.state.object_lki.latest_for_object(*object).cloned();
-                if let Some(lki) = source_lki {
-                    sources.push(TriggerSourceSnapshot {
-                        object: *object,
-                        controller: *controller,
-                        lki,
-                    });
-                }
+            if let Some(lki) = event
+                .departed_object()
+                .and_then(|object| self.object_lki(object))
+            {
+                sources.push(TriggerSourceSnapshot {
+                    object: lki.object,
+                    controller: *controller,
+                    lki: lki.clone(),
+                });
             }
         }
 
@@ -1669,20 +1670,15 @@ impl Game {
                 source_was_on_battlefield,
                 event,
             ),
-            (
-                TriggerCondition::Sacrificed { subject },
-                GameEvent::PermanentSacrificed {
-                    object_id: object,
-                    controller,
-                },
-            ) => self.subject_matches_moved_object(
-                subject,
-                source_object,
-                source_controller,
-                source_was_on_battlefield,
-                *object,
-                *controller,
-            ),
+            (TriggerCondition::Sacrificed { subject }, GameEvent::PermanentSacrificed { .. }) => {
+                self.subject_matches_moved_object(
+                    subject,
+                    source_object,
+                    source_controller,
+                    source_was_on_battlefield,
+                    event,
+                )
+            }
             (TriggerCondition::WhileSourceAttacking { condition }, _) => {
                 self.state.object_to_permanent[source_object]
                     .and_then(|id| self.state.permanents[id].as_ref())
@@ -1736,13 +1732,7 @@ impl Game {
             }
             (
                 TriggerCondition::EntersTheBattlefield { subject },
-                GameEvent::CardMoved {
-                    object_id: object,
-                    from,
-                    to,
-                    controller,
-                    ..
-                },
+                GameEvent::CardMoved { from, to, .. },
             ) => {
                 let entered = *to == ZoneType::Battlefield && *from != Some(ZoneType::Battlefield);
                 entered
@@ -1751,37 +1741,24 @@ impl Game {
                         source_object,
                         source_controller,
                         source_was_on_battlefield,
-                        *object,
-                        *controller,
+                        event,
                     )
             }
-            (
-                TriggerCondition::Dies { subject },
-                GameEvent::CardMoved {
-                    object_id: object,
-                    from,
-                    to,
-                    controller,
-                    ..
-                },
-            ) => {
+            (TriggerCondition::Dies { subject }, GameEvent::CardMoved { from, to, .. }) => {
                 let died = *from == Some(ZoneType::Battlefield) && *to == ZoneType::Graveyard;
                 died && self.subject_matches_moved_object(
                     subject,
                     source_object,
                     source_controller,
                     source_was_on_battlefield,
-                    *object,
-                    *controller,
+                    event,
                 )
             }
             (
                 TriggerCondition::LeavesTheBattlefield { subject },
                 GameEvent::CardMoved {
-                    object_id: object,
                     from: Some(ZoneType::Battlefield),
                     to,
-                    controller,
                     ..
                 },
             ) if *to != ZoneType::Battlefield => self.subject_matches_moved_object(
@@ -1789,8 +1766,7 @@ impl Game {
                 source_object,
                 source_controller,
                 source_was_on_battlefield,
-                *object,
-                *controller,
+                event,
             ),
             (TriggerCondition::Attacks { .. }, GameEvent::AttackersDeclared { .. })
             | (
@@ -1922,7 +1898,7 @@ impl Game {
             (
                 TriggerCondition::PutIntoGraveyard { whose, predicate },
                 GameEvent::CardMoved {
-                    object_id: object,
+                    object_id: ObjectRef { entity: object, .. },
                     to: ZoneType::Graveyard,
                     ..
                 },
@@ -2021,17 +1997,28 @@ impl Game {
         source_object: ObjectId,
         source_controller: PlayerId,
         source_was_on_battlefield: bool,
-        moved_object: ObjectId,
-        moved_controller: PlayerId,
+        event: &GameEvent,
     ) -> bool {
-        let animated = self.state.object_to_permanent[moved_object]
-            .filter(|id| self.state.permanents[*id].is_some())
-            .map(|id| self.characteristics(id).is_animated)
+        let (moved_object, moved_controller) = match event {
+            GameEvent::CardMoved {
+                object_id,
+                controller,
+                ..
+            } => (object_id.entity, *controller),
+            GameEvent::PermanentSacrificed {
+                object_id,
+                controller,
+            } => (*object_id, *controller),
+            _ => return false,
+        };
+        let departed = event.departed_object();
+        let animated = departed
+            .and_then(|object| self.object_lki(object))
+            .map(|lki| lki.animated_creature)
             .unwrap_or_else(|| {
-                self.state
-                    .object_lki
-                    .latest_for_object(moved_object)
-                    .is_some_and(|lki| lki.animated_creature)
+                self.state.object_to_permanent[moved_object]
+                    .filter(|id| self.state.permanents[*id].is_some())
+                    .is_some_and(|id| self.characteristics(id).is_animated)
             });
         let matches = |predicate: &crate::state::predicate::CardPredicate| {
             predicate.matches(
@@ -2058,7 +2045,7 @@ impl Game {
                 .and_then(|aura| self.state.permanents[aura].as_ref())
                 .and_then(|aura| aura.attached_to)
                 .is_some_and(|attached| {
-                    attached.entity.0 == moved_object.0 && self.state.object_lki.contains(attached)
+                    Some(attached) == departed && self.state.object_lki.contains(attached)
                 }),
         }
     }

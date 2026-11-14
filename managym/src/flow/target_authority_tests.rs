@@ -1,4 +1,4 @@
-//! Tiny rules witnesses for stack-target enumeration, acceptance and resolution.
+//! Exact event identities and stack targets: enumeration, acceptance and resolution.
 
 use std::collections::BTreeMap;
 
@@ -93,6 +93,69 @@ fn trigger(source: ObjectId, effects: Vec<Effect>, order: u64) -> PendingTrigger
         x: 0,
         spent: Default::default(),
     }
+}
+
+#[test]
+fn cr_400_zone_event_keeps_its_departure_after_a_later_death() {
+    use crate::flow::event::GameEvent;
+
+    let (mut game, _, _, Target::Permanent(first), _) = fixture() else {
+        unreachable!()
+    };
+    let object = game.state.permanents[first].as_ref().unwrap().object;
+    let original = game.current_object_ref(object).unwrap();
+    game.move_object(object, ZoneType::Graveyard);
+    let event = game.state.events.iter().last().unwrap().clone();
+    let GameEvent::CardMoved {
+        object_id: became,
+        departed,
+        ..
+    } = &event
+    else {
+        panic!("committed zone event")
+    };
+    assert_eq!(*departed, Some(original));
+    assert_eq!(
+        game.state.object_of(game.state.card_id(object).unwrap()),
+        Some(*became)
+    );
+    assert_ne!(*became, original);
+    assert_eq!(
+        serde_json::to_value(&event).unwrap(),
+        serde_json::json!({"CardMoved": {
+            "card": object.0,
+            "from": "Battlefield",
+            "to": "Graveyard",
+            "controller": 0
+        }})
+    );
+
+    game.move_object(object, ZoneType::Battlefield);
+    let second = game.state.object_to_permanent[object].unwrap();
+    game.move_object(object, ZoneType::Graveyard);
+    assert_ne!(first, second);
+    assert_eq!(
+        game.triggering_permanent(&event),
+        Some(Target::Permanent(first))
+    );
+    let sources = game.trigger_ability_sources(&event);
+    assert!(sources
+        .iter()
+        .any(|source| source.lki.object_ref == original));
+    assert!(!sources.iter().any(|source| source.lki.permanent == second));
+    assert!(game.state.object(*became).is_err());
+    let fork = game.clone();
+    assert_eq!(
+        fork.triggering_permanent(&event),
+        Some(Target::Permanent(first))
+    );
+
+    game.move_object(object, ZoneType::Hand);
+    let hand_event = game.state.events.iter().last().unwrap();
+    assert!(!game
+        .trigger_ability_sources(hand_event)
+        .iter()
+        .any(|source| source.object == object));
 }
 
 #[test]

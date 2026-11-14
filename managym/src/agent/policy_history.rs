@@ -111,10 +111,10 @@ fn target_reference(game: &Game, target: Target) -> HistoryReference {
             .stack_ability_source(id)
             .map(|object_id| object_reference(game, object_id))
             .unwrap_or(HistoryReference::Unavailable),
-        Target::GraveyardCard(object) => object_reference(game, ObjectId::from(object.entity)),
+        Target::GraveyardCard(object) => object_reference(game, object.entity),
         Target::Permanent(id) => game
             .permanent_object_ref(id)
-            .map(|exact| object_reference(game, ObjectId::from(exact.entity)))
+            .map(|exact| object_reference(game, exact.entity))
             .unwrap_or(HistoryReference::Unavailable),
     }
 }
@@ -126,7 +126,8 @@ fn target_reference(game: &Game, target: Target) -> HistoryReference {
 pub(crate) fn record(game: &mut Game, event: &GameEvent) {
     use HistoryKind::*;
     if let GameEvent::CardMoved {
-        object_id: object, ..
+        object_id: crate::state::game_object::ObjectRef { entity: object, .. },
+        ..
     } = event
     {
         let id = game.state.objects[*object].id.0 as i32;
@@ -155,7 +156,7 @@ pub(crate) fn record(game: &mut Game, event: &GameEvent) {
     let unknown = HistoryReference::Unavailable;
     let (kind, amount, source, targets) = match event {
         GameEvent::CardMoved {
-            object_id: object,
+            object_id: crate::state::game_object::ObjectRef { entity: object, .. },
             to,
             face_down,
             ..

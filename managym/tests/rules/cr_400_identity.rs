@@ -1,5 +1,5 @@
 use managym::state::{
-    game_object::{EntityId, Incarnation, ObjectLookupError, ObjectRef, PlayerId},
+    game_object::{Incarnation, ObjectId, ObjectLookupError, ObjectRef, PlayerId},
     zone::ZoneType,
 };
 
@@ -43,7 +43,7 @@ fn object_ref_leave_and_reenter_preserves_entity_but_invalidates_incarnation() {
     );
     assert_eq!(
         s.game().lookup_current_permanent(ObjectRef {
-            entity: EntityId(usize::MAX),
+            entity: ObjectId(usize::MAX),
             incarnation: Incarnation::INITIAL,
         }),
         Err(ObjectLookupError::MissingEntity)
@@ -67,11 +67,12 @@ fn object_ref_leave_and_reenter_preserves_entity_but_invalidates_incarnation() {
         "Gray Ogre"
     );
 
-    s.game_mut().move_object(object, ZoneType::Battlefield);
+    let returned = s.game_mut().move_object(object, ZoneType::Battlefield);
     let new_ref = s
         .game()
         .current_object_ref(object)
         .expect("re-entered object ref");
+    assert_eq!(returned, new_ref);
     let new_permanent = s.game().state.object_to_permanent[object].expect("re-entered permanent");
     let new_presentation = s.game().state.permanents[new_permanent]
         .as_ref()
@@ -117,8 +118,9 @@ fn object_ref_same_zone_move_is_not_a_new_rules_object() {
     let before = s.game().current_object_ref(object).expect("object ref");
     let events_before = s.game().state.events.len();
 
-    s.game_mut().move_object(object, ZoneType::Battlefield);
+    let returned = s.game_mut().move_object(object, ZoneType::Battlefield);
 
+    assert_eq!(returned, before);
     assert_eq!(s.game().current_object_ref(object), Some(before));
     assert_eq!(s.game().state.object_to_permanent[object], Some(permanent));
     assert_eq!(s.game().state.events.len(), events_before);

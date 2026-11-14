@@ -1,11 +1,12 @@
 // semantic_conformance_tests.rs
 // Checked replay, property, metamorphic, and Phase evidence for the current rules.
 
-use std::path::Path;
+use std::{collections::BTreeSet, path::Path};
 
 use managym::conformance::{
-    check_root, generate_case, replay_receipt, validate_phase_matrix, verify_metamorphic,
-    verify_properties, CaseSpec, Orientation, PhaseMatrix, CONTRACT_ID, PHASE_REVISION,
+    generate_case, replay_case, replay_receipt, validate_contract_root, validate_phase_matrix,
+    verify_metamorphic, verify_properties, CaseSpec, Evidence, Manifest, Orientation, PhaseMatrix,
+    CONTRACT_ID, PHASE_REVISION,
 };
 
 const ROOT: &str = concat!(
@@ -13,12 +14,114 @@ const ROOT: &str = concat!(
     "/../conformance/semantic-kernel-w17-v3"
 );
 
+// Each frozen game owns its regeneration, replay and 300-second timeout.
+// Its digest pins every checkpoint and command in the generated trace.
+macro_rules! frozen_cases {
+    ($($test:ident => $id:literal),+ $(,)?) => {
+        const FROZEN_CASE_IDS: &[&str] = &[$($id),+];
+        $(#[test]
+        fn $test() {
+            check_frozen_case($id);
+        })+
+    };
+}
+
+frozen_cases! {
+    frozen_ur_vs_gw_5eed => "ur-vs-gw-5eed",
+    frozen_gw_vs_ur_5eee => "gw-vs-ur-5eee",
+    frozen_ur_vs_gw_5eef => "ur-vs-gw-5eef",
+    frozen_gw_vs_ur_5ef0 => "gw-vs-ur-5ef0",
+    frozen_elemental_161 => "elemental-161",
+    frozen_elemental_162 => "elemental-162",
+    frozen_elemental_163 => "elemental-163",
+    frozen_elemental_164 => "elemental-164",
+    frozen_sacrifice_162 => "sacrifice-162",
+    frozen_sacrifice_163 => "sacrifice-163",
+    frozen_temur_163 => "temur-163",
+    frozen_temur_164 => "temur-164",
+    frozen_elemental_world_gr_vs_ug => "elemental-world-gr_vs_ug",
+    frozen_elemental_world_ug_vs_gr => "elemental-world-ug_vs_gr",
+}
+
+fn manifest() -> Manifest {
+    serde_json::from_slice(include_bytes!(
+        "../../conformance/semantic-kernel-w17-v3/manifest.json"
+    ))
+    .expect("pinned manifest")
+}
+
+fn evidence() -> Evidence {
+    serde_json::from_slice(include_bytes!(
+        "../../conformance/semantic-kernel-w17-v3/evidence.json"
+    ))
+    .expect("pinned evidence")
+}
+
+fn check_frozen_case(id: &str) {
+    let manifest = manifest();
+    let spec = manifest.cases.iter().find(|case| case.id == id).unwrap();
+    let case = generate_case(spec).expect("regenerated frozen case");
+    let evidence = evidence();
+    let expected = evidence
+        .replays
+        .iter()
+        .find(|case| case.case_id == id)
+        .unwrap();
+    // The historical trace_sha256 name holds BLAKE3 over the entire case:
+    // every decision checkpoint, command, event boundary and state hash.
+    let bytes = serde_json::to_vec(&case).unwrap();
+    assert_eq!(
+        blake3::hash(&bytes).to_hex().as_str(),
+        expected.trace_sha256,
+        "{id}"
+    );
+    assert_eq!(
+        case.final_checkpoint.state_hash, expected.final_state_hash,
+        "{id}"
+    );
+    replay_case(&case).expect("frozen case replay");
+}
+
 #[test]
-fn checked_semantic_conformance_evidence_reproduces() {
-    let summary = check_root(Path::new(ROOT)).expect("checked conformance evidence");
-    assert!(summary.replay_cases >= 2);
-    assert!(summary.replay_commands > 0);
-    assert_eq!(summary.phase_rows, 15);
+fn frozen_case_inventory_covers_the_complete_manifest_and_evidence() {
+    validate_contract_root(Path::new(ROOT)).expect("conformance contract");
+    let manifest = manifest();
+    let evidence = evidence();
+    let tested: BTreeSet<_> = FROZEN_CASE_IDS.iter().copied().collect();
+    let declared: BTreeSet<_> = manifest.cases.iter().map(|case| case.id.as_str()).collect();
+    let recorded: BTreeSet<_> = evidence
+        .replays
+        .iter()
+        .map(|case| case.case_id.as_str())
+        .collect();
+    assert_eq!(tested.len(), FROZEN_CASE_IDS.len());
+    assert_eq!(declared.len(), manifest.cases.len());
+    assert_eq!(recorded.len(), evidence.replays.len());
+    assert_eq!(tested, declared);
+    assert_eq!(tested, recorded);
+    assert_eq!(
+        FROZEN_CASE_IDS,
+        manifest
+            .cases
+            .iter()
+            .map(|case| case.id.as_str())
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        FROZEN_CASE_IDS,
+        evidence
+            .replays
+            .iter()
+            .map(|case| case.case_id.as_str())
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(manifest.fuzz, evidence.fuzz);
+    assert_eq!(evidence.schema_version, manifest.schema_version);
+    assert_eq!(evidence.contract_id, manifest.contract_id);
+    assert_eq!(
+        evidence.content_digest,
+        managym::cards::content_pack::default_content_pack().content_digest()
+    );
 }
 
 #[test]

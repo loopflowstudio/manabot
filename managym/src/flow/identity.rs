@@ -33,7 +33,7 @@ impl Game {
         object_ref: ObjectRef,
     ) -> Result<PermanentId, ObjectLookupError> {
         self.state.object(object_ref)?;
-        let object = ObjectId::from(object_ref.entity);
+        let object = object_ref.entity;
         if self.state.zones.zone_of(object) != Some(ZoneType::Battlefield) {
             return Err(ObjectLookupError::WrongZone);
         }
@@ -109,11 +109,6 @@ impl Game {
         self.state.object_lki.for_permanent(permanent_id)
     }
 
-    /// Last known information of `object`'s most recent battlefield appearance.
-    pub(crate) fn latest_object_lki(&self, object: impl Into<ObjectId>) -> Option<&ObjectLki> {
-        self.state.object_lki.latest_for_object(object.into())
-    }
-
     /// Capture the stable viewer identity for a current or departed object.
     pub(crate) fn object_event_ref(&self, object_ref: ObjectRef) -> Option<ObjectEventRef> {
         let entity = if let Ok(permanent_id) = self.lookup_current_permanent(object_ref) {
@@ -121,10 +116,7 @@ impl Game {
         } else if let Some(lki) = self.object_lki(object_ref) {
             lki.presentation_id
         } else {
-            self.state
-                .objects
-                .get(ObjectId::from(object_ref.entity).0)?
-                .id
+            self.state.objects.get(object_ref.entity.0)?.id
         };
         Some(ObjectEventRef {
             entity,

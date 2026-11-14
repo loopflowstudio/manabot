@@ -78,8 +78,7 @@ impl Game {
                 match &self.state.suspended_decision.as_ref()?.decision {
                     Decision::OrderReplacement { candidates, .. } => {
                         let candidate = candidates.get(*mode)?;
-                        let object_id =
-                            crate::state::game_object::ObjectId::from(candidate.source().entity);
+                        let object_id = candidate.source().entity;
                         Some(format!(
                             "{}: {}",
                             self.state.objects[object_id].name,

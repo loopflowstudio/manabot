@@ -754,9 +754,10 @@ impl Game {
                 last_controller == Some(controller)
             }
             Condition::CardsThisWayMatch(predicate) => frame.is_some_and(|frame| {
-                frame.this_way.iter().any(|object| {
-                    self.object_matches_predicate(ObjectId::from(object.entity), predicate)
-                })
+                frame
+                    .this_way
+                    .iter()
+                    .any(|object| self.object_matches_predicate(object.entity, predicate))
             }),
             Condition::TriggeringSpellMatches(predicate) => matches!(
                 frame.and_then(|frame| frame.context_target),
@@ -768,7 +769,7 @@ impl Game {
                 else {
                     return false;
                 };
-                let object_id = ObjectId::from(object.entity);
+                let object_id = object.entity;
                 self.current_object_ref(object_id) != Some(object)
                     && self.state.zones.zone_of(object_id) == Some(ZoneType::Exile)
                     && self.object_matches_predicate(object_id, predicate)

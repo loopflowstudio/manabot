@@ -56,7 +56,8 @@ fn observation_preserves_committed_card_move_zones() {
     let observation = Observation::new(
         &game,
         &[GameEvent::CardMoved {
-            object_id: ObjectId(0),
+            object_id: game.current_object_ref(ObjectId(0)).unwrap(),
+            departed: None,
             from: Some(ZoneType::Battlefield),
             to: ZoneType::Graveyard,
             controller: PlayerId(1),

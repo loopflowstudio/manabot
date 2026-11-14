@@ -101,7 +101,7 @@ impl GameState {
     pub fn current_object_ref(&self, object: ObjectId) -> Option<ObjectRef> {
         self.zones.zone_of(object)?;
         Some(ObjectRef {
-            entity: object.into(),
+            entity: object,
             incarnation: *self.object_incarnations.get(object.0)?,
         })
     }
@@ -115,7 +115,7 @@ impl GameState {
     /// and spell copies have no card.
     pub fn card_of(&self, object: ObjectRef) -> Option<CardId> {
         self.object(object).ok()?;
-        self.objects.card_id(ObjectId::from(object.entity))
+        self.objects.card_id(object.entity)
     }
 
     /// Read one exact appearance, rejecting departed objects even when their
@@ -124,7 +124,7 @@ impl GameState {
         &self,
         object: ObjectRef,
     ) -> Result<&crate::state::game_object::Object, ObjectLookupError> {
-        let row = ObjectId::from(object.entity);
+        let row = object.entity;
         let value = self
             .objects
             .get(row.0)

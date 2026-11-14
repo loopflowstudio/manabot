@@ -97,20 +97,29 @@ fn spell_events_are_observable_for_creature_spells() {
         targets: Vec::new(),
     }));
     assert!(events.contains(&GameEvent::SpellResolved { object_id: elf }));
-    assert!(events.contains(&GameEvent::CardMoved {
-        object_id: elf,
-        from: Some(ZoneType::Hand),
-        to: ZoneType::Stack,
-        controller: PlayerId(0),
-        face_down: false,
-    }));
-    assert!(events.contains(&GameEvent::CardMoved {
-        object_id: elf,
-        from: Some(ZoneType::Stack),
-        to: ZoneType::Battlefield,
-        controller: PlayerId(0),
-        face_down: false,
-    }));
+    let moves: Vec<_> = events
+        .iter()
+        .filter_map(|event| match event {
+            GameEvent::CardMoved {
+                object_id,
+                departed,
+                from,
+                to,
+                controller,
+                face_down,
+            } if object_id.entity == elf => {
+                Some((*object_id, *departed, *from, *to, *controller, *face_down))
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(moves.len(), 2);
+    assert_eq!(moves[0].2, Some(ZoneType::Hand));
+    assert_eq!(moves[0].3, ZoneType::Stack);
+    assert_eq!(moves[1].1, Some(moves[0].0));
+    assert_eq!(moves[1].2, Some(ZoneType::Stack));
+    assert_eq!(moves[1].3, ZoneType::Battlefield);
+    assert!(moves.iter().all(|moved| moved.4 == PlayerId(0) && !moved.5));
 
     let spell_cast_index = events
         .iter()

@@ -189,8 +189,10 @@ fn cr_614_1c_enters_tapped_and_with_counters_before_card_moved_commits() {
     assert!(permanent.tapped);
     assert_eq!(permanent.counter_count(CounterKind::PlusOnePlusOne), 2);
     assert_ne!(s.game().current_object_ref(object), Some(old_ref));
+    let entered = s.game().current_object_ref(object).unwrap();
     assert!(s.drain_events().contains(&GameEvent::CardMoved {
-        object_id: object,
+        object_id: entered,
+        departed: Some(old_ref),
         from,
         to: ZoneType::Battlefield,
         controller: PlayerId(0),

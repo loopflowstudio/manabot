@@ -3886,7 +3886,7 @@ fn delayed_event_seen(event: &DelayedTriggerEvent) -> (u8, bool) {
 #[test]
 fn every_delayed_trigger_event_has_its_own_relation_code() {
     let watched = managym::state::game_object::ObjectRef {
-        entity: managym::state::game_object::EntityId(1),
+        entity: managym::state::game_object::ObjectId(1),
         incarnation: managym::state::game_object::Incarnation(0),
     };
     let events = [

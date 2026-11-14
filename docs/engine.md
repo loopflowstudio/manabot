@@ -747,6 +747,8 @@ object from its base (the card's printing, or a token's or copy's copiable
 values) and returns the new `ObjectId`. Everything else about the old object
 is dropped: damage, counters, attachments, copy effects, a transformed face,
 continuous effects that named it, and every id held elsewhere.
+A request to move to the object's current zone is a no-op and returns its
+unchanged identity.
 
 What the rules let the new object know arrives in one `CarryOver` value, built
 by whatever caused the move. A fact crosses a zone change only as a field of
@@ -755,7 +757,7 @@ it, with the rule that allows it:
 | Rule | What crosses | How |
 | --- | --- | --- |
 | CR 400.7d | a permanent knows how its spell was cast: that it was cast, the value of X and the mana spent | `CarryOver::cast` |
-| CR 400.7e, f | a zone-change trigger (dies, leaves the battlefield, an Aura put into the graveyard) finds the object in the public zone it moved to | the committed event's `became: Option<ObjectId>` |
+| CR 400.7e, f | a zone-change trigger (dies, leaves the battlefield, an Aura put into the graveyard) finds the object in the public zone it moved to | `CardMoved.object_id` is the successor; `departed` names its exact pre-move appearance for LKI |
 | CR 400.7g, h | a permission to cast a card, and the effect that granted it, find the spell on the stack | casting returns the spell's `ObjectId`; `CarryOver::cast_from` |
 | CR 400.7i | an effect that lets a land be played finds the land on the battlefield | playing returns the permanent's `ObjectId` |
 | CR 400.7j | an effect or cost that moves an object to a public zone finds it there ("exile it, then return it", "if you do") | the move's returned `ObjectId`, held by the effect frame (`Moved`, `CreatedThisWay`) or the exile link |

@@ -111,7 +111,7 @@ impl HiddenCommitments {
 fn pinned_library_objects(game: &Game, owner: PlayerId, pinned: &[ObjectRef]) -> Vec<ObjectId> {
     pinned
         .iter()
-        .map(|object| object.entity.into())
+        .map(|object| object.entity)
         .filter(|object_id| {
             game.state
                 .zones
@@ -218,7 +218,7 @@ impl Game {
                     }
                     return binding;
                 }
-                let object_id = ObjectId::from(object.entity);
+                let object_id = object.entity;
                 let zone = self.state.zones.zone_of(object_id);
                 let selection = zone
                     .filter(|zone| matches!(zone, ZoneType::Hand | ZoneType::Library))
@@ -343,7 +343,7 @@ impl Game {
                 return;
             };
             for object in selected {
-                let object_id = ObjectId::from(object.entity);
+                let object_id = object.entity;
                 // Moved selections keep their old incarnation and no longer
                 // bind a hidden source slot. Public results must never be sampled.
                 if self.current_object_ref(object_id) == Some(*object)
@@ -786,7 +786,7 @@ impl Rebinding {
         let objects: BTreeMap<_, _> = mapping.collect();
         let object_ids = objects
             .iter()
-            .map(|(old, new)| (ObjectId::from(old.entity), ObjectId::from(new.entity)))
+            .map(|(old, new)| (old.entity, new.entity))
             .collect();
         Self {
             viewer,

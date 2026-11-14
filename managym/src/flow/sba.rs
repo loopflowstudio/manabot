@@ -170,11 +170,7 @@ impl Game {
                 if destroy {
                     ProposedEvent::Destroy { target }
                 } else {
-                    self.zone_move_proposal(
-                        ObjectId::from(target.entity),
-                        ZoneType::Graveyard,
-                        Default::default(),
-                    )
+                    self.zone_move_proposal(target.entity, ZoneType::Graveyard, Default::default())
                 }
             })
             .collect();

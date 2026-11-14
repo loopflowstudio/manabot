@@ -12,7 +12,7 @@ use crate::{
     state::card::StaticAbility,
     state::{
         card::ReplacementEffect,
-        game_object::{EntityId, ObjectId, ObjectLki, ObjectRef, PermanentId, PlayerId},
+        game_object::{ObjectId, ObjectLki, ObjectRef, PermanentId, PlayerId},
         permanent::{CounterKind, Counters},
         zone::ZoneType,
     },
@@ -631,7 +631,7 @@ impl Game {
         } = batch.binding
         {
             for object in results.iter().filter_map(|result| result.moved) {
-                let object_id = ObjectId::from(object.entity);
+                let object_id = object.entity;
                 if self.state.zones.zone_of(object_id) != Some(ZoneType::Exile) {
                     continue;
                 }
@@ -909,7 +909,7 @@ impl Game {
                 }
                 match (from, object) {
                     (Some(_), Some(object_ref)) => {
-                        object_ref.entity == EntityId::from(*object_id)
+                        object_ref.entity == *object_id
                             && self.current_object_ref(*object_id) == Some(*object_ref)
                     }
                     (None, None) => self.current_object_ref(*object_id).is_none(),
@@ -924,7 +924,7 @@ impl Game {
     /// spell is the source of the delayed triggers it created (CR 603.7d)
     /// though no battlefield record of it exists.
     fn object_ref_is_known(&self, object_ref: ObjectRef) -> bool {
-        let object = ObjectId::from(object_ref.entity);
+        let object = object_ref.entity;
         self.state.objects.get(object.0).is_some()
             && (self.current_object_ref(object) == Some(object_ref)
                 || self.object_lki(object_ref).is_some()
@@ -1032,7 +1032,7 @@ impl Game {
                 ..
             } => {
                 let source = object.unwrap_or(ObjectRef {
-                    entity: EntityId::from(*object_id),
+                    entity: *object_id,
                     incarnation: self.state.object_incarnations[*object_id],
                 });
                 // Entry conditions read the prospective controller, including
@@ -1197,7 +1197,7 @@ impl Game {
         if let Ok(id) = self.lookup_current_permanent(source) {
             return self.state.permanents[id].as_ref().map(|p| p.controller);
         }
-        let object = ObjectId::from(source.entity);
+        let object = source.entity;
         if self.current_object_ref(object) == Some(source) {
             if let Some(controller) = self.stack_spell_controller(object) {
                 return Some(controller);
@@ -1366,7 +1366,7 @@ impl Game {
             return false;
         };
         // A land-type overwrite's counters change other players' mana.
-        if self.state.objects[ObjectId::from(target.entity)]
+        if self.state.objects[target.entity]
             .statics
             .iter()
             .any(|ability| matches!(ability, StaticAbility::SetsLandType(_)))

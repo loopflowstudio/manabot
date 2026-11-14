@@ -11,7 +11,7 @@ use crate::{
     state::{
         ability::DelayedExpiry,
         card::StaticAbility,
-        game_object::{ObjectId, ObjectRef, PermanentId, PlayerId},
+        game_object::{ObjectRef, PermanentId, PlayerId},
         permanent::CounterKind,
     },
 };
@@ -55,7 +55,7 @@ impl Game {
         if amount <= 0 {
             return false;
         }
-        let source_object = source.map(|object_ref| ObjectId::from(object_ref.entity));
+        let source_object = source.map(|object_ref| object_ref.entity);
         let source_has_deathtouch = source.is_some_and(|object_ref| {
             self.source_keywords(object_ref)
                 .is_some_and(|keywords| keywords.has(Keyword::Deathtouch))
@@ -204,7 +204,7 @@ impl Game {
         if let Some(lki) = self.object_lki(source) {
             return Some(lki.keywords);
         }
-        let object = ObjectId::from(source.entity);
+        let object = source.entity;
         if let Some(controller) = self.stack_spell_controller(object) {
             return Some(self.spell_keywords(object, controller));
         }
@@ -223,7 +223,7 @@ impl Game {
         if let Some(lki) = self.object_lki(source) {
             return Some(lki.controller);
         }
-        let object = ObjectId::from(source.entity);
+        let object = source.entity;
         self.state.objects.get(object.0).map(|object| object.owner)
     }
 

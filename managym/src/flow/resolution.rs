@@ -61,7 +61,7 @@ impl Game {
                 .into_iter()
                 .filter(|object| {
                     predicate.as_ref().is_none_or(|predicate| {
-                        self.object_matches_predicate(ObjectId::from(object.entity), predicate)
+                        self.object_matches_predicate(object.entity, predicate)
                     })
                 })
                 .count() as i32,
@@ -499,7 +499,7 @@ impl Game {
         match target {
             Target::Permanent(id) => self.permanent_object_ref(id).is_some(),
             Target::GraveyardCard(object) => {
-                let object_id = ObjectId::from(object.entity);
+                let object_id = object.entity;
                 self.state.card_id(object_id).is_some()
                     && self.current_object_ref(object_id) == Some(object)
                     && self.state.zones.zone_of(object_id) == Some(ZoneType::Graveyard)
@@ -782,7 +782,7 @@ impl Game {
                 }
                 let mut events = Vec::new();
                 for object in selected {
-                    let object_id = ObjectId::from(object.entity);
+                    let object_id = object.entity;
                     let from = self.state.zones.zone_of(object_id);
                     // "Put that card on top" of the library it is already in
                     // (Cruel Tutor, after its shuffle) only reorders it.
@@ -983,7 +983,7 @@ impl Game {
                     .select(from, frame)
                     .into_iter()
                     .filter(|object| {
-                        let object = ObjectId::from(object.entity);
+                        let object = object.entity;
                         (!cards_only || self.state.card_id(object).is_some())
                             && self.object_matches_predicate(object, predicate)
                     })
@@ -1159,7 +1159,7 @@ impl Game {
                 let selected = self.select(what, frame);
                 let mut bent = false;
                 for object in selected {
-                    let object_id = ObjectId::from(object.entity);
+                    let object_id = object.entity;
                     match self.state.zones.zone_of(object_id) {
                         Some(ZoneType::Battlefield) => {
                             if let Ok(id) = self.lookup_current_permanent(object) {
@@ -1479,7 +1479,7 @@ impl Game {
                 let spells: Vec<_> = self
                     .select(what, frame)
                     .into_iter()
-                    .map(|object| ObjectId::from(object.entity))
+                    .map(|object| object.entity)
                     .filter(|object_id| self.find_spell_on_stack_index(*object_id).is_some())
                     .collect();
                 for spell in spells {
@@ -1518,7 +1518,7 @@ impl Game {
                         }
                         // Copied once this resolution has exiled it.
                         Target::GraveyardCard(object) => {
-                            let object_id = ObjectId::from(object.entity);
+                            let object_id = object.entity;
                             if self.state.zones.zone_of(object_id) != Some(ZoneType::Exile) {
                                 return None;
                             }
@@ -1529,7 +1529,7 @@ impl Game {
                     selector => self
                         .select(selector, frame)
                         .into_iter()
-                        .map(|object| ObjectId::from(object.entity))
+                        .map(|object| object.entity)
                         .collect(),
                 };
                 if copied.is_empty() {
@@ -1712,7 +1712,7 @@ impl Game {
                     .iter()
                     .filter(|link| link.source == source)
                     .filter(|link| self.state.object(link.exiled_object).is_ok())
-                    .map(|link| ObjectId::from(link.exiled_object.entity))
+                    .map(|link| link.exiled_object.entity)
                     .filter(|object_id| {
                         self.state.zones.zone_of(*object_id) == Some(ZoneType::Exile)
                             && predicate.matches_object(&self.state.objects[*object_id])
@@ -1998,7 +1998,7 @@ impl Game {
                             or_exiled: true,
                         },
                         controller,
-                        source_object: ObjectId::from(watched.entity),
+                        source_object: watched.entity,
                         source_ref: Some(watched),
                         effects: vec![Effect::Move {
                             library_end: None,
@@ -2143,9 +2143,7 @@ impl Game {
                 })
                 .iter()
                 .copied()
-                .filter(|object| {
-                    self.current_object_ref(ObjectId::from(object.entity)) == Some(*object)
-                })
+                .filter(|object| self.current_object_ref(object.entity) == Some(*object))
                 .collect()
             }
             ObjectSelector::Zone(_) | ObjectSelector::TargetPlayersZone { .. } => {
@@ -2387,7 +2385,7 @@ impl Game {
                     }
                     TargetSpec::GraveyardCard { predicate } => (predicate, false),
                     TargetSpec::GraveyardCardOpponentOwns { predicate } => {
-                        let object_id = ObjectId::from(object.entity);
+                        let object_id = object.entity;
                         if self.state.objects[object_id].owner == controller {
                             return false;
                         }
@@ -2395,7 +2393,7 @@ impl Game {
                     }
                     _ => return false,
                 };
-                let object_id = ObjectId::from(object.entity);
+                let object_id = object.entity;
                 self.state.card_id(object_id).is_some()
                     && self.current_object_ref(object_id) == Some(object)
                     && self.state.zones.zone_of(object_id) == Some(ZoneType::Graveyard)
@@ -2430,7 +2428,7 @@ impl Game {
                 })
             })
             .unwrap_or_else(|| self.object_power(source_object));
-        i32::from(self.object_mana_value(ObjectId::from(object.entity))) <= power
+        i32::from(self.object_mana_value(object.entity)) <= power
     }
 
     /// Whether a battlefield permanent matches a spec's characteristics and

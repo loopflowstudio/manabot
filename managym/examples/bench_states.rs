@@ -627,7 +627,10 @@ fn run(
                         benchmark_layers::triggers(
                             game,
                             GameEvent::CardMoved {
-                                object_id: card,
+                                object_id: game
+                                    .current_object_ref(card)
+                                    .expect("battlefield appearance"),
+                                departed: None,
                                 from: Some(ZoneType::Hand),
                                 to: ZoneType::Battlefield,
                                 controller: PlayerId(actor),

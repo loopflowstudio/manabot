@@ -1295,7 +1295,7 @@ impl Observation {
         // A replacement question identifies prospective battlefield entrants
         // publicly before their retained zone moves commit.
         for object in game.pending_public_entries() {
-            let object_id = ObjectId::from(object.entity);
+            let object_id = object.entity;
             if let Some(zone) = game.state.zones.zone_of(object_id) {
                 add_object(object_id, zone);
             }
@@ -1706,7 +1706,7 @@ impl Observation {
                 player_id: None,
                 permanent_id: None,
                 stack_object_id: None,
-                card_id: Some(game.state.objects[ObjectId::from(object.entity)].id.0 as i32),
+                card_id: Some(game.state.objects[object.entity].id.0 as i32),
             }),
             Target::StackSpell(object_id) => {
                 let stack_object_id = Self::stack_spell_object_id(game, object_id)?.0 as i32;
@@ -1771,8 +1771,10 @@ impl Observation {
                 to,
                 controller,
                 face_down,
+                ..
             } => {
-                let mut data = Self::card_event_data(EventType::CardMoved, *object_id, *controller);
+                let mut data =
+                    Self::card_event_data(EventType::CardMoved, object_id.entity, *controller);
                 data.from_zone = from.map_or(-1, |zone| zone as i32);
                 data.to_zone = *to as i32;
                 // Outside cards and face-down arrivals name no public object.
@@ -2054,7 +2056,7 @@ impl Observation {
                     .map(|perm| vec![perm.id])
                     .unwrap_or_default(),
                 crate::state::target::Target::GraveyardCard(object) => {
-                    vec![game.state.objects[ObjectId::from(object.entity)].id]
+                    vec![game.state.objects[object.entity].id]
                 }
                 crate::state::target::Target::StackSpell(object_id) => {
                     vec![game.state.objects[object_id].id]
@@ -2071,9 +2073,7 @@ impl Observation {
                 ) {
                     return candidates
                         .get(*mode)
-                        .map(|candidate| {
-                            game.state.objects[ObjectId::from(candidate.source().entity)].id
-                        })
+                        .map(|candidate| game.state.objects[candidate.source().entity].id)
                         .into_iter()
                         .collect();
                 }

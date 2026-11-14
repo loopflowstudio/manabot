@@ -1090,7 +1090,7 @@ fn hidden_selection_capture_does_not_follow_a_later_incarnation() {
     let viewer = PlayerId(0);
     let mut root = completed_private_capture(player);
     let original = root.state.delayed_triggers[0].remembered[0].object;
-    let object_id = ObjectId::from(original.entity);
+    let object_id = original.entity;
     root.move_object(object_id, ZoneType::Graveyard);
     root.move_object(object_id, ZoneType::Hand);
     assert_ne!(root.current_object_ref(object_id), Some(original));
@@ -1319,7 +1319,7 @@ fn hidden_selection_from_remembered_keeps_decision_and_child_aliases() {
                     &mut branch,
                     Action::SelectCard {
                         player,
-                        object: captured.entity.into(),
+                        object: captured.entity,
                     },
                 );
             }
@@ -2157,7 +2157,7 @@ fn surveil_commits_the_partition_once_and_announces_only_after_kept_order() {
                     .events
                     .iter()
                     .filter(|event| matches!(event,
-                GameEvent::CardMoved { object_id: moved, to: ZoneType::Graveyard, .. } if moved == object))
+                GameEvent::CardMoved { object_id: crate::state::game_object::ObjectRef { entity: moved, .. }, to: ZoneType::Graveyard, .. } if moved == object))
                     .count(),
                 1
             );
@@ -2714,7 +2714,7 @@ fn retained_batch_linked_entry_suspends_actual_mana_cost_completion() {
     assert_eq!(game.state.players[player.0].life, 23);
     assert_eq!(game.state.players[player.0].mana_pool.total(), 0);
     assert_eq!(game.state.events.iter().filter(|event| matches!(event, GameEvent::PermanentSacrificed { object_id: object, .. } if *object == source_object)).count(), 1);
-    assert_eq!(game.state.events.iter().filter(|event| matches!(event, GameEvent::CardMoved { object_id: object, to: ZoneType::Battlefield, .. } if *object == returned)).count(), 1);
+    assert_eq!(game.state.events.iter().filter(|event| matches!(event, GameEvent::CardMoved { object_id: crate::state::game_object::ObjectRef { entity: object, .. }, to: ZoneType::Battlefield, .. } if *object == returned)).count(), 1);
 }
 
 #[test]
@@ -2795,7 +2795,7 @@ fn retained_batch_state_based_departure_retains_linked_entry_and_lki() {
         3
     );
     assert_eq!(game.perform_state_based_actions(), SbaProgress::Stable);
-    assert_eq!(game.state.events.iter().filter(|event| matches!(event, GameEvent::CardMoved { object_id: object, from: Some(ZoneType::Battlefield), .. } if *object == source_object)).count(), 1);
+    assert_eq!(game.state.events.iter().filter(|event| matches!(event, GameEvent::CardMoved { object_id: crate::state::game_object::ObjectRef { entity: object, .. }, from: Some(ZoneType::Battlefield), .. } if *object == source_object)).count(), 1);
 }
 
 #[test]
@@ -2855,12 +2855,12 @@ fn hidden_selection_partial_discard_survives_both_samplers_and_divergent_command
             };
             assert_eq!(selected.len(), 1, "a prior choice cannot disappear");
             assert!(candidates.iter().all(|object| branch.state.zones.contains(
-                ObjectId::from(object.entity),
+                object.entity,
                 ZoneType::Hand,
                 player
             )));
             assert!(selected.iter().all(|object| candidates.contains(object)));
-            let first = ObjectId::from(selected[0].entity);
+            let first = selected[0].entity;
             let second = branch
                 .action_space()
                 .unwrap()
@@ -2990,7 +2990,7 @@ fn hidden_selection_child_and_saved_caller_share_one_sampled_binding() {
             caller.frame.selected[0]
         );
         assert_eq!(caller.frame.remembered[0].object, caller.frame.selected[0]);
-        let selected = ObjectId::from(caller.frame.selected[0].entity);
+        let selected = caller.frame.selected[0].entity;
         assert!(branch
             .state
             .zones
@@ -3129,7 +3129,7 @@ fn hidden_selection_library_commitments_survive_sampling_without_revealing_order
             panic!("search retained");
         };
         assert_eq!(selected.len(), 1);
-        let selected = ObjectId::from(selected[0].entity);
+        let selected = selected[0].entity;
         assert_eq!(
             branch.state.zones.zone_of(selected),
             Some(ZoneType::Library)
@@ -3456,7 +3456,7 @@ fn hidden_selection_foretold_measure_preserves_every_committed_slot() {
             };
             assert_eq!(selected.len(), 2);
             for object in selected {
-                let object_id = ObjectId::from(object.entity);
+                let object_id = object.entity;
                 assert_eq!(branch.state.objects[object_id].name, "Lightning Bolt");
                 assert!(branch
                     .state

@@ -1042,11 +1042,7 @@ impl Game {
                     .iter()
                     .filter_map(|id| self.permanent_object_ref(*id))
                     .map(|object| {
-                        self.zone_move_proposal(
-                            ObjectId::from(object.entity),
-                            ZoneType::Exile,
-                            Default::default(),
-                        )
+                        self.zone_move_proposal(object.entity, ZoneType::Exile, Default::default())
                     })
                     .collect(),
             ),
@@ -1410,7 +1406,7 @@ impl Game {
             EventBinding::Shuffle { player } => self.shuffle_library(player),
             EventBinding::PlaceInLibrary { second_from_top } => {
                 for object in moved {
-                    let object_id = ObjectId::from(object.entity);
+                    let object_id = object.entity;
                     if self.state.zones.zone_of(object_id) != Some(ZoneType::Library) {
                         continue;
                     }
@@ -1432,7 +1428,7 @@ impl Game {
             EventBinding::Created { attacking } => {
                 frame.created = moved.collect();
                 for object in &frame.created {
-                    self.finish_created_token(ObjectId::from(object.entity), attacking);
+                    self.finish_created_token(object.entity, attacking);
                 }
             }
             EventBinding::Damage { result: measured } => {
@@ -1469,7 +1465,7 @@ impl Game {
                 frame.moved = moved.collect();
                 let mut owners = Vec::new();
                 for object in &frame.moved {
-                    let object_id = ObjectId::from(object.entity);
+                    let object_id = object.entity;
                     let owner = self.state.objects[object_id].owner;
                     match self.state.zones.zone_of(object_id) {
                         Some(ZoneType::Library) if shuffle => {
@@ -1796,10 +1792,8 @@ impl Game {
                 let object_ids: Vec<_> = candidates
                     .iter()
                     .filter(|object| !selected.contains(object))
-                    .filter(|object| {
-                        self.current_object_ref(ObjectId::from(object.entity)) == Some(**object)
-                    })
-                    .map(|object| ObjectId::from(object.entity))
+                    .filter(|object| self.current_object_ref(object.entity) == Some(**object))
+                    .map(|object| object.entity)
                     .collect();
                 ActionSpace {
                     player: Some(*player),
@@ -3384,7 +3378,7 @@ mod learn_tests {
             );
             assert!(game.state.suspended_decision.is_none());
             let events: Vec<_> = game.state.events.iter().skip(event_count).collect();
-            assert!(events.iter().any(|event| matches!(event, GameEvent::CardMoved { object_id: moved, from: None, to: ZoneType::Hand, .. } if *moved == card.into())));
+            assert!(events.iter().any(|event| matches!(event, GameEvent::CardMoved { object_id: crate::state::game_object::ObjectRef { entity: moved, .. }, from: None, to: ZoneType::Hand, .. } if *moved == card.into())));
             assert!(!events
                 .iter()
                 .any(|event| matches!(event, GameEvent::CardDrawn { .. })));

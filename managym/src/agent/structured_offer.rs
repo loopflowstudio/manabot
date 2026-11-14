@@ -1841,7 +1841,7 @@ impl Game {
                 .map(|_| Target::StackAbility(id))
                 .ok_or(StructuredOfferError::InvalidCurrentTarget),
             BoundTarget::GraveyardCard(object) => {
-                let object_id = ObjectId::from(object.entity);
+                let object_id = object.entity;
                 if self.current_object_ref(object_id) == Some(object)
                     && self.state.zones.zone_of(object_id) == Some(ZoneType::Graveyard)
                 {
@@ -1882,7 +1882,7 @@ impl Game {
                 ))
             }
             BoundTarget::GraveyardCard(object) => {
-                let object_id = ObjectId::from(object.entity);
+                let object_id = object.entity;
                 if self.current_object_ref(object_id) != Some(object) {
                     return Err(StructuredOfferError::InvalidCurrentTarget);
                 }

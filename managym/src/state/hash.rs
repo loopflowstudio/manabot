@@ -1,4 +1,10 @@
 //! Versioned deterministic hashing for mutable match state.
+//!
+//! V16 projects identities that were bare rows to their slot alone, including
+//! CardMoved's successor. Its captured departure is also omitted from that old
+//! event shape. Two states differing only in those appearances' generations
+//! can therefore hash alike, as before the identity split; a future hash
+//! version must encode the complete identities rather than these projections.
 
 use std::fmt;
 

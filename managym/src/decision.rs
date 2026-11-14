@@ -21,7 +21,7 @@ use crate::{
     },
     flow::game::Game,
     state::{
-        game_object::{ObjectId, ObjectLookupError, PlayerId},
+        game_object::{ObjectLookupError, PlayerId},
         zone::ZoneType,
     },
 };
@@ -372,9 +372,9 @@ impl Game {
             card.zone != ZoneType::Hand
                 || self.shares_information(viewer, PlayerId(1 - viewer.0))
                 || self.searches_private_zones(viewer, PlayerId(1 - viewer.0))
-                || public_entries.iter().any(|object| {
-                    self.state.objects[ObjectId::from(object.entity)].id.0 as i32 == card.id
-                })
+                || public_entries
+                    .iter()
+                    .any(|object| self.state.objects[object.entity].id.0 as i32 == card.id)
         }) {
             return Err(SemanticError::ViewerSafetyViolation);
         }

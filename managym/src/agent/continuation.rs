@@ -223,7 +223,7 @@ impl Game {
         effects: &[crate::state::ability::Effect],
     ) -> bool {
         let definition = if let Some(grant) = grant {
-            self.state.objects[ObjectId::from(grant.grantor.entity)]
+            self.state.objects[grant.grantor.entity]
                 .attached_grants()
                 .nth(grant.index)
         } else {
@@ -243,7 +243,7 @@ impl Game {
         object: ObjectRef,
         viewer: PlayerId,
     ) -> VisibleReference {
-        let object_id = ObjectId::from(object.entity);
+        let object_id = object.entity;
         if self.current_object_ref(object_id) != Some(object) {
             return VisibleReference {
                 definition: self.object_lki(object).map(|lki| lki.definition_id.0),
@@ -1250,7 +1250,7 @@ mod tests {
             .visible_reference(reference, PlayerId(0))
             .object
             .is_some());
-        let object_id = ObjectId::from(reference.entity);
+        let object_id = reference.entity;
         game.move_object(object_id, ZoneType::Hand);
         assert!(game
             .visible_reference(reference, PlayerId(0))

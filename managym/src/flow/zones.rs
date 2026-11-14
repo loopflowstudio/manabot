@@ -124,8 +124,13 @@ impl Game {
             owner: player,
             definition,
         });
-        self.move_object(object, ZoneType::Hand);
-        if self.state.zones.contains(object, ZoneType::Hand, player) {
+        let moved = self.move_object(object, ZoneType::Hand);
+        if self.state.object(moved).is_ok()
+            && self
+                .state
+                .zones
+                .contains(moved.entity, ZoneType::Hand, player)
+        {
             let count = self.state.players[player.0]
                 .known_hand
                 .get(&definition)
@@ -329,7 +334,7 @@ impl Game {
         }]);
         let results = self.complete_immediate_batch(batch);
         for object in results.iter().filter_map(|result| result.moved) {
-            self.finish_created_token(ObjectId::from(object.entity), tapped_and_attacking);
+            self.finish_created_token(object.entity, tapped_and_attacking);
         }
         results
             .iter()
@@ -493,8 +498,11 @@ impl Game {
         self.state.stack_objects.is_empty()
     }
 
-    pub fn move_object(&mut self, object: impl Into<ObjectId>, to_zone: ZoneType) {
-        self.move_object_with_entry(object, to_zone, ZoneEntry::default());
+    /// Return the appearance made by this move (CR 400.7j), even if a
+    /// consequent event moves it again. A same-zone no-op returns the
+    /// unchanged appearance.
+    pub fn move_object(&mut self, object: impl Into<ObjectId>, to_zone: ZoneType) -> ObjectRef {
+        self.move_object_with_entry(object, to_zone, ZoneEntry::default())
     }
 
     pub(crate) fn move_object_with_entry(
@@ -502,9 +510,17 @@ impl Game {
         object: impl Into<ObjectId>,
         to_zone: ZoneType,
         entry: ZoneEntry,
-    ) {
+    ) -> ObjectRef {
+        let object = object.into();
+        let unchanged = self.current_object_ref(object);
         let event = self.zone_move_proposal(object, to_zone, entry);
-        self.apply_immediate_event(event);
+        let batch = self.event_batch(vec![event]);
+        self.complete_immediate_batch(batch)
+            .into_iter()
+            .next()
+            .and_then(|result| result.moved)
+            .or(unchanged)
+            .expect("zone move must name an existing object")
     }
 
     pub(crate) fn zone_move_proposal(
@@ -664,7 +680,10 @@ impl Game {
         }
         self.capture_object_move(object_id, old_zone, Some(to_zone), event_controller);
         let event = GameEvent::CardMoved {
-            object_id,
+            object_id: self
+                .current_object_ref(object_id)
+                .expect("committed appearance"),
+            departed: departing_ref,
             from: old_zone,
             to: to_zone,
             controller: event_controller,
@@ -839,7 +858,7 @@ impl Game {
                 continue;
             };
             let owner = exiled_object.owner;
-            let exiled = ObjectId::from(link.exiled_object.entity);
+            let exiled = link.exiled_object.entity;
             if self.state.zones.contains(exiled, ZoneType::Exile, owner) {
                 followups.push(self.zone_move_proposal(
                     exiled,

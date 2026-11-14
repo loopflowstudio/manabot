@@ -102,27 +102,6 @@ impl std::ops::Index<CardId> for CardVec {
     }
 }
 
-/// Stable match-local identity of a card, token or spell copy.
-///
-/// `ObjectId` is the current storage authority for runtime objects. Keeping the
-/// rules identity in a distinct type prevents continuations from silently
-/// treating that storage index as the current rules object after a zone
-/// change. The adapter can move when the card-instance layout changes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
-pub struct EntityId(pub usize);
-
-impl From<ObjectId> for EntityId {
-    fn from(object: ObjectId) -> Self {
-        Self(object.0)
-    }
-}
-
-impl From<EntityId> for ObjectId {
-    fn from(entity: EntityId) -> Self {
-        Self(entity.0)
-    }
-}
-
 /// Monotonic rules-object generation for one physical entity.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub struct Incarnation(pub u32);
@@ -140,7 +119,7 @@ impl Incarnation {
 /// object represented by the same physical card.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub struct ObjectRef {
-    pub entity: EntityId,
+    pub entity: ObjectId,
     pub incarnation: Incarnation,
 }
 
@@ -201,15 +180,12 @@ pub struct ObjectLki {
 }
 
 /// Last-known battlefield facts of departed exact objects, keyed by object,
-/// with each entity's latest departed object and each battlefield slot's
-/// object at hand: a card leaves and re-enters the battlefield as new
-/// objects, and zone-change matching looks back to its most recent one.
+/// with each battlefield slot's departed object at hand. Zone-change
+/// events carry their own departure identity, never a latest-by-row query.
 /// Iterates in object order; the canonical state hash serializes that.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ObjectLkiLog {
     by_object: BTreeMap<ObjectRef, ObjectLki>,
-    /// The latest departed object of each entity, by entity index.
-    latest_by_entity: Vec<Option<ObjectRef>>,
     /// The departed object that occupied each battlefield slot, by
     /// `PermanentId`; a slot is never reused.
     by_permanent: Vec<Option<ObjectRef>>,
@@ -218,13 +194,6 @@ pub struct ObjectLkiLog {
 impl ObjectLkiLog {
     pub fn insert(&mut self, lki: ObjectLki) {
         let object = lki.object_ref;
-        let entity = object.entity.0;
-        if self.latest_by_entity.len() <= entity {
-            self.latest_by_entity.resize(entity + 1, None);
-        }
-        if self.latest_by_entity[entity].is_none_or(|latest| latest < object) {
-            self.latest_by_entity[entity] = Some(object);
-        }
         let slot = lki.permanent.0;
         if self.by_permanent.len() <= slot {
             self.by_permanent.resize(slot + 1, None);
@@ -239,15 +208,6 @@ impl ObjectLkiLog {
 
     pub fn contains(&self, object: ObjectRef) -> bool {
         self.by_object.contains_key(&object)
-    }
-
-    /// The most recent battlefield appearance this object left.
-    pub fn latest_for_object(&self, object_id: ObjectId) -> Option<&ObjectLki> {
-        self.latest_by_entity
-            .get(object_id.0)
-            .copied()
-            .flatten()
-            .and_then(|object| self.by_object.get(&object))
     }
 
     /// The departed object that occupied a battlefield slot.
