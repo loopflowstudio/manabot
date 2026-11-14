@@ -256,7 +256,9 @@ One continuous leaf. Regions are ruled, never boxed.
   italics, the deck's color identity as a thin **pie rule** beneath it,
   life as bare numerals. Zones are **staves** — hand, battlefield,
   graveyard — named by small-caps **rubrics** in a margin column, divided
-  by hairlines. The opponent reads hand-first; the hero battlefield-first.
+  by hairlines. Both players read battlefield-first; secondary zones follow.
+  Occupied lanes use the available space, with pagers beside their headings;
+  empty groups share a compact count line.
 - **The stack is the one thing on the sheet allowed to burn red**: a hot
   rubric and red-framed spell lines between the two regions.
 - The **margin column** holds the apparatus behind a single vertical rule:

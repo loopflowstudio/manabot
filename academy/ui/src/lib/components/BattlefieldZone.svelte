@@ -47,24 +47,25 @@
 </script>
 
 <div role="group" aria-label={label} data-battlefield-lane={lane} class:occupied={permanents.length > 0} class="lane min-h-0 min-w-0 rounded border border-line p-2">
-  <h3 class="type-rubric truncate text-ink-2" title={label}>{label} · {permanents.length}</h3>
+  <div class="lane-heading flex items-center justify-between gap-1">
+    <h3 class="type-rubric min-w-0 truncate text-ink-2" title={label}>{label} · {permanents.length}</h3>
+    {#if pages > 1}
+      <div class="flex shrink-0 items-center gap-1 type-caption">
+        <button aria-label={`Previous ${label.toLowerCase()}`} disabled={page === 0} onclick={() => page -= 1} class="min-h-6 min-w-6 px-1 underline disabled:opacity-30">←</button>
+        <span role="status" class="text-ink-2">{page + 1}/{pages}</span>
+        <button aria-label={`Next ${label.toLowerCase()}`} disabled={page + 1 >= pages} onclick={() => page += 1} class="min-h-6 min-w-6 px-1 underline disabled:opacity-30">→</button>
+      </div>
+    {/if}
+  </div>
   <div bind:this={box} class="min-h-0 overflow-hidden p-1">
     {#if permanents.length}
       <PermanentRow permanents={visible} {allPermanents} {tablePermanents} cardWidth={layout.cardWidth}
         {focusedIds} {clickableTargets} {onSelectTarget} {onHoverTarget} {onPreviewCard} />
-    {:else}<p class="type-caption text-ink-3">Empty</p>{/if}
-  </div>
-  <div class="flex min-h-6 items-center justify-between gap-1 type-caption">
-    {#if pages > 1}
-      <button aria-label={`Previous ${label.toLowerCase()}`} disabled={page === 0} onclick={() => page -= 1} class="min-h-6 min-w-6 px-1 underline disabled:opacity-30">←</button>
-      <span role="status" class="text-ink-2">{page + 1}/{pages}</span>
-      <button aria-label={`Next ${label.toLowerCase()}`} disabled={page + 1 >= pages} onclick={() => page += 1} class="min-h-6 min-w-6 px-1 underline disabled:opacity-30">→</button>
     {/if}
   </div>
 </div>
 
 <style>
-  .lane { align-self: start; display: grid; grid-template-rows: auto; }
-  .lane:not(.occupied) > :global(:not(h3)) { display: none; }
-  .occupied { height: 150px; grid-template-rows: auto minmax(0, 1fr) 1.5rem; }
+  .lane { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 126px; }
+  .lane-heading { min-height: 1.5rem; }
 </style>

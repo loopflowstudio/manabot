@@ -118,7 +118,8 @@ the board above choices, with links between them. History, advice and table
 tools can be opened separately; **Compare advice** opens and focuses Advice. Native card
 types group creatures, lands, other
 permanents and artifact tokens into bounded battlefield lanes; dense lanes
-compact their cards, then offer explicit paging. Focusing a legal offer reveals
+compact their cards, then offer explicit paging beside their headings. Occupied
+lanes precede compact empty counts and secondary-zone disclosures. Focusing a legal offer reveals
 its objects' pages without submitting a choice. Public mana
 pools, spending restrictions and chooser-only inspected cards come from native
 observations. Historical frames without those fields say details were not recorded.

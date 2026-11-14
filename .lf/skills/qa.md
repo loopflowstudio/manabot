@@ -318,3 +318,17 @@ publish, land or choose the next Graph step from here.
   `ETUDE_OUTPUT_DIR=<dir> MTG301_WORK=<dir> MTG301_CANDIDATE=<c> uv run python
   experiments/l4_step_profile.py job --smoke`. For `live` it took about 6
   minutes and 2.2 GB and runs every stage as a real child process.
+
+- Live Academy QA without fixtures: build first, then start the ordinary
+  `managym.academy.server:app` with `ACADEMY_TRACES_DIR` pointing into an ignored
+  `.runs/` directory and `ACADEMY_PLAY_RECORD_ORIGIN=automated_validation`.
+  Run `ACADEMY_API_PORT=<api> npm run preview -- --host 127.0.0.1 --port <ui>
+  --strictPort` from `academy/ui`. Browser frame probes must read accepted
+  Commands from `message.update.frame` as well as `message.recovery.frame`;
+  otherwise a reload comparison uses a stale opening frame. For a short real
+  target/recovery game, import `20 Mountain\n40 Lightning Bolt` against
+  `40 Plains`, select Passive, play Mountains and cast Bolts at Villain.
+  Replay's newest entry can be an unfinished Play Again attempt: select the
+  completed result explicitly before checking Next frame. Playwright offline
+  mode did not close an existing localhost WebSocket in the MTG-355 run; it
+  alone does not prove disconnect/reconnect behavior.

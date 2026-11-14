@@ -270,7 +270,8 @@
   @media (min-width: 1024px) and (min-height: 650px) {
     [data-testid="game-board"] { display: flex; flex-direction: column; }
     [data-testid="game-board"] > :global(.player-area) { flex: 1; }
-    .hero-area { flex: 1.6; display: flex; flex-direction: column; min-height: 0; }
+    [data-testid="game-board"] > :global(.player-area.empty-battlefield) { flex: 0 0 auto; }
+    .hero-area { flex: 1 1 150px; display: flex; flex-direction: column; min-height: 0; }
     .hero-area > :global(.player-area) { flex: 1; }
     .schedule-details, .ordered-stack { max-height: 90px; overflow-y: auto; flex-shrink: 0; }
     [aria-label="Inspected card"], [aria-label="Private inspection"], [aria-label="The stack"] { max-height: 130px; overflow-y: auto; flex-shrink: 0; }

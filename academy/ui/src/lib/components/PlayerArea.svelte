@@ -210,11 +210,23 @@
   </div>
 {/snippet}
 
-<section class="player-area" aria-label={`${label}${deckName ? ` — ${deckName}` : ''}`}>
+<section class="player-area" class:empty-battlefield={opponent && player.battlefield.length === 0} aria-label={`${label}${deckName ? ` — ${deckName}` : ''}`}>
   {@render playerBar()}
 
   <!-- svelte-ignore a11y_no_noninteractive_tabindex (keyboard access to the scrolling zones) -->
   <div class="staves" role="region" aria-label={`${label} battlefield and zones`} tabindex="0">
+      <div class="staff">
+        {@render rubric('Battlefield')}
+        <Battlefield
+          permanents={player.battlefield}
+          {tablePermanents}
+          {focusedIds}
+          {clickableTargets}
+          {onSelectTarget}
+          {onHoverTarget}
+          {onPreviewCard}
+        />
+      </div>
     {#if player.main_counts}
       <details class="type-caption py-2" data-testid="decklist-summary">
         <summary>Decklist ({total(player.main_counts)} cards, {total(player.unseen_counts)} unseen)</summary>
@@ -251,18 +263,7 @@
         </div>
       </details>
     {/if}
-      <div class="staff">
-        {@render rubric('Battlefield')}
-        <Battlefield
-          permanents={player.battlefield}
-          {tablePermanents}
-          {focusedIds}
-          {clickableTargets}
-          {onSelectTarget}
-          {onHoverTarget}
-          {onPreviewCard}
-        />
-      </div>
+
 
     <details open={player.graveyard.some(card => focusedIds.has(card.id))}>
       <summary class="type-caption cursor-pointer">Graveyard ({player.graveyard.length})</summary>
@@ -358,27 +359,15 @@
   @media (min-width: 1024px) and (min-height: 650px) {
     .player-area { display: flex; flex-direction: column; min-height: 0; }
     .player-status { flex-shrink: 0; max-height: 90px; overflow: auto; }
-    .staves { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 .25rem; }
+    .staves { display: flex; flex-direction: column; gap: .25rem; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 .25rem; }
     .hand-staff { flex-shrink: 0; }
   }
-  .staves .staff {
-    display: grid;
-    grid-template-columns: 1fr;
-    column-gap: 18px;
-    align-items: end;
-    padding: 4px 0;
-  }
-  .staves .staff + .staff {
-    border-top: 1px solid color-mix(in srgb, var(--border) 62%, transparent);
+  .staff { padding: 4px 0; }
+  @media (min-width: 1024px) and (min-height: 650px) {
+    .staff { display: flex; flex-direction: column; flex: 1 0 auto; min-height: 0; }
+    .staves > :global(:not(.staff)) { flex-shrink: 0; }
   }
   @media (max-width: 640px) {
-    .staves .staff {
-      grid-template-columns: 1fr;
-      row-gap: 6px;
-    }
-    .staves .staff > :first-child {
-      padding-top: 6px;
-      text-align: left;
-    }
+    .staff > :first-child { padding-top: 6px; }
   }
 </style>

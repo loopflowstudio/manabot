@@ -420,9 +420,9 @@ board.
 
 - **A crowded hand:** scroll the labeled hand region horizontally to reach
   the remaining cards.
-- **A crowded battlefield:** use its previous/next page controls. Counts show
+- **A crowded battlefield:** use the previous/next controls beside each lane heading. Counts show
   the size of each group; focusing an action reveals the page holding its
-  subject. Scroll the labeled battlefield region to reach further groups and
+  subject. Occupied lanes come first; empty groups retain compact counts. Scroll the labeled battlefield region to reach further groups and
   secondary zones. Identical card copies keep their own choices.
 - **Other zones:** open their inspection controls to see viewer-permitted
   contents. Empty zones keep their labels and counts; hidden cards remain

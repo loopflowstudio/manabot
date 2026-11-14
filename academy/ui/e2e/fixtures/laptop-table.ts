@@ -1,4 +1,3 @@
-import type { Page } from '@playwright/test';
 import boltFixtureJson from '../../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type {
   CardState,
@@ -10,7 +9,6 @@ import type {
 } from '../../src/lib/types';
 
 const boltFixture = boltFixtureJson as { recovery: RecoveryEnvelope };
-
 
 interface PermanentSpec {
   name: string;
@@ -186,31 +184,3 @@ export function denseFrame(): ExperienceFrame {
     deck_names: { hero: 'UR Lessons', villain: 'GW Allies' },
   };
 }
-
-export async function installDenseAuthority(page: Page): Promise<void> {
-  await page.routeWebSocket('**/ws/play', (socket) => {
-    socket.onMessage((raw) => {
-      const message = JSON.parse(String(raw)) as { type?: string };
-      if (message.type !== 'new_game') {
-        return;
-      }
-      const frame = denseFrame();
-      socket.send(JSON.stringify({
-        type: 'observation',
-        data: frame.projection,
-        actions: [],
-        session_id: 'dense-board-session',
-        resume_token: 'dense-board-resume-token',
-        recovery: {
-          ...structuredClone(boltFixture.recovery),
-          reason: 'initial_connect',
-          frame,
-          presentation_tail: [],
-          accepted_commands: [],
-          replay_cursor: frame.revision,
-        },
-      }));
-    });
-  });
-}
-

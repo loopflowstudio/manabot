@@ -6,6 +6,7 @@ import type { Command, ExperienceFrame, RecoveryEnvelope } from '../src/lib/type
 import { denseFrame } from './fixtures/laptop-table';
 
 interface TableOptions {
+  sparse?: boolean;
   offerCount?: number;
   longInstruction?: boolean;
   holdCommand?: boolean;
@@ -15,6 +16,11 @@ async function installTable(page: Page, options: TableOptions = {}): Promise<{
   commands: Command[]; frame: ExperienceFrame; rejectPending: () => void;
 }> {
   const frame = denseFrame();
+  if (options.sparse) {
+    frame.projection.agent.battlefield = frame.projection.agent.battlefield.filter(card => card.types?.is_land).slice(0, 1);
+    frame.projection.opponent.battlefield = [];
+    frame.projection.agent.hand = frame.projection.agent.hand.slice(0, 7);
+  }
   // A large published offer set over exact visible objects, including identical copies.
   frame.offers = Array.from({ length: options.offerCount ?? frame.projection.agent.battlefield.length }, (_, index) => {
     const card = frame.projection.agent.battlefield[index % frame.projection.agent.battlefield.length];
@@ -120,6 +126,59 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 800
       expect(recoveredHand!.y + recoveredHand!.height).toBeLessThanOrEqual(viewport.height);
       await page.screenshot({ path: testInfo.outputPath('laptop-table.png') });
       await context.close();
+    });
+  }
+}
+
+for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 800 }]) {
+  for (const sparse of [true, false]) {
+    test(`battlefield lane access ${sparse ? 'sparse' : 'dense'} ${viewport.width}`, async ({ page }, testInfo) => {
+      await page.setViewportSize(viewport);
+      const { commands, frame } = await installTable(page, { sparse });
+      await page.evaluate(() => document.fonts.ready);
+      const zones = page.getByRole('region', { name: 'You battlefield and zones', exact: true });
+      const zoneBounds = (await zones.boundingBox())!;
+      if (sparse) {
+        const land = (await zones.locator('[data-object-id]').first().boundingBox())!;
+        expect(land.y).toBeGreaterThanOrEqual(zoneBounds.y);
+        expect(land.y + land.height).toBeLessThanOrEqual(zoneBounds.y + zoneBounds.height);
+        expect(await zones.evaluate(element => element.scrollTop)).toBe(0);
+      }
+      const lanes = zones.locator('[data-battlefield-lane].occupied');
+      for (const lane of await lanes.all()) {
+        const heading = (await lane.locator('h3').boundingBox())!;
+        expect(heading.y).toBeGreaterThanOrEqual(zoneBounds.y);
+        expect(heading.y + heading.height).toBeLessThanOrEqual(zoneBounds.y + zoneBounds.height);
+        const seen = new Set<string>();
+        const next = lane.getByRole('button', { name: /^Next / });
+        do {
+          for (const card of await lane.locator('[data-object-id]').all()) {
+            seen.add((await card.getAttribute('data-object-id'))!);
+            await card.focus();
+            const cardBounds = (await card.boundingBox())!;
+            const visibleZone = (await zones.boundingBox())!;
+            expect(cardBounds.y).toBeGreaterThanOrEqual(visibleZone.y);
+            expect(cardBounds.y + cardBounds.height).toBeLessThanOrEqual(visibleZone.y + visibleZone.height);
+          }
+          if (!await next.count() || !await next.isEnabled()) break;
+          await next.focus();
+          await expect(next).toBeInViewport();
+          await next.press('Enter');
+        } while (true);
+        const kind = await lane.getAttribute('data-battlefield-lane');
+        const expected = frame.projection.agent.battlefield.filter(card => kind === 'lands' ? card.types?.is_land : card.types?.is_creature);
+        expect([...seen].sort()).toEqual(expected.map(card => String(card.id)).sort());
+      }
+      if (sparse) {
+        await expect(page.getByRole('region', { name: 'Search 64 battlefield and zones', exact: true }).getByText('Creatures · 0', { exact: true })).toBeVisible();
+      }
+      expect(await page.evaluate(() => scrollY)).toBe(0);
+      expect(commands).toEqual([]);
+      await page.screenshot({ path: testInfo.outputPath('battlefield.png') });
+      await writeFile(testInfo.outputPath('battlefield-geometry.json'), JSON.stringify(await zones.evaluate(element => ({
+        bounds: element.getBoundingClientRect().toJSON(), scrollTop: element.scrollTop, scrollHeight: element.scrollHeight,
+        lanes: Array.from(element.querySelectorAll('[data-battlefield-lane]'), lane => ({ label: lane.getAttribute('aria-label'), bounds: lane.getBoundingClientRect().toJSON() })),
+      })), null, 2));
     });
   }
 }
