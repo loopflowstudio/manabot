@@ -241,7 +241,7 @@ describe('GameSocketController presentation seam', () => {
     });
 
     expect(gameStore.protocolFrame?.revision).toBe(43);
-    expect(presentationPlayer.currentEvent?.seq).toBe(900);
+    expect(presentationPlayer.currentEvent?.seq).toBe(902);
     expect(presentationPlayer.currentEvent?.to_revision).toBe(
       gameStore.protocolFrame?.revision,
     );
@@ -269,29 +269,29 @@ describe('GameSocketController presentation seam', () => {
     expect(gameStore.actionLog.map((entry) => entry.text).join('\n')).not.toContain(
       'Hero life:',
     );
-    expect(presentationPlayer.currentEvent?.kind.kind).toBe('cast');
+    expect(presentationPlayer.currentEvent?.kind.kind).toBe('resolved');
   });
 
-  it('recovery cancels current theater and replaces it with the recovery tail', () => {
+  it('same-match recovery merges unseen tail events and never repeats seen motion', () => {
     gameStore.prepareForNewGame();
-    presentationPlayer.load(LIGHTNING_BOLT_PRESENTATION);
+    presentationPlayer.clear();
+    gameStore.applyFrame(frameAt(42));
+    presentationPlayer.setScope(`live:${frameAt(42).match_id}`);
+    presentationPlayer.enqueue(LIGHTNING_BOLT_PRESENTATION.events.slice(0, 3), LIGHTNING_BOLT_PRESENTATION.labels);
     const controller = new GameSocketController();
-
-    deliver(controller, {
-      type: 'observation',
-      data: frameAt(43).projection,
-      actions: [],
-      recovery: {
-        ...structuredClone(boltProtocolFixture.recovery),
-        frame: frameAt(43),
-        presentation_cursor: 903,
-        presentation_tail: LIGHTNING_BOLT_PRESENTATION.events.slice(3),
-      },
-    });
-
+    const recovery = {
+      ...structuredClone(boltProtocolFixture.recovery),
+      frame: frameAt(43),
+      presentation_cursor: 901,
+      presentation_tail: LIGHTNING_BOLT_PRESENTATION.events.slice(1),
+    };
+    deliver(controller, { type: 'observation', data: recovery.frame.projection, actions: [], recovery });
     expect(gameStore.protocolFrame?.revision).toBe(43);
-    expect(presentationPlayer.events.map((event) => event.seq)).toEqual([903, 904]);
-    expect(presentationPlayer.currentEvent?.kind.kind).toBe('damage');
+    expect(presentationPlayer.events.map(event => event.seq)).toEqual([900, 901, 902, 903, 904]);
+    expect(presentationPlayer.currentEvent?.seq).toBe(903);
+    deliver(controller, { type: 'observation', data: recovery.frame.projection, actions: [], recovery });
+    expect(presentationPlayer.events).toHaveLength(5);
+    expect(presentationPlayer.currentEvent).toBeNull();
   });
 
   it('keeps a committed frame when optional theater is malformed', () => {

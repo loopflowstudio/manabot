@@ -156,6 +156,16 @@ offer on a retained isolated root, then **Return to recorded decision** restores
 its original address/frame/Command; **Return to live** is a separate destination.
 Expired roots remain unavailable rather than being reconstructed from the screen.
 
+After resolving a spell, open **History and settings** to read its recorded
+consequences by turn. Earlier/later pages and **Latest** let you read older
+events without being pulled away by incoming or recovered rows. Gaps appear
+inline and turn context stays unknown until the next recorded turn change. Narration can be paused,
+accelerated or skipped while the pending choice remains usable. Reloaded active
+games label unavailable earlier history; older recordings without event data say
+**Consequences not recorded**. See
+[reading consequences and controlling narration](../../docs/academy.md#reading-consequences-and-controlling-narration)
+for controls, exact-subject inspection and Replay/Study behavior.
+
 Long action lists have an optional **Find an action** filter. See the
 [retained choice positions and local walkthrough](../../docs/academy.md#choice-navigation)
 for target, discard, Learn, combat and optional-cost coverage.

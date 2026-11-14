@@ -20,7 +20,7 @@
   import { fetchAdviceMeta, postAdvice, type AdviceMeta, type AdviceResponse } from '$lib/advice';
   import { checkpointChoice, gameStore } from '$lib/game.svelte';
   import { sanitizeDeckSelection } from '$lib/decks';
-  import { presentationPlayer } from '$lib/presentation.svelte';
+  import { presentationPlayer, studyPresentationPlayer } from '$lib/presentation.svelte';
   import {
     connect,
     disconnect,
@@ -181,6 +181,7 @@
   const gameActive = $derived(gameStore.observation !== null && !gameStore.gameOver);
   const pilotCanAct = $derived(gameStore.hasCapability('submit_live_command'));
   const participantStudying = $derived(gameStore.restoredDecision !== null);
+  const tablePresentation = $derived(participantStudying ? studyPresentationPlayer : presentationPlayer);
   const canPassTurn = $derived(
     gameActive && offers.length > 0 && pilotCanAct && !participantStudying && !gameStore.commandPending && gameStore.connection === 'connected',
   );
@@ -409,6 +410,7 @@
     <div class="play-workspace" data-testid="play-workspace">
       <div id="table-board" class="board-region" tabindex="-1"><a href="#table-choices" class="table-jump type-caption underline">Choose a play</a>
       <GameBoard
+        workspace
         observation={boardObservation}
         focusedIds={gameStore.focusIds}
         {clickableTargets}
@@ -420,7 +422,7 @@
         villainLabel={opponentLabel}
         overlayActionLabel="Play Again"
         onOverlayAction={startNewGame}
-        {presentationPlayer}
+        presentationPlayer={tablePresentation}
       />
       </div>
 
@@ -463,10 +465,10 @@
         <details bind:open={secondaryOpen} class="secondary-panels">
           <summary class="type-rubric cursor-pointer">History and settings</summary>
           <div class="secondary-content space-y-4" tabindex="0" role="region" aria-label="History and settings">
+            <PresentationHistory player={tablePresentation} observation={boardObservation} />
             {#if tableFrame && !gameStore.branchProjection}
               <DecisionContext observation={tableFrame.projection} actor={tableFrame.prompt?.actor ?? null} />
             {/if}
-            <PresentationHistory player={presentationPlayer} />
 
             {#if adviceMetaState}
             <details bind:this={advicePanel} bind:open={adviceOpen} class="border-t border-line pt-4"><summary class="type-rubric cursor-pointer">Advice</summary>
@@ -574,7 +576,7 @@
     .choices-region > :global(*) { flex-shrink: 0; }
     .choices-region > :global(.workspace-decision) { flex: 1; min-height: 0; }
     [data-testid="current-decision"] { max-height: 3rem; overflow-y: auto; overscroll-behavior: contain; }
-    .secondary-content { max-height: 16dvh; overflow-y: auto; overscroll-behavior: contain; }
+    .secondary-content { max-height: 32dvh; overflow-y: auto; overscroll-behavior: contain; }
     .table-jump { position: absolute; width: 1px; height: 1px; overflow: hidden; }
     .table-jump:focus { position: static; width: auto; height: auto; }
   }

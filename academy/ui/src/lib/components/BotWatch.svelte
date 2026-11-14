@@ -2,6 +2,10 @@
   import { onMount } from 'svelte';
   import { replaceState } from '$app/navigation';
   import GameBoard from './GameBoard.svelte';
+  import PresentationHistory from './PresentationHistory.svelte';
+  import { createPresentationPlayer } from '$lib/presentation.svelte';
+  import { presentationLabelsFromObservation, mergePresentationLabels } from '$lib/presentation';
+  const presentationPlayer = createPresentationPlayer();
   import DecisionSurface from './DecisionSurface.svelte';
   import DecisionContext from './DecisionContext.svelte';
   import DeckSelector from './DeckSelector.svelte';
@@ -76,6 +80,11 @@
   async function inspect(index: number): Promise<void> {
     const next = await api<WatchDecision>(`/api/watch/${id}/decisions/${index}?reveal=${reveal}`);
     current = next;
+    // Use the decision's permitted view even when spectator reveal is enabled.
+    presentationPlayer.loadPrefix([{
+      events: next.presentation ?? [],
+      labels: presentationLabelsFromObservation(next.decision.frame.projection),
+    }], `watch:${id}:viewer:${next.decision.viewer}`, false);
     ordinal = index;
     count = next.count;
     finished = next.finished;
@@ -148,6 +157,10 @@
       attempt = result.attempt_id;
       branch = result.retry.projection;
       phase = 'retried';
+      presentationPlayer.loadEvents(result.retry.presentation, mergePresentationLabels(
+        presentationLabelsFromObservation(restored.frame.projection),
+        presentationLabelsFromObservation(result.retry.projection),
+      ), `watch:${id}:study:${result.attempt_id}`);
     } catch (reason) { fail(reason); }
     finally { busy = false; }
   }
@@ -250,8 +263,9 @@
         <span role="status">Decision {ordinal + 1} of {count} · Seat {current.decision.viewer + 1}{finished ? ` · Finished: ${current.winner === null ? 'draw' : `seat ${current.winner + 1} wins`}` : ''}</span>
         <label><input type="checkbox" bind:checked={reveal} disabled={busy || restored !== null} onchange={() => void seek(ordinal)} /> Show both hands</label>
       </div>
+      <PresentationHistory player={presentationPlayer} observation={branch ?? restored?.frame.projection ?? current.decision.frame.projection} />
       <div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_350px]">
-        <GameBoard observation={branch ?? restored?.frame.projection ?? current.observation} heroLabel={`Seat ${current.decision.viewer + 1} · ${current.players[current.decision.viewer]}`} villainLabel={`Seat ${2 - current.decision.viewer} · ${current.players[1 - current.decision.viewer]}`} />
+        <GameBoard {presentationPlayer} observation={branch ?? restored?.frame.projection ?? current.observation} heroLabel={`Seat ${current.decision.viewer + 1} · ${current.players[current.decision.viewer]}`} villainLabel={`Seat ${2 - current.decision.viewer} · ${current.players[1 - current.decision.viewer]}`} />
         <aside class="border-l border-line pl-5">
           {#each current.identities as identity}
             <p class="type-caption text-ink-2">Seat {identity.seat + 1}: {identity.name}{identity.version ? ` · ${identity.version.slice(0, 12)}` : ''}</p>

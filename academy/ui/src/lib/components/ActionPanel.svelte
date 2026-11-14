@@ -103,6 +103,8 @@
 
     lastFocusKey = nextFocusKey;
     void tick().then(() => {
+      // New offers must not interrupt someone reading recorded consequences.
+      if (document.activeElement?.closest('[data-testid="presentation-history"]')) return;
       focusFirstChoice();
     });
   });

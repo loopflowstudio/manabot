@@ -1,6 +1,6 @@
 <script lang="ts">
   import { visibleCardLabel } from '$lib/decision-labels';
-  import { tick } from 'svelte';
+  import { tick, setContext } from 'svelte';
 
   import type { CardPreview, Observation } from '$lib/types';
   import type { PresentationPlayer } from '$lib/presentation.svelte';
@@ -8,7 +8,7 @@
   import HoverPreview from './HoverPreview.svelte';
   import PlayerArea from './PlayerArea.svelte';
   import Schedule from './Schedule.svelte';
-  import PresentationStage from './PresentationStage.svelte';
+  import { PRESENTATION_CONTEXT, presentationSubjects } from '$lib/presentation';
 
   // The score column of the sheet: the opponent's region, the stack — the
   // one thing on the page allowed to burn red — and the hero's region,
@@ -26,6 +26,7 @@
     overlayActionLabel?: string | null;
     onOverlayAction?: () => void;
     presentationPlayer?: PresentationPlayer;
+    workspace?: boolean;
   }
 
   let {
@@ -41,17 +42,23 @@
     overlayActionLabel = null,
     onOverlayAction = undefined,
     presentationPlayer = undefined,
+    workspace = false,
   }: Props = $props();
+
+  setContext(PRESENTATION_CONTEXT, () => presentationPlayer?.currentEvent ?? null);
 
   let inspected = $state<{ id: number; card: CardPreview } | null>(null);
   let preview = $state<CardPreview | null>(null);
   let resultDialog: HTMLDivElement | null = $state(null);
   let resultAction: HTMLButtonElement | null = $state(null);
   const tablePermanents = $derived([...observation.agent.battlefield, ...observation.opponent.battlefield]);
+  const narratedSubjects = $derived(presentationPlayer?.currentEvent ? presentationSubjects(presentationPlayer.currentEvent) : []);
+  const narratedStacks = $derived(new Set(narratedSubjects.flatMap(subject => subject.kind === 'stack' ? [subject.id] : [])));
   const stackCards = $derived([...observation.opponent.stack, ...observation.agent.stack]);
+  const interactiveResult = $derived(!!overlayActionLabel && !!onOverlayAction);
 
   $effect(() => {
-    if (!observation.game_over) {
+    if (!observation.game_over || !interactiveResult) {
       return;
     }
     void tick().then(() => (resultAction ?? resultDialog)?.focus());
@@ -74,7 +81,7 @@
   }
 
   function keepResultFocus(event: KeyboardEvent): void {
-    if (event.key !== 'Tab') {
+    if (!interactiveResult || event.key !== 'Tab') {
       return;
     }
     event.preventDefault();
@@ -102,13 +109,11 @@
   });
 </script>
 
-<section data-testid="game-board" class="relative min-w-0">
-  {#if presentationPlayer}
-    <PresentationStage player={presentationPlayer} />
-  {/if}
+<section data-testid="game-board" class="relative min-w-0" class:workspace-board={workspace}>
 
   <!-- The turn, set as a tempo marking. -->
   <div
+    data-narrated={presentationPlayer?.currentEvent?.kind.kind === 'turn_started' && presentationPlayer.currentEvent.kind.turn_number === observation.turn.turn_number || undefined}
     data-phase={observation.turn.phase}
     data-step={observation.turn.step}
     class="tempo flex items-center gap-4 pt-1"
@@ -167,6 +172,8 @@
           {#each stackCards as card}
             <button
               type="button"
+              data-object-id={card.id}
+              data-narrated-seq={narratedStacks.has(card.id) ? presentationPlayer?.currentEvent?.seq : undefined}
               onclick={() => inspectTarget(card.id)}
               aria-label={card.name}
               class={`relative ${focusedIds.has(card.id) ? 'stack-hit' : ''}`}
@@ -230,8 +237,8 @@
     <div class="absolute inset-0 z-[190] grid place-items-center rounded bg-[color-mix(in_srgb,var(--text)_45%,transparent)]">
       <div
         bind:this={resultDialog}
-        role="alertdialog"
-        aria-modal="true"
+        role={interactiveResult ? 'alertdialog' : 'status'}
+        aria-modal={interactiveResult ? 'true' : undefined}
         aria-labelledby="game-over-heading"
         aria-describedby="game-result"
         tabindex="-1"
@@ -271,11 +278,14 @@
     [data-testid="game-board"] { display: flex; flex-direction: column; }
     [data-testid="game-board"] > :global(.player-area) { flex: 1; }
     [data-testid="game-board"] > :global(.player-area.empty-battlefield) { flex: 0 0 auto; }
-    .hero-area { flex: 1 1 150px; display: flex; flex-direction: column; min-height: 0; }
+    .hero-area { flex: 0 0 auto; display: flex; flex-direction: column; min-height: 0; }
+    .workspace-board .hero-area { flex: 1 1 150px; }
     .hero-area > :global(.player-area) { flex: 1; }
     .schedule-details, .ordered-stack { max-height: 90px; overflow-y: auto; flex-shrink: 0; }
     [aria-label="Inspected card"], [aria-label="Private inspection"], [aria-label="The stack"] { max-height: 130px; overflow-y: auto; flex-shrink: 0; }
   }
+
+  .tempo[data-narrated] { background: var(--bg-field); }
 
   .tempo::before,
   .tempo::after {
@@ -306,6 +316,8 @@
       text-align: left;
     }
   }
+  [data-narrated-seq] { outline: 2px solid var(--info); outline-offset: 2px; }
+
   .stack-hit {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
