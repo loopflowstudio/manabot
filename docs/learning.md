@@ -34,7 +34,7 @@ for running training, see [training.md](training.md).
 | Word | Meaning |
 | --- | --- |
 | **Decision** | One point where a seat chooses among two or more legal actions. Forced decisions are played by the engine and never appear. |
-| **Row** or **transition** | One recorded decision by a learning seat: observation, action, probabilities, value, reward and end flag. |
+| **Row** or **transition** | One recorded decision by a learning seat: observation, action, behavior log-probabilities, value, reward and end flag. |
 | **Stream** | One native game slot. It plays games one after another. |
 | **Trajectory** | The rows of one seat in order. Credit never crosses from one trajectory to another. |
 | **Batch** | All rows collected for one iteration. |
@@ -49,7 +49,7 @@ chooses actions for all of them. The network sees only the acting seat's
 outcomes never enter it.
 
 Each decision stores what the update will need later: the observation, the
-chosen action, the behavior probabilities over every legal action, and the
+chosen action, the behavior log-probabilities of every legal action, and the
 behavior value estimate. The weights do not change during collection.
 
 By default both seats learn. Each seat of each stream keeps its own trajectory,

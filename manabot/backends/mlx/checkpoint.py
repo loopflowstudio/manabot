@@ -83,10 +83,11 @@ def mlx_gradients(canonical: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
 
 
 def assemble(
-    checkpoint: PolicyCheckpoint, *, precision: Precision = "float32"
+    checkpoint: PolicyCheckpoint, *, precision: Precision | None = None
 ) -> MLXActorCritic:
     """An MLX policy holding the checkpoint's weights; names and shapes must
-    match the MLX model exactly."""
+    match the MLX model exactly. An omitted precision follows the model's
+    width (`manabot.backends.mlx.arrays.default_precision`)."""
     parameters = mlx_parameters(checkpoint.parameters)
     policy = MLXActorCritic(
         checkpoint.dimensions(),
@@ -114,7 +115,7 @@ def build(
     observation: ObservationConfig,
     state: Mapping[str, np.ndarray],
     *,
-    precision: Precision = "float32",
+    precision: Precision | None = None,
 ) -> tuple[MLXActorCritic, ObservationSpace]:
     """An MLX policy holding `state` (a PyTorch state dict as NumPy arrays)."""
     checkpoint = from_torch_state(model, observation, state)
@@ -122,7 +123,7 @@ def build(
 
 
 def load_mlx_policy(
-    path: str | Path, *, precision: Precision = "float32"
+    path: str | Path, *, precision: Precision | None = None
 ) -> tuple[MLXActorCritic, ObservationSpace]:
     """Load a checkpoint container, validating its world binding."""
     checkpoint = read_container(path)
@@ -130,12 +131,17 @@ def load_mlx_policy(
 
 
 class MLXBackend:
-    """`manabot.policy.protocol.Backend` for MLX."""
+    """`manabot.policy.protocol.Backend` for MLX.
+
+    An omitted precision lets each loaded policy follow its width
+    (`manabot.backends.mlx.arrays.default_precision`).
+    """
 
     name = "mlx"
 
-    def __init__(self, precision: Precision = "float32") -> None:
-        precision_dtype(precision)
+    def __init__(self, precision: Precision | None = None) -> None:
+        if precision is not None:
+            precision_dtype(precision)
         self.precision = precision
 
     def load(self, checkpoint: PolicyCheckpoint) -> tuple[MLXActorCritic, Learner]:
