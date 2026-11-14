@@ -204,23 +204,27 @@ impl Game {
                     } => Some(format!(
                         "Seat {} sacrificed {}.",
                         controller.0 + 1,
-                        self.state[*object].name
+                        self.state.source_base(*object).1.name
                     )),
                     GameEvent::SpellCast {
                         object_id: object, ..
                     } => Some(format!(
                         "{} was cast; its announced costs are committed.",
-                        self.state[*object].name
+                        self.state.source_base(*object).1.name
                     )),
-                    GameEvent::SpellResolved { object_id: object } => {
-                        Some(format!("{} finished resolving.", self.state[*object].name))
-                    }
+                    GameEvent::SpellResolved { object_id: object } => Some(format!(
+                        "{} finished resolving.",
+                        self.state.source_base(*object).1.name
+                    )),
                     GameEvent::SpellCountered {
                         object_id: object, ..
-                    } => Some(format!("{} was countered.", self.state[*object].name)),
+                    } => Some(format!(
+                        "{} was countered.",
+                        self.state.source_base(*object).1.name
+                    )),
                     GameEvent::AbilityCountered { source_object, .. } => Some(format!(
                         "An ability of {} was countered.",
-                        self.state[*source_object].name
+                        self.state.source_base(*source_object).1.name
                     )),
                     _ => None,
                 }

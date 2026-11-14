@@ -141,7 +141,7 @@ use the native Rust implementations so new visibility fields cannot drift.
 The policy input factors resolved `EffectRecords` through `agent/shared_effects.rs`
 before admission: complete equal payloads share one header and typed detail
 slice, with one explicit membership per original record. Controller, exact
-source incarnation, timestamps, fixed affected sets and duplicate edges survive.
+source appearance, timestamps, fixed affected sets and duplicate edges survive.
 Public object IDs are joins; private object storage slots do not enter this view.
 Native scalar/vector and Python encoders mirror bounded arrays of 128 × 18,
 4096 × 3 and 2048 × 2; every capacity fails explicitly. Local facts exclude
@@ -181,13 +181,13 @@ and effects. `CreateDelayedTrigger.event` only matches the event;
 `DelayedFrequency::Once` consumes its watcher on the first match, even if the
 occurrence is countered or later does nothing. `EachMatch` keeps waiting until
 `DelayedExpiry::ThisTurn` removes the watcher at cleanup, or `Never` supplies no
-stated expiry. Exact-object death watchers retire when the watched incarnation
+stated expiry. Exact-object death watchers retire when the watched appearance
 leaves, regardless of frequency. Expiry removes waiting watchers, never queued
 or stacked occurrences. No printed trigger vocabulary is migrated.
 `CreateDelayedTrigger.remember` resolves an ordinary `ObjectSelector` when the
-ability is created. Its exact incarnations travel through placement, stack and
+ability is created. Its exact appearances travel through placement, stack and
 suspended resolution; `ObjectSelector::Remembered` never follows a departed
-object into a new incarnation. Event context (such as the spell just cast) stays
+object into a new appearance. Event context (such as the spell just cast) stays
 separate. End-step timing can wait for either player's step or the controller's,
 independently of what was captured. Viewer-safe relations and text expose
 the remembered references, expiry and frequency. Relation row kind 9 carries
@@ -494,10 +494,10 @@ subset constraints: exact weights count only compatible ordered fills, and the
 materializer samples that conditional measure. Commitments are captured before
 zone reassignment, so a sampled face-down slot cannot erase an earlier selection.
 Frozen count-only belief samplers reject these additional constraints before
-inference. `ObjectBinding` carries exact incarnation, captured zone/predicate and
+inference. `ObjectBinding` carries exact appearance, captured zone/predicate and
 per-seat exact knowledge through waiting, queued, placing, stack and resolving
 trigger lifetimes. Both samplers use one assignment across those captures and
-active selections; known exact captures remain fixed, and departed incarnations
+active selections; known exact captures remain fixed, and departed appearances
 never follow a later object. Capturing `Moved` uses its new zone. This binding
 provenance is canonical state, independent of viewer-safe reference projection. Library inspection exposes membership in stable definition/object order,
 never draw order. Prospective battlefield entrants are public during replacement

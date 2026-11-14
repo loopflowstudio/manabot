@@ -233,14 +233,15 @@ impl Card {
     }
 }
 
-/// Flat physical-card roster, frozen after setup. Tokens and copies belong
-/// solely to the object store.
+/// Flat physical-card roster, frozen after setup and shared by every clone
+/// of the game (search clones it per node). Tokens and copies belong solely
+/// to the object store.
 #[derive(Clone, Debug, Default)]
-pub struct CardVec(Vec<Card>);
+pub struct CardVec(Arc<[Card]>);
 
 impl CardVec {
     pub fn new(cards: Vec<Card>) -> Self {
-        Self(cards)
+        Self(cards.into())
     }
 
     pub fn len(&self) -> usize {
@@ -419,6 +420,17 @@ impl ObjectVec<Object> {
         self.get(object.slot()).map(Object::retained_base)
     }
 
+    /// [`ObjectVec::retained_base`] as the shared row, with the slot's kind.
+    pub fn retained_definition(
+        &self,
+        object: ObjectId,
+    ) -> Option<(CardDefId, &Arc<PrintedCharacteristics>, ObjectKind)> {
+        self.get(object.slot()).map(|row| {
+            let (id, printed) = row.retained_definition();
+            (id, printed, row.kind())
+        })
+    }
+
     /// Viewer identity and ownership are stable across appearances.
     pub fn provenance(&self, object: ObjectId) -> Option<(PublicId, PlayerId, ObjectKind)> {
         self.get(object.slot())
@@ -585,11 +597,18 @@ impl Object {
     /// The base that a zone move restores, including fixture edits. It never
     /// follows an entry-copy or transformed face installed on a later appearance.
     pub fn retained_base(&self) -> (CardDefId, &PrintedCharacteristics) {
+        let (id, row) = self.retained_definition();
+        (id, &**row)
+    }
+
+    /// [`Object::retained_base`] as the shared row, for consumers that build a
+    /// new object from it (a token copy of a departed source).
+    pub fn retained_definition(&self) -> (CardDefId, &Arc<PrintedCharacteristics>) {
         self.printed
             .as_ref()
             .or(self.front.as_ref())
-            .map_or((self.definition_id, &*self.definition), |(id, row)| {
-                (*id, &**row)
+            .map_or((self.definition_id, &self.definition), |(id, row)| {
+                (*id, row)
             })
     }
 

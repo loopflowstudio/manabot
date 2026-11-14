@@ -1613,6 +1613,8 @@ impl Game {
     }
 
     fn build_trigger_index(&self) -> TriggerIndex {
+        #[cfg(feature = "benchmark")]
+        crate::benchmark_layers::record(|m| m.trigger_indexes += 1);
         let mut sources: Vec<TriggerSourceEntry> = self
             .layer_views(
                 (0..self.state.permanents.len())

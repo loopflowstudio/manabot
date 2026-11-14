@@ -506,7 +506,7 @@ sources are looked up per event kind through `TriggerIndex`
 (`flow/triggers.rs`), invalidated by trigger and layer dependencies; departed-object
 facts are an `ObjectLkiLog`. A cloned `Game` carries these caches.
 Layer rebuilds reuse immutable copiable source objects and static plans, bound to
-exact definition identity, incarnation and timestamp; copy/transform definition
+exact definition identity, appearance and timestamp; copy/transform definition
 changes invalidate that source. Intermediate layer objects detach on writes.
 Conservative characteristic read/write summaries skip impossible dependency
 probes; plausible pairs still compare instructions and generating-ability

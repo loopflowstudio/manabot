@@ -2709,7 +2709,10 @@ fn combustion_is_an_owned_learn_candidate() {
             _ => None,
         })
         .unwrap();
-    assert_eq!(s.game().state[object].name, "Combustion Technique");
+    assert_eq!(
+        s.game().state.objects.retained_base(object).unwrap().1.name,
+        "Combustion Technique"
+    );
     s.step_action(index);
     assert_eq!(zone_of(&s, object), Some(ZoneType::Hand));
 }
@@ -8332,7 +8335,7 @@ fn ran_and_shaw_copy_records_its_copy_effect_and_exception() {
     settle(&mut s);
     let dragons = s.battlefield_permanents_named(0, "Ran and Shaw");
     assert_eq!(dragons.len(), 2);
-    let objects = &s.game().state.objects;
+    let objects = &s.game().state;
     let pair: [ObjectId; 2] = [card_of(&s, dragons[0]), card_of(&s, dragons[1])];
     let (copy, source) = match pair {
         [a, b] if objects[a].kind() == ObjectKind::Token => (a, b),
@@ -14494,7 +14497,10 @@ fn a_token_copy_of_a_double_faced_creature_keeps_being_a_token_on_either_face() 
 
     let token_card = move_card(&mut s, token_card, ZoneType::Graveyard);
     s.advance_to_active_step(0, StepKind::End);
-    assert!(s.game().state[token_card].kind() == ObjectKind::Token);
+    assert_eq!(
+        s.game().state.objects.provenance(token_card).unwrap().2,
+        ObjectKind::Token
+    );
     assert_eq!(zone_of(&s, token_card), None, "a token ceases to exist");
 }
 
@@ -14979,6 +14985,7 @@ fn suki_cda_power_applies_in_hand_library_graveyard_exile_stack_and_outside() {
         .place_object(suki, PlayerId(0), ZoneType::Hand);
     cast_card(&mut s, suki);
     spend_colorless(&mut s);
+    let suki = now(&s, suki);
     assert_eq!(s.game().object_power(suki), 2);
     // A control-changing effect changes the spell's "you", not its owner.
     if let managym::state::stack_object::StackObject::Spell(spell) =
@@ -15085,7 +15092,7 @@ fn suki_loses_its_cda_with_its_abilities_and_recovers_it_after_returning_to_hand
     assert!(s.choose_target(Target::Permanent(suki)));
     settle(&mut s);
     assert_eq!(zone_of(&s, object), Some(ZoneType::Hand));
-    assert_eq!(s.game().object_power(object), 1);
+    assert_eq!(s.game().object_power(now(&s, object)), 1);
 }
 
 fn bloodbending_setup(caster: usize, paid: bool) -> Scenario {

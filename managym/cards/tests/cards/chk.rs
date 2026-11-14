@@ -191,7 +191,7 @@ fn heartbeat_of_spring_type_choice_names_its_source_and_the_tapped_land() {
         .iter()
         .find(|frame| frame.kind == 6 && frame.decision == 3)
         .expect("the type choice's obligation frame");
-    assert_eq!(frame.source().definition, definition(heartbeat));
+    assert_eq!(frame.source.definition, definition(heartbeat));
     let land = frame.context.as_ref().expect("the tapped land");
     assert_eq!(land.definition, definition(card_of(&s, lands[0])));
     let context = s.game().decision_context(PlayerId(0)).unwrap();

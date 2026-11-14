@@ -1531,13 +1531,7 @@ impl Game {
                 let events = copied
                     .into_iter()
                     .map(|copied| ProposedEvent::CreateTokens {
-                        definition: Box::new(TokenSource::Copy {
-                            definition_id: self.state[copied].definition_id,
-                            definition: default_content_pack().object_row(&self.state[copied]),
-                            front: self.state[copied].front_face().cloned(),
-                            copy: self.state[copied].copy.clone(),
-                            exceptions: exceptions.clone(),
-                        }),
+                        definition: Box::new(self.copy_source(copied, exceptions.clone())),
                         controller: frame.controller,
                         count: 1,
                         entry: ZoneEntry::default(),
@@ -2315,6 +2309,42 @@ impl Game {
         self.state.permanents[permanent_id].as_mut()
     }
 
+    /// The copiable values a token copy of `copied` takes (CR 707.2). A
+    /// departed object (an ability's source that has left) supplies its
+    /// retained base printing and kind, never a later appearance's copy or
+    /// face; its last copy and face state are not retained (MTG-354).
+    fn copy_source(&self, copied: ObjectId, exceptions: Vec<Modification>) -> TokenSource {
+        if let Ok(row) = self.state.object(copied) {
+            return TokenSource::Copy {
+                definition_id: row.definition_id,
+                definition: default_content_pack().object_row(row),
+                front: row.front_face().cloned(),
+                copy: row.copy.clone(),
+                exceptions,
+            };
+        }
+        let (definition_id, printed, kind) = self
+            .state
+            .objects
+            .retained_definition(copied)
+            .expect("copied object storage");
+        TokenSource::Copy {
+            definition_id,
+            definition: crate::state::card::ObjectDefinition {
+                key: "",
+                scryfall_id: None,
+                printed: std::sync::Arc::clone(printed),
+                is_token: kind != crate::state::game_object::ObjectKind::Card,
+                back_face: default_content_pack()
+                    .definition(definition_id)
+                    .and_then(|row| row.back_face.clone()),
+            },
+            front: None,
+            copy: None,
+            exceptions,
+        }
+    }
+
     /// Check whether a target is (still) legal for a given TargetSpec, from
     /// the perspective of `controller` ("you").
     pub(crate) fn target_is_legal(
@@ -2381,7 +2411,11 @@ impl Game {
                     }
                     TargetSpec::GraveyardCard { predicate } => (predicate, false),
                     TargetSpec::GraveyardCardOpponentOwns { predicate } => {
-                        if self.state[object].owner == controller {
+                        if self
+                            .state
+                            .object(object)
+                            .map_or(true, |row| row.owner == controller)
+                        {
                             return false;
                         }
                         (predicate, false)

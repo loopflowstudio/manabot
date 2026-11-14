@@ -1039,13 +1039,16 @@ impl Game {
         if let (false, Some(life)) = (cast.kicked, self.state[object].life_alternative()) {
             self.change_life(player, -(life as i32));
         }
+        // Recorded before the move, so its invalidation precedes the move's
+        // board reads; the move then names the stack appearance.
+        self.state.turn.spells_cast[player.0].push(object);
         if self.state[object].types.is_creature() {
             self.end_next_creature_cast_flash(player);
         }
         // CR 601.2i — A cast spell is put onto the stack.
         let object =
             self.push_spell_to_stack(object, player, targets.clone(), target_req_indices, cast);
-        self.state.turn.spells_cast[player.0].push(object);
+        self.state.name_last_cast(player, object);
         self.emit(GameEvent::SpellCast {
             object_id: object,
             targets: targets.clone(),

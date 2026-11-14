@@ -291,11 +291,28 @@ fn build(recipe: &Recipe) -> Env {
                 .collect();
             let mut index = 0;
             let state = &mut *game.state;
-            for p in state.permanents.iter_mut().flatten() {
-                if state[p.object].owner == PlayerId(i) {
-                    if state[p.object].name == "Gray Ogre" {
+            let roles: Vec<_> = state
+                .permanents
+                .iter()
+                .map(|p| {
+                    p.as_ref().map(|p| {
+                        let object = &state[p.object];
+                        (
+                            object.owner,
+                            object.name == "Gray Ogre",
+                            object.name == "Forest",
+                        )
+                    })
+                })
+                .collect();
+            for (p, role) in state.permanents.iter_mut().zip(roles) {
+                let (Some(p), Some((owner, ogre, forest))) = (p.as_mut(), role) else {
+                    continue;
+                };
+                if owner == PlayerId(i) {
+                    if ogre {
                         p.change_counters(CounterKind::PlusOnePlusOne, 1);
-                    } else if state[p.object].name != "Forest" {
+                    } else if !forest {
                         p.attached_to = Some(targets[index % targets.len()]);
                         index += 1;
                     }

@@ -410,7 +410,11 @@ impl Game {
         if let Some(permanent) = self.state.permanent_of(object_id) {
             return self.characteristics(permanent).power;
         }
-        let object = &self.state[object_id];
+        // An outside-game card is allocated but in no zone.
+        let object = self
+            .state
+            .object(object_id)
+            .unwrap_or_else(|_| self.state.entry_object(object_id));
         let Some(cda) = object.power_cda() else {
             return object.power.unwrap_or(0);
         };

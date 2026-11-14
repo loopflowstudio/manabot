@@ -215,7 +215,8 @@ fn content_schema_and_content_change_the_hash() {
 fn card_names_are_compatibility_data_not_state_identity() {
     let game = make_game(23);
     let mut renamed = game.clone();
-    renamed.state[game.state.players[0].deck[0]].name = "Compatibility-only rename".to_string();
+    let first = renamed.state.object_of(game.state.players[0].deck[0]);
+    renamed.state[first].name = "Compatibility-only rename".to_string();
 
     assert_eq!(
         game.state.deterministic_hash(),

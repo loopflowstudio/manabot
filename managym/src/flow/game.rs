@@ -633,6 +633,18 @@ impl TrackedState {
         &mut self.state.players[player.0].combat_mana_pool
     }
 
+    /// Name the stack appearance of the cast `player` recorded last. The
+    /// cast was recorded (through `DerefMut`) before its spell moved, so
+    /// derivations already saw it; only the entry's generation changes here,
+    /// and no cached derivation reads `spells_cast`.
+    pub(crate) fn name_last_cast(&mut self, player: PlayerId, spell: ObjectId) {
+        let cast = self.state.turn.spells_cast[player.0]
+            .last_mut()
+            .expect("a recorded cast");
+        debug_assert_eq!(cast.slot(), spell.slot(), "the cast's own spell");
+        *cast = spell;
+    }
+
     // Zone changes feed the derivations that read the zones they touch.
 
     /// Mint the appearance `object` becomes in `holder`'s `to_zone` (CR
