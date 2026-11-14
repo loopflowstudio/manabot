@@ -12,30 +12,13 @@ from typing import Any
 import managym
 
 PACK_MANIFEST_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "academy"
-    / "ui"
-    / "src"
-    / "lib"
-    / "packs"
-    / "tla-ur-lessons-vs-gw-allies"
-    / "v2"
-    / "manifest.json"
+    Path(__file__).parent / "packs/tla-ur-lessons-vs-gw-allies/v2/manifest.json"
 )
 JEONG_INCREMENT_MANIFEST_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "academy"
-    / "ui"
-    / "src"
-    / "lib"
-    / "packs"
-    / "tla-gw-allies-jeong-vs-ur-lessons"
-    / "v2"
-    / "manifest.json"
+    Path(__file__).parent / "packs/tla-gw-allies-jeong-vs-ur-lessons/v2/manifest.json"
 )
 ELEMENTAL_WORLD_MANIFEST_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "academy/ui/src/lib/packs/elemental-world/v2/manifest.json"
+    Path(__file__).parent / "packs/elemental-world/v2/manifest.json"
 )
 HEX_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
 REMOTE_PREFIXES = ("http://", "https://", "//")

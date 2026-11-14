@@ -8,9 +8,9 @@ from fastapi.testclient import TestClient
 import pytest
 import torch
 
-from academy import server, trace as trace_store
-from academy.server import app
 from manabot.model.world import WORLD
+from managym.academy import server, trace as trace_store
+from managym.academy.server import app
 from tests.academy.test_play_modes import _recorded_traces, _write_tiny_checkpoint
 
 

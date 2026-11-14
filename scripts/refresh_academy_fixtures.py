@@ -10,7 +10,7 @@ Run from the repository root after rebuilding the extension:
 
     uv run --extra dev python scripts/refresh_academy_fixtures.py
 
-Refreshes `academy/fixtures/{learn,precision,precision-mana}-demo-w17-token-cards.json`,
+Refreshes `managym/academy/fixtures/{learn,precision,precision-mana}-demo-w17-token-cards.json`,
 `choice-navigation-w17-token-cards.json` and `trigger-order-w17-token-cards.json`. The conformance and
 parity receipts have their own writers (see `conformance/README.md`).
 """
@@ -22,12 +22,12 @@ from pathlib import Path
 import tempfile
 from typing import Any
 
-from academy.play_demo import load_play_demo
-from academy.server import GameSession
 from manabot.verify.trigger_order import root
+from managym.academy.play_demo import load_play_demo
+from managym.academy.server import GameSession
 
 ROOT = Path(__file__).resolve().parents[1]
-FIXTURES = ROOT / "academy" / "fixtures"
+FIXTURES = ROOT / "managym" / "academy" / "fixtures"
 DEMOS = {
     "learn": "learn-demo-w17-token-cards.json",
     "precision": "precision-demo-w17-token-cards.json",

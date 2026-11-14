@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from academy import authored_match_parity
-from academy.authored_match_parity import ParityDivergence, verify_receipt
+from conformance import authored_match_parity
+from conformance.authored_match_parity import ParityDivergence, verify_receipt
 
 
 def test_checked_authored_match_parity_receipt() -> None:

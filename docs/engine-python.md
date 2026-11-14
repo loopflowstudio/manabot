@@ -20,6 +20,10 @@ installs without Torch, Gymnasium, Etude or the training CLI. NumPy supports
 native observation buffers; Pydantic supports the structured decision API.
 No Rust compiler is needed when installing a wheel.
 
+To play in the browser instead of from Python, install the `academy` extra and
+run `uv run --no-project managym academy` ([running Academy](academy.md#running-academy)); it adds
+FastAPI and Uvicorn and still needs no manabot or Torch.
+
 Supported wheels target ordinary CPython 3.12 and 3.13 on Linux x86-64 with
 glibc 2.28+ and Apple Silicon macOS 14+. To use 3.12, change the environment
 creation command to `uv venv --python 3.12`. Free-threaded Python, Windows,
@@ -68,7 +72,7 @@ the existing engine to that matching version. When the environment already has
 uninstall it before installing `managym` or a newer `manabot`; removing it
 afterwards deletes that file. Repair an affected environment by reinstalling
 the engine (`uv pip install --reinstall-package managym 'managym==<version>'`
-with uv, `pip install --force-reinstall 'managym==<version>'` with pip). Keep a project lockfile, or pin
+with uv). Keep a project lockfile, or pin
 both to the same published version. A resolver conflict between the two is
 fixed by aligning versions, not by using `--no-deps`. See
 [training installation](development.md#install) for extras and Torch backends.

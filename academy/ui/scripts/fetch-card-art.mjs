@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const manifestPath = path.join(
   here,
-  '../src/lib/packs/tla-ur-lessons-vs-gw-allies/v2/manifest.json',
+  '../../../managym/academy/packs/tla-ur-lessons-vs-gw-allies/v2/manifest.json',
 );
 const outDir = path.join(here, '../src/lib/card-art');
 const fullDir = path.join(outDir, 'full');
@@ -85,12 +85,12 @@ function artCropUri(card) {
   return card?.image_uris?.art_crop ?? card?.card_faces?.[0]?.image_uris?.art_crop ?? null;
 }
 
-const manifests = await Promise.all([manifestPath, path.join(here, '../src/lib/packs/elemental-world/v2/manifest.json')]
+const manifests = await Promise.all([manifestPath, path.join(here, '../../../managym/academy/packs/elemental-world/v2/manifest.json')]
   .map(async filename => JSON.parse(await readFile(filename, 'utf8'))));
 const identities = [...new Map(manifests.flatMap(manifest => Object.entries(manifest.identities)) )]
   .map(([name, identity]) => ({ name, kind: identity.kind }));
 // Directed demos use ordinary cards outside the curated two-deck pack.
-const fixtureDir = path.join(here, '../../fixtures');
+const fixtureDir = path.join(here, '../../../managym/academy/fixtures');
 const known = new Set(identities.map(identity => identity.name));
 for (const filename of (await readdir(fixtureDir)).filter(name => name.includes('demo') && name.endsWith('.json'))) {
   const fixture = JSON.parse(await readFile(path.join(fixtureDir, filename), 'utf8'));
