@@ -14,8 +14,8 @@ review questions. Do not rerun the pilot or rewrite its evidence. Earlier plan
 text, launch notes and per-slice checks are in git `78397f2042` and before
 (`ce074e9d37` for the first concept review).
 
-Remaining: the report-scope slice below (concept review at `59c82bc2be`),
-then gate/review and the caller's delivery steps. No PR created here.
+The report-scope slice from concept review `59c82bc2be` is complete.
+Remaining: gate/review and the caller's delivery steps. No PR created here.
 
 ## Demo and done when
 
@@ -24,14 +24,16 @@ the summary with the recommendation (one native payment-outcome decision,
 automatic plan first), then three numbered questions, each with its options as
 bullets and the measured price of each. The design, evidence and limits follow;
 run logistics sit in a collapsed appendix. Headless:
-`sed -n 1,95p experiments/mana_spending.md` (first table is at line 100).
+`sed -n 1,110p experiments/mana_spending.md`.
 
 Done when the report recommends that single decision with D's costs, names no
 entry step as part of the design, and every number it quotes is one already in
-its tables. Also done when (next slice): the design says which payments it
-covers and prices the ones that are not casts, and the Forest illustration says
-which review question its two-offer menu depends on. The report-text slice (base `caa15caca4`) changes nothing outside
-the report and `scratch/`.
+its tables; the design says which payments it covers and prices the ones that
+are not casts; and the Forest illustration says which review question its
+two-offer menu depends on. Since `caa15caca4` the branch changes only the
+report, `scratch/` and the read-only `summary --all-payments` aggregation in
+`experiments/mana_spending.py`. Published evidence and its manifest stay
+unchanged.
 
 ## What people said
 
@@ -118,77 +120,62 @@ them.
 4. The over-tap figure is 6–15% of ordinary payments (400/2717, 538/4430,
    213/2588, 288/4742); earlier text said 8–15%.
 
-## Next implement direction (concept review at `59c82bc2be`; report and `scratch/` only unless noted)
+## All-payment scope (concept review `59c82bc2be`)
 
-The report matches the earlier review's direction. Two gaps remain between the
-design it recommends and what it shows:
+The review found the recommendation priced casts only and the two-offer Forest
+example assumed source equivalence; its direction is in git
+`b0d7d6060e:scratch/mana-spending.md`. The report now covers every mana payment
+(the capture marks cast versus non-cast only, not the rules reason) and the
+example names its dependency on question 2.
 
-5. **The design is one decision per mana payment, and the report prices only
-   casts.** The recommendation says "per cast" and "replaces today's per-pip
-   prompts for cast payments"; C–E "retain noncast payment behavior". A player
-   would then learn two payment interactions (outcome menu for spells,
-   automatic tapping plus per-unit prompts for ability costs) with the source
-   choice still hidden in the second. Nothing anyone said restricts the Task to
-   casts ("letting users decide how to spend mana"). State the design as
-   covering every mana payment, and report the non-cast price beside the cast
-   one, from the published rows. Read at this review from
-   `current/non-redundant-shapes/shapes.jsonl` (`cast: false`): 5,686 of
-   14,775 payments are not casts (Elemental 2,496, TLA 3,190, Heartbeat 0);
-   3,774 have a mana cost (1,544 / 2,230), 134 of those capped (68 / 66). Of
-   the completely enumerated ones, 933 / 1,220 have two or more non-redundant
-   capability outcomes (1,017 / 1,452 by exact identity); exact maxima 28 / 22
-   capability, 252 / 252 identity. Only 9 / 2 drew a per-unit prompt today.
-   So the hidden choice is about as common there as on casts, and the
-   headline "+2.5–7.0% decisions per game" is a cast-only figure. Recompute
-   these through the experiment's own summary path, give decisions per game
-   for all payments next to the cast-only columns, and correct the summary,
-   question 3 and Limits wording to say which population each figure covers.
-   Published `shapes.jsonl` / `summary.json` bytes stay unchanged: a new
-   derived table needs a new output name, not a rewritten summary. If that
-   needs a code change in `experiments/mana_spending.py`, it is a read-only
-   aggregation over published rows; no games rerun.
-6. **The illustration silently answers question 2.** Its menu shows two offers
-   for Forest, Forest, Mountain, which treats the two Forests as one choice,
-   while the text below says the recommendation "preserves exact identity
-   until an equivalence rule is reviewed" (three offers). Say so next to the
-   table, as it already does for the redundant tap and question 1.
+`summary --all-payments` writes `all-payments-summary.json` beside the source
+(`payment_scopes.noncast` / `.all`, same four counting rules). It is derived
+locally from published rows and not published; the report's tables hold its
+results. No games or training were rerun. The all-payment price did not change
+the recommendation; the figures are under the open choices below.
 
-Assumption (also in `scratch/questions.md`): covering every mana payment is
-what "one payment decision" already means, so it is written as direction, not
-asked as a fourth question. If the all-payments price changes the
-recommendation, say that in the report rather than narrowing the design.
-
-`scratch/concept-review.html` is the page of the first review (`1530995a9e`)
-and predates these two points.
+The review's 9 Elemental / 2 TLA non-cast prompts count payment boundaries; the
+rows hold 10 / 3 per-unit decisions across them, and the report gives both.
 
 ## Open product choices (nobody has answered; they do not block this Task)
 
 1. Deliberate surplus tapping: not offered, a priority action, or in the
-   chooser? Decides whether the flat menu suffices (exact max 22) or groups are
+   chooser? Decides whether the flat menu suffices (all-payment exact max 28) or groups are
    required.
-2. Which sources are the same choice: exact identity (493 non-redundant casts
-   above 64, mostly identical basics) or equal definition and state (needs a
+2. Which sources are the same choice: exact identity (655 non-redundant payments
+   above 64, including combinatorial subsets of identical basics) or equal definition and state (needs a
    rules argument; capability alone merges a land with a mana creature)?
 3. Where the player opts out of automation: a decision at each payment whose
-   outcomes differ (+2.5–7.0% decisions/game non-redundant capability, plan
-   visible) or intent at cast selection (no added decisions unless used, plan
-   not visible). Learning effects stay with MTG-265.
+   outcomes differ (+2.9–11.8% decisions/game across all payments under
+   non-redundant capability, plan visible), or intent at cast selection (no
+   added cast decisions unless used, plan not visible; non-casts still need
+   control). Learning effects stay with MTG-265.
 
 ## Checks
 
-Gate, for the report-text slice:
+Gate, for the report and read-only aggregation slice:
 
 - `git log --first-parent --name-only caa15caca4..HEAD`: branch commits touch
-  only the report and `scratch/` (no code, manifest or evidence change). A
+  only the report and `scratch/` before this scope extension; the extension
+  also changes the read-only aggregation in `experiments/mana_spending.py`,
+  with no native, manifest or evidence change. A
   plain diff from `caa15caca4` now includes main's #520 via merge `67e03ef138`.
 - `grep -c 'C followed by D' experiments/mana_spending.md`: 0.
 - `uv run --extra dev pytest tests/eval/test_experiment_files.py tests/infra/test_experiment_data_untracked.py -q`: pass.
-- Each figure quoted in the recommendation and questions appears in a table of
-  the same report (317.39, 321.69, 22, 493, 422, 420, 75, 13, 712, 49–59);
-  percentages are ratios of its columns (question 1's 4–11% is surplus D over
-  A, 1.037–1.112; 2.5–7.0% is non-redundant D over A; 26 is 2 × 13).
+- Recommendation and review questions distinguish all payments from cast-only
+  figures; all-payment intervals and capacity totals match the derived summary.
+  Percentages use the unrounded decision counts; group navigation is excluded.
 
-If code changes again: debug `flow::mana` tests
+Run at implementation (2026-11-13): `summary --all-payments` played no games;
+independent raw-row checks passed for all 48 scope/rule D and C bounds and the
+prompt reconciliation. Without `payment_scopes` the output equals the published
+`summary.json` byte-for-byte, and SHA256 of the three published paired-evidence
+files matches the manifest. Focused
+`uv run --extra dev pytest tests/eval/test_experiment_files.py -q -k etude_finds_each_current_experiment_and_nothing_else`:
+1 passed. Ruff and `git diff --check` clean. Compress then reworded report
+prose only (no figure or code change): `git diff --check` clean.
+
+If native code changes again: debug `flow::mana` tests
 (`CARGO_BUILD_JOBS=2 cargo test --manifest-path managym/Cargo.toml -p managym --lib flow::mana -- --test-threads 2`,
 27 passed at `1530995a9e`), rebuild the release extension, and `cmp` a fresh
 `shapes`/`summary` against `current/non-redundant-shapes/`.

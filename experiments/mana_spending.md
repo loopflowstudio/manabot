@@ -1,12 +1,12 @@
 # How should players choose which mana to spend? — MTG-347
 
-Exploratory. Today a cast taps its lands automatically; when the pool then holds
-more usable mana than the cost needs, the player chooses which pooled unit pays
-each pip (`mana_spend` decisions). That prompt is rare, and it hides the choice
+Exploratory. Today a mana payment taps its sources automatically; when the pool
+then holds more usable mana than the cost needs, the player chooses which pooled
+unit pays each pip (`mana_spend` decisions). That prompt is rare, and it hides the choice
 that differs far more often: which sources stay untapped.
 
-- **Recommendation, for review:** one native payment decision per cast whose
-  outcomes differ, with the automatic plan as its first offer.
+- **Recommendation, for review:** one native decision at every mana payment
+  whose outcomes differ, with the automatic plan as its first offer.
   [Recommended design](#recommended-design).
 - **Today's prompt is rare.** 0.11–0.60% of decisions on Elemental and TLA
   Limited mirrors; 51–95% of those prompts follow a payment that tapped a source
@@ -14,10 +14,11 @@ that differs far more often: which sources stay untapped.
 - **The hidden choice is common, and small once redundant taps are set aside.**
   Which sources stay untapped differs in 63–73% of completely enumerated casts
   when redundant taps are included. Without them, a payment offers a median of 2
-  outcomes, 4–7 at the 95th percentile and an exact maximum of 22 under the
-  optimistic equal-output collapse, and adds 2.5–7.0% to decisions per game.
-  Keeping every land's exact identity instead
-  certifies 493 casts above 64 offers. Incomplete enumerations remain explicit.
+  outcomes, 4–5 at the 95th percentile on ordinary decks and an exact maximum
+  of 28 under the optimistic equal-output collapse across all payments. This
+  adds 2.9–11.8% to decisions per game (casts alone: 2.5–7.0%).
+  Keeping every source's exact identity instead certifies 655 payments above
+  64 offers, including 493 casts. Incomplete enumerations remain explicit.
   [Matched payment-shape results](#matched-payment-shape-results).
 - **A small learning pilot**, per-unit prompts against automatic pool spending:
   two seeds per arm, about USD1.4 of rental, no resolved difference.
@@ -38,31 +39,31 @@ occasionally matters. It is a different act from paying: a player may tap for
 mana whenever they have priority (CR 605.3a). Without it, the payment menu is
 the set of minimal payments, the same set MTG-342's fixed tapper picks from.
 
-- **Not offered.** Under the equal-output collapse: exact maximum 22, no cast
+- **Not offered.** Under the equal-output collapse: exact maximum 28, no payment
   certified above 64 offers, so a flat menu suffices on completely enumerated
-  casts. The 420 casts that hit the enumeration cap remain unknown; their lower
-  bounds reach 30. A land's fixed output could then never be floated on purpose,
-  as today.
+  payments. The 554 payments that hit the enumeration cap remain unknown; their
+  lower bounds reach 30. A land's fixed output could then never be floated on
+  purpose, as today.
 - **A tap-for-mana action at priority.** The same payment menu. Activated mana
   abilities are already offered at priority and during payment; a land's fixed
   output is tapped only by the automatic payer, so this extends an existing
   action to fixed sources. Its cost in offers per priority window is not
   measured here.
-- **In the payment chooser.** 422 casts certified above 64 offers, an exact
-  maximum of 712 and a 95th percentile of 49–59 on ordinary decks, so groups are
-  required. Decisions per game rise 4–11% over today before any group
-  navigation.
+- **In the payment chooser.** 655 payments certified above 64 offers (422
+  casts), an exact maximum of 712 and a cast-only 95th percentile of 49–59 on
+  ordinary decks, so groups are required. Decisions per game rise 4.2–16.7%
+  over today before any group navigation (casts alone: 4–11%).
 
 ### 2. Which sources are the same choice?
 
-- **Exact object identity.** Without redundant taps, 493 casts certified above
-  64 offers (291 completely enumerated, 202 capped), with an exact maximum of
-  252; groups are required. The excess includes combinatorial subsets of
-  identical basic lands.
+- **Exact object identity.** Without redundant taps, 655 payments certified
+  above 64 offers (389 completely enumerated, 266 capped), including 493 casts,
+  with an exact maximum of 252; groups are required. The excess includes
+  combinatorial subsets of identical basic lands.
 - **Equal definition and state.** Not measured: the capture holds outputs and
   resource transitions, not complete object state. It lies between the other two
   options and needs a rules argument before implementation.
-- **Equal mana output.** The menu above (exact maximum 22). Not a safe rule by
+- **Equal mana output.** The menu above (exact maximum 28). Not a safe rule by
   itself: it merges a land with a mana creature that could also attack or block.
 
 The recommendation preserves exact identity until an equivalence rule is
@@ -71,22 +72,25 @@ own visible offer.
 
 ### 3. Where does the player opt out of automation?
 
-- **At the payment decision (recommended).** One decision at each cast whose
-  outcomes differ: 2.5–7.0% more decisions per game, without redundant taps and
-  under equal-output collapse. Exact identity has the larger D costs in the
-  paired table. The plan is visible when chosen, because modes, targets, X and
-  the cost are already known.
-- **At cast selection: "cast X" beside "cast X, choosing payment".** No added
-  decision unless used. Decisions per game lie between the [folded
-  column](#matched-payment-shape-results) (305.60, 210.91, 437.26 and 216.22 for
-  the four ordinary-deck rows; never override) and the single-decision column
-  (always override). A priority window gains at most one offer per cast offer;
+- **At the payment decision (recommended).** One decision at every mana payment
+  whose outcomes differ: 2.9–11.8% more decisions per game, without redundant
+  taps and under equal-output collapse (casts alone: 2.5–7.0%). Exact identity
+  raises that to 4.0–15.4%, before group navigation. The plan is visible when
+  chosen, because the announcements determining the cost are complete.
+- **At cast selection: "cast X" beside "cast X, choosing payment".** For casts,
+  no added decision unless used. Cast-only decisions per game lie between the
+  [folded column](#matched-payment-shape-results) (305.60, 210.91, 437.26 and
+  216.22 for the four ordinary-deck rows; never override) and the cast-only D
+  column (always override). A priority window gains at most one offer per cast offer;
   fully measured windows held at most 13 offers, so at most 26. The automatic
   path commits before modes, targets, X, the cost and therefore the plan are
   known, so the plan cannot be inspected when it is chosen.
 
-The cast-selection option is arithmetic on published columns, not a measured shape.
-Learning effects of either stay with MTG-265.
+The cast-selection option is arithmetic on published cast-only columns, not a
+measured shape. It leaves ability costs, resolution payments and foretell fees
+needing their own control; the recommended decision there adds the non-cast
+increments in the [all-payment table](#all-payment-costs). No earlier opt-out
+for those payments was measured. Learning effects of either stay with MTG-265.
 
 ## Recommended design
 
@@ -103,13 +107,19 @@ whose modes, targets and cost are already announced:
 | Tap Forest and Forest | leaves the Mountain; the spell records {G}{G} spent |
 
 The player picks one offer and the engine pays once. Tapping all three lands is
-not on this menu: it is a redundant tap, the subject of question 1.
+not on this menu: it is a redundant tap, the subject of question 1. Two offers
+also assume question 2 lets the Forests count as one choice. Under exact
+identity, which the recommendation keeps until an equivalence rule is reviewed,
+there are three: both Forests, or the Mountain with either Forest.
 
-- **When it appears.** After the spell's modes, targets, X and cost are known,
-  and only when two or more permitted outcomes differ in what stays untapped,
-  what floats, or what the spell's receipt records (colors spent, spend
-  effects). A uniquely payable cast skips it, as any single-action decision
-  does. It replaces today's per-pip prompts for cast payments.
+- **When it appears.** At every mana-payment boundary, after the announcements
+  determining its cost (including modes, targets and X where applicable), and
+  only when two or more permitted outcomes differ in what stays untapped,
+  what floats, or what the payment receipt records (colors spent, spend effects).
+  This covers casts, ability costs including upfront mana-ability fees,
+  resolution payments and foretell fees. A uniquely payable payment skips it,
+  as any single-action decision does; zero-mana costs add no fixed sources.
+  It replaces today's per-pip prompts at every such boundary.
 - **The automatic plan** is an ordinary bound offer, listed first and identified
   as automation, describing the sources it taps and the pool it leaves. It
   presupposes MTG-342's fix: today's payer taps a source it does not need in
@@ -129,31 +139,35 @@ not on this menu: it is a redundant tap, the subject of question 1.
   and 2.
 
 **What it costs.** All decisions per game on the measured trajectories, without
-redundant taps and treating equal-output sources as one choice:
+redundant taps and treating equal-output sources as one choice. The design
+covers all payments; the cast-only column shows what non-casts add.
 
-| decks | policy | per unit (today) | one payment decision | with a separate entry step |
-| --- | --- | ---: | ---: | ---: |
-| elemental | heuristic | 306.18 | 317.39–317.54 | 317.39–321.69 |
-| elemental | random | 211.36 | 226.10–226.24 | 226.10–231.07 |
-| tla | heuristic | 437.75 | 448.86–449.06 | 448.86–454.96 |
-| tla | random | 217.50 | 227.35–227.36 | 227.35–232.46 |
+| decks | policy | per unit (today) | D casts only | D all payments | C all payments, separate entry |
+| --- | --- | ---: | ---: | ---: | ---: |
+| elemental | heuristic | 306.18 | 317.39–317.54 | 319.68–319.84 | 319.68–325.44 |
+| elemental | random | 211.36 | 226.10–226.24 | 236.18–236.32 | 236.18–247.71 |
+| tla | heuristic | 437.75 | 448.86–449.06 | 450.62–450.82 | 450.62–457.55 |
+| tla | random | 217.50 | 227.35–227.36 | 241.61–241.64 | 241.61–252.69 |
 
 Under that optimistic equal-output collapse, the single decision adds
-2.5–7.0% to decisions per game (its range reflects incomplete enumerations).
-Completely enumerated casts with multiple outcomes offer a median of 2, a
-95th percentile of 4–7 and an exact maximum of 22 outcomes. These menu sizes
-do not bound incomplete enumerations. The entry step's range runs from always
-accepting the plan to always overriding. These are counts on today's
-trajectories, not games played under the design, an acceptance rate or a
-learning cost; learning effects belong to MTG-265's study. Columns D and C of
-the [paired counts](#paired-counts-without-redundant-taps) hold the full
-figures, including the larger menus that questions 1 and 2 can select.
+2.9–11.8% to decisions per game across all payments (casts alone: 2.5–7.0%).
+Non-cast payments hide the same source choices, so they use the same
+interaction at that larger price.
+Completely enumerated payments with multiple outcomes offer a median of 2,
+a 95th percentile of 4–5 on ordinary decks and an exact maximum of 28 outcomes.
+These menu sizes do not bound incomplete enumerations. The entry step's range
+runs from always accepting the plan to always overriding. These are counts on
+today's trajectories, not games played under the design, an acceptance rate or
+a learning cost; learning effects belong to MTG-265's study. The
+[all-payment costs](#all-payment-costs) include exact identity and surplus
+choices; group-navigation decisions are additional.
 
 **For the policy,** each outcome and group has native action descriptors for
 what remains available, the floating pool and the relevant receipt. The
-announced spell stays available to observation and action joins throughout the
-pending choice, and pending-choice state reaches the policy input, the learning
-tokens and the LLM text in the change that adds it. Group expansion goes through
+announced spell or ability and the payment context stay available to
+observation and action joins throughout the pending choice, and pending-choice
+state reaches the policy input, the learning tokens and the LLM text in the
+change that adds it. Group expansion goes through
 `PaymentModel`, which keeps restrictions, expiry, spend riders and saved
 obligations.
 
@@ -352,7 +366,9 @@ retained trajectory; every final digest must match the frequency run.
 
 The comparison reports decisions per game, offers per decision (median, 95th
 percentile, maximum), real choices and cap hits. A and B count all spending
-prompts; C–E replace cast-payment prompts and retain noncast payment behavior.
+prompts; the C–E columns below replace cast-payment prompts and retain
+noncast payment behavior. [All-payment costs](#all-payment-costs) applies C and
+D to every mana payment, as the recommendation requires.
 C's decision cost depends on how often the player overrides, so it is a range
 from always accepting the plan (equal to D) to always overriding. E's decision
 count assumes the other announcement steps stay as they are. These are
@@ -549,6 +565,96 @@ Paired evidence is published separately as
 manifest. Original frequency, `current/` baseline and `current/shapes/` bytes are
 preserved. Restore it with the same artifact fetch command above.
 
+### All-payment costs
+
+The recommendation covers all **14,775** payment rows, including **5,686**
+non-casts: 2,496 Elemental, 3,190 TLA and none in Heartbeat. Of those non-casts,
+3,774 have positive mana cost (1,544 Elemental / 2,230 TLA), with 134 capped
+(68 / 66). Zero-mana rows remain in the population and add no source choices.
+The published capture marks cast versus non-cast, not the non-cast rules reason;
+it cannot separate ability costs, resolution payments and foretell fees here.
+
+This is a read-only aggregation of the paired rows through the same summary
+path, not another game run. Reproduce it after fetching the published evidence:
+
+```sh
+uv run python -m experiments.mana_spending summary --source experiments/data/mana_spending/current/non-redundant-shapes --all-payments
+```
+
+This writes `all-payments-summary.json` beside the source, leaving the published
+`shapes.jsonl` and `summary.json` unchanged. It repeats the cast-only summary
+and adds `payment_scopes.noncast` and `payment_scopes.all` under the same four
+counting rules. The file is derived locally and not published; the tables below
+hold its results.
+
+For any selected payment population, let S be its observed per-unit prompts,
+N its certified payments with at least two outcomes, and U those with either
+at least two outcomes or an incomplete enumeration. With T original decisions
+and G games, D is `(T - S + [N, U]) / G`. C has the same lower bound; its upper
+bound adds one decision per payment with more than two outcomes or an incomplete
+enumeration. Every population retains all other observed decisions, so a
+non-cast increment is its D count minus A and adds to the cast-only D count.
+Capped rows are treated as in the cast summary.
+
+Non-cast counts below keep each policy separate. Exact choices and offer
+quantiles exclude capped rows and use non-redundant outcomes. Prompted payments
+count boundaries; prompts count individual per-unit decisions.
+
+| decks | policy | non-cast payments | positive cost | capped | prompted payments / prompts | exact ≥2 capability / identity | capability offers median / p95 / max | identity offers median / p95 / max |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| elemental | heuristic | 655 | 336 | 6 | 3 / 3 | 181 / 206 | 3 / 3 / 6 | 10 / 36 / 45 |
+| elemental | random | 1841 | 1208 | 62 | 6 / 7 | 752 / 811 | 3 / 4 / 28 | 10 / 70 / 252 |
+| tla | heuristic | 561 | 269 | 3 | 1 / 1 | 139 / 166 | 2 / 4 / 16 | 6 / 35 / 126 |
+| tla | random | 2629 | 1961 | 63 | 1 / 2 | 1081 / 1286 | 2 / 4 / 22 | 6 / 55 / 252 |
+| heartbeat | heuristic | 0 | 0 | 0 | 0 / 0 | 0 / 0 | — | — |
+| heartbeat | random | 0 | 0 | 0 | 0 / 0 | 0 / 0 | — | — |
+
+Of completely enumerated positive-cost non-casts, 933/1476 Elemental and
+1220/2164 TLA payments have multiple capability outcomes (63.2% / 56.4%);
+identity gives 1017/1476 and 1452/2164 (68.9% / 67.1%). The hidden source choice
+is common here too, despite only 9 Elemental and 2 TLA non-cast payments drawing
+prompts today. Those boundaries produced 10 and 3 per-unit decisions respectively.
+
+**Non-redundant all-payment decision costs**, before group navigation. The
+non-cast increment uses capability: it is what the cast-only D columns leave
+out. The first four D and C capability rows also appear in the recommendation's
+cost table.
+
+| decks | policy | non-cast D increment | D all capability | C all capability | D all identity | C all identity |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| elemental | heuristic | +2.29–2.30 | 319.68–319.84 | 319.68–325.44 | 326.11–326.12 | 326.11–344.65 |
+| elemental | random | +10.08–10.09 | 236.18–236.32 | 236.18–247.71 | 243.90–243.91 | 243.90–274.01 |
+| tla | heuristic | +1.76 | 450.62–450.82 | 450.62–457.55 | 455.19 | 455.19–472.07 |
+| tla | random | +14.26–14.28 | 241.61–241.64 | 241.61–252.69 | 248.75–248.76 | 248.75–278.48 |
+| heartbeat | heuristic | +0.00 | 83.00–84.25 | 83.00–89.12 | 87.25 | 87.25–98.12 |
+| heartbeat | random | +0.00 | 139.12–142.88 | 139.12–149.50 | 147.88–148.00 | 147.88–161.62 |
+
+Relative to A, ordinary-deck all-payment D grows 2.9–11.8% with capability
+collapse, or 4.0–15.4% with exact identity. The latter also requires group
+navigation. These figures do not imply that every identity distinction matters.
+
+**All-payment capacity and surplus price.** Non-redundant capability menus
+have median / p95 / maximum below, conditional on complete enumeration and
+multiple outcomes. Identity's exact maximum remains 252. Surplus-inclusive D
+uses capability and is shown alongside its increase over A for the ordinary
+decks. Counts above 64 include capped rows; none of the non-redundant capability
+counts certifies more than 64. Capped rows' non-redundant lower bounds reach 30.
+
+| decks | policy | all payments / capped | non-redundant capability offers | non-redundant identity >64, exact / capped | surplus capability >64 | surplus D all capability | surplus D increase over A |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| elemental | heuristic | 2717 / 105 | 2 / 4 / 9 | 61 / 50 | 109 | 327.73 | 7.0% |
+| elemental | random | 4430 / 182 | 2 / 4 / 28 | 115 / 74 | 189 | 246.69 | 16.7% |
+| tla | heuristic | 2588 / 114 | 2 / 5 / 22 | 90 / 78 | 97 | 456.11 | 4.2% |
+| tla | random | 4742 / 101 | 2 / 5 / 22 | 122 / 63 | 174 | 250.57–250.59 | 15.2% |
+| heartbeat | heuristic | 134 / 16 | 2 / 6 / 6 | 1 / 1 | 37 | 88.88 | — |
+| heartbeat | random | 164 / 36 | 2 / 5 / 6 | 0 / 0 | 49 | 149.88 | — |
+
+Across all payments, 554 enumerations remain incomplete. Keeping exact identity
+certifies 655 non-redundant payments above 64 (389 exact / 266 capped), compared
+with 493 casts alone. Including surplus also certifies 655 capability payments
+above 64, compared with 422 casts alone; its exact maximum remains 712.
+Questions 1 and 2 therefore still decide whether groups are needed.
+
 ## Learning comparison
 
 This exploratory pilot compares today's per-unit decisions (A) with first-feasible
@@ -633,6 +739,10 @@ measurements.
 
 - Mirror games under scripted or early policies show how often the decision
   arises, not how much a strong player gains from it.
+- The shape tables price casts only; [all-payment costs](#all-payment-costs)
+  prices non-casts from the same published rows, without their rules reason.
+  No earlier opt-out for non-cast payments is measured. All D counts exclude
+  group-navigation steps.
 - The shape comparison counts offers. It does not measure play or learning
   under a shape that is not implemented. Manual tapping at every priority
   window is a qualitative alternative, without a measured offer count here.

@@ -89,3 +89,7 @@ frozen pilot or its launcher database.
   only casts: nobody restricted the Task to spells, and a cast-only chooser
   leaves a second payment interaction for ability costs. The report prices the
   non-cast payments from published rows instead of asking a fourth question.
+
+- All-payment aggregation (2026-11-13): keep the new derived summary local and
+  reproducible through `summary --all-payments`; retain its tables in the report
+  without modifying the published artifact manifest. No new games are needed.

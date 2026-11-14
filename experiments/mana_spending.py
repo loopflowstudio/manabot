@@ -15,7 +15,7 @@ from decimal import Decimal
 import json
 from pathlib import Path
 import subprocess
-from typing import Literal, cast
+from typing import Literal, TypedDict, cast
 
 from etude.experiment import ExperimentState
 from etude.launch.records import Job, Run
@@ -447,7 +447,56 @@ def _quantiles(values: list[int]) -> list[float] | None:
     return [float(np.quantile(values, q, method="higher")) for q in (0.5, 0.95, 1)]
 
 
-def summarize_shapes(source: Path) -> None:
+class _PaymentChoiceSummary(TypedDict):
+    """Flat payment costs and capacity for one population and counting rule."""
+
+    D_exact_offers: list[float] | None
+    D_certified_over64: int
+    D_exact_over64: int
+    exact_real_payments: int
+    certified_real_payments: int
+    D_decisions_per_game: list[float]
+    C_decisions_per_game: list[float]
+    C_worst_path_exact_offers: list[float] | None
+
+
+def _payment_choices(
+    payments: list[ShapeCounts],
+    count_outcomes: Callable[[ShapeCounts], int],
+    decisions_without_spend: int,
+    games: int,
+) -> _PaymentChoiceSummary:
+    """Count flat payment decisions; cap hits retain uncertainty, not truncation."""
+    counts = [count_outcomes(p) for p in payments]
+    exact_counts = [count_outcomes(p) for p in payments if not p.cap_hit]
+    real_counts = [n for n in exact_counts if n > 1]
+    certain = sum(n > 1 for n in counts)
+    possible = sum(n > 1 or p.cap_hit for n, p in zip(counts, payments))
+    return {
+        "D_exact_offers": _quantiles(real_counts),
+        "D_certified_over64": sum(n > 64 for n in counts),
+        "D_exact_over64": sum(n > 64 for n in exact_counts),
+        "exact_real_payments": len(real_counts),
+        "certified_real_payments": certain,
+        "D_decisions_per_game": [
+            (decisions_without_spend + n) / games for n in (certain, possible)
+        ],
+        "C_decisions_per_game": [
+            (decisions_without_spend + certain) / games,
+            (
+                decisions_without_spend
+                + possible
+                + sum(n > 2 or p.cap_hit for n, p in zip(counts, payments))
+            )
+            / games,
+        ],
+        "C_worst_path_exact_offers": _quantiles(
+            [2 for _ in real_counts] + [n - 1 for n in real_counts if n > 2]
+        ),
+    }
+
+
+def summarize_shapes(source: Path, *, all_payments: bool = False) -> None:
     """Keep incomplete enumeration out of exact offer quantiles."""
     groups: dict[tuple[str, str], list[ShapeGame]] = defaultdict(list)
     for line in (source / "shapes.jsonl").read_text().splitlines():
@@ -485,32 +534,18 @@ def summarize_shapes(source: Path) -> None:
         )
         rules: dict[str, dict[str, object]] = {}
         for label, count_outcomes, count_folded in measurements:
-            counts = [count_outcomes(p) for p in casts]
-            exact_counts = [count_outcomes(p) for p in exact]
-            real_counts = [n for n in exact_counts if n > 1]
-            certain = sum(n > 1 for n in counts)
-            possible = sum(n > 1 or p.cap_hit for n, p in zip(counts, casts))
+            choices = _payment_choices(
+                casts, count_outcomes, without_cast_spend, len(games)
+            )
             rules[label] = {
-                "D_exact_offers": _quantiles(real_counts),
-                "D_certified_over64": sum(n > 64 for n in counts),
-                "D_exact_over64": sum(n > 64 for n in exact_counts),
+                "D_exact_offers": choices["D_exact_offers"],
+                "D_certified_over64": choices["D_certified_over64"],
+                "D_exact_over64": choices["D_exact_over64"],
                 "cast_cap_hits": sum(p.cap_hit for p in casts),
-                "certified_real_casts": certain,
-                "D_decisions_per_game": [
-                    (without_cast_spend + n) / len(games) for n in (certain, possible)
-                ],
-                "C_decisions_per_game": [
-                    (without_cast_spend + certain) / len(games),
-                    (
-                        without_cast_spend
-                        + possible
-                        + sum(n > 2 or p.cap_hit for n, p in zip(counts, casts))
-                    )
-                    / len(games),
-                ],
-                "C_worst_path_exact_offers": _quantiles(
-                    [2 for _ in real_counts] + [n - 1 for n in real_counts if n > 2]
-                ),
+                "certified_real_casts": choices["certified_real_payments"],
+                "D_decisions_per_game": choices["D_decisions_per_game"],
+                "C_decisions_per_game": choices["C_decisions_per_game"],
+                "C_worst_path_exact_offers": choices["C_worst_path_exact_offers"],
                 "E_exact_offers": _quantiles([count_folded(f) for f in folded_exact]),
                 "E_exact_over64": sum(count_folded(f) > 64 for f in folded_exact),
                 "E_certified_over64": sum(count_folded(f) > 64 for f in folded),
@@ -551,9 +586,33 @@ def summarize_shapes(source: Path) -> None:
             "E_exact_offers": _quantiles([f.expanded for f in folded_exact]),
             "E_original_offers": _quantiles([f.original for f in folded_exact]),
         } | rules
+        if all_payments:
+            scopes: dict[str, dict[str, object]] = {}
+            for scope, selected in (
+                ("noncast", [p for p in payments if not p.cast]),
+                ("all", payments),
+            ):
+                selected_spend = sum(len(p.spend_offers) for p in selected)
+                scopes[scope] = {
+                    "payments": len(selected),
+                    "positive_cost_payments": sum(p.cost > 0 for p in selected),
+                    "cap_hits": sum(p.cap_hit for p in selected),
+                    "positive_cost_cap_hits": sum(
+                        p.cost > 0 and p.cap_hit for p in selected
+                    ),
+                    "spend_decisions": selected_spend,
+                    "payments_with_spend": sum(bool(p.spend_offers) for p in selected),
+                } | {
+                    label: _payment_choices(
+                        selected, count_outcomes, decisions - selected_spend, len(games)
+                    )
+                    for label, count_outcomes, _ in measurements
+                }
+            row["payment_scopes"] = scopes
         summaries.append(row)
         print(json.dumps(row), flush=True)
-    (source / "summary.json").write_text(json.dumps(summaries, indent=2) + "\n")
+    filename = "all-payments-summary.json" if all_payments else "summary.json"
+    (source / filename).write_text(json.dumps(summaries, indent=2) + "\n")
 
 
 def main() -> None:
@@ -575,9 +634,14 @@ def main() -> None:
         default=16384,
         help="native enumeration work limit per payment",
     )
+    parser.add_argument(
+        "--all-payments",
+        action="store_true",
+        help="summary: add noncast/all-payment costs in all-payments-summary.json",
+    )
     args = parser.parse_args()
     if args.command == "summary":
-        summarize_shapes(args.source)
+        summarize_shapes(args.source, all_payments=args.all_payments)
         return
     if args.command == "shapes":
         if args.out == args.source:
