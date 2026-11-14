@@ -293,13 +293,14 @@ a second game if a built-in wins before an external choice.
 With two built-in seats, reset only constructs a game. Call scalar `step()`
 (with no action) or vector `step([-1, ...])` to execute exactly one published
 built-in decision per game; terminal rewards belong to that decision's chooser.
-This makes autonomous games bounded and inspectable. Command and structured
-submission methods commit exactly their requested external action, preserving
-atomic receipts and stale rejection. If the resulting chooser is a built-in,
-call scalar `step()` to continue native play. Supplying an external
-index for a built-in chooser raises an error. Native trivial skipping still
-applies. Each seat owns independent heuristic memory; reset clears both, even
-with the same seed, and forks copy both.
+This makes autonomous games bounded and inspectable.
+
+Command and structured submission methods commit exactly their requested
+external action, preserving atomic receipts and stale rejection. If the
+resulting chooser is a built-in, call scalar `step()` to continue native play.
+Supplying an external index for a built-in chooser raises an error. Native
+trivial skipping still applies. Each seat owns independent heuristic memory;
+reset clears both, even with the same seed, and forks copy both.
 
 The Python training wrapper accepts the same tuple. The public vector
 `opponent_policy` argument is deprecated, warns, and will be removed in 0.3.0:

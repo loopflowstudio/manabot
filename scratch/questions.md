@@ -464,3 +464,18 @@ per-seat reward and unsupported/retained-policy checks pass (11 checks plus
 - Focused Ruff lint/format, workspace Rust fmt, the guide example and
   `git diff --check` passed. No background work remains. Full suites, release
   training smoke, consumer matrix and normal Engine Budget remain for gate.
+
+## Compress after fourth-review implementation (2026-11-13, at 9636eadc60)
+
+Nothing further to delete: no code, test or identity-file change. Checked the
+commit's diff and every remaining `opponent_policy` use; each is the alias,
+its tests, retained-receipt reading/replay, the pre-existing
+`manabot/verify/store.py` schema or frozen experiment/release text. Only edit:
+`docs/engine.md` "Per-seat players" separates the Command/memory rules from
+the two-built-in paragraph (they apply to mixed games too). `git diff --check`
+passed; no rebuild or test rerun needed for prose.
+
+Left for demo/gate judgment, not changed: replaying a retained vector receipt
+passes its legacy name to native construction, so that replay emits the
+alias's DeprecationWarning, and the 0.3.0 removal must translate retained
+names inside `manabot/env/replay.py` instead.
