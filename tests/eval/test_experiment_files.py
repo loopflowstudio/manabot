@@ -3,18 +3,20 @@
 Each kept file reads through Etude's declaration reader into one addressed run
 per job and seed, and its declarations return typed jobs that lower to plain
 ones: `training_jobs` only `TrainingJob`s, `eval_jobs(state)` only `EvalJob`s.
+`NOT_YET_RUNNABLE` lists the files checked in ahead of the Etude support they
+need; move one out of it, into the checks below, when it runs.
 """
 
 from collections import Counter
 from dataclasses import replace
 from pathlib import Path
-import runpy
 from types import ModuleType
 
 from etude.checkpoints import CheckpointRecord
 from etude.declarations import asked, read_experiment, read_job_file
 from etude.errors import EtudeError
 from etude.eval.records import Match
+from etude.experiment_file import defined_functions
 from etude.jobs import (
     Checkpoints,
     EvalJob,
@@ -57,25 +59,39 @@ DECLARED: list[tuple[ModuleType, tuple[str, ...], dict[str, int]]] = [
 ]
 
 
+# Eval-only files Etude cannot hold yet (EXP-70): a seated checkpoint no run of
+# the experiment stored, a served or hosted player and what its job needs. They
+# are found as experiments and declare `eval_jobs`; nothing here reads them.
+NOT_YET_RUNNABLE = {"llm_claude", "llm_qwen"}
+
+
 def _name(module: ModuleType) -> str:
     return module.__name__.rsplit(".", 1)[-1]
 
 
 def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
     found = {path.stem for path in experiment_files(EXPERIMENTS)}
-    assert found == {
+    assert found - NOT_YET_RUNNABLE == {
         "batched_baseline",
         "belief",
         "elemental",
         "seat_comparison",
         "tla_frontier",
     }
+    assert NOT_YET_RUNNABLE <= found
 
 
 def test_no_experiment_file_keeps_a_retired_declaration() -> None:
     """Etude refuses `runs()` and `eval()`; no file may define either."""
     for path in experiment_files(EXPERIMENTS):
-        assert not {"runs", "training_runs", "eval"} & set(runpy.run_path(str(path)))
+        assert not {"runs", "training_runs", "eval"} & defined_functions(path)
+
+
+def test_not_yet_runnable_files_are_eval_only() -> None:
+    for name in sorted(NOT_YET_RUNNABLE):
+        defined = defined_functions(EXPERIMENTS / f"{name}.py")
+        assert {"eval_jobs", "play", "report"} <= defined
+        assert "training_jobs" not in defined
 
 
 @pytest.mark.parametrize(

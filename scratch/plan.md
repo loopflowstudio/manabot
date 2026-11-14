@@ -68,8 +68,11 @@ only names released 0.4.0 has.
   `sampler` from stored state). `elemental_long_eval.py` became
   `elemental_play.py`, holding only what `elemental` plays with.
 - Deleted: the MTG-183 follower/rent/db/report, MTG-186, curriculum readers,
-  inference baselines, the LLM campaigns and `manabot.llm.vllm_*`, with their
-  tests, setup scripts and fixtures. Last commit with them: b49df79b49.
+  inference baselines and the LLM campaign drivers, with their tests and
+  fixtures. `manabot/llm/`, its tests and setup scripts stay. Last commit with
+  the deleted code: b49df79b49.
+- `experiments/llm_claude.py` and `llm_qwen.py` are eval-only declarations over
+  `manabot/verify/llm_match.py`, checked in not runnable (Etude EXP-70).
 - Blocked on Etude: `etude train experiments/belief.py --job sampler` fails
   `input not given: 'start'` (`etude/local.py:_prepare` carries no job inputs);
   an `EvalJob` cannot choose its command or uv extras, so the frontier pass

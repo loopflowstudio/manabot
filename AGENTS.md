@@ -167,7 +167,7 @@ Where classes are valuable here, with the examples to copy:
 - **`torch.nn.Module` subclasses** (`ActorCritic` and its parts). Keep
   construction and `forward` there; training logic is functions over the
   module.
-- **A resource with a lifetime** (`VerifyStore`,
+- **A resource with a lifetime** (`VerifyStore`, `VLLMServer`,
   `PolicyInference`, `ChildProcess`, native `managym` environments, Etude's
   `Run`): something opened, used and closed. Make it a context manager, or a
   `@contextmanager` function when there is no state to hold. Do not wrap

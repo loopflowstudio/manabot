@@ -44,7 +44,9 @@ play only new ones; `report()` draws the figures. A run's address is always
 (`etude.eval.records.Seating`): its players in seat order, the configs they
 play under and the tags a report selects them by. A `Benchmark` holds
 `seatings`, and a checkpoint says where it stood on each clock in
-`CheckpointRecord.at`, as in `checkpoint.at["updates"]`.
+`CheckpointRecord.at`, as in `checkpoint.at["updates"]`. A file may declare only
+`eval_jobs`: `experiments/llm_claude.py` and `llm_qwen.py` seat a language model
+against a frozen checkpoint, and are not runnable until Etude EXP-70 lands.
 
 Use the repository's locked Etude revision for these commands
 ([development dependency](development.md#environment-and-commands)). Launch,

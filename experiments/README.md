@@ -45,6 +45,10 @@ has not been run, so typing the command again launches what is new.
 | [batched_baseline](batched_baseline.py) | one GPU recipe ([size and batching study](reports/longer-learning-017.md)) | `batched_baseline` | — | — |
 | [belief](belief.py) | a later stage that starts from an earlier run | `policy`, then `sampler` from its final checkpoint once state shows it finished ([guide](../docs/training.md#recipes-in-stages)) | — | — |
 
+[`llm_claude`](llm_claude.py) and [`llm_qwen`](llm_qwen.py) are eval-only files,
+a language model against a frozen checkpoint over the Elemental decks; they are
+not runnable yet (Etude EXP-70), and each file's docstring says what is missing.
+
 [`elemental_grid`](elemental_grid.py) and [`elemental_long`](elemental_long.py)
 hold the frozen evaluation schedules `elemental` plays, and
 [`tla_corpus`](tla_corpus.py) and [`tla_pools`](tla_pools.py) build the TLA
@@ -56,8 +60,8 @@ benchmark (`manabot.eval.benchmark`) is still bound to the retired executor's
 training record, so `seat_comparison` has no `eval_jobs(state)` yet.
 
 The MTG-183 follower and its report, the MTG-186 pairings and card tables, the
-curriculum grid readers, the inference baselines and the LLM campaigns were
-removed; the last commit with them is `b49df79b49`. The compound-decision
+curriculum grid readers, the inference baselines and the LLM campaign drivers
+were removed; the last commit with them is `b49df79b49`. The compound-decision
 study is at commit `ba3cd58de25bcc5d0b32e0fa3c546ee3d27be52b`.
 
 Reports of finished studies stay as the record. The runners, contracts, plans

@@ -460,7 +460,8 @@ target from .59375 to 1.0 in 64 updates. History:
 
 `manabot.llm` asks an unmodified language model to pick one action from the
 viewer-safe text observation and its complete legal-reference list, and keeps
-a receipt of the choice. It runs locally through Transformers or hosted through OpenRouter; the native game runner
+a receipt of the choice. It runs locally through Transformers, behind a
+loopback vLLM server, or hosted through OpenRouter; the native game runner
 (`manabot.verify.llm_game`) owns capture, stale rejection, submission and
 replay, and importing `manabot.llm` loads no model runtime.
 
