@@ -120,6 +120,8 @@ test('long recorded identities fit Games and preserve full filter values', async
   const row = page.getByTestId('game-history-row');
   await expect(row).toContainText('ci-fix-528/…/learner_transitions-8');
   await expect(row).toContainText('aaaaaaaaaa');
+  await expect(row.locator('td').nth(3)).toContainText('ci-fix-528/…/learner_transitions-8 won');
+  await expect(row.locator('td').nth(3)).not.toContainText('aaaaaaaaaa');
   const modelName = row.locator('.player-name .truncate').last();
   expect(await modelName.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1280);

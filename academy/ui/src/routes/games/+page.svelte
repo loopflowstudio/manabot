@@ -79,7 +79,7 @@
     if (game.status !== 'completed') return { active: 'In progress', stopped: 'Stopped', interrupted: 'Interrupted' }[game.status];
     if (game.winner === null) return 'Draw';
     const winner = game.players.find((p) => p.seat === game.winner);
-    return `${winner ? recordedIdentity(winner).text : `Seat ${game.winner + 1}`} won`;
+    return `${winner ? recordedIdentity(winner).compact : `Seat ${game.winner + 1}`} won`;
   }
 
   async function saveName(event: SubmitEvent): Promise<void> {
