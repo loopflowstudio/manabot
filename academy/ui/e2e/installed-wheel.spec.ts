@@ -10,6 +10,7 @@ test('installed Academy plays and opens its recorded decisions', async ({ page }
   page.on('requestfailed', request => errors.push(`${request.url()}: ${request.failure()?.errorText}`));
   const catalog = await (await page.request.get('/api/opponents')).json();
   expect(catalog.extension).toBeNull();
+  expect(catalog.watch_players).toEqual(['random', 'search']);
   const outcomes: { status?: string }[] = [];
   page.on('websocket', socket => socket.on('framereceived', event => {
     const payload = JSON.parse(String(event.payload));
@@ -31,5 +32,12 @@ test('installed Academy plays and opens its recorded decisions', async ({ page }
   await expect(page.getByText(/^Frame 1 \/ \d+$/)).toBeVisible();
   await page.getByRole('button', { name: 'Next frame', exact: true }).click();
   await expect(page.getByText(/^Frame 2 \/ \d+$/)).toBeVisible();
+  await page.goto('/replay?watch=1');
+  await expect(page.getByRole('button', { name: 'Start watching' })).toBeEnabled();
+  for (const seat of ['Seat 1', 'Seat 2']) {
+    await expect(page.getByRole('combobox', { name: seat, exact: true }).locator('option')).toHaveText(['random', 'search']);
+  }
+  await expect(page.getByText('Trained bots need manabot installed on this server.')).toBeVisible();
+  await expect(page.getByLabel('Open arena game')).toHaveCount(0);
   expect(errors).toEqual([]);
 });

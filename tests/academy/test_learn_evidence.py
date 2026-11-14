@@ -9,7 +9,7 @@ from conformance.authored_match_receipt import (
     DeterministicServerOfferPolicy,
     UnsupportedAuthorityPrompt,
 )
-from conformance.learn_lesson_evidence import attempt, verify_attempt
+from conformance.learn_lesson_evidence import attempt, source_identity, verify_attempt
 from manabot.semantic.decision_contract import SemanticDecisionContract
 import managym
 from managym.academy.server import GameSession
@@ -84,3 +84,9 @@ def test_learn_rejections_preserve_full_root(tmp_path, field, value):
     assert result["status"] == "rejected"
     assert session.env.search_witness_json() == before
     assert session.revision == frame["revision"]
+
+
+def test_source_identity_includes_relocated_evidence_producer() -> None:
+    paths = {row["path"] for row in source_identity()["files"]}
+    assert "conformance/learn_lesson_evidence.py" in paths
+    assert "managym/academy/server.py" in paths

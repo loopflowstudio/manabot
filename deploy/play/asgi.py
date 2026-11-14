@@ -1,6 +1,6 @@
 """Hosted play entrypoint: the experience server plus the built frontend.
 
-Wraps academy.server's FastAPI app and mounts the static SPA build so the
+Wraps managym.academy.server's FastAPI app and mounts the static SPA build so the
 client, /api, and /ws/play share one origin — the same shape ./scripts/play
 gives locally via the Vite proxy.
 """
@@ -40,8 +40,6 @@ class PlayDomainMiddleware(BaseHTTPMiddleware):
                 status_code=308,
             )
         return await call_next(request)
-
-
 
 
 app.add_middleware(PlayDomainMiddleware)

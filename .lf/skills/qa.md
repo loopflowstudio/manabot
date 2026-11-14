@@ -104,7 +104,7 @@ publish, land or choose the next Graph step from here.
   fixed 30-second deadline whatever `--ready-timeout` says, so the launch
   fails with `ready.timeout`. Then start the two servers as it does: from the
   root, `uv run --python 3.13 --locked --only-group play-runtime uvicorn
-  academy.server:app --host 127.0.0.1 --port <api>`; from `academy/ui`,
+  managym.academy.server:app --host 127.0.0.1 --port <api>`; from `academy/ui`,
   `ACADEMY_API_PORT=<api> npm run dev -- --host 127.0.0.1 --port <ui>
   --strictPort`; poll `/` and `/api/traces` until both return 200. Demos:
   open `/?demo=learn|precision|precision-mana`, wait a second after the

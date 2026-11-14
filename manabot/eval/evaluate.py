@@ -270,9 +270,7 @@ def evaluate_matchup(args: argparse.Namespace) -> None:
             "rollouts_per_world": DEFAULT_ROLLOUTS_PER_WORLD,
             "max_steps": DEFAULT_MAX_PLAYOUT_STEPS,
         },
-        source_sha256=source_digest(
-            ["managym/bots.py", "manabot/sim/players.py"]
-        ),
+        source_sha256=source_digest(["managym/bots.py", "manabot/sim/players.py"]),
     )
     candidate = (
         candidate
