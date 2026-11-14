@@ -8,20 +8,13 @@ another Task. Keep defaults, policy input, Academy behavior, native payment
 execution and the frozen A/B pilot unchanged. No Wave is selected.
 
 All measurement is complete and published: frequencies, the A/B pilot, and the
-paired shape counts with and without redundant taps. The report recommends extending
-today's mana-payment decision, `PayCost` (the automatic plan) first, and asks four
-review questions. Do not rerun the pilot or rewrite its evidence. Earlier plan
-text, launch notes and per-slice checks are in git `78397f2042` and before
-(`ce074e9d37` for the first concept review).
-
-The report names the mana-payment decision precisely, distinguishes kicker
-and sacrifice choices, and presents per-source taps as the fourth unanswered
-review question with published-row bounds. D's overlap pricing and the outcome
-menu recommendation survive.
-
-The group-navigation contract from concept review `15cb04c339` is now in the
-report; see "Entering a group" below. No implementation work remains in this
-prose slice. No PR created here.
+paired shape counts with and without redundant taps. The report recommends
+extending today's mana-payment decision, `PayCost` (the automatic plan) first,
+and asks four review questions before its first table. Do not rerun the pilot
+or rewrite its evidence. Nothing remains to implement in this Task (checked at
+`5040b148b4`); the production chooser needs the separate post-review Task. No
+PR created here. Earlier plan text, launch notes and per-slice checks are in
+git `78397f2042` and before (`ce074e9d37` for the first concept review).
 
 ## Demo and done when
 
@@ -340,29 +333,14 @@ A checkout with no `.venv` makes `uv run --no-sync` create an empty one and
 imports fail. Sync from the lock (`uv run --extra dev`) and keep the existing
 `managym/_managym.cpython-313-darwin.so`.
 
-## Report-text passes (2026-11-13)
+## Later prose and aggregation passes (2026-11-13)
 
-Prose only, on top of `78397f2042`: the four counting definitions are stated
-once under "Decision shapes"; repeated restatements are cut. The three review
-questions then moved ahead of the design, their options as bullets rather than
-tables. Check: the 126 remaining table rows are the 140 of `78397f2042` minus
-the three option tables (14 rows); option text and every quoted figure are
-unchanged; all in-page anchors resolve; `git diff --check` clean.
-
-## Existing-decision checks (2026-11-13)
-
-Rerunning `summary --all-payments` reproduces `all-payments-summary.json`
-byte-identically and leaves `summary.json` untouched; stripping
-`payment_scopes` equals the published summary; all six report overlap rows
-match the derived figures; the three published evidence SHA256s match the
-manifest. Ruff check/format and `git diff --check` pass.
+Each pass after `78397f2042` (questions ahead of the design, the existing
+payment decision and its overlap, per-source bounds, group entry) was checked
+the same way: every earlier table row and quoted figure unchanged, in-page
+anchors resolving, `git diff --check` clean, and where the aggregation changed,
+`summary --all-payments` reproducing `all-payments-summary.json` byte-identically
+with `summary.json` untouched and the three published evidence SHA256s matching
+the manifest. A raw-row projection reproduced all six per-source bounds rows
+and all six overlap rows. Last test run:
 `uv run --extra dev pytest tests/eval/test_experiment_files.py tests/infra/test_experiment_data_untracked.py -q`: 6 passed.
-
-## Per-source report revision (2026-11-13)
-
-Report and plan only. A local `uv run --no-sync python` raw-row projection
-reproduced all six bounds rows (payment count, nearest-rank median/p95/max,
-activated maximum). Four questions precede every table; all internal anchors
-resolve; prior table rows survive in order; `git diff --check` passed. Compress
-then reflowed report prose and added the per-source limit line; no figure
-changed.
