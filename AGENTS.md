@@ -110,7 +110,7 @@ checkpoints or experiment evidence.
   to `Job.max_hours`. Size both job and cohort dollar caps for that whole
   window; a price offer does not guarantee provider capacity.
 - An experiment is `experiments/<name>.py` at a commit with one report,
-  `experiments/<name>.md`. Do not add a protocol document, a serialized regime,
+  `experiments/reports/<name>.md`. Do not add a protocol document, a serialized regime,
   a digest check or a test suite for one experiment's schedule; reusable
   machinery belongs in `manabot/` or Etude, tested once there.
 - Paired deals, replay verification, world-bound checkpoints and training

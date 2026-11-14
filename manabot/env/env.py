@@ -114,7 +114,7 @@ class Env(gym.Env):
         # reset(seed=...) silently replays the identical deal (same
         # shuffles/opening hands) for every value of seed — which is what the
         # evaluation harness had been doing historically (see
-        # experiments/exp-06-newworld-training.md). The native set_seed
+        # experiments/reports/exp-06-newworld-training.md). The native set_seed
         # binding supersedes the engine-rebuild workaround exp-06 landed.
         if seed is not None and seed != self.seed:
             self.seed = seed

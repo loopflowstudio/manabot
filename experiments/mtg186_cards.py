@@ -77,12 +77,13 @@ from experiments.elemental_grid import (
     Score,
     wilson,
 )
-from experiments.mtg186 import CAP_USD, ROOT
 from experiments.mtg186_eval import (
     BUCKET,
+    CAP_USD,
     GW,
     RENT,
     RESULTS,
+    ROOT,
     UR,
     Checkpoint,
     Pairing,

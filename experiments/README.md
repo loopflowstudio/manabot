@@ -1,30 +1,35 @@
 # experiments/
 
-One experiment = one report (`<name>.md`). Raw data in `data/`.
+One experiment = one module and one report: `<name>.py` here, `reports/<name>.md`
+for what it showed. Raw data in `data/`.
 Run provenance lives in the verify store (`.runs/verify.sqlite`).
 
-The [Haiku versus MTG-183 evaluation](haiku-mtg183.md) reports a completed
+The [Haiku versus MTG-183 evaluation](reports/haiku-mtg183.md) reports a completed
 100-game hosted-model comparison, with full evidence in the experiment cache.
 
-Each experiment people run today is one module beside its report: its recipes,
-built from [`manabot.recipes.builders`](../manabot/recipes/builders.py), and
-anything only it needs to run and report. `manabot/` keeps the reusable
-instruments.
+Each experiment people run today is one module: its recipes, built from
+[`manabot.recipes.builders`](../manabot/recipes/builders.py), and anything only
+it needs to run and report. `manabot/` keeps the reusable instruments.
 
 A runnable recipe is a file that defines `train(config)`; run one with
-`uv run etude train FILE` ([training](../docs/training.md#run-training)). Retained
-`TrainingRegime` builders are records; execute them from the pre-cutover main
-revision `f4e1822faf46bbc9cdc43909293f8cbc8de4a300`. Exact reproductions use
-the experiment's recorded revision and lock ([saved regimes](../docs/training.md#saved-regimes)).
+`uv run etude train FILE` ([training](../docs/training.md#run-training)).
+Experiments that ran saved `TrainingRegime` records were removed with their
+executor: their reports stay under [`reports/`](reports/), each naming the last
+commit with its code, and the regime files they trained stay under `regimes/`
+as records ([saved regimes](../docs/training.md#saved-regimes)).
 
-| module | current role | execution |
+| module | role | execution |
 | --- | --- | --- |
-| [batched_baseline](batched_baseline.py) | `train(config)`; retained `batched_baseline()` and `scale_ladder()` builders ([scale ladder](scale-ladder.md)) | `uv run etude train experiments/batched_baseline.py`; retained builders require pre-cutover source |
-| [value_model_baseline](value_model_baseline.py) | retained regime builder ([value models](value-models.md)) | pre-cutover source |
-| [ataraxos_move](ataraxos_move.py) | retained `ataraxos_move()` and `ataraxos_move_scalar()` builders ([fidelity](../docs/learning.md#fidelity-to-the-sources)) | pre-cutover source |
-| [direct_self_play](direct_self_play.py) | retained regime builder | pre-cutover source |
-| [ataraxos_ablation](ataraxos_ablation.py) | retained RL control and four treatment arms ([ablations](ataraxos-mtg-ablations.md)) | `uv run python -m experiments.ataraxos_ablation` refuses and names the pre-cutover revision |
+| [batched_baseline](batched_baseline.py) | the batched GPU baseline ([size and batching study](reports/longer-learning-017.md)) | `uv run etude train experiments/batched_baseline.py` |
 | [belief recipe](../manabot/recipes/belief_sampler.py) | two jobs: [belief_policy](../manabot/recipes/belief_policy.py) trains a policy; the sampler run starts from its final checkpoint, collects histories and fits the sampler ([guide](../docs/training.md#recipes-in-stages)) | `uv run etude launch manabot/recipes/belief_sampler.py` |
+
+Evaluation, LLM and deck-building modules that never ran a regime are
+unchanged: the MTG-183 follower and its report (`elemental_long_*.py`), the
+MTG-186 pairings and card tables (`mtg186_eval.py`, `mtg186_cards.py`), the
+curriculum grid readers (`curriculum_*.py`), the inference baselines
+(`inference_baseline.py`, `policy_inference_gpu.py`), the LLM campaigns
+(`llm_game.py`, `qwen_mtg183*.py`, `jev_mtg183.py`) and the TLA corpus
+(`tla_corpus.py`, `tla_pools.py`).
 
 The compound-decision study (`compound_decisions.py`) is no longer runnable;
 reproduce it at commit `ba3cd58de25bcc5d0b32e0fa3c546ee3d27be52b`.
@@ -50,13 +55,13 @@ draws them. Etude tells each run it launches from the file that stem, and the
 | file | `runs()` | `eval(state)` | `report()` |
 | --- | --- | --- | --- |
 | [elemental](elemental.py) (MTG-181/183) | fresh seeds of the ten-deck recipe | 10×10 heuristic grid and checkpoint pairs | grid score, deck matrix and rankings, crosstable of pairs |
-| [seat_comparison](seat_comparison.py) (MTG-165) | retired; requires pre-cutover source `f4e1822faf46bbc9cdc43909293f8cbc8de4a300` | — | score on learner transitions, one-seat dotted |
-| [two_seat](two_seat.py) (MTG-165 ladder) | — | — | score, matchups, head to head |
+| [seat_comparison](seat_comparison.py) (MTG-165) | one job per arm (`learning_seats` one or both), four seeds each: the template for comparing method arms | — | score by update, one-seat dotted |
+| [tla_frontier](tla_frontier.py) (c5fba4) | one wall-bounded job per model size on the 17Lands TLA corpus | each size against its earlier self, the heuristic and the other size | progress curves and head to head |
 
 Perf and ML details draw self-play's own keys ([`manabot.training.panels`](../manabot/training/panels.py)),
 including a flame graph of each update's `time/` seconds. The two-deck
-experiments' evaluation is still bound to each checkpoint's training record
-(`manabot.eval.benchmark`), and their retained results predate Etude eval runs.
+benchmark (`manabot.eval.benchmark`) is still bound to the retired executor's
+training record, so `seat_comparison` has no `eval(state)` yet.
 
 Reports of finished studies stay as the record. The runners, contracts, plans
 and fixtures they cite were removed once nothing current used them; git
@@ -133,14 +138,14 @@ at the source each run pinned; ac601834d is the last revision carrying them.
 
 ## Index
 
-[Live-token attention, MTG-319](live_token_attention.md): **completed
+[Live-token attention, MTG-319](reports/live_token_attention.md): **completed
 2026-11-12**, exploratory pilot on one L4 (USD 0.24). Attending over valid objects
 only, on top of bucketed shapes, takes the w384l8 learner step from 386 ms to
 202 ms (1.91×, bar 1.5×). Outputs match the padded path as closely as bucketed
 shapes do. Build-out recommended. Evidence is under
 `experiments/data/live_token_attention/`.
 
-[Mirror search on MTG-183](search-mirror.md): **completed 2026-11-12**,
+[Mirror search on MTG-183](reports/search-mirror.md): **completed 2026-11-12**,
 exploratory — 3,000 games (six settings × 500 deals) plus an 8,000-game earlier
 sweep on the frozen w13 policy. With playable uniform hand sampling, mirror
 search beats the policy's sampled play by +12.5 to +17.4 points from 4 to 16
@@ -149,7 +154,7 @@ The HTML report and evidence are in the data manifest under
 `experiments/data/search-mirror-v1/` and `search-mirror-v2/`; source is tag
 `mirror-w13-study-frozen`.
 
-[Critic readouts and attention depth, MTG-252](value-readout-252-results.md):
+[Critic readouts and attention depth, MTG-252](reports/value-readout-252-results.md):
 **completed 2026-11-09** — five arms, three seeds each, 300 updates and 28,200
 valid evaluation games. Depth-4 masked mean/token score 61.0%/61.7% against the
 heuristic, with no clear readout winner. The equal-update depth advantage largely
@@ -157,14 +162,14 @@ disappears at matched measured training hours; no default promotion. Graphs,
 uncertainty, cost limits and the offline HTML report are retained in the data
 manifest under `experiments/data/value-readout-252/`.
 
-[V7 state reduction, GPU horizon](state-representation-gpu.md): **completed
+[V7 state reduction, GPU horizon](reports/state-representation-gpu.md): **completed
 2026-11-05** — four paired seeds, 256 updates (524,288 training games), 11,264
 replayed evaluation games. No qualified plateau (one of six final-window
 intervals within ±5). Held-out GRU minus pooling: −1.95 points [−5.88, +1.98],
 neither advantage nor equivalence; no promotion. GRU and pooling are two
 within-decision reducers, not agent memory.
 
-[V7 state reduction, CPU](state-representation-v7.md): **preliminary,
+[V7 state reduction, CPU](reports/state-representation-v7.md): **preliminary,
 2026-11-04** — four seeds at 128 updates, 32,768 training games and 1,024
 replayed evaluation games. GRU minus pooling: −0.98 points [−10.13, +8.18], at
 1.06× training time. Too short a horizon to choose an architecture; the GPU
@@ -175,77 +180,77 @@ unexecuted, 2026-11-11** — authored reference league, frozen mixtures and
 separate retention, expansion and generalization panels. No training or
 strength results; the protocol and modules remain at that revision.
 
-[Heuristic strength](heuristic-strength.md): **completed 2026-10-24** — the
+[Heuristic strength](reports/heuristic-strength.md): **completed 2026-10-24** — the
 `heuristic` anchor as UR against MTG-183's update-1,750 GW rises from 18.3% to
 62.0% (300 held-out games), and from 10.8% to 34.3% across all ten decks, with
 faster decisions. Flat Monte Carlo over it adds +6.3 points [0.0, 12.7] at 16
 worlds, for about 3,000 times the decision time.
 
-[MTG-165 two-seat scale ladder](two-seat-ladder.md): **running, interim report** —
+[MTG-165 two-seat scale ladder](reports/two-seat-ladder.md): **running, interim report** —
 20.9M learner/environment decisions retained in a verified 704-update snapshot.
 Early heuristic score at 250 updates: 51.5% [48.5, 54.5], versus one-seat 47.5%;
 paired delta +4 points [−1, +8.5], with unequal training cost. The $50 endpoint
 is pending; $4.01 estimated incurred at the retained cost observation.
 
-[ETU-105 mini filter scope](ataraxos-technique-screen.md#mini-result--completed-2026-10-07):
+[ETU-105 mini filter scope](reports/ataraxos-technique-screen.md#mini-result--completed-2026-10-07):
 actor-only gained +3.33 [−4.33, 11.33] points against held-out greedy at 45% extra
 training cost; unpromoted. All 3,600 monitoring/final games replayed exactly.
 
-[ETU-106 pooling × advantage floor](pooling-filter-followup.md#result--completed-2026-10-06):
+[ETU-106 pooling × advantage floor](reports/pooling-filter-followup.md#result--completed-2026-10-06):
 2,400 replay-verified games; no demonstrated token or floor-removal strength
 benefit, no equivalence claim, and both floor changes remain unresolved.
 
-ETU-99's [remaining Ataraxos transfer protocols](ataraxos-transfer.md) map
+ETU-99's [remaining Ataraxos transfer protocols](reports/ataraxos-transfer.md) map
 delivered instruments to unexecuted sampler, search, distillation and robustness
 studies. Proposed budgets are separate from ETU-91 and grant no execution authority.
 
 | exp | question | verdict |
 |---|---|---|
-| [00](exp-00-decision-profile.md) / [00-cost](exp-00-cost-basis.md) / [00c](exp-00c-seat-balanced-baselines.md) | calibrate the instrument | 194 decisions/game; single-init baselines meaningless; $0.44/1M steps. ~~Per-seat findings (94%/23.1% on-play)~~ deal artifacts per exp-06 — deal-averaged random mirrors are at parity (repro_06) |
-| [01](exp-01-c1-training.md) | does the shaped recipe survive a real deck? | no — 0/3 seeds; one seat-parasitic; `cast_when_able` flipped sign |
-| [02](exp-02-flat-mc.md) | how much intelligence is free? | search-256 = 99% vs random at $0; every trained policy below N=16 |
-| [03](exp-03-distillation.md) | is distillation cheaper than RL? | yes — 90.5% vs matched-cost PPO's 52.7%; ladder ≈ N=8 at 1ms |
-| [04](exp-04-potential-shaping.md) | is bias-free dense signal possible? | shaping was the disease — terminal-only wins; pass-collapse fails replication |
-| [07](exp-07-expert-iteration.md) | does the expert-iteration crank compound? | no — R1 loses 74–26 to R0 (label economics); batched inference 12× landed |
-| [06](exp-06-newworld-training.md) | did observation growth hurt training? | benign — seeds in/above the historical band |
-| [08](exp-08-two-deck-matchup.md) / [08b](exp-08b-ancestral-dose.md) | what decides a matchup table? | pilot + card quality — 4× Recall swung it 55 points; UR-22% was a pilot artifact |
-| [09](exp-09-control-competency.md) | can the pilot play control? | no — ≤0.39 correct at any N; random beats search on 3/5 scenarios; win rate masks incapacity |
-| [10](exp-10-value-gate.md) | does search-with-V beat V-greedy? | gate passes deal-diverse 60.25% [55.4, 64.9], but V loses to cheaper random-rollout search (P3 refuted); V's ordering near-noise in undecided positions; first battery + training corpus (3 deals/225g) were deal-narrow |
-| [11](exp-11-curriculum-exploitability.md) | does a stronger opponent teach better? | self-play quietly wins; the opponent installs the strategy; student robust (exploiter ≤26%) |
-| [W2-214](w2-214-structural-semantic-katas.md) | can a bounded structural encoder break the bag encoder's exact symmetry on five static semantic relations? | instrument valid; bag exactly 50%; relational arm learned order/hierarchy but failed the pre-registered trainability and cost gates — redesign optimization/capacity before interpreting the remaining katas |
-| [ETU-87](etu-87-allies-lessons-balance.md) | which cards decide Allies versus Lessons? | exploratory — the 70–30 gap is in the lists (Random mirrors reproduce it); cutting White Lotus Reinforcements ×2 and Suki for lands gives UR Lessons 47.7% [45, 51] on w3; the revised Lessons list is worth ~13 points on w4 |
+| [00](reports/exp-00-decision-profile.md) / [00-cost](reports/exp-00-cost-basis.md) / [00c](reports/exp-00c-seat-balanced-baselines.md) | calibrate the instrument | 194 decisions/game; single-init baselines meaningless; $0.44/1M steps. ~~Per-seat findings (94%/23.1% on-play)~~ deal artifacts per exp-06 — deal-averaged random mirrors are at parity (repro_06) |
+| [01](reports/exp-01-c1-training.md) | does the shaped recipe survive a real deck? | no — 0/3 seeds; one seat-parasitic; `cast_when_able` flipped sign |
+| [02](reports/exp-02-flat-mc.md) | how much intelligence is free? | search-256 = 99% vs random at $0; every trained policy below N=16 |
+| [03](reports/exp-03-distillation.md) | is distillation cheaper than RL? | yes — 90.5% vs matched-cost PPO's 52.7%; ladder ≈ N=8 at 1ms |
+| [04](reports/exp-04-potential-shaping.md) | is bias-free dense signal possible? | shaping was the disease — terminal-only wins; pass-collapse fails replication |
+| [07](reports/exp-07-expert-iteration.md) | does the expert-iteration crank compound? | no — R1 loses 74–26 to R0 (label economics); batched inference 12× landed |
+| [06](reports/exp-06-newworld-training.md) | did observation growth hurt training? | benign — seeds in/above the historical band |
+| [08](reports/exp-08-two-deck-matchup.md) / [08b](reports/exp-08b-ancestral-dose.md) | what decides a matchup table? | pilot + card quality — 4× Recall swung it 55 points; UR-22% was a pilot artifact |
+| [09](reports/exp-09-control-competency.md) | can the pilot play control? | no — ≤0.39 correct at any N; random beats search on 3/5 scenarios; win rate masks incapacity |
+| [10](reports/exp-10-value-gate.md) | does search-with-V beat V-greedy? | gate passes deal-diverse 60.25% [55.4, 64.9], but V loses to cheaper random-rollout search (P3 refuted); V's ordering near-noise in undecided positions; first battery + training corpus (3 deals/225g) were deal-narrow |
+| [11](reports/exp-11-curriculum-exploitability.md) | does a stronger opponent teach better? | self-play quietly wins; the opponent installs the strategy; student robust (exploiter ≤26%) |
+| [W2-214](reports/w2-214-structural-semantic-katas.md) | can a bounded structural encoder break the bag encoder's exact symmetry on five static semantic relations? | instrument valid; bag exactly 50%; relational arm learned order/hierarchy but failed the pre-registered trainability and cost gates — redesign optimization/capacity before interpreting the remaining katas |
+| [ETU-87](reports/etu-87-allies-lessons-balance.md) | which cards decide Allies versus Lessons? | exploratory — the 70–30 gap is in the lists (Random mirrors reproduce it); cutting White Lotus Reinforcements ×2 and Suki for lands gives UR Lessons 47.7% [45, 51] on w3; the revised Lessons list is worth ~13 points on w4 |
 
 ### Teacher program (W2-234)
 
 | report | question | verdict |
 |---|---|---|
-| [teacher0](w2-234-teacher0.md) | can a search-supervised policy/value student learn from Teacher-0? | proceed to scale-up — joint policy/value matches policy-only CE/top-1, improves held-out value Brier 0.2536→0.2043, 71%→73% vs random |
-| [teacher1](w2-234-teacher1.md) | does the determinized PUCT substrate work end-to-end? | substrate pass — tree search, node reuse, alternating backup, self-play shards all function; priors still uniform, playouts random |
-| [teacher1-pilot](w2-234-teacher1-pilot.md) | do budgets 8/32/128 give strong, legal, affordable targets? | **preregistered, unrun** — fail-closed until the terminal Teacher-0 manifest and control lock exist |
-| [INT-4 smoke](int-4-visit-teacher-smoke.md) | does the visit teacher → 2×2 students → four-agent arena → Study pipeline execute on real states? | engineering substrate pass, **not admission evidence** — 507 labels, exact 175-decision replay, four matched checkpoints, complete smoke arena, and cross-language Study validation; production controls and competencies remain |
-| [INT-4 production harness](int-4-visit-teacher-production.md) | can the registered multi-seed iteration fail closed on exact controls and produce independently verified admission evidence? | harness ready, **production not run** — exact frozen Teacher-0 bytes are absent; no substitution or production claim |
-| [INT-8 student signal guidance](int-8-student-signal-guidance.md) | should the recovered chosen-action or visit-distribution policy guide bounded PUCT? | `kill_retained_smoke_policy_guidance` — both arms lost paired score to uniform, added inference cost, and improved uniform-128 agreement by <0.05; one-seed smoke evidence only |
+| [teacher0](reports/w2-234-teacher0.md) | can a search-supervised policy/value student learn from Teacher-0? | proceed to scale-up — joint policy/value matches policy-only CE/top-1, improves held-out value Brier 0.2536→0.2043, 71%→73% vs random |
+| [teacher1](reports/w2-234-teacher1.md) | does the determinized PUCT substrate work end-to-end? | substrate pass — tree search, node reuse, alternating backup, self-play shards all function; priors still uniform, playouts random |
+| [teacher1-pilot](reports/w2-234-teacher1-pilot.md) | do budgets 8/32/128 give strong, legal, affordable targets? | **preregistered, unrun** — fail-closed until the terminal Teacher-0 manifest and control lock exist |
+| [INT-4 smoke](reports/int-4-visit-teacher-smoke.md) | does the visit teacher → 2×2 students → four-agent arena → Study pipeline execute on real states? | engineering substrate pass, **not admission evidence** — 507 labels, exact 175-decision replay, four matched checkpoints, complete smoke arena, and cross-language Study validation; production controls and competencies remain |
+| [INT-4 production harness](reports/int-4-visit-teacher-production.md) | can the registered multi-seed iteration fail closed on exact controls and produce independently verified admission evidence? | harness ready, **production not run** — exact frozen Teacher-0 bytes are absent; no substitution or production claim |
+| [INT-8 student signal guidance](reports/int-8-student-signal-guidance.md) | should the recovered chosen-action or visit-distribution policy guide bounded PUCT? | `kill_retained_smoke_policy_guidance` — both arms lost paired score to uniform, added inference cost, and improved uniform-128 agreement by <0.05; one-seed smoke evidence only |
 
 ### Platform evidence (W2)
 
 | report | claim proven |
 |---|---|
-| [card-conformance-audit](card-conformance-audit.md) | 55 registered cards audited vs Scryfall; 20 shell mismatches fixed; fixture + tripwire test |
-| [milestone-1](milestone-1-two-deck-slice.md) | all four rules stages landed for the UR-Lessons-vs-GW-Allies slice |
-| [opcode-alignment-v1](opcode-alignment-v1.md) | semantic-program-only encoder: 91.7% zero-shot held-out cluster accuracy vs 0.0% for opaque card-id arms |
-| [structured-policy-decoder](structured-policy-decoder.md) | structured decoder matches legacy adapter exactly (6435/6435 actions) at comparable latency — migration evidence |
-| [INT-11 semantic runtime policy](int-11-semantic-runtime-policy.md) | learned priority/target/combat policy executes 144 legal Commands and 36/36 terminal paired games across three seeds; identity transfer beats identity-only but matches structure-shuffled, so structure evidence is null/ambiguous |
-| [INT-12 belief strategy advisor](int-12-belief-strategy-advisor.md) | one pinned exact-range comparison returns byte-identical live/Study advice with a 0.125 policy delta; cached p50 0.984 ms and fresh p50 16.981 s for the declared 16-simulation engineering profile, with no strength or service-SLO claim |
-| [INT-17 belief calibration](int-17-belief-calibration.md) | exact frozen run retained a fail-closed systems result: per-row materialization re-enumerates the full support, making likelihood updates O(S²); optimistic full-trace projection 11.55h exceeded the 6h cap, so no curves or calibration claim exist pending RUL-13 and a new execution contract that preserves v1's scientific inputs while binding the repaired runtime |
-| [w2-179](w2-179-content-pack-local-diagnostic.md) | immutable ContentPack / mutable Card seam with deterministic CardDefId hashing |
-| [w2-182](w2-182-search-branching-v1.md) | full-clone branching baseline: 2,194 sims/s, clone p50 4.5µs |
-| [w2-198](w2-198-compact-clone-undo-v1.md) | compact clone+undo at parity with full clone (2,097 sims/s) with journal accounting |
-| [w2-208](w2-208-content-pack-clone-allocations.md) | exact clones share the immutable ContentPack by Arc pointer |
-| [w2-215](w2-215-semantic-projection.md) | viewer projection baseline: ~53 tokens/object p50, ~9.9µs hot projection, zero failures |
-| [w2-223](w2-223-typed-ir-interpreter.md) | generic fail-closed interpreter executes all 31 admitted programs by opcode — no card-name dispatch |
+| [card-conformance-audit](reports/card-conformance-audit.md) | 55 registered cards audited vs Scryfall; 20 shell mismatches fixed; fixture + tripwire test |
+| [milestone-1](reports/milestone-1-two-deck-slice.md) | all four rules stages landed for the UR-Lessons-vs-GW-Allies slice |
+| [opcode-alignment-v1](reports/opcode-alignment-v1.md) | semantic-program-only encoder: 91.7% zero-shot held-out cluster accuracy vs 0.0% for opaque card-id arms |
+| [structured-policy-decoder](reports/structured-policy-decoder.md) | structured decoder matches legacy adapter exactly (6435/6435 actions) at comparable latency — migration evidence |
+| [INT-11 semantic runtime policy](reports/int-11-semantic-runtime-policy.md) | learned priority/target/combat policy executes 144 legal Commands and 36/36 terminal paired games across three seeds; identity transfer beats identity-only but matches structure-shuffled, so structure evidence is null/ambiguous |
+| [INT-12 belief strategy advisor](reports/int-12-belief-strategy-advisor.md) | one pinned exact-range comparison returns byte-identical live/Study advice with a 0.125 policy delta; cached p50 0.984 ms and fresh p50 16.981 s for the declared 16-simulation engineering profile, with no strength or service-SLO claim |
+| [INT-17 belief calibration](reports/int-17-belief-calibration.md) | exact frozen run retained a fail-closed systems result: per-row materialization re-enumerates the full support, making likelihood updates O(S²); optimistic full-trace projection 11.55h exceeded the 6h cap, so no curves or calibration claim exist pending RUL-13 and a new execution contract that preserves v1's scientific inputs while binding the repaired runtime |
+| [w2-179](reports/w2-179-content-pack-local-diagnostic.md) | immutable ContentPack / mutable Card seam with deterministic CardDefId hashing |
+| [w2-182](reports/w2-182-search-branching-v1.md) | full-clone branching baseline: 2,194 sims/s, clone p50 4.5µs |
+| [w2-198](reports/w2-198-compact-clone-undo-v1.md) | compact clone+undo at parity with full clone (2,097 sims/s) with journal accounting |
+| [w2-208](reports/w2-208-content-pack-clone-allocations.md) | exact clones share the immutable ContentPack by Arc pointer |
+| [w2-215](reports/w2-215-semantic-projection.md) | viewer projection baseline: ~53 tokens/object p50, ~9.9µs hot projection, zero failures |
+| [w2-223](reports/w2-223-typed-ir-interpreter.md) | generic fail-closed interpreter executes all 31 admitted programs by opcode — no card-name dispatch |
 
-(Older platform docs: [first-light-run-1](first-light-run-1.md),
-[sps-closeout](sps-closeout.md).)
+(Older platform docs: [first-light-run-1](reports/first-light-run-1.md),
+[sps-closeout](reports/sps-closeout.md).)
 
 Distributed-RL research and the unexecuted bounded workload plan live in
 [the ETU-108 report](../docs/training.md#distributed-training); its benchmark supervisor was
@@ -263,5 +268,5 @@ batches change optimization; the prospective recipe retains the original
 complete-game horizon. Scientific Run `e51f61b92931` ended `lost / machine_lost`
 on 2026-11-05 after three of eight learners completed, with no curve or held-out
 endpoint; that record is unchanged. The recovery amendment completed the cohort
-the same day: [the GPU report](state-representation-gpu.md) holds its result.
+the same day: [the GPU report](reports/state-representation-gpu.md) holds its result.
 The preliminary CPU study remains frozen.

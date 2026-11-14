@@ -415,7 +415,7 @@ class SemanticCardEncoder(nn.Module):
         Rows repeat heavily within a batch. Under CUDA autograd, embedding
         backward groups repeated rows before accumulating into the
         differentiable table, where advanced indexing accumulates each one
-        separately (`experiments/ppo_cuda.md`). Row 0 still receives gradients;
+        separately (`experiments/reports/ppo_cuda.md`). Row 0 still receives gradients;
         no padding suppression or frequency normalization applies. Other
         devices and inference keep advanced indexing, so CPU results are
         unchanged.

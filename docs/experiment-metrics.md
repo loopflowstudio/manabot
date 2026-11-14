@@ -48,7 +48,7 @@ not an assumed complete training history.
 
 The accepted cross-project scope is recorded in
 Training time reports from selected Etude runs (the plan was retired; the
-cohort report in [training time](../experiments/training-time.md) is the record).
+cohort report in [training time](../experiments/reports/training-time.md) is the record).
 
 ## Experiment notebooks
 

@@ -6,7 +6,6 @@ from pathlib import Path
 from etude.train.read import read
 import pytest
 
-from experiments.direct_self_play import direct_self_play
 from manabot.reports import training as monitoring
 from manabot.reports.training import (
     Dashboard,
@@ -16,6 +15,7 @@ from manabot.training.records import StageRecord, TrainingRun
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.training.update_metrics import stage_rows
 import managym
+from tests.fixtures.saved_regimes import direct_self_play
 
 
 def _recipe() -> TrainingRegime:

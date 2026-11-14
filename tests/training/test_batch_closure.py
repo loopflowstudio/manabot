@@ -8,12 +8,6 @@ import numpy as np
 from pydantic import ValidationError
 import pytest
 
-from experiments.batched_baseline import (
-    closure_comparison,
-    lambda_sweep,
-    scale_ladder,
-    seat_comparison,
-)
 from manabot.env.match import Match, Reward
 from manabot.experiment.attacks import AttackPlan, AttackTarget
 from manabot.infra.config import MatchConfig, RewardConfig
@@ -282,45 +276,3 @@ def test_saved_regime_digests_do_not_move(name: str, digest: str) -> None:
     payload = json.loads((ROOT / f"experiments/regimes/{name}.json").read_text())
     regime = TrainingRegime.model_validate(payload)
     assert canonical_sha256(regime.model_dump(mode="json")) == digest
-
-
-def test_frozen_one_seat_recipes_keep_their_closure_and_digest() -> None:
-    ladder = scale_ladder()
-    assert _closure(ladder) == "exact-quota"
-    assert canonical_sha256(ladder.model_dump(mode="json")) == (
-        "022bb2c002aef264f305270ce1e9fcad0e3214a88f70dbc14ffb053aa4a62f26"
-    )
-    one = seat_comparison("one", 10)
-    assert _closure(one) == "complete-games"
-    assert canonical_sha256(one.model_dump(mode="json")) == (
-        "b27f1c3b6a5c21857b20e268151d83dd3cac4cb8841305ef225ba8393cc17e82"
-    )
-
-
-def _changed(first: dict[str, object], second: dict[str, object]) -> set[str]:
-    return {
-        key for key in first.keys() | second.keys() if first.get(key) != second.get(key)
-    }
-
-
-def test_closure_study_arms_differ_only_in_closure_and_floor() -> None:
-    exact = closure_comparison("exact-quota", 10).model_dump(mode="json")
-    complete = closure_comparison("complete-games", 10).model_dump(mode="json")
-    assert _changed(exact, complete) == {"id", "stages"}
-    assert _changed(exact["stages"][0], complete["stages"][0]) == {
-        "batch_closure",
-        "transitions",
-    }
-
-
-def test_lambda_study_arms_differ_only_in_their_traces() -> None:
-    first = lambda_sweep(0.5, 0.8, 10).model_dump(mode="json")
-    second = lambda_sweep(0.95, 1.0, 10).model_dump(mode="json")
-    assert _changed(first, second) == {"id", "stages"}
-    assert _changed(first["stages"][0], second["stages"][0]) == {"learning"}
-    assert _changed(
-        first["stages"][0]["learning"], second["stages"][0]["learning"]
-    ) == {
-        "policy_lambda",
-        "value_lambda",
-    }

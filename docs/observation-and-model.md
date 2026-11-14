@@ -52,7 +52,7 @@ validation of its own
 2. **Mix.** Self-attention lets objects inform each other, with padding masked.
    [Live-token attention](#live-token-attention) attends over valid
    objects only; it replaced the pooled token stream
-   ([token-stream report](../experiments/token_stream.md)).
+   ([token-stream report](../experiments/reports/token_stream.md)).
 3. **Score actions.** Each action gathers the post-attention embeddings of its
    focus objects, and a small head gives it one logit. With `policy_film`, a
    pooled game state first scales each action embedding. Illegal slots are
@@ -61,7 +61,7 @@ validation of its own
    objects (`masked_mean`, as in the TLA pilot; the historical default averages
    every slot) and read by the value head. The output is a scalar or loss/draw/win logits.
    `value_token` and `attention_readout` replace the mean with a learned summary
-   ([readout comparison](../experiments/value-readout-252.md)).
+   ([readout comparison](../experiments/reports/value-readout-252.md)).
 
 The GRU encodes a card's rules program, not game history. The network has no
 recurrent game memory, and the optional recent-event encoder is off by default.
@@ -167,9 +167,12 @@ A training stage's execution settings choose it, with
 `train_self_play` stage, off on CPU and MPS and for every other operation:
 
 ```python
-from experiments.batched_baseline import batched_baseline
+from manabot.training.regime import Execution, TrainingRegime, TrainSelfPlay
 
-regime = batched_baseline()  # one CUDA train_self_play stage, fields unset
+stage = TrainSelfPlay(
+    id="self-play", operation="train_self_play", execution=Execution(device="cuda")
+)
+regime = TrainingRegime(id="example", world=world, match=match, stages=[stage])
 execution = regime.stages[0].execution
 execution.bucketed_shapes, execution.live_tokens  # (True, True)
 ```
@@ -196,7 +199,7 @@ one there. Search players load their policies padded.
 Bucketed shapes are 2.4× faster per learner step than padding to capacity at
 w160l8 and 2.6× at w384l8 on an L4. Collection over full tables was faster at
 w160l8, 2.4 s against 2.9 s per pass with both settings on
-([live-token attention](../experiments/live_token_attention.md)). That is the
+([live-token attention](../experiments/reports/live_token_attention.md)). That is the
 known cost of the default at small widths; it stays on at every width.
 
 The setting changes how a forward is computed, not the model. It changes no
@@ -237,7 +240,7 @@ jagged nested tensors. On CUDA that runs the fused variable-length kernels; on
 CPU it falls back to one attention call per observation, which is correct but
 slow: at w160l8 a 256-row collection forward took about 0.86 s against 0.46 s
 padded on a laptop CPU
-([measurement](../experiments/eval_forward_layout.md)). A stage therefore uses
+([measurement](../experiments/reports/eval_forward_layout.md)). A stage therefore uses
 live tokens only on CUDA: `auto` resolves off elsewhere, and an explicit
 `live_tokens=True` on CPU or MPS fails validation (`live tokens require CUDA`),
 as a reduced precision does.
@@ -258,7 +261,7 @@ probabilities, values, losses and gradients agree with the padded path to
 within 1e-5 on CPU; on CUDA they differ only by accumulation order, as bucketed
 shapes do. On an L4, live tokens over buckets make a learner step 1.45× faster than bucketed shapes
 alone at w160l8 and 1.91× at w384l8, where it falls from 386 ms to 202 ms
-([live-token attention](../experiments/live_token_attention.md)).
+([live-token attention](../experiments/reports/live_token_attention.md)).
 
 ## Policy inputs
 
@@ -555,7 +558,7 @@ this proof first.
 | --- | --- |
 | Larger fixed fact and relation tables | Admission control only. Removes neither duplication nor source-identity loss. |
 | Typed shared records pooled into objects and frames | Shipped with pre-attention routing. Cheapest; a learned sum can still compress away a distinction that transport preserved. |
-| Per-record token GRU with sparse joins | Tested against pooling on the earlier v7 input and not separated from it ([GPU report](../experiments/state-representation-gpu.md)). The current input requires it for ordered programs, so that comparison does not cover the current effect path. |
+| Per-record token GRU with sparse joins | Tested against pooling on the earlier v7 input and not separated from it ([GPU report](../experiments/reports/state-representation-gpu.md)). The current input requires it for ordered programs, so that comparison does not cover the current effect path. |
 | Variable-length game-state tokens | Unbuilt. Variable length alone does not reduce memory: the card encoder allocates padded tokens before packing. Ordered payloads suit token sequences, while unordered objects and effects need equivariant joins with explicit order features. |
 | Split the relation table into typed stack, execution and trigger structures | Unbuilt. The table is a flattened typed structure, not wrong in itself. Its costs are repeated headers, capacity shared across unrelated structures, overloaded index and order features, and uniform pooling. A split must keep public stack rank, parent links, retained target eligibility and action continuation joins. |
 | All objects, effects and frames as global attention tokens | Unmeasured. Moves attention from N² to (N + E + F)². Memberships need not become tokens. Compact transport alone does not justify it. |
@@ -618,14 +621,14 @@ is not evidence for any of them:
 
 - **The encoding hides no decision.** The learnability search found 0 clean
   input collisions, and the fixed suite runs on relevant PR updates
-  ([learnability](../experiments/learnability-search.md)).
+  ([learnability](../experiments/reports/learnability-search.md)).
 - **The smallest model learned as well as larger ones at this scale.** Two
   seeds were not enough to rank sizes
-  ([longer learning](../experiments/longer-learning-017.md)).
+  ([longer learning](../experiments/reports/longer-learning-017.md)).
 - **Value-token and pooling variants are unresolved**
-  ([value token](../experiments/value-token-screen.md),
-  [pooling follow-up](../experiments/pooling-filter-followup.md),
-  [three-seed depth/readout results](../experiments/value-readout-252-results.md)).
+  ([value token](../experiments/reports/value-token-screen.md),
+  [pooling follow-up](../experiments/reports/pooling-filter-followup.md),
+  [three-seed depth/readout results](../experiments/reports/value-readout-252-results.md)).
 - **No history input has shown a training benefit**, and the shared-effect
   transport is an engineering proof, not a learning result.
 

@@ -17,7 +17,7 @@ checked against.
 
 Keep PyTorch in production and retain MLX as an experimental Apple backend:
 MLX half's measured speed advantage still needs learning-quality validation.
-See the [MPS retest](../../experiments/mps_retest.md) for results and limits.
+See the [MPS retest](../../experiments/reports/mps_retest.md) for results and limits.
 Both follow [one precision rule](../../docs/training.md#reduced-precision):
 bfloat16 forwards for models of width 256 or more on MPS and MLX, as on CUDA,
 with float32 log-probabilities, master weights and optimizer state.
@@ -199,7 +199,7 @@ Read card-program rows through `SemanticCardEncoder.lookup`
 repeat heavily in a batch; under CUDA autograd `lookup` uses embedding
 backward, which groups repeated rows, where advanced indexing accumulates each
 row separately and made PPO updates 2.17× slower on an L4
-(`experiments/ppo_cuda.md`). CPU results are identical either way.
+(`experiments/reports/ppo_cuda.md`). CPU results are identical either way.
 
 The reusable pieces in `rl.py`, `learner.py` and `arrays.py` depend only on
 their own backend, the shared host returns and the profiler at runtime;

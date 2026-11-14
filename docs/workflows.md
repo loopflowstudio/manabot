@@ -91,9 +91,9 @@ games; they do not establish a serving limit. Phase timers measure seconds,
 not inference call counts or rows per call. Measure those separately when
 batch utilization is the question. For resumed recipe runs, read per-update
 rows rather than dividing cumulative counts by the last attempt's wall time.
-Keep failed attempts and missing measurements visible. The frozen
-`experiments/training_throughput.py` driver refuses execution before spawning
-children; its historical receipt reader is not a reader for this new output.
+Keep failed attempts and missing measurements visible. The
+training-throughput study's driver and receipt reader were removed after
+revision `83b77e6c64`; they do not read this output.
 
 Use `--cuda-counts PATH` in a separate diagnostic run for kernel launches and
 synchronizations. It requires real CUDA and changes timing; its whole-run counts
@@ -104,7 +104,7 @@ evidence. For evaluation, use the predeclared plan and receipt guidance in
 
 Compare baseline and candidate on the same machine with matched workloads and
 behavior digests. A GPU label alone does not identify a comparable host; the
-[training update investigation](../experiments/training-update-time.md) records
+[training update investigation](../experiments/reports/training-update-time.md) records
 substantial host variation. Never induce artificial load. If required hardware is
 unavailable, record the exact command and missing hardware as a deferred check;
 do not rent automatically, substitute CPU timing for CUDA evidence or claim a gain.

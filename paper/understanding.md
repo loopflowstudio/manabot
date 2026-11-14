@@ -31,7 +31,7 @@ not propagate it to the Rust engine. Every evaluation that re-seeded via
 `reset` therefore played all of its games on one deal (one shuffle, one pair
 of opening hands). An N-game evaluation through that path measures N
 stochastic rollouts of a single deal, not N games. Fixed 2026-07-10
-(PR #51); source: `experiments/exp-06-newworld-training.md`. Evaluation
+(PR #51); source: `experiments/reports/exp-06-newworld-training.md`. Evaluation
 lineages that construct a fresh engine per game (the flat-MC matchup driver)
 or step the Rust VectorEnv across auto-resets were not affected.
 
@@ -49,7 +49,7 @@ was traced to a training corpus containing 3 distinct deals across 225 games.
 Deal-diverse data shows no clean seat pattern. The hypothesis "seat advantage
 emerges with playing competence" is unsupported; it was briefly asserted on
 2026-07-10 before the deal check completed, and is retracted.
-Source: `experiments/exp-10-value-gate.md` (Deviation 3, Caveats).
+Source: `experiments/reports/exp-10-value-gate.md` (Deviation 3, Caveats).
 
 **F4 — Representation growth is benign for training (exp-06/C6a).** Growing
 the observation/action encoding from world w0 to w1 (card features 29→37,
@@ -67,7 +67,7 @@ against a frozen strong opponent, policies are forced into near-total
 aggression (cast_when_able 0.86–0.89); in self-play, intermediate profiles.
 Self-play produced the strongest policies on both vs-random and
 search-ladder metrics among the three conditions (2 seeds/arm).
-Source: `experiments/exp-11-curriculum-exploitability.md`.
+Source: `experiments/reports/exp-11-curriculum-exploitability.md`.
 
 **F6 — The distilled student is robust to a matched-budget exploiter
 (exp-11/C8).** A from-scratch PPO exploiter trained specifically against the
@@ -110,7 +110,7 @@ script is provisional.
 
 ## Pooling and filtering (ETU-106, 2026-10-06, w4)
 
-The [paired pooling/floor follow-up](../experiments/pooling-filter-followup.md#result--completed-2026-10-06)
+The [paired pooling/floor follow-up](../experiments/reports/pooling-filter-followup.md#result--completed-2026-10-06)
 changed optimization work without demonstrating stronger play. At 600 collection
 updates every arm saw 153,600 learner transitions. Removing the .01 floor raised
 token exposures from 15,102–19,028 to 38,400, yet its three endpoint score changes
@@ -128,7 +128,7 @@ them. Preserve both unresolved results and the unchanged defaults.
 
 ## Critic coverage at fixed collection count (ETU-105, 2026-10-07, w4)
 
-The [mini filter-scope screen](../experiments/ataraxos-technique-screen.md#mini-result--completed-2026-10-07)
+The [mini filter-scope screen](../experiments/reports/ataraxos-technique-screen.md#mini-result--completed-2026-10-07)
 kept quantile/floor, masked-mean scalar architecture, learning rule and schedules
 fixed across three paired seeds. Training the critic on every collected row raised
 mean wall cost by 45% at the same 317,440 transitions. Final held-out greedy changes

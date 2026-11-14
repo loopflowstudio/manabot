@@ -6,7 +6,7 @@ Silicon. It loads
 the shared checkpoint container ([backends](README.md#convert-a-pytorch-checkpoint))
 and uses PyTorch as its numerical reference
 ([parity check](README.md#parity-check)). The ordinary pilot gates timing on
-those checks. The [MPS retest](../../experiments/mps_retest.md) explicitly
+those checks. The [MPS retest](../../experiments/reports/mps_retest.md) explicitly
 measures approximate half-precision arms too; it reports failing tolerances
 alongside timing and does not treat execution as numerical equivalence. Training, evaluation and the CLI
 still run the PyTorch model; nothing in the PyTorch path imports MLX.
@@ -110,7 +110,7 @@ is compiled. The backend does not write checkpoints or collect; training
 continuity stays with the PyTorch learner.
 
 Results, machine and cost are in
-[the MLX pilot report](../../experiments/mlx_pilot.md).
+[the MLX pilot report](../../experiments/reports/mlx_pilot.md).
 
 ## Compute precision
 
@@ -163,7 +163,7 @@ uv run --extra mlx python -m manabot.backends.parity capture/initial.pt --captur
 | bfloat16 | 0.001 | 0.01 | 1% | ≥ 0.99 |
 
 The bound was calibrated on the retained real-input w384/w768 checks in
-the [MPS retest](../../experiments/mps_retest.md), source `140eec28d`. It
+the [MPS retest](../../experiments/reports/mps_retest.md), source `140eec28d`. It
 remains a numerical gate; passing those cases does not establish general
 equivalence or equivalent optimization trajectories.
 Half still requires a finite clipped Adam step and reports the minimum
@@ -181,6 +181,6 @@ gate or trains equivalently. Float32 passed each real-capture check below. Half 
   full-gradient cosine of 0.9315 against ≥ 0.99; bfloat16 at w384 failed only
   the relative-loss gate, on near-zero losses.
 
-The [report's QA table](../../experiments/mps_retest.md#later-small-capture-qa-2026-11-13)
+The [report's QA table](../../experiments/reports/mps_retest.md#later-small-capture-qa-2026-11-13)
 has each measurement. Tolerances are unchanged, and the relative-loss gate has
 no absolute floor.

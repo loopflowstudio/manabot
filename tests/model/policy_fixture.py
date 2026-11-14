@@ -1,8 +1,8 @@
 """Small saved model configuration shared by admission and inference checks."""
 
-from experiments.direct_self_play import direct_self_play
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
 import managym
+from tests.fixtures.saved_regimes import direct_self_play
 
 
 def recipe() -> TrainingRegime:

@@ -5,7 +5,7 @@ produces: measured bottleneck, bounded comparison plan and checks in the existin
 Measure what training and evaluation spend time on, then select a worthwhile software improvement.
 
 1. Read `docs/workflows.md` (training and evaluation performance),
-   `experiments/training-update-time.md` and the relevant retained receipts before
+   `experiments/reports/training-update-time.md` and the relevant retained receipts before
    running anything. Separate observations from suspected causes. Use the current
    task's workload and model sizes; do not expand a speed question into a campaign.
    This skill grants no campaign, resource or spending authority. Preserve frozen

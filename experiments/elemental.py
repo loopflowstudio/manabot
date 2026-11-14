@@ -77,6 +77,8 @@ PAIRS = "checkpoint-pairs"
 WORKERS = 10
 # Wall hours one evaluation pass may take on a launched machine.
 EVAL_HOURS = 12.0
+# The training seed `runs()` launches; `--seed` is the launcher's own option.
+SEED = 18101
 
 # The checkpoint in the model's seat: the inference code is its version.
 INFERENCE = Inference(source=list(INFERENCE_CODE))
@@ -91,14 +93,13 @@ def runs(
     updates: int,
     hours: float,
     usd_per_run: float,
-    seed: int = 18101,
 ) -> Job:
     """Launch current-world self-play; frozen regimes use their recorded revision."""
     return training(
         train,
         config=ElementalConfig(updates=updates, device="cuda", validate_numerics=True),
         smoke=ElementalConfig(updates=1, device="cpu", streams=2),
-        seeds=(seed,),
+        seeds=(SEED,),
         repo=str(ROOT),
         revision=revision,
         setup=machine_setup(" --extra artifacts"),

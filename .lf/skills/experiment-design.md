@@ -11,8 +11,8 @@ Design the smallest experiment that answers the question.
    and any run whose purpose is to make later work possible. When unsure, it is
    exploratory; a finding that grows out of it gets its own run.
 2. Exploratory: write `experiments/<name>.py` and one line at the top of
-   `experiments/<name>.md` saying what the run is for. It needs no prediction.
-3. Finding: open `experiments/<name>.md` with one paragraph holding the
+   `experiments/reports/<name>.md` saying what the run is for. It needs no prediction.
+3. Finding: open `experiments/reports/<name>.md` with one paragraph holding the
    question, what is measured against what, the strongest confound and a cost
    cap, and commit it before any scored run. Name the control, the matching
    clock (learner decisions, hours or dollars), independent training seeds and

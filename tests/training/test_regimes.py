@@ -7,7 +7,6 @@ import numpy as np
 import pytest
 import torch
 
-from experiments.direct_self_play import direct_self_play
 from manabot.backends.torch.rl import selected_rows
 from manabot.policy.prepare import reference_distribution
 from manabot.training.learning import DampedPolicyLearning
@@ -16,6 +15,7 @@ from manabot.training.regime import TrainingRegime
 from manabot.training.validation import validate_regime
 from manabot.verify.store import VerifyStore
 from managym import WORLD_VERSION
+from tests.fixtures.saved_regimes import direct_self_play
 
 ROOT = Path(__file__).resolve().parents[2]
 

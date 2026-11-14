@@ -82,5 +82,5 @@ On the frozen w13 mirror checkout, where both were opt-in, compact evidence with
 reduced one depth-20, 16-world decision at a fixed midgame root from 9.7 s to
 1.7 s at one thread (about 5× faster), and was about 9× faster at three
 threads. Commands, tensors and values were identical. Those numbers come from a different world and engine, so
-they are not a forecast for main. See `experiments/search-mirror.md` and tag
+they are not a forecast for main. See `experiments/reports/search-mirror.md` and tag
 `mirror-w13-study-frozen`.

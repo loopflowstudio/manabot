@@ -91,7 +91,7 @@ frozen in the pilot's corpus and
 The pilot's question is whether the recipe learns on a population of real
 decks at all. Its first run learned for five updates before a capacity limit
 stopped it, and no trained checkpoint on this population exists yet
-([pilot evidence](experiments/tla-trophy-pilot.md)). The curriculum questions
+([pilot evidence](experiments/reports/tla-trophy-pilot.md)). The curriculum questions
 that follow, which matchups, opponents and mix of self-play to learn from, are
 in the [research program](manabot/RESEARCH.md). Earlier runs trained on one
 fixed matchup, [UR Lessons versus GW Allies](content/DECKS.md), which the older
@@ -117,7 +117,7 @@ An EMA of the weights and annealed step sizes complete the recipe. Each piece
 has a source and is a separate switch we test on Magic rather than adopt on a
 paper's authority ([influences](docs/learning.md#influences)). Reward is win
 or loss only: shaped rewards bought nothing over it
-([exp-04](experiments/exp-04-potential-shaping.md)).
+([exp-04](experiments/reports/exp-04-potential-shaping.md)).
 [How a manabot learns](docs/learning.md) walks each step down to the code.
 
 ## How strength is measured
@@ -249,12 +249,12 @@ dollars or hours. We add a row when a run sets a new high.
 
 | Agent | Date | Model | Parameters | Learner decisions | Decisions per iteration × iterations | Hardware |
 |---|---|---|---:|---:|---:|---|
-| first-light PPO ([report](experiments/first-light-run-1.md)) | 2026-03 | width 64, no attention | not recorded | 262k | 512 × 512 | CPU |
-| matched-cost PPO ([exp-03](experiments/exp-03-distillation.md)) | 2026-07 | width 64, no attention | 50,306 | 5.8M | 2,048 × 2,850 | M4 Max |
-| `small-26k` ([capacity](experiments/model-capacity.md), [head-to-head](experiments/head-to-head.md)) | 2026-10 | 64 wide × 2 attention layers | 188,482 | 13.3M | 512 × 26,000 | 1× L4 |
+| first-light PPO ([report](experiments/reports/first-light-run-1.md)) | 2026-03 | width 64, no attention | not recorded | 262k | 512 × 512 | CPU |
+| matched-cost PPO ([exp-03](experiments/reports/exp-03-distillation.md)) | 2026-07 | width 64, no attention | 50,306 | 5.8M | 2,048 × 2,850 | M4 Max |
+| `small-26k` ([capacity](experiments/reports/model-capacity.md), [head-to-head](experiments/reports/head-to-head.md)) | 2026-10 | 64 wide × 2 attention layers | 188,482 | 13.3M | 512 × 26,000 | 1× L4 |
 | `small-63k`, continued | 2026-10 | 64×2 | 188,482 | 32.3M | 512 × 63,000 | 1× L4 |
 | `small-100k`, continued | 2026-10 | 64×2 | 188,482 | 51.2M | 512 × 100,000 | 1× L4 |
-| scale ladder v1, one seat ([ladder](experiments/scale-ladder.md)) | 2026-10 | 64×2 | not retained | 196.6M | 16,384 × 12,000 | 1× L4, $13.34 |
+| scale ladder v1, one seat ([ladder](experiments/reports/scale-ladder.md)) | 2026-10 | 64×2 | not retained | 196.6M | 16,384 × 12,000 | 1× L4, $13.34 |
 | MTG-183, ten Elemental decks, both seats ([protocol](experiments/protocols/elemental-183.md)) | 2026-10 | 64×2 | 196,482 | 331.2M | ≈55,700 (complete games) × 5,950 | 1× L4, four rental segments, $50 cap |
 
 The parameter count of a 64×2 network depends on its inputs, not only its
@@ -294,28 +294,28 @@ Earlier findings are tabulated in the
 - **Claude Haiku played that checkpoint to a draw.** Haiku 5.5 with high
   reasoning won 51 of 100 games against MTG-183's final policy, at $0.37
   per game and a median 1.4 seconds per decision
-  ([Haiku versus MTG-183](experiments/haiku-mtg183.md)).
+  ([Haiku versus MTG-183](experiments/reports/haiku-mtg183.md)).
 - **The anchors are moving targets.** A rewrite of the `heuristic` bot took it
   from 18.3% to 62.0% as UR Lessons against MTG-183's update-1,750 checkpoint,
   and from 10.8% to 34.3% as each of the ten decks against its GW and UB seats,
   without slower decisions
-  ([heuristic strength](experiments/heuristic-strength.md)). Ratings are
+  ([heuristic strength](experiments/reports/heuristic-strength.md)). Ratings are
   pinned to an anchor version and a world, never compared across them.
 - **Learning from both seats replaced one-seat training.** The one-seat ladder
   reached 0.69 against the heuristic at $10
-  ([scale ladder](experiments/scale-ladder.md)); matched per learner decision
+  ([scale ladder](experiments/reports/scale-ladder.md)); matched per learner decision
   over four seeds per arm, two-seat learning was no worse and reached the same
   score about 1.4× sooner
   ([seat comparison](experiments/protocols/seat-comparison-v1.md)).
 - **Batching is the reliable speedup, and the smallest model kept up.** 64×2
   took 109–111 minutes at 4 streams and about 5 at 256; larger models showed no
   advantage at this horizon, on two seeds
-  ([longer learning](experiments/longer-learning-017.md)). Collection is 82.5%
-  of training time ([training time](experiments/training-time.md)).
+  ([longer learning](experiments/reports/longer-learning-017.md)). Collection is 82.5%
+  of training time ([training time](experiments/reports/training-time.md)).
 - **The trophy population is untested.** The TLA pilot's initialization scored
   7–25 against the heuristic before its run stopped; there is no trained
   checkpoint on random real decks yet
-  ([pilot evidence](experiments/tla-trophy-pilot.md)).
+  ([pilot evidence](experiments/reports/tla-trophy-pilot.md)).
 - **Search and beliefs run end to end but add no strength yet**
   ([beside the loop](#beside-the-loop)).
 
@@ -324,7 +324,7 @@ Earlier findings are tabulated in the
 - **A trained agent on the trophy population.** The pilot's first run stopped
   at a permanent-capacity limit after five updates; its successor raises the
   capacity and recovers from oversized games, but hasn't run
-  ([pilot evidence](experiments/tla-trophy-pilot.md)).
+  ([pilot evidence](experiments/reports/tla-trophy-pilot.md)).
 - **The full trophy population.** The pilot corpus was frozen when 134 of
   1,000 sampled lists admitted; the current world admits all 1,000, and no
   protocol or run uses the larger population yet.

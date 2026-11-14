@@ -21,8 +21,8 @@ comparison. The
 
 ## What an experiment is
 
-One experiment is one module beside its report:
-`experiments/<name>.py` and `experiments/<name>.md`. The module holds the
+One experiment is one module and its report:
+`experiments/<name>.py` and `experiments/reports/<name>.md`. The module holds the
 recipes, built from [`manabot.recipes.builders`](../manabot/recipes/builders.py),
 and anything only this experiment needs to run and report; `manabot/` keeps the
 reusable instruments. A file defining `report()` or `eval(state)` is an
@@ -131,7 +131,7 @@ and refutations stay on the record, dated.
 
 ## A worked example
 
-[exp-04](../experiments/exp-04-potential-shaping.md) is from an earlier world,
+[exp-04](../experiments/reports/exp-04-potential-shaping.md) is from an earlier world,
 so read it for its shape rather than its numbers. The project believed that
 shaped rewards (pay per land, creature and damage) sped up learning, and an
 earlier run had shown those rewards training agents into cast-everything play.
@@ -156,12 +156,12 @@ from an earlier world, so read them for the reasoning, not the numbers.
 
 | What we believed | What happened | Lesson |
 | --- | --- | --- |
-| Shaped rewards speed up learning | Terminal reward matched potential shaping and beat pay-per-event shaping by about 14 points ([exp-04](../experiments/exp-04-potential-shaping.md)) | Test the obvious helper |
-| Expert iteration compounds | Round 1 lost 74–26 to round 0 ([exp-07](../experiments/exp-07-expert-iteration.md)) | Distillation doesn't improve a weak teacher |
-| Win rate measures competence | A strong-looking search pilot couldn't play a control deck ([exp-09](../experiments/exp-09-control-competency.md)) | Test specific skills, not just outcomes |
-| Matchup tables measure the decks | A four-card swap moved a matchup by 55 points ([exp-08b](../experiments/exp-08b-ancestral-dose.md)) | The pilot and the cards are confounded |
+| Shaped rewards speed up learning | Terminal reward matched potential shaping and beat pay-per-event shaping by about 14 points ([exp-04](../experiments/reports/exp-04-potential-shaping.md)) | Test the obvious helper |
+| Expert iteration compounds | Round 1 lost 74–26 to round 0 ([exp-07](../experiments/reports/exp-07-expert-iteration.md)) | Distillation doesn't improve a weak teacher |
+| Win rate measures competence | A strong-looking search pilot couldn't play a control deck ([exp-09](../experiments/reports/exp-09-control-competency.md)) | Test specific skills, not just outcomes |
+| Matchup tables measure the decks | A four-card swap moved a matchup by 55 points ([exp-08b](../experiments/reports/exp-08b-ancestral-dose.md)) | The pilot and the cards are confounded |
 | An N-game evaluation played N deals | A seed bug made every game replay one deal ([F1](../paper/understanding.md)) | Check the instrument before the result. Seat-advantage claims built on it were retracted. |
-| A borrowed technique helps by default | Actor-only filtering: +3.33 points, interval [−4.33, +11.33], at 1.45× wall time ([technique screen](../experiments/ataraxos-technique-screen.md)) | Keep it as a switch; promote only on evidence |
+| A borrowed technique helps by default | Actor-only filtering: +3.33 points, interval [−4.33, +11.33], at 1.45× wall time ([technique screen](../experiments/reports/ataraxos-technique-screen.md)) | Keep it as a switch; promote only on evidence |
 
 ## Declaring a comparison
 
@@ -199,10 +199,9 @@ snapshots into `TrainingRegime` values and provenance receipts. The record
 models and reports still read their original fields. Resolution does not
 launch work, and those declarations no longer have a `runs()` method.
 The local comparison scheduler, checkpoint follower and study executor are
-retired. Frozen entry points and the CLI name revision
-`f4e1822faf46bbc9cdc43909293f8cbc8de4a300` when asked to execute them.
-Use their recorded revision and lock to reproduce old experiments; do not
-translate their schedules or recovery contracts silently.
+retired; revision `f4e1822faf46bbc9cdc43909293f8cbc8de4a300` is the last with
+them. Use an experiment's recorded revision and lock to reproduce it; do not
+translate its schedules or recovery contracts silently.
 
 `StepCalibration.from_export(path)` remains a reader of a retained completed
 single-stage export. Its `updates_for(hours)` gives an author a target; a new

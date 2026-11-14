@@ -2,8 +2,8 @@
 
 import pytest
 
-from experiments.ataraxos_move import ataraxos_move_scalar
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
+from tests.fixtures.saved_regimes import ataraxos_move_scalar
 from tests.training.test_ataraxos_regime import _recipe
 
 

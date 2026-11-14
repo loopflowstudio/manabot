@@ -5,6 +5,7 @@ its panels name and a flame graph of its phases; `eval(state)` asks for the
 same games the MTG-183 follower plays.
 """
 
+from collections import Counter
 from collections.abc import Iterator
 from dataclasses import replace
 from pathlib import Path
@@ -14,6 +15,7 @@ from etude.errors import EtudeError
 from etude.eval.records import Match
 from etude.experiment import Checkpoint, Checkpoints, ExperimentState, TrainingRun
 from etude.jobs import evaluation_spec
+from etude.launch.job_file import read_job_file
 from etude.page import experiment_files
 from etude.records import ArtifactRef
 import pytest
@@ -53,23 +55,39 @@ def keep_imported_modules() -> Iterator[None]:
 def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
     found = {path.stem for path in experiment_files(EXPERIMENTS)}
     assert found == {
-        "batch_closure",
-        "bf16_behavior_logs",
         "elemental",
-        "elemental_closure",
-        "elemental_lambda",
-        "lambda_sweep",
-        "mlx_pilot",
-        "mps_retest",
         "mtg183-elemental-eval",
-        "precision_ladder",
         "seat_comparison",
         "tla_frontier",
-        "tla_frontier_calibration",
-        "tla_frontier_vocabulary",
-        "two_seat",
-        "value_readout_252",
     }
+
+
+@pytest.mark.parametrize(
+    ("name", "given", "jobs"),
+    [
+        (
+            "elemental",
+            ("--updates", "2", "--hours", "1", "--usd-per-run", "1"),
+            {"elemental": 1},
+        ),
+        ("seat_comparison", (), {"seat-comparison-one": 4, "seat-comparison-both": 4}),
+        (
+            "tla_frontier",
+            (),
+            {"tla-frontier-c5fba4-w64": 1, "tla-frontier-c5fba4-w160l8": 1},
+        ),
+    ],
+)
+def test_training_experiments_declare_launchable_jobs(
+    name: str, given: tuple[str, ...], jobs: dict[str, int]
+) -> None:
+    """`etude launch` reads each file's `runs()` into one run per job and seed."""
+    requests = read_job_file(
+        EXPERIMENTS / f"{name}.py", ("--revision", "HEAD", *given), local=True
+    )
+    assert Counter(request.job.name for request in requests) == jobs
+    assert {request.job.experiment for request in requests} == {name}
+    assert all("etude.call" in request.job.command for request in requests)
 
 
 def _finished_run(tmp_path: Path, updates: range) -> TrainingRun:

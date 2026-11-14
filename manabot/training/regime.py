@@ -1,7 +1,7 @@
 """Retained regime and stage records for reading historical experiments."""
 
 from collections.abc import Mapping
-from typing import Annotated, Literal, NoReturn, TypedDict
+from typing import Annotated, Literal, TypedDict
 
 from pydantic import (
     BaseModel,
@@ -28,15 +28,6 @@ from manabot.training.learning import (
 )
 from manabot.training.rollout.adaptive import AdaptiveConfig
 from manabot.training.state.game_errors import GameErrorPolicy
-
-FROZEN_EXECUTION_REVISION = "f4e1822faf46bbc9cdc43909293f8cbc8de4a300"
-
-
-def refuse_frozen_execution() -> NoReturn:
-    """Refuse to translate a frozen method into the current self-play loop."""
-    raise RuntimeError(
-        f"Frozen execution requires revision {FROZEN_EXECUTION_REVISION}"
-    )
 
 
 class ArtifactReference(TypedDict):
@@ -744,7 +735,7 @@ class TrainingRegime(Strict):
         """Resolve automatic precision and layouts once for this model and stage.
 
         Bucketed shapes and live tokens pay on CUDA at every measured width
-        (experiments/live_token_attention.md), so `auto` is on for a CUDA
+        (experiments/reports/live_token_attention.md), so `auto` is on for a CUDA
         `train_self_play` stage and off on CPU and MPS and for every other
         operation. A `train_self_play` stage's precision follows the width
         ladder (`ladder_precision`: BF16 for wide models on CUDA and MPS);

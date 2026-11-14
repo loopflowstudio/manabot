@@ -418,7 +418,7 @@ That idle time is the price of having real outcomes on every trajectory.
 
 - **How far back should a result reach?** In one baseline, Allies reached
   87–88% against a scripted opponent while Lessons climbed slowly from 5/150
-  to 32/150 ([current baseline](../experiments/current-baseline.md)). Credit
+  to 32/150 ([current baseline](../experiments/reports/current-baseline.md)). Credit
   reach might be part of the reason, but that's untested.
 - **What does the advantage filter do?** Only about the top quarter of rows
   by |A| train, and both KL terms apply only to those rows. Filtering on a
@@ -438,14 +438,14 @@ one switch at a time. These are the results the guide leans on:
 
 - **Terminal reward only.** Potential shaping matched it and pay-per-event
   shaping lost to it by about 14 points
-  ([exp-04](../experiments/exp-04-potential-shaping.md)), in an earlier world.
+  ([exp-04](../experiments/reports/exp-04-potential-shaping.md)), in an earlier world.
 - **Technique screens.** Each Ataraxos component has its own status in the
-  [technique screen](../experiments/ataraxos-technique-screen.md) and
-  [ablations](../experiments/ataraxos-mtg-ablations.md). The recipe is not a
+  [technique screen](../experiments/reports/ataraxos-technique-screen.md) and
+  [ablations](../experiments/reports/ataraxos-mtg-ablations.md). The recipe is not a
   demonstrated strength result as a whole.
 - **Scale.** The largest run so far is MTG-183, one seed on ten decks for
   331M learner decisions ([protocol](../experiments/protocols/elemental-183.md));
-  the one-seat [scale ladder](../experiments/scale-ladder.md) is the largest
+  the one-seat [scale ladder](../experiments/reports/scale-ladder.md) is the largest
   exact-quota run. Both are summarized in the [README](../README.md#scale).
 
 ## Influences
@@ -491,7 +491,7 @@ becoming a draw; opponent actions are traversed, not trained on.
 
 Optional controls: `filter_scope="actor"` keeps all critic rows;
 `behavior="ema-self"` collects and bootstraps with averaged weights
-([protocol](../experiments/ataraxos-omitted-controls.md)). EMA evaluation
+([protocol](../experiments/reports/ataraxos-omitted-controls.md)). EMA evaluation
 outputs are selected explicitly at arena registration.
 
 ### Fidelity table
@@ -525,8 +525,8 @@ Before any scientific comparison of PPO, categorical and scalar move learning,
 freeze a protocol, independent seeds, budgets, world and code identities,
 held-out paired deals with both seat/deck assignments and the raw/EMA choice;
 keep all failures and compare overlapping cost intervals. The technique
-inventory is [ataraxos-technique-screen](../experiments/ataraxos-technique-screen.md);
-ablations are in [ataraxos-mtg-ablations](../experiments/ataraxos-mtg-ablations.md).
+inventory is [ataraxos-technique-screen](../experiments/reports/ataraxos-technique-screen.md);
+ablations are in [ataraxos-mtg-ablations](../experiments/reports/ataraxos-mtg-ablations.md).
 
 ## Where the code lives
 

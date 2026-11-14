@@ -16,7 +16,7 @@ settings too; its frozen records stay readable through `EvalComputeV1`.
 The forward layout (`bucketed_shapes`, `live_tokens`) is an allocation setting
 for the same reason: like batch composition, it changes only the order of
 floating-point sums. Both are off unless written: at served batch sizes the
-padded forward was the faster one (experiments/eval_forward_layout.md).
+padded forward was the faster one (experiments/reports/eval_forward_layout.md).
 """
 
 from __future__ import annotations

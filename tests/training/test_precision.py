@@ -7,8 +7,6 @@ from pydantic import ValidationError
 import pytest
 import torch
 
-from experiments import precision_ladder, training_throughput_packing as packing
-from experiments.batched_baseline import batched_baseline
 import manabot.backends.torch as torch_backend
 from manabot.backends.torch import learner as torch_learner
 from manabot.backends.torch.learner import Learner
@@ -16,22 +14,15 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import BF16_MIN_HIDDEN_DIM, ModelConfig, RewardConfig
-from manabot.infra.identity import canonical_sha256
 from manabot.recipes.builders import with_capacity
 from manabot.training.learning import DampedPolicyLearning, Precision
 from manabot.training.regime import Device, Execution, TrainingRegime, ladder_precision
 from manabot.training.rollout.collection import close_collector, collect, open_collector
 from manabot.training.updates.damped_policy import update_damped_iteration
+from tests.fixtures.saved_regimes import batched_baseline
 
 
-def test_float32_regimes_keep_their_bytes() -> None:
-    # The D1 packing builder omits the input version, so it resolves to v9.
-    # The digest matches the same builder at f4e1822fa, before the cutover.
-    d1 = packing.digest_recipe()
-    assert (
-        canonical_sha256(d1.model_dump(mode="json"))
-        == "81ba576258a66f5576e8b1440be3a22fd083ce71301aff83fefd3bb6cc8aafd2"
-    )
+def test_saved_float32_regime_keeps_its_precision() -> None:
     assert batched_baseline().stages[0].execution.precision == "float32"
 
 
@@ -272,8 +263,3 @@ def test_bf16_wraps_exactly_the_policy_forwards_and_keeps_float32_outputs(
     assert result["rows"] > 0
     assert all(p.dtype == torch.float32 for p in agent.parameters())
     assert not torch.is_autocast_enabled("cpu")
-
-
-def test_frozen_precision_ladder_refuses_before_building_or_launching() -> None:
-    with pytest.raises(RuntimeError, match="f4e1822faf46bbc9cdc43909293f8cbc8de4a300"):
-        precision_ladder.runs("HEAD")

@@ -73,10 +73,10 @@ call. Its CPU test variant drives the [nightly learning check](../.github/workfl
 run that reaches a deadline saves its state and exits 75, and `--resume`
 carries it on. The baseline is a versioned starting point, not a strength certification.
 
-For GPU training, start from `batched_baseline()` in `experiments/batched_baseline.py`. It is the
+For GPU training, start from `train` in `experiments/batched_baseline.py`. It is the
 same 64×2 model trained on 64 streams for 524,288 learner transitions (128
 iterations), with the learning-rate schedule mapped onto 2,048 four-stream
-iterations. In the [longer size and batching comparison](../experiments/longer-learning-017.md)
+iterations. In the [longer size and batching comparison](../experiments/reports/longer-learning-017.md)
 it met the competence thresholds on both seeds within 7 minutes on an RTX 5090, and the
 full run takes about 13 minutes versus about 110 at four streams; larger models showed no advantage at this
 horizon. The recipe is that study's exact tested settings; it requires CUDA.
@@ -121,9 +121,9 @@ linked capture audit for boundaries and supervision limits.
 
 The TLA frontier run uses `experiments/tla_corpus.py` for the fixed admitted
 corpus and `experiments/tla_frontier.py` for Etude training and paired
-evaluation ([report](../experiments/tla-frontier-c5fba4-results.md)).
+evaluation ([report](../experiments/reports/tla-frontier-c5fba4-results.md)).
 The earlier trophy pilots execute from their pinned source; see the
-[pilot evidence](../experiments/tla-trophy-pilot.md).
+[pilot evidence](../experiments/reports/tla-trophy-pilot.md).
 
 `UniformDecks.sampling` selects
 independent per-seat draws (including mirrors) or the retained distinct-pair
@@ -586,7 +586,7 @@ Self-play [numerical health](../docs/training.md#numerical-health) records polic
 selection, gradients and actual optimizer effects, with bounded private failure
 artifacts. CPU correctness does not imply CUDA validation or improved play.
 
-For exploratory same-deck checkpoint play, the [head-to-head runner](../experiments/head-to-head.md#mirror-only-follow-up-mtg-131-2026-10-09)
+For exploratory same-deck checkpoint play, the [head-to-head runner](../experiments/reports/head-to-head.md#mirror-only-follow-up-mtg-131-2026-10-09)
 accepts `--matchups mirrors`. This explicitly permits repeating exact checkpoint
 roster decks/sideboards and carries them through replay;
 it is not ordinary training-match admission or evidence of mirror competence.

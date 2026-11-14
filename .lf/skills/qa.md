@@ -296,7 +296,7 @@ publish, land or choose the next Graph step from here.
 - TLA Limited decks (the MTG-282 pool corpus) overflow default observation
   capacities within a few dozen games; copy the `observation` block and the
   `game_errors` policy (`recover_capacity: true`) of
-  `experiments/regimes/tla-frontier-c5fba4-w64.json`. Those retained regimes are historical; run them at the named executable revision.
+  `experiments/regimes/tla-frontier-c5fba4-w64.json`; `experiments/tla_frontier.py` trains that record on the current loop.
 - Served evaluation without a GPU: `evaluate(request, out_dir=...,
   execution=EvalExecution(device="cpu", deadline_unix=time.time() + 900))`
   runs the same serving child (and its checkpoint ABI checks) as CUDA; omitting
@@ -325,11 +325,7 @@ publish, land or choose the next Graph step from here.
   not word-split `$P`. Fetch only the files the figure code reads; whole
   evidence folders can exceed 1 GB. Redraw twice and compare digests, because a
   figure that changes bytes on every redraw also changes its manifest entry.
-  Render SVGs with `rsvg-convert -z 2 -b white` and look at them. The L4 profile
-  (`experiments/l4_step_profile.py`) has a CPU smoke job,
-  `ETUDE_OUTPUT_DIR=<dir> MTG301_WORK=<dir> MTG301_CANDIDATE=<c> uv run python
-  experiments/l4_step_profile.py job --smoke`. For `live` it took about 6
-  minutes and 2.2 GB and runs every stage as a real child process.
+  Render SVGs with `rsvg-convert -z 2 -b white` and look at them.
 
 - Live Academy QA without fixtures: build first, then start the ordinary
   `managym.academy.server:app` with `ACADEMY_TRACES_DIR` pointing into an ignored

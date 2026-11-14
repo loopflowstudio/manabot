@@ -3,8 +3,22 @@
 One seed per size trains under the same damped self-play rule, population,
 input v9, four producers and wall budget; the large size is the frozen w64
 regime with only its width, depth, heads and damping horizon replaced. The
-design and results are `experiments/tla-frontier-c5fba4-results.md`; the
-executed source is revision ab2b757d9. Primary progress is
+design and results are `experiments/reports/tla-frontier-c5fba4-results.md`.
+
+This file is the experiment `tla_frontier` for Etude: `train(config)` runs one
+size on the current self-play loop with the settings its regime record holds
+(`settings`), `runs()` declares one wall-bounded job per size, `eval(state)`
+plays the comparisons below and `report()` draws them.
+
+    uv run etude launch experiments/tla_frontier.py --revision COMMIT --rent l4
+    uv run etude eval experiments/tla_frontier.py --rent cpu32 --source r2://manabot/jobs
+    uv run etude report experiments/tla_frontier.py --source r2://manabot/jobs --open
+
+The executed runs (revision ab2b757d9) trained under the retired executor; a
+launch here is a new run of the same settings on the current loop, not a
+reproduction of them. `eval` admits one run per size, and the executed runs
+hold this experiment's two, so a new frontier starts from a copy of this file
+under its own name. Primary progress is
 each learner against its latest trained checkpoint at or before half its elapsed
 training hours, on the frozen random 17Lands deck pairs. `eval` also plays, at
 every shared update milestone, each size against the matched first-64 heuristic and
@@ -21,7 +35,8 @@ Training exports more often than `eval` plays: the export cadence bounds what a
 lost rental can cost, and only milestones and endpoints are evaluated.
 
 A launched run is stored under its launcher id, so `size_run` knows a size by
-the regime tag on its checkpoints. `pod_reading` reads each run's step phase,
+the job name `runs()` launched it under, or, for the executed runs, by the
+regime tag on their checkpoints. `pod_reading` reads each run's step phase,
 host and game-error counts, which are reported and void nothing. A lost run stops at its last export, which is its endpoint even
 below the first milestone; then its endpoint comparisons are unreached.
 
@@ -59,13 +74,14 @@ from etude.eval.records import (
 )
 from etude.eval.run import Row, Tables
 from etude.experiment import Checkpoint, ExperimentState, TrainingRun
-from etude.jobs import evaluation
+from etude.jobs import evaluation, training
 from etude.launch import client
 from etude.report import Report, Score
-from etude.spec import Job, RunRequest
+from etude.spec import Job
 from etude.storage import Storage
 from etude.train.read import RunData
-from pydantic import Field
+from etude.train.tracking import track
+from pydantic import BaseModel, ConfigDict, Field
 import torch
 
 from experiments import tla_frontier
@@ -74,19 +90,16 @@ from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.models import EvaluationKey
 from manabot.experiment.setup import TOOLCHAIN_ENV, machine_setup
 from manabot.infra.artifacts import local_checkpoint_file
-from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import StrictModel, canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.infra.runtime import regime_tag
 from manabot.sim.matchup import DeckMatchup
 from manabot.sim.registration import PlayerRegistration
 from manabot.training.learning import DampedPolicyLearning, IterationSchedule
+from manabot.training.loops.self_play import CLOCKS, SelfPlay, self_play
 from manabot.training.panels import ML, PERF
-from manabot.training.regime import (
-    TrainingRegime,
-    TrainSelfPlay,
-    refuse_frozen_execution,
-)
+from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.training.report import (
     against_earlier_self,
     against_fixed,
@@ -278,78 +291,79 @@ def _schedule(regime: TrainingRegime) -> IterationSchedule:
     return learning.iteration_schedule
 
 
-def shortened(
-    regime: TrainingRegime,
-    *,
-    id: str,
-    updates: int,
-    wall_seconds: float,
-    workers: Literal[1, 2, 4] | None = None,
-    agent: ModelConfig | None = None,
-) -> TrainingRegime:
-    """`regime` as a short run of its own: new identity, update target and wall.
+# -- Training -----------------------------------------------------------------
 
-    Calibration and the vocabulary check each change one thing more, `workers`
-    or `agent`.
+
+class FrontierConfig(BaseModel):
+    """One size's run; `updates` is a ceiling the wall budget is expected to end first."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    size: SizeLabel
+    updates: int = Field(default=10_000, ge=1)
+    device: Literal["cpu", "mps", "cuda"] = "cuda"
+    workers: Literal[1, 2, 4] = 4
+    streams: int = Field(default=256, ge=2)
+
+
+def settings(config: FrontierConfig) -> SelfPlay:
+    """The size's regime record as current self-play settings.
+
+    Population, input capacities, model, learning rule with its damping
+    horizon, game-error recovery, precision and forward layout are the
+    record's; the world is the installed one. Exports fall on the protocol's
+    cadence, which every milestone is a multiple of.
     """
-    stage = _stage(regime)
-    execution = stage.execution.model_copy(
-        update={
-            "wall_seconds": wall_seconds,
-            "workers": workers or stage.execution.workers,
-        }
-    )
-    return TrainingRegime.model_validate(
-        regime.model_copy(
-            update={
-                "id": id,
-                "wall_seconds": wall_seconds,
-                "agent": agent or regime.agent,
-                "stages": [
-                    stage.model_copy(
-                        update={"updates": updates, "execution": execution}
-                    )
-                ],
-            }
-        ).model_dump()
-    )
-
-
-def horizon(regime: TrainingRegime) -> int:
-    """The size's damping horizon, `IterationSchedule.steps`."""
-    return _schedule(regime).steps
-
-
-def update_cap(regime: TrainingRegime) -> int:
-    return _stage(regime).updates
-
-
-def export_updates(regime: TrainingRegime, protocol: Protocol) -> tuple[int, ...]:
-    """Every update the run exports: the cadence joined with the milestones."""
-    cadence = range(protocol.export_every, update_cap(regime), protocol.export_every)
-    return tuple(sorted({*cadence, *protocol.milestones}))
-
-
-def capped_runs(*args: object, **kwargs: object) -> None:
-    """Retired frozen execution entry point; retained data and evaluation still read."""
-    refuse_frozen_execution()
-
-
-def runs(revision: str) -> list[RunRequest]:
-    """One capped GPU allocation per size; no automatic retry or budget expansion."""
     regimes, protocol = frozen()
+    regime = regimes[config.size]
+    stage = _stage(regime)
+    if any(update % protocol.export_every for update in protocol.milestones):
+        raise ValueError("milestones must fall on the export cadence")
+    return SelfPlay(
+        deck_source=regime.deck_source,
+        observation=regime.observation,
+        model=regime.agent,
+        learning=stage.learning,
+        behavior="current-self",
+        streams=config.streams,
+        transitions=stage.transitions,
+        learning_seats=stage.learning_seats,
+        batch_closure=stage.batch_closure,
+        game_errors=stage.game_errors,
+        device=config.device,
+        precision=stage.execution.resolved_precision,
+        workers=config.workers,
+        bucketed_shapes=stage.execution.resolved_bucketed_shapes,
+        live_tokens=stage.execution.resolved_live_tokens,
+        checkpoint_every=protocol.export_every,
+    )
+
+
+def train(config: FrontierConfig) -> None:
+    with track(clocks=CLOCKS, config=config) as run:
+        self_play(settings(config), run, updates=config.updates)
+
+
+def runs(revision: str) -> list[Job]:
+    """One capped GPU job per size, named for its regime; no automatic retry."""
+    _, protocol = frozen()
     return [
-        run
-        for regime in regimes.values()
-        for run in capped_runs(
-            regime,
-            experiment=EXPERIMENT,
+        training(
+            train,
+            config=FrontierConfig(size=label),
+            smoke=FrontierConfig(
+                size=label, updates=1, device="cpu", workers=1, streams=2
+            ),
+            name=_regime_id(label),
+            seeds=(protocol.training_seed,),
+            repo=str(ROOT),
             revision=revision,
-            seed=protocol.training_seed,
+            setup=machine_setup(" --extra artifacts"),
             max_hours=protocol.training_hours,
             max_usd=protocol.training_usd,
-            milestones=export_updates(regime, protocol),
+            max_attempts=1,
         )
+        for label in SIZES
     ]
 
 
@@ -575,10 +589,19 @@ def with_launcher_ends(state: ExperimentState) -> ExperimentState:
     )
 
 
+def _of_regime(run: TrainingRun, regime: str) -> bool:
+    """Whether `run` trained `regime`: launched under its name, or tagged with it.
+
+    `runs()` names each job for its regime. The executed runs predate that and
+    carry the regime as a checkpoint tag instead.
+    """
+    return run.launch == regime or bool(run.checkpoints.tagged(regime_tag(regime)))
+
+
 def size_label(run: TrainingRun) -> SizeLabel | None:
-    """The size a run's checkpoints name; a run that stored none names no size."""
+    """The size a run trained; None for a run of neither regime."""
     for label in SIZES:
-        if run.checkpoints.tagged(regime_tag(_regime_id(label))):
+        if _of_regime(run, _regime_id(label)):
             return label
     return None
 
@@ -593,14 +616,9 @@ def last_update(run: TrainingRun) -> int | None:
     return checkpoint_update(last) if last else None
 
 
-def tagged_runs(state: ExperimentState, regime: str) -> list[TrainingRun]:
-    """The regime's runs: the checkpoints' tag names them, not their stored names."""
-    return [run for run in state.runs if run.checkpoints.tagged(regime_tag(regime))]
-
-
 def one_run(state: ExperimentState, regime: str) -> TrainingRun | None:
     """The regime's one run; a second is a new protocol version, so it raises."""
-    found = tagged_runs(state, regime)
+    found = [run for run in state.runs if _of_regime(run, regime)]
     if len(found) > 1:
         raise ValueError(f"{regime} admits one run, found {len(found)}")
     return found[0] if found else None
@@ -1020,8 +1038,7 @@ def _memory_journal(retained: Path) -> Iterator[Path]:
 
     The arena syncs every record, which a rented container disk serves at about
     .1 s, and that time counts against the game limit, so a game a slow size
-    could finish would fail instead. `experiments.learning_signal` measured this
-    and is mirrored here because its source is hashed into retained environments.
+    could finish would fail instead.
     """
     memory = Path("/dev/shm")
     with TemporaryDirectory(dir=memory if memory.is_dir() else None) as journal:
@@ -1119,7 +1136,7 @@ def play(match: Match) -> Tables:
 
 
 def report() -> Report:
-    """Progress curves by update; `experiments.tla_frontier_analysis` owns claims.
+    """Progress curves by update; the written report owns claims.
 
     Etude's report axes are checkpoint clocks, and hours are not one yet, so the
     equal-hours pair is drawn once, at Large's update; a pair that is also an

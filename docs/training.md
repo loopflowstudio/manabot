@@ -174,12 +174,21 @@ on Apple Silicon; no recipe runs on it. This support makes no speed or strength 
 
 Before recipes were functions, a run was a saved `TrainingRegime` executed by
 `execute_regime`. Saved regime files, their `run.json` records and their
-checkpoints stay readable: `manabot.training.records` reads every retained
-record and `load_checkpoint` loads every world-bound checkpoint as before,
-with serialized keys unchanged. They no longer execute. Their last executor
-revision is `f4e1822faf46bbc9cdc43909293f8cbc8de4a300`. For an exact
-reproduction, use the experiment's recorded revision and lock; the revision
-above retains the executor.
+checkpoints stay readable: `manabot.training.regime` holds the record schema,
+`manabot.training.records` reads every retained record and `load_checkpoint`
+loads every world-bound checkpoint as before, with serialized keys unchanged.
+Nothing on main executes a regime, and no entry point stands in for one. The
+last revision with the executor is `f4e1822faf46bbc9cdc43909293f8cbc8de4a300`;
+the experiment modules that launched regimes were removed after revision
+`83b77e6c64`, and each of their reports under
+[`experiments/reports/`](../experiments/reports/) names that revision. For an
+exact reproduction, use the experiment's recorded revision and lock.
+
+An experiment worth repeating is written as a recipe instead.
+[`experiments/tla_frontier.py`](../experiments/tla_frontier.py) reads its
+regime record as data and trains it on the current loop, and
+[`experiments/seat_comparison.py`](../experiments/seat_comparison.py) compares
+two arms of one config across seeds.
 
 ## Write a recipe
 
@@ -450,7 +459,7 @@ draws, exposure and batches agree for 1, 2 and 4 producers. `threads` controls
 Torch threads independently. `sampled_self_play()` defaults to four producers,
 a damping horizon fitted to the expected updates and `recover_capacity`. The
 matched GPU comparison for a fixed matchup is in
-[worker-scaling run019](../experiments/worker-scaling.md#persistent-production-producers-run019).
+[worker-scaling run019](../experiments/reports/worker-scaling.md#persistent-production-producers-run019).
 A collector opened directly with `open_collector` must be closed with `close_collector`. `bucketed_shapes`
 selects [bucketed padding](observation-and-model.md#bucketed-padding)
 and `live_tokens` selects
@@ -566,7 +575,7 @@ change. It returns at once when `out` binds the same policy, population, match,
 reference and step cap; a different request refuses. Scalar and
 categorical values are supported; belief-input policies are not. The protocol
 is in
-[ataraxos-omitted-controls](../experiments/ataraxos-omitted-controls.md#frozen-complete-game-selection-diagnostic);
+[ataraxos-omitted-controls](../experiments/reports/ataraxos-omitted-controls.md#frozen-complete-game-selection-diagnostic);
 results are frozen-policy associations, not causal filter benefits.
 
 ### Reuse a published policy
@@ -756,7 +765,7 @@ preparation, inference, `stream_bookkeeping`, assembly and learning.
 Etude's attempt record names the machine each attempt got. With one producer
 (`workers` 1) training occupies one CPU thread, so host single-thread
 speed sets its pace, not vCPU count or GPU size; see
-[training update time](../experiments/training-update-time.md) before choosing a
+[training update time](../experiments/reports/training-update-time.md) before choosing a
 machine. `scripts/bench_training_update.py` prints the same split for one machine.
 
 Reading the curves: RL policy loss is the clipped objective, **not log loss**.
@@ -924,18 +933,18 @@ binding: a checkpoint trained in any precision loads and runs in any other.
 
 The measured speed crossover is width 256. On an L4 with bucketed shapes,
 BF16 is slower than float32 at w160l8, 1.66× faster per learner step at w256l8,
-and 2–2.7× faster at w384l8 ([measurement](../experiments/cuda_precision.md)).
+and 2–2.7× faster at w384l8 ([measurement](../experiments/reports/cuda_precision.md)).
 On an M4 Max at w384l8 with 256 streams, a whole update took 261 s in bfloat16
-against 277 s in float32 on MPS, and 208 s against 263 s on MLX ([measurement](../experiments/mps_retest.md)).
+against 277 s in float32 on MPS, and 208 s against 263 s on MLX ([measurement](../experiments/reports/mps_retest.md)).
 
-In the earlier [learning A/B](../experiments/precision_ladder.md), BF16 seed
+In the earlier [learning A/B](../experiments/reports/precision_ladder.md), BF16 seed
 32401 stopped after 140 completed updates with
 `behavior_log_probability_mismatch`, which kept `auto` at float32. Playing
 strength was not scored, and the failure does not establish a strength
 difference. Its cause was independent of precision: a check then compared
 collection's device `exp` of a subnormal legal probability with the host's,
 which the [sampling contract](#sampling-contract) no longer stores or compares
-([cause and proof](../experiments/bf16_behavior_logs.md)). The A/B
+([cause and proof](../experiments/reports/bf16_behavior_logs.md)). The A/B
 used bucketed shapes without live-token attention; their combination with
 BF16 has no learning admission from this run. TF32 remains explicit.
 

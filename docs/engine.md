@@ -247,7 +247,7 @@ declared capacity is an error; the `first-legal` action-overflow policy and
 isolated capacity recovery are explicit opt-ins.
 
 Collection was 75–83% of active time across the profiled training runs
-([training time](../experiments/training-time.md)), so engine and inference
+([training time](../experiments/reports/training-time.md)), so engine and inference
 throughput are the cost levers. CI keeps an
 [engine performance budget](development.md#engine-performance-budget): a
 change more than 10% slower than the reference, or one that moves the
@@ -1086,13 +1086,13 @@ saved training corpora or change their split assignments.
 
 - **Replay holds.** Evaluation cohorts replay exactly in practice. In the
   filter-scope screen all 3,600 monitoring and final games replayed
-  ([technique screen](../experiments/ataraxos-technique-screen.md)).
+  ([technique screen](../experiments/reports/ataraxos-technique-screen.md)).
 - **The encoding hides no decision.** The learnability search found no clean
   input collisions, and the fixed suite runs on relevant PR updates
-  ([learnability](../experiments/learnability-search.md)).
+  ([learnability](../experiments/reports/learnability-search.md)).
 - **Collection dominates cost.** 75–83% of active training time across the
   profiled runs, 82.5% in the L4 run
-  ([training time](../experiments/training-time.md)).
+  ([training time](../experiments/reports/training-time.md)).
 - **Hidden-pool ordering once leaked.** Reordering a hidden zone changed search
   evidence between viewer-equivalent states. Viewer equivalence, replay and
   leakage checks are now hard gates ([research program](../manabot/RESEARCH.md#earlier-the-search-era)).

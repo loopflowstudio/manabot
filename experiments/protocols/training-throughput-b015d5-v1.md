@@ -7,7 +7,7 @@ and all 128 C2 artifacts matched the manifest. All required C2 base comparisons
 were measured on one A40; conditional cells retain their recorded dispositions.
 The final operating recommendation is one seed per GPU by default, with two as
 an option for aggregate throughput and cost. Findings and limits are maintained
-in `experiments/training-update-time.md`. No further rental is planned.
+in `experiments/reports/training-update-time.md`. No further rental is planned.
 
 This closes the bounded throughput measurement, not the deferred strength or
 generalization questions. The marginal w160l8 four-seed admission remains
@@ -2396,4 +2396,4 @@ step readings and choices, step 2's digest result, metric comparison and shape
 readings, its seeds x producers table and shape per machine class, step 3's speed table
 per (size, GPU, precision, K) with its packing crossover and $100-over-two-weeks reading,
 cost against this budget, and the machine recommendation that updates
-`experiments/training-update-time.md`.
+`experiments/reports/training-update-time.md`.

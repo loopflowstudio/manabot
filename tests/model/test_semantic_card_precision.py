@@ -8,6 +8,7 @@ from copy import deepcopy
 import io
 import json
 import os
+from pathlib import Path
 from typing import Literal
 
 import numpy as np
@@ -15,7 +16,6 @@ import pytest
 import torch
 from torch import nn
 
-from experiments.elemental_variants import elemental_recipe
 from manabot.backends.torch.learner import forward_precision
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
@@ -24,11 +24,14 @@ from manabot.infra.config import RewardConfig
 from manabot.model.admission import admit_observation
 from manabot.model.inference import PolicyInference
 from manabot.model.semantic_cards import SemanticCardEncoder
+from manabot.training.regime import TrainingRegime
 from manabot.training.rollout import collection
 from manabot.training.rollout.collection import (
     close_collector,
     open_collector,
 )
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_definition_join_preserves_float32_outputs_and_gradients() -> None:
@@ -78,7 +81,9 @@ def test_cuda_semantic_policy_admission(declared: Literal["float32", "bf16"]) ->
         pytest.fail("CUDA device does not support BF16")
     torch.set_num_threads(1)
     torch.manual_seed(26400)
-    regime = elemental_recipe("precision-admission-fixture", 2)
+    regime = TrainingRegime.model_validate_json(
+        (ROOT / "experiments/regimes/elemental-long-183-v1.json").read_bytes()
+    )
     regime.agent.hidden_dim = 16
     regime.agent.num_attention_heads = 2
     space = ObservationSpace(regime.observation)

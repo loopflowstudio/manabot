@@ -111,7 +111,7 @@ The code anchors `scripted_greedy` and `random`
 (`manabot.sim.anchors`, frozen v1 sources) remain admissible for compatibility
 and diagnostics, not as working anchors; `fit_population` still places
 `random-v1` at the origin by default. Head-to-head
-[tournaments](../experiments/head-to-head.md) play chosen checkpoints
+[tournaments](../experiments/reports/head-to-head.md) play chosen checkpoints
 against each other on shared deals.
 
 Ratings are a seat-aware Bradley-Terry fit expressed on the Elo scale
@@ -142,13 +142,13 @@ sit beside it:
   raised it from 18.3% to 62.0% as UR against MTG-183's update-1,750 GW over
   300 held-out games, and from 10.8% to 34.3% across all ten Elemental decks
   over 400 games, without slower decisions
-  ([heuristic strength](../experiments/heuristic-strength.md)). Ratings are
+  ([heuristic strength](../experiments/reports/heuristic-strength.md)). Ratings are
   pinned to an anchor version.
 - **Matchup tables measure the pilot and the cards.** A four-card swap moved a
-  matchup by 55 points ([exp-08b](../experiments/exp-08b-ancestral-dose.md)).
+  matchup by 55 points ([exp-08b](../experiments/reports/exp-08b-ancestral-dose.md)).
 - **A matched-budget exploiter reached 23.5–26.0%** against the distilled
   student in an earlier world, so it was not farmable at that budget; stronger
-  attackers were untested ([exp-11](../experiments/exp-11-curriculum-exploitability.md)).
+  attackers were untested ([exp-11](../experiments/reports/exp-11-curriculum-exploitability.md)).
 - **An N-game evaluation once played one deal.** A seed bug made every game
   replay the same shuffle, and the seat-advantage claims built on it were
   retracted ([F1 and F3](../paper/understanding.md)). Derived seeds and replay
@@ -234,7 +234,7 @@ allocation = EvalAllocation(device="cuda", bucketed_shapes=True, live_tokens=Tru
 are off because served batches are small: in one w384l8 pass on an L4, at about
 nine rows per forward, the padded forward took 23.7 ms against 27.3 ms with
 both on, and the pass took 118 s either way
-([measurement](../experiments/eval_forward_layout.md)). The layout changes only
+([measurement](../experiments/reports/eval_forward_layout.md)). The layout changes only
 the order of floating-point sums, as batch composition already does, so it is
 an allocation setting: the values are retained in the attempt receipt and
 leave `EvalCompute`, player, benchmark and match identities unchanged. Search
@@ -444,18 +444,14 @@ producer seeds, at least two independent attacker seeds, a strictly increasing
 target/attacker pair becomes an ordinary TrainingRegime against the frozen
 target; rungs continue one attacker.
 
-```sh
-uv run python -m manabot.experiment.attack_execution --plan attack.json --out .runs/attack-001
-```
-
-Requires a fresh output directory, the selected matchup and a POSIX main
-thread (it owns a SIGALRM deadline and refuses an active timer). Literal seed
-reuse across producers and attackers is rejected. Every attacker faces its
-target before training and at every rung on all four legs; only terminal,
-replay-verified games count. A failed cell stops the cohort, and results keep
-`plan.json`, `result.json`, `report.md`, `training.sqlite`, run directories and
-arena evidence. Final paired improvement bootstraps over attacker seeds and is
-exploratory. A failed bounded attacker never certifies equilibrium. The
+The plan is a record: its executor ran saved regimes and was removed with
+them (last at revision `f4e1822faf46bbc9cdc43909293f8cbc8de4a300`). Literal seed
+reuse across producers and attackers is rejected. In an executed plan every
+attacker faced its target before training and at every rung on all four legs;
+only terminal, replay-verified games counted. A failed cell stopped the cohort,
+and results kept `plan.json`, `result.json`, `report.md`, `training.sqlite`, run
+directories and arena evidence. Final paired improvement bootstraps over
+attacker seeds and is exploratory. A failed bounded attacker never certifies equilibrium. The
 real-PPO positive control raised score against a deliberately passive toy
 target from .59375 to 1.0 in 64 updates. History:
 [frozen-policy-attacks.md at a74f31828](https://github.com/loopflowstudio/manabot/blob/a74f31828/docs/frozen-policy-attacks.md).
@@ -489,7 +485,7 @@ uv run --extra openrouter python -m manabot.verify.llm_game \
 `GameConfig.opponent_checkpoint` substitutes a frozen policy for the random
 opponent, which is how Haiku 5.5 played MTG-183's final checkpoint to 51–49
 over 100 games at $0.37 a game
-([Haiku versus MTG-183](../experiments/haiku-mtg183.md)). Qwen3.5-9B on an L4
+([Haiku versus MTG-183](../experiments/reports/haiku-mtg183.md)). Qwen3.5-9B on an L4
 won one functional game in 308 decisions with every selection valid first time
 (2026-10-25). `manabot/reports/inference.py` reads receipts offline without the
 model runtime. Full operating detail, including vLLM serving and the campaign

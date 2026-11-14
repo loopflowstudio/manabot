@@ -8,7 +8,6 @@ from typing import NoReturn
 from pydantic import JsonValue, ValidationError
 import pytest
 
-from experiments.value_model_baseline import value_model_baseline
 from manabot.experiment.config import (
     Axis,
     Baseline,
@@ -26,6 +25,7 @@ from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.training.learning import DampedPolicyLearning, Learning
 from manabot.training.regime import ArtifactReference, Execution, ImportPolicy
+from tests.fixtures.saved_regimes import value_model_baseline
 from tests.training.wdl_baseline import wdl_baseline
 
 

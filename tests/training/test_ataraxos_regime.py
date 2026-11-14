@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from experiments.ataraxos_move import ataraxos_move, ataraxos_move_scalar
 from manabot.training.learning import DampedPolicyLearning
 from manabot.training.regime import TrainingRegime
 from manabot.training.validation import validate_regime
 import managym
+from tests.fixtures.saved_regimes import ataraxos_move, ataraxos_move_scalar
 
 ROOT = Path(__file__).resolve().parents[2]
 

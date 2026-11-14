@@ -6,7 +6,6 @@ from pathlib import Path
 from pydantic import ValidationError
 import pytest
 
-from experiments.ataraxos_move import ataraxos_move_scalar
 from manabot.infra.config import ModelConfig
 from manabot.recipes.builders import (
     REFERENCE_UPDATES,
@@ -24,6 +23,7 @@ from manabot.training.learning import DampedPolicyLearning, IterationSchedule, L
 from manabot.training.regime import Execution, TrainingRegime, TrainSelfPlay
 from manabot.training.state.game_errors import GameErrorPolicy
 import managym
+from tests.fixtures.saved_regimes import ataraxos_move_scalar
 
 ROOT = Path(__file__).resolve().parents[2]
 

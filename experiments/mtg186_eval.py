@@ -70,7 +70,6 @@ from experiments.elemental_grid import (
     Group,
     _legs,
 )
-from experiments.mtg186 import CAP_USD, LAUNCHES, MILESTONES, ROOT, SEED, STORAGE
 from manabot.eval.models import EvaluationKey
 from manabot.experiment.setup import TOOLCHAIN_ENV, machine_setup
 from manabot.infra.identity import canonical_sha256, file_sha256
@@ -78,6 +77,19 @@ from manabot.sim.matchup import AuthoredMatchup
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.threads import child_environment
 import managym
+
+ROOT = Path(__file__).resolve().parents[1]
+STORAGE = "r2://manabot/jobs"
+# MTG-186's one training seed (UR vs GW only, regime
+# experiments/regimes/elemental-ur-gw-186-v1.json), trained under the retired
+# executor; its launch module is at revision 83b77e6c64 and earlier.
+SEED = 18601
+# MTG-181's longest seed reached 616 updates; exports match its 200-update cadence.
+MILESTONES = (200, 400, 600)
+# Inclusive authorization for the Task: training, setup, failures and evaluation.
+CAP_USD = Decimal(10)
+# Training cohorts whose runs failed before learning, and what each cost.
+LAUNCHES = {"mtg186": Decimal("0.148"), "mtg186-r2": Decimal("0.05")}
 
 RESULTS = ROOT / "experiments/data/mtg186/pairings"
 STATE = ROOT / ".runs/mtg186/pairings.json"
