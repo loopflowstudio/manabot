@@ -530,3 +530,11 @@ the first feasible pooled unit and preserves automatic source order, saved costs
 and receipts. The experiment's job command records the switch; replay and
 heuristic evaluation must use the same value. Ordinary runs leave it unset.
 This switch is experiment scaffolding, pending the report's design review.
+
+`MANAGYM_EXPERIMENT_SOURCE_TAPS=1` is the per-source arm of
+`experiments/source_taps.py`. A cast or activation mana payment then offers
+each fixed source whose output the cost can still use as a `TapForMana` step
+(action type `TapForCost`) beside `PayCost`, which finishes automatically.
+Nothing is offered when the pool covers the cost or every offered source is
+needed. Waterbend, resolution payments, upfront fees and foretell stay
+automatic. Replay and evaluation must use the same value.

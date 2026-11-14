@@ -19,6 +19,7 @@ instruments.
 | [direct_self_play](direct_self_play.py) | `direct_self_play` | `manabot train` |
 | [ataraxos_ablation](ataraxos_ablation.py) | `:rl_control` and four treatment arms ([ablations](ataraxos-mtg-ablations.md)) | `python -m experiments.ataraxos_ablation` |
 | [mana_spending](mana_spending.py) | `mana-spending-A/B` ([mana spending decisions](mana_spending.md)) | `uv run python -m experiments.mana_spending count` / `shapes` / `summary`; `etude launch` |
+| [source_taps](source_taps.py) | `source-taps-automatic/taps` ([per-source taps](source_taps.md)) | `etude launch` |
 | [belief_sampler](belief_sampler.py) | `belief_sampler` ([guide](https://github.com/loopflowstudio/manabot/blob/055dddab1/docs/search-and-beliefs.md#belief-sampler)) | `manabot train` |
 
 The compound-decision study (`compound_decisions.py`) is no longer runnable;

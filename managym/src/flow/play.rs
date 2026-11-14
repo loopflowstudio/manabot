@@ -1940,7 +1940,9 @@ impl Game {
             sacrifice,
             alternative: alternative.clone(),
         });
-        if !self.mana_ability_actions(player, sacrifice).is_empty() {
+        if !self.mana_ability_actions(player, sacrifice).is_empty()
+            || !self.fixed_tap_actions(player).is_empty()
+        {
             return Ok(());
         }
         self.commit_payment(player, payment, sacrifice, alternative, 0)
