@@ -81,3 +81,28 @@ control for this study.
 The six v9 study runs in `mtg265-study-20261114` were stopped before training:
 four cancelled, two capacity-refused, all USD0 in the launcher. Preserve those
 records. Verify the corrected input with each arm before replacing that cohort.
+
+## Successful smoke and final placement
+
+At source `ee0281c0d402`, all three current-input calibration runs completed
+two updates: baseline `362f5ba6146d`, combat `9729cdd9186d`, and mana taps
+`a767d947ac05`. These used 256 streams; only the numerical gate's tiny
+continuation fixture uses two streams. The baseline TrainingRun records
+144.08 seconds for two updates, including collection and learning, excluding
+machine setup. This short smoke supports placement planning, not a sustained
+throughput or strength claim. The calibration rental was terminated.
+
+The initial v10 cohort `mtg265-study-20261114b` exposed conservative launcher
+budget reservation per job despite shared GPUs. Its 48-hour jobs made later
+rentals too short, and the worker correctly refused with `remaining allocation
+cannot cover the frozen regime`. Stop that cohort; all its attempts ended at
+update zero or before training. Its acquired machines were terminated.
+
+The replacement is `mtg265-study-20261114c`, source `ee0281c0d402`, with the
+same six seeds/arms and 500-update target, but a 28-hour maximum per job and
+USD9 job ceiling. The whole cohort retains its USD48 ceiling. Placement is
+two jobs per Ada GPU, up to three machines, under USD0.28/hour. The launcher
+quoted USD23.73 for that full maximum first-wave rental window, including
+startup; this is a quote, not a bill. The scientific question, damping horizon,
+population and evaluation schedule are unchanged. Earlier failed/cancelled
+attempts remain in Etude and are not reused as completed study runs.
