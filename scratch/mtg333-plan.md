@@ -671,3 +671,7 @@ Academy conformance inventory collected **23 tests**, and the fresh-process
 local evaluation CLI check passed (**1 test, 23.08 s**). Final Ruff check and
 format check pass on all **185** changed Python files. The workflow compiler
 passes every repository graph; `git diff --check` is clean.
+
+The three required local-update/search receipt files passed together:
+**31 passed (37.31 s)**. The second `lf sync` merged cleanly with no new
+main changes. All Task-owned test/collection commands have exited.
