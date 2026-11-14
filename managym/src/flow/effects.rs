@@ -53,8 +53,7 @@ impl Game {
     ) {
         let source_object =
             source_object.filter(|_| duration == EffectDuration::WhileYouControlSource);
-        let source: Option<CardDefId> =
-            source.map(|object| self.state.objects[object].definition_id);
+        let source: Option<CardDefId> = source.map(|object| self.state[object].definition_id);
         let timestamp = self.state.id_gen_mut().next_id();
         self.push_effects(affected.into_iter().map(|affected| ContinuousEffect {
             timestamp,
@@ -80,8 +79,7 @@ impl Game {
             return;
         };
         let timestamp = self.state.id_gen_mut().next_id();
-        let source: Option<CardDefId> =
-            source.map(|object_id| self.state.objects[object_id].definition_id);
+        let source: Option<CardDefId> = source.map(|object_id| self.state[object_id].definition_id);
         let modifications = [
             Modification::BecomeCreature,
             Modification::SetBasePt {

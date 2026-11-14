@@ -29,7 +29,7 @@ fn count_cards_named(s: &Scenario, player: usize, zone: ZoneType, name: &str) ->
         .zones
         .zone_objects(zone, PlayerId(player))
         .iter()
-        .filter(|object_id| s.game().state.objects[*object_id].name == name)
+        .filter(|object_id| s.game().state[*object_id].name == name)
         .count()
 }
 
@@ -123,8 +123,7 @@ fn cr_603_3b_pending_triggers_flush_in_apnap_order() {
             targets: Vec::new(),
             target_req_indices: Vec::new(),
             requirement_index: 0,
-            source_object: p1_source,
-            source_ref: None,
+            source_identity: managym::state::game_object::AbilitySource::new(p1_source, None),
             source_lki: None,
             ability_index: 0,
             controller: PlayerId(1),
@@ -144,8 +143,7 @@ fn cr_603_3b_pending_triggers_flush_in_apnap_order() {
             targets: Vec::new(),
             target_req_indices: Vec::new(),
             requirement_index: 0,
-            source_object: p0_source,
-            source_ref: None,
+            source_identity: managym::state::game_object::AbilitySource::new(p0_source, None),
             source_lki: None,
             ability_index: 0,
             controller: PlayerId(0),
@@ -277,8 +275,7 @@ fn cr_603_trigger_flush_happens_after_sba_check() {
         targets: Vec::new(),
         target_req_indices: Vec::new(),
         requirement_index: 0,
-        source_object: source,
-        source_ref: None,
+        source_identity: managym::state::game_object::AbilitySource::new(source, None),
         source_lki: None,
         ability_index: 0,
         controller: PlayerId(0),

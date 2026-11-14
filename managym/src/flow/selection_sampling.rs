@@ -219,7 +219,7 @@ impl Game {
                 let selection = zone
                     .filter(|zone| matches!(zone, ZoneType::Hand | ZoneType::Library))
                     .map(|zone| ZoneSelection {
-                        owner: self.state.objects[object].owner,
+                        owner: self.state[object].owner,
                         zone,
                         predicate: frame
                             .selected_from
@@ -479,7 +479,7 @@ impl Game {
         let mut counts = allocation.counts;
         let mut chosen = Vec::new();
         pool.retain(|object| {
-            let Some(count) = counts.get_mut(&self.state.objects[*object].name) else {
+            let Some(count) = counts.get_mut(&self.state[*object].name) else {
                 return true;
             };
             if *count == 0 {
@@ -504,7 +504,7 @@ impl Game {
         let owner = PlayerId(1 - commitments.viewer.0);
         let mut pool = BTreeMap::<String, Vec<ObjectId>>::new();
         for object in commitments.unseen_objects(self, owner) {
-            pool.entry(self.state.objects[object].name.clone())
+            pool.entry(self.state[object].name.clone())
                 .or_default()
                 .push(object);
         }
@@ -516,7 +516,7 @@ impl Game {
         }
         let bearers: Vec<_> = pool
             .iter()
-            .filter(|(_, objects)| self.state.objects[objects[0]].foretell().is_some())
+            .filter(|(_, objects)| self.state[objects[0]].foretell().is_some())
             .map(|(name, objects)| {
                 (
                     name.clone(),

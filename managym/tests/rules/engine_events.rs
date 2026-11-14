@@ -409,7 +409,7 @@ fn block_restriction_respects_effective_power() {
         .unwrap()
         .summoning_sick = false;
     let attacker_card = card_of(&s, attacker);
-    s.game_mut().state.objects[attacker_card]
+    s.game_mut().state[attacker_card]
         .statics
         .push(StaticAbility::BlockRestriction(
             BlockRestriction::CantBeBlockedBy(CardPredicate {
@@ -530,9 +530,7 @@ fn observation_encodes_counters_tokens_and_type_tags() {
     // A Lesson in the graveyard (subtype injected — no Lesson spell is
     // registered until Stage 2 machinery lands).
     let bolt = find_owned_card_off_battlefield(&s, 0, "Lightning Bolt");
-    s.game_mut().state.objects[bolt]
-        .subtypes
-        .push("Lesson".to_string());
+    s.game_mut().state[bolt].subtypes.push("Lesson".to_string());
     move_card(&mut s, bolt, ZoneType::Graveyard);
     s.pass_priority();
 

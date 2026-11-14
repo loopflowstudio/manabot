@@ -44,7 +44,7 @@ impl Game {
     pub(crate) fn snapshot_current_permanent(&self, object: ObjectId) -> Option<ObjectLki> {
         let permanent_id = self.lookup_current_permanent(object).ok()?;
         let permanent = self.state.permanents[permanent_id].as_ref()?;
-        let definition = &self.state.objects[object];
+        let definition = &self.state[object];
         let characteristics = self.characteristics(permanent_id);
         Some(ObjectLki {
             transforms: permanent.transforms,
@@ -94,7 +94,7 @@ impl Game {
         } else if let Some(lki) = self.object_lki(object_ref) {
             lki.presentation_id
         } else {
-            self.state.objects.get(object_ref.slot())?.id
+            self.state.objects.provenance(object_ref)?.0
         };
         Some(ObjectEventRef {
             entity,

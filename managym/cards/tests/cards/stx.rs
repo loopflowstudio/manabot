@@ -159,7 +159,7 @@ fn library_search_is_private_enters_tapped_and_continues_to_learn() {
             })
             .unwrap();
         if forest {
-            assert_eq!(s.game().state.objects[selected].name, "Forest");
+            assert_eq!(s.game().state[selected].name, "Forest");
         }
         let index = s
             .action_space()
@@ -231,8 +231,8 @@ fn resampled_private_search_choices_still_name_library_cards() {
                 .zones
                 .zone_objects(ZoneType::Library, PlayerId(0))
                 .iter()
-                .filter(|object| branch.state.objects[**object].name == "Forest")
-                .map(|object| branch.state.objects[*object].id.0 as i32)
+                .filter(|object| branch.state[**object].name == "Forest")
+                .map(|object| branch.state[*object].id.0 as i32)
                 .collect();
             let offered: BTreeSet<_> = branch
                 .action_space()
@@ -240,9 +240,7 @@ fn resampled_private_search_choices_still_name_library_cards() {
                 .actions
                 .iter()
                 .filter_map(|action| match action {
-                    Action::SelectCard { object, .. } => {
-                        Some(branch.state.objects[*object].id.0 as i32)
-                    }
+                    Action::SelectCard { object, .. } => Some(branch.state[*object].id.0 as i32),
                     _ => None,
                 })
                 .collect();
@@ -259,7 +257,7 @@ fn resampled_private_search_choices_still_name_library_cards() {
                 .zones
                 .zone_objects(ZoneType::Library, PlayerId(0))
                 .iter()
-                .map(|object| branch.state.objects[*object].id.0 as i32)
+                .map(|object| branch.state[*object].id.0 as i32)
                 .collect::<BTreeSet<_>>();
             assert_eq!(
                 visible, inspected,
@@ -322,7 +320,7 @@ fn search_possible_worlds_refresh_private_candidates_without_exposing_library_ca
         for action in &branch.action_space().unwrap().actions {
             if let Action::SelectCard { object, .. } = action {
                 assert_eq!(branch.state.zones.zone_of(*object), Some(ZoneType::Library));
-                assert_eq!(branch.state.objects[*object].name, "Forest");
+                assert_eq!(branch.state[*object].name, "Forest");
             }
         }
     }

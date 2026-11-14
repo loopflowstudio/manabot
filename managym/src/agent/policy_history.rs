@@ -75,7 +75,7 @@ fn object_reference(game: &Game, object: ObjectId) -> HistoryReference {
     if game.is_foretold(object) {
         return HistoryReference::Unavailable;
     }
-    let data = &game.state.objects[object];
+    let data = &game.state[object];
     HistoryReference::Card {
         definition: data.definition_id.0,
         owner: data.owner,
@@ -128,7 +128,7 @@ pub(crate) fn record(game: &mut Game, event: &GameEvent) {
         object_id: object, ..
     } = event
     {
-        let id = game.state.objects[*object].id.0 as i32;
+        let id = game.state[*object].id.0 as i32;
         // Every real zone move creates a new incarnation. The old reference
         // keeps its public definition/zone but cannot follow the physical card.
         let matches = |reference: &HistoryReference| {

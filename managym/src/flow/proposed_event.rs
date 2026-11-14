@@ -675,8 +675,8 @@ impl Game {
                         to: ZoneType::Hand,
                         ..
                     } => Some((
-                        self.state.objects[*object_id].owner,
-                        self.state.objects[*object_id].definition_id,
+                        self.state.entry_object(*object_id).owner,
+                        self.state.entry_object(*object_id).definition_id,
                     )),
                     _ => None,
                 }
@@ -819,7 +819,7 @@ impl Game {
         let (scope, predicate, _) = self.entry_copy_terms(*object)?;
         let player = entry
             .controller
-            .unwrap_or(self.state.objects[*object].owner);
+            .unwrap_or(self.state.entry_object(*object).owner);
         let controllers = match scope {
             crate::state::ability::Scope::YouControl => vec![player],
             crate::state::ability::Scope::OpponentsControl => vec![PlayerId(1 - player.0)],
@@ -856,12 +856,14 @@ impl Game {
         let Some(source) = of.and_then(|id| self.state.permanents[id].as_ref()) else {
             return;
         };
-        let source = self.state.objects[source.object].clone();
+        let source = self.state[source.object].clone();
         let Some((_, _, exceptions)) = self.entry_copy_terms(object) else {
             return;
         };
         let exceptions = exceptions.to_vec();
-        self.state.objects[object].become_copy_of(&source, &exceptions);
+        self.state
+            .entry_object_mut(object)
+            .become_copy_of(&source, &exceptions);
         if let ProposedEvent::ZoneMove { entry, .. } = &mut pending.event {
             entry.entry_copy = true;
         }
@@ -877,7 +879,8 @@ impl Game {
         &crate::state::predicate::CardPredicate,
         &[crate::state::effect::Modification],
     )> {
-        self.state.objects[object]
+        self.state
+            .entry_object(object)
             .replacement_effects
             .iter()
             .find_map(|effect| match effect {
@@ -922,7 +925,7 @@ impl Game {
                 ..
             } => entry
                 .controller
-                .unwrap_or(self.state.objects[*object].owner),
+                .unwrap_or(self.state.entry_object(*object).owner),
         }
     }
 
@@ -1037,7 +1040,7 @@ impl Game {
                         continue;
                     }
                     let permanent = self.state.permanents[id].as_ref().expect("battlefield");
-                    for (definition_index, effect) in self.state.objects[permanent.object]
+                    for (definition_index, effect) in self.state[permanent.object]
                         .replacement_effects
                         .iter()
                         .enumerate()
@@ -1090,7 +1093,7 @@ impl Game {
                     let affected_side = permanent.controller == affected_controller;
                     let source_side = source_controller == Some(permanent.controller)
                         && permanent.controller != affected_controller;
-                    for (definition_index, effect) in self.state.objects[permanent.object]
+                    for (definition_index, effect) in self.state[permanent.object]
                         .replacement_effects
                         .iter()
                         .enumerate()
@@ -1126,8 +1129,10 @@ impl Game {
                 // a spell or reanimation controlled by someone other than its owner.
                 let entering_controller = entry
                     .controller
-                    .unwrap_or(self.state.objects[*object_id].owner);
-                let mut entries: Vec<_> = self.state.objects[*object_id]
+                    .unwrap_or(self.state.entry_object(*object_id).owner);
+                let mut entries: Vec<_> = self
+                    .state
+                    .entry_object(*object_id)
                     .replacement_effects
                     .iter()
                     .enumerate()
@@ -1175,7 +1180,7 @@ impl Game {
                     };
                     for (definition_index, ability) in view.static_abilities.iter().enumerate() {
                         if matches!(ability, StaticAbility::EntersTapped(predicate)
-                            if self.object_matches_predicate(*object_id, predicate))
+                            if self.entry_matches_predicate(*object_id, predicate))
                         {
                             entries.push(ReplacementCandidate {
                                 identity: ReplacementId {
@@ -1211,7 +1216,7 @@ impl Game {
                 *object_id,
                 entry
                     .controller
-                    .unwrap_or(self.state.objects[*object_id].owner),
+                    .unwrap_or(self.state.entry_object(*object_id).owner),
             )),
             _ => None,
         };
@@ -1221,7 +1226,7 @@ impl Game {
                     continue;
                 }
                 let permanent = self.state.permanents[id].as_ref().expect("battlefield");
-                for (definition_index, effect) in self.state.objects[permanent.object]
+                for (definition_index, effect) in self.state[permanent.object]
                     .replacement_effects
                     .iter()
                     .enumerate()
@@ -1239,7 +1244,7 @@ impl Game {
                         ProposedEvent::CounterChange { target, .. } => self
                             .lookup_current_permanent(*target)
                             .is_ok_and(|id| self.permanent_matches_predicate(id, predicate)),
-                        _ => self.object_matches_predicate(object_id, predicate),
+                        _ => self.entry_matches_predicate(object_id, predicate),
                     };
                     let matches_kind = match event {
                         ProposedEvent::CounterChange { kind: placed, .. } => {
@@ -1452,7 +1457,7 @@ impl Game {
             return false;
         };
         // A land-type overwrite's counters change other players' mana.
-        if self.state.objects[target]
+        if self.state[target]
             .statics
             .iter()
             .any(|ability| matches!(ability, StaticAbility::SetsLandType(_)))
@@ -1571,7 +1576,7 @@ mod tests {
                         .scenario_force_battlefield(PlayerId(0), "Mountain", true)
                         .unwrap();
                     let object = game.state.permanents[source].as_ref().unwrap().object;
-                    game.state.objects[object].replacement_effects =
+                    game.state[object].replacement_effects =
                         vec![ReplacementEffect::ModifyCounters {
                             effects_only,
                             kind: None,

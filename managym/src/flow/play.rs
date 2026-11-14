@@ -101,7 +101,7 @@ impl Game {
     /// (a Lesson's {1}, or a spell's own mana cost).
     pub(crate) fn flashback_cost(&self, player: PlayerId, object: ObjectId) -> Option<ManaCost> {
         let card = self.state.card_of(object)?;
-        let definition = &self.state.objects[card];
+        let definition = &self.state[self.state.object_of(card)];
         if !definition.types.is_spell()
             || !self
                 .state
@@ -150,7 +150,7 @@ impl Game {
     /// cast, so they are never offered.
     pub(crate) fn library_top_castable(&self, player: PlayerId) -> Option<CardId> {
         let card = self.library_top_card(player)?;
-        let definition = &self.state.objects[card];
+        let definition = &self.state[self.state.object_of(card)];
         (!definition.types.is_land()
             && self.active_permanent_has(player, |source| {
                 matches!(source, StaticAbility::CastFromLibraryTop(predicate) if self.object_matches_predicate(self.state.object_of(card), predicate))
@@ -175,7 +175,7 @@ impl Game {
                     .map(|card| self.state.object_of(card))
                     == Some(object) =>
             {
-                self.state.objects[object].mana_cost.clone()
+                self.state[object].mana_cost.clone()
             }
             _ => None,
         }
@@ -193,7 +193,7 @@ impl Game {
         if cast.free || self.uses_exile_alternative(object, cast) {
             Some(ManaCost::default())
         } else if cast.resolving || self.state.zones.zone_of(object) == Some(ZoneType::Hand) {
-            self.state.objects[object].mana_cost.clone()
+            self.state[object].mana_cost.clone()
         } else {
             self.zone_cast_cost(player, object)
         }
@@ -211,7 +211,7 @@ impl Game {
         cast: CastChoices,
         targets: Option<&[Target]>,
     ) -> Option<ManaCost> {
-        let card_ref = &self.state.objects[object];
+        let card_ref = &self.state[object];
         let mut cost = self.casting_mana_cost(player, object, cast)?.with_x(cast.x);
         cost.purpose = SpendingContext::Cast(SpellSnapshot(card_ref.copiable_definition()));
         if let Some(additional) = card_ref.required_waterbend() {
@@ -282,9 +282,9 @@ impl Game {
                 };
                 if reduction.first_on_own_turn
                     && (self.active_player() != player
-                        || self.state.turn.spells_cast[player.0]
-                            .iter()
-                            .any(|cast| self.object_matches_predicate(*cast, &reduction.predicate)))
+                        || self.state.turn.spells_cast[player.0].iter().any(|cast| {
+                            self.recorded_object_matches_predicate(*cast, &reduction.predicate)
+                        }))
                 {
                     continue;
                 }
@@ -299,7 +299,7 @@ impl Game {
     }
 
     pub(crate) fn play_land(&mut self, player: PlayerId, card: CardId) -> Result<(), AgentError> {
-        let card_ref = &self.state.objects[card];
+        let card_ref = &self.state[self.state.object_of(card)];
         if !card_ref.types.is_land() {
             return Err(AgentError("only land cards can be played".to_string()));
         }
@@ -336,7 +336,7 @@ impl Game {
         }
 
         let (is_land, owner, is_instant_speed) = {
-            let card_ref = &self.state.objects[card];
+            let card_ref = &self.state[self.state.object_of(card)];
             (
                 card_ref.types.is_land(),
                 card_ref.owner,
@@ -398,7 +398,7 @@ impl Game {
         object: ObjectId,
         cast: CastChoices,
     ) -> Result<(), AgentError> {
-        let card_ref = &self.state.objects[object];
+        let card_ref = &self.state[object];
         let printed_x = card_ref.mana_cost.as_ref().is_some_and(|cost| cost.x > 0);
         let selected_x = self
             .casting_mana_cost(player, object, cast)
@@ -447,7 +447,7 @@ impl Game {
             return false;
         };
         if !cast.kicked
-            && self.state.objects[object]
+            && self.state[object]
                 .life_alternative()
                 .is_some_and(|life| self.payable_life(player) < life as i32)
         {
@@ -476,7 +476,7 @@ impl Game {
             self.can_pay_cast(player, object, CastChoices { x, ..cast })
         }));
         // "X targets" (CR 601.2c): X can't exceed the legal candidates.
-        for requirement in self.state.objects[object].target_requirements() {
+        for requirement in self.state[object].target_requirements() {
             if requirement.exact_x() {
                 let legal = self.legal_targets_for_requirement(player, object, &requirement);
                 values.retain(|x| usize::from(*x) <= legal.len());
@@ -522,7 +522,7 @@ impl Game {
         // A spell cast without paying its mana cost can't also take an
         // alternative cost (CR 118.9a).
         if !cast.free
-            && self.state.objects[object].exile_alternative().is_some()
+            && self.state[object].exile_alternative().is_some()
             && self.can_pay_cast(player, object, kicked)
         {
             // The mana cost or the alternative: asked only when both are
@@ -537,8 +537,7 @@ impl Game {
             });
             return Ok(());
         }
-        if self.state.objects[object].optional_cost().is_some()
-            && self.can_pay_cast(player, object, kicked)
+        if self.state[object].optional_cost().is_some() && self.can_pay_cast(player, object, kicked)
         {
             // Only the mana is payable: "pay 5 life or pay {2}" at low life.
             if !self.can_pay_cast(player, object, cast) {
@@ -589,7 +588,7 @@ impl Game {
         object: ObjectId,
         cast: CastChoices,
     ) -> u8 {
-        let card_ref = &self.state.objects[object];
+        let card_ref = &self.state[object];
         let waterbend = card_ref
             .additional_costs
             .iter()
@@ -611,12 +610,12 @@ impl Game {
     }
 
     pub(crate) fn legal_spell_modes(&self, player: PlayerId, object: ObjectId) -> Vec<usize> {
-        self.state.objects[object]
+        self.state[object]
             .spell_modes()
             .map_or_else(Vec::new, |modes| {
                 (0..modes.len())
                     .filter(|mode| {
-                        self.state.objects[object]
+                        self.state[object]
                             .target_requirements_for_mode(Some(*mode))
                             .iter()
                             .all(|req| {
@@ -637,7 +636,7 @@ impl Game {
         object: ObjectId,
         cast: CastChoices,
     ) -> Result<(), AgentError> {
-        if self.state.objects[object].spell_modes().is_some() {
+        if self.state[object].spell_modes().is_some() {
             if self.legal_spell_modes(player, object).is_empty() {
                 return Err(AgentError("no legal spell mode".into()));
             }
@@ -686,7 +685,7 @@ impl Game {
             chosen,
             chosen_req_indices,
         } = selection;
-        let requirements = self.state.objects[object].target_requirements_for_mode(mode);
+        let requirements = self.state[object].target_requirements_for_mode(mode);
         loop {
             let Some(requirement) = requirements.get(requirement_index) else {
                 return self.finish_casting(player, object, cast, mode, chosen, chosen_req_indices);
@@ -740,10 +739,7 @@ impl Game {
         chosen: &[Target],
         target: Target,
     ) -> bool {
-        if self.state.objects[object]
-            .cost_reduction_if_targets()
-            .is_none()
-        {
+        if self.state[object].cost_reduction_if_targets().is_none() {
             return true;
         }
         let targets: Vec<Target> = chosen.iter().copied().chain([target]).collect();
@@ -820,7 +816,7 @@ impl Game {
         chosen.push(target);
         chosen_req_indices.push(requirement_index);
 
-        let requirements = self.state.objects[object].target_requirements_for_mode(mode);
+        let requirements = self.state[object].target_requirements_for_mode(mode);
         let requirement = &requirements[requirement_index];
         let chosen_in_req = chosen_req_indices
             .iter()
@@ -909,7 +905,7 @@ impl Game {
             return Err(AgentError("wrong player for target choice".to_string()));
         }
 
-        let requirements = self.state.objects[object].target_requirements_for_mode(mode);
+        let requirements = self.state[object].target_requirements_for_mode(mode);
         let requirement = &requirements[requirement_index];
         let chosen_in_req = chosen_req_indices
             .iter()
@@ -952,7 +948,7 @@ impl Game {
         targets: Vec<Target>,
         target_req_indices: Vec<usize>,
     ) -> Result<(), AgentError> {
-        let cost = self.state.objects[object].sacrifice_cost().cloned();
+        let cost = self.state[object].sacrifice_cost().cloned();
         let payment = Payment::Spell {
             object,
             cast,
@@ -973,7 +969,7 @@ impl Game {
     /// Whether `cast` takes `card`'s exile-from-hand alternative cost: such a
     /// card's kicked flag means the alternative, which costs no mana.
     fn uses_exile_alternative(&self, object: ObjectId, cast: CastChoices) -> bool {
-        cast.kicked && self.state.objects[object].exile_alternative().is_some()
+        cast.kicked && self.state[object].exile_alternative().is_some()
     }
 
     /// The cards `player` may exile for `card`'s exile-from-hand alternative
@@ -984,8 +980,7 @@ impl Game {
         player: PlayerId,
         object: ObjectId,
     ) -> Vec<CardId> {
-        let Some((predicate, not_your_turn)) = self.state.objects[object].exile_alternative()
-        else {
+        let Some((predicate, not_your_turn)) = self.state[object].exile_alternative() else {
             return Vec::new();
         };
         if (not_your_turn && self.active_player() == player)
@@ -1029,7 +1024,7 @@ impl Game {
             ));
         }
         self.move_object(self.state.object_of(card), ZoneType::Exile);
-        let cost = self.state.objects[*object].sacrifice_cost().cloned();
+        let cost = self.state[*object].sacrifice_cost().cloned();
         self.begin_payment(player, *payment, cost)
     }
 
@@ -1041,10 +1036,10 @@ impl Game {
         target_req_indices: Vec<usize>,
         cast: CastChoices,
     ) -> Result<(), AgentError> {
-        if let (false, Some(life)) = (cast.kicked, self.state.objects[object].life_alternative()) {
+        if let (false, Some(life)) = (cast.kicked, self.state[object].life_alternative()) {
             self.change_life(player, -(life as i32));
         }
-        if self.state.objects[object].types.is_creature() {
+        if self.state[object].types.is_creature() {
             self.end_next_creature_cast_flash(player);
         }
         // CR 601.2i — A cast spell is put onto the stack.
@@ -1288,7 +1283,7 @@ impl Game {
         card: CardId,
         ability_index: usize,
     ) -> Option<ActivatedAbilityDefinition> {
-        let definition = &self.state.objects[card];
+        let definition = &self.state[self.state.object_of(card)];
         let ability = definition.activated_abilities.get(ability_index)?;
         if ability.zone == ActivationZone::Battlefield
             || !self
@@ -2152,7 +2147,7 @@ impl Game {
                 if permanent.tapped {
                     return false;
                 }
-                let object = &self.state.objects[permanent.object];
+                let object = &self.state[permanent.object];
                 object.types.is_artifact() || object.types.is_creature()
             })
             .collect()
@@ -2331,7 +2326,7 @@ impl Game {
             .ok_or_else(|| AgentError("missing activation source identity".into()))?;
         let attached = permanent.attached_to;
         let source_transforms = permanent.transforms;
-        let source_definition_id = self.state.objects[source_object].definition_id;
+        let source_definition_id = self.state[source_object].definition_id;
         let inherited_from = self.inherited_definition_id(permanent_id);
         let Some(ability) = self
             .characteristics(permanent_id)
@@ -2420,7 +2415,7 @@ impl Game {
                 inherited_from: None,
                 id,
                 controller: player,
-                source_definition_id: self.state.objects[card].definition_id,
+                source_definition_id: self.state[self.state.object_of(card)].definition_id,
                 source_object,
                 ability_index,
                 targets,

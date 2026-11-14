@@ -465,6 +465,16 @@ follows one card through moves the engine made uses the support helpers
 `Game::move_object` or compared with an event's object does nothing or fails
 ([objects and zones](docs/engine.md#objects-and-zones)).
 
+`GameState::object` and `state[object]` check appearance identity against the
+zone manager; `ObjectVec` has no object-id or card-id indexing. Zone-entry
+code alone uses `entry_object` before placement (new tokens and outside-game
+cards), still checking the allocated generation. Departed-source consumers
+read LKI and `source_base`/`source_face` definition provenance, never a later
+appearance's copy state. Recorded spell, mill and discard predicates use
+`recorded_object_matches_predicate` after their captured appearance departs.
+`AbilitySource` holds one id and the creator's exact
+reference presence; v16 serialization projects both historical source fields.
+
 A permanent's characteristics after continuous effects (name, types, colors,
 keywords, static/triggered/activated abilities, power/toughness) are one view,
 `Game::characteristics(id)`, which applies static abilities and effect records

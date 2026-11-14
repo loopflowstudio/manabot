@@ -207,10 +207,7 @@ impl Game {
         if let Some(controller) = self.stack_spell_controller(object) {
             return Some(self.spell_keywords(object, controller));
         }
-        self.state
-            .objects
-            .get(object.slot())
-            .map(|object| object.keywords)
+        Some(self.state.source_base(object).1.keywords)
     }
 
     fn source_controller(&self, source: ObjectId) -> Option<PlayerId> {
@@ -225,8 +222,8 @@ impl Game {
         let object = source;
         self.state
             .objects
-            .get(object.slot())
-            .map(|object| object.owner)
+            .provenance(object)
+            .map(|(_, owner, _)| owner)
     }
 
     pub(crate) fn gain_life(&mut self, player: PlayerId, amount: i32) {

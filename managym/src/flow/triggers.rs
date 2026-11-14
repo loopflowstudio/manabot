@@ -209,7 +209,7 @@ impl Game {
     /// Whether `target` is the exact permanent whose ability triggered.
     fn is_trigger_source(&self, trigger: &PendingTrigger, target: Target) -> bool {
         matches!(target, Target::Permanent(id)
-            if trigger.source_ref.is_some() && self.permanent_object(id) == trigger.source_ref)
+            if trigger.source_ref().is_some() && self.permanent_object(id) == trigger.source_ref())
     }
 
     fn trigger_requirements(
@@ -220,11 +220,13 @@ impl Game {
             Some(effects) => effects.as_slice(),
             None => self
                 .source_face(
-                    trigger.source_object,
-                    trigger.source_lki.as_ref().map_or(
-                        self.state.objects[trigger.source_object].definition_id,
-                        |lki| lki.definition_id,
-                    ),
+                    trigger.source_object(),
+                    trigger
+                        .source_lki
+                        .as_ref()
+                        .map_or(self.state.source_base(trigger.source_object()).0, |lki| {
+                            lki.definition_id
+                        }),
                 )?
                 .abilities
                 .get(trigger.ability_index)?
@@ -242,7 +244,7 @@ impl Game {
         if !requirement.another {
             return None;
         }
-        let source = trigger.source_ref?;
+        let source = trigger.source_ref()?;
         self.lookup_current_permanent(source).ok()
     }
 
@@ -323,8 +325,8 @@ impl Game {
             || !self.within_source_bound(
                 target,
                 &requirement.spec,
-                trigger.source_object,
-                trigger.source_ref,
+                trigger.source_object(),
+                trigger.source_ref(),
             )
             || self
                 .excluded_source(trigger, requirement)
@@ -455,8 +457,8 @@ impl Game {
                         self.within_source_bound(
                             *target,
                             &requirement.spec,
-                            trigger.source_object,
-                            trigger.source_ref,
+                            trigger.source_object(),
+                            trigger.source_ref(),
                         )
                     })
                     .filter(|target| {
@@ -520,9 +522,13 @@ impl Game {
     /// The placing trigger's `Effect::TriggerModes`, its only effect.
     fn trigger_mode_rule(&self, trigger: &PendingTrigger) -> Option<&Effect> {
         match self
-            .state
-            .objects
-            .get(trigger.source_object.slot())?
+            .source_face(
+                trigger.source_object(),
+                trigger.source_lki.as_ref().map_or_else(
+                    || self.state.source_base(trigger.source_object()).0,
+                    |lki| lki.definition_id,
+                ),
+            )?
             .abilities
             .get(trigger.ability_index)?
             .effects()
@@ -554,7 +560,7 @@ impl Game {
             Some(Effect::TriggerModes { unchosen: true, .. })
         );
         let chosen_before = match trigger
-            .source_ref
+            .source_ref()
             .map(|source| self.lookup_current_permanent(source))
         {
             Some(Ok(id)) if unchosen => self.chosen_modes(id),
@@ -573,7 +579,7 @@ impl Game {
         modes: &[Vec<Effect>],
     ) -> Vec<usize> {
         let source = trigger
-            .source_ref
+            .source_ref()
             .and_then(|source| self.lookup_current_permanent(source).ok());
         (0..modes.len())
             .filter(|mode| {
@@ -614,7 +620,7 @@ impl Game {
         }
         let rule = self.trigger_mode_rule(trigger).cloned();
         let source = trigger
-            .source_ref
+            .source_ref()
             .and_then(|source| self.lookup_current_permanent(source).ok());
         let trigger = self
             .state
@@ -747,7 +753,7 @@ impl Game {
             .source_lki
             .as_ref()
             .map(|lki| lki.definition_id)
-            .unwrap_or(self.state.objects[trigger.source_object].definition_id);
+            .unwrap_or(self.state.source_base(trigger.source_object()).0);
         let id = self.state.id_gen_mut().next_id();
         let targets = trigger.targets;
         self.emit_permanents_targeted(&targets, Target::StackAbility(id), trigger.controller);
@@ -757,8 +763,7 @@ impl Game {
             source_transforms: trigger.source_lki.as_ref().map_or(0, |lki| lki.transforms),
             id,
             controller: trigger.controller,
-            source_object: trigger.source_object,
-            source_ref: trigger.source_ref,
+            source_identity: trigger.source_identity,
             source_lki: trigger.source_lki,
             source_definition_id,
             ability_index: trigger.ability_index,
@@ -771,7 +776,7 @@ impl Game {
             inline_effects: trigger.inline_effects,
         }));
         self.emit(GameEvent::AbilityTriggered {
-            source_object: trigger.source_object,
+            source_object: trigger.source_identity.object(),
             controller: trigger.controller,
             ability: id,
             attacker: trigger.attacker,
@@ -1067,7 +1072,7 @@ impl Game {
                     object_id: object,
                     to: ZoneType::Graveyard,
                     ..
-                } => Some(self.state.objects[*object].owner),
+                } => Some(self.state[*object].owner),
                 // "that player": whose step it is.
                 GameEvent::StepStarted { .. } => Some(self.active_player()),
                 // "that player": who searched, scried, surveilled or bent.
@@ -1106,8 +1111,10 @@ impl Game {
                 targets: Vec::new(),
                 target_req_indices: Vec::new(),
                 requirement_index: 0,
-                source_object,
-                source_ref: Some(source_lki.object),
+                source_identity: crate::state::game_object::AbilitySource::new(
+                    source_object,
+                    Some(source_lki.object),
+                ),
                 source_lki: Some(source_lki),
                 ability_index,
                 controller,
@@ -1183,7 +1190,7 @@ impl Game {
     /// time" covers the source (CR 603.2d), as the source is or last was.
     fn additional_trigger_times(&self, source: &TriggerSourceSnapshot) -> usize {
         let current = self.lookup_current_permanent(source.lki.object).ok();
-        let object = &self.state.objects[source.lki.object];
+        let (_, object) = self.state.source_base(source.lki.object);
         self.static_sources()
             .filter(|(_, controller, _)| *controller == source.controller)
             .map(|(_, _, grantor)| {
@@ -1198,7 +1205,17 @@ impl Game {
                     })
                     .filter(|predicate| match current {
                         Some(id) => self.permanent_matches_predicate(id, predicate),
-                        None => predicate.matches_object_with_power(object, source.lki.power),
+                        None => predicate.matches_printing(
+                            object,
+                            self.state
+                                .objects
+                                .provenance(source.lki.object)
+                                .expect("source provenance")
+                                .2,
+                            object.mana_cost.as_ref().map_or(0, |cost| cost.mana_value),
+                            source.lki.power,
+                            &[],
+                        ),
                     })
                     .count()
             })
@@ -1252,7 +1269,7 @@ impl Game {
                 to: ZoneType::Graveyard,
                 ..
             } => {
-                self.state.objects[*object].types.is_creature()
+                self.state[*object].types.is_creature()
                     || event
                         .departed_object()
                         .and_then(|object| self.object_lki(object))
@@ -1316,8 +1333,8 @@ impl Game {
         context: Option<Target>,
     ) {
         self.enqueue_inline_trigger(
-            trigger.source_object,
-            trigger.source_ref,
+            trigger.source_object(),
+            trigger.source_ref(),
             trigger.controller,
             trigger.effects.clone(),
             context,
@@ -1360,8 +1377,10 @@ impl Game {
             targets: Vec::new(),
             target_req_indices: Vec::new(),
             requirement_index: 0,
-            source_object,
-            source_ref,
+            source_identity: crate::state::game_object::AbilitySource::new(
+                source_object,
+                source_ref,
+            ),
             source_lki,
             ability_index: 0,
             controller,
@@ -1406,10 +1425,10 @@ impl Game {
                 };
                 let object = Some(source.lki.object);
                 let waiting = self.state.pending_triggers.iter().any(|trigger| {
-                    trigger.source_ref == object && trigger.ability_index == ability_index
+                    trigger.source_ref() == object && trigger.ability_index == ability_index
                 }) || self.state.stack_objects.iter().any(|item| {
                     matches!(item, StackObject::TriggeredAbility(trigger)
-                        if trigger.source_ref == object && trigger.ability_index == ability_index)
+                        if trigger.source_ref() == object && trigger.ability_index == ability_index)
                 });
                 if !source.lki.abilities_lost && permanent.counter_count(*kind) == 0 && !waiting {
                     fired.push((source.clone(), ability_index));
@@ -1424,8 +1443,10 @@ impl Game {
                 targets: Vec::new(),
                 target_req_indices: Vec::new(),
                 requirement_index: 0,
-                source_object: source.lki.object,
-                source_ref: Some(source.lki.object),
+                source_identity: crate::state::game_object::AbilitySource::new(
+                    source.lki.object,
+                    Some(source.lki.object),
+                ),
                 source_lki: Some(source.lki),
                 ability_index,
                 controller: source.controller,
@@ -1453,7 +1474,7 @@ impl Game {
         };
         let object = *object;
         let caster = self.spell_caster(object);
-        let fired: Vec<Vec<Effect>> = self.state.objects[object]
+        let fired: Vec<Vec<Effect>> = self.state[object]
             .abilities
             .iter()
             .filter(|ability| {
@@ -1472,7 +1493,7 @@ impl Game {
             .find_spell_on_stack_index(object)
             .map(|index| &self.state.stack_objects[index])
         {
-            Some(StackObject::Spell(spell)) if self.state.objects[object].replicate().is_some() => {
+            Some(StackObject::Spell(spell)) if self.state[object].replicate().is_some() => {
                 usize::from(spell.x)
             }
             _ => 0,
@@ -1500,9 +1521,7 @@ impl Game {
                 .zone_objects(ZoneType::Graveyard, owner)
                 .iter()
             {
-                for (ability_index, ability) in
-                    self.state.objects[object].abilities.iter().enumerate()
-                {
+                for (ability_index, ability) in self.state[object].abilities.iter().enumerate() {
                     let Ability::Triggered {
                         condition: TriggerCondition::InGraveyard { condition },
                         ..
@@ -1525,8 +1544,7 @@ impl Game {
                 targets: Vec::new(),
                 target_req_indices: Vec::new(),
                 requirement_index: 0,
-                source_object: object,
-                source_ref,
+                source_identity: crate::state::game_object::AbilitySource::new(object, source_ref),
                 source_lki: None,
                 ability_index,
                 controller: owner,
@@ -1926,7 +1944,7 @@ impl Game {
                     ..
                 },
             ) => {
-                let moved = &self.state.objects[*object];
+                let moved = &self.state[*object];
                 moved.is_card()
                     && whose.includes(source_controller, moved.owner)
                     && self.object_matches_predicate(*object, predicate)
@@ -2046,7 +2064,7 @@ impl Game {
             });
         let matches = |predicate: &crate::state::predicate::CardPredicate| {
             predicate.matches(
-                &self.state.objects[moved_object],
+                &self.state[moved_object],
                 self.object_power(moved_object),
                 if animated { &[CardType::Creature] } else { &[] },
             )

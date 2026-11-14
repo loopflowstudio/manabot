@@ -121,12 +121,12 @@ pub struct EffectFrame {
     pub inherited_from: Option<crate::state::card::CardDefId>,
     #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub source_transforms: u32,
-    /// The card whose spell or ability is resolving.
-    pub source: Option<ObjectId>,
-    /// Exact battlefield source when the effect belongs to an ability of a
-    /// permanent. This intentionally does not follow `source` across zones.
-    #[serde(serialize_with = "crate::state::game_object::exact")]
-    pub source_ref: Option<ObjectId>,
+    /// The single exact source, inherited unchanged by child scopes.
+    #[serde(
+        flatten,
+        serialize_with = "crate::state::game_object::serialize_frame_source"
+    )]
+    pub source_identity: Option<crate::state::game_object::AbilitySource>,
     /// The player the effects resolve for ("you").
     pub controller: PlayerId,
     /// For triggered abilities: how many times this ability has resolved
@@ -204,6 +204,17 @@ pub struct TargetIteration {
 }
 
 impl EffectFrame {
+    pub fn source(&self) -> Option<ObjectId> {
+        self.source_identity.map(|source| source.object())
+    }
+    pub fn source_ref(&self) -> Option<ObjectId> {
+        self.source_identity.and_then(|source| source.reference())
+    }
+    pub(crate) fn bind_source(&mut self, source: Option<ObjectId>, reference: Option<ObjectId>) {
+        self.source_identity =
+            crate::state::game_object::AbilitySource::optional(source, reference);
+    }
+
     /// Give the current instruction an isolated scope and retain its suffix.
     /// Completing the scope emits its fact exactly once through `run_frame`.
     pub(crate) fn complete_with_event(&mut self, event: GameEvent) {
@@ -225,8 +236,7 @@ impl EffectFrame {
             remembered: Vec::new(),
             inherited_from: None,
             source_transforms: 0,
-            source: None,
-            source_ref: None,
+            source_identity: None,
             controller,
             resolutions_this_turn: 0,
             kicked: false,
@@ -258,8 +268,7 @@ impl EffectFrame {
             remembered: self.remembered.clone(),
             inherited_from: self.inherited_from,
             source_transforms: self.source_transforms,
-            source: self.source,
-            source_ref: self.source_ref,
+            source_identity: self.source_identity,
             resolutions_this_turn: self.resolutions_this_turn,
             kicked: self.kicked,
             x: self.x,
@@ -1160,7 +1169,7 @@ impl Game {
     }
 
     fn object_focus(&self, ids: &[ObjectId]) -> Vec<PublicId> {
-        ids.iter().map(|id| self.state.objects[id].id).collect()
+        ids.iter().map(|id| self.state[id].id).collect()
     }
 
     /// The current appearances of cards found in a zone, in their order.
@@ -1359,7 +1368,7 @@ impl Game {
                         // has already left the stack (CR 608.2n); the entry
                         // batch always moves a card still on it.
                         if self.state.zones.zone_of(object) == Some(ZoneType::Stack) {
-                            let (to, entry) = if self.state.objects[object].types.is_permanent() {
+                            let (to, entry) = if self.state[object].types.is_permanent() {
                                 (
                                     ZoneType::Battlefield,
                                     crate::flow::proposed_event::ZoneEntry {
@@ -1442,7 +1451,7 @@ impl Game {
                         continue;
                     }
                     if second_from_top {
-                        let owner = self.state.objects[object].owner;
+                        let owner = self.state[object].owner;
                         let below_top = self
                             .state
                             .zones
@@ -1497,7 +1506,7 @@ impl Game {
                 let mut owners = Vec::new();
                 for object in &frame.moved {
                     let object_id = *object;
-                    let owner = self.state.objects[object_id].owner;
+                    let owner = self.state[object_id].owner;
                     match self.state.zones.zone_of(object_id) {
                         Some(ZoneType::Library) if shuffle => {
                             if !owners.contains(&owner) {
@@ -1522,8 +1531,16 @@ impl Game {
         let suspended = self.state.suspended_decision.as_ref()?;
         let source_focus = suspended
             .frame
-            .source
-            .map(|object_id| vec![self.state.objects[object_id].id])
+            .source()
+            .map(|object_id| {
+                vec![
+                    self.state
+                        .objects
+                        .provenance(object_id)
+                        .expect("source provenance")
+                        .0,
+                ]
+            })
             .unwrap_or_default();
         let space = match &suspended.decision {
             Decision::OrderReplacement { player, candidates } => ActionSpace {
@@ -1552,7 +1569,7 @@ impl Game {
                     })
                     .chain([Action::Decline { player: *player }])
                     .collect(),
-                focus: vec![self.state.objects[*object_id].id],
+                focus: vec![self.state[*object_id].id],
             },
             Decision::ChoosePaymentX { player, .. } => ActionSpace {
                 player: Some(*player),
@@ -1574,20 +1591,18 @@ impl Game {
                 owner,
                 name,
                 remaining,
-            } => {
-                ActionSpace {
-                    player: Some(*player),
-                    kind: ActionSpaceKind::LookAndSelect,
-                    actions: select_objects(
-                        *player,
-                        self.card_objects(self.named_search_cards(*owner).filter(|card| {
-                            self.state.objects[*card].name == *name && *remaining > 0
-                        })),
-                        true,
-                    ),
-                    focus: source_focus,
-                }
-            }
+            } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: select_objects(
+                    *player,
+                    self.card_objects(self.named_search_cards(*owner).filter(|card| {
+                        self.state[self.state.object_of(*card)].name == *name && *remaining > 0
+                    })),
+                    true,
+                ),
+                focus: source_focus,
+            },
             Decision::ManaUpfront {
                 player,
                 tap_remaining,
@@ -2072,8 +2087,8 @@ impl Game {
                 },
             ) => {
                 if *remaining == 0
-                    || self.state.objects[*object_id].owner != *owner
-                    || self.state.objects[*object_id].name != *name
+                    || self.state[*object_id].owner != *owner
+                    || self.state[*object_id].name != *name
                     || !matches!(
                         self.state.zones.zone_of(*object_id),
                         Some(ZoneType::Hand | ZoneType::Library | ZoneType::Graveyard)
@@ -2138,10 +2153,10 @@ impl Game {
             (Decision::Payment(payment), Action::Decline { .. }) if payment.can_decline() => {
                 match payment.counters_on_decline {
                     Some(Target::StackSpell(object_id)) => {
-                        self.counter_spell(object_id, suspended.frame.source, ZoneType::Graveyard)
+                        self.counter_spell(object_id, suspended.frame.source(), ZoneType::Graveyard)
                     }
                     Some(Target::StackAbility(id)) => {
-                        self.counter_ability(id, suspended.frame.source)
+                        self.counter_ability(id, suspended.frame.source())
                     }
                     _ => {}
                 }
@@ -2962,7 +2977,12 @@ impl Game {
                 .zones
                 .zone_of(self.state.object_of(card))
                 .is_none()
-            && self.state.objects[card]
+            && self
+                .state
+                .objects
+                .retained_base(self.state.object_of(card))
+                .expect("sideboard printing")
+                .1
                 .subtypes
                 .iter()
                 .any(|subtype| subtype == "Lesson")
@@ -3047,7 +3067,7 @@ impl Game {
                 .state
                 .zone_cards(ZoneType::Hand, *player)
                 .filter(|card| {
-                    self.state.objects[*card].types.is_castable()
+                    self.state[self.state.object_of(*card)].types.is_castable()
                         && self.object_matches_predicate(self.state.object_of(*card), predicate)
                 })
                 .collect(),
@@ -3065,7 +3085,7 @@ impl Game {
                 .filter(|link| link.source == *source)
                 .filter_map(|link| self.state.card_of(link.exiled_object))
                 .filter(|card| {
-                    let definition = &self.state.objects[*card];
+                    let definition = &self.state[self.state.object_of(*card)];
                     self.state
                         .zones
                         .contains(self.state.object_of(*card), ZoneType::Exile, *player)
@@ -3077,14 +3097,16 @@ impl Game {
                 .library_top_card(*player)
                 .filter(|card| {
                     self.state.object_of(*card) == *object
-                        && self.state.objects[*card].types.is_castable()
+                        && self.state[self.state.object_of(*card)].types.is_castable()
                 })
                 .into_iter()
                 .collect(),
         };
         cards.retain(|card| self.can_cast_with(*player, *card, free));
-        cards.sort_unstable_by_key(|card| (self.state.objects[*card].definition_id, *card));
-        cards.dedup_by_key(|card| self.state.objects[*card].definition_id);
+        cards.sort_unstable_by_key(|card| {
+            (self.state[self.state.object_of(*card)].definition_id, *card)
+        });
+        cards.dedup_by_key(|card| self.state[self.state.object_of(*card)].definition_id);
         cards
     }
 
@@ -3104,9 +3126,8 @@ impl Game {
             .copied()
             .filter(|object| self.object_matches_predicate(*object, predicate))
             .collect();
-        candidates
-            .sort_unstable_by_key(|object| (self.state.objects[*object].definition_id, *object));
-        candidates.dedup_by_key(|object| self.state.objects[*object].definition_id);
+        candidates.sort_unstable_by_key(|object| (self.state[*object].definition_id, *object));
+        candidates.dedup_by_key(|object| self.state[*object].definition_id);
         candidates
     }
 
@@ -3136,15 +3157,14 @@ impl Game {
             .iter()
             .copied()
             .filter(|object| {
-                let card_ref = &self.state.objects[*object];
+                let card_ref = &self.state[*object];
                 self.object_matches_predicate(*object, predicate)
                     && !selected
                         .iter()
-                        .any(|chosen| self.state.objects[*chosen].name == card_ref.name)
+                        .any(|chosen| self.state[*chosen].name == card_ref.name)
             })
             .collect();
-        candidates
-            .sort_unstable_by_key(|object| (self.state.objects[*object].definition_id, *object));
+        candidates.sort_unstable_by_key(|object| (self.state[*object].definition_id, *object));
         candidates
     }
 
@@ -3294,7 +3314,7 @@ impl Game {
     /// within one zone, so no zone change (CR 400.7) and no zone-move
     /// inverse applies. Index 0 is the bottom; the last card is the top.
     pub(crate) fn reorder_in_library(&mut self, object: ObjectId, end: LibraryEnd) {
-        let owner = self.state.objects[object].owner;
+        let owner = self.state[object].owner;
         let index = match end {
             LibraryEnd::Bottom => 0,
             LibraryEnd::Top => usize::MAX,
@@ -3415,7 +3435,7 @@ mod learn_tests {
                 ZoneType::Hand,
                 PlayerId(0)
             ));
-            assert_eq!(game.state.objects[card].name, name);
+            assert_eq!(game.state[game.state.object_of(card)].name, name);
             assert!(game.state.live(game.state.object_of(card)).is_some());
             assert_eq!(game.state.players[0].deck, deck);
             assert_eq!(
@@ -3479,12 +3499,16 @@ mod learn_tests {
         let nonlesson = *game.state.players[0]
             .sideboard
             .iter()
-            .find(|&&object| game.state.objects[object].name == "Island")
+            .find(|&&object| {
+                game.state.source_base(game.state.object_of(object)).1.name == "Island"
+            })
             .unwrap();
         let lesson = *game.state.players[0]
             .sideboard
             .iter()
-            .find(|&&object| game.state.objects[object].name == "Firebending Lesson")
+            .find(|&&object| {
+                game.state.source_base(game.state.object_of(object)).1.name == "Firebending Lesson"
+            })
             .unwrap();
         for action in [
             Action::LearnTakeLesson {
@@ -3741,7 +3765,7 @@ mod learn_tests {
         use crate::agent::observation::{EventEntityKind, EventType, Observation};
         let mut game = game(&[("Firebending Lesson", 1)]);
         let card = game.state.players[0].sideboard[0];
-        let definition = game.state.objects[card].definition_id;
+        let definition = game.state.cards[card].definition;
         learn(&mut game);
         let before = game.semantic_observation(PlayerId(1)).unwrap();
         let event_start = game.state.events.len();
@@ -3818,7 +3842,7 @@ mod learn_tests {
             .deck
             .iter()
             .copied()
-            .find(|card| game.state.objects[*card].name == "Island")
+            .find(|card| game.state[game.state.object_of(*card)].name == "Island")
             .unwrap();
         game.move_object(game.state.object_of(island), ZoneType::Hand);
         learn(&mut game);
@@ -3921,7 +3945,7 @@ mod learn_tests {
             let hand = branch.state.zones.zone_objects(ZoneType::Hand, PlayerId(0));
             let lesson_count = hand
                 .iter()
-                .filter(|object| branch.state.objects[**object].name == "Firebending Lesson")
+                .filter(|object| branch.state[**object].name == "Firebending Lesson")
                 .count();
             assert!(lesson_count >= 1);
             seen.insert(lesson_count);
@@ -3968,7 +3992,9 @@ mod learn_tests {
             .deck
             .iter()
             .copied()
-            .find(|object| source.state.objects[*object].name == "Firebending Lesson")
+            .find(|object| {
+                source.state[source.state.object_of(*object)].name == "Firebending Lesson"
+            })
             .unwrap();
         // An identical main-deck physical copy can witness the known card.
         let (retrieved_object, duplicate_object) = (
@@ -4001,12 +4027,12 @@ mod learn_tests {
     fn learn_public_duplicate_departure_decrements_known_minimum_without_copy_identity() {
         let mut game = small_known_hand_game();
         let retrieved = game.state.players[0].sideboard[0];
-        let definition = game.state.objects[retrieved].definition_id;
+        let definition = game.state[game.state.object_of(retrieved)].definition_id;
         let duplicate = game.state.players[0]
             .deck
             .iter()
             .copied()
-            .find(|object| game.state.objects[*object].definition_id == definition)
+            .find(|object| game.state[game.state.object_of(*object)].definition_id == definition)
             .unwrap();
         game.move_object(game.state.object_of(duplicate), ZoneType::Hand);
         assert_eq!(game.state.players[0].known_hand.get(&definition), Some(&1));
@@ -4213,7 +4239,7 @@ mod payment_tests {
                 .deck
                 .iter()
                 .copied()
-                .find(|card| game.state.objects[*card].name == name)
+                .find(|card| game.state[game.state.object_of(*card)].name == name)
                 .unwrap();
             game.move_object(game.state.object_of(card), ZoneType::Battlefield);
             sources.push(game.state.live(game.state.object_of(card)).unwrap());
@@ -4320,5 +4346,48 @@ mod payment_tests {
         assert_eq!(witness(&branch), root);
         assert_eq!(witness(&game), root);
         assert_eq!(witness(&sibling), sibling_witness);
+    }
+}
+
+#[cfg(test)]
+mod source_scope_tests {
+    use super::EffectFrame;
+    use crate::{
+        flow::game::Game,
+        state::{
+            game_object::{AbilitySource, PlayerId},
+            player::PlayerConfig,
+        },
+    };
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn child_scope_inherits_one_source_and_both_v16_projections() {
+        let deck = BTreeMap::from([("Mountain".into(), 40)]);
+        let game = Game::new(
+            vec![
+                PlayerConfig::new("a", deck.clone()),
+                PlayerConfig::new("b", deck),
+            ],
+            341,
+            false,
+        );
+        let object = game.state.latest_objects().next().unwrap().0;
+        let mut parent = EffectFrame::new(PlayerId(0), vec![]);
+        parent.bind_source(Some(object), Some(object));
+        let child = parent.child_scope(vec![]);
+        assert_eq!(
+            child.source_identity,
+            Some(AbilitySource::new(object, Some(object)))
+        );
+        let bytes = serde_json::to_string(&child).unwrap();
+        assert!(bytes.contains(&format!(
+            "\"source\":{},\"source_ref\":{{\"entity\":{},\"incarnation\":{}}}",
+            object.slot(),
+            object.slot(),
+            object.generation()
+        )));
+        let absent = serde_json::to_string(&EffectFrame::new(PlayerId(0), vec![])).unwrap();
+        assert!(absent.contains("\"source\":null,\"source_ref\":null"));
     }
 }

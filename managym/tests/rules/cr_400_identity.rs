@@ -143,7 +143,7 @@ fn cr_400_7_death_trigger_keeps_source_lki_across_reentry() {
         .id;
     let hand_before = s.zone_size(0, ZoneType::Hand);
 
-    let definition = s.game().state.objects[swarm_card].definition_id;
+    let definition = s.game().state[swarm_card].definition_id;
     let in_graveyard = s.game_mut().move_object(swarm_card, ZoneType::Graveyard);
     let pending = s
         .game()
@@ -151,7 +151,7 @@ fn cr_400_7_death_trigger_keeps_source_lki_across_reentry() {
         .pending_triggers
         .first()
         .expect("Dragonfly death trigger");
-    assert_eq!(pending.source_ref, Some(old_ref));
+    assert_eq!(pending.source_ref(), Some(old_ref));
     let source_lki = pending.source_lki.clone().expect("trigger source LKI");
     assert_eq!(source_lki.object, old_ref);
     assert_eq!(source_lki.controller, PlayerId(0));
@@ -162,7 +162,10 @@ fn cr_400_7_death_trigger_keeps_source_lki_across_reentry() {
         .game_mut()
         .move_object(in_graveyard, ZoneType::Battlefield);
     assert_ne!(new_ref, old_ref);
-    assert_eq!(s.game().state.pending_triggers[0].source_ref, Some(old_ref));
+    assert_eq!(
+        s.game().state.pending_triggers[0].source_ref(),
+        Some(old_ref)
+    );
 
     for _ in 0..8 {
         if s.game().state.pending_triggers.is_empty() && s.game().state.stack_objects.is_empty() {
@@ -200,7 +203,7 @@ fn card_ids_narrow_kind_and_keep_numeric_wire_identity() {
     );
     assert!(s.game().state.card_id(missing_object(&s)).is_none());
 
-    let template = s.game().state.objects[card].clone();
+    let template = s.game().state[s.game().state.object_of(card)].clone();
     let mut objects = ObjectVec(vec![
         template.clone(),
         managym::state::game_object::Object::token_copy(
@@ -219,8 +222,8 @@ fn card_ids_narrow_kind_and_keep_numeric_wire_identity() {
     let checked = objects.card_id(ids[0]).unwrap();
     assert!(objects.card_id(ids[1]).is_none());
     assert!(objects.card_id(ids[2]).is_none());
-    let token = objects[ids[1]].clone();
-    objects[checked].become_copy_of(&token, &[]);
+    let token = objects[ids[1].slot()].clone();
+    objects[ids[0].slot()].become_copy_of(&token, &[]);
     assert_eq!(objects.card_id(ids[0]), Some(checked));
 
     for zone in [
@@ -284,7 +287,7 @@ fn card_zone_readers_preserve_transient_token_occupants() {
             assert!(observation
                 .agent_cards
                 .iter()
-                .any(|row| row.id == s.game().state.objects[token].id.0 as i32));
+                .any(|row| row.id == s.game().state[token].id.0 as i32));
         }
         if zone == ZoneType::Library {
             let mut drawn = s.game().clone();
@@ -292,10 +295,7 @@ fn card_zone_readers_preserve_transient_token_occupants() {
             drawn.draw_cards(player, 1);
             let drawn_token = drawn.state.zones.top(ZoneType::Hand, player).unwrap();
             assert_eq!(drawn.state.zones.zone_of(token), None);
-            assert_eq!(
-                drawn.state.objects[drawn_token].id,
-                s.game().state.objects[token].id
-            );
+            assert_eq!(drawn.state[drawn_token].id, s.game().state[token].id);
             assert_eq!(drawn.state.turn.history[player.0].cards_drawn, history + 1);
             assert_eq!(
                 drawn.state.zones.size(ZoneType::Library, player),
@@ -336,7 +336,8 @@ fn typed_card_zones_preserve_wire_order_and_hidden_reassignment() {
     use rand_chacha::ChaCha8Rng;
 
     let s = Scenario::new(deck(&[("Mountain", 40)]), deck(&[("Island", 40)]), 400_711);
-    let template = s.game().state.objects[s.game().state.players[0].deck[0]].clone();
+    let template =
+        s.game().state[s.game().state.object_of(s.game().state.players[0].deck[0])].clone();
     let objects = ObjectVec(vec![
         template.clone(),
         managym::state::game_object::Object::token_copy(
@@ -437,11 +438,8 @@ fn cr_400_7_physical_card_survives_appearances_and_copy_effects() {
     let card = s.game().state.card_of(appearance).unwrap();
     let physical = s.game().state.cards[card];
     assert_eq!(physical.owner, PlayerId(0));
-    assert_eq!(
-        physical.definition,
-        s.game().state.objects[object].definition_id
-    );
-    assert_eq!(physical.public_id, s.game().state.objects[object].id);
+    assert_eq!(physical.definition, s.game().state[object].definition_id);
+    assert_eq!(physical.public_id, s.game().state[object].id);
     assert_eq!(s.game().state.object_of(card), appearance);
     assert_eq!(
         s.game().state.object(appearance).unwrap().id,
@@ -449,12 +447,9 @@ fn cr_400_7_physical_card_survives_appearances_and_copy_effects() {
     );
 
     let other = owned_card(&s, 1, "Island");
-    let template = s.game().state.objects[other].clone();
-    s.game_mut().state.objects[object].become_copy_of(&template, &[]);
-    assert_ne!(
-        s.game().state.objects[object].definition_id,
-        physical.definition
-    );
+    let template = s.game().state[other].clone();
+    s.game_mut().state[object].become_copy_of(&template, &[]);
+    assert_ne!(s.game().state[object].definition_id, physical.definition);
     assert_eq!(s.game().state.cards[card], physical);
     assert_eq!(s.game().state.card_of(appearance), Some(card));
 
@@ -469,7 +464,7 @@ fn cr_400_7_physical_card_survives_appearances_and_copy_effects() {
     assert_eq!(s.game().state.card_of(exiled), Some(card));
     assert_eq!(s.game().state.cards[card], physical);
     assert_eq!(
-        s.game().state.objects[card].definition_id,
+        s.game().state[s.game().state.object_of(card)].definition_id,
         physical.definition
     );
 
@@ -515,11 +510,11 @@ fn cr_400_7_non_battlefield_move_discards_old_copy_values() {
     );
     let object = owned_card(&s, 0, "Gray Ogre");
     let object = s.game_mut().move_object(object, ZoneType::Hand);
-    s.game_mut().state.objects[object].power = Some(5);
+    s.game_mut().state[object].power = Some(5);
     let appearance = s.game().state.live(object).unwrap();
     let card = s.game().state.card_of(appearance).unwrap();
-    let template = s.game().state.objects[owned_card(&s, 1, "Island")].clone();
-    s.game_mut().state.objects[object].become_copy_of(&template, &[]);
+    let template = s.game().state[owned_card(&s, 1, "Island")].clone();
+    s.game_mut().state[object].become_copy_of(&template, &[]);
     assert_eq!(s.game().state.object(appearance).unwrap().name, "Island");
 
     s.game_mut().move_object(object, ZoneType::Library);
@@ -571,7 +566,7 @@ fn cr_400_7_permanent_spell_and_copy_mint_distinct_appearances() {
     let mut s = five_color_setup(&["Gray Ogre"]);
     let source = s.force_permanent_on_battlefield(0, "Mountain");
     let source_object = s.game().state.permanents[source].as_ref().unwrap().object;
-    s.game_mut().state.objects[source_object]
+    s.game_mut().state[source_object]
         .abilities
         .push(Ability::Triggered {
             condition: TriggerCondition::casts(Actor::You, CardPredicate::default()),
@@ -611,7 +606,7 @@ fn cr_400_7_permanent_spell_and_copy_mint_distinct_appearances() {
         .iter()
         .find_map(|stack| match stack {
             StackObject::Spell(spell)
-                if s.game().state.objects[spell.object].kind() == ObjectKind::SpellCopy =>
+                if s.game().state[spell.object].kind() == ObjectKind::SpellCopy =>
             {
                 Some(spell.object)
             }

@@ -125,7 +125,7 @@ impl Game {
             return;
         };
         let object_id = permanent.object;
-        let owner = self.state.objects[object_id].owner;
+        let owner = self.state[object_id].owner;
         self.exile_with_play_grant(object_id, |object| ExileCastGrant {
             cost: Some(ManaCost::parse(AIRBEND_COST)),
             ..ExileCastGrant::new(object, owner)
@@ -135,7 +135,7 @@ impl Game {
     /// Airbend a spell (CR 701.65a): it leaves the stack for exile, and its
     /// owner may cast that card for {2}; a copy ceases to exist (CR 707.10a).
     pub(crate) fn airbend_spell(&mut self, object_id: ObjectId) {
-        let owner = self.state.objects[object_id].owner;
+        let owner = self.state[object_id].owner;
         self.exile_with_play_grant(object_id, |object| ExileCastGrant {
             cost: Some(ManaCost::parse(AIRBEND_COST)),
             ..ExileCastGrant::new(object, owner)
@@ -167,7 +167,7 @@ impl Game {
     /// their hand, during their turn, with {2} available (CR 702.143a).
     pub(crate) fn can_foretell(&self, player: PlayerId, card: CardId) -> bool {
         self.active_player() == player
-            && self.state.objects[card].foretell().is_some()
+            && self.state[self.state.object_of(card)].foretell().is_some()
             && self
                 .state
                 .zones
@@ -234,15 +234,14 @@ impl Game {
             .collect();
         let bearers = pool
             .iter()
-            .filter(|object_id| self.state.objects[**object_id].foretell().is_some())
+            .filter(|object_id| self.state[**object_id].foretell().is_some())
             .count();
         if bearers < slots.len() {
             return false;
         }
         let mut chosen = Vec::with_capacity(slots.len());
         pool.retain(|object_id| {
-            let take =
-                chosen.len() < slots.len() && self.state.objects[*object_id].foretell().is_some();
+            let take = chosen.len() < slots.len() && self.state[*object_id].foretell().is_some();
             if take {
                 chosen.push(*object_id);
             }
@@ -325,7 +324,7 @@ impl Game {
         grant: impl FnOnce(ObjectId) -> ExileCastGrant,
     ) {
         if self.state.zones.zone_of(object_id) != Some(ZoneType::Exile)
-            || !self.state.objects[object_id].is_card()
+            || !self.state[object_id].is_card()
         {
             return;
         }
@@ -410,7 +409,7 @@ impl Game {
         grant: &ExileCastGrant,
         object: ObjectId,
     ) -> Option<ManaCost> {
-        let definition = &self.state.objects[object];
+        let definition = &self.state[object];
         if definition.types.is_land() {
             return None;
         }
@@ -463,7 +462,7 @@ impl Game {
         if self.state.zones.contains(object, ZoneType::Hand, player) {
             return true;
         }
-        if self.state.objects[object].types.is_land() {
+        if self.state[object].types.is_land() {
             return self.exile_grant(player, object).is_some();
         }
         self.zone_cast_cost(player, object).is_some()

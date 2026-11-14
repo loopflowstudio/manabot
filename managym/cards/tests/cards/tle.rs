@@ -879,7 +879,7 @@ fn toph_cast_receipt_includes_additional_mana_costs() {
     let card = move_to_hand(&mut s, "Toph, Greatest Earthbender");
     // A controlled cost fixture exercises the same receipt with a required
     // additional cost. Toph's printed definition is unchanged.
-    s.game_mut().state.objects[card]
+    s.game_mut().state[card]
         .additional_costs
         .push(AdditionalCost::RequiredWaterbend(ManaCost::parse("2")));
     s.game_mut().scenario_refresh_priority().unwrap();

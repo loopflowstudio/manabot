@@ -388,9 +388,7 @@ pub struct HiddenHandConstraints {
 fn name_counts(game: &Game, objects: impl IntoIterator<Item = ObjectId>) -> BTreeMap<String, u32> {
     let mut counts = BTreeMap::new();
     for object in objects {
-        *counts
-            .entry(game.state.objects[object].name.clone())
-            .or_insert(0) += 1;
+        *counts.entry(game.state[object].name.clone()).or_insert(0) += 1;
     }
     counts
 }
@@ -410,8 +408,8 @@ impl HiddenHandConstraints {
         let unseen = commitments.unseen_objects(game, opponent);
         let foretell = unseen
             .iter()
-            .filter(|object| game.state.objects[**object].foretell().is_some())
-            .map(|object| game.state.objects[*object].name.clone())
+            .filter(|object| game.state[**object].foretell().is_some())
+            .map(|object| game.state[*object].name.clone())
             .collect();
         let pool = name_counts(game, unseen);
         let foretold = if game.shares_information(viewer, opponent) {
@@ -542,7 +540,7 @@ impl HiddenHandConstraints {
             let mut by_name: BTreeMap<String, Vec<ObjectId>> = BTreeMap::new();
             for object in commitments.unseen_objects(&branch, opponent) {
                 by_name
-                    .entry(branch.state.objects[object].name.clone())
+                    .entry(branch.state[object].name.clone())
                     .or_default()
                     .push(object);
             }

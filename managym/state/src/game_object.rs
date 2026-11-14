@@ -125,6 +125,64 @@ impl<T: ExactIds, U: serde::Serialize, V: serde::Serialize> ExactIds for (T, U, 
     }
 }
 
+/// One source identity and whether its creator captured an exact reference.
+/// Presence remains recorded even for spell and graveyard sources; it is not
+/// inferred from the source's zone at serialization time.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AbilitySource {
+    object: ObjectId,
+    captured: bool,
+}
+impl AbilitySource {
+    pub fn new(object: ObjectId, reference: Option<ObjectId>) -> Self {
+        assert!(
+            reference.is_none_or(|id| id.slot() == object.slot()),
+            "source slots differ"
+        );
+        Self {
+            object: reference.unwrap_or(object),
+            captured: reference.is_some(),
+        }
+    }
+    pub fn object(self) -> ObjectId {
+        self.object
+    }
+    pub fn reference(self) -> Option<ObjectId> {
+        self.captured.then_some(self.object)
+    }
+    pub fn optional(object: Option<ObjectId>, reference: Option<ObjectId>) -> Option<Self> {
+        assert!(
+            object.is_some() || reference.is_none(),
+            "reference requires a source"
+        );
+        object.map(|object| Self::new(object, reference))
+    }
+}
+impl serde::Serialize for AbilitySource {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(2))?;
+        map.serialize_entry("source_card", &self.object)?;
+        map.serialize_entry("source_ref", &Exact(&self.reference()))?;
+        map.end()
+    }
+}
+/// V16 frame projection of the same source identity; an absent source emits
+/// both null fields rather than omitting them.
+pub fn serialize_frame_source<S: serde::Serializer>(
+    source: &Option<AbilitySource>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    use serde::ser::SerializeMap;
+    let mut map = serializer.serialize_map(Some(2))?;
+    map.serialize_entry("source", &source.map(AbilitySource::object))?;
+    map.serialize_entry(
+        "source_ref",
+        &Exact(&source.and_then(AbilitySource::reference)),
+    )?;
+    map.end()
+}
+
 /// A physical-card roster index (CR 108.2), independent of appearance ids.
 ///
 /// Internally one-based so an optional card association is also four bytes.
@@ -354,52 +412,24 @@ impl<T> std::ops::DerefMut for ObjectVec<T> {
         &mut self.0
     }
 }
-impl<T> std::ops::Index<ObjectId> for ObjectVec<T> {
-    type Output = T;
-    fn index(&self, id: ObjectId) -> &T {
-        &self.0[id.slot()]
-    }
-}
-impl<T> std::ops::Index<&ObjectId> for ObjectVec<T> {
-    type Output = T;
-    fn index(&self, id: &ObjectId) -> &T {
-        &self.0[id.slot()]
-    }
-}
-impl<T> std::ops::IndexMut<ObjectId> for ObjectVec<T> {
-    fn index_mut(&mut self, id: ObjectId) -> &mut T {
-        &mut self.0[id.slot()]
-    }
-}
-
 impl ObjectVec<Object> {
+    /// Retained printing, independent of the slot's current copy or face.
+    /// This is definition provenance, never a lookup of a departed object.
+    pub fn retained_base(&self, object: ObjectId) -> Option<(CardDefId, &PrintedCharacteristics)> {
+        self.get(object.slot()).map(Object::retained_base)
+    }
+
+    /// Viewer identity and ownership are stable across appearances.
+    pub fn provenance(&self, object: ObjectId) -> Option<(PublicId, PlayerId, ObjectKind)> {
+        self.get(object.slot())
+            .map(|row| (row.id, row.owner, row.kind()))
+    }
+
     /// Narrow a storage id once; missing rows, tokens and spell copies are not cards.
     pub fn card_id(&self, object: ObjectId) -> Option<CardId> {
         self.get(object.slot())
             .filter(|value| value.is_card())
             .map(|_| CardId::from_index(object.slot()))
-    }
-}
-
-impl std::ops::Index<CardId> for ObjectVec<Object> {
-    type Output = Object;
-    fn index(&self, card: CardId) -> &Object {
-        let object = &self.0[card.index()];
-        debug_assert!(object.is_card(), "CardId must still name a card");
-        object
-    }
-}
-impl std::ops::Index<&CardId> for ObjectVec<Object> {
-    type Output = Object;
-    fn index(&self, card: &CardId) -> &Object {
-        &self[*card]
-    }
-}
-impl std::ops::IndexMut<CardId> for ObjectVec<Object> {
-    fn index_mut(&mut self, card: CardId) -> &mut Object {
-        let object = &mut self.0[card.index()];
-        debug_assert!(object.is_card(), "CardId must still name a card");
-        object
     }
 }
 
@@ -462,8 +492,8 @@ impl IdGenerator {
 // Runtime objects
 
 /// The kind of object a runtime object is (CR 109.1). An object keeps its
-/// kind for its whole life; the one change is a copy of a permanent spell,
-/// which becomes a token as it resolves (CR 111.12, 608.3f).
+/// kind for its whole life. A copy of a permanent spell resolves into a new
+/// token appearance (CR 111.12, 608.3f); the zone mint sets that successor kind.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
 pub enum ObjectKind {
     /// A Magic card (CR 108.2), from a card definition.
@@ -550,6 +580,17 @@ impl Object {
         copy.exceptions.extend(exceptions.iter().cloned());
         self.copy = Some(copy);
         self.printed = Some(printed);
+    }
+
+    /// The base that a zone move restores, including fixture edits. It never
+    /// follows an entry-copy or transformed face installed on a later appearance.
+    pub fn retained_base(&self) -> (CardDefId, &PrintedCharacteristics) {
+        self.printed
+            .as_ref()
+            .or(self.front.as_ref())
+            .map_or((self.definition_id, &*self.definition), |(id, row)| {
+                (*id, &**row)
+            })
     }
 
     /// Mint the values of a new zone appearance (CR 400.7), consuming the

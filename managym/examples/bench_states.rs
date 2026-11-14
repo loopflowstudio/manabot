@@ -280,7 +280,7 @@ fn build(recipe: &Recipe) -> Env {
                 .iter()
                 .flatten()
                 .filter(|p| {
-                    let card = &game.state.objects[p.object];
+                    let card = &game.state[p.object];
                     card.owner == PlayerId(i) && card.name == "Gray Ogre"
                 })
                 .map(|p| p.object)
@@ -292,10 +292,10 @@ fn build(recipe: &Recipe) -> Env {
             let mut index = 0;
             let state = &mut *game.state;
             for p in state.permanents.iter_mut().flatten() {
-                if state.objects[p.object].owner == PlayerId(i) {
-                    if state.objects[p.object].name == "Gray Ogre" {
+                if state[p.object].owner == PlayerId(i) {
+                    if state[p.object].name == "Gray Ogre" {
                         p.change_counters(CounterKind::PlusOnePlusOne, 1);
-                    } else if state.objects[p.object].name != "Forest" {
+                    } else if state[p.object].name != "Forest" {
                         p.attached_to = Some(targets[index % targets.len()]);
                         index += 1;
                     }
@@ -312,7 +312,7 @@ fn build(recipe: &Recipe) -> Env {
             .enumerate()
             .find_map(|(i, p)| {
                 p.as_ref()
-                    .filter(|p| game.state.objects[p.object].name == "The Rise of Sozin")
+                    .filter(|p| game.state[p.object].name == "The Rise of Sozin")
                     .map(|_| i)
             })
             .unwrap();
@@ -620,7 +620,7 @@ fn run(
                         .permanents
                         .iter()
                         .flatten()
-                        .find(|p| game.state.objects[p.object].name == "Gray Ogre")
+                        .find(|p| game.state[p.object].name == "Gray Ogre")
                         .or_else(|| game.state.permanents.iter().flatten().next())
                         .map(|p| p.object);
                     if let Some(card) = source {

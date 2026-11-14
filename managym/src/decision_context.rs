@@ -29,8 +29,8 @@ impl Game {
             .get(object.slot())
             .and_then(|permanent| *permanent)
             .and_then(|permanent| self.state.permanents[permanent].as_ref())
-            .map_or(self.state.objects[object].id.0, |permanent| permanent.id.0);
-        let object = &self.state.objects[object];
+            .map_or(self.state[object].id.0, |permanent| permanent.id.0);
+        let object = &self.state[object];
         Some(DecisionObjectView {
             entity_id: reference.slot() as u32,
             subject: SubjectRef::Object {
@@ -204,27 +204,23 @@ impl Game {
                     } => Some(format!(
                         "Seat {} sacrificed {}.",
                         controller.0 + 1,
-                        self.state.objects[*object].name
+                        self.state[*object].name
                     )),
                     GameEvent::SpellCast {
                         object_id: object, ..
                     } => Some(format!(
                         "{} was cast; its announced costs are committed.",
-                        self.state.objects[*object].name
+                        self.state[*object].name
                     )),
-                    GameEvent::SpellResolved { object_id: object } => Some(format!(
-                        "{} finished resolving.",
-                        self.state.objects[*object].name
-                    )),
+                    GameEvent::SpellResolved { object_id: object } => {
+                        Some(format!("{} finished resolving.", self.state[*object].name))
+                    }
                     GameEvent::SpellCountered {
                         object_id: object, ..
-                    } => Some(format!(
-                        "{} was countered.",
-                        self.state.objects[*object].name
-                    )),
+                    } => Some(format!("{} was countered.", self.state[*object].name)),
                     GameEvent::AbilityCountered { source_object, .. } => Some(format!(
                         "An ability of {} was countered.",
-                        self.state.objects[*source_object].name
+                        self.state[*source_object].name
                     )),
                     _ => None,
                 }
@@ -340,9 +336,9 @@ impl Game {
                 ("additional_cost", "Choose a creature to tap for crew. Each tap commits immediately; the cost completes once the tapped creatures' total power reaches the crew number."),
             Some(PendingChoice::SpellMode { .. }) => ("mode", "Choose a spell mode."),
             Some(PendingChoice::ActivationX { .. }) => ("announcement", "Choose the value of X. Each choice is a value the announced total cost can pay."),
-            Some(PendingChoice::KickerChoice { object: object_id, .. }) if self.state.objects[*object_id].exile_alternative().is_some() => ("additional_cost", "Choose whether to exile a card from hand rather than pay the mana cost: paying the cost uses the alternative."),
+            Some(PendingChoice::KickerChoice { object: object_id, .. }) if self.state[*object_id].exile_alternative().is_some() => ("additional_cost", "Choose whether to exile a card from hand rather than pay the mana cost: paying the cost uses the alternative."),
             Some(PendingChoice::KickerChoice { .. }) => ("additional_cost", "Choose whether to include the kicker cost."),
-            Some(PendingChoice::AnnounceX { object: object_id, .. }) if self.state.objects[*object_id].replicate().is_some() => ("mode", "Announce how many times to pay the replicate cost; each offer's mode index is that count, and the spell is copied once per payment."),
+            Some(PendingChoice::AnnounceX { object: object_id, .. }) if self.state[*object_id].replicate().is_some() => ("mode", "Announce how many times to pay the replicate cost; each offer's mode index is that count, and the spell is copied once per payment."),
             Some(PendingChoice::AnnounceX { .. }) => ("mode", "Announce the value of X; each offer's mode index is that value."),
             None => match space.kind {
                 crate::agent::action::ActionSpaceKind::DeclareAttacker => ("declare_attackers", "Choose each attack declaration, including the legal nonparticipation offers. Submitted declarations are committed."),
@@ -407,7 +403,7 @@ impl Game {
             .into();
             view.instruction = if let Some(trigger) = &placement.placing {
                 let description = crate::agent::ability_description::trigger_description(
-                    &self.state.objects[trigger.source_object],
+                    &self.state[trigger.source_object()],
                     trigger.ability_index,
                     trigger.inline_effects.as_deref(),
                 );

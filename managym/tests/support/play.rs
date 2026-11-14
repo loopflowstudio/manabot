@@ -154,7 +154,7 @@ impl Scenario {
                 let Some(permanent) = self.game.state.permanents[*permanent_id].as_ref() else {
                     return false;
                 };
-                let object = &self.game.state.objects[permanent.object];
+                let object = &self.game.state[permanent.object];
                 object.name == card_name
             })
             .expect("target choice for named permanent should exist");
@@ -490,7 +490,7 @@ pub fn activate_named(s: &mut Scenario, name: &str, index: usize) {
 /// onto the battlefield, anything else is cast.
 pub fn play_and_settle(s: &mut Scenario, name: &str) -> ObjectId {
     let id = library_card(s, 0, name);
-    if s.game().state.objects[id].types.is_land() {
+    if s.game().state[id].types.is_land() {
         s.game_mut().move_object(id, ZoneType::Battlefield);
         s.game_mut().scenario_refresh_priority().unwrap();
     } else {

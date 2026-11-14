@@ -374,7 +374,7 @@ impl Game {
                 || self.searches_private_zones(viewer, PlayerId(1 - viewer.0))
                 || public_entries
                     .iter()
-                    .any(|object| self.state.objects[object].id.0 as i32 == card.id)
+                    .any(|object| self.state[object].id.0 as i32 == card.id)
         }) {
             return Err(SemanticError::ViewerSafetyViolation);
         }

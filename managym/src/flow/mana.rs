@@ -2011,8 +2011,10 @@ impl Game {
         effects.extend_from_slice(ability.mana_suffix());
         if !effects.is_empty() {
             let mut child = EffectFrame::new(player, effects);
-            child.source = self.state.permanents[permanent].as_ref().map(|p| p.object);
-            child.source_ref = source_ref;
+            child.bind_source(
+                self.state.permanents[permanent].as_ref().map(|p| p.object),
+                source_ref,
+            );
             self.run_before_decision(child, caller);
         } else {
             *self.state.suspended_decision_mut() = Some(caller);
@@ -2445,7 +2447,7 @@ impl Game {
     fn unspent_mana_becomes_red(&self, player: PlayerId) -> bool {
         self.iter_battlefield_permanents(player).any(|id| {
             self.state.permanents[id].as_ref().is_some_and(|permanent| {
-                self.state.objects[permanent.object]
+                self.state[permanent.object]
                     .replacement_effects
                     .contains(&ReplacementEffect::UnspentManaBecomesRed)
             }) && !self.characteristics(id).abilities_lost

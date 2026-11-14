@@ -75,8 +75,8 @@ fn stack(
             .0;
         // Lightning Bolt is only a vessel: the synthetic clauses carry their
         // own requirements, so its printed targeting must not apply.
-        game.state.objects[object_id].spell_effects = effects;
-        game.state.objects[object_id].targeting = Vec::new();
+        game.state[object_id].spell_effects = effects;
+        game.state[object_id].targeting = Vec::new();
         game.push_spell_to_stack(object_id, controller, targets, indices, Default::default());
         return;
     }
@@ -85,20 +85,19 @@ fn stack(
         .unwrap();
     let source_object = game.state.permanents[source].as_ref().unwrap().object;
     let source_ref = game.permanent_object(source).unwrap();
-    let source_definition_id = game.state.objects[source_object].definition_id;
+    let source_definition_id = game.state[source_object].definition_id;
     let id = game.state.id_gen.next_id();
     let object = match entry {
         Entry::Activated => {
             // Activated announcements currently expose one clause. Multi-clause
             // cases below use the spell/trigger paths that can announce them.
             assert_eq!(effects.len(), 1);
-            game.state.objects[source_object].activated_abilities =
-                vec![ActivatedAbilityDefinition {
-                    effects: vec![effects.remove(0)],
-                    ..Default::default()
-                }];
+            game.state[source_object].activated_abilities = vec![ActivatedAbilityDefinition {
+                effects: vec![effects.remove(0)],
+                ..Default::default()
+            }];
             StackObject::ActivatedAbility(ActivatedAbilityOnStack {
-                effects: game.state.objects[source_object].activated_abilities[0]
+                effects: game.state[source_object].activated_abilities[0]
                     .effects
                     .clone(),
                 program: false,
@@ -122,8 +121,10 @@ fn stack(
             source_transforms: 0,
             id,
             controller,
-            source_object,
-            source_ref: Some(source_ref),
+            source_identity: crate::state::game_object::AbilitySource::new(
+                source_object,
+                Some(source_ref),
+            ),
             source_lki: None,
             source_definition_id,
             ability_index: 0,
@@ -196,7 +197,7 @@ fn activated_ability_records_both_v16_source_projections_from_one_object() {
     let Some(StackObject::ActivatedAbility(ability)) = game.state.stack_objects.last() else {
         panic!("activated ability on the stack");
     };
-    let source = ability.source_object;
+    let source = ability.source_object();
     let value = serde_json::to_value(ability).unwrap();
     assert_eq!(value["source_card"], serde_json::json!(source.slot()));
     assert_eq!(
@@ -363,7 +364,7 @@ fn resolution_same_object_can_be_illegal_for_only_one_clause() {
             let permanent = game.state.permanents[victim].as_ref().unwrap();
             assert_eq!(permanent.damage, 0);
             assert_eq!(permanent.counter_count(CounterKind::PlusOnePlusOne), 2);
-            assert_eq!(game.state.objects[permanent.object].owner, owner);
+            assert_eq!(game.state[permanent.object].owner, owner);
         }
     }
 }
@@ -563,7 +564,7 @@ fn resolution_positional_power_damage_never_substitutes_an_illegal_victim() {
                 StackObject::Spell(spell) => spell.object,
                 _ => unreachable!(),
             };
-            game.state.objects[spell_card].targeting = vec![
+            game.state[spell_card].targeting = vec![
                 TargetRequirement::up_to(2, TargetSpec::CreatureYouControl),
                 TargetRequirement::one(TargetSpec::CreatureOpponentControls),
             ];
@@ -697,10 +698,12 @@ fn counter_spell_cannot_affect_an_ability() {
         source_transforms: 0,
         id,
         controller: PlayerId(0),
-        source_object,
-        source_ref: game.permanent_object(source),
+        source_identity: crate::state::game_object::AbilitySource::new(
+            source_object,
+            game.permanent_object(source),
+        ),
         source_lki: None,
-        source_definition_id: game.state.objects[source_object].definition_id,
+        source_definition_id: game.state[source_object].definition_id,
         ability_index: 0,
         targets: Vec::new(),
         target_req_indices: Vec::new(),
@@ -822,7 +825,7 @@ fn delayed_capture_survives_placement_and_choice_forks_without_following_reentry
                 game.state.delayed_triggers[0].remembered[0].object,
                 captured
             );
-            let source = game.state.delayed_triggers[0].source_object;
+            let source = game.state.delayed_triggers[0].source_object();
             let mut different = game.clone();
             different.state.delayed_triggers[0].remembered[0].object =
                 game.permanent_object(other).unwrap();
@@ -924,7 +927,7 @@ fn delayed_capture_keeps_event_context_and_original_controller_after_source_chan
             vec![0],
         );
         game.resolve_top_of_stack();
-        let source = game.state.delayed_triggers[0].source_object;
+        let source = game.state.delayed_triggers[0].source_object();
         let source_permanent = game.state.permanent_of(game.state.now(source)).unwrap();
         game.change_control(source_permanent, PlayerId(1 - controller.0));
         game.move_object(source, ZoneType::Graveyard);
@@ -1011,11 +1014,7 @@ fn delayed_capture_projects_only_viewer_visible_incarnations() {
             assert!(frame.remembered[0].object.is_some());
             assert_eq!(
                 frame.remembered[0].definition,
-                Some(
-                    game.state.objects[game.state.now(object_id)]
-                        .definition_id
-                        .0
-                )
+                Some(game.state[game.state.now(object_id)].definition_id.0)
             );
         }
     }
@@ -1924,8 +1923,7 @@ fn cost_effect_completion_retains_output_and_parent_payment_across_choices() {
         player,
         vec![Effect::sacrifice_this(), Effect::Surveil { count: 2 }],
     );
-    child.source = Some(object);
-    child.source_ref = Some(source_ref);
+    child.bind_source(Some(object), Some(source_ref));
     // A rules-level child choice isolates completion ownership. Entry
     // replacement suspension is a separate event-batch integration witness.
     game.run_before_decision(child, caller.clone());
@@ -2021,7 +2019,7 @@ fn retained_inspection_survives_nested_choices_and_hidden_world_sampling() {
         };
         let expected = looked
             .iter()
-            .map(|object| game.state.objects[*object].id.0 as i32)
+            .map(|object| game.state[*object].id.0 as i32)
             .collect::<Vec<_>>();
         assert_eq!(visible_library(&game, player), expected);
         assert!(visible_library(&game, opponent).is_empty());
@@ -2388,10 +2386,10 @@ fn keyword_completion_captures_triggers_before_the_callers_suffix_removes_source
         vec![],
     );
     let source = match game.state.stack_objects.last().unwrap() {
-        StackObject::TriggeredAbility(ability) => ability.source_object,
+        StackObject::TriggeredAbility(ability) => ability.source_object(),
         _ => unreachable!(),
     };
-    game.state.objects[source].abilities = vec![Ability::Triggered {
+    game.state[source].abilities = vec![Ability::Triggered {
         condition: TriggerCondition::Performs {
             who: Actor::You,
             any_of: vec![KeywordAction::Scry, KeywordAction::Surveil],
@@ -2411,7 +2409,7 @@ fn keyword_completion_captures_triggers_before_the_callers_suffix_removes_source
         .state
         .pending_triggers
         .iter()
-        .filter(|t| t.source_object == source)
+        .filter(|t| t.source_object() == source)
         .count()
         + game
             .state
@@ -2419,7 +2417,7 @@ fn keyword_completion_captures_triggers_before_the_callers_suffix_removes_source
             .iter()
             .filter(|object| {
                 matches!(object,
-            StackObject::TriggeredAbility(ability) if ability.source_object == source)
+            StackObject::TriggeredAbility(ability) if ability.source_object() == source)
             })
             .count();
     assert_eq!(occurrences, 1, "completion matched before source departure");
@@ -2436,7 +2434,7 @@ fn counter_replacement_drivers(game: &mut Game, player: PlayerId) {
             .scenario_force_battlefield(player, "Mountain", true)
             .unwrap();
         let object = game.state.permanents[id].as_ref().unwrap().object;
-        game.state.objects[object].replacement_effects = vec![ReplacementEffect::ModifyCounters {
+        game.state[object].replacement_effects = vec![ReplacementEffect::ModifyCounters {
             effects_only: false,
             kind: Some(CounterKind::PlusOnePlusOne),
             predicate: CardPredicate::default(),
@@ -2545,11 +2543,10 @@ fn exiled_counter_entry(game: &mut Game, player: PlayerId) -> ObjectId {
         .unwrap()
         .0;
     let object = game.move_object(object, ZoneType::Exile);
-    game.state.objects[object].replacement_effects =
-        vec![ReplacementEffect::EntersWithPlusOneCounters {
-            count: 1,
-            condition: None,
-        }];
+    game.state[object].replacement_effects = vec![ReplacementEffect::EntersWithPlusOneCounters {
+        count: 1,
+        condition: None,
+    }];
     object
 }
 
@@ -2564,8 +2561,7 @@ fn retained_batch_rechecks_new_entry_replacements_without_reapplying_identity() 
         player,
         vec![Effect::return_to_battlefield(ObjectSelector::This, false)],
     );
-    frame.source = Some(object);
-    frame.source_ref = game.state.live(game.state.now(object));
+    frame.bind_source(Some(object), game.state.live(game.state.now(object)));
     frame.completion = FrameCompletion::Continue;
     game.run_frame(frame);
     game.publish_action_space(game.suspended_decision_action_space().unwrap());
@@ -2695,7 +2691,7 @@ fn retained_batch_linked_entry_suspends_actual_mana_cost_completion() {
         .unwrap();
     let source_object = game.state.permanents[source].as_ref().unwrap().object;
     let source_ref = game.permanent_object(source).unwrap();
-    game.state.objects[source_object].activated_abilities = vec![ActivatedAbilityDefinition {
+    game.state[source_object].activated_abilities = vec![ActivatedAbilityDefinition {
         mana_cost: ManaCost::parse("{1}"),
         life_cost: 2,
         tap_source: true,
@@ -2708,7 +2704,7 @@ fn retained_batch_linked_entry_suspends_actual_mana_cost_completion() {
         }],
         ..Default::default()
     }];
-    game.state.objects[source_object].abilities = vec![crate::state::ability::Ability::Triggered {
+    game.state[source_object].abilities = vec![crate::state::ability::Ability::Triggered {
         condition: crate::state::ability::TriggerCondition::BecomesTapped {
             subject: crate::state::ability::TriggerSubject::This,
         },
@@ -2797,7 +2793,7 @@ fn retained_batch_combat_defers_every_hit_until_all_replacements_are_chosen() {
             .scenario_force_battlefield(defender, "Mountain", true)
             .unwrap();
         let object = root.state.permanents[id].as_ref().unwrap().object;
-        root.state.objects[object].replacement_effects = vec![effect];
+        root.state[object].replacement_effects = vec![effect];
     }
     root.state.combat = Some(CombatState {
         attackers: vec![first, second],
@@ -3122,7 +3118,7 @@ fn hidden_selection_library_commitments_survive_sampling_without_revealing_order
             .zone_objects(ZoneType::Library, player)
             .iter()
             .copied()
-            .find(|object| root.state.objects[*object].name == "Mountain")
+            .find(|object| root.state[*object].name == "Mountain")
             .unwrap();
         root.move_object(object, ZoneType::Hand);
     }
@@ -3204,7 +3200,7 @@ fn hidden_selection_library_commitments_survive_sampling_without_revealing_order
             branch.state.zones.zone_of(branch.state.now(selected)),
             Some(ZoneType::Library)
         );
-        assert_eq!(branch.state.objects[selected].name, "Lightning Bolt");
+        assert_eq!(branch.state[selected].name, "Lightning Bolt");
         assert!(Observation::for_player(&branch, viewer)
             .opponent_cards
             .iter()
@@ -3217,7 +3213,7 @@ fn hidden_selection_library_commitments_survive_sampling_without_revealing_order
         assert_eq!(
             branch.state.players[player.0]
                 .known_hand
-                .get(&branch.state.objects[branch.state.now(selected)].definition_id),
+                .get(&branch.state[branch.state.now(selected)].definition_id),
             Some(&1)
         );
         assert_eq!(branch.state.events.iter().filter(|event| matches!(event, GameEvent::LibrarySearched { player: owner } if *owner == player)).count(), 1);
@@ -3263,12 +3259,11 @@ fn hidden_selection_merchant_bottoms_source_before_linked_return_and_shuffles_af
         exiled_object: returned_ref,
         returns: true,
     });
-    let Ability::Triggered { effects, .. } = &game.state.objects[source].abilities[1];
+    let Ability::Triggered { effects, .. } = &game.state[source].abilities[1];
     let mut effects = effects.clone();
     effects.push(Effect::gain_life(3));
     let mut frame = EffectFrame::new(player, effects);
-    frame.source = Some(source);
-    frame.source_ref = Some(source_ref);
+    frame.bind_source(Some(source), Some(source_ref));
     game.run_frame(frame);
     game.publish_action_space(game.suspended_decision_action_space().unwrap());
     checked_command(&mut game, Action::ChooseMode { player, mode: 0 });
@@ -3377,10 +3372,7 @@ fn hidden_selection_public_entry_is_pinned_through_both_samplers() {
             Observation::for_player(&root, viewer)
                 .opponent_cards
                 .iter()
-                .any(
-                    |object| object.id == root.state.objects[entering].id.0 as i32
-                        && object.zone == zone
-                ),
+                .any(|object| object.id == root.state[entering].id.0 as i32 && object.zone == zone),
             "a precommit entrant is public during replacement choices"
         );
         let before = crate::search_state::witness(&root);
@@ -3457,13 +3449,13 @@ fn hidden_selection_foretold_measure_preserves_every_committed_slot() {
     let bolts: Vec<_> = object_ids
         .iter()
         .copied()
-        .filter(|object_id| root.state.objects[*object_id].name == "Lightning Bolt")
+        .filter(|object_id| root.state[*object_id].name == "Lightning Bolt")
         .take(3)
         .collect();
     let ogres: Vec<_> = object_ids
         .iter()
         .copied()
-        .filter(|object_id| root.state.objects[*object_id].name == "Gray Ogre")
+        .filter(|object_id| root.state[*object_id].name == "Gray Ogre")
         .take(2)
         .collect();
     for object_id in object_ids {
@@ -3474,7 +3466,7 @@ fn hidden_selection_foretold_measure_preserves_every_committed_slot() {
     // ordered fills remain compatible: 2 Ogre/Ogre and 12 Ogre/Bolt fills.
     for object_id in bolts.iter().chain(&ogres) {
         let current = root.state.now(*object_id);
-        root.state.objects[current]
+        root.state[current]
             .statics
             .push(StaticAbility::Foretell(ManaCost::parse("{1}")));
         root.move_object(
@@ -3547,7 +3539,7 @@ fn hidden_selection_foretold_measure_preserves_every_committed_slot() {
             assert_eq!(selected.len(), 2);
             for object in selected {
                 let object_id = *object;
-                assert_eq!(branch.state.objects[object_id].name, "Lightning Bolt");
+                assert_eq!(branch.state[object_id].name, "Lightning Bolt");
                 assert!(branch
                     .state
                     .zones
@@ -3561,7 +3553,7 @@ fn hidden_selection_foretold_measure_preserves_every_committed_slot() {
                 .zones
                 .zone_objects(ZoneType::Hand, player)
                 .iter()
-                .all(|object_id| branch.state.objects[*object_id].name == "Lightning Bolt"));
+                .all(|object_id| branch.state[*object_id].name == "Lightning Bolt"));
         }
     }
 }
@@ -3576,17 +3568,16 @@ fn retained_creation_precedes_allocation_and_preserves_copy_entry_terms() {
         .scenario_force_battlefield(player, "Gray Ogre", true)
         .unwrap();
     let object = game.state.permanents[source].as_ref().unwrap().object;
-    game.state.objects[object].replacement_effects =
-        vec![ReplacementEffect::EntersWithPlusOneCounters {
-            count: 1,
-            condition: None,
-        }];
+    game.state[object].replacement_effects = vec![ReplacementEffect::EntersWithPlusOneCounters {
+        count: 1,
+        condition: None,
+    }];
     for multiplier in [2, 3] {
         let id = game
             .scenario_force_battlefield(player, "Mountain", true)
             .unwrap();
         let object = game.state.permanents[id].as_ref().unwrap().object;
-        game.state.objects[object].replacement_effects =
+        game.state[object].replacement_effects =
             vec![ReplacementEffect::MultiplyTokens { multiplier }];
     }
     counter_replacement_drivers(&mut game, player);
@@ -3603,8 +3594,7 @@ fn retained_creation_precedes_allocation_and_preserves_copy_entry_terms() {
             Effect::gain_life(3),
         ],
     );
-    frame.source = Some(object);
-    frame.source_ref = game.permanent_object(source);
+    frame.bind_source(Some(object), game.permanent_object(source));
     frame.completion = FrameCompletion::Continue;
     let cards_before = game.state.objects.len();
     game.run_frame(frame);
@@ -3860,8 +3850,7 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
                     // offers, but a consequential captured power of 2 versus 3.
                     lki.power += choice;
                     game.record_object_lki(lki);
-                    frame.source = Some(object);
-                    frame.source_ref = Some(source);
+                    frame.bind_source(Some(object), Some(source));
                     frame.queue = vec![Effect::GainLife {
                         amount: EffectValue::SourcePower,
                     }]

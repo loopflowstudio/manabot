@@ -95,10 +95,8 @@ pub struct TriggeredAbilityOnStack {
     pub source_transforms: u32,
     pub id: PublicId,
     pub controller: PlayerId,
-    #[serde(rename = "source_card")]
-    pub source_object: ObjectId,
-    #[serde(serialize_with = "crate::game_object::exact")]
-    pub source_ref: Option<ObjectId>,
+    #[serde(flatten)]
+    pub source_identity: crate::game_object::AbilitySource,
     pub source_lki: Option<ObjectLki>,
     #[serde(rename = "source_card_registry_key")]
     pub source_definition_id: CardDefId,
@@ -159,8 +157,8 @@ impl StackObject {
     pub fn source_object(&self) -> ObjectId {
         match self {
             StackObject::Spell(spell) => spell.object,
-            StackObject::ActivatedAbility(ability) => ability.source_object,
-            StackObject::TriggeredAbility(triggered) => triggered.source_object,
+            StackObject::ActivatedAbility(ability) => ability.source_object(),
+            StackObject::TriggeredAbility(triggered) => triggered.source_object(),
         }
     }
 
@@ -168,8 +166,8 @@ impl StackObject {
     pub fn source_ref(&self) -> Option<ObjectId> {
         match self {
             StackObject::Spell(_) => None,
-            StackObject::ActivatedAbility(ability) => Some(ability.source_object),
-            StackObject::TriggeredAbility(triggered) => triggered.source_ref,
+            StackObject::ActivatedAbility(ability) => Some(ability.source_object()),
+            StackObject::TriggeredAbility(triggered) => triggered.source_ref(),
         }
     }
 
@@ -202,5 +200,20 @@ impl StackObject {
             StackObject::ActivatedAbility(ability) => &ability.targets,
             StackObject::TriggeredAbility(triggered) => &triggered.targets,
         }
+    }
+}
+
+impl TriggeredAbilityOnStack {
+    pub fn source_object(&self) -> ObjectId {
+        self.source_identity.object()
+    }
+    pub fn source_ref(&self) -> Option<ObjectId> {
+        self.source_identity.reference()
+    }
+}
+
+impl ActivatedAbilityOnStack {
+    pub fn source_object(&self) -> ObjectId {
+        self.source_object
     }
 }

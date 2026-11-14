@@ -336,7 +336,7 @@ fn cr_702_trample_with_deathtouch_assigns_one_lethal() {
         .as_ref()
         .expect("mammoth should exist")
         .object;
-    s.game_mut().state.objects[mammoth_card]
+    s.game_mut().state[mammoth_card]
         .keywords
         .insert(Keyword::Deathtouch);
 
@@ -575,7 +575,7 @@ fn cr_702_double_strike_with_trample_interaction() {
         .as_ref()
         .expect("ace should exist")
         .object;
-    s.game_mut().state.objects[ace_card]
+    s.game_mut().state[ace_card]
         .keywords
         .insert(Keyword::Trample);
 

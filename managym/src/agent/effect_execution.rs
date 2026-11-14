@@ -446,7 +446,7 @@ impl<'a> Projection<'a> {
             } => {
                 self.paid_summary();
                 self.field("return", &"paid activation");
-                self.object("activation source", ability.source_object);
+                self.object("activation source", ability.source_object());
                 self.field("controller", &ability.controller);
                 self.field("ability", &ability.ability_index);
                 self.field("X", &ability.x);
@@ -704,7 +704,7 @@ impl<'a> Projection<'a> {
                             "entering definition",
                             VisibleReference {
                                 definition: Some(
-                                    self.game.state.objects[*object_id].definition_id.0,
+                                    self.game.state.entry_object(*object_id).definition_id.0,
                                 ),
                                 ..Default::default()
                             },
@@ -872,7 +872,7 @@ pub(crate) fn project_frame(
     let mut out = Projection::new(game, viewer, text);
     // Source/trigger quantities can read departed characteristics after another
     // instruction has suspended. Their definition join alone cannot carry LKI.
-    if let Some(source) = effect.source_ref {
+    if let Some(source) = effect.source_ref() {
         out.retained_object(source);
     }
     if let Some(target) = effect.context_target {
@@ -905,8 +905,8 @@ pub(crate) fn project_frame(
         out.field("excess damage", &effect.excess_damage);
     }
     let source_definition = effect
-        .source
-        .map(|object| game.state.objects[object].definition_id);
+        .source()
+        .map(|object| game.state.source_base(object).0);
     if receipt_matters(&effect.spent, source_definition) {
         out.receipt(&effect.spent);
     }

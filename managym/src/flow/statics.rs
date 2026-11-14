@@ -410,7 +410,7 @@ impl Game {
         if let Some(permanent) = self.state.permanent_of(object_id) {
             return self.characteristics(permanent).power;
         }
-        let object = &self.state.objects[object_id];
+        let object = &self.state[object_id];
         let Some(cda) = object.power_cda() else {
             return object.power.unwrap_or(0);
         };
@@ -449,7 +449,73 @@ impl Game {
         } else {
             0
         };
-        predicate.matches_object_with_power(&self.state.objects[object_id], power)
+        predicate.matches_object_with_power(&self.state[object_id], power)
+    }
+
+    /// A recorded event can still ask what its departed card was. Read the
+    /// retained base and LKI, never the later appearance occupying its slot.
+    pub(crate) fn recorded_object_matches_predicate(
+        &self,
+        object: ObjectId,
+        predicate: &CardPredicate,
+    ) -> bool {
+        if self.state.live(object).is_some() {
+            return self.object_matches_predicate(object, predicate);
+        }
+        let (_, printing) = self.state.source_base(object);
+        let (_, owner, kind) = self
+            .state
+            .objects
+            .provenance(object)
+            .expect("recorded provenance");
+        let power = if predicate.reads_power() {
+            self.object_lki(object).map_or_else(
+                || {
+                    printing.power_cda().map_or_else(
+                        || printing.power.unwrap_or(0),
+                        |cda| self.cda_power(cda, owner),
+                    )
+                },
+                |lki| lki.power,
+            )
+        } else {
+            0
+        };
+        predicate.matches_printing(
+            printing,
+            kind,
+            printing
+                .mana_cost
+                .as_ref()
+                .map_or(0, |cost| cost.mana_value),
+            power,
+            &[],
+        )
+    }
+
+    /// Entry replacements inspect allocated tokens before placement. This is
+    /// distinct from rules predicates on current zone appearances.
+    pub(crate) fn entry_matches_predicate(
+        &self,
+        object: ObjectId,
+        predicate: &CardPredicate,
+    ) -> bool {
+        if self.state.live(object).is_some() {
+            return self.object_matches_predicate(object, predicate);
+        }
+        if predicate.from_battlefield_this_turn {
+            return false;
+        }
+        let row = self.state.entry_object(object);
+        let power = if predicate.reads_power() {
+            row.power_cda().map_or_else(
+                || row.power.unwrap_or(0),
+                |cda| self.cda_power(cda, row.owner),
+            )
+        } else {
+            0
+        };
+        predicate.matches_object_with_power(row, power)
     }
 
     fn cda_power(&self, cda: &PowerCda, controller: PlayerId) -> i32 {
@@ -484,7 +550,7 @@ impl Game {
             })
     }
     pub(crate) fn spell_keywords(&self, object: ObjectId, controller: PlayerId) -> Keywords {
-        let mut keywords = self.state.objects[object].keywords;
+        let mut keywords = self.state[object].keywords;
         for (_, owner, view) in self.static_sources() {
             for ability in &view.static_abilities {
                 if let StaticAbility::KeywordGrant(grant) = ability {
@@ -587,7 +653,7 @@ impl Game {
         let granted_flash = self
             .exile_grant(player, object)
             .is_some_and(|grant| grant.flash);
-        let object = &self.state.objects[object];
+        let object = &self.state[object];
         granted_flash
             || object.is_instant_speed()
             || (object.types.is_creature() && self.has_next_creature_cast_flash(player))
@@ -641,7 +707,7 @@ impl Game {
             condition,
             controller,
             frame,
-            frame.and_then(|frame| frame.source_ref),
+            frame.and_then(|frame| frame.source_ref()),
             frame.and_then(|frame| frame.context_target),
         )
     }
@@ -686,7 +752,7 @@ impl Game {
                 self.iter_battlefield_permanents(controller)
                     .filter(|&id| {
                         self.state.permanents[id].as_ref().is_some_and(|permanent| {
-                            self.state.objects[permanent.object].owner != controller
+                            self.state[permanent.object].owner != controller
                         })
                     })
                     .take(*count)
@@ -754,11 +820,11 @@ impl Game {
                 frame
                     .this_way
                     .iter()
-                    .any(|object| self.object_matches_predicate(*object, predicate))
+                    .any(|object| self.recorded_object_matches_predicate(*object, predicate))
             }),
             Condition::TriggeringSpellMatches(predicate) => matches!(
                 frame.and_then(|frame| frame.context_target),
-                Some(Target::StackSpell(object_id)) if self.object_matches_predicate(object_id, predicate)
+                Some(Target::StackSpell(object_id)) if self.recorded_object_matches_predicate(object_id, predicate)
             ),
             Condition::TargetCardExiled(predicate) => {
                 let Some(Target::GraveyardCard(object)) =

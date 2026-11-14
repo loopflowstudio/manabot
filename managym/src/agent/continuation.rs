@@ -223,9 +223,7 @@ impl Game {
         effects: &[crate::state::ability::Effect],
     ) -> bool {
         let definition = if let Some(grant) = grant {
-            self.state.objects[grant.grantor]
-                .attached_grants()
-                .nth(grant.index)
+            self.state[grant.grantor].attached_grants().nth(grant.index)
         } else {
             self.source_face(object, face).and_then(|source| {
                 source.activated_abilities.get(index).or_else(|| {
@@ -245,7 +243,7 @@ impl Game {
                 ..VisibleReference::default()
             };
         }
-        let record = &self.state.objects[object];
+        let record = &self.state[object];
         let zone = self.state.zones.zone_of(object);
         // Ordinary visibility needs no walk of retained event batches. Only
         // otherwise hidden objects need the prospective-entry permission.
@@ -288,10 +286,7 @@ impl Game {
         let Some(suspended) = &self.state.suspended_decision else {
             return false;
         };
-        let (owner, zone) = (
-            self.state.objects[object].owner,
-            self.state.zones.zone_of(object),
-        );
+        let (owner, zone) = (self.state[object].owner, self.state.zones.zone_of(object));
         suspended.decisions().any(|decision| {
             self.shares_information(viewer, decision.player())
                 && (decision.revealed_objects().contains(&object)
@@ -469,10 +464,10 @@ impl Game {
         viewer: PlayerId,
     ) -> ContinuationFrame {
         let mut source = trigger
-            .source_ref
+            .source_ref()
             .map(|r| self.visible_reference(r, viewer))
             .unwrap_or_default();
-        source.definition = Some(self.state.objects[trigger.source_object].definition_id.0);
+        source.definition = Some(self.state.source_base(trigger.source_object()).0 .0);
         let context = match &trigger.event {
             DelayedTriggerEvent::Leaves { watched, .. } => {
                 Some(self.visible_reference(*watched, viewer))
@@ -532,11 +527,11 @@ impl Game {
                 .filter(|t| self.decision_controller(t.controller) == viewer)
             {
                 let mut source = trigger
-                    .source_ref
+                    .source_ref()
                     .map(|r| self.visible_reference(r, viewer))
                     .unwrap_or_default();
                 source.definition = Some(trigger.source_lki.as_ref().map_or(
-                    self.state.objects[trigger.source_object].definition_id.0,
+                    self.state.source_base(trigger.source_object()).0 .0,
                     |lki| lki.definition_id.0,
                 ));
                 let mut frame = ContinuationFrame {
@@ -623,7 +618,7 @@ impl Game {
                 if ability.program {
                     frame.program(&ability.effects);
                 }
-                frame.source = self.visible_reference(ability.source_object, viewer);
+                frame.source = self.visible_reference(ability.source_object(), viewer);
                 frame.x = ability.x;
                 frame.inherited_from = ability.inherited_from.map(|id| VisibleReference {
                     definition: Some(id.0),
@@ -648,7 +643,7 @@ impl Game {
                 frame.x = ability.x;
                 frame.source_transforms = ability.source_transforms;
                 frame.source = ability
-                    .source_ref
+                    .source_ref()
                     .map(|r| self.visible_reference(r, viewer))
                     .unwrap_or_default();
                 frame.remembered = self.remembered_references(&ability.remembered, viewer);
@@ -816,11 +811,11 @@ impl Game {
             kind: 5,
             controller: effect.controller.0,
             source: effect
-                .source_ref
+                .source_ref()
                 .map(|r| self.visible_reference(r, viewer))
                 .unwrap_or_else(|| {
                     effect
-                        .source
+                        .source()
                         .map(|object| self.object_reference(object, viewer))
                         .unwrap_or_default()
                 }),

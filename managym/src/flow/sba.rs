@@ -236,7 +236,7 @@ impl Game {
             .filter(|&id| {
                 self.state.permanents[id].as_ref().is_some_and(|equipment| {
                     equipment.attached_to.is_some()
-                        && self.state.objects[equipment.object].enchant().is_none()
+                        && self.state[equipment.object].enchant().is_none()
                 }) && self.attached_creature(id).is_none()
             })
             .collect();
@@ -296,7 +296,7 @@ impl Game {
                 && source_ref == object
                 && inline.is_none()
                 && matches!(
-                    self.state.objects[saga].abilities.get(index),
+                    self.state[saga].abilities.get(index),
                     Some(Ability::Triggered {
                         condition: TriggerCondition::Chapter { .. },
                         ..
@@ -305,15 +305,15 @@ impl Game {
         };
         self.state.pending_triggers.iter().any(|trigger| {
             is_chapter(
-                trigger.source_object,
-                trigger.source_ref,
+                trigger.source_object(),
+                trigger.source_ref(),
                 &trigger.inline_effects,
                 trigger.ability_index,
             )
         }) || self.state.stack_objects.iter().any(|item| {
             matches!(item, StackObject::TriggeredAbility(ability) if is_chapter(
-                ability.source_object,
-                ability.source_ref,
+                ability.source_object(),
+                ability.source_ref(),
                 &ability.inline_effects,
                 ability.ability_index,
             ))
@@ -326,7 +326,7 @@ impl Game {
         let Some(permanent) = self.state.permanents[aura].as_ref() else {
             return false;
         };
-        let Some(enchant) = self.state.objects[permanent.object].enchant() else {
+        let Some(enchant) = self.state[permanent.object].enchant() else {
             return false;
         };
         !self.attached_permanent(aura).is_some_and(|object| {

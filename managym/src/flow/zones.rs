@@ -97,7 +97,7 @@ impl Game {
     /// this stable order for private selection candidates and visible cards.
     pub(crate) fn selection_zone_objects(&self, owner: PlayerId, zone: ZoneType) -> Vec<ObjectId> {
         let mut objects = self.state.zones.zone_objects(zone, owner).to_vec();
-        objects.sort_unstable_by_key(|object| (self.state.objects[*object].definition_id, *object));
+        objects.sort_unstable_by_key(|object| (self.state[*object].definition_id, *object));
         objects
     }
 
@@ -118,7 +118,7 @@ impl Game {
     /// Reveal before moving; public hand knowledge retains definition counts,
     /// never the identity of the physical copy.
     pub(crate) fn reveal_object_to_hand(&mut self, object: ObjectId, player: PlayerId) {
-        let definition = self.state.objects[object].definition_id;
+        let definition = self.state.entry_object(object).definition_id;
         self.emit(GameEvent::CardRevealed {
             owner: player,
             definition,
@@ -147,7 +147,7 @@ impl Game {
         {
             self.emit(GameEvent::CardRevealed {
                 owner: player,
-                definition: self.state.objects[object].definition_id,
+                definition: self.state[object].definition_id,
             });
         }
         self.remember_hand(player);
@@ -159,7 +159,7 @@ impl Game {
         let mut counts = std::collections::BTreeMap::new();
         for object in self.state.zones.zone_objects(ZoneType::Hand, player).iter() {
             *counts
-                .entry(self.state.objects[*object].definition_id)
+                .entry(self.state[*object].definition_id)
                 .or_insert(0_u32) += 1;
         }
         for (definition, count) in counts {
@@ -175,7 +175,13 @@ impl Game {
                 StackObject::Spell(spell) => Some(spell.controller),
                 _ => None,
             })
-            .unwrap_or(self.state.objects[object].owner)
+            .unwrap_or_else(|| {
+                self.state
+                    .objects
+                    .provenance(object)
+                    .expect("source provenance")
+                    .1
+            })
     }
 
     /// The permanents `player` controls, in battlefield order.
@@ -365,9 +371,9 @@ impl Game {
     /// Create a token that's a copy of `source` under `controller` (CR 707.2,
     /// 111.1). A card's definition is its copiable values: play never
     /// mutates it, and counters, damage, tapped state and non-copy effects
-    /// live on the `Permanent` and in effect records. The source card keeps
-    /// its definition after leaving the battlefield, so a departed source is
-    /// copied as it last existed there. `exceptions` become part of the
+    /// live on the `Permanent` and in effect records. The caller supplies
+    /// the copiable source values; this allocator never looks up a departed
+    /// appearance through its storage slot. `exceptions` become part of the
     /// token's copiable values after the source's own (CR 707.9b); the
     /// token's `CopyEffect` records both and the definition at the root.
     pub(crate) fn prepare_token_copy(
@@ -461,7 +467,7 @@ impl Game {
         // CR 400.7g, h: the spell is the object the card became on the stack.
         let object = self.move_object(object, ZoneType::Stack);
         let id = self.state.id_gen_mut().next_id();
-        let source_definition_id = self.state.objects[object].definition_id;
+        let source_definition_id = self.state[object].definition_id;
         self.state
             .stack_objects_mut()
             .push(StackObject::Spell(SpellOnStack {
@@ -506,6 +512,9 @@ impl Game {
         to_zone: ZoneType,
         entry: ZoneEntry,
     ) -> ObjectId {
+        if !self.state.zones.is_latest(object) {
+            return object;
+        }
         let event = self.zone_move_proposal(object, to_zone, entry);
         let batch = self.event_batch(vec![event]);
         self.complete_immediate_batch(batch)
@@ -541,7 +550,7 @@ impl Game {
     /// Whether the face that enters is a Saga: the back face when it enters
     /// transformed (CR 712.14), so a Saga returning as a creature gets no lore.
     fn enters_as_saga(&self, object: ObjectId, entry: &ZoneEntry) -> bool {
-        let printed = &self.state.objects[object];
+        let printed = self.state.entry_object(object);
         if entry.transformed {
             if let Some((_, back)) = default_content_pack().back_face(printed.definition_id) {
                 return back.is_saga();
@@ -563,10 +572,10 @@ impl Game {
         followups: &mut Vec<ProposedEvent>,
     ) -> bool {
         let departing_ref = old_zone.map(|_| object_id);
-        let owner = self.state.objects[object_id].owner;
+        let owner = self.state.entry_object(object_id).owner;
 
         if old_zone == Some(ZoneType::Hand) && to_zone != ZoneType::Hand {
-            let definition = self.state.objects[object_id].definition_id;
+            let definition = self.state[object_id].definition_id;
             let count = self.state.players[owner.0]
                 .known_hand
                 .get(&definition)
@@ -592,7 +601,7 @@ impl Game {
         let mut event_controller = owner;
 
         if old_zone == Some(ZoneType::Battlefield) {
-            if let Some(permanent_id) = self.state.object_to_permanent[object_id].take() {
+            if let Some(permanent_id) = self.state.object_to_permanent[(object_id).slot()].take() {
                 if let Some(permanent) = self.state.permanents[permanent_id].as_ref() {
                     event_controller = permanent.controller;
                 }
@@ -639,7 +648,7 @@ impl Game {
             let mut permanent = Permanent::new(
                 self.state.id_gen_mut().next_id(),
                 object_id,
-                &self.state.objects[object_id],
+                &self.state[object_id],
             );
             permanent.controller = holder;
             permanent.was_cast = carry.cast.is_some();
@@ -651,10 +660,10 @@ impl Game {
             permanent.counters = entry.counters;
             event_controller = permanent.controller;
             self.state.permanents.push(Some(permanent));
-            if self.state.objects[object_id].types.is_land() {
+            if self.state[object_id].types.is_land() {
                 self.state.turn.history[holder.0].land_entered = true;
             }
-            self.state.object_to_permanent[object_id] = Some(permanent_id);
+            self.state.object_to_permanent[(object_id).slot()] = Some(permanent_id);
         }
 
         if old_zone == Some(ZoneType::Battlefield) || to_zone == ZoneType::Battlefield {
@@ -695,7 +704,7 @@ impl Game {
         }
         // An attachment that grants or removes abilities changes the mana
         // its creature's controller, possibly the opponent, can produce.
-        let card_def = &self.state.objects[object_id];
+        let card_def = &self.state[object_id];
         if (old_zone == Some(ZoneType::Battlefield) || to_zone == ZoneType::Battlefield)
             && (card_def.attached_characteristics().is_some()
                 || card_def.attached_grants().next().is_some()
@@ -725,8 +734,8 @@ impl Game {
         let Some(object) = self.state.permanents[permanent].as_ref().map(|p| p.object) else {
             return;
         };
-        if self.state.objects[object].is_transformed() {
-            self.state.objects[object].turn_front_face_up();
+        if self.state[object].is_transformed() {
+            self.state[object].turn_front_face_up();
         } else if !self.show_back_face(object) {
             return;
         }
@@ -741,11 +750,11 @@ impl Game {
 
     /// Show a card's back face; false when it has none.
     fn show_back_face(&mut self, object: ObjectId) -> bool {
-        let definition = self.state.objects[object].definition_id;
+        let definition = self.state[object].definition_id;
         let Some(back) = default_content_pack().back_face(definition) else {
             return false;
         };
-        self.state.objects[object].turn_back_face_up(back);
+        self.state[object].turn_back_face_up(back);
         true
     }
 
@@ -910,8 +919,8 @@ impl Game {
     pub(crate) fn stack_ability_source(&self, id: PublicId) -> Option<ObjectId> {
         let index = self.find_ability_on_stack_index(id)?;
         match &self.state.stack_objects[index] {
-            StackObject::ActivatedAbility(ability) => Some(ability.source_object),
-            StackObject::TriggeredAbility(triggered) => Some(triggered.source_object),
+            StackObject::ActivatedAbility(ability) => Some(ability.source_object()),
+            StackObject::TriggeredAbility(triggered) => Some(triggered.source_object()),
             StackObject::Spell(_) => None,
         }
     }

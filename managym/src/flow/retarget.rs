@@ -35,7 +35,7 @@ impl Game {
         match &self.state.stack_objects[index] {
             StackObject::Spell(spell) => {
                 let requirements =
-                    self.state.objects[spell.object].target_requirements_for_mode(spell.mode);
+                    self.state[spell.object].target_requirements_for_mode(spell.mode);
                 requirements
                     .get(*spell.target_req_indices.get(slot)?)
                     .cloned()
@@ -50,7 +50,7 @@ impl Game {
                         let object = triggered
                             .source_lki
                             .as_ref()
-                            .map_or(triggered.source_object, |lki| lki.object);
+                            .map_or(triggered.source_object(), |lki| lki.object);
                         self.source_face(object, triggered.source_definition_id)?
                             .abilities
                             .get(triggered.ability_index)?
@@ -171,7 +171,7 @@ impl Game {
         let copy = match self.state.stack_objects[index].clone() {
             StackObject::Spell(mut spell) => {
                 let copy = crate::state::game_object::Object::spell_copy(
-                    self.state.objects[spell.object].clone(),
+                    self.state[spell.object].clone(),
                     id,
                     controller,
                 );

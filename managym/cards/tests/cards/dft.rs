@@ -30,7 +30,7 @@ fn caradora_search_reveals_a_vehicle_and_declining_does_not_shuffle() {
             assert!(!offered.is_empty());
             assert!(offered
                 .iter()
-                .all(|object| s.game().state.objects[*object].name == "Phoenix Fleet Airship"));
+                .all(|object| s.game().state[*object].name == "Phoenix Fleet Airship"));
             let selected = offered[0];
             select_card(&mut s, selected);
             settle(&mut s);

@@ -632,20 +632,20 @@ impl Game {
             let public_commitment = match (action_space.kind, action) {
                 (_, Action::PassPriority { .. }) => Some(PublicCommitment::PassPriority),
                 (_, Action::CastSpell { object, .. }) => Some(PublicCommitment::Cast {
-                    card: self.state.objects[*object].name.clone(),
+                    card: self.state[*object].name.clone(),
                 }),
                 (_, Action::PlayLand { object, .. }) => Some(PublicCommitment::PlayLand {
-                    card: self.state.objects[*object].name.clone(),
+                    card: self.state[*object].name.clone(),
                 }),
                 (ActionSpaceKind::Learn, Action::LearnDiscard { object, .. })
                 | (ActionSpaceKind::Discard, Action::SelectCard { object, .. }) => {
                     Some(PublicCommitment::Discard {
-                        card: self.state.objects[*object].name.clone(),
+                        card: self.state[*object].name.clone(),
                     })
                 }
                 (ActionSpaceKind::Learn, Action::LearnTakeLesson { object, .. }) => {
                     Some(PublicCommitment::LearnTakeLesson {
-                        card: self.state.objects[*object].name.clone(),
+                        card: self.state.source_base(*object).1.name.clone(),
                     })
                 }
                 (ActionSpaceKind::Learn, Action::Decline { .. }) => {
@@ -873,7 +873,7 @@ impl Game {
         };
         if !self.state.delayed_triggers.is_empty()
             || self.state.permanents.iter().flatten().any(|permanent| {
-                let object = &self.state.objects[permanent.object];
+                let object = &self.state[permanent.object];
                 !object.abilities.is_empty() || !object.triggered_mana_abilities.is_empty()
             })
         {
@@ -884,11 +884,7 @@ impl Game {
         if legal_taps.iter().any(|id| {
             self.state.permanents[*id]
                 .as_ref()
-                .is_some_and(|permanent| {
-                    !self.state.objects[permanent.object]
-                        .mana_abilities
-                        .is_empty()
-                })
+                .is_some_and(|permanent| !self.state[permanent.object].mana_abilities.is_empty())
         }) {
             return Ok(None);
         }
@@ -974,7 +970,7 @@ impl Game {
                     id: object_render_id(permanent.id, object.generation()),
                 },
             },
-            label: self.state.objects[permanent.object].name.clone(),
+            label: self.state[permanent.object].name.clone(),
             help: None,
             preview: None,
         })
@@ -1058,7 +1054,7 @@ impl Game {
                     internal.insert(id, InternalOffer::PassPriority { player: *player });
                 }
                 Action::CastSpell { player, object } => {
-                    let card_ref = &self.state.objects[*object];
+                    let card_ref = &self.state[*object];
                     if card_ref.optional_cost().is_some() {
                         continue;
                     }
@@ -1196,7 +1192,7 @@ impl Game {
                         id: object_render_id(permanent.id, object_ref.generation()),
                     },
                 },
-                label: self.state.objects[permanent.object].name.clone(),
+                label: self.state[permanent.object].name.clone(),
                 help: None,
                 preview: None,
             });
@@ -1880,7 +1876,7 @@ impl Game {
                     SubjectRef::Object {
                         id: object_render_id(permanent_ref.id, object_ref.generation()),
                     },
-                    self.state.objects[permanent_ref.object].name.clone(),
+                    self.state[permanent_ref.object].name.clone(),
                 ))
             }
             BoundTarget::GraveyardCard(object) => {
@@ -1889,9 +1885,9 @@ impl Game {
                 }
                 Ok((
                     SubjectRef::Object {
-                        id: object_render_id(self.state.objects[object].id, object.generation()),
+                        id: object_render_id(self.state[object].id, object.generation()),
                     },
-                    self.state.objects[object].name.clone(),
+                    self.state[object].name.clone(),
                 ))
             }
             BoundTarget::StackSpell(_) | BoundTarget::StackAbility(_) => {

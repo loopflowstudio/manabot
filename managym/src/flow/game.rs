@@ -137,10 +137,44 @@ impl GameState {
         Ok(value)
     }
 
+    /// Zone-entry authority may inspect an allocated row before it is in a
+    /// zone (new tokens and outside-game cards). It still rejects a retired
+    /// generation; ordinary rules reads use `object`.
+    pub(crate) fn entry_object(&self, object: ObjectId) -> &crate::state::game_object::Object {
+        assert!(self.zones.is_latest(object), "retired entry appearance");
+        &self.objects[object.slot()]
+    }
+
+    pub(crate) fn entry_object_mut(
+        &mut self,
+        object: ObjectId,
+    ) -> &mut crate::state::game_object::Object {
+        assert!(self.zones.is_latest(object), "retired entry appearance");
+        &mut self.objects[object.slot()]
+    }
+
+    /// Definition provenance for a source that may have departed. A live
+    /// source supplies its current printing; departure restores its retained
+    /// base, independently of any later appearance in the same storage slot.
+    pub(crate) fn source_base(
+        &self,
+        source: ObjectId,
+    ) -> (
+        crate::state::card::CardDefId,
+        &crate::state::card::PrintedCharacteristics,
+    ) {
+        self.object(source)
+            .map(|row| (row.definition_id, &**row))
+            .unwrap_or_else(|_| self.objects.retained_base(source).expect("source printing"))
+    }
+
     /// The battlefield permanent this appearance is.
     pub fn permanent_of(&self, object: ObjectId) -> Option<PermanentId> {
         self.live(object)?;
-        self.object_to_permanent[object]
+        self.object_to_permanent
+            .get(object.slot())
+            .copied()
+            .flatten()
     }
 
     /// The object the card behind `object` is now: a test follows one card
@@ -167,6 +201,25 @@ impl GameState {
         player: PlayerId,
     ) -> impl Iterator<Item = CardId> + '_ {
         self.zones.zone_objects(zone, player).cards(&self.objects)
+    }
+}
+
+impl std::ops::Index<ObjectId> for GameState {
+    type Output = crate::state::game_object::Object;
+    fn index(&self, object: ObjectId) -> &Self::Output {
+        self.object(object).expect("current object appearance")
+    }
+}
+impl std::ops::Index<&ObjectId> for GameState {
+    type Output = crate::state::game_object::Object;
+    fn index(&self, object: &ObjectId) -> &Self::Output {
+        &self[*object]
+    }
+}
+impl std::ops::IndexMut<ObjectId> for GameState {
+    fn index_mut(&mut self, object: ObjectId) -> &mut Self::Output {
+        self.object(object).expect("current object appearance");
+        &mut self.objects.0[object.slot()]
     }
 }
 
@@ -604,7 +657,11 @@ impl TrackedState {
         if to_zone == ZoneType::Battlefield || from_zone == Some(ZoneType::Battlefield) {
             self.revisions.triggers += 1;
         }
-        self.state.objects[object].mint_appearance(from_zone, to_zone, entry_copy);
+        assert!(
+            self.state.zones.is_latest(object),
+            "retired mint appearance"
+        );
+        self.state.objects[object.slot()].mint_appearance(from_zone, to_zone, entry_copy);
         self.state
             .zones
             .move_object(&self.state.objects, object, holder, to_zone)

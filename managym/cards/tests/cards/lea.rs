@@ -146,7 +146,7 @@ fn an_announced_tap_cannot_be_used_to_fund_itself() {
         let elves_card = enter_and_settle(&mut s, "Llanowar Elves");
         ready(&mut s, "Llanowar Elves");
         let elves = permanent_named(&s, "Llanowar Elves");
-        s.game_mut().state.objects[elves_card]
+        s.game_mut().state[elves_card]
             .activated_abilities
             .push(ActivatedAbilityDefinition {
                 mana_cost: ManaCost::parse("1"),
@@ -248,8 +248,8 @@ fn clone_enters_as_a_copy_and_leaves_as_clone() {
     assert_eq!(seen.name, "Gray Ogre");
 
     let clone = move_card(&mut s, clone, ZoneType::Graveyard);
-    assert_eq!(s.game().state.objects[clone].name, "Clone");
-    assert!(s.game().state.objects[clone].copy.is_none());
+    assert_eq!(s.game().state[clone].name, "Clone");
+    assert!(s.game().state[clone].copy.is_none());
 }
 
 /// The copied creature's own entry replacement applies (CR 614.12): a copy
@@ -288,7 +288,7 @@ fn clone_copy_survives_suspended_entry_and_keeps_its_printed_base() {
     let mut s = five_color_setup(&["Clone", "Wolf Cove Villager"]);
     let villager = s.force_permanent_on_battlefield(1, "Wolf Cove Villager");
     let source = s.game().state.permanents[villager].as_ref().unwrap().object;
-    s.game_mut().state.objects[source].replacement_effects = vec![
+    s.game_mut().state[source].replacement_effects = vec![
         ReplacementEffect::EntersTapped,
         ReplacementEffect::EntersWithCounters {
             kind: CounterKind::PlusOnePlusOne,
@@ -296,8 +296,8 @@ fn clone_copy_survives_suspended_entry_and_keeps_its_printed_base() {
         },
     ];
     let clone = crate::support::game::move_to_hand(&mut s, "Clone");
-    s.game_mut().state.objects[clone].power = Some(3);
-    s.game_mut().state.objects[clone].toughness = Some(3);
+    s.game_mut().state[clone].power = Some(3);
+    s.game_mut().state[clone].toughness = Some(3);
     cast_card(&mut s, clone);
     spend_colorless(&mut s);
     resolve_top(&mut s);
@@ -332,8 +332,8 @@ fn clone_copy_survives_suspended_entry_and_keeps_its_printed_base() {
     assert_eq!(current_object(&s, clone).name, "Wolf Cove Villager");
 
     let clone = move_card(&mut s, clone, ZoneType::Hand);
-    assert_eq!(s.game().state.objects[clone].name, "Clone");
-    assert_eq!(s.game().state.objects[clone].power, Some(3));
-    assert_eq!(s.game().state.objects[clone].toughness, Some(3));
-    assert!(s.game().state.objects[clone].copy.is_none());
+    assert_eq!(s.game().state[clone].name, "Clone");
+    assert_eq!(s.game().state[clone].power, Some(3));
+    assert_eq!(s.game().state[clone].toughness, Some(3));
+    assert!(s.game().state[clone].copy.is_none());
 }

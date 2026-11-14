@@ -26,8 +26,7 @@ fn queue_effects(s: &mut Scenario, source: ObjectId, effects: Vec<Effect>) {
     s.game_mut().state.pending_triggers.push(PendingTrigger {
         program: false,
         remembered: Vec::new(),
-        source_object: source,
-        source_ref,
+        source_identity: managym::state::game_object::AbilitySource::new(source, source_ref),
         source_lki: None,
         ability_index: 0,
         controller: PlayerId(0),

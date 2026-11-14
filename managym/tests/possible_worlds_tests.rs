@@ -411,8 +411,8 @@ fn direct_sampled_hand_preserves_public_known_minima() {
     use managym::possible_worlds::HiddenHandConstraints;
     let mut game = gwallies_decision_with_lesson();
     let object = game.state.zones.zone_objects(ZoneType::Hand, OPPONENT)[0];
-    let name = game.state.objects[object].name.clone();
-    let definition = game.state.objects[object].definition_id;
+    let name = game.state[object].name.clone();
+    let definition = game.state[object].definition_id;
     game.state.players[OPPONENT.0]
         .known_hand
         .insert(definition, 1);

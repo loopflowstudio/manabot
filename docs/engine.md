@@ -844,6 +844,18 @@ Every lookup by `ObjectId` checks that the id is current:
 | `WrongZone` | the object exists but is not where the caller requires (`lookup_current_permanent` on an object in hand) |
 | `Missing` | no object ever had this id |
 
+`state[id]` uses the same check and asserts that the caller has a current
+appearance. Raw object storage has no `ObjectId` or `CardId` indexing.
+Entry processing can inspect a newly allocated row before placement through
+an entry-only accessor that still rejects retired generations.
+
+An ability keeps one source identity through pending triggers, the stack and
+child resolution frames. Its captured definition and the retained base
+printing supply definition provenance after departure; these reads never
+borrow a later appearance's copy or transformed face. Battlefield facts come
+from LKI. The retained base preserves the engine's existing departure behavior;
+it does not capture additional copy exceptions or transformed mana value.
+
 A stale id is an ordinary outcome, not a bug: a spell whose target left fizzles
 on it, and a delayed trigger watching one creature retires on it. Code picks
 the id for what its rules text means:

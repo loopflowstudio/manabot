@@ -142,9 +142,7 @@ fn removal_respects_mana_value_and_excluded_creature_types() {
         let big = s.force_permanent_on_battlefield(1, "Gnarled Professor");
         if name == "Power Word Kill" {
             let object = s.game().state.permanents[small].as_ref().unwrap().object;
-            s.game_mut().state.objects[object]
-                .subtypes
-                .push("Dragon".into());
+            s.game_mut().state[object].subtypes.push("Dragon".into());
         }
         cast(&mut s, name);
         assert!(!s.action_space().actions.iter().any(|action| matches!(

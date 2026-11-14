@@ -58,7 +58,7 @@ fn prism_payment_preserves_the_spells_required_green_mana() {
         assert!(s.game().state.stack_objects.iter().any(|object| matches!(
             object,
             managym::state::stack_object::StackObject::Spell(spell)
-                if s.game().state.objects[spell.object].name == "Gnarled Professor"
+                if s.game().state[spell.object].name == "Gnarled Professor"
         )));
     }
 }
@@ -406,7 +406,7 @@ fn filters_require_a_real_seed_and_do_not_reuse_a_reserved_source() {
             .iter()
             .filter_map(|action| match action {
                 Action::ActivateAbility { permanent, .. }
-                    if s.game().state.objects[s.game().state.permanents[*permanent]
+                    if s.game().state[s.game().state.permanents[*permanent]
                         .as_ref()
                         .unwrap()
                         .object]
@@ -507,7 +507,7 @@ fn nested_mana_nonmana_life_cost_is_reserved_and_paid_once() {
             .create_token("token.treasure", PlayerId(0), false);
         let treasure = permanent_named(&s, "Treasure");
         let source_object = s.game().state.permanents[treasure].as_ref().unwrap().object;
-        s.game_mut().state.objects[source_object].activated_abilities[0].life_cost = 2;
+        s.game_mut().state[source_object].activated_abilities[0].life_cost = 2;
         s.game_mut().state.players[0].life = life;
         s.set_player_mana_pool(0, "0");
         s.game_mut().scenario_refresh_priority().unwrap();
@@ -568,7 +568,7 @@ fn prism_upfront_pools_the_whole_fee_before_spending_any_unit() {
     let card = s.game().state.permanents[prism].as_ref().unwrap().object;
     // A two-mana filter fee distinguishes full-cost production from a
     // witness that spends one pooled unit before producing the rest.
-    s.game_mut().state.objects[card].activated_abilities[0].mana_cost =
+    s.game_mut().state[card].activated_abilities[0].mana_cost =
         managym::state::mana::ManaCost::parse("2");
     s.set_player_mana_pool(0, "U");
     activate_named(&mut s, "Prophetic Prism", 0);

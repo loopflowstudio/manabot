@@ -1783,7 +1783,7 @@ fn card_row<'a>(
 
 fn card_index(game: &Game, observation: &Observation, permanent: PermanentId) -> usize {
     let object = game.state.permanents[permanent].as_ref().unwrap().object;
-    let id = game.state.objects[object].id.0 as i32;
+    let id = game.state[object].id.0 as i32;
     observation
         .agent_cards
         .iter()
@@ -2220,7 +2220,7 @@ fn printed_and_granted_keywords_set_their_card_and_permanent_columns_and_tokens(
 
         let mut printed = base_game.clone();
         let object = printed.state.permanents[ogre].as_ref().unwrap().object;
-        printed.state.objects[object].keywords = keywords;
+        printed.state[object].keywords = keywords;
         let (obs, after) = observe(&printed, 0);
         assert!(
             changed(
@@ -2401,7 +2401,7 @@ fn opponent_hidden_cards_do_not_reach_the_viewer_tensor() {
             .zones
             .zone_objects(ZoneType::Hand, PlayerId(1))
             .iter()
-            .map(|object| game.state.objects[*object].name.clone())
+            .map(|object| game.state[*object].name.clone())
             .collect::<Vec<_>>();
         names.sort();
         names
@@ -2597,7 +2597,7 @@ fn tensor_visible_statics_and_costs_move_their_named_columns() {
     let mut checked = 0;
     for (row, edit) in edits {
         let mut game = base_game.clone();
-        edit(&mut game.state.objects[object]);
+        edit(&mut game.state[object]);
         let (obs, after) = observe(&game, 0);
         let moved = match row.seen {
             Seen::Card(column) => changed(
@@ -3283,7 +3283,7 @@ fn card_sources() -> Vec<(&'static str, CardSource)> {
 
 /// The card row of `permanent` as the viewer's JSON observation states it.
 fn card_json(s: &Scenario, viewer: usize, permanent: PermanentId) -> serde_json::Value {
-    let id = s.game().state.objects[card_of(s, permanent)].id.0 as i64;
+    let id = s.game().state[card_of(s, permanent)].id.0 as i64;
     let observation: serde_json::Value =
         serde_json::from_str(&Observation::for_player(s.game(), PlayerId(viewer)).to_json())
             .unwrap();
@@ -3307,7 +3307,7 @@ fn layered_card_fields_read_characteristics_on_the_battlefield() {
     let witnesses = [gran, swarm, drake];
     let before = witnesses.map(|id| card_json(&s, 0, id));
     let gran_card = s.game().state.permanents[gran].as_ref().unwrap().object;
-    s.game_mut().state.objects[gran_card]
+    s.game_mut().state[gran_card]
         .statics
         .push(StaticAbility::TypeGrant(StaticTypeGrant {
             scope: StaticScope::This,
@@ -3379,11 +3379,11 @@ fn card_rows_off_the_battlefield_read_the_printed_card() {
     let mut s = five_color_setup(&["Gran-Gran"]);
     let gran = s.force_permanent_on_battlefield(0, "Gran-Gran");
     let object = card_of(&s, gran);
-    assert!(s.game().state.objects[object].is_legendary());
+    assert!(s.game().state[object].is_legendary());
     until_end_of_turn(&mut s, gran, Modification::Nonlegendary);
     assert_eq!(card_json(&s, 0, gran)["is_legendary"], false);
     let object = move_card(&mut s, object, ZoneType::Graveyard);
-    let id = s.game().state.objects[object].id.0 as i32;
+    let id = s.game().state[object].id.0 as i32;
     let observation = Observation::for_player(s.game(), PlayerId(0));
     let row = observation
         .agent_cards
@@ -3936,7 +3936,7 @@ fn a_waiting_delayed_trigger_is_observed_until_it_fires_or_expires() {
         (s, ogre)
     };
     let (mut s, ogre) = setup();
-    let fissure = s.game().state.delayed_triggers[0].source_object;
+    let fissure = s.game().state.delayed_triggers[0].source_object();
     for viewer in [0, 1] {
         let (controller, event, this_turn, watched) = waiting(&s, viewer).expect("visible");
         assert_eq!(
@@ -4565,11 +4565,10 @@ fn a_token_copy_reaches_copy_and_exception_fact_rows_for_both_viewers() {
     cast(&mut s, "Ran and Shaw");
     settle(&mut s);
     let dragons = s.battlefield_permanents_named(0, "Ran and Shaw");
-    let is_tok =
-        |id: PermanentId| s.game().state.objects[card_of(&s, id)].kind() == ObjectKind::Token;
+    let is_tok = |id: PermanentId| s.game().state[card_of(&s, id)].kind() == ObjectKind::Token;
     let token = *dragons.iter().find(|id| is_tok(**id)).unwrap();
     let source = *dragons.iter().find(|id| !is_tok(**id)).unwrap();
-    let key = s.game().state.objects[card_of(&s, source)].registry_key.0 as f32;
+    let key = s.game().state[card_of(&s, source)].registry_key.0 as f32;
     for viewer in [0, 1] {
         let rows = facts_about(&s, viewer, object_index(&s, viewer, token));
         let copy = fact_row(&rows, FactKind::Copy, name_value("CopyEffect"));

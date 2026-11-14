@@ -158,7 +158,7 @@ impl Scenario {
         let permanent = Permanent::new(
             self.game.state.id_gen.next_id(),
             object_id,
-            &self.game.state.objects[object_id],
+            &self.game.state[object_id],
         );
         self.game.state.permanents.push(Some(permanent));
         if self.game.state.object_to_permanent.len() <= object_id.slot() {
@@ -167,7 +167,7 @@ impl Scenario {
                 .object_to_permanent
                 .resize(object_id.slot() + 1, None);
         }
-        self.game.state.object_to_permanent[object_id] = Some(permanent_id);
+        self.game.state.object_to_permanent[(object_id).slot()] = Some(permanent_id);
         permanent_id
     }
 
@@ -266,7 +266,7 @@ pub fn force_from_library(s: &mut Scenario, player: usize, name: &str) -> Object
         .zone_objects(ZoneType::Library, PlayerId(player))
         .iter()
         .copied()
-        .find(|object_id| game.state.objects[object_id].name == name)
+        .find(|object_id| game.state[object_id].name == name)
         .unwrap_or_else(|| panic!("no {name} in player {player}'s library"));
     s.game_mut()
         .state
@@ -286,7 +286,7 @@ pub fn pin_top(s: &mut Scenario, names: &[&str]) -> Vec<ObjectId> {
             .zone_objects(ZoneType::Library, PlayerId(0))
             .iter()
             .copied()
-            .find(|id| s.game().state.objects[*id].name == *name && !objects.contains(id))
+            .find(|id| s.game().state[*id].name == *name && !objects.contains(id))
             .unwrap();
         objects.push(next);
     }
@@ -432,9 +432,7 @@ pub fn set_counters(s: &mut Scenario, id: PermanentId, kind: CounterKind, count:
 }
 
 pub fn inject_ability(s: &mut Scenario, object_id: ObjectId, ability: Ability) {
-    s.game_mut().state.objects[object_id]
-        .abilities
-        .push(ability);
+    s.game_mut().state[object_id].abilities.push(ability);
 }
 
 /// The UR Lessons list both players use for Gran-Gran, Proft's Eidetic Memory

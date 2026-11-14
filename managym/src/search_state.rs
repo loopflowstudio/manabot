@@ -204,7 +204,7 @@ mod tests {
         let mut incarnation = game.clone();
         let object = incarnation.state.zones.latest().next().expect("first card");
         let zone = incarnation.state.zones.zone_of(object).expect("in a zone");
-        let owner = incarnation.state.objects[object].owner;
+        let owner = incarnation.state[object].owner;
         incarnation
             .state
             .mint_appearance(object, owner, zone, false);

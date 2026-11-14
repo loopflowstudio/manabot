@@ -54,10 +54,7 @@ fn bribery_puts_a_creature_from_the_opponents_library_under_your_control() {
     let taken = permanent_of(&s, ogre).expect("entered");
     let permanent = s.game().state.permanents[taken].as_ref().unwrap();
     assert_eq!(permanent.controller, PlayerId(0));
-    assert_eq!(
-        s.game().state.objects[card_of(&s, taken)].owner,
-        PlayerId(1)
-    );
+    assert_eq!(s.game().state[card_of(&s, taken)].owner, PlayerId(1));
     assert_eq!(
         zone_of(&s, held),
         Some(ZoneType::Hand),

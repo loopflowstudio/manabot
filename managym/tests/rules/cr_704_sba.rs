@@ -136,7 +136,7 @@ fn cr_704_3_sba_trigger_sba_chain_reaches_fixpoint_before_priority() {
     let StackObject::TriggeredAbility(triggered) = &s.game().state.stack_objects[0] else {
         panic!("Dragonfly death trigger should be on the stack");
     };
-    assert_eq!(triggered.source_ref, Some(swarm_ref));
+    assert_eq!(triggered.source_ref(), Some(swarm_ref));
     assert!(s.game().state.pending_events.is_empty());
     assert!(s.game().state.pending_triggers.is_empty());
     assert!(s.game().state.priority.sba_done);
@@ -254,7 +254,7 @@ fn cr_704_3_simultaneous_departures_share_trigger_source_snapshot() {
             .as_ref()
             .expect("ogre")
             .object;
-        s.game_mut().state.objects[object_id].abilities = vec![ability.clone()];
+        s.game_mut().state[object_id].abilities = vec![ability.clone()];
         s.game_mut().state.permanents[permanent_id]
             .as_mut()
             .expect("ogre")
@@ -271,7 +271,7 @@ fn cr_704_3_simultaneous_departures_share_trigger_source_snapshot() {
         .stack_objects
         .iter()
         .filter_map(|object| match object {
-            StackObject::TriggeredAbility(triggered) => triggered.source_ref,
+            StackObject::TriggeredAbility(triggered) => triggered.source_ref(),
             _ => None,
         })
         .collect();
@@ -312,8 +312,7 @@ fn cr_400_7_stale_delayed_trigger_reference_is_rejected() {
             or_exiled: true,
         },
         controller: PlayerId(0),
-        source_object: object,
-        source_ref: Some(old_ref),
+        source_identity: managym::state::game_object::AbilitySource::new(object, Some(old_ref)),
         effects: vec![Effect::Move {
             library_end: None,
             what: ObjectSelector::This,

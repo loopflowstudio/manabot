@@ -370,7 +370,7 @@ fn shared_effects_bind_exact_sources_before_and_after_a_zone_change() {
         let timestamp = game.state.id_gen.next_id();
         let record = ContinuousEffect {
             timestamp,
-            source: Some(game.state.objects[source_object].definition_id),
+            source: Some(game.state[source_object].definition_id),
             controller: PlayerId(0),
             affected,
             modification: flying(),
@@ -413,7 +413,7 @@ fn layer_fixture(
     use managym::state::game_object::Object;
     let id = s.force_permanent_on_battlefield(0, name);
     let object_id = card_of(s, id);
-    let old = &s.game().state.objects[object_id];
+    let old = &s.game().state[object_id];
     let object = Object::from_definition(
         old.id,
         old.owner,
@@ -421,7 +421,7 @@ fn layer_fixture(
         Arc::new(definition),
         old.kind() == ObjectKind::Token,
     );
-    s.game_mut().state.objects[object_id] = object;
+    s.game_mut().state[object_id] = object;
     id
 }
 
@@ -1070,7 +1070,7 @@ fn cr_613_dependency_loop_keeps_timestamp_order_and_copy_ignores_grants_and_loss
     }
     let (mut s, source) = ogre_scenario();
     let object = card_of(&s, source);
-    s.game_mut().state.objects[object].keywords = Keywords::of(&[Keyword::Flying]);
+    s.game_mut().state[object].keywords = Keywords::of(&[Keyword::Flying]);
     indefinitely(&mut s, source, Modification::LoseAllAbilities);
     indefinitely(
         &mut s,
@@ -1093,7 +1093,7 @@ fn cr_613_dependency_loop_keeps_timestamp_order_and_copy_ignores_grants_and_loss
     let copy = s
         .battlefield_permanents_named(0, "Gray Ogre")
         .into_iter()
-        .find(|&id| s.game().state.objects[card_of(&s, id)].kind() == ObjectKind::Token)
+        .find(|&id| s.game().state[card_of(&s, id)].kind() == ObjectKind::Token)
         .unwrap();
     let view = s.game().characteristics(copy);
     assert!(view.keywords.has(Keyword::Flying));
@@ -1371,8 +1371,8 @@ fn cr_613_copiable_definition_changes_detach_warmed_forks() {
     let mut branch = root.clone();
     // Copy exceptions and transformed faces can change copiable values without
     // assigning a new catalog row. Keep the same slot, row and timestamp here.
-    branch.state.objects[object].power = Some(7);
-    branch.state.objects[object].statics.push(continuous(
+    branch.state[object].power = Some(7);
+    branch.state[object].statics.push(continuous(
         StaticScope::This,
         vec![Modification::ModifyPt {
             power: LayerValue::Fixed(2),
@@ -1384,7 +1384,7 @@ fn cr_613_copiable_definition_changes_detach_warmed_forks() {
     assert_eq!(before.pt(), (2, 2));
 
     let mut sibling = branch.clone();
-    sibling.state.objects[object].statics.clear();
+    sibling.state[object].statics.clear();
     assert_eq!(sibling.characteristics(ogre).pt(), (7, 2));
     assert_eq!(branch.characteristics(ogre).pt(), (9, 5));
     assert_eq!(root.characteristics(ogre).pt(), (2, 2));

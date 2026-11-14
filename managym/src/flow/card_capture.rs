@@ -86,18 +86,23 @@ pub struct CardCapture {
 }
 
 fn snapshot(game: &Game, object: ObjectId) -> CardSnapshot {
-    let data = &game.state.objects[object];
-    let player = &game.state.players[data.owner.0];
+    let (definition, data) = game.state.source_base(object);
+    let (_, owner, _) = game
+        .state
+        .objects
+        .provenance(object)
+        .expect("captured provenance");
+    let player = &game.state.players[owner.0];
     let original = game
         .card_capture
         .as_ref()
         .and_then(|capture| capture.original(object));
     CardSnapshot {
         copy: object.slot(),
-        definition: original.map_or(data.definition_id.0, |object| object.definition),
+        definition: original.map_or(definition.0, |object| object.definition),
         name: original.map_or_else(|| data.name.clone(), |object| object.name.clone()),
         incarnation: object.generation(),
-        owner: data.owner.0,
+        owner: owner.0,
         zone: game.state.zones.zone_of(object),
         origin: match game.state.card_id(object) {
             Some(card) if player.deck.contains(&card) => "deck",
@@ -193,7 +198,7 @@ impl Game {
     pub(crate) fn capture_resolution(&mut self, frame: &EffectFrame) {
         // Attribute to the captured physical copy's initial definition. Copy/face
         // changes do not turn this into a count of executed mechanic programs.
-        let definition = frame.source.and_then(|source| {
+        let definition = frame.source().and_then(|source| {
             let capture = self.card_capture.as_ref()?;
             capture.original(source).map(|object| object.definition)
         });
@@ -205,7 +210,7 @@ impl Game {
             exposure.resolutions.push(ExposureResolution {
                 revision: self.decision_epoch,
                 controller: frame.controller.0,
-                source: frame.source_ref,
+                source: frame.source_ref(),
                 definition,
             });
         }
@@ -344,11 +349,11 @@ mod tests {
                 .zones
                 .zone_objects(ZoneType::Hand, PlayerId(0))
                 .iter()
-                .find(|object_id| game.state.objects[**object_id].name == "Gray Ogre")
+                .find(|object_id| game.state[**object_id].name == "Gray Ogre")
                 .unwrap();
             // Synthetic free, untargeted spell isolates capture from card rules.
-            game.state.objects[object_id].mana_cost = None;
-            game.state.objects[object_id]
+            game.state[object_id].mana_cost = None;
+            game.state[object_id]
                 .keywords
                 .insert(crate::state::card::Keyword::Flash);
             game.card_capture = Some(CardCapture::new(&game));
@@ -419,10 +424,10 @@ mod tests {
         // that this synthetic double-faced land is a playable card.
         let content = default_content_pack();
         let back = content.definition_id("Forest").unwrap();
-        game.state.objects[object]
+        game.state[object]
             .turn_back_face_up((back, Arc::clone(&content.definition(back).unwrap().printed)));
         let after = snapshot(&game, object);
-        assert_eq!(game.state.objects[object].name, "Forest");
+        assert_eq!(game.state[object].name, "Forest");
         assert_eq!(after.name, before.name);
         assert_eq!(after.definition, before.definition);
         assert_eq!(after.incarnation, before.incarnation);

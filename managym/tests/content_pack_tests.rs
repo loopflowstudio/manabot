@@ -229,15 +229,13 @@ fn matches_and_search_clones_share_one_immutable_content_pack() {
 
     // The legacy scenario mutation seam is copy-on-write and cannot mutate a
     // definition in either the source branch or the process-wide pack.
-    branch.state.objects[first_card]
+    branch.state[first_card]
         .subtypes
         .push("scenario-only".to_string());
-    assert!(!game.state.objects[first_card].has_subtype("scenario-only"));
-    assert!(
-        !branch.state.objects[first_card].shares_definition_with(&game.state.objects[first_card])
-    );
+    assert!(!game.state[first_card].has_subtype("scenario-only"));
+    assert!(!branch.state[first_card].shares_definition_with(&game.state[first_card]));
     assert!(!admitted
-        .definition(game.state.objects[first_card].definition_id)
+        .definition(game.state[first_card].definition_id)
         .unwrap()
         .subtypes
         .iter()

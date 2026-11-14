@@ -68,7 +68,7 @@ impl Scenario {
             .zone_objects(ZoneType::Battlefield, PlayerId(player))
             .iter()
             .filter_map(|object_id| {
-                let object = &self.game.state.objects[*object_id];
+                let object = &self.game.state[*object_id];
                 if object.name != card_name {
                     return None;
                 }
@@ -219,7 +219,7 @@ pub fn stack_spell_card(s: &Scenario, name: &str) -> ObjectId {
         .stack_objects
         .iter()
         .find_map(|object| match object {
-            StackObject::Spell(spell) if s.game().state.objects[spell.object].name == name => {
+            StackObject::Spell(spell) if s.game().state[spell.object].name == name => {
                 Some(spell.object)
             }
             _ => None,
