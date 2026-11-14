@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { revealWithinScrollRegions } from '$lib/scroll-regions';
   import { tick } from 'svelte';
   import CardImage from './CardImage.svelte';
 
@@ -75,7 +76,14 @@
 
   function clearQuery(): void {
     setQuery('');
-    searchInput?.focus();
+    searchInput?.focus({ preventScroll: true });
+  }
+
+  function focusFirstChoice(): void {
+    const button = actionList?.querySelector<HTMLButtonElement>('button:not(:disabled)');
+    if (!button) return;
+    button.focus({ preventScroll: true });
+    revealWithinScrollRegions(button);
   }
 
   async function chooseMode(mode: string | null): Promise<void> {
@@ -83,7 +91,7 @@
     learnSelection = mode ? { key: focusKey, mode } : null;
     onHoverAction?.(null);
     await tick();
-    actionList?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+    focusFirstChoice();
   }
 
   $effect(() => {
@@ -95,7 +103,7 @@
 
     lastFocusKey = nextFocusKey;
     void tick().then(() => {
-      actionList?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+      focusFirstChoice();
     });
   });
 </script>

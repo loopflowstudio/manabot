@@ -12,6 +12,7 @@ digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 
 - [Running Academy](#running-academy): install, launch, chosen games and replays, Python, training games, card art, trained bots, troubleshooting
 - [Shared decision surface](#shared-decision-surface)
+- [Using the laptop table](#using-the-laptop-table)
 - [Choice navigation](#choice-navigation)
 - [Presentation runtime](#presentation-runtime)
 - [Playing a trained challenger](#playing-a-trained-challenger)
@@ -398,6 +399,55 @@ The table reads **Who decides / What is happening / Your choices**. Clicking a
 card inspects it and sends nothing; choosing one of the listed legal actions
 commits it. Decisions with a single legal action are taken for you and never
 shown. Reloading the page restores the pending decision.
+
+### Using the laptop table
+
+Start a game, inspect a land in your hand, then choose its play action in
+**Your choices**. The board stays in view as the next prompt appears. Inspecting
+the card sends nothing; selecting the legal action commits the play. If a spell
+needs a target or payment choice, follow the next prompt before taking another
+action.
+
+At laptop widths, the board and hand sit beside the current decision. Long
+choice lists scroll within their own region, so reaching an action does not
+require scrolling away from the table. At narrow widths, board and choices
+stack; use the board/choices jump links to move between them. Changing decisions
+moves focus within the choices region without pulling the page away from the
+board.
+
+- **A crowded hand:** scroll the labeled hand region horizontally to reach
+  the remaining cards.
+- **A crowded battlefield:** use its previous/next page controls. Counts show
+  the size of each group; focusing an action reveals the page holding its
+  subject. Scroll the labeled battlefield region to reach further groups and
+  secondary zones. Identical card copies keep their own choices.
+- **Other zones:** open their inspection controls to see viewer-permitted
+  contents. Empty zones keep their labels and counts; hidden cards remain
+  hidden.
+- **Card details:** hover or keyboard-focus a visible card to preview it, or
+  select it to inspect its details and related choices. Inspection leaves the
+  pending decision unchanged. Use **Show all** to return from card-specific
+  choices to the complete list.
+- **Keyboard navigation:** Tab reaches the board, choices and inspection
+  controls, including labeled scrolling regions. Focus a region to scroll it
+  with the keyboard; activate a listed action only when ready to commit it.
+
+The total legal choice count remains visible when narrowing a list. If a text
+filter finds nothing, use **Clear filter** or Escape; neither chooses an action.
+See [Choice navigation](#choice-navigation) for searching larger lists.
+
+While disconnected or waiting for a submitted choice, the board remains
+readable and action submission is disabled. Reconnect or reload in the same
+tab to recover the actual pending decision. If a choice is rejected because
+the game has advanced, inspect the refreshed prompt and choose again. A
+submitted action cannot be cancelled by clearing inspection or going back.
+Reloading a configured launch in its tab resumes that game; a separate tab or
+another launch has its own game.
+
+For bot inspection, open **Watch** or a recording in **Replay**. The shared
+decision surface shows the acting seat's permitted view and the complete legal
+choices for that decision. Recorded policy outputs appear only when available;
+missing outputs are not reconstructed. See [Inspect a replay](#inspect-a-replay).
 
 ### Card art
 

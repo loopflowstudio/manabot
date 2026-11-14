@@ -118,8 +118,10 @@
     </span>
   </div>
 
+  <details class="schedule-details type-caption"><summary>Turn and combat schedule</summary>
   <Schedule schedule={observation.schedule} heroSeat={observation.agent.player_index}
     {heroLabel} {villainLabel} />
+  </details>
 
   <PlayerArea
         definitionNames={observation.definition_names ?? {}}
@@ -136,7 +138,7 @@
   />
 
   {#if observation.stack_objects !== undefined}
-    <section aria-label="Ordered stack" data-testid="ordered-stack" class="border-t border-line py-3">
+    <section aria-label="Ordered stack" data-testid="ordered-stack" class="ordered-stack border-t border-line py-1">
       <h3 class="type-title">Stack · top first</h3>
       {#if observation.stack_objects.length === 0}<p class="type-caption text-ink-2">Empty stack</p>{/if}
       <ol class="type-caption space-y-2">
@@ -191,7 +193,7 @@
     </section>
   {/if}
 
-  <div class="border-t border-line">
+  <div class="hero-area border-t border-line">
     <PlayerArea
         definitionNames={observation.definition_names ?? {}}
       label={heroLabel}
@@ -265,6 +267,15 @@
 <HoverPreview card={preview} />
 
 <style>
+  @media (min-width: 1024px) and (min-height: 650px) {
+    [data-testid="game-board"] { display: flex; flex-direction: column; }
+    [data-testid="game-board"] > :global(.player-area) { flex: 1; }
+    .hero-area { flex: 1.6; display: flex; flex-direction: column; min-height: 0; }
+    .hero-area > :global(.player-area) { flex: 1; }
+    .schedule-details, .ordered-stack { max-height: 90px; overflow-y: auto; flex-shrink: 0; }
+    [aria-label="Inspected card"], [aria-label="Private inspection"], [aria-label="The stack"] { max-height: 130px; overflow-y: auto; flex-shrink: 0; }
+  }
+
   .tempo::before,
   .tempo::after {
     content: '';

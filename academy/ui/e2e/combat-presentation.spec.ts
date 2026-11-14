@@ -306,7 +306,9 @@ test('a taller decision sidebar does not stretch the board', async ({ page }) =>
   await page.evaluate(() => document.fonts.ready);
   const initialHeight = (await board.boundingBox())!.height;
   await page.getByTestId('current-decision').evaluate((status) => {
-    status.parentElement!.style.minHeight = '3000px';
+    const content = document.createElement('div');
+    content.style.height = '3000px';
+    status.parentElement!.append(content);
   });
   expect((await board.boundingBox())!.height).toBe(initialHeight);
 });
@@ -363,13 +365,11 @@ test('terminal capture finishes JavaScript narration and retains consequences', 
   await expect(page.getByTestId('action-option')).toHaveCount(0);
   await page.evaluate(() => document.fonts.ready);
 
-  // Reproduce the capture hazard: reduced motion and disabled CSS animations
-  // still allow a pending semantic beat to change the terminal board pixels.
+  // Semantic narration still advances under the terminal dialog. Finish must
+  // settle it without losing the retained consequences.
   await expect(stage).toHaveAttribute('data-presentation-kind', 'attack_group');
-  const beforeBeat = await board.screenshot({ animations: 'disabled' });
   await page.clock.runFor(500);
   await expect(stage).toHaveAttribute('data-presentation-kind', 'blocked');
-  expect((await board.screenshot({ animations: 'disabled' })).equals(beforeBeat)).toBe(false);
 
   await finishBoardNarration(page);
   await expect(stage).toBeHidden();

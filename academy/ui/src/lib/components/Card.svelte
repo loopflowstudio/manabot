@@ -6,6 +6,7 @@
   // for the printer (targeted), reproduced as an etching (spent), counted
   // in brass (+1/+1), annotated in the margin (other effect-derived state).
   interface Props {
+    objectId?: number;
     name: string;
     copyDescription?: string;
     power?: number | null;
@@ -26,6 +27,7 @@
   }
 
   let {
+    objectId = undefined,
     name,
     copyDescription = '',
     power = null,
@@ -77,6 +79,7 @@
 </script>
 
 <button
+  data-object-id={objectId}
   type="button"
   aria-label={accessibleName}
   aria-disabled={!clickable}

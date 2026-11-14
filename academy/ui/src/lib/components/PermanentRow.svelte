@@ -40,6 +40,7 @@
 
   {#each permanents as permanent}
     <Card
+      objectId={permanent.id}
       name={permanent.name ?? 'Unknown Permanent'}
       copyDescription={copyLabel(allPermanents, permanent.id)}
       power={permanent.power === 0 && permanent.toughness === 0 ? null : permanent.power}

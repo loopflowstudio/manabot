@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { revealWithinScrollRegions } from '$lib/scroll-regions';
   import { copyLabel } from '$lib/decision-labels';
   import { effectNote } from '$lib/permanent-notes';
 
@@ -15,9 +16,8 @@
   import CardBack from './CardBack.svelte';
   import Battlefield from './Battlefield.svelte';
 
-  // A player's region of the sheet: ruled staves with margin rubrics, the
-  // way a score names its staves. The opponent reads hand-first (their hand
-  // faces you); the hero reads battlefield-first.
+  // Player identity and the hero hand remain outside the scrolling zones.
+  // Secondary zones expose only cards already permitted by the viewer projection.
   interface Props {
     label: string;
     player: PlayerState;
@@ -134,12 +134,13 @@
 </script>
 
 {#snippet rubric(text: string)}
-  <div class="type-rubric pt-2 text-right text-ink-2">
+  <div class="type-rubric pt-1 text-left text-ink-2">
     {text}
   </div>
 {/snippet}
 
 {#snippet playerBar()}
+  <details class="player-status type-caption"><summary>{label} status and mana</summary>
   {#if player.mana}
     <p class="type-caption py-1" data-testid="mana-pool">{label} mana: {manaText(player.mana)}
       {#if player.restricted_mana?.length}
@@ -182,6 +183,7 @@
       ].filter(Boolean).join(' · ')}.
     </p>
   {/if}
+  </details>
   <!-- The player bar, in the manner of a chess clock plate: identity at
        one end, life at the other. The opponent's sits above their side of
        the table; yours below yours — the players bracket the battlefield. -->
@@ -208,12 +210,11 @@
   </div>
 {/snippet}
 
-<section class="py-3" aria-label={`${label}${deckName ? ` — ${deckName}` : ''}`}>
-  {#if opponent}
-    {@render playerBar()}
-  {/if}
+<section class="player-area" aria-label={`${label}${deckName ? ` — ${deckName}` : ''}`}>
+  {@render playerBar()}
 
-  <div class="staves">
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex (keyboard access to the scrolling zones) -->
+  <div class="staves" role="region" aria-label={`${label} battlefield and zones`} tabindex="0">
     {#if player.main_counts}
       <details class="type-caption py-2" data-testid="decklist-summary">
         <summary>Decklist ({total(player.main_counts)} cards, {total(player.unseen_counts)} unseen)</summary>
@@ -241,19 +242,15 @@
       </div>
     {/if}
     {#if opponent}
-      <div class="staff">
-        {@render rubric(`Hand (${hiddenHandCount})`)}
-        <div class="flex flex-wrap items-end gap-2">
-          {#if hiddenHandCount === 0}
-            <div class="type-caption px-1 py-1 text-ink-3">Empty hand</div>
-          {/if}
+      <details class="type-caption text-ink-2">
+        <summary>Hand ({hiddenHandCount}) · hidden</summary>
+        <div class="hand-cards">
           {#each Array(hiddenHandCount) as _, index}
-            <div role="img" aria-label={`Hidden card ${index + 1}`}>
-              <CardBack />
-            </div>
+            <div role="img" aria-label={`Hidden card ${index + 1}`}><CardBack /></div>
           {/each}
         </div>
-      </div>
+      </details>
+    {/if}
       <div class="staff">
         {@render rubric('Battlefield')}
         <Battlefield
@@ -266,22 +263,66 @@
           {onPreviewCard}
         />
       </div>
-    {:else}
-      <div class="staff">
-        {@render rubric('Battlefield')}
-        <Battlefield
-          permanents={player.battlefield}
-          {tablePermanents}
-          {focusedIds}
-          {clickableTargets}
-          {onSelectTarget}
-          {onHoverTarget}
-          {onPreviewCard}
-        />
+
+    <details open={player.graveyard.some(card => focusedIds.has(card.id))}>
+      <summary class="type-caption cursor-pointer">Graveyard ({player.graveyard.length})</summary>
+      <div class="flex flex-wrap items-end gap-2">
+        {#if player.graveyard.length === 0}
+          <div class="type-caption px-1 py-1 text-ink-3">Empty graveyard</div>
+        {/if}
+        {#each player.graveyard as card}
+          <Card
+            name={card.name}
+              copyDescription={copyLabel(player.graveyard, card.id)}
+            power={card.types.is_creature ? card.power : null}
+            toughness={card.types.is_creature ? card.toughness : null}
+            focused={focusedIds.has(card.id)}
+            spent
+            clickable={onSelectTarget !== undefined}
+            onSelect={() => onSelectTarget?.(card.id)}
+            onHoverStart={() => preview(card)}
+            onHoverEnd={() => onPreviewCard?.(null)}
+          />
+        {/each}
       </div>
-      <div class="staff">
-        {@render rubric(`Hand (${player.hand.length})`)}
+    </details>
+
+    {#if exileCount > 0}
+      <details open={player.exile.some(card => focusedIds.has(card.id))}>
+        <summary class="type-caption cursor-pointer">Exile ({exileCount})</summary>
         <div class="flex flex-wrap items-end gap-2">
+          {#if hiddenExileCount > 0}
+            <div class="type-caption px-1 py-1 text-ink-3">
+              {hiddenExileCount} face-down {hiddenExileCount === 1 ? 'card' : 'cards'}
+            </div>
+          {/if}
+          {#each player.exile as card}
+            <Card
+              name={card.name}
+              copyDescription={exileDescription(card)}
+              power={card.types.is_creature ? card.power : null}
+              toughness={card.types.is_creature ? card.toughness : null}
+              focused={focusedIds.has(card.id)}
+              spent
+              clickable={onSelectTarget !== undefined}
+              onSelect={() => onSelectTarget?.(card.id)}
+              onHoverStart={() => preview(card)}
+              onHoverEnd={() => onPreviewCard?.(null)}
+            />
+          {/each}
+        </div>
+      </details>
+    {/if}
+  </div>
+
+  {#if !opponent}
+      <div class="hand-staff">
+        {@render rubric(`Hand (${player.hand.length})`)}
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex (keyboard access to horizontal hand scrolling) -->
+        <div role="region" aria-label={`${label} hand`} tabindex="0" class="hand-cards"
+          onfocusin={(event) => {
+            if (event.target instanceof HTMLElement) revealWithinScrollRegions(event.target);
+          }}>
           {#if player.hand.length === 0}
             <div class="type-caption px-1 py-1 text-ink-3">Empty hand</div>
           {/if}
@@ -306,71 +347,26 @@
           {/each}
         </div>
       </div>
-    {/if}
-
-    <div class="staff">
-      {@render rubric(`Graveyard (${player.graveyard.length})`)}
-      <div class="flex flex-wrap items-end gap-2">
-        {#if player.graveyard.length === 0}
-          <div class="type-caption px-1 py-1 text-ink-3">Empty graveyard</div>
-        {/if}
-        {#each player.graveyard as card}
-          <Card
-            name={card.name}
-              copyDescription={copyLabel(player.graveyard, card.id)}
-            power={card.types.is_creature ? card.power : null}
-            toughness={card.types.is_creature ? card.toughness : null}
-            focused={focusedIds.has(card.id)}
-            spent
-            clickable={onSelectTarget !== undefined}
-            onSelect={() => onSelectTarget?.(card.id)}
-            onHoverStart={() => preview(card)}
-            onHoverEnd={() => onPreviewCard?.(null)}
-          />
-        {/each}
-      </div>
-    </div>
-
-    {#if exileCount > 0}
-      <div class="staff">
-        {@render rubric(`Exile (${exileCount})`)}
-        <div class="flex flex-wrap items-end gap-2">
-          {#if hiddenExileCount > 0}
-            <div class="type-caption px-1 py-1 text-ink-3">
-              {hiddenExileCount} face-down {hiddenExileCount === 1 ? 'card' : 'cards'}
-            </div>
-          {/if}
-          {#each player.exile as card}
-            <Card
-              name={card.name}
-              copyDescription={exileDescription(card)}
-              power={card.types.is_creature ? card.power : null}
-              toughness={card.types.is_creature ? card.toughness : null}
-              focused={focusedIds.has(card.id)}
-              spent
-              clickable={onSelectTarget !== undefined}
-              onSelect={() => onSelectTarget?.(card.id)}
-              onHoverStart={() => preview(card)}
-              onHoverEnd={() => onPreviewCard?.(null)}
-            />
-          {/each}
-        </div>
-      </div>
-    {/if}
-  </div>
-
-  {#if !opponent}
-    {@render playerBar()}
   {/if}
 </section>
 
 <style>
+  .player-area { min-width: 0; padding: .25rem 0; }
+  .hand-cards { display: flex; align-items: end; gap: .5rem; overflow-x: auto; overscroll-behavior: contain; padding: .25rem; }
+  .hand-cards > :global(*) { flex-shrink: 0; }
+  .hand-staff { min-width: 0; }
+  @media (min-width: 1024px) and (min-height: 650px) {
+    .player-area { display: flex; flex-direction: column; min-height: 0; }
+    .player-status { flex-shrink: 0; max-height: 90px; overflow: auto; }
+    .staves { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 .25rem; }
+    .hand-staff { flex-shrink: 0; }
+  }
   .staves .staff {
     display: grid;
-    grid-template-columns: 88px minmax(0, 1fr);
+    grid-template-columns: 1fr;
     column-gap: 18px;
     align-items: end;
-    padding: 10px 0 12px;
+    padding: 4px 0;
   }
   .staves .staff + .staff {
     border-top: 1px solid color-mix(in srgb, var(--border) 62%, transparent);

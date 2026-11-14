@@ -289,7 +289,8 @@
 </script>
 
 <main
-  class="mx-auto w-full max-w-[1400px] px-4 py-6"
+  class:table-active={gameStore.observation !== null && !gameStore.gameOver && !showSetup}
+  class="play-page mx-auto w-full max-w-[1600px] px-4 py-4"
   data-update-seq={gameStore.updateSeq}
   data-frame-revision={gameStore.protocolFrame?.revision ?? -1}
   data-table-revision={gameStore.table?.table_revision ?? -1}
@@ -303,8 +304,8 @@
   {/if}
 
   <!-- The sheet: one continuous leaf. Regions are ruled, never boxed. -->
-  <div class="overflow-hidden rounded-sm border border-line bg-panel shadow-sheet">
-    <div class="px-10 pb-10 pt-6 max-md:px-5 max-md:pb-6">
+  <div class="play-sheet overflow-hidden rounded-sm border border-line bg-panel shadow-sheet">
+    <div class="sheet-content px-5 pb-4 pt-3">
   <!-- The masthead, in levels: the matchup names the players, fields show
        only while they matter, one red action, and the connection is a
        whisper beside it. -->
@@ -402,8 +403,8 @@
     <DeckImport />
   {/if}
   {#if gameStore.observation && boardObservation}
-    <div class="grid grid-cols-1 items-start">
-      <div id="table-board" class="min-w-0"><a href="#table-choices" class="type-caption underline">Choose a play</a>
+    <div class="play-workspace" data-testid="play-workspace">
+      <div id="table-board" class="board-region" tabindex="-1"><a href="#table-choices" class="table-jump type-caption underline">Choose a play</a>
       <GameBoard
         observation={boardObservation}
         focusedIds={gameStore.focusIds}
@@ -422,10 +423,11 @@
 
       <!-- The margin column: actions, stops, and the log as annotations
            beside the score, behind a single vertical rule. -->
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex (keyboard access to the scrolling choices rail) -->
       <div
-        id="table-choices" class="flex min-w-0 flex-col gap-6 border-t-2 border-action pt-6"
+        id="table-choices" tabindex="0" role="region" aria-label="Current choices and game controls" class="choices-region"
       >
-        <a href="#table-board" class="type-caption underline">Inspect board</a>
+        <a href="#table-board" class="table-jump type-caption underline">Inspect board</a>
         <p data-testid="current-decision" role="status" aria-live="polite" aria-atomic="true" class="text-ink">
           {gameStore.decisionStatus}
         </p>
@@ -539,3 +541,23 @@
   {#key gameStore.table.attempt_id}<Feedback attemptId={gameStore.table.attempt_id} />{/key}
 {/if}
 
+
+<style>
+  .play-workspace { display: grid; gap: 1rem; min-width: 0; }
+  .board-region { min-width: 0; }
+  .choices-region { display: flex; flex-direction: column; gap: 1rem; min-width: 0; border-top: 2px solid var(--accent); padding-top: 1rem; }
+  @media (min-width: 1024px) and (min-height: 650px) {
+    .table-active { height: calc(100dvh - 64px); display: flex; flex-direction: column; }
+    .table-active > :global(*) { flex-shrink: 0; }
+    .table-active .play-sheet { flex: 1; min-height: 0; }
+    .table-active .sheet-content { height: 100%; display: flex; flex-direction: column; }
+    .table-active .sheet-content > :global(*) { flex-shrink: 0; }
+    .table-active .play-workspace { flex: 1; min-height: 0; }
+    .play-workspace { grid-template-columns: minmax(0, 1fr) clamp(19rem, 26vw, 23rem); height: calc(100dvh - 190px); min-height: 0; padding-top: .5rem; }
+    .board-region { min-height: 0; display: flex; flex-direction: column; }
+    .board-region :global([data-testid="game-board"]) { flex: 1; min-height: 0; }
+    .choices-region { min-height: 0; overflow-y: auto; overscroll-behavior: contain; border-top: 0; border-left: 1px solid var(--border); padding: 0 .5rem 1rem 1rem; scrollbar-gutter: stable; }
+    .table-jump { position: absolute; width: 1px; height: 1px; overflow: hidden; }
+    .table-jump:focus { position: static; width: auto; height: auto; }
+  }
+</style>

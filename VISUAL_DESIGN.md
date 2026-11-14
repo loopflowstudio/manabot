@@ -234,6 +234,13 @@ between them belongs to the sheet.
 
 One continuous leaf. Regions are ruled, never boxed.
 
+- At laptop widths, the sheet is a viewport-bounded workspace: a flexible
+  board beside a choices margin, with the hero hand, turn, pending prompt and
+  essential controls in reach. Long choices and hands scroll in labeled,
+  keyboard-reachable regions; dense battlefields page with counts and reveal
+  the focused subject. Decision focus stays inside its region without moving
+  the document. Narrow layouts stack board and choices with explicit jump
+  links. Fit through composition, never smaller text or browser zoom.
 - The game header is the sheet's **masthead**, in conscious levels: the
   matchup names the players — "You (UR Lessons) vs Search 64 (GW Allies)",
   serif with mana pips; configuration fields appear only while they matter
@@ -259,9 +266,11 @@ One continuous leaf. Regions are ruled, never boxed.
 - The log records **game vocabulary only** — actor and action; key hints
   and control labels never enter the record.
 - **Hidden information is counted, not drawn**: hidden cards are the
-  violet-framed back with its blind lozenge, unlabeled. **Empty states are
-  silent**: one italic serif aside in `ink-2` with a staff's worth of
-  breathing room — no borders, no chips.
+  violet-framed back with its blind lozenge, unlabeled. **Empty zones are
+  compact**: a rubric and count, with an optional italic serif aside in
+  `ink-2`, rather than an empty card lane. Secondary zone contents open through
+  explicit inspection controls. Inspection must leave the pending choice
+  reachable in either color scheme.
 - Modals sit on the **scrim** (`color-mix(in srgb, var(--text) 45%,
   transparent)`, z 190); page content is never dimmed by its own opacity.
 

@@ -18,8 +18,8 @@
   const groups = $derived(groupBattlefield(permanents));
   const lanes: { lane: BattlefieldLane; label: string }[] = [
     { lane: 'creatures', label: 'Creatures' },
-    { lane: 'other', label: 'Other permanents' },
     { lane: 'lands', label: 'Lands' },
+    { lane: 'other', label: 'Other permanents' },
     { lane: 'tokens', label: 'Artifact tokens' },
   ];
 </script>
@@ -34,10 +34,8 @@
 <style>
   .battlefield-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(5.5rem, 30%);
-    grid-template-rows: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.5rem;
-    height: clamp(20rem, 34vh, 23rem);
     min-width: 0;
   }
 </style>

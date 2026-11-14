@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { revealWithinScrollRegions } from '$lib/scroll-regions';
+  import { onMount, tick } from 'svelte';
   import { battlefieldPageLayout } from '$lib/battlefield-layout';
   import type { CardPreview, PermanentState } from '$lib/types';
   import PermanentRow from './PermanentRow.svelte';
@@ -28,7 +29,12 @@
   $effect(() => { if (page >= pages) page = pages - 1; });
   $effect(() => {
     const index = permanents.findIndex(permanent => focusedIds.has(permanent.id));
-    if (index >= 0) page = Math.floor(index / layout.capacity);
+    if (index >= 0) {
+      page = Math.floor(index / layout.capacity);
+      void tick().then(() => {
+        if (box.parentElement) revealWithinScrollRegions(box.parentElement);
+      });
+    }
   });
   onMount(() => {
     const observer = new ResizeObserver(([entry]) => {
@@ -40,7 +46,7 @@
   });
 </script>
 
-<div role="group" aria-label={label} data-battlefield-lane={lane} class="lane min-h-0 min-w-0 rounded border border-line p-2">
+<div role="group" aria-label={label} data-battlefield-lane={lane} class:occupied={permanents.length > 0} class="lane min-h-0 min-w-0 rounded border border-line p-2">
   <h3 class="type-rubric truncate text-ink-2" title={label}>{label} · {permanents.length}</h3>
   <div bind:this={box} class="min-h-0 overflow-hidden p-1">
     {#if permanents.length}
@@ -58,5 +64,7 @@
 </div>
 
 <style>
-  .lane { display: grid; grid-template-rows: auto minmax(0, 1fr) 1.5rem; }
+  .lane { align-self: start; display: grid; grid-template-rows: auto; }
+  .lane:not(.occupied) > :global(:not(h3)) { display: none; }
+  .occupied { height: 150px; grid-template-rows: auto minmax(0, 1fr) 1.5rem; }
 </style>
