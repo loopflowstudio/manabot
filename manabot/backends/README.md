@@ -4,14 +4,17 @@
 from manabot.backends.torch.checkpoint import load_checkpoint
 
 policy, space = load_checkpoint(".runs/example/self-play-raw.safetensors")
-batch = policy.prepare(obs)              # NumPy in: the buffers VectorEnv produces
-logits, values = policy.evaluate(batch)  # NumPy out: logits [B,A], values [B]
+batch = policy.prepare(obs, inference=True)  # NumPy in: the buffers VectorEnv produces
+logits, values = policy.evaluate(batch)      # NumPy out: logits [B,A], values [B]
 ```
 
 `obs` is the dictionary of NumPy observation buffers for `B` decisions.
 `prepare` checks it and does every integer lookup on the host, returning a
 `Prepared` batch (`manabot.policy.prepare`); `evaluate` runs the forward and
-returns logits, -1e8 off the legal actions, and each row's value. Every
+returns logits, -1e8 off the legal actions, and each row's value.
+`inference=True` lays the batch out as simulation and serving do (on CPU it
+drops object and fact columns no row uses); the default is the learning
+layout, whose outputs differ from it by float summation order. Every
 backend reads the same `Prepared` batch and the same checkpoint file, so the
 MLX lines differ only in the import and the loader's name
 ([mlx.md](mlx.md)).

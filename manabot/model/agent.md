@@ -213,7 +213,9 @@ Each observation path prepares once per batch:
   advantage filter drops are never checked, and epochs prepare admitted rows
   again without repeating the checks.
 - Other callers use `agent.prepare(obs)` and `on_device`, or
-  `agent.evaluate(agent.prepare(obs))` for NumPy logits and values.
+  `agent.evaluate(agent.prepare(obs, inference=True))` for NumPy logits and
+  values; pass `inference=not torch.is_grad_enabled()` when one path serves
+  both.
 
 ## Inference preparation
 

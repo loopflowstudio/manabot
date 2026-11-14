@@ -104,7 +104,8 @@ logits and a signed expected value `[B]`; `forward_distribution(prepared)`
 returns the raw critic output instead: `[B,3]` logits for
 `value_kind="categorical_wdl"`, `[B,1]` for scalar. An observation dictionary
 passed to either raises `TypeError`. For NumPy in and out without gradients,
-`agent.evaluate(agent.prepare(obs))` returns logits and values
+`agent.evaluate(agent.prepare(obs, inference=True))` returns logits and values
+in the layout simulation uses
 ([backends](../manabot/backends/README.md#the-torch-backend)).
 
 | Piece | Module | What it does |

@@ -9,8 +9,8 @@ framework** (PyTorch, MLX, JAX); it uses NumPy only
 from manabot.backends.torch.checkpoint import load_checkpoint
 
 policy, space = load_checkpoint("policy.safetensors")
-batch = policy.prepare(obs)              # check, trim, index: a Prepared batch
-logits, values = policy.evaluate(batch)  # NumPy: logits [B,A], values [B]
+batch = policy.prepare(obs, inference=True)  # check, trim, index: a Prepared batch
+logits, values = policy.evaluate(batch)      # NumPy: logits [B,A], values [B]
 ```
 
 `Prepared` is the one policy input. A policy's `prepare` runs this package's
