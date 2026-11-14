@@ -414,16 +414,16 @@ in Git history. Their archived inputs and receipts are indexed in
 [repository archive](../docs/development.md#retained-evidence-and-archived-corpora). Shared target inspection
 now belongs to `sim/action/targeting.py`.
 
-`heuristic` (`manabot/sim/heuristic.py`) is a
-separately versioned candidate anchor of rules of thumb: highest-mana-value casts,
-removal held for a kill, counters held for an opponent's spell, effect polarity
-derived from the semantic card source, attacks unless a blocker kills and
-survives, and value blocks. Prompts without a rule match `scripted_greedy`, which
-stays frozen with its registered source identity. Select it for checkpoint monitoring
-with `MonitorProtocol(opponent="heuristic")`. One exploratory check (MTG-152,
-GPU seed 12261 at 25k, 200 paired games per anchor) scored the checkpoint
-0.57 against `heuristic` and 0.795 against `scripted_greedy`, lower in every
-cell; it is not yet a frozen anchor comparison.
+Select `MonitorProtocol(opponent="heuristic")` for checkpoint monitoring, or
+`VectorEnv(..., player_policies=("agent", "heuristic"))` for a native batched opponent.
+The scalar `HeuristicPlayer` adapter and arena anchor call the same engine
+implementation. `heuristic` is a separately versioned anchor with rules of thumb
+for mana, timing, targets, card choices and combat; see
+[selection, rules and information limits](../docs/engine.md#built-in-heuristic).
+Historical results keep the heuristic version they evaluated. One exploratory
+check (MTG-152, GPU seed 12261 at 25k, 200 paired games per anchor) scored the
+checkpoint 0.57 against `heuristic` and 0.795 against `scripted_greedy`, lower
+in every cell; it is not yet a frozen anchor comparison.
 
 For versioned S1–S5 tactical diagnostics through ordinary checkpoint players,
 see [checkpoint scenario scoring](../docs/evaluation.md#checkpoint-scenarios). Each retained
