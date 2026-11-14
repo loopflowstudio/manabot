@@ -647,7 +647,17 @@ export interface OpponentConfig {
   opponent_sha256?: string;
 }
 
+/** What a game recorded about its checkpoint; a value it did not record is absent. */
+export interface CheckpointProvenance {
+  source?: string | null;
+  world?: string | null;
+  model?: string | null;
+  step?: number | null;
+}
+
 export interface TraceConfig {
+  opponent?: { name: string; sha256: string; producer?: string } | null;
+  opponent_checkpoint?: CheckpointProvenance | null;
   watch_players?: string[] | null;
   hero_deck: Record<string, number>;
   villain_deck: Record<string, number>;

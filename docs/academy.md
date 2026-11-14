@@ -628,7 +628,9 @@ deleting the cache directory is safe.
 Every game you start is recorded as you play.
 
 - **Games** (`/games`) lists them, newest first, with filters for player, deck,
-  status, result and date. **My games** narrows the list to this browser.
+  status, result and date. **My games** narrows the list to this browser. A
+  trained bot appears under its
+  [short name and digest](#how-a-trained-opponent-is-named).
 - Opening a game shows it in **Replay** (`/replay`): step forward and back
   through each recorded decision, with the board, the legal actions offered
   and the action taken. While the server that played the game is still
@@ -709,6 +711,43 @@ It adds:
 - **Greedy** and **Heuristic** players in Watch.
 - **Open a game file**: exported training games and evaluation traces open as
   verified replays.
+
+#### How a trained opponent is named
+
+A checkpoint found under a runs directory is named by its path there, and one
+run's checkpoints share most of that path. Academy shows the first and last
+parts of the name with the first ten characters of the checkpoint's SHA-256:
+
+```text
+recorded name   ci-fix-528/consumer/release-smoke/self-play/etude/6b2c855662254a698e5c7a97356b7930/checkpoints/learner_transitions-8
+recorded digest 7ac5d442da37abf0838098f8a971a193b9f77d11c094d92688ff35e3d12544dc
+
+shown as        ci-fix-528/…/learner_transitions-8 · 7ac5d442da
+```
+
+The same short form appears in the Opponent menu, on the opponent's bar at the
+table, in the turn line and target choices, in **Games**, **Replay** and
+**Watch**. The Opponent menu adds the training step when the checkpoint
+records one. A name with fewer than three `/`-separated parts, such as a
+Tournament entrant's label, is shown whole. Human names are never shortened
+this way; one too long for its line ends in an ellipsis.
+
+The digest is what tells two checkpoints apart. Two files from one run can
+share a short name, and the same file listed from two directories has two
+names and one digest, so the short digest always accompanies a trained
+opponent's name. Random, Search and other control bots load no checkpoint and show
+no digest.
+
+For the full identity, open **status and mana** on that player's bar, by mouse
+or with Tab and Enter. It lists the full recorded name, the full SHA-256 as
+selectable text and the producer. In **Replay** it also lists what the game
+recorded about the checkpoint: its source, world, model shape and training
+step. A value the checkpoint did not record is absent, not guessed. Hovering
+a short name shows the full name and digest.
+
+Shortening is display only. Recordings, `play.sqlite`, exported games and
+filter links hold the full name and digest: search **Games** by either, and
+the **Bot version** filter selects by the full digest.
 
 Without manabot the Opponent menu and Watch show a line saying trained bots
 need it, and a saved game that was played against a checkpoint still replays;
@@ -928,8 +967,12 @@ loader. A checkpoint bound to another world, content or deck setup stays listed,
 disabled, with the mismatch, and the server refuses it with the same sentence.
 The browser sends only a digest; the server re-hashes the bytes before play,
 fails clearly if they were replaced, and records the identity as the trace's
-`opponent_checkpoint`. An install without manabot lists no trained opponents
-and says why.
+`opponent_checkpoint`. The checkpoint's path on the server stays on the
+server: a trace sent to the browser or exported for a viewer carries the name,
+digest, producer, source, world, model shape and step, without the path. The
+browser shortens the name for display
+([how a trained opponent is named](#how-a-trained-opponent-is-named)). An
+install without manabot lists no trained opponents and says why.
 
 To serve the same SPA/ASGI entrypoint as the hosted app:
 
