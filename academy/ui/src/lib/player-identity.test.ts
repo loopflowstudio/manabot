@@ -6,7 +6,7 @@ it('shortens only path-shaped bot names and retains exact provenance', () => {
   const digest = '7ac5d442da' + '0'.repeat(54);
   expect(playerIdentity({ name, kind: 'bot', digest })).toMatchObject({
     compact: 'ci-fix-528/…/learner_transitions-8', full: name, digest,
-    shortDigest: '7ac5d442da', text: 'ci-fix-528/…/learner_transitions-8 · 7ac5d442da',
+    text: 'ci-fix-528/…/learner_transitions-8 · 7ac5d442da',
     description: `${name} · ${digest}`,
   });
 });
@@ -30,8 +30,8 @@ it('distinguishes checkpoints with the same compact name by recorded version', (
 it('treats a control bot version as settings, not a digest', () => {
   const search = recordedIdentity({ name: 'Search', kind: 'bot', player_id: 'control:search',
     version: 'c'.repeat(64), inference: { policy: 'search' } });
-  expect(search).toMatchObject({ digest: null, shortDigest: null, text: 'Search' });
+  expect(search).toMatchObject({ digest: null, text: 'Search' });
   const checkpoint = recordedIdentity({ name: 'run/x/model', kind: 'bot', player_id: 'p',
     version: 'd'.repeat(64), inference: { policy: 'checkpoint' } });
-  expect(checkpoint.shortDigest).toBe('dddddddddd');
+  expect(checkpoint.text).toBe('run/…/model · dddddddddd');
 });

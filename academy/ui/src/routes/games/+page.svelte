@@ -176,17 +176,17 @@
   {#if !loading && !error && !games.length}<p class="rounded border border-line bg-panel p-8 text-center">No games match these filters. Try another player or clear the filters.</p>{/if}
   {#if games.length}
     <div class="overflow-x-auto rounded border border-line bg-panel" aria-busy={loading}>
-      <table class="w-full table-fixed text-left">
+      <table class="w-full table-fixed text-left [overflow-wrap:anywhere]">
         <caption class="sr-only">Recorded games across players</caption>
         <colgroup><col style="width: 14%" /><col style="width: 30%" /><col style="width: 30%" /><col style="width: 18%" /><col style="width: 8%" /></colgroup>
-        <thead class="border-b border-line text-ink-2"><tr><th class="p-4 [overflow-wrap:anywhere]">Played</th><th class="p-4 [overflow-wrap:anywhere]">Player 1</th><th class="p-4 [overflow-wrap:anywhere]">Player 2</th><th class="p-4 [overflow-wrap:anywhere]">Result / status</th><th class="p-4 [overflow-wrap:anywhere]">Review</th></tr></thead>
+        <thead class="border-b border-line text-ink-2"><tr><th class="p-4">Played</th><th class="p-4">Player 1</th><th class="p-4">Player 2</th><th class="p-4">Result / status</th><th class="p-4">Review</th></tr></thead>
         <tbody>
           {#each games as game (game.id)}
             <tr class="border-b border-line align-top" data-testid="game-history-row">
-              <td class="p-4 [overflow-wrap:anywhere]"><time datetime={game.timestamp ?? undefined}>{game.timestamp ? new Date(game.timestamp).toLocaleString() : 'Unknown date'}</time><div class="mt-1 text-xs text-ink-2">{game.origin.replaceAll('_', ' ')}</div></td>
+              <td class="p-4"><time datetime={game.timestamp ?? undefined}>{game.timestamp ? new Date(game.timestamp).toLocaleString() : 'Unknown date'}</time><div class="mt-1 text-xs text-ink-2">{game.origin.replaceAll('_', ' ')}</div></td>
               {#each [0, 1] as seat}
                 {@const player = game.players.find((p) => p.seat === seat)}
-                <td class="p-4 [overflow-wrap:anywhere]">
+                <td class="p-4">
                   {#if player}
                     <a href={filterUrl('player', player.player_id)} class="font-semibold underline decoration-line underline-offset-4"><PlayerName identity={recordedIdentity(player)} chip={false} /></a>
                     <div class="mt-1 text-sm text-ink-2">{player.kind === 'human' ? 'Human' : 'Bot'} · {player.deck.replaceAll('_', ' ')}</div>
@@ -195,8 +195,8 @@
                   {:else}<span class="text-ink-2">Unknown player</span>{/if}
                 </td>
               {/each}
-              <td class="p-4 [overflow-wrap:anywhere]"><span class="font-semibold">{resultLabel(game)}</span>{#if game.status !== 'completed' && game.end_reason !== 'active'}<div class="text-sm text-ink-2">{game.end_reason?.replaceAll('_', ' ')}</div>{/if}<div class="mt-1 text-xs text-ink-2">{game.num_events} recorded steps</div></td>
-              <td class="p-4 [overflow-wrap:anywhere]">{#if game.replay_available}<a href={replayUrl(game.id)} class="underline" aria-label={`Replay game ${game.id}`}>Replay</a>{:else}<span class="text-sm text-ink-2">Replay private until completed</span>{/if}
+              <td class="p-4"><span class="font-semibold">{resultLabel(game)}</span>{#if game.status !== 'completed' && game.end_reason !== 'active'}<div class="text-sm text-ink-2">{game.end_reason?.replaceAll('_', ' ')}</div>{/if}<div class="mt-1 text-xs text-ink-2">{game.num_events} recorded steps</div></td>
+              <td class="p-4">{#if game.replay_available}<a href={replayUrl(game.id)} class="underline" aria-label={`Replay game ${game.id}`}>Replay</a>{:else}<span class="text-sm text-ink-2">Replay private until completed</span>{/if}
                 {#each game.feedback as note}<blockquote class="mt-2 max-w-64 break-words text-sm italic">{note.note}</blockquote>{/each}
               </td>
             </tr>

@@ -158,10 +158,9 @@
     <p>{identity.full}</p>
     {#if identity.digest}<p>SHA-256: {identity.digest}</p>{/if}
     {#if identity.producer}<p>Producer: {identity.producer}</p>{/if}
-    {#each ['source', 'world', 'model', 'step'] as key}
-      {#if identity.provenance?.[key] !== null && identity.provenance?.[key] !== undefined}
-        <p>{key}: {typeof identity.provenance[key] === 'object' ? JSON.stringify(identity.provenance[key]) : String(identity.provenance[key])}</p>
-      {/if}
+    {#each ['source', 'world', 'model', 'step'] as const as key}
+      {@const value = identity.provenance?.[key]}
+      {#if value != null}<p>{key}: {value}</p>{/if}
     {/each}
   </div>
   {/if}

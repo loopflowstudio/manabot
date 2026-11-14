@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { playerIdentity } from '$lib/player-identity';
+  import { checkpointIdentity, shortHash } from '$lib/player-identity';
   import { checkpointChoice, type OpponentChoice } from '$lib/game.svelte';
   import type { Decklists, TrainedOpponent } from '$lib/types';
 
@@ -35,10 +35,9 @@
   const searchUnavailable = $derived(decklists === 'closed');
 
   function optionLabel(opponent: TrainedOpponent): string {
-    const identity = playerIdentity({ ...opponent, kind: 'bot', digest: opponent.sha256 });
-    const parts = [identity.compact];
+    const parts = [checkpointIdentity(opponent).compact];
     if (opponent.step !== null) parts.push(`step ${opponent.step.toLocaleString('en-US')}`);
-    parts.push(identity.shortDigest!);
+    parts.push(shortHash(opponent.sha256));
     if (opponent.world) parts.push(opponent.world);
     const label = parts.join(' · ');
     return opponent.available ? label : `${label} — ${opponent.reason ?? 'unavailable'}`;
@@ -71,7 +70,7 @@
       {value}
       {disabled}
       aria-describedby="opponent-details"
-      title={selected ? playerIdentity({ ...selected, kind: 'bot', digest: selected.sha256 }).description : undefined}
+      title={selected ? checkpointIdentity(selected).description : undefined}
       onchange={(event) =>
         onChange?.((event.currentTarget as HTMLSelectElement).value as OpponentChoice)}
     >
