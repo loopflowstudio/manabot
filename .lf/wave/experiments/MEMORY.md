@@ -46,9 +46,22 @@ launcher must provide fresh shared inventory, durable pre-submit lookup, writer
 closure, cost and delivered-byte evidence. A filesystem lock coordinates only
 invocations using the same authoritative root. Copied worker roots cannot become
 independent dispatch authorities or return their ledger/closure as controller
-truth. Remote staging, rejection of dispatch from worker snapshots and admission
-of returned evidence remain adapter requirements, not implemented guarantees.
-Keep launcher execution, artifact delivery and scientific completion distinct.
+truth. The local owner now binds controller authority to host/path/device/inode,
+stages one-job snapshots and admits returned bytes against fresh launcher
+inventories and semantic bindings. Copied-root, fatal/orphan delivery and fit-input
+fixtures support those boundaries; connected transport remains unverified.
+
+Preparation is part of the lost-response boundary too. `JobAllocation.run`
+requires an existing durable key, while the inspected SDK's `prepare_launch`
+returns one. A key visible only in a lost preparation reply cannot support
+recovery, even if subsequent submission is idempotent. The adapter still needs
+a controller-supported request identity, its retained intent before any launcher
+mutation, verified preparation side effects and lookup of that same request.
+Unknown preparation cannot authorize another preparation or new dispatch.
+The candidate `prepare_launch`/`submit_launch` and store lookup APIs have not
+been proved against the preserved controller. Keep launcher execution, artifact
+delivery and scientific completion distinct; local fixtures supply none of those
+connected proofs.
 
 ## Self-play metric indexing (MTG-273, 2026-11-11)
 

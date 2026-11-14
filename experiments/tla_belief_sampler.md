@@ -117,8 +117,9 @@ adapter to compatible Etude inventory, pre-submit lookup and artifact delivery.
 `EvidenceRoot` coordinates invocations on one authoritative filesystem directory;
 its lock cannot coordinate copied remote roots. Worker staging must execute only
 its retained intent, reject controller operations and return verified private
-outputs without merging its ledger or closure as authority. These transport and
-authority checks remain unimplemented. A connected lookup/delivery reconciliation
+outputs without merging its ledger or closure as authority. The local authority,
+snapshot and output-admission checks are implemented and validated below;
+connected transport remains unimplemented. A connected lookup/delivery reconciliation
 proof is required before original-runtime admission; no additional experiment was
 launched during realignment.
 
@@ -219,3 +220,63 @@ not a verified lost-response contract against the existing controller; a lost
 prepare acknowledgement also needs reconciliation. Compatible inventory and a
 connected lookup/delivery transcript remain missing. The shared database and
 controller were preserved; no experiment job or new cost receipt was created.
+
+The remaining handoff also includes preparation: `JobAllocation.run` must exist
+before `dispatch`, whereas `prepare_launch` returns that reference. Existing
+lost-submit fixtures start after preparation and do not cover a lost prepare
+reply. Before connecting dispatch, verify a controller-supported request identity
+that can recover the same preparation after a lost reply, and establish whether
+preparation can enqueue work, acquire resources or start a writer. Retain that
+request's exact work and whole-window cap before the first launcher mutation;
+unresolved preparation blocks replacement and further dispatch. This is an
+unimplemented adapter requirement, not evidence that the inspected SDK provides
+recoverable preparation. No tests, games or fits were rerun during realignment.
+
+### Preparation API inspection (2026-11-14, recorded 14:05 UTC)
+
+The current MTG-349 environment on the mini identifies its installed distribution
+as `etude-sdk 0.2.16`; this is separate from the earlier 0.2.15/0.3.2 checks.
+The read-only inventory command was:
+
+```sh
+ssh -o BatchMode=yes mini-heart.local '/Users/jack/.local/bin/uv run --no-sync --project /Users/jack/src/manabot.mtg-349-score etude machines'
+```
+
+It exited 1 with the same database-version refusal quoted above. Capacity,
+existing work and launcher costs remain unknown. No preparation or submission
+was attempted, and the database/controller were preserved.
+
+Inspection of that environment's `etude/launch/` sources narrows the handoff:
+
+- `Scheduler.prepare_launch` preserves an explicit `Run.id`, otherwise assigning
+  one, then generates a separate launch ID. It validates the jobs, writes
+  `Database.begin_launch` and retains a diagnostic before returning. The inspected
+  body does not freeze/publish source, admit runs or acquire a machine.
+- `Database.begin_launch` rejects an admitted run or a previous preparing/admitting
+  launch for the same run, including unresolved acquired sessions. Its
+  `launches(run)` lookup can recover launch records by the supplied run identity.
+  These source paths suggest a recovery key; they do not prove a connected
+  recovery contract or authorize generating one for the preserved controller.
+- `controller.prepare` first requests `prepare_launch`, then freezes/attaches
+  source using the returned launch and run IDs. The inspected controller request
+  operations expose no direct `launches`/`launch_evidence` lookup. Its
+  `diagnostics(run=...)` selects pre-admission launches through `launches(run)`;
+  whether that supplies sufficient exact binding and resumable preparation still
+  needs proof against the compatible controller.
+- `submit_launch` claims the preparing launch before source freezing and admission;
+  a repeated claim fails. A lost reply requires reconciliation, not a blind retry.
+
+Source SHA-256 identities (relative to that environment's site-packages):
+
+| File | SHA-256 |
+| --- | --- |
+| `etude/launch/scheduler.py` | `9e70e8c738118bc3108e3d986d1a53ea1b3e6d8fff8253dac658c40146dca2d6` |
+| `etude/launch/database.py` | `cefe65329d2d2d6f09ee6518e0a1f32e5508a828bade308c2b938cf0edb7d5a8` |
+| `etude/launch/controller.py` | `58e22bbf8245251849e70419ab14b2e2736e621d99239ce73cf4e99e383c6c88` |
+
+Stop at the compatible-controller inventory dependency. Once available, prove
+lost-prepare recovery using an explicitly retained request identity and verify
+writer closure, cost and delivery through that same controller before connecting
+the existing evidence owner. No speculative adapter or additional ledger was
+added. Original-runtime admission, training and comparison remain outstanding.
+This pass changed evidence notes only; no tests, games or fits ran.
