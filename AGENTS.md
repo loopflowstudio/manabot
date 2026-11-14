@@ -107,7 +107,7 @@ checkpoints or experiment evidence.
 - An experiment whose whole cost is at or under USD25 launches under the
   launcher's cap (`--max-usd`). Above that, a person approves the amount first.
 - Etude rental admission includes the on-demand startup allowance in addition
-  to `Job.max_hours`. Size both job and cohort dollar caps for that whole
+  to `Job.max_hours`. Size both job and experiment dollar caps for that whole
   window; a price offer does not guarantee provider capacity.
 - An experiment is `experiments/<name>.py` at a commit with one report,
   `experiments/reports/<name>.md`. Do not add a protocol document, a serialized regime,
@@ -167,7 +167,7 @@ Where classes are valuable here, with the examples to copy:
 - **`torch.nn.Module` subclasses** (`ActorCritic` and its parts). Keep
   construction and `forward` there; training logic is functions over the
   module.
-- **A resource with a lifetime** (`VerifyStore`, `VLLMServer`,
+- **A resource with a lifetime** (`VerifyStore`,
   `PolicyInference`, `ChildProcess`, native `managym` environments, Etude's
   `Run`): something opened, used and closed. Make it a context manager, or a
   `@contextmanager` function when there is no state to hold. Do not wrap
@@ -640,8 +640,8 @@ while keeping new dependency imports (including Torch lazy registrations).
 
 Etude discovers experiment files with `runpy`; pass evaluation callbacks from
 their canonical importable module, not the discovery file's `<run_path>`
-namespace. Exercise discovery with `read_experiment` in runner tests, or
-`etude.launch.job_file.read_job_file` for a launch file with no `eval`. Local
+namespace. Exercise discovery with `etude.declarations.read_experiment` in runner tests,
+or `etude.declarations.read_job_file` for a file's `training_jobs()`. Local
 evaluation must supply `ETUDE_OUTPUT_DIR` when its callback writes replay evidence;
 only launched jobs receive that directory automatically.
 

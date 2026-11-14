@@ -291,7 +291,7 @@ publish, land or choose the next Graph step from here.
   and source `105abdd` do not provide it. Do not stub the SDK for QA. Until the
   API lands, report the missing real-path proof and stop dependent checks.
   `etude smoke experiments/elemental.py --step train --revision HEAD` needs
-  `runs()`'s `--updates/--hours/--usd-per-run`; it builds the revision's own
+  `training_jobs()`'s `--updates/--hours/--usd-per-run`; it builds the revision's own
   locked venv, so an overlay does not prove the committed dependency works.
 - TLA Limited decks (the MTG-282 pool corpus) overflow default observation
   capacities within a few dozen games; copy the `observation` block and the

@@ -55,3 +55,22 @@ released Etude 0.4.0. EXP-56 landed; no development override remains.
 Frozen replay schema 7 versus runtime 8 remains contrary evidence: gate must
 report it without regenerating frozen bytes. This pass changes the plan only;
 publishing, landing and Task movement belong to the caller.
+
+## 2026-11-14: experiment-file API (`training_jobs` / `eval_jobs`)
+
+Etude resolves from commit 9e8fec1268ed (`[tool.uv.sources]`); requirement
+strings stay `etude-sdk>=0.4.0`, and the published `manabot` package imports
+only names released 0.4.0 has.
+
+- Ported: `experiments/elemental.py` (job `elemental`), `seat_comparison.py`
+  (`seat-comparison-one`/`-both`), `tla_frontier.py` (one job per size),
+  `batched_baseline.py`, and new `experiments/belief.py` (`policy`, then
+  `sampler` from stored state). `elemental_long_eval.py` became
+  `elemental_play.py`, holding only what `elemental` plays with.
+- Deleted: the MTG-183 follower/rent/db/report, MTG-186, curriculum readers,
+  inference baselines, the LLM campaigns and `manabot.llm.vllm_*`, with their
+  tests, setup scripts and fixtures. Last commit with them: b49df79b49.
+- Blocked on Etude: `etude train experiments/belief.py --job sampler` fails
+  `input not given: 'start'` (`etude/local.py:_prepare` carries no job inputs);
+  an `EvalJob` cannot choose its command or uv extras, so the frontier pass
+  sets `UV_NO_SYNC=1` through `environment`, unproved on a rental.

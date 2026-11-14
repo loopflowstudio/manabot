@@ -7,61 +7,58 @@ Run provenance lives in the verify store (`.runs/verify.sqlite`).
 The [Haiku versus MTG-183 evaluation](reports/haiku-mtg183.md) reports a completed
 100-game hosted-model comparison, with full evidence in the experiment cache.
 
-Each experiment people run today is one module: its recipes, built from
-[`manabot.recipes.builders`](../manabot/recipes/builders.py), and anything only
-it needs to run and report. `manabot/` keeps the reusable instruments.
-
-A runnable recipe is a file that defines `train(config)`; run one with
-`uv run etude train FILE` ([training](../docs/training.md#run-training)).
-Experiments that ran saved `TrainingRegime` records were removed with their
-executor: their reports stay under [`reports/`](reports/), each naming the last
-commit with its code, and the regime files they trained stay under `regimes/`
-as records ([saved regimes](../docs/training.md#saved-regimes)).
-
-| module | role | execution |
-| --- | --- | --- |
-| [batched_baseline](batched_baseline.py) | the batched GPU baseline ([size and batching study](reports/longer-learning-017.md)) | `uv run etude train experiments/batched_baseline.py` |
-| [belief recipe](../manabot/recipes/belief_sampler.py) | two jobs: [belief_policy](../manabot/recipes/belief_policy.py) trains a policy; the sampler run starts from its final checkpoint, collects histories and fits the sampler ([guide](../docs/training.md#recipes-in-stages)) | `uv run etude launch manabot/recipes/belief_sampler.py` |
-
-Evaluation, LLM and deck-building modules that never ran a regime are
-unchanged: the MTG-183 follower and its report (`elemental_long_*.py`), the
-MTG-186 pairings and card tables (`mtg186_eval.py`, `mtg186_cards.py`), the
-curriculum grid readers (`curriculum_*.py`), the inference baselines
-(`inference_baseline.py`, `policy_inference_gpu.py`), the LLM campaigns
-(`llm_game.py`, `qwen_mtg183*.py`, `jev_mtg183.py`) and the TLA corpus
-(`tla_corpus.py`, `tla_pools.py`).
-
-The compound-decision study (`compound_decisions.py`) is no longer runnable;
-reproduce it at commit `ba3cd58de25bcc5d0b32e0fa3c546ee3d27be52b`.
+Each experiment people run today is one file: its recipe, built from
+[`manabot.recipes.builders`](../manabot/recipes/builders.py), its jobs, and
+anything only it needs to run and report. `manabot/` keeps the reusable
+instruments. Only a few experiment files are kept, each as the baseline to copy
+for the next experiment of its kind; a finished experiment's code is removed
+and its report under [`reports/`](reports/) names the last commit with it. The
+regime files retired experiments trained stay under `regimes/` as records
+([saved regimes](../docs/training.md#saved-regimes)).
 
 ## Etude experiment files
 
 ```sh
 uv run etude report experiments/ --source r2://manabot/jobs --serve   # every experiment, with an index
-uv run etude eval experiments/elemental.py --source r2://manabot/jobs # play what is new, here
 uv run etude launch experiments/elemental.py --revision COMMIT --updates 3200 \
-    --hours 11.9 --usd-per-run 9 --rent l4
+    --hours 11.9 --usd-per-run 9 --rent l4                            # launch what has not been run
+uv run etude train experiments/belief.py --job policy                 # train one declared job here
+uv run etude eval experiments/elemental.py --source r2://manabot/jobs # play what is new, here
 ```
 
-A file defining `report()` or `eval(state)` is an Etude experiment, named for
-its stem. Its functions are explicit: `train(config)` is what a run does (its
-own, or a maintained recipe's imported from `manabot.recipes`), `runs()`
-declares the jobs to launch with `etude.jobs.training(train, config=...)`,
-`eval(state)` returns the matches its checkpoints should play and `report()`
-draws them. Etude tells each run it launches from the file that stem, and the
-`track` inside `train` records the run under it, so `etude eval` and
-`etude report` find them.
+A file defining `training_jobs()`, `eval_jobs(state)` or `report()` is an Etude
+experiment, named for its stem. Its functions are explicit: `train(config)` is
+what a run does (its own, or a maintained recipe's imported from
+`manabot.recipes`); `training_jobs()` returns every `etude.jobs.TrainingJob`
+that should have been run by now, each with a required `name`;
+`eval_jobs(state)` returns the `etude.jobs.EvalJob`s whose matches the stored
+checkpoints should play; `report()` draws them. A run's address is always
+`EXPERIMENT/JOB@SEED`, such as `elemental/elemental@18101`. `etude launch FILE`
+and `etude queue FILE` read both declarations and get machines only for what
+has not been run, so typing the command again launches what is new.
 
-| file | `runs()` | `eval(state)` | `report()` |
-| --- | --- | --- | --- |
-| [elemental](elemental.py) (MTG-181/183) | fresh seeds of the ten-deck recipe | 10×10 heuristic grid and checkpoint pairs | grid score, deck matrix and rankings, crosstable of pairs |
-| [seat_comparison](seat_comparison.py) (MTG-165) | one job per arm (`learning_seats` one or both), four seeds each: the template for comparing method arms | — | score by update, one-seat dotted |
-| [tla_frontier](tla_frontier.py) (c5fba4) | one wall-bounded job per model size on the 17Lands TLA corpus | each size against its earlier self, the heuristic and the other size | progress curves and head to head |
+| file | a baseline for | `training_jobs()` | `eval_jobs(state)` | `report()` |
+| --- | --- | --- | --- | --- |
+| [elemental](elemental.py) | the current recipe, with a checkpoint ladder | `elemental`: fresh seeds of the ten-deck recipe | 10×10 heuristic grid and checkpoint pairs, played by [`elemental_play`](elemental_play.py) | grid score, deck matrix and rankings, crosstable of pairs |
+| [seat_comparison](seat_comparison.py) | comparing method arms | `seat-comparison-one` and `seat-comparison-both`, four seeds each | — | score by update, one-seat dotted |
+| [tla_frontier](tla_frontier.py) | comparing model sizes on a deck corpus | one wall-bounded job per size, named for its regime | each size against its earlier self, the heuristic and the other size | progress curves and head to head |
+| [batched_baseline](batched_baseline.py) | one GPU recipe ([size and batching study](reports/longer-learning-017.md)) | `batched_baseline` | — | — |
+| [belief](belief.py) | a later stage that starts from an earlier run | `policy`, then `sampler` from its final checkpoint once state shows it finished ([guide](../docs/training.md#recipes-in-stages)) | — | — |
+
+[`elemental_grid`](elemental_grid.py) and [`elemental_long`](elemental_long.py)
+hold the frozen evaluation schedules `elemental` plays, and
+[`tla_corpus`](tla_corpus.py) and [`tla_pools`](tla_pools.py) build the TLA
+deck corpus; they declare no jobs.
 
 Perf and ML details draw self-play's own keys ([`manabot.training.panels`](../manabot/training/panels.py)),
 including a flame graph of each update's `time/` seconds. The two-deck
 benchmark (`manabot.eval.benchmark`) is still bound to the retired executor's
-training record, so `seat_comparison` has no `eval(state)` yet.
+training record, so `seat_comparison` has no `eval_jobs(state)` yet.
+
+The MTG-183 follower and its report, the MTG-186 pairings and card tables, the
+curriculum grid readers, the inference baselines and the LLM campaigns were
+removed; the last commit with them is `b49df79b49`. The compound-decision
+study is at commit `ba3cd58de25bcc5d0b32e0fa3c546ee3d27be52b`.
 
 Reports of finished studies stay as the record. The runners, contracts, plans
 and fixtures they cite were removed once nothing current used them; git

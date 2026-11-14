@@ -224,8 +224,8 @@ These exist and run, and none of them is on the training path today.
   over one `PossibleWorldSpace`, a tracker fed by viewer observations, and the
   `AutoregressiveBeliefSampler`, which learns opponent hand counts from a
   frozen policy's games. The `collect_belief` and `train_belief` steps fit it
-  on an immutable dataset (`uv run etude smoke manabot/recipes/belief_sampler.py`
-  is the bounded pilot), and
+  on an immutable dataset (`experiments/belief.py` declares the bounded pilot
+  as a policy job and a sampler job), and
   `python -m manabot.reports.belief` scores a sampler by held-out joint NLL,
   Brier and calibration. Consumers are search players and a demo seam only;
   `ActorCritic` has an optional belief channel that self-play rejects, and

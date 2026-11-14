@@ -1,5 +1,7 @@
 # Training throughput on the ten-deck Elemental recipe, v1 (bounded measurement concluded)
 
+> The code that ran this experiment was removed from main; the last commit with it is `b49df79b49`.
+
 ## Final disposition — 2026-11-11
 
 C2 evidence review is complete. The frozen reader reproduced its readings exactly,

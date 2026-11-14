@@ -21,8 +21,8 @@ Design the smallest experiment that answers the question.
    incumbent is the default, and a candidate justifies its cost after the data
    is in. An expectation may be written down as an expectation; never a
    threshold that decides the verdict before the result exists.
-4. An experiment is its Python module at a commit: `runs()`, `eval(state)` and
-   `report()`, with recipes from `manabot.recipes.builders`, launched through
+4. An experiment is its Python module at a commit: `training_jobs()`,
+   `eval_jobs(state)` and `report()`, with recipes from `manabot.recipes.builders`, launched through
    Etude. Existing checkpoints need no placeholder training. Do not write a
    protocol document, a serialized regime, a digest check or a test suite for
    one experiment's schedule. Machinery a second experiment would reuse belongs

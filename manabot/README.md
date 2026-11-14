@@ -32,7 +32,7 @@ Training runs through [Etude](https://github.com/loopflowstudio/etude):
 run's id and writes it under `~/.etude/track`. `--config JSON` sets fields of
 the recipe's config, `--experiment` an independent experiment label,
 `--until updates=N` its stop target and `--seconds` a deadline. Files with
-only `train(config)` use seed 0; declare `runs()` for other seeds, then select
+only `train(config)` use seed 0; declare `training_jobs()` for other seeds, then select
 with `--job` and `--seed`. `--resume` is another attempt of an existing run, to a later
 target when `--until` is given ([run training](../docs/training.md#run-training)).
 `manabot train` exits with migration guidance naming that command.
@@ -593,16 +593,18 @@ it is not ordinary training-match admission or evidence of mirror competence.
 
 ### Etude-owned training jobs
 
-A training job is a recipe's `train` function and its config; an experiment
-file's `runs()` builds it with `etude.jobs.training`, and nothing is submitted
-until `etude launch`:
+A training job is a name, a recipe's `train` function and its config; an
+experiment file's `training_jobs()` returns them as `etude.jobs.TrainingJob`
+values, and nothing is submitted until `etude launch`:
 
 ```python
-from etude.jobs import training
+from etude.jobs import TrainingJob
 
 from manabot.recipes.elemental import ElementalConfig, train
 
-job = training(train, config=ElementalConfig(), seeds=(197,), max_hours=12)
+job = TrainingJob(
+    name="elemental", train=train, config=ElementalConfig(), seeds=(197,), max_hours=12
+)
 ```
 
 On the machine Etude imports `train` from the committed source and calls it.

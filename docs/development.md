@@ -48,7 +48,19 @@ requirements. A downstream project resolves those with its own dependencies. The
 groups retain exact Torch/backend choices. Those development pins are not
 constraints exported to consumers.
 
-For an ordinary released Etude update without raising the public minimum:
+The repository itself resolves Etude from a pinned commit
+(`[tool.uv.sources]` in `pyproject.toml`), because the experiment files, their
+tests and the nightly baseline use the experiment-file API
+(`training_jobs`, `eval_jobs`, `etude.declarations`) that no Etude release
+carries yet. That commit still reports version 0.4.0, and the published
+`manabot` package imports only names the released 0.4.0 has, so the public
+requirements and the consumer installs in `.github/workflows/release.yml`,
+which take Etude from PyPI, are unchanged. Remove the source, and raise the
+minimum if the package comes to need the new API, at the Etude release that
+carries it.
+
+For an ordinary released Etude update without raising the public minimum, once
+no source pin is present:
 
 ```bash
 uv lock --upgrade-package etude-sdk

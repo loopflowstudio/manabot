@@ -25,7 +25,7 @@ One experiment is one module and its report:
 `experiments/<name>.py` and `experiments/reports/<name>.md`. The module holds the
 recipes, built from [`manabot.recipes.builders`](../manabot/recipes/builders.py),
 and anything only this experiment needs to run and report; `manabot/` keeps the
-reusable instruments. A file defining `report()` or `eval(state)` is an
+reusable instruments. A file defining `training_jobs()`, `eval_jobs(state)` or `report()` is an
 [Etude](https://github.com/loopflowstudio/etude) experiment, and its training
 runs track under its stem:
 
@@ -36,13 +36,15 @@ uv run etude eval experiments/elemental.py --source r2://manabot/jobs     # play
 uv run etude report experiments/elemental.py --source r2://manabot/jobs --serve  # draw what it played
 ```
 
-`runs()` names the training runs, `eval(state)` returns the seatings still
-wanted so repeated passes play only new ones, and `report()` draws the figures.
-A seating is Etude's rule for who meets whom (`etude.eval.records.Seating`):
-its players in seat order, the conditions they play under and the tags a
-report selects them by. A `Benchmark` holds `seatings`, and a checkpoint says
-where it stood on each clock in `Checkpoint.at`, as in
-`checkpoint.at["updates"]`.
+`training_jobs()` returns every training job that should have been run by now,
+each a named `etude.jobs.TrainingJob`; `eval_jobs(state)` returns
+`etude.jobs.EvalJob`s holding the seatings still wanted, so repeated passes
+play only new ones; `report()` draws the figures. A run's address is always
+`EXPERIMENT/JOB@SEED`. A seating is Etude's rule for who meets whom
+(`etude.eval.records.Seating`): its players in seat order, the configs they
+play under and the tags a report selects them by. A `Benchmark` holds
+`seatings`, and a checkpoint says where it stood on each clock in
+`CheckpointRecord.at`, as in `checkpoint.at["updates"]`.
 
 Use the repository's locked Etude revision for these commands
 ([development dependency](development.md#environment-and-commands)). Launch,
@@ -165,11 +167,11 @@ from an earlier world, so read them for the reasoning, not the numbers.
 
 ## Declaring a comparison
 
-An experiment file keeps its explicit `train(config)`, `runs()`, `eval(state)`
-and `report()` functions. Training is an ordinary function that calls a loop;
-Etude supplies its run directory, seed, saved state, stopping, tracking and retry. `runs()`
-returns jobs made with `etude.jobs.training(train, config=..., smoke=...)`.
-Put each arm in that declaration with its hours and dollar cap, and its
+An experiment file keeps its explicit `train(config)`, `training_jobs()`,
+`eval_jobs(state)` and `report()` functions. Training is an ordinary function that calls a loop;
+Etude supplies its run directory, seed, saved state, stopping, tracking and retry. `training_jobs()`
+returns `etude.jobs.TrainingJob(name=..., train=train, config=..., smoke=...)` values.
+Put each arm in that declaration under its own job name, with its hours and dollar cap, and its
 training seeds in `seeds=`; a config has no seed. Evaluation and reports continue to read the recorded checkpoints.
 
 For example, `experiments/elemental.py` launches the current Elemental recipe
@@ -197,7 +199,7 @@ seeds. Training time and evaluation time remain separate.
 `manabot.experiment.config.Experiment` still resolves saved comparison
 snapshots into `TrainingRegime` values and provenance receipts. The record
 models and reports still read their original fields. Resolution does not
-launch work, and those declarations no longer have a `runs()` method.
+launch work, and those declarations declare no jobs.
 The local comparison scheduler, checkpoint follower and study executor are
 retired; revision `f4e1822faf46bbc9cdc43909293f8cbc8de4a300` is the last with
 them. Use an experiment's recorded revision and lock to reproduce it; do not
@@ -255,8 +257,8 @@ def report() -> Report:
 For an experiment whose evaluations were played from the same revision,
 `uv run etude report <experiment file> --source r2://manabot/jobs --serve`
 draws it. A finished experiment's page is rebuilt from the revision that ran
-it, or from a file with its `report()` and no `eval` over its own run prefixes:
-`etude report` still calls `eval(state)`, and a seating derived from today's
+it, or from a file with its `report()` and no `eval_jobs` over its own run prefixes:
+`etude report` still calls `eval_jobs(state)`, and a seating derived from today's
 source digest no longer agrees with the held runs. The page then draws the
 tournament as its eval runs recorded it and says so in a note at the top
 (`tournament_conflict`).
@@ -288,7 +290,7 @@ The learning schedule opens ML details.
 | `job_labels(jobs)` | A display name per job: the size word you give, then the model's width, and its attention layers when they differ from the first job's. Small (width 64), Large (width 160, 8 layers). Etude appends each job's seed count. |
 | `against_earlier_self(title, tags)` | Each checkpoint against an earlier checkpoint of its own job, a line per job. A point counts every such match its checkpoint sat in; a checkpoint that was also the earlier partner of a later one counts that role too, until Etude can score only the later side. |
 | `against_fixed(title, tags)` | Each checkpoint against one fixed player, such as the heuristic, a line per job. The tags select the seatings that hold that player. |
-| `head_to_head(title, seatings)` | Two jobs against each other, as one line: the first-seated job's score, drawn where its checkpoint stood. `seatings` are the names `eval(state)` gave the pairs, one per point, each played once. An empty sequence raises `ValueError`. |
+| `head_to_head(title, seatings)` | Two jobs against each other, as one line: the first-seated job's score, drawn where its checkpoint stood. `seatings` are the names `eval_jobs(state)` gave the pairs, one per point, each played once. An empty sequence raises `ValueError`. |
 | `learning_schedule(regimes)` | Two charts, the configured learning rate and policy damping of each job on the update clock through its damping horizon, with each run's latest update marked. These are plans, not measurements. |
 
 Every helper returns an ordinary Etude panel, so a report mixes them with its
@@ -302,7 +304,7 @@ pair's hours.
 one seat only when every part of it is `Matches(seating=NAME)`. A tag is
 always drawn per job, both seats, so a tagged head-to-head shows two lines
 mirrored about 0.5. The names must be the recorded ones, character for
-character, so the frontier formats them with the functions its `eval(state)`
+character, so the frontier formats them with the functions its `eval_jobs(state)`
 schedule uses.
 
 `report()` receives no state, so it cannot work out which pairs were played.
@@ -316,9 +318,9 @@ A Curve panel names seating 'w160l8 u1200 vs w64 u1200', which nothing holds.
 ```
 
 and the chart is missing that point: correct the name, or drop it if the pair
-was never played. Renaming a seating in `eval(state)` changes its tournament
+was never played. Renaming a seating in `eval_jobs(state)` changes its tournament
 definition and the name reports select; the match keys still depend on the
-players, groups, conditions and game count. For a finished experiment, correct
+players, groups, configs and game count. For a finished experiment, correct
 the report selection and preserve the recorded seating names.
 
 A seating can also follow a job without listing pairs: an `Inference` first
