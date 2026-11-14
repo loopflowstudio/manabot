@@ -74,12 +74,15 @@ test('shared history identifies both players and preserves private prefixes and 
     const filtered = visitor.url();
     await aliceRow.getByRole('link', { name: /^Replay game/ }).click();
     await expect(visitor.getByTestId('game-board')).toBeVisible();
-    await expect(visitor.getByText('Automatic action · configured automation', { exact: true })).toBeVisible();
+    // Trivial opening windows are skipped natively; the first frame is a real decision.
+    await expect(visitor.getByText('Decision before · Chosen action · Consequences after', { exact: true })).toBeVisible();
     await expect(visitor.getByRole('textbox', { name: /How did this game feel/ })).toHaveCount(0);
     await visitor.getByTestId('study-decision').first().click();
     await expect(visitor.getByText("Shared replay from Player 1's perspective.", { exact: false })).toBeVisible();
     await expect(visitor.getByTestId('game-board')).toBeVisible();
-    await visitor.getByRole('link', { name: 'Back to games' }).click();
+    await visitor.getByRole('link', { name: 'Back to games' }).focus();
+    await visitor.keyboard.press('Enter');
+    expect(failures).toEqual([]);
     await expect(visitor).toHaveURL(filtered);
     await aliceRow.getByRole('link', { name: 'Passive', exact: true }).click();
     await expect(visitor).toHaveURL(/player=control%3Apassive/);
@@ -104,7 +107,6 @@ test('shared history identifies both players and preserves private prefixes and 
     await Promise.all(contexts.map((context) => context.close()));
   }
 });
-
 
 test('long recorded identities fit Games and preserve full filter values', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
