@@ -71,24 +71,24 @@ def _signatures(raw: managym.Observation) -> list[str]:
         raw.agent.id: ["player", "self"],
         raw.opponent.id: ["player", "opponent"],
     }
-    for role, rows, permanents in (
-        ("self", raw.agent_objects, raw.agent_permanents),
-        ("opponent", raw.opponent_objects, raw.opponent_permanents),
+    for role, cards, permanents in (
+        ("self", raw.agent_cards, raw.agent_permanents),
+        ("opponent", raw.opponent_cards, raw.opponent_permanents),
     ):
-        for row in rows:
-            objects[row.id] = [
+        for card in cards:
+            objects[card.id] = [
                 "card",
                 role,
-                row.registry_key,
-                int(row.zone),
-                row.power,
-                row.toughness,
-                row.is_token,
-                row.is_ally,
-                row.is_lesson,
-                row.ward_cost,
-                row.kicker_cost,
-                _keywords(row.keywords),
+                card.registry_key,
+                int(card.zone),
+                card.power,
+                card.toughness,
+                card.is_token,
+                card.is_ally,
+                card.is_lesson,
+                card.ward_cost,
+                card.kicker_cost,
+                _keywords(card.keywords),
             ]
         for permanent in permanents:
             objects[permanent.id] = [

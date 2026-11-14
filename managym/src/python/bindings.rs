@@ -15,7 +15,7 @@ use std::{
 #[cfg(feature = "python")]
 use pyo3::{
     buffer::PyBuffer,
-    exceptions::{PyDeprecationWarning, PyRuntimeError, PyValueError},
+    exceptions::{PyRuntimeError, PyValueError},
     prelude::*,
     types::{PyDict, PyList, PyModule},
 };
@@ -30,10 +30,11 @@ use crate::{
         action::{ActionSpaceKind, ActionType, AgentError},
         env::{Env, HandSnapshot, PreparedPossibleWorldMaterializer},
         observation::{
-            ActionOption, ActionSpaceData, CardTypeData, CastPermissionData, ContinuousEffectData,
-            CopyData, EventData, EventEntityKind, EventType, KeywordData, ObjectData, Observation,
-            PermanentData, PlayerData, PooledManaClassData, RestrictedManaData, SideboardCardData,
-            StackObjectData, StackObjectKindData, StackTargetData, StackTargetKindData, TurnData,
+            ActionOption, ActionSpaceData, CardData, CardTypeData, CastPermissionData,
+            ContinuousEffectData, CopyData, EventData, EventEntityKind, EventType, KeywordData,
+            Observation, PermanentData, PlayerData, PooledManaClassData, RestrictedManaData,
+            SideboardCardData, StackObjectData, StackObjectKindData, StackTargetData,
+            StackTargetKindData, TurnData,
         },
         observation_encoder::{ObservationEncoderConfig, ACTION_DIM},
         shared_effects,
@@ -54,18 +55,6 @@ use crate::{
         zone::ZoneType,
     },
 };
-
-#[cfg(feature = "python")]
-fn warn_deprecated(py: Python<'_>, class: &str, old: &str, new: &str) -> PyResult<()> {
-    PyErr::warn_bound(
-        py,
-        &py.get_type_bound::<PyDeprecationWarning>(),
-        &format!(
-            "managym.{class}.{old} is deprecated and removed in 0.3.0; use managym.{class}.{new}"
-        ),
-        1,
-    )
-}
 
 #[cfg(feature = "python")]
 #[pymethods]
@@ -1838,9 +1827,9 @@ impl From<PyManaCost> for ManaCost {
 }
 
 #[cfg(feature = "python")]
-#[pyclass(name = "Object")]
+#[pyclass(name = "Card")]
 #[derive(Clone)]
-pub struct PyObjectRecord {
+pub struct PyCard {
     #[pyo3(get, set)]
     pub zone: ZoneEnum,
     #[pyo3(get, set)]
@@ -1956,8 +1945,8 @@ impl From<PyCastPermission> for CastPermissionData {
 }
 
 #[cfg(feature = "python")]
-impl From<ObjectData> for PyObjectRecord {
-    fn from(value: ObjectData) -> Self {
+impl From<CardData> for PyCard {
+    fn from(value: CardData) -> Self {
         Self {
             zone: value.zone.into(),
             owner_id: value.owner_id,
@@ -1985,8 +1974,8 @@ impl From<ObjectData> for PyObjectRecord {
 }
 
 #[cfg(feature = "python")]
-impl From<PyObjectRecord> for ObjectData {
-    fn from(value: PyObjectRecord) -> Self {
+impl From<PyCard> for CardData {
+    fn from(value: PyCard) -> Self {
         Self {
             zone: value.zone.into(),
             owner_id: value.owner_id,
@@ -2453,7 +2442,7 @@ pub struct PyStackObject {
     #[pyo3(get, set)]
     pub controller_id: i32,
     #[pyo3(get, set)]
-    pub source_registry_key: i32,
+    pub source_card_registry_key: i32,
     #[pyo3(get, set)]
     pub source_permanent_id: Option<i32>,
     #[pyo3(get, set)]
@@ -2471,33 +2460,6 @@ pub struct PyStackObject {
 }
 
 #[cfg(feature = "python")]
-#[pymethods]
-impl PyStackObject {
-    #[getter]
-    fn source_card_registry_key(&self, py: Python<'_>) -> PyResult<i32> {
-        warn_deprecated(
-            py,
-            "StackObject",
-            "source_card_registry_key",
-            "source_registry_key",
-        )?;
-        Ok(self.source_registry_key)
-    }
-
-    #[setter]
-    fn set_source_card_registry_key(&mut self, py: Python<'_>, value: i32) -> PyResult<()> {
-        warn_deprecated(
-            py,
-            "StackObject",
-            "source_card_registry_key",
-            "source_registry_key",
-        )?;
-        self.source_registry_key = value;
-        Ok(())
-    }
-}
-
-#[cfg(feature = "python")]
 impl From<StackObjectData> for PyStackObject {
     fn from(value: StackObjectData) -> Self {
         Self {
@@ -2505,7 +2467,7 @@ impl From<StackObjectData> for PyStackObject {
             description: value.description,
             kind: value.kind.into(),
             controller_id: value.controller_id,
-            source_registry_key: value.source_registry_key,
+            source_card_registry_key: value.source_card_registry_key,
             source_permanent_id: value.source_permanent_id,
             chosen_mode: value.chosen_mode,
             ability_index: value.ability_index,
@@ -2524,7 +2486,7 @@ impl From<PyStackObject> for StackObjectData {
             description: value.description,
             kind: value.kind.into(),
             controller_id: value.controller_id,
-            source_registry_key: value.source_registry_key,
+            source_card_registry_key: value.source_card_registry_key,
             source_permanent_id: value.source_permanent_id,
             chosen_mode: value.chosen_mode,
             ability_index: value.ability_index,
@@ -2628,7 +2590,7 @@ pub struct PyObservation {
     #[pyo3(get, set)]
     pub agent: PyPlayer,
     #[pyo3(get, set)]
-    pub agent_objects: Vec<PyObjectRecord>,
+    pub agent_cards: Vec<PyCard>,
     #[pyo3(get)]
     pub agent_sideboard: Vec<PySideboardCard>,
     #[pyo3(get, set)]
@@ -2636,7 +2598,7 @@ pub struct PyObservation {
     #[pyo3(get, set)]
     pub opponent: PyPlayer,
     #[pyo3(get, set)]
-    pub opponent_objects: Vec<PyObjectRecord>,
+    pub opponent_cards: Vec<PyCard>,
     #[pyo3(get, set)]
     pub opponent_permanents: Vec<PyPermanent>,
     #[pyo3(get, set)]
@@ -2661,11 +2623,7 @@ impl From<Observation> for PyObservation {
             turn: value.turn.into(),
             action_space: value.action_space.into(),
             agent: value.agent.into(),
-            agent_objects: value
-                .agent_objects
-                .into_iter()
-                .map(PyObjectRecord::from)
-                .collect(),
+            agent_cards: value.agent_cards.into_iter().map(PyCard::from).collect(),
             agent_sideboard: value
                 .agent_sideboard
                 .into_iter()
@@ -2677,11 +2635,7 @@ impl From<Observation> for PyObservation {
                 .map(PyPermanent::from)
                 .collect(),
             opponent: value.opponent.into(),
-            opponent_objects: value
-                .opponent_objects
-                .into_iter()
-                .map(PyObjectRecord::from)
-                .collect(),
+            opponent_cards: value.opponent_cards.into_iter().map(PyCard::from).collect(),
             opponent_permanents: value
                 .opponent_permanents
                 .into_iter()
@@ -2715,11 +2669,7 @@ impl From<PyObservation> for Observation {
             turn: value.turn.into(),
             action_space: value.action_space.into(),
             agent: value.agent.into(),
-            agent_objects: value
-                .agent_objects
-                .into_iter()
-                .map(ObjectData::from)
-                .collect(),
+            agent_cards: value.agent_cards.into_iter().map(CardData::from).collect(),
             agent_sideboard: value
                 .agent_sideboard
                 .into_iter()
@@ -2731,10 +2681,10 @@ impl From<PyObservation> for Observation {
                 .map(PermanentData::from)
                 .collect(),
             opponent: value.opponent.into(),
-            opponent_objects: value
-                .opponent_objects
+            opponent_cards: value
+                .opponent_cards
                 .into_iter()
-                .map(ObjectData::from)
+                .map(CardData::from)
                 .collect(),
             opponent_permanents: value
                 .opponent_permanents
@@ -2760,32 +2710,6 @@ impl From<PyObservation> for Observation {
 #[cfg(feature = "python")]
 #[pymethods]
 impl PyObservation {
-    #[getter]
-    fn agent_cards(&self, py: Python<'_>) -> PyResult<Vec<PyObjectRecord>> {
-        warn_deprecated(py, "Observation", "agent_cards", "agent_objects")?;
-        Ok(self.agent_objects.clone())
-    }
-
-    #[setter]
-    fn set_agent_cards(&mut self, py: Python<'_>, value: Vec<PyObjectRecord>) -> PyResult<()> {
-        warn_deprecated(py, "Observation", "agent_cards", "agent_objects")?;
-        self.agent_objects = value;
-        Ok(())
-    }
-
-    #[getter]
-    fn opponent_cards(&self, py: Python<'_>) -> PyResult<Vec<PyObjectRecord>> {
-        warn_deprecated(py, "Observation", "opponent_cards", "opponent_objects")?;
-        Ok(self.opponent_objects.clone())
-    }
-
-    #[setter]
-    fn set_opponent_cards(&mut self, py: Python<'_>, value: Vec<PyObjectRecord>) -> PyResult<()> {
-        warn_deprecated(py, "Observation", "opponent_cards", "opponent_objects")?;
-        self.opponent_objects = value;
-        Ok(())
-    }
-
     /// Frozen viewer JSON omits continuation. A retained reader may supply
     /// its separately serialized frames; neither input grants execution authority.
     #[staticmethod]
@@ -4891,7 +4815,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<crate::agent::continuation::ContinuationFrame>()?;
     m.add_class::<PyPlayer>()?;
     m.add_class::<PyTurn>()?;
-    m.add_class::<PyObjectRecord>()?;
+    m.add_class::<PyCard>()?;
     m.add_class::<PyCastPermission>()?;
     m.add_class::<PyRestrictedMana>()?;
     m.add_class::<PyPooledManaClass>()?;
