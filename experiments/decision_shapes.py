@@ -277,7 +277,10 @@ def runs(
                 run.model_copy(update={"job": in_arm(run.job, arm)})
                 for run in capped_runs(
                     regime,
-                    experiment=EXPERIMENT,
+                    # Short calibration runs stay out of the study's evaluation.
+                    experiment=EXPERIMENT
+                    if updates >= EXPORT_EVERY
+                    else f"{EXPERIMENT}_calibration",
                     revision=revision,
                     seed=int(seed),
                     max_hours=hours,
