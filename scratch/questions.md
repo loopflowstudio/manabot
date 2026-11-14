@@ -566,3 +566,19 @@ only, so no recipe selects a native built-in opponent yet. The Task's outcome
 is the engine/VectorEnv capability and the arena anchor; a training-recipe
 setting is separate work, not requested here. The native and Python alias
 warnings word their hint differently; both leave with the alias in 0.3.0.
+
+## QA after per-seat API (2026-11-13, from d5538ec7ad)
+
+Real surfaces: guide snippet, all seat pairings on Elemental decks (scalar),
+training wrapper, `manabot.eval.local --opponent heuristic` (replay passed,
+548 decisions, 0 private exposures), Academy Watch heuristic v heuristic to
+decision 279 without page errors (host load ~190 made each request ~1 s, so
+not run to the finish). Heuristic beat random ~90% from either seat. Fixed:
+`step()`/`-1` at an external chooser said "Action index -1 out of bounds";
+`Env::step` now says "external chooser (seat N) requires an action index"
+(env.rs is not an identity file; no retained receipt records the old -1
+message). Release extension rebuilt and replaced atomically;
+`cargo test ... --lib heuristic vector_env` 38 passed (debug);
+`tests/env/test_native_player_policies.py`, automatic capture, game errors and
+captured bookkeeping: 103 passed, 3 known upstream `binding_mismatch`.
+Report: `scratch/qa.html`. Gate items unchanged.

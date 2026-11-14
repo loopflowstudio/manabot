@@ -69,6 +69,10 @@ def test_two_builtins_reset_is_unplayed_and_forks_continue_identically() -> None
     assert obs.toJSON() == manual.reset(players())[0].toJSON()
     with pytest.raises(managym.AgentError, match="built-in chooser"):
         env.step(0)
+    mixed = managym.Env(seed=213, player_policies=("agent", "heuristic"))
+    mixed.reset(players())
+    with pytest.raises(managym.AgentError, match="external chooser.*action index"):
+        mixed.step()
     env.step()
     fork = env.clone_env()
     assert env.step()[0].toJSON() == fork.step()[0].toJSON()

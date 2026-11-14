@@ -1,69 +1,79 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>MTG-277 QA — native heuristic opponent</title>
-<style>body{font:15px/1.5 system-ui;max-width:960px;margin:2em auto;padding:0 1em}pre{background:#f4f1ea;padding:.6em;overflow:auto;font-size:13px}img{max-width:100%;border:1px solid #ccc}td,th{padding:.2em .6em;border-bottom:1px solid #ddd;text-align:left}</style></head><body>
-<h1>MTG-277 QA — native heuristic opponent (2026-11-13, HEAD 00e2090eb7)</h1>
-<p>Installed extension: <code>managym/_managym.cpython-313-darwin.so</code> (release, built 12:46; later commits changed only comments and docs). Host load average ≈ 500 during the run (other agents). These checks drove the public surfaces: the docs example, native and training batch play, the local evaluation CLI, and Academy's Watch page. No code was changed in this pass.</p>
+<html lang="en"><head><meta charset="utf-8"><title>MTG-277 QA — per-seat players and native heuristic</title>
+<style>body{font:15px/1.5 system-ui;max-width:960px;margin:2em auto;padding:0 1em}pre{background:#f4f1ea;padding:.6em;overflow:auto;font-size:13px}img{max-width:100%;border:1px solid #ccc}td,th{padding:.2em .6em;border-bottom:1px solid #ddd;text-align:left}</style></head>
+<body>
+<h1>MTG-277 QA — per-seat players and native heuristic (2026-11-13, from d5538ec7ad)</h1>
+<p>This pass is the first QA since <code>player_policies</code> replaced the one-opponent API; the earlier pass at 00e2090eb7 tested <code>opponent_policy</code>. I drove the public surfaces only: the guide's example, scalar and vector <code>managym</code> games on authored Elemental decks, the Python training wrapper, the local evaluation CLI and Academy's Watch page. Host load averaged 150–190 throughout, so the timings below are not speed evidence.</p>
 
-<h2>1. Docs example, verbatim</h2>
-<p>Ran the <code>docs/engine.md#built-in-heuristic-opponent</code> snippet in a fresh process.</p>
-<pre>2 &lt;class 'tuple'&gt; 2 [5, 5]          # reset returns (obs, info) per slot; step returns 5-tuples
-[(0.0, False, False), (0.0, False, False)]</pre>
-<p>Matches the guide's description.</p>
+<h2>1. Guide example, verbatim</h2>
+<p>I ran the <code>docs/engine.md#per-seat-players</code> snippet unchanged in a fresh process. Reset returned a list of two <code>(observation, info)</code> pairs, and step returned two 5-tuples, as the guide says.</p>
 
-<h2>2. Training against it: batch play, rewards, chooser</h2>
-<p>A native <code>VectorEnv</code> with 8 slots on authored Elemental decks. The learner in seat 0 picks uniformly random legal actions. A check asserted that every surfaced observation's viewer is seat 0, so the opponent never surfaced a decision. Play ran to 200 finished games.</p>
-<pre>random    elemental_ur v elemental_gw: learner W102 L99  rewards=[-1.0, 1.0] 19736 learner steps 11622/s
-heuristic elemental_ur v elemental_gw: learner W11  L189 rewards=[-1.0, 1.0]  9656 learner steps  9073/s
-heuristic elemental_bg v elemental_ug: learner W28  L172 rewards=[-1.0, 1.0] 11552 learner steps  3867/s</pre>
-<p>The heuristic beats a random learner 86–95% of the time, against about 50% for the random opponent. Terminal rewards are ±1 from the learner's side. Finished slots reset automatically. The rates come from a heavily loaded host: they show the opponent is usable, not that it is fast.</p>
+<h2>2. Every seat pairing plays real games (scalar <code>managym.Env</code>)</h2>
+<p>I used random Elemental deck pairs, 40 games per row. External seats picked uniformly random legal actions. For each mixed game, the script asserted on every surfaced decision that the chooser was the external seat and that the observation's viewer was that seat.</p>
+<table><tr><th>player_policies</th><th>Result</th></tr>
+<tr><td>(agent, random)</td><td>external W19 L21</td></tr>
+<tr><td>(random, agent)</td><td>external W18 L22</td></tr>
+<tr><td>(agent, heuristic)</td><td>external W4 L36</td></tr>
+<tr><td>(heuristic, agent)</td><td>external W3 L37</td></tr>
+<tr><td>(heuristic, heuristic), step() per decision</td><td>seat 0 won 15, seat 1 won 25</td></tr>
+<tr><td>(random, heuristic)</td><td>heuristic won 39 of 40</td></tr>
+<tr><td>(heuristic, random)</td><td>heuristic won 37 of 40</td></tr></table>
+<p>Every game reached a terminal state. The heuristic beats random play about 90% of the time from either seat. It never surfaced a decision to the external seat. Terminal rewards were ±1 from the external seat's side.</p>
 
-<h2>3. Arena: local evaluation CLI</h2>
-<p>Trained a real checkpoint with <code>uv run manabot train --out .runs/qa277-small</code> (completed). Then ran the guide's command:</p>
-<pre>uv run python -m manabot.eval.local --checkpoint .runs/qa277-small/self-play-raw.pt --opponent heuristic \
-  --deal-seed 101 --out .runs/qa277-eval-h --seconds 300 --workers 2
-completed: 1/1 complete deals; 4/4 games; evidence: .runs/qa277-eval-h/panel
-score: 0.000 (1 deal block; ...); local-check-not-admission        # exit 0, 6.3 s wall</pre>
-<ul>
-<li>Evidence names the opponent <code>version: native-v2</code>, <code>compute_class_id: heuristic-cpu-v2</code>, display name "Rule-of-thumb heuristic".</li>
-<li><code>panel/replay.json</code>: passed. It covered 4 games and 548 decisions, with 0 mismatches of any kind and <b>0 private_exposures</b>.</li>
-<li>Repeating with <code>--request request.json --out .runs/qa277-eval-h2</code> gave the same results across all 1,096 decision records. Chosen offers, Commands, frames and state digests were identical; only allocation IDs, inference IDs and timings differ.</li>
-<li>The untrained two-update checkpoint lost all 4 games to the heuristic, as expected.</li>
-</ul>
+<h2>3. Fork, reset and determinism</h2>
+<pre>fork (clone_env) mid-game, both continue 300 decisions: identical observations and rewards  -> True
+set_seed(s) + reset with the same decks replays the same heuristic-vs-heuristic game         -> True</pre>
 
-<h2>4. Academy Watch (browser, scalar adapter)</h2>
-<p>Started <code>./scripts/play --port 8771 --frontend-port 5191</code>. Its <code>ACADEMY_PLAY_READY</code> line named this checkout's cp313 module. In headless Chromium I opened <code>/replay?watch=1</code>, chose Seat 1 heuristic and Seat 2 random, and used the default Lessons v Allies decks with seed 42. I pressed Start watching, stepped 6 decisions, then fast-forwarded to the end. No page errors. Stopped with SIGINT to <code>scripts/play.py</code>; no processes were left running.</p>
-<p>After 7 decisions: the heuristic holds its Firebending Lessons and passes in combat, and the Decision Advice panel marks the recorded choice. The identity "Seat 1: Heuristic · 05e9961d83d8" is shown.</p>
-<img src="qa-shots/watch-steps.png" alt="Watch after 7 decisions">
-<p>Finished at decision 337, turn 27: "Finished: seat 1 wins". The heuristic was at 2 life and random at 5. Pump activations are on the stack for lethal.</p>
-<img src="qa-shots/watch-finished.png" alt="Watch finished, heuristic wins">
+<h2>4. Wrong input — <b>fixed one message</b></h2>
+<pre>player_policies=("agent","greedy")       ValueError: unsupported player policy: greedy
+player_policies=("agent","passive")      ValueError: unsupported player policy: passive
+player_policies=("agent",)               ValueError: player_policies requires exactly two seats
+both arguments                           ValueError: use player_policies or opponent_policy, not both
+index at a built-in chooser              AgentError: built-in chooser requires action=None (vector: -1)
+opponent_policy="heuristic"              DeprecationWarning: opponent_policy is deprecated; use player_policies=('agent', '&lt;policy&gt;'); removal in 0.3.0
+step() / step([-1]) at an external seat
+   before:  AgentError: Action index -1 out of bounds: 5
+   after:   AgentError: external chooser (seat 0) requires an action index</pre>
+<p>Calling <code>step()</code> while an external seat is choosing is the mirror image of the built-in error. Before this pass, the error named an index the caller never passed. <code>Env::step</code> in <code>managym/src/agent/env.rs</code> now reports the missing action directly, and the vector path inherits the message along with its <code>native_failure</code> payload. Other out-of-range indices keep their existing message. No retained receipt records the old <code>-1</code> message. I added an assertion to <code>tests/env/test_native_player_policies.py</code>. The release extension was rebuilt and replaced atomically, and the scenario script gave the same results after the rebuild.</p>
 
-<h2>5. Wrong input and determinism</h2>
-<pre>opponent_policy="Heuristic" -> ValueError unsupported opponent_policy: Heuristic
-opponent_policy="passive"   -> ValueError unsupported opponent_policy: passive
-managym.Heuristic(max_actions=0)   -> ValueError heuristic max_actions must be positive
-HeuristicPlayer(max_actions=0|True) -> ValueError heuristic max_actions must be a positive integer
-Heuristic(max_actions=1).select_action(obs) -> 0
-two fresh selectors, same observation -> same action</pre>
+<h2>5. Training wrapper (<code>manabot.env.vector_env.VectorEnv</code>)</h2>
+<p>I ran 8 slots on the authored Lessons v Allies match with <code>DeprecationWarning</code> turned into an error. A random learner in seat 0 played until 80 games finished:</p>
+<pre>('agent', 'heuristic')  learner W2  L78
+('agent', 'random')     learner W25 L55</pre>
+<p>25–55 against random looked low, so I checked native random-vs-random on the same match over 200 games: seat 0 won 56 and seat 1 won 144. The matchup favors seat 1; rewards are correct. No warning came from the repository's own calls.</p>
+
+<h2>6. Arena: local evaluation CLI</h2>
+<pre>uv run --no-sync python -W error::DeprecationWarning -m manabot.eval.local \
+  --checkpoint .runs/qa277-small/self-play-raw.pt --opponent heuristic --deal-seed 101 \
+  --out .runs/qa277-eval-h3 --seconds 300 --workers 2
+completed: 1/1 complete deals; 4/4 games; score 0.000; local-check-not-admission   (exit 0)
+panel/replay.json: passed, 4 games, 548 decisions, 0 mismatches of every kind, 0 private_exposures</pre>
+<p>The decision count matches the earlier pass on the same seed.</p>
+
+<h2>7. Academy Watch, heuristic in both seats (browser)</h2>
+<p>I started <code>./scripts/play --port 8771 --frontend-port 5191</code>. Its <code>ACADEMY_PLAY_READY</code> line named this checkout's rebuilt cp313 module. In headless Chromium I opened <code>/replay?watch=1</code>, set both seats to heuristic, kept the default decks and seed 42, and pressed Start watching. Then I stepped 6 decisions and fast-forwarded. There were no page or console errors.</p>
+<p><img src="qa-shots/watch2-steps.png" alt="Watch after 7 decisions"></p>
+<p>Decision 7, turn 3: Seat 1 heuristic in declare attackers, with Firebending Lessons held. The panel shows both seats as "Heuristic · 05e9961d83d8".</p>
+<p><img src="qa-shots/watch2-decision279.png" alt="Watch at decision 279"></p>
+<p>After about 8 minutes of fast-forward the game was at decision 279, turn 22, with seat 2 at 2 life. Every backend request took about 1 s under the host load, including a rejected one (403), so I stopped before the finish. Section 2 shows heuristic-versus-heuristic games finishing natively. I stopped both servers with SIGINT, and no processes were left running.</p>
 
 <h2>Summary</h2>
-<p><b>Works now:</b></p>
+<p><b>Works now:</b> the guide example; all nine seat pairings in scalar and vector use, with correct chooser, viewer and reward ownership; fork and same-seed reset; clear errors for every misuse I tried; the deprecated alias's warning; the training wrapper; the evaluation CLI with clean replay; and Academy Watch with heuristic seats.</p>
+<p><b>Fixed in this pass:</b> the misleading "Action index -1 out of bounds" error when no action is given at an external chooser.</p>
+<p><b>Not reached:</b></p>
 <ul>
-<li>The documented batch API.</li>
-<li>Training-style batch play: opponent decisions are never surfaced, rewards are ±1 from the learner's side, and finished slots reset automatically.</li>
-<li>The local evaluation CLI: the new <code>native-v2</code>/<code>heuristic-cpu-v2</code> identity, replay-verified with no private exposure, and deterministic on repeat.</li>
-<li>The Academy Watch page with a heuristic seat.</li>
-<li>Error messages for bad inputs.</li>
-</ul>
-<p><b>Not reached here:</b></p>
-<ul>
-<li>The gate's full debug Rust suite, clippy and full Python suites.</li>
-<li>Engine Budget, which needs CI on a single runner.</li>
+<li>Academy Watch to the end of the game: the loaded host made each request take about a second. The earlier pass watched heuristic v random to its finish.</li>
+<li>Gate's full debug Rust suite and clippy.</li>
+<li>Full Python suites.</li>
+<li>Engine Budget, which needs a single CI runner.</li>
 <li>The full release training smoke.</li>
-<li>Throughput measured on an idle host. Load averaged about 500, so the rates above are not speed evidence.</li>
-<li>The Python 3.12 consumer install. An earlier pass checked the cp313 standalone install.</li>
+<li>The CPython 3.12 consumer install.</li>
+<li>Speed on an idle host.</li>
 </ul>
-<p><b>Still wrong / rough, worst first:</b></p>
+<p><b>Still wrong or rough, worst first:</b></p>
 <ol>
-<li>(Minor, pre-existing wording) <code>unsupported opponent_policy: X</code> does not list the accepted names (none, random, heuristic). The docs do list them. This was left unchanged because the message comes from main's MTG-272 surface.</li>
+<li>Three retained <code>tla-pilot</code> receipt replays in <code>tests/training/test_game_errors.py</code> end in <code>binding_mismatch</code>. This is the upstream failure already reported on base 402dfd5b2, not caused here.</li>
+<li>Minor: the vector out-of-range errors append the whole <code>native_failure</code> JSON (tens of kB) to the message. This is pre-existing behavior for evidence capture.</li>
+<li>Minor: the native and Python alias warnings word their hint differently. Both leave with the alias in 0.3.0.</li>
 </ol>
 </body></html>

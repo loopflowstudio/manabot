@@ -427,6 +427,11 @@ impl Env {
             .ok_or_else(|| AgentError("no active chooser".into()))?;
         let policy = self.player_policies[chooser];
         let action = if policy == PlayerPolicy::Agent {
+            if action == -1 {
+                return Err(AgentError(format!(
+                    "external chooser (seat {chooser}) requires an action index"
+                )));
+            }
             action
         } else {
             if action != -1 {
