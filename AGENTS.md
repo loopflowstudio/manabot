@@ -99,6 +99,9 @@ checkpoints or experiment evidence.
   recorded once; do not reconstruct bills, reserves or settlements.
 - An experiment whose whole cost is at or under USD25 launches under the
   launcher's cap (`--max-usd`). Above that, a person approves the amount first.
+- Etude rental admission includes the on-demand startup allowance in addition
+  to `Job.max_hours`. Size both job and cohort dollar caps for that whole
+  window; a price offer does not guarantee provider capacity.
 - An experiment is `experiments/<name>.py` at a commit with one report,
   `experiments/<name>.md`. Do not add a protocol document, a serialized regime,
   a digest check or a test suite for one experiment's schedule; reusable
@@ -551,6 +554,11 @@ metric block's Storage and run prefix, after attempt/update supersession, so
 relocated evidence and resumed runs keep the same meaning.
 
 ### Etude card evaluation
+
+Etude page builds reload repository neighbours, including imported helpers.
+Tests that build pages and retain module-level references must restore saved
+`sys.modules` entries and remove neighbours first imported during the build,
+while keeping new dependency imports (including Torch lazy registrations).
 
 Etude discovers experiment files with `runpy`; pass evaluation callbacks from
 their canonical importable module, not the discovery file's `<run_path>`

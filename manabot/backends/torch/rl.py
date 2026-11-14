@@ -74,8 +74,9 @@ def constant(tensor: Tensor) -> Tensor:
 # Masked categorical policies with retained log-space support.
 #
 # Normalized legal logs describe the policy; exp(logs) are the finite precision
-# sampling weights. Underflow in the latter is counted, never repaired with a
-# floor. Collection and learning share this normalization and legal mask.
+# sampling weights, used only on the collecting device. Health derives host
+# float32 exponentials from saved logs, counting underflow without a floor.
+# Collection and learning share this normalization and legal mask.
 
 
 def legal_mask(mask: Tensor) -> Tensor:
@@ -170,51 +171,25 @@ def check_logs(logs: Tensor, valid: Tensor) -> None:
 
 def check_behavior(
     logs: Tensor,
-    probabilities: Tensor,
     actions: Tensor,
     selected_logs: Tensor,
     valid: Tensor,
 ) -> None:
-    """Admit copied collection evidence, including rounded legal zeros.
+    """Admit collection evidence: normalized logs [*,A] and the action taken.
 
-    Zero is accepted only when exp(the saved finite legal log) also rounds to
-    zero. Positive sampled mass and its selected log identity remain mandatory.
+    The logs are the only stored behavior distribution. A legal log stays
+    finite however unlikely the action; its exponential is never compared.
+    The saved selected log must be the log of a legal recorded action.
     """
-    check_probabilities(probabilities, valid, positive=False)
-    tensors = dict(
-        logs=logs,
-        probabilities=probabilities,
-        actions=actions,
-        selected_logs=selected_logs,
-        valid=valid,
-    )
-    if (
-        logs.shape != valid.shape
-        or actions.shape != valid.shape[:-1]
-        or selected_logs.shape != actions.shape
-    ):
+    check_logs(logs, valid)
+    tensors = dict(logs=logs, actions=actions, selected_logs=selected_logs, valid=valid)
+    if actions.shape != valid.shape[:-1] or selected_logs.shape != actions.shape:
         raise NumericalError("behavior_shape", tensors)
-    require(torch.isfinite(logs) | ~valid, "nonfinite_behavior_logs", **tensors)
-    require(torch.isneginf(logs) | valid, "illegal_log_mass", **tensors)
-    require(
-        torch.isclose(
-            logs.logsumexp(-1), torch.zeros_like(selected_logs), atol=1e-5, rtol=0
-        ),
-        "log_normalization",
-        **tensors,
-    )
-    # Zero absolute tolerance prevents accepting fabricated tiny probabilities.
-    require(
-        torch.isclose(logs.exp(), probabilities, atol=0, rtol=1e-5),
-        "behavior_log_probability_mismatch",
-        **tensors,
-    )
     require(
         (actions >= 0) & (actions < logs.shape[-1]), "action_out_of_range", **tensors
     )
     chosen = actions[..., None]
     require(valid.gather(-1, chosen), "illegal_sampled_action", **tensors)
-    require(probabilities.gather(-1, chosen) > 0, "zero_sampled_probability", **tensors)
     require(
         torch.isclose(
             logs.gather(-1, chosen).squeeze(-1), selected_logs, atol=1e-5, rtol=1e-5
