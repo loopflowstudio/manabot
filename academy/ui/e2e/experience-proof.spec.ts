@@ -24,7 +24,7 @@ for (const [seed, width, height, motion] of [
     test.setTimeout(120_000);
     await page.setViewportSize({ width, height });
     await page.emulateMedia({ reducedMotion: motion });
-    await page.addInitScript(() => {
+    await page.addInitScript((gameSeed: number) => {
       const probe: Probe = { samples: [], frames: [] };
       window.academyTiming = probe;
       const Native = window.WebSocket;
@@ -39,6 +39,7 @@ for (const [seed, width, height, motion] of [
             if (!sample || sample.sent === null || sample.message !== null || !frame || frame.match_id !== sample.match || frame.revision <= sample.revision) return;
             sample.message = arrived;
             sample.terminal = frame.projection.game_over;
+            window.dispatchEvent(new Event('academy-timing-authority'));
             // App message listeners run synchronously; this microtask bounds parse/store
             // work, including the probe's own parse. It is not server-only latency.
             queueMicrotask(() => { sample.applied = performance.now(); });
@@ -47,6 +48,12 @@ for (const [seed, width, height, motion] of [
         override send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
           if (typeof data === 'string') {
             const message = JSON.parse(data);
+            // Rewrite here: a routed second socket can reach this probe before the app.
+            if (message.type === 'new_game') {
+              message.config.seed = gameSeed;
+              super.send(JSON.stringify(message));
+              return;
+            }
             if (message.type === 'command') {
               const sample = probe.samples.at(-1);
               if (sample) { sample.sent = performance.now(); sample.match = message.command.match_id; sample.revision = message.command.expected_revision; }
@@ -71,15 +78,7 @@ for (const [seed, width, height, motion] of [
       let previous = 0;
       const frame = (now: number): void => { if (previous) probe.frames.push(now - previous); previous = now; requestAnimationFrame(frame); };
       requestAnimationFrame(frame);
-    });
-    await page.routeWebSocket('**/ws/play', socket => {
-      const server = socket.connectToServer();
-      socket.onMessage(raw => {
-        const message = JSON.parse(String(raw));
-        if (message.type === 'new_game') message.config.seed = seed;
-        server.send(JSON.stringify(message));
-      });
-    });
+    }, seed);
     const art: { url: string; ms: number; status: number | string; cacheControl?: string }[] = [];
     const requests = new Map<string, number>();
     page.on('request', request => { if (request.url().includes('/api/card-art/')) requests.set(request.url(), performance.now()); });
@@ -108,8 +107,16 @@ for (const [seed, width, height, motion] of [
       const labels = await actions.allTextContents();
       let pick = labels.findIndex(label => /Play (Island|Mountain)|Cast /.test(label));
       if (pick < 0) pick = input % labels.length;
+      await expect(actions.nth(pick)).toBeEnabled();
       await actions.nth(pick).focus();
       await actions.nth(pick).press('Enter');
+      // Search time is part of the authority metric, not a client render deadline.
+      // Await the actual response under the existing test deadline before checking
+      // rendering. CI's Search 64 response can exceed the assertion's 5s budget.
+      await page.evaluate(() => new Promise<void>(resolve => {
+        if (window.academyTiming.samples.at(-1)?.message != null) resolve();
+        else window.addEventListener('academy-timing-authority', () => resolve(), { once: true });
+      }));
       await expect.poll(() => page.evaluate(() => window.academyTiming.samples.at(-1)?.renderingOpportunity)).toBeTruthy();
     }
     const probe = await page.evaluate(() => window.academyTiming);
@@ -130,7 +137,7 @@ for (const [seed, width, height, motion] of [
       seed, opponent: seed === 0 ? 'random' : 'search-64', motion,
       definitions: { acknowledgement: 'input to socket send', response: 'input to matching authority message before parse, includes policy/network',
         applied: 'message to microtask after synchronous listeners (includes probe parse)', render: 'message to second rAF after matching DOM revision; rendering opportunity upper bound, not display latency',
-        overhead: 'WebSocket wrapper, one extra JSON parse, mutation observer, rAF loop and CDP timeline enabled in both receipts' },
+        overhead: 'WebSocket wrapper (including seed injection), one extra JSON parse, authority event, mutation observer, rAF loop and CDP timeline; no Playwright WebSocket routing' },
       acknowledgement: distribution(live.map(s => s.sent! - s.input)), authority: distribution(live.map(s => s.message! - s.input)),
       apply: distribution(live.map(s => s.applied! - s.message!)), render: distribution(live.map(s => s.renderingOpportunity! - s.message!)),
       raf: distribution(probe.frames), longFrames50ms: probe.frames.filter(value => value > 50).length,
