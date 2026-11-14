@@ -239,11 +239,13 @@ export class GameSocketController {
     if (gameStore.newGamePending) return;
     if (!config?.launch) {
       this.launchId = null;
-      sessionStorage.removeItem(LAUNCH_STORAGE_KEY);
-      const url = new URL(window.location.href);
-      if (url.searchParams.has('launch')) {
-        url.searchParams.delete('launch');
-        window.history.replaceState(window.history.state, '', url);
+      if (browser) {
+        sessionStorage.removeItem(LAUNCH_STORAGE_KEY);
+        const url = new URL(window.location.href);
+        if (url.searchParams.has('launch')) {
+          url.searchParams.delete('launch');
+          window.history.replaceState(window.history.state, '', url);
+        }
       }
     }
     gameStore.newGamePending = true;
