@@ -118,10 +118,9 @@ pub(crate) enum TokenSource {
     },
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum ProposedEvent {
     Damage {
-        #[serde(serialize_with = "crate::state::game_object::exact")]
         source: Option<ObjectId>,
         target: ProposedDamageTarget,
         amount: i32,
@@ -132,11 +131,9 @@ pub(crate) enum ProposedEvent {
         delta: i32,
     },
     Destroy {
-        #[serde(serialize_with = "crate::state::game_object::exact")]
         target: ObjectId,
     },
     Sacrifice {
-        #[serde(serialize_with = "crate::state::game_object::exact")]
         target: ObjectId,
     },
     CreateTokens {
@@ -147,21 +144,112 @@ pub(crate) enum ProposedEvent {
     },
     CounterChange {
         provenance: CounterProvenance,
-        #[serde(serialize_with = "crate::state::game_object::exact")]
         target: ObjectId,
         kind: CounterKind,
         delta: i32,
         by: Option<PlayerId>,
     },
     ZoneMove {
-        #[serde(rename = "card")]
         object_id: ObjectId,
-        #[serde(serialize_with = "crate::state::game_object::exact")]
-        object: Option<ObjectId>,
         from: Option<ZoneType>,
         to: ZoneType,
         entry: ZoneEntry,
     },
+}
+
+// V16 records the former bare row and optional exact identity. Project both
+// from the proposal's one identity and source zone; they cannot disagree.
+impl serde::Serialize for ProposedEvent {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStructVariant;
+        match self {
+            Self::Damage {
+                source,
+                target,
+                amount,
+                combat,
+            } => {
+                let mut variant =
+                    serializer.serialize_struct_variant("ProposedEvent", 0, "Damage", 4)?;
+                variant.serialize_field("source", &RecordedExact(source))?;
+                variant.serialize_field("target", target)?;
+                variant.serialize_field("amount", amount)?;
+                variant.serialize_field("combat", combat)?;
+                variant.end()
+            }
+            Self::LifeChange { player, delta } => {
+                let mut variant =
+                    serializer.serialize_struct_variant("ProposedEvent", 1, "LifeChange", 2)?;
+                variant.serialize_field("player", player)?;
+                variant.serialize_field("delta", delta)?;
+                variant.end()
+            }
+            Self::Destroy { target } => {
+                let mut variant =
+                    serializer.serialize_struct_variant("ProposedEvent", 2, "Destroy", 1)?;
+                variant.serialize_field("target", &RecordedExact(target))?;
+                variant.end()
+            }
+            Self::Sacrifice { target } => {
+                let mut variant =
+                    serializer.serialize_struct_variant("ProposedEvent", 3, "Sacrifice", 1)?;
+                variant.serialize_field("target", &RecordedExact(target))?;
+                variant.end()
+            }
+            Self::CreateTokens {
+                definition,
+                controller,
+                count,
+                entry,
+            } => {
+                let mut variant =
+                    serializer.serialize_struct_variant("ProposedEvent", 4, "CreateTokens", 4)?;
+                variant.serialize_field("definition", definition)?;
+                variant.serialize_field("controller", controller)?;
+                variant.serialize_field("count", count)?;
+                variant.serialize_field("entry", entry)?;
+                variant.end()
+            }
+            Self::CounterChange {
+                provenance,
+                target,
+                kind,
+                delta,
+                by,
+            } => {
+                let mut variant =
+                    serializer.serialize_struct_variant("ProposedEvent", 5, "CounterChange", 5)?;
+                variant.serialize_field("provenance", provenance)?;
+                variant.serialize_field("target", &RecordedExact(target))?;
+                variant.serialize_field("kind", kind)?;
+                variant.serialize_field("delta", delta)?;
+                variant.serialize_field("by", by)?;
+                variant.end()
+            }
+            Self::ZoneMove {
+                object_id,
+                from,
+                to,
+                entry,
+            } => {
+                let mut variant =
+                    serializer.serialize_struct_variant("ProposedEvent", 6, "ZoneMove", 5)?;
+                variant.serialize_field("card", object_id)?;
+                variant.serialize_field("object", &RecordedExact(&from.map(|_| *object_id)))?;
+                variant.serialize_field("from", from)?;
+                variant.serialize_field("to", to)?;
+                variant.serialize_field("entry", entry)?;
+                variant.end()
+            }
+        }
+    }
+}
+
+struct RecordedExact<'a, T>(&'a T);
+impl<T: crate::state::game_object::ExactIds> serde::Serialize for RecordedExact<'_, T> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        crate::state::game_object::exact(self.0, serializer)
+    }
 }
 
 /// The definition namespace is part of identity: a static and a replacement
@@ -250,7 +338,8 @@ impl EventBatch {
     pub(crate) fn public_entries(&self, out: &mut Vec<ObjectId>) {
         for pending in &self.events {
             if let ProposedEvent::ZoneMove {
-                object: Some(object),
+                object_id: object,
+                from: Some(_),
                 to: ZoneType::Battlefield,
                 ..
             } = pending.event
@@ -362,7 +451,6 @@ impl Game {
             }
             event = ProposedEvent::ZoneMove {
                 object_id: permanent.object,
-                object: Some(*target),
                 from: Some(ZoneType::Battlefield),
                 to: ZoneType::Graveyard,
                 entry: ZoneEntry::default(),
@@ -382,7 +470,7 @@ impl Game {
         // CR 614.1a: replace any death of the exact affected incarnation,
         // including sacrifice and zero toughness, not only lethal damage.
         if let ProposedEvent::ZoneMove {
-            object: Some(object),
+            object_id: object,
             from: Some(ZoneType::Battlefield),
             to,
             ..
@@ -557,7 +645,7 @@ impl Game {
             let death = if matches!(batch.binding, EventBinding::Deaths) {
                 match &event {
                     ProposedEvent::ZoneMove {
-                        object: Some(object),
+                        object_id: object,
                         to: ZoneType::Graveyard,
                         ..
                     } => self.object_event_ref(*object),
@@ -907,7 +995,6 @@ impl Game {
             }
             ProposedEvent::ZoneMove {
                 object_id,
-                object,
                 from,
                 to,
                 entry,
@@ -919,15 +1006,7 @@ impl Game {
                 {
                     return false;
                 }
-                match (from, object) {
-                    (Some(_), Some(object_ref)) => {
-                        object_ref == object_id && self.state.live(*object_id).is_some()
-                    }
-                    // An object entering its first zone (CR 400.11), never
-                    // one a zone change already replaced.
-                    (None, None) => self.state.zones.is_latest(*object_id),
-                    _ => false,
-                }
+                self.state.zones.is_latest(*object_id)
             }
         }
     }
@@ -1038,12 +1117,11 @@ impl Game {
             }
             ProposedEvent::ZoneMove {
                 object_id,
-                object,
                 to: ZoneType::Battlefield,
                 entry,
                 ..
             } => {
-                let source = object.unwrap_or(*object_id);
+                let source = *object_id;
                 // Entry conditions read the prospective controller, including
                 // a spell or reanimation controlled by someone other than its owner.
                 let entering_controller = entry
@@ -1354,11 +1432,10 @@ impl Game {
             } => self.commit_counter_change(target, kind, delta, by),
             ProposedEvent::ZoneMove {
                 object_id,
-                object,
                 from,
                 to,
                 entry,
-            } => self.commit_zone_move(object_id, object, from, to, entry, lki, followups),
+            } => self.commit_zone_move(object_id, from, to, entry, lki, followups),
         }
     }
 
@@ -1454,6 +1531,29 @@ mod tests {
             .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
             .expect("scenario ogre");
         (game, permanent)
+    }
+
+    #[test]
+    fn zone_move_records_both_v16_identity_projections_from_one_object() {
+        let (mut game, permanent) = game_with_ogre();
+        let old = game.permanent_object(permanent).unwrap();
+        let object = game.move_object(old, ZoneType::Hand);
+        let proposal = game.zone_move_proposal(object, ZoneType::Exile, ZoneEntry::default());
+        let value = serde_json::to_value(&proposal).unwrap();
+        assert_eq!(value["ZoneMove"]["card"], serde_json::json!(object.slot()));
+        assert_eq!(
+            value["ZoneMove"]["object"],
+            serde_json::json!({"entity": object.slot(), "incarnation": object.generation()})
+        );
+        let mut zones = crate::state::zone::ZoneManager::default();
+        let entering = zones.allocate();
+        let proposal = ProposedEvent::ZoneMove {
+            object_id: entering,
+            from: None,
+            to: ZoneType::Battlefield,
+            entry: ZoneEntry::default(),
+        };
+        assert!(serde_json::to_value(&proposal).unwrap()["ZoneMove"]["object"].is_null());
     }
 
     #[test]
@@ -1556,8 +1656,7 @@ mod tests {
         }));
         assert!(!game.apply_immediate_event(ProposedEvent::Destroy { target: stale }));
         assert!(!game.apply_immediate_event(ProposedEvent::ZoneMove {
-            object_id,
-            object: Some(stale),
+            object_id: stale,
             from: Some(ZoneType::Battlefield),
             to: ZoneType::Exile,
             entry: ZoneEntry::default(),

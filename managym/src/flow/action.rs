@@ -813,7 +813,7 @@ impl Game {
     /// Narrow untrusted action ids at card-only entry points.
     fn chosen_card(&self, object: ObjectId) -> Result<CardId, AgentError> {
         self.state
-            .card_id(object)
+            .card_of(object)
             .ok_or_else(|| AgentError("choice must name a card".into()))
     }
 
@@ -1043,5 +1043,51 @@ fn choice_verb(effect: &Effect) -> &'static str {
             to: ZoneType::Hand, ..
         } => "Return",
         _ => "Choose",
+    }
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use std::collections::BTreeMap;
+
+    use super::*;
+    use crate::{search_state::witness, state::player::PlayerConfig};
+
+    #[test]
+    fn stale_card_action_cannot_follow_a_card_back_to_hand() {
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("p0", BTreeMap::from([("Mountain".into(), 40)])),
+                PlayerConfig::new("p1", BTreeMap::from([("Island".into(), 40)])),
+            ],
+            400_715,
+            false,
+        );
+        let player = game.active_player();
+        game.state.turn.current_phase = 1;
+        game.state.turn.current_step = 0;
+        let old = game.state.zones.zone_objects(ZoneType::Hand, player)[0];
+        let card = game.state.card_of(old).unwrap();
+        let exiled = game.move_object(old, ZoneType::Exile);
+        let returned = game.move_object(exiled, ZoneType::Hand);
+        let before = witness(&game);
+        assert!(game
+            .execute_action(&Action::PlayLand {
+                player,
+                object: old
+            })
+            .is_err());
+        assert_eq!(witness(&game), before);
+        assert_eq!(game.chosen_card(returned).unwrap(), card);
+        assert!(game
+            .execute_action(&Action::PlayLand {
+                player,
+                object: returned
+            })
+            .is_ok());
+        assert_eq!(
+            game.state.zones.zone_of(game.state.object_of(card)),
+            Some(ZoneType::Battlefield)
+        );
     }
 }

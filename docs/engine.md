@@ -691,6 +691,10 @@ kind `Token`, and neither it nor the copy has a `CardId`. A definition's
 `is_token` says only that its catalog row is a token definition's; an object's
 kind is the authority for what it is.
 
+Copies are made through `Object::token_copy` and `Object::spell_copy`, with
+their viewer id, owner and kind set at creation. The zone allocator supplies
+their `ObjectId`.
+
 A Clone is still a card. A copy effect changes an object's copiable values
 (CR 707.2) and is recorded on that object (`copy`); it does not make a copy
 object, and it does not survive the object leaving its zone.

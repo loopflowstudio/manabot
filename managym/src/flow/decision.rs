@@ -3498,7 +3498,13 @@ mod learn_tests {
             },
             Action::LearnTakeLesson {
                 player: PlayerId(0),
-                object: ObjectId::in_slot(u32::MAX as usize, 0),
+                object: {
+                    let mut zones = crate::state::zone::ZoneManager::default();
+                    for _ in 0..game.state.objects.len() {
+                        zones.allocate();
+                    }
+                    zones.allocate()
+                },
             },
             Action::LearnTakeLesson {
                 player: PlayerId(1),

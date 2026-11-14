@@ -693,13 +693,12 @@ impl<'a> Projection<'a> {
                 }
                 ProposedEvent::ZoneMove {
                     object_id,
-                    object,
                     from,
                     to,
                     entry,
                 } => {
-                    if let Some(object) = object {
-                        self.object("moving object", *object);
+                    if from.is_some() {
+                        self.object("moving object", *object_id);
                     } else {
                         self.reference(
                             "entering definition",

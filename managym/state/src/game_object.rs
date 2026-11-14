@@ -34,7 +34,7 @@ impl ObjectId {
     /// Storage only: the object store and zone manager name the appearance
     /// they hold. Rules code takes ids from the game, never from numbers.
     #[doc(hidden)]
-    pub fn in_slot(slot: usize, generation: u32) -> Self {
+    pub(crate) fn in_slot(slot: usize, generation: u32) -> Self {
         Self {
             slot: u32::try_from(slot).expect("object store exceeds u32"),
             generation,
@@ -580,10 +580,24 @@ impl Object {
         }
     }
 
-    /// The same object as `kind`: a token made by a copy effect (CR 707.2,
-    /// 111.1) or a copy of a spell (CR 707.10), before it enters the game.
-    pub fn with_kind(self, kind: ObjectKind) -> Self {
-        Self { kind, ..self }
+    /// A fresh token with the source's copiable values (CR 707.2, 111.1).
+    pub fn token_copy(source: Self, id: PublicId, owner: PlayerId) -> Self {
+        Self {
+            id,
+            owner,
+            kind: ObjectKind::Token,
+            ..source
+        }
+    }
+
+    /// A fresh copy of a spell on the stack (CR 707.10), never a card.
+    pub fn spell_copy(source: Self, id: PublicId, owner: PlayerId) -> Self {
+        Self {
+            id,
+            owner,
+            kind: ObjectKind::SpellCopy,
+            ..source
+        }
     }
 
     pub fn kind(&self) -> ObjectKind {

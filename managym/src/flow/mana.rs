@@ -2557,10 +2557,19 @@ mod tests {
         }
     }
 
+    // Payment models take distinct appearances from the ordinary allocator.
+    fn payment_object(index: usize) -> ObjectId {
+        static OBJECTS: std::sync::LazyLock<Vec<ObjectId>> = std::sync::LazyLock::new(|| {
+            let mut zones = crate::state::zone::ZoneManager::default();
+            (0..128).map(|_| zones.allocate()).collect()
+        });
+        OBJECTS[index]
+    }
+
     fn source(index: usize, fixed: Option<&str>, abilities: Vec<ManaActivation>) -> ManaSource {
         ManaSource {
             permanent: PermanentId(index),
-            object: ObjectId::in_slot(index, 0),
+            object: payment_object(index),
             untapped: true,
             fixed: fixed.map(Mana::parse),
             abilities,
@@ -2680,7 +2689,7 @@ mod tests {
                         let untapped = rng.gen_bool(0.85);
                         ManaSource {
                             permanent: PermanentId(index),
-                            object: ObjectId::in_slot(index, 0),
+                            object: payment_object(index),
                             untapped,
                             fixed: outputs.choose(&mut rng).unwrap().clone(),
                             abilities: Vec::new(),
@@ -2914,7 +2923,7 @@ mod tests {
             // One Herbalist-shaped source: any color, or two restricted mana.
             model.sources.push(ManaSource {
                 permanent: PermanentId(count),
-                object: ObjectId::in_slot(count, 0),
+                object: payment_object(count),
                 untapped: true,
                 fixed: None,
                 waterbend: true,
@@ -3105,7 +3114,7 @@ mod tests {
         let sources = (0..4)
             .map(|index| ManaSource {
                 permanent: PermanentId(index),
-                object: ObjectId::in_slot(index, 0),
+                object: payment_object(index),
                 untapped: true,
                 fixed: Some(Mana::parse("G")),
                 abilities: vec![
@@ -3168,7 +3177,7 @@ mod tests {
         let model = PaymentModel {
             sources: vec![ManaSource {
                 permanent: PermanentId(0),
-                object: ObjectId::in_slot(0, 0),
+                object: payment_object(0),
                 untapped: true,
                 fixed: Some(Mana::parse("G")),
                 abilities: vec![sacrifice],

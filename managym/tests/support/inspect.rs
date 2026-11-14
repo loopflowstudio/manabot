@@ -385,3 +385,12 @@ pub fn assert_choice_contract(s: &Scenario) {
     }
     assert_eq!(witness(s.game()), root);
 }
+
+/// An allocator-produced appearance that has never belonged to this game.
+pub fn missing_object(s: &Scenario) -> ObjectId {
+    let mut zones = managym::state::zone::ZoneManager::default();
+    for _ in 0..s.game().state.objects.len() {
+        zones.allocate();
+    }
+    zones.allocate()
+}

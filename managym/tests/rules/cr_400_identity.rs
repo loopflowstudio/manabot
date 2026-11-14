@@ -1,10 +1,10 @@
 use managym::state::{
-    game_object::{ObjectId, ObjectLookupError, PlayerId},
+    game_object::{ObjectLookupError, PlayerId},
     zone::ZoneType,
 };
 
 use crate::support::game::*;
-use crate::support::inspect::owned_card;
+use crate::support::inspect::{missing_object, owned_card};
 
 #[test]
 fn cr_400_7_leave_and_reenter_keeps_the_card_but_makes_new_objects() {
@@ -33,8 +33,7 @@ fn cr_400_7_leave_and_reenter_keeps_the_card_but_makes_new_objects() {
         Err(ObjectLookupError::WrongZone)
     );
     assert_eq!(
-        s.game()
-            .lookup_current_permanent(ObjectId::in_slot(u32::MAX as usize, 0)),
+        s.game().lookup_current_permanent(missing_object(&s)),
         Err(ObjectLookupError::Missing)
     );
     let lki = s
@@ -184,7 +183,7 @@ fn cr_400_7_death_trigger_keeps_source_lki_across_reentry() {
 /// rows never pass the card boundary, even when they have a card's definition.
 #[test]
 fn card_ids_narrow_kind_and_keep_numeric_wire_identity() {
-    use managym::state::game_object::{ObjectKind, ObjectVec};
+    use managym::state::game_object::ObjectVec;
     use managym::state::zone::ZoneManager;
 
     let mut s = Scenario::new(
@@ -199,17 +198,21 @@ fn card_ids_narrow_kind_and_keep_numeric_wire_identity() {
         serde_json::to_value(card).unwrap(),
         serde_json::to_value(object).unwrap()
     );
-    assert!(s
-        .game()
-        .state
-        .card_id(ObjectId::in_slot(u32::MAX as usize, 0))
-        .is_none());
+    assert!(s.game().state.card_id(missing_object(&s)).is_none());
 
     let template = s.game().state.objects[card].clone();
     let mut objects = ObjectVec(vec![
         template.clone(),
-        template.clone().with_kind(ObjectKind::Token),
-        template.with_kind(ObjectKind::SpellCopy),
+        managym::state::game_object::Object::token_copy(
+            template.clone(),
+            template.id,
+            template.owner,
+        ),
+        managym::state::game_object::Object::spell_copy(
+            template.clone(),
+            template.id,
+            template.owner,
+        ),
     ]);
     let mut slots = ZoneManager::default();
     let ids = [slots.allocate(), slots.allocate(), slots.allocate()];
@@ -327,7 +330,7 @@ fn card_zone_readers_preserve_transient_token_occupants() {
 /// placement, reorder, hidden-world assignment, and removal of visitors.
 #[test]
 fn typed_card_zones_preserve_wire_order_and_hidden_reassignment() {
-    use managym::state::game_object::{ObjectKind, ObjectVec};
+    use managym::state::game_object::ObjectVec;
     use managym::state::zone::ZoneManager;
     use rand::{seq::SliceRandom, RngCore, SeedableRng};
     use rand_chacha::ChaCha8Rng;
@@ -336,9 +339,17 @@ fn typed_card_zones_preserve_wire_order_and_hidden_reassignment() {
     let template = s.game().state.objects[s.game().state.players[0].deck[0]].clone();
     let objects = ObjectVec(vec![
         template.clone(),
-        template.clone().with_kind(ObjectKind::Token),
+        managym::state::game_object::Object::token_copy(
+            template.clone(),
+            template.id,
+            template.owner,
+        ),
         template.clone(),
-        template.with_kind(ObjectKind::SpellCopy),
+        managym::state::game_object::Object::spell_copy(
+            template.clone(),
+            template.id,
+            template.owner,
+        ),
     ]);
     let player = PlayerId(0);
     let mut zones = ZoneManager::default();

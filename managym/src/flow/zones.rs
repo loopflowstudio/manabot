@@ -14,8 +14,7 @@ use crate::{
         card::{CardDefId, Restriction, StaticAbility},
         effect::{CopyEffect, Modification},
         game_object::{
-            CardId, Object, ObjectId, ObjectKind, ObjectLki, PermanentId, PlayerId, PublicId,
-            Target,
+            CardId, Object, ObjectId, ObjectLki, PermanentId, PlayerId, PublicId, Target,
         },
         mana::ManaSpent,
         permanent::CounterKind,
@@ -373,15 +372,14 @@ impl Game {
     /// token's `CopyEffect` records both and the definition at the root.
     pub(crate) fn prepare_token_copy(
         &mut self,
-        mut copy: Object,
+        copy: Object,
         controller: PlayerId,
         exceptions: Vec<Modification>,
     ) -> ObjectId {
-        copy.id = self.state.id_gen.next_id();
-        copy.owner = controller;
+        let id = self.state.id_gen.next_id();
         // Token status is the object's kind, not a copiable value; only an
         // exception's write detaches the shared definition (`DerefMut`).
-        let mut copy = copy.with_kind(ObjectKind::Token);
+        let mut copy = Object::token_copy(copy, id, controller);
         for exception in &exceptions {
             let copiable = exception.apply_copiable(&mut copy);
             debug_assert!(copiable, "copy exception {exception:?} is a rules effect");
@@ -528,14 +526,12 @@ impl Game {
             && self.find_spell_on_stack_index(object_id).is_some_and(|index| {
                 matches!(&self.state.stack_objects[index], StackObject::Spell(spell) if spell.flashback)
             }) { ZoneType::Exile } else { to_zone };
-        let object = from.and_then(|_| self.state.live(object_id));
         entry = entry.for_zone(to_zone);
         if to_zone == ZoneType::Battlefield && self.enters_as_saga(object_id, &entry) {
             entry.counters.change(CounterKind::Lore, 1);
         }
         ProposedEvent::ZoneMove {
             object_id,
-            object,
             from,
             to: to_zone,
             entry,
@@ -560,13 +556,13 @@ impl Game {
     pub(crate) fn commit_zone_move(
         &mut self,
         object_id: ObjectId,
-        departing_ref: Option<ObjectId>,
         old_zone: Option<ZoneType>,
         to_zone: ZoneType,
         entry: ZoneEntry,
         departing_lki: Option<ObjectLki>,
         followups: &mut Vec<ProposedEvent>,
     ) -> bool {
+        let departing_ref = old_zone.map(|_| object_id);
         let owner = self.state.objects[object_id].owner;
 
         if old_zone == Some(ZoneType::Hand) && to_zone != ZoneType::Hand {
