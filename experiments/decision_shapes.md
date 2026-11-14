@@ -68,3 +68,16 @@ calibration regimes with a `-calibration` suffix instead, which also keeps
 their checkpoint tags out of scored evaluation. No study updates ran in
 either attempt. The Ada rental remains held under its USD0.80 ceiling while
 preparation continues.
+
+The tracking-fixed calibration (`bd63b6fe1c88`, `099e3658b035`, source
+`eb88310ef319`) reached collection but failed at update zero: native admission
+reported `policy input v10 required` for mana that cannot cast nonartifact
+spells. The 900-deck regime had inherited v9 from the historical frontier.
+Fresh arms now use v10 consistently, retaining width 64, two attention layers,
+four heads and 256 streams. No historical checkpoint or evidence is rebound.
+The earlier frontier curve is only a planning reference, not a same-input
+control for this study.
+
+The six v9 study runs in `mtg265-study-20261114` were stopped before training:
+four cancelled, two capacity-refused, all USD0 in the launcher. Preserve those
+records. Verify the corrected input with each arm before replacing that cohort.

@@ -39639,7 +39639,7 @@
     "max_facts": 512,
     "max_focus_objects": 2,
     "max_permanents_per_player": 96,
-    "policy_input_version": 9
+    "policy_input_version": 10
   },
   "recovery_max_microsteps": null,
   "schedule_clock": "iteration_fraction",

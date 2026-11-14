@@ -177,6 +177,9 @@ def build(corpus_path: Path = CORPUS) -> tuple[int, int]:
     held_ids, held = playable_decks(corpus, "held_out")
     regime = json.loads(FRONTIER_REGIME.read_text())
     regime["id"] = "decision-shapes-w64"
+    # The full current corpus includes state that the older frontier input
+    # cannot represent. All fresh arms use v10; no checkpoint is rebound.
+    regime["observation"]["policy_input_version"] = 10
     regime["deck_source"] = UniformDecks(
         decks=train, sampling="uniform-independent-v1", entry_ids=train_ids
     ).model_dump(mode="json")
