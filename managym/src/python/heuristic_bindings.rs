@@ -1,4 +1,7 @@
 //! Scalar adapter over the same viewer-observation selector used by VectorEnv.
+// PyO3's generated wrappers trigger the same false positive as the other bindings.
+#![allow(clippy::useless_conversion)]
+
 use crate::{
     agent::{heuristic::Heuristic, observation::Observation},
     python::bindings::PyObservation,

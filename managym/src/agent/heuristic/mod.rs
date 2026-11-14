@@ -619,16 +619,15 @@ impl Heuristic {
         let mut incoming: Vec<_> = b.creatures(false).map(|p| p.power).collect();
         incoming.sort_by(|a, b| b.cmp(a));
         let pool = self.attack_pool.as_ref().unwrap();
-        let mut defenders = b.creatures(true).filter(|p| !pool.contains(&p.id)).count();
+        let defenders = b.creatures(true).filter(|p| !pool.contains(&p.id)).count();
         let mut candidates: Vec<_> = b.creatures(true).filter(|p| pool.contains(&p.id)).collect();
         candidates.sort_by_key(|p| (-p.toughness, p.power));
         let mut held = BTreeSet::new();
-        for p in candidates {
+        for (defenders, p) in (defenders..).zip(candidates) {
             if incoming.iter().skip(defenders).sum::<i32>() < b.raw.agent.life {
                 break;
             }
             held.insert(p.id);
-            defenders += 1;
         }
         held
     }

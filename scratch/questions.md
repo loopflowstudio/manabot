@@ -28,15 +28,15 @@ tests and retained decision parity cover the surviving owner. Do not restore
 the Python policy allowlist or Passive. Rust `OpponentPolicy` is replaced by
 per-seat `PlayerPolicy` (see Required per-seat API below).
 
-## Current state (fourth-review implementation, 2026-11-13)
+## Current state (gate, 2026-11-13)
 
-Draft PR #518 remains the delivery. The fourth and fifth concept-review
-findings are implemented (details and focused checks below). Replay reads
-retained receipt policies without the deprecated argument. New captures record
-only per-seat player policies; retained receipts remain unchanged. Remaining:
-gate checks (full debug Rust, clippy, affected Python suites, consumer interpreter
-matrix), normal same-runner Engine Budget for unused-policy cost, full release
-training smoke, then delivery per steer a0c2b822 with scratch deleted pre-land.
+Draft PR #518 remains the delivery. Replay reads retained receipt policies
+without the deprecated argument. New captures record only per-seat policies;
+retained receipts remain unchanged. Gate repaired stale test expectations and
+Clippy findings; final results are in `scratch/gate.md`. CI run 43540649606
+passed Engine Budget and all integration groups except the stale Rust/model
+message assertions, now repaired. Delivery follows steer a0c2b822; delete scratch
+pre-land and require final-revision CI. Local gate and final wheel checks passed.
 
 Fresh registrations use native-v2 / heuristic-cpu-v2 and hash the adapter plus
 three Rust files. Main now distributes managym separately; its wheel must ship
@@ -582,3 +582,44 @@ message). Release extension rebuilt and replaced atomically;
 `tests/env/test_native_player_policies.py`, automatic capture, game errors and
 captured bookkeeping: 103 passed, 3 known upstream `binding_mismatch`.
 Report: `scratch/qa.html`. Gate items unchanged.
+
+## Publish check after sync (2026-11-13)
+
+`lf sync` merged main at `fc22c9eb5a`; its focused release staging test passed.
+`uv run --no-sync pytest tests/env/test_native_player_policies.py tests/sim/test_heuristic.py tests/env/test_captured_vector_bookkeeping.py tests/env/test_opponents.py tests/semantic/test_player_control.py tests/training/test_action_cutoff.py tests/env/test_observation.py tests/verify/test_native_buffer_capacities.py -q` — 190 passed.
+`uv run --no-sync pytest tests/training/test_game_errors.py -q -W error::DeprecationWarning` — 29 passed, 3 failed: retained capacity receipt returns `binding_mismatch` where `failed` is expected, as previously reproduced on base `402dfd5b2`. This remains a gate failure, not a waiver. Full gate, release training smoke, consumer matrix and same-runner Engine Budget remain outstanding. PR remains draft; sync has not been pushed.
+
+## Gate plan and replay diagnosis (2026-11-13)
+
+Gate uses the current diff against origin/main. `.github/ci/select-tests.sh`
+selects every CI job because native source/package metadata changed; it selects
+jobs, not focused local tests. Locally run the changed heuristic/Env/VectorEnv
+Rust unit tests (debug, nextest CI timeout), affected Python files and direct
+capture/collector/evaluation/package consumers, then fmt/Clippy/Ruff. Reuse
+unchanged acceptance evidence above; no UI source changed. Full Rust workspace,
+semantic/browser matrices and same-runner Engine Budget remain CI checks per
+the gate's focused-suite rule. Installed paired-wheel training smoke and both
+consumer interpreters remain release acceptance checks.
+
+Replay diagnosis: replayed all but the final action of the retained
+`tla-pilot-permanent-capacity.jsonl` and recursively compared its pre-command
+frame with the live frame. Only `/schema_version` (7 retained, 8 live) and
+`/fingerprint` differ. This explains the three parameterized failures in the
+unchanged `test_resource_limit_receipt_replays_its_retained_encoding_boundary`.
+Preserve retained evidence and strict binding. The later steer below authorizes
+repairing the stale test expectation.
+
+Gate steer c73159d0 (Jack Heart, 2026-11-13) explicitly authorizes repairing
+stale assertions: "These ordinary test repairs are within the approved delivery
+scope; a stale expectation alone is not a product decision or reason to return
+an unresolved blocker." This supersedes the blocker disposition immediately
+above. Rust and Python negative-index tests now expect the accepted external
+chooser message. The capacity replay test asserts strict schema-7 rejection,
+compares every other frame field, then exercises a separate current-world
+attempt using the freshly produced schema-8 binding; retained bytes are untouched.
+The affected run also found the v10 model test missed main's required
+`admit_observation` boundary. Its call now uses that public admission API.
+
+CI run 43540649606 and its same-runner Engine Budget results are recorded in
+`scratch/gate.md`. Gate's final source changes only simplify a loop counter and
+apply the existing PyO3 generated-code lint exception; strategy is unchanged.
