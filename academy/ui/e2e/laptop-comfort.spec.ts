@@ -19,6 +19,11 @@ async function installTable(page: Page, options: TableOptions = {}): Promise<{
   if (options.sparse) {
     frame.projection.agent.battlefield = frame.projection.agent.battlefield.filter(card => card.types?.is_land).slice(0, 1);
     frame.projection.opponent.battlefield = [];
+    // Real open-deck games retain these summaries even with an empty field.
+    frame.projection.opponent.main_counts = { 'lea.forest': 40 };
+    frame.projection.opponent.unseen_counts = { 'lea.forest': 40 };
+    frame.projection.opponent.sideboard_counts = { 'lea.forest': 2 };
+    frame.projection.opponent.remaining_sideboard_counts = { 'lea.forest': 2 };
     frame.projection.agent.hand = frame.projection.agent.hand.slice(0, 7);
   }
   // A large published offer set over exact visible objects, including identical copies.
@@ -66,9 +71,9 @@ async function installTable(page: Page, options: TableOptions = {}): Promise<{
 
 for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 800 }]) {
   for (const colorScheme of ['light', 'dark'] as const) {
-    test(`laptop choices, inspection and recovery ${viewport.width} ${colorScheme}`, async ({ browser }, testInfo) => {
-      const context = await browser.newContext({ viewport, colorScheme, deviceScaleFactor: 1 });
-      const page = await context.newPage();
+    test(`laptop choices, inspection and recovery ${viewport.width} ${colorScheme}`, async ({ page }, testInfo) => {
+      await page.setViewportSize(viewport);
+      await page.emulateMedia({ colorScheme });
       const { commands, frame } = await installTable(page);
       await page.evaluate(() => document.fonts.ready);
       const geometry = await page.evaluate(() => {
@@ -125,7 +130,6 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 800
       const recoveredHand = await hand.boundingBox();
       expect(recoveredHand!.y + recoveredHand!.height).toBeLessThanOrEqual(viewport.height);
       await page.screenshot({ path: testInfo.outputPath('laptop-table.png') });
-      await context.close();
     });
   }
 }
@@ -143,8 +147,18 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 800
         expect(land.y).toBeGreaterThanOrEqual(zoneBounds.y);
         expect(land.y + land.height).toBeLessThanOrEqual(zoneBounds.y + zoneBounds.height);
         expect(await zones.evaluate(element => element.scrollTop)).toBe(0);
+        const opponentZones = page.locator('[aria-label$="battlefield and zones"]').first();
+        await opponentZones.focus();
+        await opponentZones.press('End');
+        await expect.poll(() => opponentZones.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+        const opponentBounds = (await opponentZones.boundingBox())!;
+        await expect.poll(async () => {
+          const graveyard = (await opponentZones.locator('summary').filter({ hasText: /^Graveyard/ }).boundingBox())!;
+          return graveyard.y + graveyard.height;
+        }).toBeLessThanOrEqual(opponentBounds.y + opponentBounds.height);
+        expect(await page.evaluate(() => scrollY)).toBe(0);
       }
-      const lanes = zones.locator('[data-battlefield-lane].occupied');
+      const lanes = zones.locator('[data-testid="battlefield"] [data-battlefield-lane]');
       for (const lane of await lanes.all()) {
         const heading = (await lane.locator('h3').boundingBox())!;
         expect(heading.y).toBeGreaterThanOrEqual(zoneBounds.y);

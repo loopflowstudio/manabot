@@ -139,7 +139,7 @@
   </div>
 {/snippet}
 
-{#snippet playerBar()}
+<section class="player-area" class:empty-battlefield={opponent && player.battlefield.length === 0} aria-label={`${label}${deckName ? ` — ${deckName}` : ''}`}>
   <details class="player-status type-caption"><summary>{label} status and mana</summary>
   {#if player.mana}
     <p class="type-caption py-1" data-testid="mana-pool">{label} mana: {manaText(player.mana)}
@@ -184,9 +184,7 @@
     </p>
   {/if}
   </details>
-  <!-- The player bar, in the manner of a chess clock plate: identity at
-       one end, life at the other. The opponent's sits above their side of
-       the table; yours below yours — the players bracket the battlefield. -->
+  <!-- Identity and life stay above the scrolling battlefield and zones. -->
   <div
     class={`rounded-sm px-4 py-2 ${pieColors.length > 0 ? 'border border-black/30' : 'border border-line bg-field/70'}`}
     style:background={barBackground || undefined}
@@ -208,10 +206,6 @@
       </div>
     </div>
   </div>
-{/snippet}
-
-<section class="player-area" class:empty-battlefield={opponent && player.battlefield.length === 0} aria-label={`${label}${deckName ? ` — ${deckName}` : ''}`}>
-  {@render playerBar()}
 
   <!-- svelte-ignore a11y_no_noninteractive_tabindex (keyboard access to the scrolling zones) -->
   <div class="staves" role="region" aria-label={`${label} battlefield and zones`} tabindex="0">
@@ -356,14 +350,13 @@
   .hand-cards { display: flex; align-items: end; gap: .5rem; overflow-x: auto; overscroll-behavior: contain; padding: .25rem; }
   .hand-cards > :global(*) { flex-shrink: 0; }
   .hand-staff { min-width: 0; }
+  .staff { padding: 4px 0; }
   @media (min-width: 1024px) and (min-height: 650px) {
     .player-area { display: flex; flex-direction: column; min-height: 0; }
     .player-status { flex-shrink: 0; max-height: 90px; overflow: auto; }
     .staves { display: flex; flex-direction: column; gap: .25rem; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 .25rem; }
+    .empty-battlefield .staves { max-height: 64px; }
     .hand-staff { flex-shrink: 0; }
-  }
-  .staff { padding: 4px 0; }
-  @media (min-width: 1024px) and (min-height: 650px) {
     .staff { display: flex; flex-direction: column; flex: 1 0 auto; min-height: 0; }
     .staves > :global(:not(.staff)) { flex-shrink: 0; }
   }

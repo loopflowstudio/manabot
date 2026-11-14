@@ -400,7 +400,7 @@ Before merging UI changes:
 - [ ] `npm run check` and `npm test` pass; the e2e suites pass
 - [ ] Overlays on card art use literal colors, not adaptive tokens
 - [ ] New colored elements are assigned by register, not by taste
-- [ ] Dense boards hold: `DENSE_BOARD=1 npx playwright test e2e/dense-board.spec.ts` and read the captures
+- [ ] Dense boards hold: `npm --prefix academy/ui run test:e2e:release -- laptop-comfort.spec.ts` and read the captures
 - [ ] Both modes checked by eye — parchment and lamplight
 
 ---

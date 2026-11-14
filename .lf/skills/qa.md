@@ -91,8 +91,10 @@ publish, land or choose the next Graph step from here.
   the panel is not an offer). Tapped lands show only in a `fullPage`
   screenshot, not in the board's text.
 - Configured launch (`managym academy play|replay`, `managym.academy.launch.serve`):
-  from a checkout set `ACADEMY_FRONTEND_BUILD=$PWD/academy/ui/build` (otherwise
-  `site.missing`) and pass `--no-open --port <unused> --traces-dir /tmp/<dir>`;
+  from a checkout first build the static SPA with
+  `ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build`, then set
+  `ACADEMY_FRONTEND_BUILD=$PWD/academy/ui/build` (otherwise `site.missing`).
+  Plain `npm run build` uses adapter-auto and does not create that directory. Pass `--no-open --port <unused> --traces-dir /tmp/<dir>`;
   port 8000 is often taken. Open READY's `open` address in Playwright. For a
   multi-game evaluation trace, call `manabot.eval.match.play_cell` with
   `tests.eval.arena_fixture.arena_fixture()` anchors, several `deal_seeds` and
@@ -136,6 +138,18 @@ publish, land or choose the next Graph step from here.
   buttons, or every click times out while the bot plays on. Hover a card name
   to read `[data-testid=card-rules-text]`. Search 64 with a fast creature deck
   usually wins before a slow card is used; give the opponent a light deck.
+- Live network recovery: browser offline emulation may leave an existing
+  WebSocket connected. To prove recovery, put a local TCP forwarder between the
+  browser and the real server, destroy its active socket pairs, stop listening
+  until the disconnected/reconnecting badge appears, then listen again. Keep
+  the backend process alive so its real session survives. Compare match,
+  revision, frame hash, projection and offers after recovery; do not retain
+  resume credentials in receipts. Close the forwarder after the browser exits.
+  Accepted Commands carry their next frame in `update.frame`; recovery carries
+  it in `recovery.frame`. Capture both when observing the wire. At game end the
+  result deliberately receives focus and may scroll; assert document stability
+  during active decisions. After Play Again, select the completed replay by its
+  result label, since the newest entry is the unfinished next game.
 - First-time clone: copy tracked plus untracked non-ignored files
   (`git ls-files -co --exclude-standard`) to an empty `/tmp` directory and run
   `ACADEMY_CLEAN_API_PORT=… ACADEMY_CLEAN_FRONTEND_PORT=… ./scripts/verify-clean-machine`

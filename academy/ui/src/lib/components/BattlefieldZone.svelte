@@ -5,6 +5,7 @@
   import type { CardPreview, PermanentState } from '$lib/types';
   import PermanentRow from './PermanentRow.svelte';
 
+  // Battlefield mounts a lane only when its native group contains permanents.
   interface Props {
     label: string;
     lane: string;
@@ -46,7 +47,7 @@
   });
 </script>
 
-<div role="group" aria-label={label} data-battlefield-lane={lane} class:occupied={permanents.length > 0} class="lane min-h-0 min-w-0 rounded border border-line p-2">
+<div role="group" aria-label={label} data-battlefield-lane={lane} class="lane min-h-0 min-w-0 rounded border border-line p-2">
   <div class="lane-heading flex items-center justify-between gap-1">
     <h3 class="type-rubric min-w-0 truncate text-ink-2" title={label}>{label} · {permanents.length}</h3>
     {#if pages > 1}
@@ -58,10 +59,8 @@
     {/if}
   </div>
   <div bind:this={box} class="min-h-0 overflow-hidden p-1">
-    {#if permanents.length}
-      <PermanentRow permanents={visible} {allPermanents} {tablePermanents} cardWidth={layout.cardWidth}
-        {focusedIds} {clickableTargets} {onSelectTarget} {onHoverTarget} {onPreviewCard} />
-    {/if}
+    <PermanentRow permanents={visible} {allPermanents} {tablePermanents} cardWidth={layout.cardWidth}
+      {focusedIds} {clickableTargets} {onSelectTarget} {onHoverTarget} {onPreviewCard} />
   </div>
 </div>
 
