@@ -277,8 +277,9 @@
         {/if}
         {#each player.graveyard as card}
           <Card
+            objectId={card.id}
             name={card.name}
-              copyDescription={copyLabel(player.graveyard, card.id)}
+            copyDescription={copyLabel(player.graveyard, card.id)}
             power={card.types.is_creature ? card.power : null}
             toughness={card.types.is_creature ? card.toughness : null}
             focused={focusedIds.has(card.id)}
@@ -303,6 +304,7 @@
           {/if}
           {#each player.exile as card}
             <Card
+              objectId={card.id}
               name={card.name}
               copyDescription={exileDescription(card)}
               power={card.types.is_creature ? card.power : null}
@@ -333,6 +335,7 @@
           {/if}
           {#each player.hand as card}
             <Card
+              objectId={card.id}
               name={card.name}
               copyDescription={copyLabel(player.hand, card.id)}
               power={card.types.is_creature ? card.power : null}

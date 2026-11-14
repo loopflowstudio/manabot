@@ -166,7 +166,7 @@
 
     <p data-testid="legal-choice-count" role="status" class="type-caption mb-2 text-ink-2">{isLearn && !learnMode ? offers.length : visibleOffers.length} of {totalOffers} legal choices</p>
     {#if selectedTargetId !== null}
-      <p class="type-caption mb-3 text-ink-2">Showing choices for the inspected card.</p>
+      <p class="type-caption mb-3 text-ink-2">Showing choices for the selected subject.</p>
     {/if}
 
     {#if !isLearn || learnMode}

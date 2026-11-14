@@ -1,7 +1,12 @@
 <script lang="ts">
   import { revealWithinScrollRegions } from '$lib/scroll-regions';
-  import { onMount, tick } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
 
+  import {
+    dragMoved, dragOffer, loadTableMode, saveTableMode, selectForPlay, selectedOffers,
+    selectionMatches, type HandDrag, type PlaySelection, type TableMode,
+  } from '$lib/play-selection';
+  import { visibleCardLabel } from '$lib/decision-labels';
   import { offerFocus, offerTargets } from '$lib/offer-map';
   import DecisionSurface from '$lib/components/DecisionSurface.svelte';
   import DecisionContext from '$lib/components/DecisionContext.svelte';
@@ -62,9 +67,17 @@
     }
   }
 
+  let tableMode = $state<TableMode>('inspect');
+  let selection = $state<PlaySelection | null>(null);
+  let drag = $state<HandDrag | null>(null);
+  let suppressClick = false;
+  let stopsPending = $state<number | null>(null);
+  let stopsOpen = $state(false);
+  let stopsPanel: HTMLDetailsElement | null = $state(null);
   let hoveredTargetId = $state<number | null>(null);
 
   onMount(() => {
+    tableMode = loadTableMode();
     const params = new URLSearchParams(window.location.search);
     demoName = params.get('demo');
     if (!demoName) {
@@ -183,13 +196,97 @@
   const participantStudying = $derived(gameStore.restoredDecision !== null);
   const tablePresentation = $derived(participantStudying ? studyPresentationPlayer : presentationPlayer);
   const canPassTurn = $derived(
-    gameActive && offers.length > 0 && pilotCanAct && !participantStudying && !gameStore.commandPending && gameStore.connection === 'connected',
+    gameActive && offers.length > 0 && pilotCanAct && !participantStudying && stopsPending === null && !gameStore.commandPending && gameStore.connection === 'connected',
   );
   const boardObservation = $derived(
     gameStore.branchProjection
       ?? gameStore.restoredDecision?.frame.projection
       ?? gameStore.observation,
   );
+
+  const liveInput = $derived(tableMode === 'play' && gameActive && pilotCanAct && !participantStudying
+    && !gameStore.branchProjection && !gameStore.commandPending && !gameStore.newGamePending
+    && stopsPending === null && gameStore.connection === 'connected');
+  const draggingOffer = $derived(drag && tableFrame ? dragOffer(drag.selection, tableFrame) : null);
+
+  $effect(() => {
+    gameStore.updateSeq;
+    untrack(clearPlaySelection);
+  });
+  $effect(() => {
+    if (!liveInput || (selection && !selectionMatches(selection, tableFrame))) untrack(clearPlaySelection);
+  });
+  $effect(() => {
+    if (stopsPending !== null && (gameStore.updateSeq !== stopsPending || gameStore.connection !== 'connected')) stopsPending = null;
+  });
+
+  function clearPlaySelection(): void {
+    if (drag?.moved) suppressClick = true;
+    selection = null;
+    drag = null;
+    gameStore.clearSelectedTarget();
+    hoveredTargetId = null;
+    gameStore.clearFocus();
+  }
+  function cancelSelection(): void {
+    const object = selection?.object;
+    const restore = document.activeElement?.closest('.play-selection');
+    clearPlaySelection();
+    if (restore && object !== undefined) void tick().then(() => {
+      document.querySelector<HTMLElement>(`[data-object-id="${object}"]`)?.focus({ preventScroll: true });
+    });
+  }
+  function changeMode(mode: TableMode): void {
+    clearPlaySelection();
+    tableMode = mode;
+    saveTableMode(mode);
+  }
+  function commitSelection(offerId: number, bound: PlaySelection | null = selection): void {
+    if (!liveInput || !bound || !selectionMatches(bound, gameStore.protocolFrame)) return;
+    const offer = selectedOffers(bound, gameStore.protocolFrame).find(offer => offer.id === offerId);
+    if (offer) handleActionSelect(offer);
+  }
+  function suppressDragClick(event: MouseEvent): void {
+    if (suppressClick && event.detail > 0) {
+      event.preventDefault();
+      event.stopPropagation();
+      suppressClick = false;
+    }
+  }
+  function startHandDrag(event: PointerEvent): void {
+    suppressClick = false;
+    if (!liveInput || event.button !== 0 || !event.isPrimary || !(event.target instanceof Element) || !tableFrame) return;
+    const card = event.target.closest<HTMLElement>('[data-object-id]');
+    if (!card) return;
+    const bound = selectForPlay(tableFrame, Number(card.dataset.objectId));
+    if (!bound || !dragOffer(bound, tableFrame)) return;
+    drag = { selection: bound, pointer: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
+    card.setPointerCapture(event.pointerId);
+  }
+  function moveHandDrag(event: PointerEvent): void {
+    if (!drag || drag.pointer !== event.pointerId) return;
+    drag.moved = dragMoved(drag, event.clientX, event.clientY);
+    if (drag.moved) { event.preventDefault(); selection = drag.selection; }
+  }
+  function endHandDrag(event: PointerEvent): void {
+    const pending = drag;
+    if (!pending || pending.pointer !== event.pointerId) return;
+    const drop = document.querySelector('[data-testid="play-drop-area"]')?.getBoundingClientRect();
+    const offer = tableFrame ? dragOffer(pending.selection, tableFrame) : null;
+    if (pending.moved) {
+      suppressClick = true;
+      if (drop && event.clientX >= drop.left && event.clientX <= drop.right && event.clientY >= drop.top && event.clientY <= drop.bottom && offer) commitSelection(offer.id, pending.selection);
+      else clearPlaySelection();
+    }
+    drag = null;
+  }
+  async function editStops(): Promise<void> {
+    secondaryOpen = true;
+    stopsOpen = true;
+    await tick();
+    stopsPanel?.querySelector('summary')?.focus({ preventScroll: true });
+    if (stopsPanel) revealWithinScrollRegions(stopsPanel);
+  }
 
   // The matchup names the players: "You (UR Lessons) vs Search 64 (GW
   // Allies)". Selectors hide while a game runs, so the choice is stable.
@@ -208,6 +305,8 @@
 
   function syncStopsToServer(): void {
     if (gameActive && gameStore.hasCapability('configure_match')) {
+      clearPlaySelection();
+      stopsPending = gameStore.updateSeq;
       sendSetStops();
     }
   }
@@ -244,6 +343,7 @@
   }
 
   function handleKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape') cancelSelection();
     if (event.key === 'F6') {
       event.preventDefault();
       handlePassTurn();
@@ -255,15 +355,15 @@
       if (!gameStore.branchAttemptId && gameStore.hasCapability('explore_study')) sendRetryDecision(action.id);
       return;
     }
-    if (gameStore.gameOver || !pilotCanAct) return;
+    if (gameStore.gameOver || !pilotCanAct || stopsPending !== null) return;
+    if (tableMode === 'play' && selection && (!liveInput
+      || !selectedOffers(selection, gameStore.protocolFrame).some(offer => offer.id === action.id))) return;
 
     if (!sendAction(action.id)) {
       return;
     }
     gameStore.appendHeroAction(action.label);
-    gameStore.clearSelectedTarget();
-    gameStore.clearFocus();
-    hoveredTargetId = null;
+    clearPlaySelection();
   }
 
   function handleActionHover(action: InteractionOffer | null): void {
@@ -275,6 +375,10 @@
   }
 
   function handleBoardTargetSelect(objectId: number): void {
+    if (tableMode === 'play' && !participantStudying && pilotCanAct) {
+      if (!liveInput || !tableFrame) return;
+      selection = selectForPlay(tableFrame, objectId);
+    }
     const offerIds = targetOfferIds(objectId);
     gameStore.selectTarget(objectId);
     gameStore.setFocus(focusIdsForOffers(offerIds));
@@ -343,6 +447,10 @@
         />
       {/if}
       <div class="flex items-center gap-4">
+        <div role="group" aria-label="Table interaction mode" class="flex gap-1">
+          <button class="btn btn-secondary btn-sm" aria-pressed={tableMode === 'play'} onclick={() => changeMode('play')}>Play</button>
+          <button class="btn btn-secondary btn-sm" aria-pressed={tableMode === 'inspect'} onclick={() => changeMode('inspect')}>Inspect</button>
+        </div>
         {#if !demoName && gameStore.observation && !gameStore.gameOver && gameStore.hasCapability('configure_match')}
           <button class="btn" aria-expanded={showSetup} onclick={() => showSetup = !showSetup}>
             {showSetup ? 'Return to game' : 'Choose decks'}
@@ -411,6 +519,16 @@
       <div id="table-board" class="board-region" tabindex="-1"><a href="#table-choices" class="table-jump type-caption underline">Choose a play</a>
       <GameBoard
         workspace
+        playMode={tableMode === 'play' && !participantStudying}
+        canSelectForPlay={liveInput}
+        selectedId={selection?.object ?? null}
+        onHandClickCapture={suppressDragClick}
+        onHandPointerDown={startHandDrag}
+        onHandPointerMove={moveHandDrag}
+        onHandPointerUp={endHandDrag}
+        onHandPointerCancel={clearPlaySelection}
+        gestureActive={drag?.moved ?? false}
+        dragLabel={draggingOffer?.confirm_label ?? draggingOffer?.label ?? null}
         observation={boardObservation}
         focusedIds={gameStore.focusIds}
         {clickableTargets}
@@ -437,6 +555,12 @@
         <p tabindex="0" data-testid="current-decision" role="status" aria-live="polite" aria-atomic="true" class="text-ink">
           {gameStore.decisionStatus}
         </p>
+        {#if tableMode === 'play' && selection && !participantStudying}
+          <div class="play-selection border-b border-line pb-2" role="region" aria-label="Selected card actions">
+            <p class="type-caption">Selected: {visibleCardLabel(boardObservation, selection.object) ?? 'player'}. Choose an action below.</p>
+            <button class="btn btn-ghost btn-sm" onclick={cancelSelection}>Cancel selection</button>
+          </div>
+        {/if}
         {#if gameStore.branchProjection}
           <DecisionContext observation={gameStore.branchProjection} actor={gameStore.branchProjection.decision_context?.actor ?? null} />
           <p class="type-caption">Alternate action played. Return to recorded decision to try another choice.</p>
@@ -447,21 +571,17 @@
           navigationKey={String(gameStore.updateSeq)}
           selectedTargetId={gameStore.selectedTargetId}
           {highlightedOfferIds}
-          disabled={(participantStudying ? !gameStore.hasCapability('explore_study') : gameStore.gameOver || !pilotCanAct) || gameStore.commandPending || gameStore.connection !== 'connected'}
+          disabled={(participantStudying ? !gameStore.hasCapability('explore_study') : gameStore.gameOver || !pilotCanAct) || gameStore.commandPending || stopsPending !== null || gameStore.connection !== 'connected'}
           fastForwarding={gameStore.fastForwarding}
           {canPassTurn}
           onHoverAction={handleActionHover}
           onSelectAction={handleActionSelect}
           onPassTurn={handlePassTurn}
-          onClearSelection={() => {
-            gameStore.clearSelectedTarget();
-            hoveredTargetId = null;
-            gameStore.clearFocus();
-          }}
+          onClearSelection={clearPlaySelection}
         />
         {/if}
 
-        <p data-testid="automation-status" class="type-caption text-ink-2">Priority-stop automation: {gameStore.stops.auto_pass ? 'on' : 'off'}</p>
+        <p data-testid="automation-status" class="type-caption text-ink-2">Priority-stop automation: {gameStore.stops.auto_pass ? `on · your turn ${gameStore.stops.my.length} / opponent ${gameStore.stops.opponent.length} · stack ${gameStore.stops.stop_on_stack ? 'on' : 'off'}` : 'off · every priority choice'}{gameStore.fastForwarding ? ' · yielding this turn' : ''}{stopsPending !== null ? ' · updating…' : ''} <button class="underline" onclick={editStops}>Edit stops</button></p>
         <details bind:open={secondaryOpen} class="secondary-panels">
           <summary class="type-rubric cursor-pointer">History and settings</summary>
           <div class="secondary-content space-y-4" tabindex="0" role="region" aria-label="History and settings">
@@ -490,9 +610,11 @@
             {/if}
 
             <div class="border-t border-line pt-4">
-              <fieldset disabled={!gameStore.hasCapability('configure_match')}>
+              <fieldset disabled={!gameStore.hasCapability('configure_match') || participantStudying || gameStore.commandPending || stopsPending !== null || gameStore.connection !== 'connected'}>
                 <legend class="sr-only">Pilot stop controls</legend>
                 <StopsPanel
+                  bind:open={stopsOpen}
+                  bind:element={stopsPanel}
                   stops={gameStore.stops}
                   onToggleStop={handleToggleStop}
                   onStopOnStackChange={handleStopOnStackChange}
@@ -559,6 +681,8 @@
 
 
 <style>
+  [aria-label="Table interaction mode"] button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+  .play-selection { max-height: 120px; overflow-y: auto; flex-shrink: 0; }
   .play-workspace { display: grid; gap: 1rem; min-width: 0; }
   .board-region { min-width: 0; }
   .choices-region { display: flex; flex-direction: column; gap: 1rem; min-width: 0; border-top: 2px solid var(--accent); padding-top: 1rem; }

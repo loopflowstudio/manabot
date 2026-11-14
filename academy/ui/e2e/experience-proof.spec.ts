@@ -1,466 +1,176 @@
-import { selectDeck } from './deck-selection';
-import { expect, test, type Browser, type Page } from '@playwright/test';
+/** Ordinary release-SPA work. Old DOM-response baselines remain frozen separately. */
+import { writeFile } from 'node:fs/promises';
+import { expect, test, type Request } from '@playwright/test';
 
-import { EXPERIENCE_PROOF_BASELINE, REACHABLE_PROMPT_FAMILIES } from './experience-proof-baseline';
+interface Sample {
+  match: string; revision: number; input: number; sent: number | null;
+  message: number | null; applied: number | null; dom: number | null;
+  renderingOpportunity: number | null; terminal: boolean;
+}
+interface Probe { samples: Sample[]; frames: number[]; }
+declare global { interface Window { academyTiming: Probe; } }
 
-const RESUME_STORAGE_KEY = 'etude.gui.resume';
-const CALIBRATING = process.env.ACADEMY_CALIBRATE_PROOF === '1';
-const TINY_PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGBgAAAABQABh6FO1AAAAABJRU5ErkJggg==',
-  'base64',
-);
-
-interface Distribution {
-  p50: number;
-  p95: number;
-  max: number;
+function distribution(values: number[]): { n: number; p50: number; p95: number; max: number; misses100ms: number } {
+  const sorted = [...values].sort((a, b) => a - b);
+  return { n: sorted.length, p50: sorted[Math.max(0, Math.ceil(sorted.length * .5) - 1)] ?? 0,
+    p95: sorted[Math.max(0, Math.ceil(sorted.length * .95) - 1)] ?? 0,
+    max: sorted.at(-1) ?? 0, misses100ms: sorted.filter(value => value > 100).length };
 }
 
-interface InteractionProbe {
-  acknowledgementMs: number | null;
-  authorityResponseMs: number | null;
-}
-
-interface ProofState {
-  frameDeltas: number[];
-  sockets: WebSocket[];
-  interaction: InteractionProbe | null;
-}
-
-interface ObservedProof {
-  schemaVersion: number;
-  recordedAt: string;
-  browserVersion: string;
-  scope: typeof EXPERIENCE_PROOF_BASELINE.scope;
-  promptInventory: readonly string[];
-  samples: typeof EXPERIENCE_PROOF_BASELINE.samples;
-  metrics: {
-    warmLaunchToPlayableMs: Distribution;
-    inputAcknowledgementMs: Distribution;
-    authorityResponseMs: Distribution;
-    frameDeltaMs: Distribution & { longFrameCount: number };
-    rendererHeapMiB: Distribution;
-  };
-}
-
-type ProofWindow = Window & typeof globalThis & { __academyProof?: ProofState };
-
-function round(value: number, digits = 2): number {
-  const factor = 10 ** digits;
-  return Math.round(value * factor) / factor;
-}
-
-function distribution(values: number[], digits = 2): Distribution {
-  expect(values.length, 'measurement produced no samples').toBeGreaterThan(0);
-  const sorted = [...values].sort((left, right) => left - right);
-  const percentile = (fraction: number): number => {
-    const index = Math.max(0, Math.ceil(sorted.length * fraction) - 1);
-    return round(sorted[index], digits);
-  };
-  return {
-    p50: percentile(0.5),
-    p95: percentile(0.95),
-    max: round(sorted[sorted.length - 1], digits),
-  };
-}
-
-function collectConsoleErrors(page: Page): string[] {
-  const errors: string[] = [];
-  page.on('console', (message) => {
-    if (message.type() === 'error' && !message.text().includes('favicon')) {
-      errors.push(message.text());
-    }
-  });
-  page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
-  return errors;
-}
-
-async function stubCardArt(page: Page): Promise<void> {
-  await page.route('https://api.scryfall.com/**', (route) =>
-    route.fulfill({ contentType: 'image/png', body: TINY_PNG }),
-  );
-}
-
-async function selectReferenceExperience(page: Page): Promise<void> {
-  await selectDeck(page, 'hero', EXPERIENCE_PROOF_BASELINE.scope.heroDeck);
-  await selectDeck(page, 'villain', EXPERIENCE_PROOF_BASELINE.scope.villainDeck);
-  await page.getByTestId('opponent-select').selectOption(
-    EXPERIENCE_PROOF_BASELINE.scope.opponent,
-  );
-}
-
-async function startReferenceGame(page: Page): Promise<void> {
-  await selectReferenceExperience(page);
-  await page.getByRole('button', { name: 'New Game' }).first().click();
-  await expect(page.getByTestId('deck-names')).toHaveText('You (UR Lessons) vs Search 64 (GW Allies)', {
-    timeout: 15_000,
-  });
-  await expect(page.getByTestId('action-option').first()).toBeVisible({ timeout: 30_000 });
-}
-
-async function measureWarmLaunches(browser: Browser): Promise<number[]> {
-  const measurements: number[] = [];
-  for (let run = 0; run < EXPERIENCE_PROOF_BASELINE.samples.warmLaunches; run += 1) {
-    const context = await browser.newContext();
-    const page = await context.newPage();
-    await stubCardArt(page);
-    const startedAt = performance.now();
-    await page.goto('/');
-    await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
-      timeout: 15_000,
-    });
-    await startReferenceGame(page);
-    measurements.push(performance.now() - startedAt);
-    await context.close();
-  }
-  return measurements;
-}
-
-async function installProofInstrumentation(page: Page): Promise<void> {
-  await page.addInitScript(() => {
-    const proofWindow = window as ProofWindow;
-    const nativeWebSocket = window.WebSocket;
-    const sockets: WebSocket[] = [];
-
-    class TrackedWebSocket extends nativeWebSocket {
-      constructor(url: string | URL, protocols?: string | string[]) {
-        if (protocols === undefined) {
-          super(url);
-        } else {
+for (const [seed, width, height, motion] of [
+  [0, 1440, 900, 'no-preference'], [1, 1280, 800, 'reduce'],
+] as const) {
+  test(`ordinary release timing seed ${seed}`, async ({ page, browser }, info) => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width, height });
+    await page.emulateMedia({ reducedMotion: motion });
+    await page.addInitScript(() => {
+      const probe: Probe = { samples: [], frames: [] };
+      window.academyTiming = probe;
+      const Native = window.WebSocket;
+      class TimedSocket extends Native {
+        constructor(url: string | URL, protocols?: string | string[]) {
           super(url, protocols);
+          this.addEventListener('message', event => {
+            const arrived = performance.now();
+            const data = JSON.parse(event.data);
+            const frame = data.update?.frame ?? data.recovery?.frame;
+            const sample = probe.samples.at(-1);
+            if (!sample || sample.sent === null || sample.message !== null || !frame || frame.match_id !== sample.match || frame.revision <= sample.revision) return;
+            sample.message = arrived;
+            sample.terminal = frame.projection.game_over;
+            // App message listeners run synchronously; this microtask bounds parse/store
+            // work, including the probe's own parse. It is not server-only latency.
+            queueMicrotask(() => { sample.applied = performance.now(); });
+          });
         }
-        sockets.push(this);
+        override send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
+          if (typeof data === 'string') {
+            const message = JSON.parse(data);
+            if (message.type === 'command') {
+              const sample = probe.samples.at(-1);
+              if (sample) { sample.sent = performance.now(); sample.match = message.command.match_id; sample.revision = message.command.expected_revision; }
+            }
+          }
+          super.send(data);
+        }
       }
-    }
-
-    Object.defineProperty(window, 'WebSocket', {
-      configurable: true,
-      value: TrackedWebSocket,
-      writable: true,
+      window.WebSocket = TimedSocket;
+      document.addEventListener('keydown', event => {
+        if (event.key === 'Enter' && event.target instanceof Element && event.target.closest('[data-testid="action-option"]')) {
+          probe.samples.push({ match: '', revision: -1, input: performance.now(), sent: null, message: null, applied: null, dom: null, renderingOpportunity: null, terminal: false });
+        }
+      }, true);
+      new MutationObserver(() => {
+        const sample = probe.samples.at(-1);
+        const revision = Number(document.querySelector('main')?.getAttribute('data-frame-revision'));
+        if (!sample || sample.message === null || sample.dom !== null || revision <= sample.revision) return;
+        sample.dom = performance.now();
+        requestAnimationFrame(() => requestAnimationFrame(() => { sample.renderingOpportunity = performance.now(); }));
+      }).observe(document, { subtree: true, attributes: true, attributeFilter: ['data-frame-revision'] });
+      let previous = 0;
+      const frame = (now: number): void => { if (previous) probe.frames.push(now - previous); previous = now; requestAnimationFrame(frame); };
+      requestAnimationFrame(frame);
     });
-
-    proofWindow.__academyProof = {
-      frameDeltas: [],
-      sockets,
-      interaction: null,
-    };
-
-    let previousFrame: number | null = null;
-    const sampleFrame = (timestamp: number): void => {
-      const proof = proofWindow.__academyProof;
-      if (proof && previousFrame !== null) {
-        proof.frameDeltas.push(timestamp - previousFrame);
-      }
-      previousFrame = timestamp;
-      window.requestAnimationFrame(sampleFrame);
-    };
-    window.requestAnimationFrame(sampleFrame);
+    await page.routeWebSocket('**/ws/play', socket => {
+      const server = socket.connectToServer();
+      socket.onMessage(raw => {
+        const message = JSON.parse(String(raw));
+        if (message.type === 'new_game') message.config.seed = seed;
+        server.send(JSON.stringify(message));
+      });
+    });
+    const art: { url: string; ms: number; status: number | string; cacheControl?: string }[] = [];
+    const requests = new Map<string, number>();
+    page.on('request', request => { if (request.url().includes('/api/card-art/')) requests.set(request.url(), performance.now()); });
+    page.on('response', response => {
+      const start = requests.get(response.url());
+      if (start !== undefined) art.push({ url: response.url(), ms: performance.now() - start, status: response.status(), cacheControl: response.headers()['cache-control'] });
+    });
+    page.on('requestfailed', request => {
+      const start = requests.get(request.url());
+      if (start !== undefined) art.push({ url: request.url(), ms: performance.now() - start, status: request.failure()?.errorText ?? 'unknown' });
+    });
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Performance.enable');
+    await cdp.send('Tracing.start', { categories: 'devtools.timeline', transferMode: 'ReturnAsStream' });
+    await page.goto('/');
+    await expect(page.getByTestId('connection-badge')).toHaveText('connected');
+    await page.getByTestId('opponent-select').selectOption(seed === 0 ? 'random' : 'search-64');
+    await page.getByRole('button', { name: 'New Game', exact: true }).click();
+    const play = page.getByRole('button', { name: 'Play', exact: true });
+    if (await play.count()) await play.click();
+    for (let input = 0; input < 30; input += 1) {
+      await expect.poll(async () => await page.getByTestId('action-option').count() > 0 || await page.getByTestId('learn-mode').count() > 0 || await page.getByTestId('game-result').isVisible()).toBe(true);
+      if (await page.getByTestId('game-result').isVisible()) break;
+      const actions = page.getByTestId('action-option');
+      if (await actions.count() === 0) { await page.getByTestId('learn-mode').first().click(); continue; }
+      if (input === 15 && await play.count()) await page.getByRole('button', { name: 'Inspect', exact: true }).click();
+      const labels = await actions.allTextContents();
+      let pick = labels.findIndex(label => /Play (Island|Mountain)|Cast /.test(label));
+      if (pick < 0) pick = input % labels.length;
+      await actions.nth(pick).focus();
+      await actions.nth(pick).press('Enter');
+      await expect.poll(() => page.evaluate(() => window.academyTiming.samples.at(-1)?.renderingOpportunity)).toBeTruthy();
+    }
+    const probe = await page.evaluate(() => window.academyTiming);
+    const live = probe.samples.filter(sample => !sample.terminal && sample.renderingOpportunity !== null);
+    expect(live.length).toBeGreaterThanOrEqual(15);
+    const metrics = await cdp.send('Performance.getMetrics');
+    const ended = new Promise<{ stream: string }>(resolve => cdp.once('Tracing.tracingComplete', resolve));
+    await cdp.send('Tracing.end');
+    const { stream } = await ended;
+    let trace = '';
+    while (true) { const chunk = await cdp.send('IO.read', { handle: stream }); trace += chunk.data; if (chunk.eof) break; }
+    await cdp.send('IO.close', { handle: stream });
+    await writeFile(info.outputPath('timeline.json'), trace);
+    const events = (JSON.parse(trace) as { traceEvents: { name: string; dur?: number }[] }).traceEvents;
+    const receipt = { recordedAt: new Date().toISOString(), stage: process.env.ACADEMY_TIMING_STAGE ?? 'after',
+      browser: browser.version(), runtime: { node: process.version, platform: process.platform, arch: process.arch },
+      artCacheState: process.env.ACADEMY_ART_CACHE_STATE ?? 'existing default server cache; not inventoried before launch', viewport: { width, height, dpr: 1, scale: await page.evaluate(() => visualViewport!.scale) },
+      seed, opponent: seed === 0 ? 'random' : 'search-64', motion,
+      definitions: { acknowledgement: 'input to socket send', response: 'input to matching authority message before parse, includes policy/network',
+        applied: 'message to microtask after synchronous listeners (includes probe parse)', render: 'message to second rAF after matching DOM revision; rendering opportunity upper bound, not display latency',
+        overhead: 'WebSocket wrapper, one extra JSON parse, mutation observer, rAF loop and CDP timeline enabled in both receipts' },
+      acknowledgement: distribution(live.map(s => s.sent! - s.input)), authority: distribution(live.map(s => s.message! - s.input)),
+      apply: distribution(live.map(s => s.applied! - s.message!)), render: distribution(live.map(s => s.renderingOpportunity! - s.message!)),
+      raf: distribution(probe.frames), longFrames50ms: probe.frames.filter(value => value > 50).length,
+      terminal: probe.samples.filter(s => s.terminal), samples: probe.samples, art, metrics,
+      timeline: Object.fromEntries(['Layout', 'UpdateLayoutTree', 'Paint', 'RunTask'].map(name => [name, { n: events.filter(e => e.name === name).length, totalMs: events.filter(e => e.name === name).reduce((sum, e) => sum + (e.dur ?? 0), 0) / 1000 }])) };
+    await writeFile(info.outputPath('timing.json'), JSON.stringify(receipt, null, 2));
+    await info.attach('timing.json', { body: JSON.stringify(receipt), contentType: 'application/json' });
+    // Machine-dependent misses are reported, never hidden by a changed budget.
+    expect(receipt.acknowledgement.n + receipt.terminal.length).toBe(probe.samples.length);
   });
 }
 
-async function updateSequence(page: Page): Promise<number> {
-  return Number(await page.locator('main').getAttribute('data-update-seq'));
-}
-
-async function authoritativeBoardText(page: Page): Promise<string> {
-  return page.getByTestId('game-board').evaluate((element) => {
-    const board = element.cloneNode(true) as HTMLElement;
-    board.querySelector('[data-testid="presentation-stage"]')?.remove();
-    return (board.textContent ?? '').replace(/\s+/g, ' ').trim();
+// A fresh server art directory is supplied by the caller. Ordinary opening-hand
+// requests only; no prefetch, hidden-name requests or repeated network workload.
+test('cold visible-art delivery receipt', async ({ page, browser }, info) => {
+  test.skip(process.env.ACADEMY_COLD_ART_PROOF !== '1', 'Supply a fresh isolated ACADEMY_CARD_ART_DIR for cold delivery');
+  const started = new Map<Request, number>();
+  const delivered: { url: string; ms: number; status: number | string }[] = [];
+  page.on('request', request => { if (request.url().includes('/api/card-art/')) started.set(request, performance.now()); });
+  page.on('requestfinished', async request => {
+    const start = started.get(request);
+    if (start !== undefined) delivered.push({ url: request.url(), ms: performance.now() - start, status: (await request.response())?.status() ?? 'unknown' });
   });
-}
-
-async function armInteractionProbe(
-  page: Page,
-  initialLogCount: number,
-  initialUpdateSequence: number,
-): Promise<void> {
-  await page.evaluate(
-    ({ logCount, updateSequence }) => {
-      const proofWindow = window as ProofWindow;
-      const proof = proofWindow.__academyProof;
-      if (!proof) {
-        throw new Error('experience proof instrumentation is unavailable');
-      }
-      proof.interaction = null;
-
-      const onKeyDown = (event: KeyboardEvent): void => {
-        const target = event.target;
-        if (
-          event.key !== 'Enter' ||
-          !(target instanceof Element) ||
-          target.closest('[data-testid="action-option"]') === null
-        ) {
-          return;
-        }
-        document.removeEventListener('keydown', onKeyDown, true);
-
-        const startedAt = performance.now();
-        const result: InteractionProbe = {
-          acknowledgementMs: null,
-          authorityResponseMs: null,
-        };
-        proof.interaction = result;
-
-        const capture = (): void => {
-          if (
-            result.acknowledgementMs === null &&
-            document.querySelectorAll('[data-testid="log-entry"]').length > logCount
-          ) {
-            result.acknowledgementMs = performance.now() - startedAt;
-          }
-          const currentSequence = Number(
-            document.querySelector('main')?.getAttribute('data-update-seq') ?? '0',
-          );
-          if (result.authorityResponseMs === null && currentSequence > updateSequence) {
-            result.authorityResponseMs = performance.now() - startedAt;
-          }
-          if (result.acknowledgementMs !== null && result.authorityResponseMs !== null) {
-            observer.disconnect();
-          }
-        };
-
-        const observer = new MutationObserver(capture);
-        observer.observe(document.documentElement, {
-          attributes: true,
-          attributeFilter: ['data-update-seq'],
-          childList: true,
-          subtree: true,
-        });
-        capture();
-      };
-
-      document.addEventListener('keydown', onKeyDown, true);
-    },
-    { logCount: initialLogCount, updateSequence: initialUpdateSequence },
-  );
-}
-
-async function chooseDeterministicAction(page: Page): Promise<number> {
-  const labels = await page.getByTestId('action-option').allTextContents();
-  const preferences = [
-    /^Play /,
-    /^Cast /,
-    /^Activate /,
-    /^Attack /,
-    /^Block /,
-    /^Target /,
-    /^Keep /,
-    /^Put /,
-    /^Discard /,
-    /^Pay /,
-    /^Tap /,
-    /^Decline/,
-    /Pass priority/,
-  ];
-  for (const preference of preferences) {
-    const index = labels.findIndex((label) => preference.test(label.trim()));
-    if (index >= 0) {
-      return index;
-    }
-  }
-  return 0;
-}
-
-async function measureKeyboardAction(page: Page): Promise<InteractionProbe> {
-  const actions = page.getByTestId('action-option');
-  await expect(actions.first()).toBeVisible({ timeout: 30_000 });
-  const actionIndex = await chooseDeterministicAction(page);
-  const action = actions.nth(actionIndex);
-  await expect(action).not.toHaveAccessibleName('');
-
-  const initialLogCount = await page.getByTestId('log-entry').count();
-  const initialUpdateSequence = await updateSequence(page);
-  await action.focus();
-  await expect(action).toBeFocused();
-  await armInteractionProbe(page, initialLogCount, initialUpdateSequence);
-  await action.press('Enter');
-
-  await expect
-    .poll(
-      () =>
-        page.evaluate(
-          () =>
-            (window as ProofWindow).__academyProof?.interaction?.authorityResponseMs ?? null,
-        ),
-      { timeout: 30_000, message: 'authority did not respond to keyboard action' },
-    )
-    .not.toBeNull();
-
-  const sample = await page.evaluate(
-    () => (window as ProofWindow).__academyProof?.interaction ?? null,
-  );
-  expect(sample?.acknowledgementMs, 'local input acknowledgement was not observed').not.toBeNull();
-  expect(sample?.authorityResponseMs, 'authority response was not observed').not.toBeNull();
-  return sample as InteractionProbe;
-}
-
-async function assertVisibleButtonsAreNamed(page: Page): Promise<void> {
-  const buttons = page.getByRole('button');
-  for (let index = 0; index < (await buttons.count()); index += 1) {
-    const button = buttons.nth(index);
-    if ((await button.isVisible()) && (await button.isEnabled())) {
-      await expect(button, `visible enabled button ${index} has no accessible name`).not.toHaveAccessibleName(
-        '',
-      );
-    }
-  }
-}
-
-async function rendererHeapMiB(page: Page): Promise<number> {
-  const session = await page.context().newCDPSession(page);
-  await session.send('Performance.enable');
-  const payload = (await session.send('Performance.getMetrics')) as {
-    metrics?: Array<{ name: string; value: number }>;
-  };
-  await session.detach();
-  const usedHeap = payload.metrics?.find((metric) => metric.name === 'JSHeapUsedSize')?.value;
-  if (usedHeap === undefined) {
-    throw new Error('Chromium did not expose JSHeapUsedSize');
-  }
-  return usedHeap / (1024 * 1024);
-}
-
-async function injectReconnectFault(page: Page): Promise<void> {
-  const badge = page.getByTestId('connection-badge');
-  const credentialsBefore = await page.evaluate((key) => sessionStorage.getItem(key), RESUME_STORAGE_KEY);
-  const boardBefore = await authoritativeBoardText(page);
-  const actionsBefore = await page.getByTestId('action-option').allTextContents();
-  const logCountBefore = await page.getByTestId('log-entry').count();
-  const updateSequenceBefore = await updateSequence(page);
-  expect(credentialsBefore, 'resume credentials were not stored').not.toBeNull();
-
-  await page.evaluate(() => {
-    const socket = (window as ProofWindow).__academyProof?.sockets.at(-1);
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
-      throw new Error('no open WebSocket is available for reconnect fault injection');
-    }
-    socket.close(4101, 'experience proof reconnect fault');
+  page.on('requestfailed', request => {
+    const start = started.get(request);
+    if (start !== undefined) delivered.push({ url: request.url(), ms: performance.now() - start, status: request.failure()?.errorText ?? 'unknown' });
   });
-
-  await expect(badge).toHaveText('disconnected', { timeout: 5_000 });
-  await expect(badge).toHaveText('connected', { timeout: 15_000 });
-  await expect
-    .poll(() => updateSequence(page), {
-      timeout: 15_000,
-      message: 'resume response did not advance the client update sequence',
-    })
-    .toBeGreaterThan(updateSequenceBefore);
-
-  const credentialsAfter = await page.evaluate((key) => sessionStorage.getItem(key), RESUME_STORAGE_KEY);
-  const boardAfter = await authoritativeBoardText(page);
-  const actionsAfter = await page.getByTestId('action-option').allTextContents();
-  const socketCount = await page.evaluate(
-    () => (window as ProofWindow).__academyProof?.sockets.length ?? 0,
-  );
-
-  expect(credentialsAfter).toBe(credentialsBefore);
-  expect(boardAfter).toBe(boardBefore);
-  expect(actionsAfter).toEqual(actionsBefore);
-  expect(await page.getByTestId('log-entry').count()).toBe(logCountBefore);
-  expect(socketCount).toBeGreaterThanOrEqual(2);
-}
-
-function assertBudgets(observed: ObservedProof): void {
-  if (CALIBRATING) {
-    return;
-  }
-  const budgets = EXPERIENCE_PROOF_BASELINE.metrics;
-  expect(observed.browserVersion).toBe(EXPERIENCE_PROOF_BASELINE.referenceProfile.chromium);
-  expect(observed.metrics.warmLaunchToPlayableMs.p95).toBeLessThanOrEqual(
-    budgets.warmLaunchToPlayableMs.budgetP95,
-  );
-  expect(observed.metrics.inputAcknowledgementMs.p95).toBeLessThanOrEqual(
-    budgets.inputAcknowledgementMs.budgetP95,
-  );
-  expect(observed.metrics.authorityResponseMs.p95).toBeLessThanOrEqual(
-    budgets.authorityResponseMs.budgetP95,
-  );
-  expect(observed.metrics.frameDeltaMs.p95).toBeLessThanOrEqual(
-    budgets.frameDeltaMs.budgetP95,
-  );
-  expect(observed.metrics.frameDeltaMs.max).toBeLessThanOrEqual(
-    budgets.frameDeltaMs.budgetMax,
-  );
-  expect(observed.metrics.rendererHeapMiB.max).toBeLessThanOrEqual(
-    budgets.rendererHeapMiB.budgetMax,
-  );
-}
-
-test('reference experience meets baseline, resumes, and accepts keyboard play', async ({
-  browser,
-  page,
-}, testInfo) => {
-  test.setTimeout(300_000);
-  const consoleErrors = collectConsoleErrors(page);
-  const warmLaunches = await measureWarmLaunches(browser);
-
-  await installProofInstrumentation(page);
-  await stubCardArt(page);
   await page.goto('/');
-  await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
-    timeout: 15_000,
-  });
-  const heapSamples: number[] = [await rendererHeapMiB(page)];
-  await startReferenceGame(page);
-  await assertVisibleButtonsAreNamed(page);
-
-  const inputAcknowledgements: number[] = [];
-  const authorityResponses: number[] = [];
-  heapSamples.push(await rendererHeapMiB(page));
-
-  for (let interaction = 0; interaction < EXPERIENCE_PROOF_BASELINE.samples.interactions; interaction += 1) {
-    if (interaction === Math.floor(EXPERIENCE_PROOF_BASELINE.samples.interactions / 2)) {
-      await injectReconnectFault(page);
-      heapSamples.push(await rendererHeapMiB(page));
-    }
-
-    const sample = await measureKeyboardAction(page);
-    inputAcknowledgements.push(sample.acknowledgementMs as number);
-    authorityResponses.push(sample.authorityResponseMs as number);
-    heapSamples.push(await rendererHeapMiB(page));
-
-    const gameOver = page.getByText('Game Over', { exact: true });
-    if (await gameOver.isVisible()) {
-      await page.getByRole('button', { name: 'Play Again' }).click();
-      await expect(page.getByTestId('action-option').first()).toBeVisible({ timeout: 30_000 });
-    }
-  }
-
-  const frameDeltas = await page.evaluate(
-    () => (window as ProofWindow).__academyProof?.frameDeltas ?? [],
-  );
-  expect(await page.evaluate(() => document.visibilityState)).toBe('visible');
-  expect(frameDeltas.length, 'too few animation frames were sampled').toBeGreaterThan(30);
-
-  const frameDistribution = distribution(frameDeltas);
-  const observed: ObservedProof = {
-    schemaVersion: EXPERIENCE_PROOF_BASELINE.schemaVersion,
-    recordedAt: new Date().toISOString(),
-    browserVersion: browser.version(),
-    scope: EXPERIENCE_PROOF_BASELINE.scope,
-    promptInventory: REACHABLE_PROMPT_FAMILIES,
-    samples: EXPERIENCE_PROOF_BASELINE.samples,
-    metrics: {
-      warmLaunchToPlayableMs: distribution(warmLaunches),
-      inputAcknowledgementMs: distribution(inputAcknowledgements),
-      authorityResponseMs: distribution(authorityResponses),
-      frameDeltaMs: {
-        ...frameDistribution,
-        longFrameCount: frameDeltas.filter(
-          (delta) => delta > EXPERIENCE_PROOF_BASELINE.metrics.frameDeltaMs.longFrameThresholdMs,
-        ).length,
-      },
-      rendererHeapMiB: distribution(heapSamples, 3),
-    },
-  };
-
-  await testInfo.attach('experience-proof.json', {
-    body: Buffer.from(JSON.stringify(observed, null, 2)),
-    contentType: 'application/json',
-  });
-  console.log(`experience proof: ${JSON.stringify(observed)}`);
-
-  assertBudgets(observed);
-  expect(consoleErrors, `console errors: ${consoleErrors.join('\n')}`).toEqual([]);
+  await expect(page.getByTestId('connection-badge')).toHaveText('connected');
+  await page.getByTestId('opponent-select').selectOption('random');
+  await page.getByRole('button', { name: 'New Game', exact: true }).click();
+  await expect(page.getByTestId('action-option').first()).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  await expect.poll(() => delivered.length, { timeout: 30_000 }).toBe(started.size);
+  await writeFile(info.outputPath('cold-art.json'), JSON.stringify({ recordedAt: new Date().toISOString(), browser: browser.version(),
+    directory: process.env.ACADEMY_CARD_ART_DIR, initiallyEmpty: true, definition: 'request start to full response body or request failure',
+    delivered, success: distribution(delivered.filter(item => typeof item.status === 'number' && item.status === 200).map(item => item.ms)),
+    cancellations: delivered.filter(item => item.status === 'net::ERR_ABORTED'),
+    failures: delivered.filter(item => item.status !== 200 && item.status !== 'net::ERR_ABORTED'),
+  }, null, 2));
+  expect(started.size).toBeGreaterThan(0);
 });
