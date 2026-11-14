@@ -496,6 +496,42 @@ def _payment_choices(
     }
 
 
+class _PaymentOverlapSummary(TypedDict):
+    """Potential existing-decision overlap, not proof an activation was offered."""
+
+    certified_payments: int
+    possible_payments: int
+    maximum_saving_per_game: float
+    merged_decisions_per_game: list[float]
+
+
+def _payment_overlap(
+    payments: list[ShapeCounts],
+    count_outcomes: Callable[[ShapeCounts], int],
+    choices: _PaymentChoiceSummary,
+    games: int,
+) -> _PaymentOverlapSummary:
+    """Bound D's duplicate decisions using sources still present at commit.
+
+    A source having abilities does not establish an available activation. The
+    merged lower bound assumes every certified overlap already had a decision;
+    the upper bound allows no overlap. Uncertain capped additions and overlaps
+    cancel together, so subtract only certified overlap from D's lower bound.
+    """
+    certified = sum(p.activated_sources > 0 and count_outcomes(p) > 1 for p in payments)
+    possible = sum(
+        p.activated_sources > 0 and (count_outcomes(p) > 1 or p.cap_hit)
+        for p in payments
+    )
+    lower, upper = choices["D_decisions_per_game"]
+    return {
+        "certified_payments": certified,
+        "possible_payments": possible,
+        "maximum_saving_per_game": possible / games,
+        "merged_decisions_per_game": [lower - certified / games, upper],
+    }
+
+
 def summarize_shapes(source: Path, *, all_payments: bool = False) -> None:
     """Keep incomplete enumeration out of exact offer quantiles."""
     groups: dict[tuple[str, str], list[ShapeGame]] = defaultdict(list)
@@ -602,12 +638,17 @@ def summarize_shapes(source: Path, *, all_payments: bool = False) -> None:
                     ),
                     "spend_decisions": selected_spend,
                     "payments_with_spend": sum(bool(p.spend_offers) for p in selected),
-                } | {
-                    label: _payment_choices(
+                }
+                for label, count_outcomes, _ in measurements:
+                    choices = _payment_choices(
                         selected, count_outcomes, decisions - selected_spend, len(games)
                     )
-                    for label, count_outcomes, _ in measurements
-                }
+                    scopes[scope][label] = {
+                        **choices,
+                        "existing_decision_overlap": _payment_overlap(
+                            selected, count_outcomes, choices, len(games)
+                        ),
+                    }
             row["payment_scopes"] = scopes
         summaries.append(row)
         print(json.dumps(row), flush=True)

@@ -6,7 +6,8 @@ unit pays each pip (`mana_spend` decisions). That prompt is rare, and it hides t
 that differs far more often: which sources stay untapped.
 
 - **Recommendation, for review:** one native decision at every mana payment
-  whose outcomes differ, with the automatic plan as its first offer.
+  whose offers differ: today's `PayOrNot` decision, extended, with `PayCost`
+  as the automatic plan, listed first.
   [Recommended design](#recommended-design).
 - **Today's prompt is rare.** 0.11–0.60% of decisions on Elemental and TLA
   Limited mirrors; 51–95% of those prompts follow a payment that tapped a source
@@ -16,7 +17,8 @@ that differs far more often: which sources stay untapped.
   when redundant taps are included. Without them, a payment offers a median of 2
   outcomes, 4–5 at the 95th percentile on ordinary decks and an exact maximum
   of 28 under the optimistic equal-output collapse across all payments. This
-  adds 2.9–11.8% to decisions per game (casts alone: 2.5–7.0%).
+  adds 2.9–11.8% under counting rule D (casts alone: 2.5–7.0%), before
+  crediting overlap with existing payment decisions (priced below).
   Keeping every source's exact identity instead certifies 655 payments above
   64 offers, including 493 casts. Incomplete enumerations remain explicit.
   [Matched payment-shape results](#matched-payment-shape-results).
@@ -73,9 +75,10 @@ own visible offer.
 ### 3. Where does the player opt out of automation?
 
 - **At the payment decision (recommended).** One decision at every mana payment
-  whose outcomes differ: 2.9–11.8% more decisions per game, without redundant
-  taps and under equal-output collapse (casts alone: 2.5–7.0%). Exact identity
-  raises that to 4.0–15.4%, before group navigation. The plan is visible when
+  whose offers differ: counting rule D gives 2.9–11.8% more decisions per game
+  without redundant taps and under equal-output collapse (casts alone:
+  2.5–7.0%), before existing-decision overlap. Exact identity raises that to
+  4.0–15.4%, before group navigation. The plan is visible when
   chosen, because the announcements determining the cost are complete.
 - **At cast selection: "cast X" beside "cast X, choosing payment".** For casts,
   no added decision unless used. Cast-only decisions per game lie between the
@@ -94,9 +97,14 @@ for those payments was measured. Learning effects of either stay with MTG-265.
 
 ## Recommended design
 
-**One native payment-outcome decision, with the automatic plan first.** This is
-a design for review; implementing it is a separate Task, and nothing here is
-built. The learning pilot does not test it.
+**Extend the existing native payment decision, with `PayCost` as the automatic
+plan, listed first.** Today `PendingChoice::ManaPayment` and resolution
+`Decision::Payment` publish `PayOrNot` for mana costs: activatable mana abilities
+beside `PayCost`, which runs the automatic payer. Waterbend has its own taps,
+and optional resolution payments may offer `Decline`. The recommendation adds
+payment outcomes to that decision; it introduces no second decision kind.
+This is a design for review; implementing it is a separate Task, and nothing
+here is built. The learning pilot does not test it.
 
 An illustration, with Forest, Forest and Mountain untapped and a {1}{G} spell
 whose modes, targets and cost are already announced:
@@ -114,11 +122,16 @@ there are three: both Forests, or the Mountain with either Forest.
 
 - **When it appears.** At every mana-payment boundary, after the announcements
   determining its cost (including modes, targets and X where applicable), and
-  only when two or more permitted outcomes differ in what stays untapped,
-  what floats, or what the payment receipt records (colors spent, spend effects).
+  whenever its offers differ, rather than only when a mana ability can be
+  activated. Alternative outcomes distinguish what stays untapped, what floats,
+  or what the payment receipt records (colors spent, spend effects). They are
+  sibling offers beside the activations, Waterbend taps and any `Decline`,
+  recomputed whenever the decision returns after an activation, as `PayCost`
+  is today.
   This covers casts, ability costs including upfront mana-ability fees,
-  resolution payments and foretell fees. A uniquely payable payment skips it,
-  as any single-action decision does; zero-mana costs add no fixed sources.
+  resolution payments and foretell fees. A payment with only one legal offer
+  skips it, as any single-action decision does; zero-mana costs add no fixed
+  sources.
   It replaces today's per-pip prompts at every such boundary.
 - **The automatic plan** is an ordinary bound offer, listed first and identified
   as automation, describing the sources it taps and the pool it leaves. It
@@ -140,7 +153,9 @@ there are three: both Forests, or the Mountain with either Forest.
 
 **What it costs.** All decisions per game on the measured trajectories, without
 redundant taps and treating equal-output sources as one choice. The design
-covers all payments; the cast-only column shows what non-casts add.
+covers all payments; the cast-only column shows what non-casts add. D adds a
+choice even where today's trajectory already has a payment decision; its
+published counts below retain that double-counting for comparison.
 
 | decks | policy | per unit (today) | D casts only | D all payments | C all payments, separate entry |
 | --- | --- | ---: | ---: | ---: | ---: |
@@ -149,10 +164,12 @@ covers all payments; the cast-only column shows what non-casts add.
 | tla | heuristic | 437.75 | 448.86–449.06 | 450.62–450.82 | 450.62–457.55 |
 | tla | random | 217.50 | 227.35–227.36 | 241.61–241.64 | 241.61–252.69 |
 
-Under that optimistic equal-output collapse, the single decision adds
-2.9–11.8% to decisions per game across all payments (casts alone: 2.5–7.0%).
-Non-cast payments hide the same source choices, so they use the same
-interaction at that larger price.
+Under that optimistic equal-output collapse, D adds 2.9–11.8% to decisions per
+game across all payments (casts alone: 2.5–7.0%). Extending the existing
+decision saves at most 1.93, 0.35, 4.12 and 1.24 decisions per game in these
+four rows; these are upper bounds, not observed savings
+([overlap table](#existing-payment-decision-overlap)). Non-cast payments use
+the same interaction.
 Completely enumerated payments with multiple outcomes offer a median of 2,
 a 95th percentile of 4–5 on ordinary decks and an exact maximum of 28 outcomes.
 These menu sizes do not bound incomplete enumerations. The entry step's range
@@ -191,7 +208,8 @@ information.
 - *A browser-only override.* It would divide the shared policy/Academy
   contract.
 
-Existing explicit mana-ability decisions stay at their native boundaries.
+Mana activations remain offers within the extended payment decision. How
+outcome groups sit beside activations is for the implementing Task.
 `MANAGYM_EXPERIMENT_AUTOSPEND` remains a reproduction control for this
 experiment's frozen A/B revision; the follow-up replaces it with the automatic
 offer above. No Academy code, default training behavior or deployment changes
@@ -632,6 +650,32 @@ cost table.
 Relative to A, ordinary-deck all-payment D grows 2.9–11.8% with capability
 collapse, or 4.0–15.4% with exact identity. The latter also requires group
 navigation. These figures do not imply that every identity distinction matters.
+
+#### Existing payment-decision overlap
+
+D adds one decision per multi-outcome payment while keeping every observed
+`PayOrNot` decision, so a payment that already had one is counted twice. The
+capture's `activated_sources` counts sources with abilities still present at
+commit, not whether an activation was offered, so it bounds the saving from
+above. Overlap with Waterbend or `Decline` decisions is not priced.
+
+`summary --all-payments` derives `existing_decision_overlap` for each scope and
+counting rule; the table uses all payments and non-redundant capability
+outcomes. Overlap counts payments with an activated source and at least two
+outcomes (certified) or, in addition, a capped enumeration (possible). The
+maximum saving is possible / games. The merged lower bound is D's lower bound
+minus certified / games, since a capped row's uncertain decision and its
+overlap cancel; the upper bound is D's, because no overlap is proved. Group
+navigation and the offers added beside activations are not counted.
+
+| decks | policy | games | overlap certified / possible | maximum saving/game | merged decisions/game | D all payments |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| elemental | heuristic | 80 | 149 / 154 | 1.93 | 317.81–319.84 | 319.68–319.84 |
+| elemental | random | 80 | 28 / 28 | 0.35 | 235.83–236.32 | 236.18–236.32 |
+| tla | heuristic | 80 | 320 / 330 | 4.12 | 446.62–450.82 | 450.62–450.82 |
+| tla | random | 80 | 99 / 99 | 1.24 | 240.38–241.64 | 241.61–241.64 |
+| heartbeat | heuristic | 8 | 0 / 0 | 0.00 | 83.00–84.25 | 83.00–84.25 |
+| heartbeat | random | 8 | 0 / 0 | 0.00 | 139.12–142.88 | 139.12–142.88 |
 
 **All-payment capacity and surplus price.** Non-redundant capability menus
 have median / p95 / maximum below, conditional on complete enumeration and

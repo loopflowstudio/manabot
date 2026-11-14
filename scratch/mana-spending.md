@@ -14,11 +14,10 @@ review questions. Do not rerun the pilot or rewrite its evidence. Earlier plan
 text, launch notes and per-slice checks are in git `78397f2042` and before
 (`ce074e9d37` for the first concept review).
 
-The report-scope slice from concept review `59c82bc2be` is complete.
-Next implement slice, report and read-only aggregation only: name the payment
-decision the engine already has and price its overlap (section "The payment
-decision already exists"). Then gate/review and the caller's delivery steps.
-No PR created here.
+The report and read-only aggregation now extend the existing `PayOrNot`
+decision in the recommendation and price D's overlap (section "The payment
+decision already exists"). Remaining: gate/review and the caller's delivery
+steps. No PR created here.
 
 ## Demo and done when
 
@@ -88,7 +87,10 @@ unchanged.
 
 ## Delete — do not maintain
 
-Nothing remains to delete. The report no longer carries the unconditional
+Nothing remains to delete. Removed the separate-payment-decision description
+and the sentence retaining mana-ability decisions as separate boundaries;
+published D counts and existing activation/tap/decline offers survive.
+The report no longer carries the unconditional
 flat-D capacity conclusion, the "grouped D" label or a separate
 automatic/override entry in the design; C's measured columns stay as
 comparison evidence. Do not add a second enumeration/payment path. Keep
@@ -165,24 +167,20 @@ source. The design implies one decision instead:
   each time the decision returns after an activation, as `PayCost` is today.
   "Payment-outcome decision" is not a second concept or a new decision kind.
 - **D double-counts there.** D adds one decision per multi-outcome payment to
-  a trajectory that already contains the `PayOrNot` decision. From the
-  published paired rows (2026-11-13, at `509878be2f`), payments with an
-  activated source still present at commit and at least two non-redundant
-  capability outcomes, certified / including capped: Elemental heuristic
-  149 / 154, random 28 / 28; TLA heuristic 320 / 330, random 99 / 99; Heartbeat
-  none. Per game 1.86, 0.35, 4.00, 1.24 (80 games each), against D's
-  all-payment additions of 13.5, 24.8, 12.9, 24.1. The capture records that a
-  source has abilities, not that an activation was offered, so these bound the
-  saving from above; say so.
+  a trajectory that already contains the `PayOrNot` decision. The capture
+  records that a source has abilities (`activated_sources`), not that an
+  activation was offered, so the overlap bounds the saving from above.
 
-Direction for the report: in "Recommended design", state the existing decision
-and that the design extends it; replace the "stay at their native boundaries"
-sentence; add the overlap column or sentence with the merged lower bound beside
-D's all-payment figures, keeping published D numbers as they are (they are the
-measured counting rule). Compute the overlap inside `summary --all-payments`
-from `activated_sources`, not by hand. How grouped outcomes sit beside
-activations is for the implementing Task. No games, native code or published
-bytes change.
+The report states this in "Recommended design" and prices it in "Existing
+payment-decision overlap"; published D figures stay beside the merged bounds.
+`summary --all-payments` derives `existing_decision_overlap` per scope and
+counting rule (`_payment_overlap`): certified / possible payments (Elemental
+149 / 154 and 28 / 28, TLA 320 / 330 and 99 / 99, Heartbeat none), a maximum
+saving of possible / games (1.93, 0.35, 4.12, 1.24 against D's all-payment
+additions of 13.5, 24.8, 12.9, 24.1), and a merged lower bound of D's lower
+bound minus certified / games, because a capped row's uncertain decision and
+its overlap cancel. How grouped outcomes sit beside activations is for the
+implementing Task. No games, native code or published bytes changed.
 
 ## Open product choices (nobody has answered; they do not block this Task)
 
@@ -227,10 +225,6 @@ reproduced `all-payments-summary.json` byte-identically (SHA256 `cb66eb31…`);
 its rows give the report's 2.9–11.8%, exact max 28 and 655 identity >64;
 the two focused test files pass (6). Nothing to correct.
 
-For the existing-decision slice: the overlap figures in the report equal the
-derived summary; without `payment_scopes` the output still equals published
-`summary.json` byte-for-byte; the two focused test files pass.
-
 If native code changes again: debug `flow::mana` tests
 (`CARGO_BUILD_JOBS=2 cargo test --manifest-path managym/Cargo.toml -p managym --lib flow::mana -- --test-threads 2`,
 27 passed at `1530995a9e`), rebuild the release extension, and `cmp` a fresh
@@ -248,3 +242,12 @@ questions then moved ahead of the design, their options as bullets rather than
 tables. Check: the 126 remaining table rows are the 140 of `78397f2042` minus
 the three option tables (14 rows); option text and every quoted figure are
 unchanged; all in-page anchors resolve; `git diff --check` clean.
+
+## Existing-decision checks (2026-11-13)
+
+Rerunning `summary --all-payments` reproduces `all-payments-summary.json`
+byte-identically and leaves `summary.json` untouched; stripping
+`payment_scopes` equals the published summary; all six report overlap rows
+match the derived figures; the three published evidence SHA256s match the
+manifest. Ruff check/format and `git diff --check` pass.
+`uv run --extra dev pytest tests/eval/test_experiment_files.py tests/infra/test_experiment_data_untracked.py -q`: 6 passed.
