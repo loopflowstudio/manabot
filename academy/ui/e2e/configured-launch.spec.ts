@@ -3,6 +3,27 @@ import { readFileSync } from 'node:fs';
 
 const proof = new URL('../test-results/launch/addresses.json', import.meta.url);
 
+test('starting and reopening an unfinished bot game keeps the Watch two bots heading', async ({ page }) => {
+  const start = page.getByRole('button', { name: 'Start watching' });
+  const heading = page.getByRole('heading', { name: 'Watch two bots', exact: true });
+  const decision = page.getByText(/^Decision 1 of 1 ·/);
+  await page.goto('/replay?watch=1');
+  await expect(start).toBeEnabled();
+  await page.getByRole('combobox', { name: 'Seat 1', exact: true }).selectOption('random');
+  await page.getByRole('combobox', { name: 'Seat 2', exact: true }).selectOption('random');
+  await start.click();
+  await expect(decision).not.toContainText('Finished');
+  await expect(heading).toBeVisible();
+  await expect(start).toBeHidden();
+  await page.reload();
+  await expect(decision).toBeVisible();
+  await expect(heading).toBeVisible();
+  await expect(page.getByRole('banner').getByRole('link', { name: 'Replay', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(start).toBeHidden();
+  await page.getByText('Watch another matchup', { exact: true }).click();
+  await expect(start).toBeVisible();
+});
+
 test('launch replaces unrelated resume, reloads pending game and opens selected replay', async ({ page, context }) => {
   const addresses = JSON.parse(readFileSync(proof, 'utf8')) as { game: string; replay: string };
   const frames: { match_id: string; projection: unknown; prompt: unknown }[] = [];

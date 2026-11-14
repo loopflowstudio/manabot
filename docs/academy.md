@@ -312,8 +312,9 @@ Every game you start is recorded as you play.
   per step, and saves the result to the same list. A managym-only install
   offers the Random and Search players.
 
-An opened bot recording shows **Replay**, its actual players and decision
-controls first. Expand **Watch another matchup** to set up a new bot game.
+A finished bot recording shows **Replay**, its actual players and decision
+controls first. A game still being played keeps the **Watch two bots** heading,
+including when reopened. Expand **Watch another matchup** to set up a new bot game.
 
 Games are stored in `play.sqlite` under the traces directory, which defaults
 to `academy/traces` in the directory you launched from. Launch from the same

@@ -200,7 +200,7 @@
 
 <main class="mx-auto w-full max-w-[1400px] px-4 py-6">
   <div class="rounded-sm border border-line bg-panel p-6 shadow-sheet">
-    <h1 class="type-title text-display">{id ? 'Replay' : 'Watch two bots'}</h1>
+    <h1 class="type-title text-display">{finished ? 'Replay' : 'Watch two bots'}</h1>
     {#if current}
       <p class="type-annotation mt-2 text-ink-2">Seat 1: {current.players[0]} · Seat 2: {current.players[1]}</p>
     {/if}
