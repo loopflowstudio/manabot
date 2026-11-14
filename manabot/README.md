@@ -382,6 +382,9 @@ See [frozen-policy belief sampling](../README.md#beside-the-loop). This separate
 admitted belief artifact does not change the policy's input contract or establish
 foreign-opponent calibration or search strength.
 
+For collection from the original Small u1952 player, fitting and inspecting saved
+predictions, see the [TLA belief-sampler guide](../docs/tla-belief-sampler.md).
+
 [Frozen-policy local search](../README.md#beside-the-loop) plays through the
 `local_update` player kind; exact-history search rejects unsupported Rules
 likelihood events. Search receipts and simulation replay retain this distinction.

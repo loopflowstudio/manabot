@@ -16,24 +16,25 @@ import os
 from pathlib import Path
 import random
 import tempfile
-from typing import Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, Protocol, cast
 
-import torch
-
-from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.belief.sampling_types import SamplerInput, SamplerSchema, _digest
 from manabot.belief.state import ViewerHistory
-from manabot.env.env import Env
-from manabot.env.match import Match, Reward
-from manabot.infra.config import MatchConfig, RewardConfig
-from manabot.sim.search.flat_mc import AgentMatchupPlayer
-import managym
 from managym.decision import (
     PUBLIC_COMMITMENT_KINDS,
-    Command,
-    DecisionFrame,
-    Observation,
 )
+
+if TYPE_CHECKING:
+    from manabot.infra.config import MatchConfig
+
+
+class ConstraintSource(Protocol):
+    def hidden_hand_constraints_json(self, viewer: int) -> str: ...
+
+
+class UnsupportedSamplerRow(ValueError):
+    """A recognized native domain outside the count-only sampler's support."""
+
 
 Split = Literal["train", "validation", "test"]
 HISTORY_SCHEMA = "manabot.public-commitment-counts/actor-kind-card-sqrt-v1"
@@ -133,42 +134,39 @@ def read_dataset(path: Path) -> SamplerDataset:
     schema = SamplerSchema(
         **{**data["schema"], "card_names": tuple(data["schema"]["card_names"])}
     )
-    games: list[SamplerGame] = []
-    for game in data["games"]:
-        rows: list[SamplerExample] = []
-        for row in game["examples"]:
-            inputs = row["inputs"]
-            rows.append(
-                SamplerExample(
-                    inputs=SamplerInput(
-                        **{
-                            **inputs,
-                            "pool_counts": tuple(inputs["pool_counts"]),
-                            "known_minima": tuple(inputs["known_minima"]),
-                            "history_features": tuple(inputs["history_features"]),
-                        }
-                    ),
-                    target_hand=tuple(row["target_hand"]),
-                    viewer=row["viewer"],
-                    revision=row["revision"],
-                    observation_identity=row["observation_identity"],
-                )
-            )
-        games.append(
-            SamplerGame(
-                game["game_id"],
-                game["seed"],
-                game["assignment"],
-                game["split"],
-                tuple(rows),
-            )
-        )
+    games = tuple(_read_game(game) for game in data["games"])
     dataset = SamplerDataset(
         schema, data["policy_identity"], data["world_identity"], tuple(games)
     )
     if dataset.identity != payload["identity"]:
         raise ValueError("belief dataset content digest mismatch")
     return dataset
+
+
+def _read_game(game: dict[str, Any]) -> SamplerGame:
+    """Narrow JSON fields at the private artifact boundary."""
+    rows: list[SamplerExample] = []
+    for row in game["examples"]:
+        inputs = row["inputs"]
+        rows.append(
+            SamplerExample(
+                inputs=SamplerInput(
+                    **{
+                        **inputs,
+                        "pool_counts": tuple(inputs["pool_counts"]),
+                        "known_minima": tuple(inputs["known_minima"]),
+                        "history_features": tuple(inputs["history_features"]),
+                    }
+                ),
+                target_hand=tuple(row["target_hand"]),
+                viewer=row["viewer"],
+                revision=row["revision"],
+                observation_identity=row["observation_identity"],
+            )
+        )
+    return SamplerGame(
+        game["game_id"], game["seed"], game["assignment"], game["split"], tuple(rows)
+    )
 
 
 def _counts(value: object) -> dict[str, int]:
@@ -204,7 +202,7 @@ def history_features(
 
 
 def public_sampler_input(
-    engine: managym.Env,
+    engine: ConstraintSource,
     history: ViewerHistory,
     schema: SamplerSchema,
 ) -> tuple[SamplerInput, str]:
@@ -217,7 +215,7 @@ def public_sampler_input(
     encoded = engine.hidden_hand_constraints_json(history.viewer)
     projected = json.loads(encoded)
     if projected.get("retained_selection", False) or projected["foretold"]:
-        raise ValueError(
+        raise UnsupportedSamplerRow(
             "count-only belief sampler cannot represent retained selections or foretold slots"
         )
     pool = _counts(projected["pool"])
@@ -258,6 +256,18 @@ def collect_frozen_policy(
     after immutable viewer inputs are constructed. No optimizer or exact support
     enumeration occurs. A caller owns attempt/failure and elapsed-cost receipts.
     """
+    # Keep runtime imports at the entry point: saved data and scheduled capture
+    # also run in an isolated historical policy runtime without today's loader.
+    import torch
+
+    from manabot.backends.torch.checkpoint import load_checkpoint
+    from manabot.belief.sampling_collection import CaptureSlot, capture_game
+    from manabot.belief.sampling_runtime import EnvCaptureRuntime
+    from manabot.env.env import Env
+    from manabot.env.match import Match, Reward
+    from manabot.infra.config import RewardConfig
+    from manabot.sim.search.flat_mc import AgentMatchupPlayer
+
     if games < 3 or max_steps < 1:
         raise ValueError("three-way whole-game split requires at least three games")
     policy_identity = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
@@ -268,9 +278,13 @@ def collect_frozen_policy(
         )
     if hashlib.sha256(checkpoint.read_bytes()).hexdigest() != policy_identity:
         raise ValueError("behavior checkpoint changed while loading")
-    player = AgentMatchupPlayer(agent)
     match = Match(match_config)
     env = Env(match, obs_space, Reward(RewardConfig()), seed=seed)
+    runtime = EnvCaptureRuntime(
+        env,
+        AgentMatchupPlayer(agent),
+        lambda slot: match if slot.assignment == 0 else match.swapped(),
+    )
     order = list(range(games))
     random.Random(seed).shuffle(order)
     held_out = max(1, games // 5)
@@ -279,104 +293,55 @@ def collect_frozen_policy(
         split_by_game[index] = "validation"
     for index in order[held_out : 2 * held_out]:
         split_by_game[index] = "test"
-    schema: SamplerSchema | None = None
+    # The public wrapper retains its matchup-specific schema and strict behavior.
+    names = tuple(
+        sorted(
+            set(match.hero_deck)
+            | set(match.villain_deck)
+            | set(match.hero_sideboard)
+            | set(match.villain_sideboard)
+        )
+    )
+    runtime.reset(CaptureSlot("schema", seed, 0, "train", ("hero", "villain")))
+    manifest = env._engine.content_pack_manifest()
+    identity = _digest(
+        {
+            "content": manifest["content_digest"],
+            "names": names,
+            "history": HISTORY_SCHEMA,
+            "kinds": PUBLIC_COMMITMENT_KINDS,
+        }
+    )
+    schema = SamplerSchema(
+        identity, names, 2 * len(PUBLIC_COMMITMENT_KINDS) * (len(names) + 1)
+    )
     records: list[SamplerGame] = []
-    with torch.random.fork_rng(), torch.inference_mode():
-        torch.manual_seed(seed)
-        for game_index in range(games):
-            if check is not None:
-                check()
-            obs, _ = env.reset(
-                seed=seed + game_index,
-                options={"match": match if game_index % 2 == 0 else match.swapped()},
-            )
-            manifest = env._engine.content_pack_manifest()
-            if schema is None:
-                # Restrict work to configured definitions; generated out-of-roster
-                # history or hidden cards fail explicitly rather than truncating.
-                names = tuple(
-                    sorted(
-                        set(match.hero_deck)
-                        | set(match.villain_deck)
-                        | set(match.hero_sideboard)
-                        | set(match.villain_sideboard)
-                    )
+    try:
+        with torch.random.fork_rng(), torch.inference_mode():
+            torch.manual_seed(seed)
+            for index in range(games):
+                slot = CaptureSlot(
+                    f"{policy_identity}:{seed + index}:{index % 2}",
+                    seed + index,
+                    index % 2,
+                    split_by_game[index],
+                    ("hero", "villain"),
                 )
-                identity = _digest(
-                    {
-                        "content": manifest["content_digest"],
-                        "names": names,
-                        "history": HISTORY_SCHEMA,
-                        "kinds": PUBLIC_COMMITMENT_KINDS,
-                    }
+                result = capture_game(
+                    runtime,
+                    slot,
+                    schema,
+                    max_steps=max_steps,
+                    moments=None,
+                    check=check,
                 )
-                schema = SamplerSchema(
-                    identity, names, 2 * len(PUBLIC_COMMITMENT_KINDS) * (len(names) + 1)
-                )
-            histories = [
-                ViewerHistory.from_observation(
-                    Observation.from_json(env._engine.semantic_observation_json(viewer))
-                )
-                for viewer in range(2)
-            ]
-            examples: list[SamplerExample] = []
-            for step in range(max_steps):
-                if check is not None:
-                    check()
-                for viewer in range(2):
-                    history = histories[viewer]
-                    inputs, _ = public_sampler_input(env._engine, history, schema)
-                    # Privileged label access begins only after all inference inputs exist.
-                    hand = env.hand_snapshot(1 - viewer).cards
-                    examples.append(
-                        SamplerExample(
-                            inputs,
-                            tuple(hand.get(name, 0) for name in schema.card_names),
-                            viewer,
-                            history.current_revision,
-                            history.current_viewer_state_hash,
-                        )
-                    )
-                frame = DecisionFrame.from_json(
-                    env._engine.semantic_decision_frame_json()
-                )
-                if len(frame.offers) != int(obs["actions_valid"].sum()):
-                    raise ValueError("frozen policy cannot encode every legal offer")
-                action = player.act(env, obs)
-                command = Command(
-                    f"sampler-{seed}-{game_index}-{step}",
-                    frame.revision,
-                    int(frame.offers[action]["id"]),
-                )
-                obs, _, terminated, truncated, _, transition = env.step_semantic(
-                    command
-                )
-                histories = [
-                    history.advance(
-                        transition.receipt,
-                        Observation.from_json(
-                            env._engine.semantic_observation_json(viewer)
-                        ),
-                        acting=frame.actor,
-                    )
-                    for viewer, history in enumerate(histories)
-                ]
-                if truncated:
-                    raise RuntimeError("belief self-play game truncated")
-                if terminated:
-                    break
-            else:
-                raise RuntimeError("belief self-play exceeded the declared step cap")
-            records.append(
-                SamplerGame(
-                    f"{policy_identity}:{seed + game_index}:{game_index % 2}",
-                    seed + game_index,
-                    game_index % 2,
-                    split_by_game[game_index],
-                    tuple(examples),
-                )
-            )
-    assert schema is not None
+                if result.failure is not None:
+                    raise RuntimeError(result.failure)
+                if result.game is None:
+                    raise ValueError("completed game has no representable rows")
+                records.append(result.game)
+    finally:
+        env.close()
     return SamplerDataset(
         schema,
         policy_identity,
