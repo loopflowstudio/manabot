@@ -384,3 +384,60 @@ Python surface), so only the Python argument keeps a deprecated alias.
 - `CARGO_BUILD_JOBS=2 cargo test --manifest-path managym/Cargo.toml -p managym --lib -- --test-threads 2 heuristic vector_env` — 38 passed (debug); `cargo check --all-targets --all-features` passed.
 - Release wheel rebuilt, cp313 extension replaced atomically; `uv run --no-sync pytest tests/env/test_native_player_policies.py tests/sim/test_heuristic.py tests/env/test_captured_vector_bookkeeping.py tests/env/test_opponents.py tests/semantic/test_player_control.py tests/training/test_action_cutoff.py::test_heuristic_scores_only_retained_legal_offers -q` — 70 passed.
 - Rust fmt and focused Ruff passed. Gate's remaining checks are unchanged.
+
+## Fourth concept review: per-seat API (2026-11-13, at e2f27df807)
+
+First review since `player_policies` landed. No open product choice: the
+names, `(agent, agent)` default, one-decision stepping for two built-ins and
+reward ownership are covered by "lg2m, approved" above. The model holds on the
+normal path (mixed step settles to the external seat), failure (index at a
+built-in chooser, unknown name, both arguments: errors) and recovery (fork
+copies both memories, reset clears them, replay rebuilds from the receipt).
+
+Next implement direction — four places where the old one-opponent concept
+still shows through the per-seat one. No behavior, world, identity-file or
+public-API change; nothing here moves the heuristic source digest.
+
+1. One recorded fact per receipt. `CapturedVector` stores
+   `opponent_policy or "none"` beside `player_policies`, so a new receipt for
+   `("agent", "heuristic")` also says `opponent_policy: "none"`. Replay reads
+   `player_policies` first, so behavior is right and the record contradicts
+   itself. New receipts write `player_policies` only; `opponent_policy` is
+   read for retained receipts that lack it and is absent (`None`) on new ones.
+   Retained receipts and the three `tests/fixtures/tla-pilot-*.jsonl` keep
+   their bytes and stay replayable.
+2. The repository stops calling its own deprecated argument.
+   `scripts/bench_breakdown.py` and the tests that are not about the alias
+   (`tests/env/test_env.py`, `test_potential_shaping.py`, `test_opponents.py`,
+   `tests/model/test_agent.py`, `tests/training/test_automatic_game_capture.py`,
+   `test_elemental_uniform.py`, `tests/verify/test_input_v10.py`,
+   `test_native_buffer_capacities.py`, `test_observation_parity.py`) pass
+   `player_policies`. Only the deprecation tests in
+   `tests/env/test_native_player_policies.py` and
+   `test_captured_vector_bookkeeping.py`, and retained-receipt replay, keep
+   `opponent_policy`. The 15 "expected" warnings become the alias tests' own.
+3. The guide names the contract for what it is. `docs/engine.md`
+   "Built-in heuristic opponent" now carries the whole per-seat contract
+   (`docs/engine-python.md` links it as "per-seat controllers"), states
+   rewards, auto-reset and memory lifecycle twice each, and calls one thing
+   policy, controller, built-in, opponent and player. Split it: "Per-seat
+   players" (the three values, mixed versus two-built-in stepping, rewards,
+   reset, Commands, the deprecated argument) stated once, then "Built-in
+   heuristic" (information limits, rules, ties, fallback, direct
+   `managym.Heuristic`, evaluation pointer). Use "player policy" for the
+   setting and "built-in" for random/heuristic; drop "controller" for this
+   concept (it already means the rules controller in the same guide and in
+   AGENTS.md's new sentence). Repoint the four links: seat-selection links
+   (`engine-python.md`, `managym/README.md`) to the first heading, rule links
+   (`evaluation.md`, `manabot/README.md`) to the second.
+4. `managym/src/agent/opponent.rs` holds only `PlayerPolicy`; rename it
+   `player_policy.rs` (imports in `env.rs`, `vector_env.rs`,
+   `heuristic/tests.rs`, `vector_env_bindings.rs`, `examples/bench_states.rs`).
+   Not one of the four identity files. Rust change, so rebuild the extension.
+
+Kept as is: scalar `step()` versus vector `-1` (a batch needs an integer
+sentinel); the Python `resolve_player_policies` beside the native parser (the
+wrappers need the resolved tuple for the training-exposure guard and the
+receipt); `manabot.env.env.Env` staying two-external-seat (scalar capture
+therefore has no policy to record); `manabot/env/opponents.py` (pre-existing,
+`manabot.verify` only).

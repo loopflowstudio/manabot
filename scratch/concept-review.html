@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MTG-277 · Heuristic concept review</title>
+<title>MTG-277 · Per-seat API concept review</title>
 <style>
 :root{color-scheme:light dark;--paper:#faf8f3;--ink:#252b29;--muted:#58635c;--line:#b8c4b9;--accent:#315d48}
 *{box-sizing:border-box}
@@ -9,7 +9,8 @@ main{max-width:850px;padding:32px 24px 48px;margin:auto}
 header{color:var(--muted);font-size:13px;overflow-wrap:anywhere}
 h1{font:600 clamp(26px,5vw,34px)/1.15 system-ui,sans-serif;margin:20px 0 12px}
 h2{font-size:19px;margin:26px 0 8px}
-code{font:.86em ui-monospace,monospace;overflow-wrap:anywhere}
+code,pre{font:.86em ui-monospace,monospace;overflow-wrap:anywhere}
+pre{white-space:pre-wrap;margin:8px 0}
 table{width:100%;border-collapse:collapse;margin:16px 0;font-size:15px}
 th,td{text-align:left;vertical-align:top;padding:10px 8px;border-bottom:1px solid var(--line)}
 th{color:var(--accent)}
@@ -19,52 +20,62 @@ li{margin:8px 0}
 @media (prefers-color-scheme:dark){:root{--paper:#1a211d;--ink:#ebece4;--muted:#b2c0b6;--line:#53685a;--accent:#add2ba}}
 @media (max-width:540px){main{padding:22px 16px}th,td{padding:8px 4px;font-size:13px}}
 </style></head><body><main>
-<header>MTG-277 · concept-review · 2026-11-13 (second pass, at 5c6b998b4d) · built from
-scratch/questions.md, docs/engine.md, docs/evaluation.md, manabot/README.md,
-manabot/sim/{heuristic,players}.py, manabot/eval/admission.py,
-managym/src/agent/{heuristic/mod.rs,env.rs,opponent.rs,vector_env.rs},
-managym/src/python/heuristic_bindings.rs, managym/__init__.pyi, manabot/sim/anchors.py</header>
-<h1>One docs edit before gate: the README still defines the fallback by another player</h1>
-<p>No product choice is open. Actions, concepts and APIs below are built and unchanged by this review.
-The rule description moved to the native header in <code>89b732137a</code>; one copy is left in
-<code>manabot/README.md</code>. The edit is proposed, not built.</p>
+<header>MTG-277 · concept-review · 2026-11-13 (fourth pass, at e2f27df807) · built from
+scratch/questions.md, docs/engine.md, docs/engine-python.md, docs/evaluation.md, manabot/README.md,
+managym/README.md, managym/__init__.pyi, managym/src/agent/{env,opponent,vector_env}.rs,
+managym/src/python/{bindings,vector_env_bindings,heuristic_bindings}.rs,
+manabot/env/{failures,replay,vector_env}.py, manabot/sim/heuristic.py</header>
+<h1>No decision needed: four leftovers of the one-opponent concept go back to implement</h1>
+<p>The per-seat API is built and holds. Nothing below changes behavior, the public API, a world or the
+heuristic source identity. Solid border is built; dashed is proposed.</p>
 
 <table>
 <tr><th>Action</th><th>Concept</th><th>State-changing API (built)</th></tr>
-<tr><td>Train against heuristic</td><td>Runner advances the opponent inside each game</td><td><code>VectorEnv(opponent_policy="heuristic")</code>, <code>reset_all</code>, <code>step</code></td></tr>
-<tr><td>Evaluate against heuristic</td><td>Scalar adapter to the same strategy</td><td><code>HeuristicPlayer.act</code> → <code>managym.Heuristic.select_action</code></td></tr>
-<tr><td>New game / fork</td><td>Game-scoped strategy memory</td><td>Env reset clears, fork copies; <code>build_code_player</code> builds a fresh scalar player per game</td></tr>
-<tr><td>Register an anchor</td><td>Identity of the implementation that produced evidence</td><td><code>register_anchor</code> → <code>native-v2</code>, adapter + three Rust files; drift rejected</td></tr>
+<tr><td>Say who chooses for each seat</td><td>Player policy per chooser seat: <code>agent</code>, <code>random</code>, <code>heuristic</code>; separate from decks and world identity</td><td><code>Env(player_policies=…)</code>, <code>VectorEnv(player_policies=…)</code>; default <code>("agent", "agent")</code></td></tr>
+<tr><td>Play against a built-in</td><td>Env settles built-in decisions until the external seat chooses or the game ends; rewards are the external seat's</td><td><code>reset</code>, <code>step(index)</code></td></tr>
+<tr><td>Watch two built-ins</td><td>One published decision per call; reward is that chooser's</td><td><code>Env.step()</code>, <code>VectorEnv.step([-1, …])</code></td></tr>
+<tr><td>New game / fork</td><td>One heuristic memory per seat, owned by Env</td><td>reset clears both, fork copies both</td></tr>
+<tr><td>Evaluate / register an anchor</td><td>Scalar adapter over the same selector; identity is the source bytes</td><td><code>HeuristicPlayer.act</code>, <code>register_anchor</code> → <code>native-v2</code></td></tr>
+<tr><td>Replay a failure</td><td>Receipt names the seats' policies</td><td><code>FailureEvidence.player_policies</code> (retained receipts: <code>opponent_policy</code>)</td></tr>
 </table>
 
-<h2>Biggest mismatch</h2>
+<h2>Biggest mismatch: a new receipt states two policies</h2>
 <aside>
-<p><strong>Existing</strong> (<code>manabot/README.md</code>, anchors paragraph):</p>
-<p>“<code>heuristic</code> is a separately versioned anchor of rules of thumb: highest-mana-value casts,
-removal held for a kill, counters held for an opponent's spell, effect polarity derived from the semantic
-card source, attacks unless a blocker kills and survives, and value blocks. Prompts without a rule match
-<code>scripted_greedy</code>, which stays frozen with its registered source identity.”</p>
-<p>A third rule list, and a fallback defined by a different implementation. Native <code>fallback</code>
-currently chooses as <code>ScriptedGreedyPlayer.act</code> does, but nothing binds them, and
-docs/engine.md dropped the same reference in realign.</p>
+<p><strong>Built.</strong> A capture of <code>player_policies=("agent", "heuristic")</code> writes</p>
+<pre>"opponent_policy": "none",
+"player_policies": ["agent", "heuristic"]</pre>
+<p>Replay reads the second, so it replays correctly; the record still says the opponent seat is surfaced.</p>
 </aside>
 <div class="proposed">
-<p><strong>Proposed.</strong> “<code>heuristic</code> is a separately versioned anchor: rules of thumb for mana,
-timing, targets, card choices and combat, described in
-<a>the engine guide</a>. Historical results keep the heuristic version they evaluated.”</p>
-<p>Docs only: not an identity file, no rebuild, no digest move. Selection sentence and MTG-152 numbers stay.</p>
+<p><strong>Proposed.</strong> New receipts write <code>player_policies</code> only. <code>opponent_policy</code> is
+read for retained receipts that lack it and is absent on new ones. Retained receipts and the three
+<code>tla-pilot-*.jsonl</code> fixtures keep their bytes and replay as before.</p>
 </div>
+
+<h2>Three smaller ones</h2>
+<div class="proposed"><ul>
+<li>The repository still calls its own deprecated argument: <code>scripts/bench_breakdown.py</code> and nine test
+files not about the alias. They move to <code>player_policies</code>; only the alias tests and retained-receipt
+replay keep <code>opponent_policy</code>.</li>
+<li><code>docs/engine.md</code> “Built-in heuristic opponent” carries the whole per-seat contract, says rewards,
+auto-reset and memory twice, and uses policy, controller, built-in, opponent and player for one thing. Split into
+“Per-seat players” (stated once) and “Built-in heuristic” (rules and information limits); “player policy” for the
+setting, “built-in” for random/heuristic, no “controller”. Four links repoint.</li>
+<li><code>managym/src/agent/opponent.rs</code> holds only <code>PlayerPolicy</code> → <code>player_policy.rs</code>.
+Not an identity file; needs an extension rebuild.</li>
+</ul></div>
 
 <h2>Checked and kept</h2>
 <ul>
-<li>Normal path: two slots, learner acts, the opponent's decisions resolve natively, terminal reward is the learner's.</li>
-<li>Failure: old extension rejects <code>"heuristic"</code>; capacity overflow stays an error; source drift rejects a registration. No random fallback.</li>
-<li>Recovery: matching install or rebuild; a new truthful registration. Old results keep their identity.</li>
-<li>Counterexamples still binding: viewer JSON omits <code>action_space.focus</code>; turn rollback cannot stand in for reset; the chooser is not the active player under control effects.</li>
+<li>Normal path: mixed step plays the built-in's decisions and returns the external seat's next decision with its reward.</li>
+<li>Failure: an index at a built-in chooser, an unknown name, both arguments, or 10,000 built-in decisions without an external chooser are errors. No fallback to random.</li>
+<li>Recovery: a Command that leaves a built-in the decision is continued with <code>Env.step()</code>; forks keep both memories and the retained combat events.</li>
+<li>Scalar <code>step()</code> versus vector <code>-1</code> stays: a batch needs an integer.</li>
+<li>The Python <code>resolve_player_policies</code> stays beside the native parser: the wrappers need the tuple for the training-exposure guard and the receipt.</li>
 </ul>
 
 <h2>Questions</h2>
 <ol>
-<li>None open. (The earlier question, which module's header owns the rules, was taken as the native one and is built.)</li>
+<li>None open. Names, default and two-built-in stepping were approved (“lg2m, approved”, 2026-11-13).</li>
 </ol>
 </main></body></html>
