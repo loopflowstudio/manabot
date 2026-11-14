@@ -59,17 +59,17 @@ jobs:
           recipe = Path(".runs/baseline_recipe.py")
           recipe.parent.mkdir(parents=True, exist_ok=True)
           recipe.write_text(
-              "from etude.jobs import training\nfrom etude.spec import Job\n"
+              "from etude.jobs import TrainingJob\n"
               "from manabot.recipes.baseline import BaselineConfig, train\n\n"
-              "def runs() -> Job:\n"
-              "    return training(train, config=BaselineConfig.model_validate_json("
-              f"{config.model_dump_json()!r}), seeds=({seed},))\n"
+              "def training_jobs() -> list[TrainingJob]:\n"
+              "    return [TrainingJob(name='baseline', train=train, config=BaselineConfig.model_validate_json("
+              f"{config.model_dump_json()!r}), seeds=({seed},))]\n"
           )
           subprocess.run([
               "uv", "run", "--no-sync", "etude", "train", str(recipe),
               "--experiment", "baseline", "--seconds", "1680",
           ], check=True)
-          destination = Path(".runs/baseline/track/baseline/out")
+          destination = Path(f".runs/baseline/track/baseline/baseline@{seed}/out")
           result = evaluate(config, destination, seed=seed)
           raise SystemExit(result.software != "passed")
           PY

@@ -11,7 +11,7 @@ returns an ordinary Etude record, so a report mixes them with its own panels:
   rate and policy damping on the update clock.
 
 Jobs are keyed by their Etude name, which for a `TrainingJob` is its regime id.
-Matches are selected by the tags or names `eval(state)` gives its seatings.
+Matches are selected by the tags or names `eval_jobs(state)` gives its seatings.
 """
 
 from collections.abc import Mapping, Sequence
@@ -72,7 +72,7 @@ def against_fixed(title: str, tags: Sequence[str]) -> Curve:
 def head_to_head(title: str, seatings: Sequence[str]) -> Curve:
     """One line: the first seat's score where its checkpoint stood.
 
-    `seatings` are the names `eval(state)` gave the pairs. An empty sequence
+    `seatings` are the names `eval_jobs(state)` gave the pairs. An empty sequence
     raises `ValueError`.
     """
     if not seatings:

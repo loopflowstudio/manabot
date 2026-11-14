@@ -23,7 +23,7 @@ from experiments.elemental_grid import (
     schedule_sha256,
     summarize,
 )
-from experiments.elemental_long_eval import H2HRequest, LocalCheckpoint, play_h2h_group
+from experiments.elemental_play import H2HRequest, LocalCheckpoint, play_h2h_group
 from manabot.backends.torch.checkpoint import save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match

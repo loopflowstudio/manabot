@@ -1,21 +1,15 @@
-"""Verify a local immutable source bundle before a long-running worker imports data.
+"""The commit of the running source, for provenance on evaluation and world records.
 
-The bundle is an execution artifact inside the supplied Task workspace, not a Git
-checkout. Its manifest binds the original commit and exact source/native bytes so
-later Task commits cannot change restart admission. It is not a trust mechanism
-for foreign pickle artifacts.
+A release archive carries `.manabot-source.json` (`scripts/release/prepare.py`):
+its commit and the digest of each source file, verified before the commit is
+reported. A checkout or a launched Etude archive has no manifest and names its
+commit through `etude.eval.source.source_commit`.
 """
 
 from functools import cache
-import hashlib
-import io
-import json
-import os
 from pathlib import Path
 import re
 import subprocess
-import sysconfig
-import tarfile
 
 from etude.eval.source import source_commit as etude_source_commit
 from pydantic import BaseModel, ConfigDict, field_validator
@@ -35,27 +29,6 @@ class SourceBundle(BaseModel):
         if re.fullmatch(r"[0-9a-f]{40}", value) is None:
             raise ValueError("bundle requires an exact source commit")
         return value
-
-
-def bundle_at(repo: Path, revision: str) -> SourceBundle:
-    """The commit and SHA-256 of every tracked file at an exact revision.
-
-    Read from git's own archive of that commit, never from the working tree,
-    so an Etude job freezes the bytes it will be admitted against.
-    """
-    commit = subprocess.check_output(
-        ["git", "-C", str(repo), "rev-parse", "--verify", f"{revision}^{{commit}}"],
-        text=True,
-    ).strip()
-    archive = subprocess.check_output(["git", "-C", str(repo), "archive", commit])
-    files: dict[str, str] = {}
-    with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
-        for member in tar:
-            if member.isfile():
-                body = tar.extractfile(member)
-                assert body is not None
-                files[member.name] = hashlib.sha256(body.read()).hexdigest()
-    return SourceBundle(commit=commit, files=files)
 
 
 def _verify(root: Path, bundle: SourceBundle, label: str) -> None:
@@ -98,33 +71,3 @@ def source_dirty() -> bool | None:
         capture_output=True,
     )
     return bool(status.stdout) if status.returncode == 0 else None
-
-
-def bind_etude_source() -> None:
-    """Verify launcher-pinned archive bytes and bind the freshly built extension.
-
-    The job config carries hashes computed from its exact committed source before
-    submission. This is not permission to infer a commit from arbitrary workfiles.
-    Native bytes are built remotely and retained as runtime evidence, not claimed
-    byte-identical to another machine's build.
-    """
-    root = Path(__file__).resolve().parents[2]
-    config = json.loads(Path(os.environ["ETUDE_CONFIG"]).read_text())
-    bundle = SourceBundle.model_validate(config["source_bundle"])
-    _verify(root, bundle, "Etude archive")
-    suffix = sysconfig.get_config_var("EXT_SUFFIX")
-    native = root / "managym" / f"_managym{suffix}"
-    files = dict(bundle.files)
-    files[str(native.relative_to(root))] = file_sha256(native)
-    target = root / ".manabot-source.json"
-    if target.exists():
-        raise ValueError("source manifest already exists; do not overwrite admission")
-    target.write_text(
-        SourceBundle(commit=bundle.commit, files=files).model_dump_json(indent=2)
-    )
-    source_commit.cache_clear()
-    assert source_commit() == bundle.commit
-
-
-if __name__ == "__main__":
-    bind_etude_source()

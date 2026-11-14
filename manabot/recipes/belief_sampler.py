@@ -2,14 +2,9 @@
 
 Each attempt restarts collection and fitting. Etude checks and carries the
 immutable policy input, and records the resulting sampler checkpoint.
+`experiments/belief.py` declares this stage after the policy it starts from.
 """
 
-from decimal import Decimal
-
-from etude.experiment import observe
-from etude.jobs import training
-from etude.spec import Job
-from etude.storage import default_root
 from etude.train.tracking import track
 from pydantic import BaseModel, Field
 
@@ -41,17 +36,3 @@ def train(config: BeliefConfig) -> None:
             histories, run.out / "belief.pt", config.sampler, seed=run.seed
         )
         run.checkpoint(sampler, steps=config.sampler.steps)
-
-
-def runs() -> Job:
-    """Fit from the completed local policy; run belief_policy.py first."""
-    policy = observe(default_root(), "belief_policy").run("belief_policy").final
-    if policy is None:
-        raise ValueError("finish belief_policy before starting the sampler")
-    return training(
-        train,
-        config=BeliefConfig(),
-        start=policy,
-        max_hours=1,
-        max_usd=Decimal(1),
-    )

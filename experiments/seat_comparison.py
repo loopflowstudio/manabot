@@ -8,15 +8,15 @@ update, one-seat from two.
 
 This file is the experiment `seat_comparison` for Etude, and the small template
 for comparing method arms: `SeatConfig` holds the fields the arms differ in,
-`train(config)` is one run, `runs()` declares one job per arm with the same
-seeds, and `report()` draws the arms on the update clock with the one-seat arm
-as the dotted baseline.
+`train(config)` is one run, `training_jobs()` declares one job per arm with the
+same seeds, and `report()` draws the arms on the update clock with the one-seat
+arm as the dotted baseline.
 
     uv run etude launch experiments/seat_comparison.py --revision COMMIT --rent l4 \\
         --max-usd 60
     uv run etude report experiments/seat_comparison.py --source r2://manabot/jobs --open
 
-There is no `eval(state)` yet. The two-deck heuristic benchmark
+There is no `eval_jobs(state)` yet. The two-deck heuristic benchmark
 (`manabot.eval.benchmark`) reads the retired executor's training record, so it
 cannot score these runs' checkpoints; `report()` names the `plays` table that
 benchmark writes, and draws training until an evaluation delivers it.
@@ -32,9 +32,8 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Literal
 
-from etude.jobs import training
+from etude.jobs import TrainingJob
 from etude.report import Curve, Matrix, Ranking, Report, Score
-from etude.spec import Job
 from etude.train.tracking import track
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -104,19 +103,19 @@ def train(config: SeatConfig) -> None:
         self_play(settings(config), run, updates=config.updates)
 
 
-def runs(
+def training_jobs(
     revision: str,
     updates: int = UPDATES,
     hours: float = 6.0,
     usd_per_run: float = 7.5,
-) -> list[Job]:
+) -> list[TrainingJob]:
     """One job per arm, every arm on the same seeds."""
     return [
-        training(
-            train,
+        TrainingJob(
+            name=job_name(seats),
+            train=train,
             config=SeatConfig(learning_seats=seats, updates=updates),
             smoke=SeatConfig(learning_seats=seats, updates=1, device="cpu", streams=4),
-            name=job_name(seats),
             seeds=SEEDS,
             repo=str(ROOT),
             revision=revision,

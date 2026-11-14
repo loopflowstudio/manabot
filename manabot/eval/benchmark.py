@@ -12,9 +12,9 @@ from collections.abc import Sequence
 import os
 from pathlib import Path
 
+from etude.checkpoints import checkpoint_id
 from etude.eval.records import (
     Benchmark,
-    CheckpointKey,
     CheckpointRef,
     Code,
     Environment,
@@ -23,7 +23,7 @@ from etude.eval.records import (
     Seating,
 )
 from etude.eval.run import Row, Tables
-from etude.eval.tournament import hold
+from etude.eval.tournament import evaluating
 from etude.records import ArtifactRef
 from pydantic import BaseModel
 
@@ -108,7 +108,7 @@ def benchmark(manifest: MonitorResult) -> Benchmark:
                     ),
                     opponent,
                 ),
-                conditions=tuple(
+                configs=tuple(
                     Conditions(
                         deal=seed,
                         key=manifest.key,
@@ -139,7 +139,7 @@ def play_match(match: Match, inference: InferenceEndpoint | None) -> Tables:
         }
     )
     opponent = PlayerRegistration.model_validate(anchor.config["registration"])
-    conditions = Conditions.model_validate(match.conditions)
+    conditions = Conditions.model_validate(match.config)
     out = Path(os.environ["ETUDE_OUTPUT_DIR"]) / "arena" / match.key
     request = EvaluationRequest(
         key=conditions.key,
@@ -248,13 +248,12 @@ def evaluate(
             directory / "execution-manifest.json", manifest.model_dump(mode="json")
         )
     with callback_allocation(execution, directory / "allocation") as inference:
-        result = hold(
+        with evaluating(
             benchmark(manifest),
             experiment=BENCHMARK,
-            play=EndpointPlay(play_match, inference) if inference else play,
             # The training run's export, wherever its bytes are read from.
             checkpoint=CheckpointRef(
-                key=CheckpointKey(run=manifest.run_id, name=path.name),
+                key=checkpoint_id(run=manifest.run_id, name=path.name),
                 artifact=ArtifactRef(
                     uri=path.as_uri(),
                     sha256=manifest.artifact["sha256"],
@@ -263,7 +262,11 @@ def evaluate(
             ),
             directory=directory.parent.parent / "track",
             workers=execution.max_active_games if execution else 1,
-        )
+            resume=True,
+        ) as active:
+            result = active.play(
+                EndpointPlay(play_match, inference) if inference else play
+            )
 
     atomic_json(directory / "result.json", result.model_dump(mode="json"))
 

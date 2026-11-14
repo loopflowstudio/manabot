@@ -121,11 +121,12 @@ def measure(
         env["ETUDE_HOME"] = temporary
         recipe = Path(temporary) / "measurement.py"
         recipe.write_text(
-            "from etude.jobs import training\nfrom etude.spec import Job\n"
+            "from etude.jobs import TrainingJob\n"
             "from scripts.bench_training_update import BenchmarkConfig, train\n\n"
-            "def runs() -> Job:\n"
-            "    return training(train, config=BenchmarkConfig.model_validate_json("
-            f"{config.model_dump_json()!r}), seeds=({seed},))\n"
+            "def training_jobs() -> list[TrainingJob]:\n"
+            "    return [TrainingJob(name='measurement', train=train, "
+            "config=BenchmarkConfig.model_validate_json("
+            f"{config.model_dump_json()!r}), seeds=({seed},))]\n"
         )
         subprocess.run(
             [
@@ -143,7 +144,7 @@ def measure(
         recorded = read(
             Path(temporary) / "track",
             "measurement",
-            "measurement",
+            f"measurement@{seed}",
         )
         rows: list[dict[str, object]] = [{} for _ in range(updates)]
         for metric in recorded.metrics():

@@ -3,11 +3,13 @@
 import hashlib
 from pathlib import Path
 
+from etude.experiment import observe
 from etude.train.tracking import track
 import pytest
 
+from experiments import belief
 from manabot.belief.sampling_data import read_dataset
-from manabot.recipes.belief_sampler import BeliefConfig, runs, train
+from manabot.recipes.belief_sampler import BeliefConfig, train
 from manabot.recipes.builders import gray_ogre_self_play
 from manabot.training.loops.self_play import (
     CLOCKS,
@@ -24,29 +26,34 @@ from manabot.training.rollout.selection_data import SelectionDataset, collect_se
 def test_belief_sampler_uses_given_policy_and_restarts_its_work(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setenv("ETUDE_HOME", str(tmp_path / "home"))
     monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "policy"))
+    monkeypatch.setenv("ETUDE_JOB_NAME", belief.POLICY)
     with track(
-        experiment="belief_policy",
-        run="belief_policy",
+        experiment="belief",
+        run="policy@0",
         clocks=CLOCKS,
         directory=tmp_path / "track",
     ) as run:
         policy = self_play(gray_ogre_self_play(horizon=1), run, updates=1)
-    monkeypatch.setenv("ETUDE_TRACK_DIR", str(tmp_path / "track"))
-    job = runs()
+    monkeypatch.delenv("ETUDE_JOB_NAME")
+    # The experiment declares the sampler from the finished policy run it reads.
+    state = observe(tmp_path / "track", "belief")
+    declared = belief.training_jobs(state)
+    assert [job.name for job in declared] == [belief.POLICY, belief.SAMPLER]
+    job = declared[1].plain()
     assert len(job.inputs) == 1
     assert job.inputs[0].name == "start"
     assert job.inputs[0].sha256 == hashlib.sha256(policy.read_bytes()).hexdigest()
-    assert job.inputs[0].run == "belief_policy"
-    # Exercise the recipe with the verified input supplied. Pinned Etude's
-    # local train command does not yet deliver job inputs (see training guide).
+    assert job.inputs[0].run == "belief/policy@0"
+    # Exercise the recipe with the verified input supplied, as a launch delivers it.
     given = tmp_path / "inputs"
     given.mkdir()
     (given / "start").write_bytes(policy.read_bytes())
     original = policy.read_bytes()
     monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "sampler"))
     monkeypatch.setenv("ETUDE_EXPERIMENT", "belief")
-    monkeypatch.setenv("ETUDE_RUN", "sampler")
+    monkeypatch.setenv("ETUDE_RUN", "sampler@0")
     monkeypatch.setenv("ETUDE_TRACK_DIR", str(tmp_path / "track"))
     monkeypatch.setenv("ETUDE_INPUTS_DIR", str(given))
     train(BeliefConfig())

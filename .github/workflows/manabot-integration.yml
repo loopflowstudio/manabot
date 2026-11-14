@@ -112,17 +112,14 @@ jobs:
             tests/training/test_etude_evaluation.py tests/training/test_head_to_head.py \
             tests/training/test_elemental_uniform.py \
             tests/eval/ -q \
-            --ignore=tests/eval/test_elemental_long_report.py --ignore=tests/eval/test_elemental_long_eval.py \
-            --ignore=tests/eval/test_card_evaluation.py --ignore=tests/eval/test_mtg186_cards.py \
+            --ignore=tests/eval/test_card_evaluation.py \
             --ignore=tests/eval/test_authored_matchup.py
 
       - name: Long evaluation matches
         if: matrix.group == 'evaluation-long'
         run: |
           uv run pytest -n logical --durations=20 \
-            tests/eval/test_elemental_long_report.py tests/eval/test_elemental_long_eval.py \
-            tests/eval/test_card_evaluation.py tests/eval/test_mtg186_cards.py \
-            tests/eval/test_authored_matchup.py
+            tests/eval/test_card_evaluation.py tests/eval/test_authored_matchup.py
 
       - name: Evaluation Perf report proof
         if: matrix.group == 'evaluation'

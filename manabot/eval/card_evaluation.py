@@ -18,19 +18,19 @@ from pathlib import Path
 import tempfile
 from typing import Literal
 
+from etude.checkpoints import checkpoint_id
 from etude.eval.records import (
-    CheckpointKey,
+    CheckpointPlayer,
     CheckpointRef,
     Code,
     Environment,
     Inference,
     Match,
-    Model,
     Player,
     RoundRobin,
 )
 from etude.eval.run import EvalResult, Result, Row, Tables
-from etude.eval.tournament import hold
+from etude.eval.tournament import evaluating
 from etude.records import ArtifactRef
 from pydantic import Field, model_validator
 
@@ -194,7 +194,7 @@ def _entrants(spec: CardEvaluationSpec) -> tuple[Player, ...]:
         if player.runner_kind == "checkpoint":
             path = spec.checkpoints[player.player_id].resolve()
             checkpoint = CheckpointRef(
-                key=CheckpointKey(address=path.as_uri()),
+                key=checkpoint_id(address=path.as_uri()),
                 artifact=ArtifactRef(
                     uri=path.as_uri(),
                     sha256=player.checkpoint_sha256,
@@ -202,7 +202,7 @@ def _entrants(spec: CardEvaluationSpec) -> tuple[Player, ...]:
                 ),
             )
             entrants.append(
-                Model(
+                CheckpointPlayer(
                     name=player.player_id,
                     checkpoint=checkpoint,
                     inference=Inference(source=code, config=config),
@@ -215,10 +215,10 @@ def _entrants(spec: CardEvaluationSpec) -> tuple[Player, ...]:
 
 def play_card_match(match: Match) -> Result:
     players = card_match_players(match)
-    conditions = CardConditions.model_validate(match.conditions)
+    conditions = CardConditions.model_validate(match.config)
     paths: dict[str, str] = {}
     for entrant, player in zip(match.players, players, strict=True):
-        if isinstance(entrant, Model):
+        if isinstance(entrant, CheckpointPlayer):
             artifact = entrant.checkpoint.artifact
             if (
                 artifact.sha256 != player.checkpoint_sha256
@@ -358,7 +358,7 @@ def evaluate_cards(spec: CardEvaluationSpec, directory: Path) -> EvalResult:
                 "metric_version": METRIC_VERSION,
             },
         ),
-        conditions=tuple(
+        configs=tuple(
             CardConditions(
                 deal=deal,
                 key=spec.key,
@@ -369,18 +369,19 @@ def evaluate_cards(spec: CardEvaluationSpec, directory: Path) -> EvalResult:
             for deal in spec.deals
         ),
         games=8,
+        rollups=CARD_ROLLUPS,
     )
     # Workers' attempt folders and evidence handoff; nothing here is kept.
     with (
         tempfile.TemporaryDirectory(prefix="manabot-cards-") as scratch,
         _environment({"MANABOT_CARD_OUTPUT": scratch, "ETUDE_RUN": spec.run}),
-    ):
-        return hold(
+        evaluating(
             tournament,
             experiment=spec.experiment,
-            play=play_card_match,
             enter=entrants,
             workers=spec.workers,
             directory=directory,
-            rollups=CARD_ROLLUPS,
-        )
+            resume=True,
+        ) as active,
+    ):
+        return active.play(play_card_match)

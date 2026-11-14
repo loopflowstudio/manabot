@@ -8,18 +8,18 @@ import json
 import os
 from pathlib import Path
 
+from etude.checkpoints import checkpoint_id
 from etude.eval.records import (
     Benchmark,
-    CheckpointKey,
+    CheckpointPlayer,
     CheckpointRef,
     Environment,
     Inference,
     Match,
-    Model,
     Seating,
 )
 from etude.eval.run import EvalResult, Tables
-from etude.eval.tournament import hold
+from etude.eval.tournament import evaluating
 from etude.records import ArtifactRef
 import numpy as np
 from pydantic import BaseModel
@@ -125,11 +125,11 @@ def play_match(match: Match, inference: InferenceEndpoint | None) -> Tables:
     candidate, opponent = registrations(duel)
     seated = match.players[0]
     if (
-        not isinstance(seated, Model)
+        not isinstance(seated, CheckpointPlayer)
         or seated.checkpoint.artifact.sha256 != candidate.checkpoint_sha256
     ):
         raise ValueError("Etude candidate differs from admitted checkpoint")
-    conditions = Conditions.model_validate(match.conditions)
+    conditions = Conditions.model_validate(match.config)
     out = Path(os.environ["ETUDE_OUTPUT_DIR"]) / "arena" / match.key
     request = EvaluationRequest(
         key=conditions.key,
@@ -219,7 +219,7 @@ def _checkpoint(result: MonitorResult) -> CheckpointRef:
     """A training run's export, keyed by its run and file, read from where it lies."""
     path = Path(result.artifact["path"]).resolve()
     return CheckpointRef(
-        key=CheckpointKey(run=result.run_id, name=path.name),
+        key=checkpoint_id(run=result.run_id, name=path.name),
         artifact=ArtifactRef(
             uri=path.as_uri(),
             sha256=result.artifact["sha256"],
@@ -277,7 +277,7 @@ def evaluate(path: Path, *, execution: EvalExecution | None = None) -> None:
                         source=code,
                         config={"registration": candidate.model_dump(mode="json")},
                     ),
-                    Model(
+                    CheckpointPlayer(
                         name="one-seat",
                         checkpoint=_checkpoint(duel.one_seat),
                         inference=Inference(
@@ -286,7 +286,7 @@ def evaluate(path: Path, *, execution: EvalExecution | None = None) -> None:
                         ),
                     ),
                 ),
-                conditions=tuple(
+                configs=tuple(
                     Conditions(
                         deal=seed,
                         key=key,
@@ -300,14 +300,17 @@ def evaluate(path: Path, *, execution: EvalExecution | None = None) -> None:
         ),
     )
     with callback_allocation(execution, directory / "allocation") as inference:
-        result = hold(
+        with evaluating(
             benchmark,
             experiment=EXPERIMENT,
-            play=EndpointPlay(play_match, inference) if inference else play,
             checkpoint=_checkpoint(duel.two_seat),
             directory=directory.parent.parent / "track",
             workers=execution.max_active_games if execution else 1,
-        )
+            resume=True,
+        ) as active:
+            result = active.play(
+                EndpointPlay(play_match, inference) if inference else play
+            )
 
     atomic_json(
         directory / "result.json",

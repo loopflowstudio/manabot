@@ -55,7 +55,7 @@ def admit_card_game(game: GameEvidence, match: Match) -> tuple[str, str]:
     Returns participant names in Etude row order. Each game is admitted on its
     own; the other legs of its deal need not exist.
     """
-    conditions = CardConditions.model_validate(match.conditions)
+    conditions = CardConditions.model_validate(match.config)
     players = card_match_players(match)
     names = (players[0].player_id, players[1].player_id)
     if game.deal != conditions.deal:

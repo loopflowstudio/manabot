@@ -7,35 +7,38 @@ design and results are `experiments/reports/tla-frontier-c5fba4-results.md`.
 
 This file is the experiment `tla_frontier` for Etude: `train(config)` runs one
 size on the current self-play loop with the settings its regime record holds
-(`settings`), `runs()` declares one wall-bounded job per size, `eval(state)`
-plays the comparisons below and `report()` draws them.
+(`settings`), `training_jobs()` declares one wall-bounded job per size,
+`eval_jobs(state)` plays the comparisons below and `report()` draws them.
 
     uv run etude launch experiments/tla_frontier.py --revision COMMIT --rent l4
-    uv run etude eval experiments/tla_frontier.py --rent cpu32 --source r2://manabot/jobs
     uv run etude report experiments/tla_frontier.py --source r2://manabot/jobs --open
+
+`etude launch` reads both declarations: typed again once checkpoints are
+stored, it launches the comparisons that have not been played (on `--rent
+cpu32`, which the evaluation limits below are sized for).
 
 The executed runs (revision ab2b757d9) trained under the retired executor; a
 launch here is a new run of the same settings on the current loop, not a
-reproduction of them. `eval` admits one run per size, and the executed runs
-hold this experiment's two, so a new frontier starts from a copy of this file
-under its own name. Primary progress is
+reproduction of them. `eval_jobs` admits one run per size, and the executed
+runs hold this experiment's two, so a new frontier starts from a copy of this
+file under its own name. Primary progress is
 each learner against its latest trained checkpoint at or before half its elapsed
-training hours, on the frozen random 17Lands deck pairs. `eval` also plays, at
+training hours, on the frozen random 17Lands deck pairs. `eval_jobs` also plays, at
 every shared update milestone, each size against the matched first-64 heuristic and
 the larger size against the smaller at equal updates; at the endpoints it adds
 each size against its own initialization and the two endpoints against each
 other, which is equal wall budget only when both runs finished. At every
 w160l8 milestone and its endpoint it also pairs w160l8 with w64's last
 checkpoint at or before the same training hours (`checkpoint_hours` reads
-Etude's `Checkpoint.wall_ms`). A failed run's endpoint is its last stored
+Etude's `CheckpointRecord.wall_ms`). A failed run's endpoint is its last stored
 checkpoint, so its reach is still played and read.
 Only a worker writes a run's end, so `with_launcher_ends` joins the launcher's
 record of a lost pod to what the store kept before anything reads the schedule.
-Training exports more often than `eval` plays: the export cadence bounds what a
+Training exports more often than `eval_jobs` plays: the export cadence bounds what a
 lost rental can cost, and only milestones and endpoints are evaluated.
 
 A launched run is stored under its launcher id, so `size_run` knows a size by
-the job name `runs()` launched it under, or, for the executed runs, by the
+the job name `training_jobs()` launched it under, or, for the executed runs, by the
 regime tag on their checkpoints. `pod_reading` reads each run's step phase,
 host and game-error counts, which are reported and void nothing. A lost run stops at its last export, which is its endpoint even
 below the first milestone; then its endpoint comparisons are unreached.
@@ -63,21 +66,21 @@ from statistics import median
 from tempfile import TemporaryDirectory
 from typing import Any, Literal, TypedDict
 
+from etude.checkpoints import CheckpointRecord
 from etude.eval.records import (
     Benchmark,
+    CheckpointPlayer,
     Code,
     Environment,
     Inference,
     Match,
-    Model,
     Seating,
 )
 from etude.eval.run import Row, Tables
-from etude.experiment import Checkpoint, ExperimentState, TrainingRun
-from etude.jobs import evaluation, training
+from etude.jobs import EvalJob, ExperimentState, TrainingJob, TrainingRunSummary
 from etude.launch import client
 from etude.report import Report, Score
-from etude.spec import Job
+from etude.spec import Variable
 from etude.storage import Storage
 from etude.train.read import RunData
 from etude.train.tracking import track
@@ -88,7 +91,7 @@ from experiments import tla_frontier
 from manabot.eval.admission import register_checkpoint
 from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.models import EvaluationKey
-from manabot.experiment.setup import TOOLCHAIN_ENV, machine_setup
+from manabot.experiment.setup import machine_setup
 from manabot.infra.artifacts import local_checkpoint_file
 from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import StrictModel, canonical_sha256, file_sha256
@@ -111,7 +114,7 @@ from manabot.training.state.game_errors import GameErrorState
 import managym
 
 ROOT = Path(__file__).resolve().parents[1]
-# `etude eval` and `etude launch` both name the experiment for this file.
+# Etude names the experiment for this file.
 EXPERIMENT = Path(__file__).stem
 REGIME = ROOT / "experiments/regimes/tla-frontier-c5fba4-w64.json"
 GAMES_PER_PAIR = 4
@@ -344,17 +347,17 @@ def train(config: FrontierConfig) -> None:
         self_play(settings(config), run, updates=config.updates)
 
 
-def runs(revision: str) -> list[Job]:
+def training_jobs(revision: str) -> list[TrainingJob]:
     """One capped GPU job per size, named for its regime; no automatic retry."""
     _, protocol = frozen()
     return [
-        training(
-            train,
+        TrainingJob(
+            name=_regime_id(label),
+            train=train,
             config=FrontierConfig(size=label),
             smoke=FrontierConfig(
                 size=label, updates=1, device="cpu", workers=1, streams=2
             ),
-            name=_regime_id(label),
             seeds=(protocol.training_seed,),
             repo=str(ROOT),
             revision=revision,
@@ -509,13 +512,16 @@ class ScheduledComparison:
 
 
 def paired_matchup(
-    name: str, players: tuple[Model, Model | Code], tag: str, protocol: Protocol
+    name: str,
+    players: tuple[CheckpointPlayer, CheckpointPlayer | Code],
+    tag: str,
+    protocol: Protocol,
 ) -> Seating:
     """One comparison: every frozen pair, four legs each, as `play` admits."""
     return Seating(
         name=name,
         players=players,
-        conditions=tuple(pair.model_dump(mode="json") for pair in protocol.pairs),
+        configs=protocol.pairs,
         games=GAMES_PER_PAIR,
         tags=(tag,),
     )
@@ -573,7 +579,7 @@ def with_launcher_ends(state: ExperimentState) -> ExperimentState:
     away from the launcher fails loudly rather than taking a dead pod for a live one.
     """
 
-    def lost(run: TrainingRun) -> bool:
+    def lost(run: TrainingRunSummary) -> bool:
         if run.ended:
             return False
         if run.name in LOST_RUNS:
@@ -589,16 +595,16 @@ def with_launcher_ends(state: ExperimentState) -> ExperimentState:
     )
 
 
-def _of_regime(run: TrainingRun, regime: str) -> bool:
+def _of_regime(run: TrainingRunSummary, regime: str) -> bool:
     """Whether `run` trained `regime`: launched under its name, or tagged with it.
 
-    `runs()` names each job for its regime. The executed runs predate that and
+    `training_jobs()` names each job for its regime. The executed runs predate that and
     carry the regime as a checkpoint tag instead.
     """
     return run.launch == regime or bool(run.checkpoints.tagged(regime_tag(regime)))
 
 
-def size_label(run: TrainingRun) -> SizeLabel | None:
+def size_label(run: TrainingRunSummary) -> SizeLabel | None:
     """The size a run trained; None for a run of neither regime."""
     for label in SIZES:
         if _of_regime(run, _regime_id(label)):
@@ -606,17 +612,17 @@ def size_label(run: TrainingRun) -> SizeLabel | None:
     return None
 
 
-def checkpoint_update(checkpoint: Checkpoint) -> int:
+def checkpoint_update(checkpoint: CheckpointRecord) -> int:
     return int(checkpoint.at["updates"])
 
 
-def last_update(run: TrainingRun) -> int | None:
+def last_update(run: TrainingRunSummary) -> int | None:
     """The run's last stored update; None if it stored no checkpoint."""
     last = run.checkpoints.last
     return checkpoint_update(last) if last else None
 
 
-def one_run(state: ExperimentState, regime: str) -> TrainingRun | None:
+def one_run(state: ExperimentState, regime: str) -> TrainingRunSummary | None:
     """The regime's one run; a second is a new protocol version, so it raises."""
     found = [run for run in state.runs if _of_regime(run, regime)]
     if len(found) > 1:
@@ -624,12 +630,12 @@ def one_run(state: ExperimentState, regime: str) -> TrainingRun | None:
     return found[0] if found else None
 
 
-def size_run(state: ExperimentState, label: SizeLabel) -> TrainingRun | None:
+def size_run(state: ExperimentState, label: SizeLabel) -> TrainingRunSummary | None:
     """The size's one run; a run lost at any update is still its size's run."""
     return one_run(state, _regime_id(label))
 
 
-def endpoint(run: TrainingRun | None) -> int | None:
+def endpoint(run: TrainingRunSummary | None) -> int | None:
     """An ended run's last stored update, failed or not; None while it may save more."""
     return last_update(run) if run and run.ended else None
 
@@ -699,14 +705,14 @@ def comparison_schedule(
     heuristic = Code(name="heuristic", source=_source(), config=HEURISTIC)
     trained = {label: size_run(state, label) for label in SIZES}
     endpoints = {label: endpoint(run) for label, run in trained.items()}
-    saved: dict[SizeLabel, dict[int, Checkpoint]] = {
+    saved: dict[SizeLabel, dict[int, CheckpointRecord]] = {
         label: {checkpoint_update(c): c for c in run.checkpoints} if run else {}
         for label, run in trained.items()
     }
 
-    def model(label: SizeLabel, update: int | None) -> Model | None:
+    def model(label: SizeLabel, update: int | None) -> CheckpointPlayer | None:
         found = saved[label].get(update) if update is not None else None
-        return found.model(inference) if found else None
+        return found.player(inference) if found else None
 
     schedule: list[ScheduledComparison] = []
 
@@ -714,7 +720,7 @@ def comparison_schedule(
         tag: str,
         label: SizeLabel,
         update: int | None,
-        opponent: Model | Code | None,
+        opponent: CheckpointPlayer | Code | None,
         name: str,
         *,
         unreached: bool = False,
@@ -880,14 +886,14 @@ def comparison_schedule(
         unreached=any(short(label) for label in SIZES),
     )
     # Last, so a pair that is also an equal-update or endpoint pair keeps that
-    # comparison's name and tag when `eval` plays it once.
+    # comparison's name and tag when `eval_jobs` plays it once.
     schedule.extend(equal_hours(update) for update in protocol.milestones)
     if endpoints[LARGE] not in protocol.milestones:
         schedule.append(equal_hours(endpoints[LARGE]))
     return progress + schedule
 
 
-def eval(state: ExperimentState) -> list[Job]:
+def eval_jobs(state: ExperimentState) -> list[EvalJob]:
     """Play the available comparisons; Etude owns already-delivered matches."""
     if state.experiment != EXPERIMENT:
         raise ValueError("frontier evaluation requires this experiment's runs")
@@ -926,9 +932,9 @@ def _distinct(matchups: Iterable[Seating]) -> tuple[Seating, ...]:
 def pass_name(name: str) -> str:
     """A benchmark's name under this attempt; with no attempt set, `name` itself.
 
-    `etude eval` names a pass for its tournament and pending matches, so without
-    a new name a pass that delivered nothing could never launch again. The name
-    sits outside match keys and environments, so an attempt skips stored matches,
+    Etude names a pass for its tournament and pending matches, so without a new
+    name a pass that delivered nothing could never launch again. The name sits
+    outside match keys and environments, so an attempt skips stored matches,
     leaves failed ones failed and changes nothing scored.
     """
     attempt = os.environ.get(PASS_ATTEMPT)
@@ -937,36 +943,33 @@ def pass_name(name: str) -> str:
 
 def evaluation_jobs(
     name: str, env: Environment, matchups: Sequence[Seating]
-) -> list[Job]:
-    """One rented pass of `play` over `matchups`, none without any.
-
-    Every check beside the frontier launches this same job.
-    """
+) -> list[EvalJob]:
+    """One rented pass of `play` over `matchups`, none without any."""
     if not matchups:
         return []
-    job = evaluation(
-        Benchmark(name=pass_name(name), environment=env, seatings=tuple(matchups)),
-        # Etude discovers this file with runpy; callbacks need an importable
-        # module identity even when eval itself came from <run_path>.
-        play=tla_frontier.play,
-        workers=EVALUATION_WORKERS,
-        max_hours=EVALUATION_HOURS,
-        # One pass's ceiling across its attempts; the operator keeps the
-        # cumulative evaluation spend under `protocol.evaluation_usd`.
-        max_usd=EVALUATION_PASS_USD,
-        # Etude retries a machine lost or refused after admission, resuming the
-        # same run and skipping stored matches, so no game result can be replaced.
-        # A refused first create raises instead, which ends the watch loop.
-        max_attempts=EVALUATION_ATTEMPTS,
-        setup=machine_setup(" --extra evaluation"),
-    )
-    # Etude's default command omits the extra holding its result writer (duckdb).
-    command = job.command.replace(
-        "uv run python",
-        f"{TOOLCHAIN_ENV}\nuv run --locked --extra evaluation python",
-        1,
-    )
-    return [job.model_copy(update={"command": command})]
+    return [
+        EvalJob(
+            # Etude discovers this file with runpy; callbacks need an importable
+            # module identity even when eval_jobs itself came from <run_path>.
+            play=tla_frontier.play,
+            tournament=Benchmark(
+                name=pass_name(name), environment=env, seatings=tuple(matchups)
+            ),
+            workers=EVALUATION_WORKERS,
+            max_hours=EVALUATION_HOURS,
+            # One pass's ceiling across its attempts; the operator keeps the
+            # cumulative evaluation spend under `protocol.evaluation_usd`.
+            max_usd=EVALUATION_PASS_USD,
+            # Etude retries a machine lost or refused after admission, resuming the
+            # same run and skipping stored matches, so no game result can be replaced.
+            max_attempts=EVALUATION_ATTEMPTS,
+            setup=machine_setup(" --extra evaluation"),
+            # Etude's command is `uv run python`, which would sync the default
+            # environment. Setup installed the locked one with the evaluation
+            # extra (the result writer's duckdb), so the job runs in it as built.
+            environment=(Variable(name="UV_NO_SYNC", value="1"),),
+        )
+    ]
 
 
 # -- Evaluation callback ------------------------------------------------------
@@ -984,7 +987,7 @@ def deck_matchup(regime: TrainingRegime, protocol: Protocol, pair: Pair) -> Deck
 
 
 def _registration(
-    player: Model | Code,
+    player: CheckpointPlayer | Code,
     name: Literal["candidate", "opponent"],
     matchup: DeckMatchup,
     observation: ObservationConfig,
@@ -1050,13 +1053,13 @@ def _memory_journal(retained: Path) -> Iterator[Path]:
                 shutil.copytree(out_dir, retained, dirs_exist_ok=True)
 
 
-def play(match: Match) -> Tables:
+def play(match: Match[Pair]) -> Tables:
     """One sampled pair/deal, four policy/deck/seat legs, with failure denominators."""
     torch.set_num_threads(1)
     regimes, protocol = frozen()
     # The sizes share observation and population; only their models differ.
     regime = regimes[SMALL]
-    pair = Pair.model_validate(match.conditions)
+    pair = Pair.model_validate(match.config)
     if pair not in protocol.pairs or match.games != GAMES_PER_PAIR:
         raise ValueError("evaluation conditions differ from frozen schedule")
     matchup = deck_matchup(regime, protocol, pair)
