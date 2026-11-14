@@ -97,8 +97,11 @@ impl Game {
                 self.shuffle_private_library(opponent, &mut rng);
             } else {
                 let (mut known, mut residual) = self.hidden_hand_partition(opponent, commitments);
-                residual.extend(self.foretold_cards(opponent).map(ObjectId::from));
-                residual.sort_unstable_by_key(|object| object.0);
+                residual.extend(
+                    self.foretold_cards(opponent)
+                        .map(|card| self.state.object_of(card)),
+                );
+                residual.sort_unstable_by_key(|object| object.slot());
                 residual.shuffle(&mut rng);
                 assert!(
                     self.fill_foretold_slots(opponent, &mut residual),
@@ -217,7 +220,7 @@ impl Game {
                         .contains(*object, ZoneType::Library, player)
             })
             .collect();
-        pool.sort_unstable_by_key(|object| object.0);
+        pool.sort_unstable_by_key(|object| object.slot());
         let mut counts = self.state.players[player.0].known_hand.clone();
         let mut known = Vec::new();
         let mut residual = Vec::new();
@@ -226,7 +229,7 @@ impl Game {
         pool.retain(|object| {
             if is_fixed(*object) && self.state.zones.contains(*object, ZoneType::Hand, player) {
                 known.push(*object);
-                if let Some(count) = counts.get_mut(&self.state.objects[*object].definition_id) {
+                if let Some(count) = counts.get_mut(&self.state[*object].definition_id) {
                     *count = count.saturating_sub(1);
                 }
                 false
@@ -235,7 +238,7 @@ impl Game {
             }
         });
         for object in pool {
-            if let Some(count) = counts.get_mut(&self.state.objects[object].definition_id) {
+            if let Some(count) = counts.get_mut(&self.state[object].definition_id) {
                 if *count > 0 {
                     known.push(object);
                     *count -= 1;
@@ -277,7 +280,7 @@ impl Game {
             .filter(|objects| !objects.is_empty())
             .collect();
         for revealed in inspections {
-            let player = self.state.objects[revealed[0]].owner;
+            let player = self.state[revealed[0]].owner;
             // Placement appends, so put revealed[0] on top (last).
             for object in revealed.iter().rev() {
                 self.state.place_object(*object, player, ZoneType::Library);

@@ -14,7 +14,7 @@ use crate::{
             ActivatedAbilityDefinition, CardTypes, Keyword, Keywords, PowerCda, Restriction,
             StaticAbility, StaticScope,
         },
-        game_object::{ObjectId, ObjectRef, PermanentId, PlayerId, Target},
+        game_object::{ObjectId, PermanentId, PlayerId, Target},
         permanent::CounterKind,
         predicate::CardPredicate,
         zone::ZoneType,
@@ -399,19 +399,22 @@ impl Game {
             condition,
             controller,
             None,
-            self.permanent_object_ref(source),
+            self.permanent_object(source),
             None,
         )
     }
     /// Power in the object's current zone (CR 604.3). On the stack "you"
     /// means the spell's controller; elsewhere off the battlefield it means
     /// the owner (CR 109.5), including owned outside-game copies.
-    pub fn object_power(&self, object_id: impl Into<ObjectId>) -> i32 {
-        let object_id: ObjectId = object_id.into();
-        if let Some(permanent) = self.state.object_to_permanent[object_id] {
+    pub fn object_power(&self, object_id: ObjectId) -> i32 {
+        if let Some(permanent) = self.state.permanent_of(object_id) {
             return self.characteristics(permanent).power;
         }
-        let object = &self.state.objects[object_id];
+        // An outside-game card is allocated but in no zone.
+        let object = self
+            .state
+            .object(object_id)
+            .unwrap_or_else(|_| self.state.entry_object(object_id));
         let Some(cda) = object.power_cda() else {
             return object.power.unwrap_or(0);
         };
@@ -425,12 +428,11 @@ impl Game {
     /// placeholder. Layer computation itself uses its explicit board context.
     pub(crate) fn object_matches_predicate(
         &self,
-        object_id: impl Into<ObjectId>,
+        object_id: ObjectId,
         predicate: &CardPredicate,
     ) -> bool {
-        let object_id: ObjectId = object_id.into();
         if predicate.from_battlefield_this_turn {
-            let Some(object) = self.current_object_ref(object_id) else {
+            let Some(object) = self.state.live(object_id) else {
                 return false;
             };
             return self.state.zones.zone_of(object_id) == Some(ZoneType::Graveyard)
@@ -443,7 +445,7 @@ impl Game {
                     },
                 );
         }
-        if let Some(permanent) = self.state.object_to_permanent[object_id] {
+        if let Some(permanent) = self.state.permanent_of(object_id) {
             return self.permanent_matches_predicate(permanent, predicate);
         }
         let power = if predicate.reads_power() {
@@ -451,7 +453,73 @@ impl Game {
         } else {
             0
         };
-        predicate.matches_object_with_power(&self.state.objects[object_id], power)
+        predicate.matches_object_with_power(&self.state[object_id], power)
+    }
+
+    /// A recorded event can still ask what its departed card was. Read the
+    /// retained base and LKI, never the later appearance occupying its slot.
+    pub(crate) fn recorded_object_matches_predicate(
+        &self,
+        object: ObjectId,
+        predicate: &CardPredicate,
+    ) -> bool {
+        if self.state.live(object).is_some() {
+            return self.object_matches_predicate(object, predicate);
+        }
+        let (_, printing) = self.state.source_base(object);
+        let (_, owner, kind) = self
+            .state
+            .objects
+            .provenance(object)
+            .expect("recorded provenance");
+        let power = if predicate.reads_power() {
+            self.object_lki(object).map_or_else(
+                || {
+                    printing.power_cda().map_or_else(
+                        || printing.power.unwrap_or(0),
+                        |cda| self.cda_power(cda, owner),
+                    )
+                },
+                |lki| lki.power,
+            )
+        } else {
+            0
+        };
+        predicate.matches_printing(
+            printing,
+            kind,
+            printing
+                .mana_cost
+                .as_ref()
+                .map_or(0, |cost| cost.mana_value),
+            power,
+            &[],
+        )
+    }
+
+    /// Entry replacements inspect allocated tokens before placement. This is
+    /// distinct from rules predicates on current zone appearances.
+    pub(crate) fn entry_matches_predicate(
+        &self,
+        object: ObjectId,
+        predicate: &CardPredicate,
+    ) -> bool {
+        if self.state.live(object).is_some() {
+            return self.object_matches_predicate(object, predicate);
+        }
+        if predicate.from_battlefield_this_turn {
+            return false;
+        }
+        let row = self.state.entry_object(object);
+        let power = if predicate.reads_power() {
+            row.power_cda().map_or_else(
+                || row.power.unwrap_or(0),
+                |cda| self.cda_power(cda, row.owner),
+            )
+        } else {
+            0
+        };
+        predicate.matches_object_with_power(row, power)
     }
 
     fn cda_power(&self, cda: &PowerCda, controller: PlayerId) -> i32 {
@@ -486,7 +554,7 @@ impl Game {
             })
     }
     pub(crate) fn spell_keywords(&self, object: ObjectId, controller: PlayerId) -> Keywords {
-        let mut keywords = self.state.objects[object].keywords;
+        let mut keywords = self.state[object].keywords;
         for (_, owner, view) in self.static_sources() {
             for ability in &view.static_abilities {
                 if let StaticAbility::KeywordGrant(grant) = ability {
@@ -585,12 +653,11 @@ impl Game {
     }
     /// Instant timing for `player` casting `card`: printed instant or flash,
     /// or a conditional "as though it had flash" that currently holds.
-    pub(crate) fn has_instant_timing(&self, player: PlayerId, object: impl Into<ObjectId>) -> bool {
-        let object: ObjectId = object.into();
+    pub(crate) fn has_instant_timing(&self, player: PlayerId, object: ObjectId) -> bool {
         let granted_flash = self
             .exile_grant(player, object)
             .is_some_and(|grant| grant.flash);
-        let object = &self.state.objects[object];
+        let object = &self.state[object];
         granted_flash
             || object.is_instant_speed()
             || (object.types.is_creature() && self.has_next_creature_cast_flash(player))
@@ -622,7 +689,7 @@ impl Game {
         &self,
         condition: &Condition,
         controller: PlayerId,
-        source: Option<ObjectRef>,
+        source: Option<ObjectId>,
         triggering: Option<Target>,
     ) -> bool {
         debug_assert!(
@@ -644,7 +711,7 @@ impl Game {
             condition,
             controller,
             frame,
-            frame.and_then(|frame| frame.source_ref),
+            frame.and_then(|frame| frame.source_ref()),
             frame.and_then(|frame| frame.context_target),
         )
     }
@@ -657,7 +724,7 @@ impl Game {
         condition: &Condition,
         controller: PlayerId,
         frame: Option<&EffectFrame>,
-        source: Option<ObjectRef>,
+        source: Option<ObjectId>,
         triggering: Option<Target>,
     ) -> bool {
         let source_permanent = || {
@@ -689,7 +756,7 @@ impl Game {
                 self.iter_battlefield_permanents(controller)
                     .filter(|&id| {
                         self.state.permanents[id].as_ref().is_some_and(|permanent| {
-                            self.state.objects[permanent.object].owner != controller
+                            self.state[permanent.object].owner != controller
                         })
                     })
                     .take(*count)
@@ -754,13 +821,14 @@ impl Game {
                 last_controller == Some(controller)
             }
             Condition::CardsThisWayMatch(predicate) => frame.is_some_and(|frame| {
-                frame.this_way.iter().any(|object| {
-                    self.object_matches_predicate(ObjectId::from(object.entity), predicate)
-                })
+                frame
+                    .this_way
+                    .iter()
+                    .any(|object| self.recorded_object_matches_predicate(*object, predicate))
             }),
             Condition::TriggeringSpellMatches(predicate) => matches!(
                 frame.and_then(|frame| frame.context_target),
-                Some(Target::StackSpell(object_id)) if self.object_matches_predicate(object_id, predicate)
+                Some(Target::StackSpell(object_id)) if self.recorded_object_matches_predicate(object_id, predicate)
             ),
             Condition::TargetCardExiled(predicate) => {
                 let Some(Target::GraveyardCard(object)) =
@@ -768,10 +836,11 @@ impl Game {
                 else {
                     return false;
                 };
-                let object_id = ObjectId::from(object.entity);
-                self.current_object_ref(object_id) != Some(object)
-                    && self.state.zones.zone_of(object_id) == Some(ZoneType::Exile)
-                    && self.object_matches_predicate(object_id, predicate)
+                // CR 400.7j: the exiled object the targeted card became.
+                self.state.zones.successor(object).is_some_and(|exiled| {
+                    self.state.zones.zone_of(exiled) == Some(ZoneType::Exile)
+                        && self.object_matches_predicate(exiled, predicate)
+                })
             }
             Condition::TargetDealtDamageThisTurn => {
                 let Some(Target::Permanent(permanent_id)) =

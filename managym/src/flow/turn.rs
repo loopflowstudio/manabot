@@ -2,12 +2,12 @@ use std::collections::BTreeMap;
 
 use crate::state::{
     ability::PlayerControlDuration,
-    game_object::{ObjectRef, PlayerId},
+    game_object::{ObjectId, PlayerId},
     predicate::CardPredicate,
 };
 
 /// A once-each-turn use: the exact source object and its ability index.
-pub type OnceEachTurnKey = (ObjectRef, usize);
+pub type OnceEachTurnKey = (ObjectId, usize);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 #[repr(i32)]
@@ -140,7 +140,8 @@ pub struct TurnState {
     /// (Brought Back), as the exact graveyard incarnation: a card that leaves
     /// its graveyard is a new object and no longer qualifies (CR 400.7).
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub graveyard_from_battlefield: Vec<ObjectRef>,
+    #[serde(serialize_with = "crate::state::game_object::exact")]
+    pub graveyard_from_battlefield: Vec<ObjectId>,
     /// Once-each-turn uses by exact source object and ability index: a
     /// `TriggerCondition::OnceEachTurn` is recorded as it fires, an
     /// `Effect::MayOnceEachTurn` option as it is taken.

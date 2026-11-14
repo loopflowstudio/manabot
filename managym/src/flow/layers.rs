@@ -358,7 +358,7 @@ impl<'a> Context<'a> {
                 continue;
             };
             let id = PermanentId(slot);
-            let source = &game.state.objects[p.object];
+            let source = &game.state[p.object];
             let reusable = seeds[slot].as_ref().is_some_and(|seed| {
                 seed.source.shares_definition_with(source)
                     && seed.incarnation == p.id
@@ -477,7 +477,7 @@ impl<'a> Context<'a> {
         }
         for (&id, object) in &mut context.objects {
             if !retain_sources || !Arc::ptr_eq(object, &seeds[id.0].as_ref().unwrap().object) {
-                let record = &game.state.objects[game.live_permanent(id).object];
+                let record = &game.state[game.live_permanent(id).object];
                 Self::finish_object(Arc::make_mut(object), record);
             }
         }
@@ -796,14 +796,19 @@ impl<'a> Context<'a> {
     fn value(&self, value: &LayerValue, id: PermanentId) -> i32 {
         match value {
             LayerValue::Fixed(n) => *n,
-            LayerValue::ManaValue => self.game.state.objects[self.game.live_permanent(id).object]
+            LayerValue::ManaValue => self.game.state[self.game.live_permanent(id).object]
                 .mana_value_cost()
                 .map_or(0, |m| i32::from(m.mana_value)),
             LayerValue::GraveyardCardTypes { offset } => {
                 [PlayerId(0), PlayerId(1)]
                     .into_iter()
                     .flat_map(|player| self.game.state.zone_cards(ZoneType::Graveyard, player))
-                    .flat_map(|card| self.game.state.objects[card].types.types.iter())
+                    .flat_map(|card| {
+                        self.game.state[self.game.state.object_of(card)]
+                            .types
+                            .types
+                            .iter()
+                    })
                     .collect::<BTreeSet<_>>()
                     .len() as i32
                     + offset
@@ -958,7 +963,7 @@ impl<'a> Context<'a> {
             }
             StaticAbility::AttachedHas(ability) => {
                 plan.scope = StaticScope::Attached;
-                let object = &self.game.state.objects[self.game.live_permanent(source).object];
+                let object = &self.game.state[self.game.live_permanent(source).object];
                 let index = object
                     .attached_grants()
                     .position(|a| a == ability)
@@ -966,7 +971,7 @@ impl<'a> Context<'a> {
                 let mut granted = ability.clone();
                 granted.granted_by = self
                     .game
-                    .permanent_object_ref(source)
+                    .permanent_object(source)
                     .map(|grantor| AbilityGrant { grantor, index });
                 add(
                     Layer::Ability,
@@ -1195,7 +1200,7 @@ pub(super) fn matches_view(
     let Some(permanent) = game.state.permanents[id].as_ref() else {
         return false;
     };
-    let object = &game.state.objects[permanent.object];
+    let object = &game.state[permanent.object];
     let mana_value = object.mana_value_cost().map_or(0, |m| m.mana_value);
     // A permanent is on the battlefield, never a graveyard card.
     !p.from_battlefield_this_turn

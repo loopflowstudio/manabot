@@ -521,7 +521,7 @@ Unless marked, the anchor shows the rule; it is not a paired-observation proof.
   modifications with different results:
   `cr_613_7_a_grant_later_than_ability_loss_applies_and_an_earlier_one_does_not`.
 - **Fixed membership.** A resolved effect's affected set excludes later
-  entrants and returned incarnations, so it cannot become "your opponents'
+  entrants and returned objects, so it cannot become "your opponents'
   permanents": `shared_effects_preserve_duplicate_additive_memberships_and_later_entrants`.
   Static abilities are the opposite case: their scope does reach later entrants.
 - **Copy versus effective state.** A copy takes copiable values and ordered

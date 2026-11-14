@@ -1,5 +1,7 @@
 //! Tests for cards filed in `src/lea.rs`, in card order.
 
+use crate::support::game::move_card;
+use crate::support::inspect::{current_object, now, permanent_of, zone_of};
 use crate::support::{
     game::{deck, deck_of, five_color_setup, ready, Scenario},
     inspect::{library_card, permanent_named},
@@ -119,7 +121,7 @@ fn counterspell_counters_ancestral_recall() {
             _ => None,
         })
         .expect("recall should be on stack");
-    assert!(s.choose_target(Target::StackSpell(recall_card)));
+    assert!(s.choose_target(Target::StackSpell(now(&s, recall_card))));
 
     s.pass_priority();
     s.pass_priority();
@@ -128,10 +130,7 @@ fn counterspell_counters_ancestral_recall() {
     s.assert_zone_size(0, ZoneType::Stack, 0);
     s.assert_zone_size(0, ZoneType::Hand, hand_before);
     s.assert_zone_size(0, ZoneType::Library, library_before);
-    assert_eq!(
-        s.game().state.zones.zone_of(recall_card),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, recall_card), Some(ZoneType::Graveyard));
 }
 
 #[test]
@@ -147,7 +146,7 @@ fn an_announced_tap_cannot_be_used_to_fund_itself() {
         let elves_card = enter_and_settle(&mut s, "Llanowar Elves");
         ready(&mut s, "Llanowar Elves");
         let elves = permanent_named(&s, "Llanowar Elves");
-        s.game_mut().state.objects[elves_card]
+        s.game_mut().state[elves_card]
             .activated_abilities
             .push(ActivatedAbilityDefinition {
                 mana_cost: ManaCost::parse("1"),
@@ -231,8 +230,8 @@ fn clone_enters_as_a_copy_and_leaves_as_clone() {
     assert!(s.choose_target(Target::Permanent(ogre)));
     settle(&mut s);
 
-    let copy = s.game().state.object_to_permanent[clone].expect("entered");
-    let object = &s.game().state.objects[clone];
+    let copy = permanent_of(&s, clone).expect("entered");
+    let object = current_object(&s, clone);
     assert_eq!(object.name, "Gray Ogre");
     assert!(object.is_card());
     assert_eq!(s.game().characteristics(copy).pt(), (2, 2));
@@ -248,9 +247,9 @@ fn clone_enters_as_a_copy_and_leaves_as_clone() {
         .expect("the copy effect is observed");
     assert_eq!(seen.name, "Gray Ogre");
 
-    s.game_mut().move_object(clone, ZoneType::Graveyard);
-    assert_eq!(s.game().state.objects[clone].name, "Clone");
-    assert!(s.game().state.objects[clone].copy.is_none());
+    let clone = move_card(&mut s, clone, ZoneType::Graveyard);
+    assert_eq!(s.game().state[clone].name, "Clone");
+    assert!(s.game().state[clone].copy.is_none());
 }
 
 /// The copied creature's own entry replacement applies (CR 614.12): a copy
@@ -265,19 +264,76 @@ fn clone_takes_the_copied_entry_replacements_or_dies_as_itself() {
     resolve_top(&mut s);
     assert!(s.choose_target(Target::Permanent(villager)));
     settle(&mut s);
-    let copy = s.game().state.object_to_permanent[clone].expect("entered");
+    let copy = permanent_of(&s, clone).expect("entered");
     assert!(s.game().state.permanents[copy].as_ref().unwrap().tapped);
 
     let second = library_card(&s, 0, "Clone");
-    s.game_mut().move_object(second, ZoneType::Hand);
+    let second = move_card(&mut s, second, ZoneType::Hand);
     cast_card(&mut s, second);
     spend_colorless(&mut s);
     resolve_top(&mut s);
     choose(&mut s, |action| matches!(action, Action::Decline { .. }));
     settle(&mut s);
+    assert_eq!(zone_of(&s, second), Some(ZoneType::Graveyard));
+    assert_eq!(current_object(&s, second).name, "Clone");
+}
+
+/// CR 614.12: the prospective copy and its entry terms survive another
+/// replacement choice and an exact fork. The original printing remains the
+/// base for the next appearance, including changes made by a rules fixture.
+#[test]
+fn clone_copy_survives_suspended_entry_and_keeps_its_printed_base() {
+    use managym::state::{card::ReplacementEffect, permanent::CounterKind};
+
+    let mut s = five_color_setup(&["Clone", "Wolf Cove Villager"]);
+    let villager = s.force_permanent_on_battlefield(1, "Wolf Cove Villager");
+    let source = s.game().state.permanents[villager].as_ref().unwrap().object;
+    s.game_mut().state[source].replacement_effects = vec![
+        ReplacementEffect::EntersTapped,
+        ReplacementEffect::EntersWithCounters {
+            kind: CounterKind::PlusOnePlusOne,
+            count: 2,
+        },
+    ];
+    let clone = crate::support::game::move_to_hand(&mut s, "Clone");
+    s.game_mut().state[clone].power = Some(3);
+    s.game_mut().state[clone].toughness = Some(3);
+    cast_card(&mut s, clone);
+    spend_colorless(&mut s);
+    resolve_top(&mut s);
+    assert!(s.choose_target(Target::Permanent(villager)));
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
+    assert_eq!(current_object(&s, clone).name, "Wolf Cove Villager");
+    // Recorded before the mint change: the pending entry's prospective copy
+    // and replacement continuation must retain their v16 bytes.
     assert_eq!(
-        s.game().state.zones.zone_of(second),
-        Some(ZoneType::Graveyard)
+        s.game().state.deterministic_hash().to_string(),
+        "v16:109204c452b21643354cfda10ad17b17ca215c2d10e497496b60cb5de22029a4"
     );
-    assert_eq!(s.game().state.objects[second].name, "Clone");
+    let pending = Observation::for_player(s.game(), PlayerId(0));
+    let fork = s.game().clone();
+    assert_eq!(
+        pending.to_json(),
+        Observation::for_player(&fork, PlayerId(0)).to_json()
+    );
+    assert_eq!(
+        s.game().state.deterministic_hash(),
+        fork.state.deterministic_hash()
+    );
+
+    crate::support::play::command(&mut s, |action| {
+        matches!(action, Action::ChooseMode { mode: 0, .. })
+    });
+    settle(&mut s);
+    let copy = permanent_of(&s, clone).expect("entered");
+    let permanent = s.game().state.permanents[copy].as_ref().unwrap();
+    assert!(permanent.tapped);
+    assert_eq!(permanent.counter_count(CounterKind::PlusOnePlusOne), 2);
+    assert_eq!(current_object(&s, clone).name, "Wolf Cove Villager");
+
+    let clone = move_card(&mut s, clone, ZoneType::Hand);
+    assert_eq!(s.game().state[clone].name, "Clone");
+    assert_eq!(s.game().state[clone].power, Some(3));
+    assert_eq!(s.game().state[clone].toughness, Some(3));
+    assert!(s.game().state[clone].copy.is_none());
 }
