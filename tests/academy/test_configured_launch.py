@@ -338,7 +338,7 @@ def test_cli_replay_ambiguity_explains_flag(
 
     path = tmp_path / "games.json"
     path.write_text(json.dumps([_record(1), _record(2)]))
-    monkeypatch.setattr("managym.academy.launch.serve", lambda **kwargs: academy)
+    monkeypatch.setattr("managym.academy.cli.serve", lambda **kwargs: academy)
     assert launch_cli(["replay", str(path), "--no-open"]) == 2
     output = capsys.readouterr().err
     assert "select one by index or trace digest" in output
@@ -356,7 +356,7 @@ def test_cli_selects_decimal_digest(
 
     path = tmp_path / "games.json"
     path.write_text(json.dumps([_record(1), _record(2)]))
-    monkeypatch.setattr("managym.academy.launch.serve", lambda **kwargs: academy)
+    monkeypatch.setattr("managym.academy.cli.serve", lambda **kwargs: academy)
     monkeypatch.setattr(Academy, "wait", lambda self: None)
     monkeypatch.setattr(
         "managym.academy.watch.import_arena",

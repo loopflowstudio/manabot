@@ -200,9 +200,9 @@ the file takes precedence when both fit. A file with one game needs no
 ```text
 ACADEMY_PLAY_ERROR {"code": "replay.ambiguous", "message": "out/traces/c41.commands.jsonl.gz holds 40 games; select one by index or trace digest."}
   Select a game with --game <index-or-digest>.
-  game  deal seed   leg  players                    trace
-     0  9120443     0    w17-final vs heuristic     5be01c9a2f31
-     1  9120443     1    heuristic vs w17-final     e07a44d1c8b2
+  game  deal seed   leg  players                 trace
+     0  9120443     0    w17-final vs heuristic  5be01c9a2f31
+     1  9120443     1    heuristic vs w17-final  e07a44d1c8b2
      …
   20 of 40 shown
 ```

@@ -1,115 +1,40 @@
-"""Engine command line: prepare and launch the packaged Academy browser UI."""
+"""Engine command line: `managym academy` launches the packaged Academy browser UI.
 
-import argparse
+The commands live in `managym.academy.cli`, built with Typer, which the
+`academy` extra provides with the server. Importing them lazily keeps
+`import managym` free of both and lets a bare install say what to install.
+"""
+
 import json
-from pathlib import Path
 import sys
 
-DEFAULT_URL = "http://127.0.0.1:8000"
-GUIDE_URL = "https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#running-academy"
+_ACADEMY_EXTRA = {"click", "fastapi", "starlette", "typer", "uvicorn"}
+
+
+def _missing_extra(exc: ModuleNotFoundError) -> int:
+    if not exc.name or exc.name.split(".")[0] not in _ACADEMY_EXTRA:
+        raise exc
+    record = {
+        "code": "extra.missing",
+        "message": "Install the server dependencies: uv pip install 'managym[academy]'",
+    }
+    print("ACADEMY_PLAY_ERROR " + json.dumps(record, sort_keys=True), file=sys.stderr)
+    return 2
 
 
 def academy(argv: list[str] | None = None) -> int:
-    from managym.academy.launch import (
-        _DECK_SUFFIXES,
-        _TRACE_SUFFIXES,
-        AcademyLaunchError,
-        _path_or_name,
-        serve,
-    )
-
-    common = argparse.ArgumentParser(add_help=False)
-    # Suppressed defaults let shared options occur before or after the verb.
-    common.add_argument("--host", default=argparse.SUPPRESS)
-    common.add_argument("--port", type=int, default=argparse.SUPPRESS)
-    common.add_argument("--traces-dir", type=Path, default=argparse.SUPPRESS)
-    common.add_argument("--no-open", action="store_true", default=argparse.SUPPRESS)
-    parser = argparse.ArgumentParser(
-        prog="managym academy",
-        parents=[common],
-        description=f"Open Academy at {DEFAULT_URL}. Launch guide: {GUIDE_URL}",
-    )
-    commands = parser.add_subparsers(dest="command")
-    play = commands.add_parser("play", parents=[common], help="Start in a chosen game")
-    play.add_argument("--deck", default="ur_lessons")
-    play.add_argument("--opponent-deck", default="gw_allies")
-    play.add_argument("--opponent", default="search")
-    play.add_argument("--sims", type=int, default=64)
-    play.add_argument("--seed", type=int)
-    play.add_argument("--decklists", choices=["open", "closed"], default="open")
-    replay = commands.add_parser(
-        "replay", parents=[common], help="Open an evaluation trace or recording"
-    )
-    replay.add_argument("source")
-    replay.add_argument("--game")
-    args = parser.parse_args(argv)
+    """Run `managym academy` with `argv`; returns the exit status."""
     try:
-        with serve(
-            host=getattr(args, "host", "127.0.0.1"),
-            port=getattr(args, "port", 8000),
-            traces_dir=getattr(args, "traces_dir", None),
-        ) as running:
-            target = running.url
-            if args.command == "play":
-                from managym.academy import server
-
-                target = running.new_game(
-                    deck=_path_or_name(args.deck, _DECK_SUFFIXES, server.NAMED_DECKS),
-                    opponent_deck=_path_or_name(
-                        args.opponent_deck, _DECK_SUFFIXES, server.NAMED_DECKS
-                    ),
-                    opponent=args.opponent,
-                    sims=args.sims,
-                    seed=args.seed,
-                    decklists=args.decklists,
-                ).url
-            elif args.command == "replay":
-                target = running.replay(
-                    _path_or_name(args.source, _TRACE_SUFFIXES),
-                    game=args.game,
-                ).url
-            print(
-                "ACADEMY_PLAY_READY "
-                + json.dumps(
-                    {
-                        "traces_dir": str(running.traces_dir),
-                        "url": running.url,
-                        "open": target,
-                    },
-                    sort_keys=True,
-                ),
-                flush=True,
-            )
-            print(f"  Academy: {target}\n  Ctrl-C stops the server", flush=True)
-            if not getattr(args, "no_open", False):
-                running.open(target)
-            running.wait()
-    except AcademyLaunchError as exc:
-        print(
-            "ACADEMY_PLAY_ERROR "
-            + json.dumps({"code": exc.code, "message": exc.message}, sort_keys=True),
-            file=sys.stderr,
-            flush=True,
-        )
-        if exc.games:
-            print("  Select a game with --game <index-or-digest>.", file=sys.stderr)
-            print("  game  deal seed  leg  players  trace", file=sys.stderr)
-            for row in exc.games[:20]:
-                print(
-                    f"  {row.index:4}  {row.deal_seed}  {row.leg}  {' vs '.join(row.players)}  {row.game_trace_sha256[:12]}",
-                    file=sys.stderr,
-                )
-            if len(exc.games) > 20:
-                print(f"  20 of {len(exc.games)} shown", file=sys.stderr)
-        return 2
-    return 0
+        from managym.academy.cli import academy as run
+    except ModuleNotFoundError as exc:
+        return _missing_extra(exc)
+    return run(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
-    arguments = sys.argv[1:] if argv is None else argv
-    if arguments[:1] == ["academy"]:
-        return academy(arguments[1:])
-    parser = argparse.ArgumentParser(description="managym engine tools")
-    parser.add_argument("command", choices=["academy"])
-    parser.parse_args(arguments)  # exits with help or a usage error
-    return 2
+    """The `managym` console script."""
+    try:
+        from managym.academy.cli import main as run
+    except ModuleNotFoundError as exc:
+        return _missing_extra(exc)
+    return run(argv)

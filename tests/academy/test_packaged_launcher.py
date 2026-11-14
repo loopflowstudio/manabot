@@ -162,17 +162,22 @@ def test_play_only_capabilities_are_explicit(
         extensions.bot_extension.cache_clear()
 
 
-def test_launcher_without_extra_names_the_install_command() -> None:
-    probe = """
+@pytest.mark.parametrize(
+    "refused", [("fastapi", "starlette", "uvicorn"), ("typer", "click")]
+)
+def test_launcher_without_extra_names_the_install_command(
+    refused: tuple[str, ...],
+) -> None:
+    probe = f"""
 import importlib.abc
 import sys
-class RefuseServer(importlib.abc.MetaPathFinder):
+class RefuseExtra(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
-        if fullname.split('.')[0] in {'fastapi', 'starlette', 'uvicorn'}:
+        if fullname.split('.')[0] in {set(refused)!r}:
             raise ModuleNotFoundError(fullname, name=fullname)
-sys.meta_path.insert(0, RefuseServer())
-from managym.cli import academy
-raise SystemExit(academy(['--no-open']))
+sys.meta_path.insert(0, RefuseExtra())
+from managym.cli import main
+raise SystemExit(main(['academy', '--no-open']))
 """
     result = subprocess.run(
         [sys.executable, "-c", probe], capture_output=True, text=True
@@ -181,6 +186,40 @@ raise SystemExit(academy(['--no-open']))
     record = json.loads(result.stderr.removeprefix("ACADEMY_PLAY_ERROR "))
     assert record["code"] == "extra.missing"
     assert "managym[academy]" in record["message"]
+
+
+def test_shared_options_go_before_or_after_the_verb(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "index.html").write_text("Academy")
+    monkeypatch.setenv("ACADEMY_FRONTEND_BUILD", str(tmp_path))
+    monkeypatch.setattr(Academy, "wait", lambda self: None)
+    previous = server.trace_store.TRACES_DIR
+    try:
+        for argv in (
+            ["--port", "0", "--traces-dir", str(tmp_path / "a"), "play", "--no-open"],
+            ["play", "--port", "0", "--traces-dir", str(tmp_path / "a"), "--no-open"],
+            [
+                "--traces-dir",
+                str(tmp_path / "b"),
+                "play",
+                "--traces-dir",
+                str(tmp_path / "a"),
+                "--port",
+                "0",
+                "--no-open",
+            ],
+        ):
+            assert academy(argv) == 0
+            ready = json.loads(
+                capsys.readouterr()
+                .out.splitlines()[0]
+                .removeprefix("ACADEMY_PLAY_READY ")
+            )
+            assert ready["traces_dir"] == str((tmp_path / "a").resolve())
+            assert "launch=" in ready["open"]
+    finally:
+        server.trace_store.TRACES_DIR = previous
 
 
 def test_extension_declared_watch_player_plays_and_records(

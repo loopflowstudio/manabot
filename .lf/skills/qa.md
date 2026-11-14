@@ -90,6 +90,15 @@ publish, land or choose the next Graph step from here.
   (buttons are disabled while a Command is in flight, and `Pass Turn (F6)` in
   the panel is not an offer). Tapped lands show only in a `fullPage`
   screenshot, not in the board's text.
+- Configured launch (`managym academy play|replay`, `managym.academy.launch.serve`):
+  from a checkout set `ACADEMY_FRONTEND_BUILD=$PWD/academy/ui/build` (otherwise
+  `site.missing`) and pass `--no-open --port <unused> --traces-dir /tmp/<dir>`;
+  port 8000 is often taken. Open READY's `open` address in Playwright. For a
+  multi-game evaluation trace, call `manabot.eval.match.play_cell` with
+  `tests.eval.arena_fixture.arena_fixture()` anchors, several `deal_seeds` and
+  `legs=(0, 1)` (six games took about 80 s under load). To test Ctrl-C, start the
+  CLI with `start_new_session=True` and SIGINT restored, as below; with `nohup … &`
+  SIGINT is ignored and the server looks hung.
 - Academy table: `./scripts/play --port <unused> --frontend-port <unused>`; wait
   for the `ACADEMY_PLAY_READY` line (it names Python, native ABI and module
   path), open the frontend URL, press New Game, play a land and Pass Turn.
