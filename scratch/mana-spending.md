@@ -8,8 +8,8 @@ another Task. Keep defaults, policy input, Academy behavior, native payment
 execution and the frozen A/B pilot unchanged. No Wave is selected.
 
 All measurement is complete and published: frequencies, the A/B pilot, and the
-paired shape counts with and without redundant taps. The report recommends one
-native payment-outcome decision with the automatic plan first and asks three
+paired shape counts with and without redundant taps. The report recommends extending
+today's `PayOrNot` payment decision, `PayCost` (the automatic plan) first, and asks three
 review questions. Do not rerun the pilot or rewrite its evidence. Earlier plan
 text, launch notes and per-slice checks are in git `78397f2042` and before
 (`ce074e9d37` for the first concept review).
@@ -22,8 +22,8 @@ steps. No PR created here.
 ## Demo and done when
 
 A reviewer opens `experiments/mana_spending.md` and, before any table, reads:
-the summary with the recommendation (one native payment-outcome decision,
-automatic plan first), then three numbered questions, each with its options as
+the summary with the recommendation (today's `PayOrNot` decision, extended,
+`PayCost` as the automatic plan first), then three numbered questions, each with its options as
 bullets and the measured price of each. The design, evidence and limits follow;
 run logistics sit in a collapsed appendix. Headless:
 `sed -n 1,110p experiments/mana_spending.md`.
