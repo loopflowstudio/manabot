@@ -23,16 +23,11 @@ import tempfile
 from typing import Any
 
 from manabot.verify.trigger_order import root
-from managym.academy.play_demo import load_play_demo
+from managym.academy.play_demo import DEMO_FILENAMES, load_play_demo
 from managym.academy.server import GameSession
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "managym" / "academy" / "fixtures"
-DEMOS = {
-    "learn": "learn-demo-w17-mana-actions.json",
-    "precision": "precision-demo-w17-mana-actions.json",
-    "precision-mana": "precision-mana-demo-w17-mana-actions.json",
-}
 
 
 def _write(path: Path, value: dict[str, Any]) -> None:
@@ -78,7 +73,7 @@ def _replay(
 
 
 def refresh_demo(name: str, trace_dir: Path) -> None:
-    path = FIXTURES / DEMOS[name]
+    path = FIXTURES / DEMO_FILENAMES[name]
     fixture = json.loads(path.read_text())
     demo = load_play_demo(name)
     session, frame, digests = _replay(
@@ -131,7 +126,7 @@ def refresh_trigger_order() -> None:
 
 def main() -> None:
     with tempfile.TemporaryDirectory() as trace_dir:
-        for name in DEMOS:
+        for name in DEMO_FILENAMES:
             refresh_demo(name, Path(trace_dir))
         refresh_navigation(Path(trace_dir))
     refresh_trigger_order()

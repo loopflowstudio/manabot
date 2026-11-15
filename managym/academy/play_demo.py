@@ -12,6 +12,12 @@ from pydantic import BaseModel
 if TYPE_CHECKING:
     from .server import GameSession
 
+DEMO_FILENAMES: dict[str, str] = {
+    "learn": "learn-demo-w17-mana-actions.json",
+    "precision": "precision-demo-w17-mana-actions.json",
+    "precision-mana": "precision-mana-demo-w17-mana-actions.json",
+}
+
 
 class DemoStep(BaseModel):
     before_digest: str
@@ -29,15 +35,10 @@ class PlayDemo(BaseModel):
 
 
 def load_play_demo(name: str) -> PlayDemo:
-    filenames = {
-        "learn": "learn-demo-w17-mana-actions.json",
-        "precision": "precision-demo-w17-mana-actions.json",
-        "precision-mana": "precision-mana-demo-w17-mana-actions.json",
-    }
-    if name not in filenames:
+    if name not in DEMO_FILENAMES:
         raise ValueError(f"Unknown play demo: {name}")
     return PlayDemo.model_validate_json(
-        (Path(__file__).parent / "fixtures" / filenames[name]).read_text()
+        (Path(__file__).parent / "fixtures" / DEMO_FILENAMES[name]).read_text()
     )
 
 

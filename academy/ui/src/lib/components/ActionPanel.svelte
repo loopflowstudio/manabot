@@ -64,9 +64,15 @@
   let filter = $state({ key: '', text: '' });
   const query = $derived(filter.key === filterKey ? filter.text : '');
   const searchable = $derived(modeOffers.length >= 8);
-  const visibleOffers = $derived(modeOffers.filter(action =>
+  const matchingOffers = $derived(modeOffers.filter(action =>
     !searchable || action.label.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
   ));
+  // Keep the pending payment in reach before a potentially long list of
+  // sources. This changes navigation only: focus previews, activation commits.
+  const visibleOffers = $derived([
+    ...matchingOffers.filter(action => action.action_type === 'PAY_COST'),
+    ...matchingOffers.filter(action => action.action_type !== 'PAY_COST'),
+  ]);
   let searchInput: HTMLInputElement | null = $state(null);
 
   function setQuery(text: string): void {

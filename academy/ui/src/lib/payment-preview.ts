@@ -1,10 +1,10 @@
 /** A single read-only query, cached only within the exact live decision. */
-import type { ExperienceFrame, SubjectRef } from './types';
+import type { ExperienceFrame, PooledManaView, SubjectRef } from './types';
 
 export const PAYMENT_PREVIEW_CONTEXT = Symbol('payment-preview');
 export interface PreviewPool {
   amounts: number[];
-  classes: { mana: number[]; restriction?: string | null; effect?: string | null; combat: boolean }[];
+  classes: PooledManaView[];
 }
 export interface PaymentPreview {
   state: 'exact' | 'needs_choice' | 'not_applicable' | 'unavailable';
@@ -70,8 +70,4 @@ export class PaymentPreviewController {
     }
     this.changed(this.state);
   }
-}
-
-export function manaText(amounts: number[]): string {
-  return amounts.map((amount, index) => amount ? `${amount} {${['W', 'U', 'B', 'R', 'G', 'C'][index]}}` : '').filter(Boolean).join(' · ') || 'Empty';
 }

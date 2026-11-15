@@ -1,7 +1,8 @@
 <script lang="ts">
   import { visibleCardLabel } from '$lib/decision-labels';
   import type { Observation } from '$lib/types';
-  import { manaText, type PreviewState } from '$lib/payment-preview';
+  import { manaText, pooledManaText } from '$lib/mana';
+  import type { PreviewState } from '$lib/payment-preview';
   interface Props { state: PreviewState | null; observation: Observation; onClose: () => void; onRetry: () => void }
   let { state, observation, onClose, onRetry }: Props = $props();
 </script>
@@ -24,7 +25,7 @@
         <ol class="list-decimal pl-5">
           {#each preview.sources as source}
             <li>{source.source.kind === 'object' ? visibleCardLabel(observation, source.source.id.entity) ?? source.label : source.label}: {manaText(source.output.amounts)}
-              {#each source.output.classes as part}<span> · {manaText(part.mana)}{part.restriction ? ` only for ${part.restriction}` : ''}{part.effect ? ` that puts ${part.effect}` : ''}, normally expires {part.combat ? 'at end of combat' : 'at step end'}</span>{/each}
+              {#each source.output.classes as part}<span> · {pooledManaText(part)}</span>{/each}
             </li>
           {/each}
         </ol>

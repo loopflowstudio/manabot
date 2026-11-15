@@ -530,6 +530,10 @@ To use the other Island instead, choose that Island's mana activation action,
 then consider the spell again. The Island taps, blue mana appears in your
 floating pool, and the revised preview shows how that pool funds the spell.
 Activate the cast action when ready, then follow any target and payment prompts.
+At a payment prompt, **Pay the cost** appears before the source activations.
+Keyboard focus starts there and opens its proposal without paying. Read it,
+then click or press Enter to commit, or move to any source offer to float mana
+deliberately. Long source lists scroll independently of the proposal.
 
 The preview describes the current automatic payer's source choices, including
 any extra mana it would produce. Each source keeps its own identity even when

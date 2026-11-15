@@ -255,3 +255,58 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900
 
   }
 }
+
+for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900 }]) {
+  for (const colorScheme of ['light', 'dark'] as const) {
+    test(`payment is immediately reachable and previews on arrival ${viewport.width} ${colorScheme}`, async ({ page }, testInfo) => {
+      await page.setViewportSize(viewport);
+      await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+      await track(page);
+      await page.goto('/');
+      await expect(page.getByTestId('connection-badge')).toHaveText('connected');
+      await page.getByRole('button', { name: 'New Game', exact: true }).click();
+      await expect(page.getByTestId('decision-surface')).toBeVisible();
+      await finishBoardNarration(page);
+      await choose(page, await offer(page, 'Cast Boomerang Basics'));
+      await choose(page, (await page.evaluate(() => window.__mana.frame!)).offers[0].id);
+      const frame = await page.evaluate(() => window.__mana.frame!);
+      const payId = await offer(page, 'Pay the cost');
+      const pay = page.locator(`[data-testid="action-option"][data-offer-id="${payId}"]`);
+      const preview = page.getByTestId('payment-preview');
+      // No locator.focus/hover/scroll here: arrival itself must reveal payment.
+      await expect(pay).toBeFocused();
+      await expect(page.getByTestId('action-option').first()).toHaveAttribute('data-offer-id', String(payId));
+      await expect(preview).toContainText('Pay the cost');
+      await expect(preview).toContainText('Exact automatic source plan');
+      const commands = await page.evaluate(() => window.__mana.commands.length);
+      const bounds = await pay.boundingBox();
+      const list = await page.getByRole('group', { name: 'Legal choices', exact: true }).boundingBox();
+      expect(bounds!.y).toBeGreaterThanOrEqual(list!.y);
+      expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(list!.y + list!.height);
+      expect(bounds!.y + bounds!.height).toBeLessThan(viewport.height);
+      // Navigation retains every native source with its original identity.
+      expect((await page.getByTestId('action-option').evaluateAll(rows => rows.map(row => Number(row.getAttribute('data-offer-id'))))).sort((a, b) => a - b))
+        .toEqual(frame.offers.map(candidate => candidate.id).sort((a, b) => a - b));
+      const firstSource = frame.offers.find(candidate => candidate.action_type === 'PRIORITY_ACTIVATE_ABILITY')!;
+      expect(firstSource).toBeDefined();
+      await page.keyboard.press('Tab');
+      await expect(page.locator(`[data-testid="action-option"][data-offer-id="${firstSource.id}"]`)).toBeFocused();
+      await page.keyboard.press('Shift+Tab');
+      await expect(pay).toBeFocused();
+      await expect(preview).toContainText('Pay the cost');
+      expect(await page.evaluate(() => window.__mana.commands.length)).toBe(commands);
+      await page.screenshot({ path: testInfo.outputPath('payment-on-arrival.png') });
+      if (colorScheme === 'light') {
+        // A real pointer reaches the visible payment without locator auto-scroll.
+        await page.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2);
+        await expect(preview).toContainText('Pay the cost');
+        await page.mouse.click(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2);
+      } else {
+        await page.keyboard.press('Enter');
+      }
+      await expect.poll(() => page.evaluate(() => window.__mana.commands.length)).toBe(commands + 1);
+      expect((await page.evaluate(() => window.__mana.commands.at(-1)!)).offer_id).toBe(payId);
+      await expect.poll(() => page.evaluate(() => window.__mana.frame!.revision)).toBeGreaterThan(frame.revision);
+    });
+  }
+}

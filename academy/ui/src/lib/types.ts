@@ -153,8 +153,15 @@ export interface PlayerTurnHistory {
   life_lost?: number;
 }
 
+export interface PooledManaView {
+  mana: number[];
+  effect?: string | null;
+  restriction?: string | null;
+  combat: boolean;
+}
+
 export interface PlayerState {
-  pooled_mana_classes?: { mana: number[]; effect?: string | null; restriction?: string | null; combat: boolean }[];
+  pooled_mana_classes?: PooledManaView[];
   mana?: number[];
   lesson_mana?: number[];
   /** `lesson_mana` split by restriction class. */
