@@ -6,6 +6,7 @@ import socket
 import subprocess
 import sys
 
+from click import unstyle
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 import pytest
@@ -16,16 +17,27 @@ from managym.academy.watch import WatchRequest, create_watch, import_arena
 from managym.cli import academy
 
 
-def test_launcher_help_lists_options_and_guide() -> None:
+@pytest.mark.parametrize("color", [False, True])
+def test_launcher_help_lists_options_and_guide(
+    color: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TERM", "xterm-256color")
+    if color:
+        monkeypatch.delenv("NO_COLOR", raising=False)
+        monkeypatch.setenv("FORCE_COLOR", "1")
+    else:
+        monkeypatch.delenv("FORCE_COLOR", raising=False)
+        monkeypatch.setenv("NO_COLOR", "1")
     result = subprocess.run(
         [sys.executable, "-m", "managym.academy", "--help"],
         capture_output=True,
         text=True,
         check=True,
     )
-    assert "--traces-dir" in result.stdout
-    assert "http://127.0.0.1:8000" in result.stdout
-    assert "docs/academy.md" in result.stdout
+    help_text = unstyle(result.stdout)
+    assert "--traces-dir" in help_text
+    assert "http://127.0.0.1:8000" in help_text
+    assert "docs/academy.md" in help_text
 
 
 def test_missing_site_names_checkout_launcher(

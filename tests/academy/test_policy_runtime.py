@@ -13,6 +13,7 @@ from managym.academy import server
 from managym.academy.opponent import opponent_catalog, set_policy_registry
 from managym.academy.watch import WatchRequest, create_watch, inspect_watch, step_watch
 from managym.policy import (
+    JSONValue,
     PolicyDecision,
     PolicyDescriptor,
     PolicyRegistry,
@@ -241,6 +242,21 @@ def test_factory_cannot_share_a_mutable_session_between_games(
         first.close()
 
 
+def test_watch_load_failure_closes_previously_loaded_seats(
+    registry: PolicyRegistry,
+) -> None:
+    class FailingFactory(IndependentFactory):
+        def load(self, *, seat: int, seed: int) -> IndependentSession:
+            raise RuntimeError("model allocation failed")
+
+    first = IndependentFactory()
+    keys = [registry.register(first), registry.register(FailingFactory("Failed"))]
+    with pytest.raises(RuntimeError, match="model allocation failed"):
+        create_watch(WatchRequest(players=[f"policy:{key}" for key in keys]))
+    assert len(first.sessions) == 1
+    assert first.sessions[0].closed
+
+
 def test_completed_independent_game_replays_without_a_provider(
     registry: PolicyRegistry,
 ) -> None:
@@ -337,6 +353,34 @@ def test_presentation_does_not_change_execution_identity() -> None:
         ).id
         == original.id
     )
+
+
+def test_ambient_alias_collision_keeps_later_policies() -> None:
+    class AliasedFactory(IndependentFactory):
+        def describe(self) -> PolicyDescriptor:
+            return replace(super().describe(), alias="shared")
+
+    class Provider:
+        def policy(self, spec: PolicySpec) -> IndependentFactory:
+            raise NotImplementedError
+
+        def discover(
+            self, config: dict[str, JSONValue] | None
+        ) -> list[IndependentFactory]:
+            return [AliasedFactory("Collision"), IndependentFactory("Later")]
+
+    registry = PolicyRegistry(providers={"example": Provider()})
+    original = AliasedFactory("Original")
+    original_id = registry.register(original)
+    registry.discover()
+    assert registry.descriptor("shared").id == original_id
+    assert {d.name for d in registry.descriptors()} == {"Original", "Later"}
+    assert registry.discovery_errors == [
+        "example: Policy alias 'shared' is already registered."
+    ]
+    with pytest.raises(ValueError, match="already registered"):
+        registry.register(AliasedFactory("Explicit"))
+    assert {d.name for d in registry.descriptors()} == {"Original", "Later"}
 
 
 def test_historical_extension_selection_has_no_named_provider_preference(

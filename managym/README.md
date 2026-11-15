@@ -57,8 +57,8 @@ For your own lists, expand **Import decklist files** and check **Use imported
 decks for the next game**. Upload or paste both decks, one `count card name`
 per line, with optional `Main` and `Sideboard` headings. Click **Check decklists**,
 fix any reported issues, and select **New Game**. Imported decks use the
-development format and supported cards; choose a built-in opponent, since
-checkpoint opponents do not accept imported decks. See the
+development format and supported cards. Registered policies check the complete
+setup, including imported lists, against their own admission requirements. See the
 [play guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#play-a-game).
 
 ### Watch a replay from an evaluation

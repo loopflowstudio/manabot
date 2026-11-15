@@ -209,12 +209,13 @@ class PolicyRegistry:
         if descriptor.contract_version != 1:
             raise ValueError("Unsupported policy adapter contract version.")
         key = descriptor.id
-        self._factories.setdefault(key, policy)
-        self._descriptors.setdefault(key, descriptor)
         name = name if name is not None else descriptor.alias
         if name is not None:
             if name in self.aliases and self.aliases[name] != key:
                 raise ValueError(f"Policy alias {name!r} is already registered.")
+        self._factories.setdefault(key, policy)
+        self._descriptors.setdefault(key, descriptor)
+        if name is not None:
             self.aliases[name] = key
         return key
 
@@ -230,7 +231,11 @@ class PolicyRegistry:
                 if discover is not None:
                     try:
                         for policy in discover(None):
-                            self.register(policy)
+                            try:
+                                self.register(policy)
+                            except (ImportError, OSError, ValueError) as exc:
+                                # One unusable entry must not hide later policies.
+                                self.discovery_errors.append(f"{name}: {exc}")
                     except (ImportError, OSError, ValueError) as exc:
                         self.discovery_errors.append(f"{name}: {exc}")
         for source in sources:

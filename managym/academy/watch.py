@@ -93,7 +93,11 @@ def create_watch(
         token = server.secrets.token_urlsafe(32)
         game = server.GameSession(watch_mode=True)
         game.attempt_owner = server.participant_id(token)
-        game.record_players = recorded_players or [player for _, player in seats]
+        game.record_players = (
+            recorded_players
+            if recorded_players is not None
+            else [player for _, player in seats]
+        )
         try:
             game.new_game(
                 {

@@ -231,7 +231,12 @@ PyO3's `PanicException` (a direct `BaseException`, with no importable Python
 class); contain that failure only at disposable-environment construction, while
 letting process interrupts escape. Do not broaden gameplay error suppression.
 
-Focused runtime checks: `uv run --extra dev pytest tests/academy/test_policy_runtime.py tests/academy/test_checkpoint_catalog.py tests/academy/test_watch.py -q`. The end-to-end browser
+Focused runtime checks: `uv run --extra dev pytest tests/academy/test_policy_runtime.py tests/academy/test_checkpoint_catalog.py tests/academy/test_watch.py -q`.
+For shared picker or runtime changes, `npm --prefix academy/ui run test:e2e:policy`
+builds the static SPA and checks Play retry/reload, both Watch seats, explicit
+runner reselection and replay in both themes. Installed-wheel CI also checks the
+provider-free picker; keep its expectations aligned with the shared menu.
+The end-to-end browser
 proofs (launch, offline reload, accessibility, release prompts) are under
 [academy/ui/e2e/](../../academy/ui/e2e/) and documented in
 [docs/development.md#clean-machine-play-proof](../../docs/development.md#clean-machine-play-proof) and
