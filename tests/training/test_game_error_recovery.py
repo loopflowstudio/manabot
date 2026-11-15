@@ -15,6 +15,7 @@ from typing import Any
 import pytest
 import torch
 
+from manabot.backends import resolve
 from manabot.env.observation import ObservationSpace
 from manabot.experiment import evaluation_queue as checkpoint_queue
 from manabot.infra.config import ModelConfig
@@ -28,6 +29,7 @@ from manabot.training.regime import (
     TrainSelfPlay,
 )
 from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.state.backend import TrainingBackend
 from manabot.training.state.game_errors import (
     GameAttempt,
     GameErrorLedger,
@@ -148,9 +150,14 @@ def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
     original_fingerprints = execution._runtime_identities
 
     def fixture_identities(
-        seed: int, regime: TrainingRegime, space: ObservationSpace
+        seed: int,
+        regime: TrainingRegime,
+        space: ObservationSpace,
+        backend: TrainingBackend | None = None,
     ) -> dict[str, object]:
-        identities = original_fingerprints(seed, regime, space)
+        identities = original_fingerprints(
+            seed, regime, space, backend or resolve("torch")
+        )
         return {
             **identities,
             "fixture_source_sha256": canonical_sha256(
@@ -196,6 +203,7 @@ def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
                 checkpoint_updates=1,
                 resume_from=resume_from,
                 source_repair_reason=source_repair_reason,
+                backend=resolve("torch"),
             )
 
         with monkeypatch.context() as patch:

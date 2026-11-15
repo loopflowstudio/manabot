@@ -217,14 +217,17 @@ declaration is not a study type: the arena studies in
 
 `Experiment.schedule = ExperimentSchedule(...)` declares seeds, hardware,
 `wall_seconds`, `process_seconds`, `MonitoringBudget` and `checkpoint_updates`.
-`manabot.experiment.runner.run_experiment(experiment, hardware, out)` executes
+`manabot.experiment.runner.run_experiment(experiment, hardware, out, backend=backend)` executes
 it and records actual attempts in `ExperimentRun`.
 
 ```python
+from manabot.backends import resolve
+
+backend = resolve("torch")
 hardware = HardwareInventory.model_validate_json(Path("hardware.json").read_text())
-result = run_experiment(experiment, hardware, Path(".runs/my-comparison"))
-result = run_experiment(experiment, hardware, out, resume=True)              # pending work only
-result = run_experiment(experiment, hardware, out, resume=True, recover=(0,))  # recover attempt 0
+result = run_experiment(experiment, hardware, Path(".runs/my-comparison"), backend=backend)
+result = run_experiment(experiment, hardware, out, resume=True, backend=backend)              # pending work only
+result = run_experiment(experiment, hardware, out, resume=True, recover=(0,), backend=backend)  # recover attempt 0
 ```
 
 `HardwareInventory` lists resource names, exact hostnames, `backend:

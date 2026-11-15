@@ -6,6 +6,7 @@ from typing import Literal
 
 import pytest
 
+from manabot.backends import resolve
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.belief.checkpoint import load_belief_sampler
 from manabot.belief.sampling_data import read_dataset
@@ -107,7 +108,9 @@ def test_frozen_belief_stages_run_and_reload(
         )
     collection_stage.weights = weights
     with VerifyStore(tmp_path / "store.sqlite") as store:
-        run = execute_regime(recipe, 421, tmp_path / "run", store)
+        run = execute_regime(
+            recipe, 421, tmp_path / "run", store, backend=resolve("torch")
+        )
         assert run.status == "completed"
         policy, collection, fit = run.stages
         assert collection.games == 3
@@ -127,6 +130,7 @@ def test_frozen_belief_stages_run_and_reload(
             expected_schema_identity=dataset.schema.identity,
             expected_world_identity=dataset.world_identity,
             expected_checkpoint_identity=fit.artifacts["sampler"]["sha256"],
+            codec=resolve("torch").belief,
         )
         assert model.schema == dataset.schema
         assert fit.optimizer_exposures == 8
@@ -166,7 +170,9 @@ def test_failed_belief_collection_keeps_frozen_policy(tmp_path: Path) -> None:
     collection.execution = Execution(wall_seconds=1e-9)
     with VerifyStore(tmp_path / "store.sqlite") as store:
         with pytest.raises(TimeoutError):
-            execute_regime(recipe, 421, tmp_path / "run", store)
+            execute_regime(
+                recipe, 421, tmp_path / "run", store, backend=resolve("torch")
+            )
         payload = json.loads((tmp_path / "run/run.json").read_text())
         assert payload["status"] == "interrupted"
         assert payload["stages"][0]["artifacts"]["raw"]["sha256"]

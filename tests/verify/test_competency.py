@@ -9,6 +9,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from manabot.backends import resolve
 from manabot.env.env import Env
 from manabot.verify.competency import (
     MICRO_AGGRO,
@@ -256,6 +257,7 @@ def test_probed_games_smoke():
         villain_deck=MICRO_AGGRO,
         num_games=2,
         seed=11,
+        backend=resolve("torch"),
     )
     assert len(out["records"]) == 2
     assert len(out["probes"]) == 2

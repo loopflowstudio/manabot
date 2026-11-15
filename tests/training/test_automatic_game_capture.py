@@ -10,6 +10,11 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends import resolve
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+    SelectionPredictor,
+)
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.failures import (
@@ -150,7 +155,7 @@ def test_bounded_replay_separates_binding_and_error_agreement(
             env.reset()
             if mode == "search":
                 pool = env.rollout_pool(1, 1, 197, 100)
-                buffers = rollout._allocate_buffers(ObservationSpace(), pool.num_slots)
+                buffers = rollout.allocate_buffers(ObservationSpace(), pool.num_slots)
                 pool.set_buffers(buffers, pool.num_slots)
                 pool.encode_active()
                 with pytest.raises(managym.AgentError):
@@ -237,6 +242,7 @@ def test_strict_collector_preserves_masked_prefixes(
             num_envs=2,
             opponent_mode="self",
             workers=workers,
+            numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
         )
         try:
             collector._env.step_into_buffers([0, -999], [True, False])
@@ -297,7 +303,9 @@ def test_strict_regime_captures_before_original_error_without_recipe_changes(
     monkeypatch.setattr(SeatRoutedCollector, "_sample_learning_rows", actions)
     with VerifyStore(tmp_path / "runs.sqlite") as store:
         with pytest.raises(managym.AgentError) as failed:
-            execution.execute_regime(recipe, 197, tmp_path / "run", store)
+            execution.execute_regime(
+                recipe, 197, tmp_path / "run", store, backend=resolve("torch")
+            )
         run_id = store.con.execute("SELECT id FROM training_runs").fetchone()[0]
         run = store.training_run(run_id)
     paths = list((tmp_path / "run" / "failures").glob("*.jsonl"))
@@ -343,6 +351,7 @@ def test_semantic_training_retains_rejected_command_and_offer_frame(
             ),
             tmp_path / "complete.jsonl",
             reference="uniform",
+            predictor=SelectionPredictor(_model(), seed=1),
             max_steps=100,
             check=lambda: None,
         )
@@ -379,7 +388,7 @@ def test_search_slot_failures_replay(tmp_path: Path) -> None:
         env.failure_context.update(game_index=11)
         env.reset(seed=24)
         pool = env.rollout_pool(1, 1, 197, 100)
-        buffers = rollout._allocate_buffers(ObservationSpace(), pool.num_slots)
+        buffers = rollout.allocate_buffers(ObservationSpace(), pool.num_slots)
         pool.set_buffers(buffers, pool.num_slots)
         assert pool.encode_active()
         with pytest.raises(managym.AgentError):
@@ -479,6 +488,7 @@ def test_sharded_failure_names_global_stream(tmp_path: Path) -> None:
             num_envs=2,
             opponent_mode="self",
             workers=2,
+            numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
         )
         try:
             with pytest.raises(managym.AgentError):
@@ -535,6 +545,9 @@ def test_strict_uniform_capture_replays_actual_sampled_root(tmp_path: Path) -> N
             seed=17402,
             opponent_mode="self",
             matchup_curriculum="elemental-uniform",
+            numerics=TorchCollectionSession(
+                device="cpu", seed=17402, precision="float32"
+            ),
         )
         try:
             # Recovery can enter any later sampled root; retained inputs must

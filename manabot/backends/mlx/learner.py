@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from contextlib import AbstractContextManager, nullcontext
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 import mlx.core as mx
 import mlx.nn as nn
@@ -188,3 +188,17 @@ class Learner:
 
 def _untracked(section: str) -> AbstractContextManager[object]:
     return nullcontext()
+
+
+def critic_gradient_norms(model: Any) -> tuple[float, float | None]:
+    raise NotImplementedError("MLX does not expose sampled gradient health")
+
+
+def gradient_health(
+    model: Any, norm_before: Any, critic_norms: tuple[float, float | None]
+) -> dict[str, float | int]:
+    raise NotImplementedError("MLX does not expose sampled gradient health")
+
+
+def parameter_health(parameters: list[Any], before: list[Any]) -> dict[str, float]:
+    raise NotImplementedError("MLX does not expose sampled parameter health")

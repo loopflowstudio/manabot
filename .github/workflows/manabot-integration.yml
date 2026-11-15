@@ -69,7 +69,8 @@ jobs:
             tests/sim/test_local_update.py tests/sim/test_local_update_sampling.py tests/sim/test_search_command_evidence.py \
             tests/semantic/test_mirror_update.py tests/semantic/test_policy_search.py \
             tests/training/test_scenario_validation.py \
-            tests/belief/test_sampling_report.py \
+            tests/belief/test_sampling_report.py tests/belief/test_sampling_fit.py \
+            tests/belief/test_runtime.py tests/belief/test_prepared_likelihood.py \
             tests/bench/test_structured_policy_benchmark.py
 
       - name: Training tests

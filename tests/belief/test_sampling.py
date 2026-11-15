@@ -6,7 +6,7 @@ import itertools
 import pytest
 import torch
 
-from manabot.belief.sampling import (
+from manabot.backends.torch.belief import (
     AutoregressiveBeliefSampler,
     physical_deal_log_prob,
     sample_physical_deal,

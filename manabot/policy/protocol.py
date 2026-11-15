@@ -14,13 +14,17 @@ from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from types import ModuleType, TracebackType
-from typing import Any, Literal, Protocol, Self
+from typing import TYPE_CHECKING, Any, Literal, Protocol, Self
 
 import numpy as np
 
 from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.policy.checkpoint import ParameterArrays, PolicyCheckpoint
 from manabot.policy.prepare import Prepared
+
+if TYPE_CHECKING:
+    from manabot.belief.encoding import BeliefEncodingSchema
+    from manabot.infra.config import ModelConfig
 
 Precision = Literal["float32", "bfloat16"]
 
@@ -82,6 +86,9 @@ class BackendPolicy(Protocol):
     value_semantic: Literal["signed_outcome", "win_logit"] | None
 
     @property
+    def config(self) -> "ModelConfig": ...
+
+    @property
     def device_type(self) -> str: ...
 
     @property
@@ -94,6 +101,10 @@ class BackendPolicy(Protocol):
 
     @property
     def has_programs(self) -> bool: ...
+
+    def admit_belief(self, belief_schema: "BeliefEncodingSchema") -> None:
+        """Refuse belief inputs that this policy cannot represent."""
+        ...
 
     def inference_scope(self, *, cache_catalog: bool = True) -> InferenceScope: ...
 
@@ -145,6 +156,12 @@ class BackendPolicy(Protocol):
 
     def evaluate(self, batch: Prepared[np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
         """Logits [B,A] (-1e8 off the legal support) and values [B]."""
+        ...
+
+    def evaluate_probabilities(
+        self, batch: Prepared[np.ndarray]
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Probabilities and values normalized in the policy's framework/device."""
         ...
 
     def forward_distribution(self, batch: Prepared) -> tuple[Any, Any]:
@@ -218,6 +235,10 @@ class Backend(Protocol):
 
     def metadata(self, path: str) -> dict[str, Any]:
         """Decode checkpoint metadata without constructing a policy."""
+        ...
+
+    def seed_training(self, seed: int, *, torch_deterministic: bool = True) -> None:
+        """Seed the framework and apply its training determinism setting."""
         ...
 
     def seed(self, seed: int) -> None:

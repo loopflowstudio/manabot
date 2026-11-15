@@ -8,7 +8,6 @@ import math
 from pathlib import Path
 import time
 
-from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND
 from manabot.eval.monitor import (
     MonitorProtocol,
     MonitorResult,
@@ -21,6 +20,7 @@ from manabot.experiment.checkpoint_evaluation import (
 from manabot.infra.files import atomic_json
 from manabot.reports.training import evaluation_dashboard, publish_dashboard
 from manabot.training.records import TrainingCoordinates, TrainingRun
+from manabot.training.state.backend import TrainingBackend
 from manabot.training.state.recovery import attempt_lock
 
 
@@ -29,6 +29,7 @@ def follow_checkpoints(
     out: Path,
     protocol: MonitorProtocol,
     *,
+    backend: TrainingBackend,
     poll_seconds: float,
     concurrent_activity: str,
     online: bool = False,
@@ -68,7 +69,7 @@ def follow_checkpoints(
                         directory,
                         protocol=protocol,
                         concurrent_activity=concurrent_activity,
-                        backend=TORCH_BACKEND,
+                        backend=backend,
                     )
                 except Exception:
                     # evaluate_checkpoint owns the admission-failure receipt.
@@ -105,6 +106,9 @@ def follow_checkpoints(
 
 
 def main() -> None:
+    from manabot.backends import resolve
+
+    backend = resolve("torch")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run", type=Path, help="TrainingRun JSON export")
     parser.add_argument(
@@ -165,6 +169,7 @@ def main() -> None:
             online=args.online,
             project=args.project,
             entity=args.entity,
+            backend=backend,
         )
         return
     if args.online:
@@ -215,7 +220,7 @@ def main() -> None:
             args.out,
             protocol=protocol,
             concurrent_activity=args.concurrent_activity,
-            backend=TORCH_BACKEND,
+            backend=backend,
         )
     print(
         f"{result.status}: {len(result.rows)}/{result.expected_games} attempted games; {args.out / 'monitor.json'}"

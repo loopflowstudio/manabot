@@ -6,14 +6,16 @@ import time
 
 import pytest
 
+from manabot.backends import resolve
 from manabot.llm.schema import InferenceConfig
 from manabot.llm.session import InferenceSession
+from manabot.policy.protocol import Backend
 from manabot.verify.llm_game import GameConfig, play
 from tests.fixtures.llm_process import FirstReferenceRuntime
 
 
 def test_native_random_control_completes_and_replays(tmp_path: Path) -> None:
-    summary = play(GameConfig(), tmp_path / "game", None)
+    summary = play(GameConfig(), tmp_path / "game", None, backend=resolve("torch"))
     assert summary.completed and summary.failure is None
     assert summary.replay_matches
     assert summary.decisions > 100
@@ -26,7 +28,9 @@ def test_native_random_control_completes_and_replays(tmp_path: Path) -> None:
 
 
 def test_decision_limit_is_not_a_completed_game(tmp_path: Path) -> None:
-    summary = play(GameConfig(max_decisions=2), tmp_path / "game", None)
+    summary = play(
+        GameConfig(max_decisions=2), tmp_path / "game", None, backend=resolve("torch")
+    )
     assert not summary.completed
     assert summary.failure is not None and "decision limit" in summary.failure
     assert summary.decisions == 2
@@ -105,7 +109,7 @@ def test_sequence_uses_one_session_and_retains_individual_game_summaries(
         )
 
     def game(
-        config: GameConfig, out: Path, session: InferenceSession
+        config: GameConfig, out: Path, session: InferenceSession, *, backend: Backend
     ) -> llm_game.GameSummary:
         fixture = cast(FixtureSession, session)
         assert not fixture.closed
@@ -186,7 +190,12 @@ def test_game_receipts_bind_the_model_behavior_version(tmp_path: Path) -> None:
     with InferenceSession(
         config, factory=FirstReferenceRuntime, load_seconds=10
     ) as session:
-        summary = play(GameConfig(max_decisions=8), tmp_path / "game", session)
+        summary = play(
+            GameConfig(max_decisions=8),
+            tmp_path / "game",
+            session,
+            backend=resolve("torch"),
+        )
     assert summary.model_decisions > 0
     assert summary.model_behavior_version == session.behavior_version
     assert summary.opponent_sha256 is None

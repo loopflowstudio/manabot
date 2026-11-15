@@ -315,9 +315,17 @@ publish, land or choose the next Graph step from here.
   manabot -o .runs/<dir>` builds in seconds; install it into a fresh `/tmp`
   venv with `uv pip install <wheel> --index-url https://pypi.org/simple
   --extra-index-url https://download.pytorch.org/whl/cpu --index-strategy
-  unsafe-best-match` (the matching `managym` comes from PyPI), then run user
-  scripts from `/tmp` with `<venv>/bin/python -I`. Outside a checkout,
-  `save_checkpoint` prints a harmless `fatal: not a git repository`.
+  unsafe-best-match`. If the checkout uses engine APIs newer than the same-version
+  PyPI wheel, supply the current engine wheel too: a version match alone does
+  not establish source compatibility. A wheel from `maturin develop` may contain
+  a `.pth` pointing back to the checkout; it is not an installed-wheel proof.
+  Use a release wheel from the build-and-verify procedure, then confirm both
+  packages' `__file__` paths are inside the fresh venv. Run user scripts from
+  `/tmp` with `uv run --no-project --python <venv>/bin/python python -I`.
+  Training CLI QA requires the staged manabot wheel from
+  `scripts/release/prepare.py`: its `.manabot-source.json` supplies verified
+  source provenance outside Git. A direct workspace wheel lacks that receipt
+  and training fails at `source_commit`; do not patch the installed files.
 - Training guide (`docs/training-loop.md`): run its example command verbatim
   (about 20 s on CPU), save and reload the policy as it says, call both
   maintained rules directly on a collected batch, and compare the tables'
@@ -343,6 +351,12 @@ publish, land or choose the next Graph step from here.
   check, then fails with "no committed recovery boundary". Resume with the same
   regime file, `--seed` and a new `--out`. `wall_seconds` counts the parent's
   time. macOS has no `timeout`; use the tool's own timeout.
+  For a public safe-pause proof, pass an existing `pause_path` to
+  `execute_regime(..., backend=resolve("torch"))`; catch `TrainingPaused` and
+  read the retained run from the store. It is recorded as `interrupted` with
+  a committed snapshot. Continue by ID through the CLI, then compare the
+  final `load_update(..., backend=resolve("torch").state)` payload against
+  uninterrupted execution, including Adam, EMA and collector sampling RNG.
 - TLA Limited decks (the MTG-282 pool corpus) overflow default observation
   capacities within a few dozen games; copy the `observation` block and the
   `game_errors` policy (`recover_capacity: true`) of

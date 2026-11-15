@@ -16,6 +16,28 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_shared_manabot_imports_use_public_names() -> None:
+    """A helper used by another production module is a public contract."""
+    violations: list[str] = []
+    for directory in ("manabot", "scripts", "experiments"):
+        for path in sorted((REPO_ROOT / directory).rglob("*.py")):
+            for node in ast.walk(ast.parse(path.read_text(), str(path))):
+                if not isinstance(node, ast.ImportFrom):
+                    continue
+                module = node.module or ""
+                if not module.startswith("manabot.") and not (
+                    node.level and path.is_relative_to(REPO_ROOT / "manabot")
+                ):
+                    continue
+                for alias in node.names:
+                    if alias.name.startswith("_"):
+                        violations.append(
+                            f"{path.relative_to(REPO_ROOT)}:{node.lineno}: "
+                            f"{'.' * node.level}{module}.{alias.name}"
+                        )
+    assert violations == []
+
+
 def _imported_modules(tree: ast.Module) -> list[tuple[int, str]]:
     found: list[tuple[int, str]] = []
     for node in ast.walk(tree):
@@ -357,56 +379,22 @@ def test_only_the_mlx_backend_imports_mlx() -> None:
 # leaves it.
 _TORCH_NOT_YET_MOVED = frozenset(
     (
-        # The converter and parity check read the PyTorch reference.
         "manabot/backends/parity.py",
-        "manabot/belief/agent.py",
-        "manabot/belief/checkpoint.py",
-        "manabot/belief/demo.py",
-        "manabot/belief/encoding.py",
-        "manabot/belief/likelihood.py",
         "manabot/belief/population.py",
-        "manabot/belief/runtime.py",
-        "manabot/belief/sampling.py",
-        "manabot/belief/sampling_data.py",
-        "manabot/belief/sampling_fit.py",
         "manabot/env/vector_env.py",
         "manabot/eval/evaluate.py",
         "manabot/eval/local.py",
         "manabot/eval/serving_benchmark.py",
-        "manabot/experiment/attack_execution.py",
-        "manabot/experiment/evaluation_queue.py",
         "manabot/experiment/numerics.py",
-        "manabot/experiment/runner.py",
-        "manabot/experiment/study.py",
-        "manabot/infra/runtime.py",
         "manabot/infra/torch.py",
         "manabot/llm/transformers_runtime.py",
         "manabot/recipes/device.py",
         "manabot/reports/belief.py",
         "manabot/sim/native_game.py",
-        "manabot/sim/search/sampling.py",
         "manabot/sim/serving.py",
-        "manabot/training/execution.py",
-        "manabot/training/loops/minimal.py",
         "manabot/training/mps.py",
-        "manabot/training/rollout/actions.py",
-        "manabot/training/rollout/collection.py",
-        "manabot/training/rollout/selection_data.py",
-        "manabot/training/state/admission.py",
-        "manabot/training/state/incidents.py",
-        "manabot/training/state/learning_state.py",
-        "manabot/training/state/recovery.py",
-        "manabot/training/updates/health.py",
         "manabot/verify/action_cases.py",
-        "manabot/verify/checkpoint_scenarios.py",
         "manabot/verify/choice_corpus.py",
-        "manabot/verify/competency.py",
-        "manabot/verify/decision_profile.py",
-        "manabot/verify/learning_regression.py",
-        "manabot/verify/llm_game.py",
-        "manabot/verify/llm_opponent.py",
-        "manabot/verify/record_coverage.py",
-        "manabot/verify/util.py",
     )
 )
 
@@ -542,9 +530,8 @@ def test_backend_resolver_selects_configured_backends_and_names_missing_extras(
         resolve("mlx")
 
 
-# CLI and child-process entry points choose the policy before passing it to
-# library code. Remaining coupled training, belief and verification modules
-# are explicit migration debt; removing an import must remove its entry.
+# CLI and child-process entry points choose the backend before passing its
+# capabilities to library code. Mixed modules permit only named entry points.
 _BACKEND_ROOTS = frozenset(
     (
         "manabot/sim/policy_provider.py",
@@ -558,50 +545,79 @@ _BACKEND_ROOTS = frozenset(
         "manabot/sim/sim.py",
     )
 )
-_BACKEND_NOT_YET_INJECTED = frozenset(
-    (
-        "manabot/belief/agent.py",
-        "manabot/belief/demo.py",
-        "manabot/belief/likelihood.py",
-        "manabot/belief/runtime.py",
-        "manabot/belief/sampling_data.py",
-        "manabot/experiment/attack_execution.py",
-        "manabot/experiment/evaluation_queue.py",
-        "manabot/experiment/monitor_worker.py",
-        "manabot/experiment/study.py",
-        "manabot/training/execution.py",
-        "manabot/training/loops/minimal.py",
-        "manabot/training/rollout/actions.py",
-        "manabot/training/rollout/collection.py",
-        "manabot/training/rollout/selection_data.py",
-        "manabot/training/state/admission.py",
-        "manabot/training/state/incidents.py",
-        "manabot/training/state/learning_state.py",
-        "manabot/training/state/recovery.py",
-        "manabot/training/updates/health.py",
-        "manabot/verify/checkpoint_scenarios.py",
-        "manabot/verify/competency.py",
-        "manabot/verify/decision_profile.py",
-        "manabot/verify/learning_regression.py",
-        "manabot/verify/llm_game.py",
-        "manabot/verify/llm_opponent.py",
-        "manabot/verify/record_coverage.py",
-        "manabot/verify/util.py",
-    )
-)
+# Only these actual CLI/child entry-point scopes choose a backend in mixed modules.
+_BACKEND_ENTRYPOINTS = {
+    "manabot/belief/demo.py": {"main"},
+    "manabot/recipes/local.py": {"run_local"},
+    "manabot/recipes/baseline.py": {"run_baseline"},
+    "manabot/experiment/runner.py": {"main"},
+    "manabot/experiment/job.py": {"run_worker"},
+    "manabot/experiment/study.py": {"main"},
+    "manabot/experiment/attack_execution.py": {"main"},
+    "manabot/experiment/evaluation_queue.py": {"main"},
+    "manabot/experiment/monitor_worker.py": {"main"},
+    "manabot/reports/belief.py": {"main"},
+    "manabot/verify/checkpoint_scenarios.py": {"main"},
+    "manabot/verify/competency.py": {"_scenario_worker", "_micro_worker", "main"},
+    "manabot/verify/decision_profile.py": {"main"},
+    "manabot/verify/learning_regression.py": {"main"},
+    "manabot/verify/llm_game.py": {"main"},
+    "manabot/verify/record_coverage.py": {"main"},
+}
+
+
+def _backend_violations(path: str, source: str) -> list[int]:
+    violations: list[int] = []
+
+    def visit(node: ast.AST, scope: str) -> None:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            scope = f"{scope}.{node.name}" if scope else node.name
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            imports = _imported_modules(ast.Module(body=[node], type_ignores=[]))
+            for line, module in imports:
+                if module == "manabot.backends" or module.startswith(
+                    "manabot.backends."
+                ):
+                    if (
+                        path not in _BACKEND_ROOTS
+                        and scope not in _BACKEND_ENTRYPOINTS.get(path, set())
+                    ):
+                        violations.append(line)
+        for child in ast.iter_child_nodes(node):
+            visit(child, scope)
+
+    visit(ast.parse(source), "")
+    return violations
 
 
 def test_only_composition_roots_choose_a_backend() -> None:
-    importing = {
-        str(path.relative_to(REPO_ROOT))
+    violations = [
+        f"{path.relative_to(REPO_ROOT)}:{line}"
         for package in ("manabot", "academy")
         for path in (REPO_ROOT / package).rglob("*.py")
         if _BACKENDS not in path.parents
-        for _, module in _imported_modules(ast.parse(path.read_text(), str(path)))
-        if module == "manabot.backends" or module.startswith("manabot.backends.")
-    }
-    assert sorted(importing - _BACKEND_ROOTS - _BACKEND_NOT_YET_INJECTED) == []
-    assert sorted(_BACKEND_NOT_YET_INJECTED - importing) == []
+        for line in _backend_violations(
+            str(path.relative_to(REPO_ROOT)), path.read_text()
+        )
+    ]
+    assert violations == []
+
+
+def test_mixed_cli_does_not_make_library_functions_backend_roots() -> None:
+    path = "manabot/verify/competency.py"
+    assert (
+        _backend_violations(
+            path, "def main():\n    from manabot.backends import resolve\n"
+        )
+        == []
+    )
+    assert _backend_violations(
+        path, "def helper():\n    from manabot.backends import resolve\n"
+    ) == [2]
+    assert _backend_violations(
+        path,
+        "def main():\n    def helper():\n        from manabot.backends import resolve\n",
+    ) == [3]
 
 
 def test_importing_the_resolver_loads_no_framework() -> None:
@@ -670,3 +686,44 @@ assert old is current
 assert any('0.4.0' in str(row.message) for row in seen)
 """
     subprocess.run([sys.executable, "-c", probe], cwd=REPO_ROOT, check=True)
+
+
+_ROLLOUT_IMPORTS = tuple(
+    ".".join(path.relative_to(REPO_ROOT).with_suffix("").parts)
+    for path in sorted((REPO_ROOT / "manabot/training/rollout").rglob("*.py"))
+)
+_UPDATE_IMPORTS = (
+    "manabot.sim.search.sampling",
+    "manabot.training.updates.ppo",
+    "manabot.training.updates.damped_policy",
+)
+
+
+@pytest.mark.parametrize(
+    "modules",
+    [(module,) for module in (*_ROLLOUT_IMPORTS, *_UPDATE_IMPORTS)]
+    + [(*_ROLLOUT_IMPORTS, *_UPDATE_IMPORTS)],
+)
+def test_rollout_and_update_imports_without_torch(modules: tuple[str, ...]) -> None:
+    probe = """
+import importlib
+import importlib.abc
+import sys
+
+class BlockTorch(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname.split('.')[0] == 'torch':
+            raise AssertionError('Torch import: ' + fullname)
+
+sys.meta_path.insert(0, BlockTorch())
+for module in sys.argv[1:]:
+    importlib.import_module(module)
+assert 'torch' not in sys.modules
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", probe, *modules],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
