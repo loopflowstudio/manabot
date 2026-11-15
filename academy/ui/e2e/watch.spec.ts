@@ -6,7 +6,7 @@ test('watch reads choices and consequences in the shared viewer, then returns fr
   await expect(page.getByRole('button', {name: 'Continue', exact: true})).toBeVisible();
   await page.getByRole('button', {name: 'Continue', exact: true}).click();
   await expect(page.getByTestId('position-counter')).toHaveText('Position 1 / 3');
-  await expect(page.getByTestId('decision-advice')).toContainText('Recorded at the acting bot');
+  await expect(page.getByTestId('decision-advice')).toContainText('Recorded at this decision');
   await page.getByRole('checkbox', {name: 'Show both hands'}).check();
   await expect(page.getByTestId('replay-perspective')).toContainText('Both hands · spectator view');
   await page.getByRole('button', {name: 'Next', exact: true}).click();

@@ -123,7 +123,8 @@ def test_independent_adapter_search_plays_watches_and_retains_private_evidence(
         assert game.record_players[1].version == game.trace.config.opponent["sha256"]
         with pytest.raises(HTTPException) as refusal:
             inspect_watch(game.match_id, 0, None)
-        assert refusal.value.status_code == 409
+        assert refusal.value.status_code == 403
+        assert refusal.value.detail == "participant_credential_required"
 
         created = create_watch(
             WatchRequest(
