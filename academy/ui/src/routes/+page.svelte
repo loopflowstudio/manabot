@@ -458,9 +458,9 @@
     </div>
 
     <div class="flex min-w-0 max-w-full flex-wrap items-end gap-x-5 gap-y-3">
-      {#if learnDemo}<p class="type-caption">Learn demo · UR Lessons vs Random GW Allies. Automated checked setup; New Game repeats it.</p>
-      {:else if demoName}<p class="type-caption" data-testid="demo-origin">Precision demo · custom stress decks · automated checked setup. Choose actions from the legal choices below. New Game repeats setup.</p>{/if}
-      {#if demoName}<button class="btn btn-primary" disabled={gameStore.newGamePending} onclick={startNewGame}>{gameStore.newGamePending ? 'Preparing game…' : 'New Game'}</button>{/if}
+      {#if learnDemo}<p class="type-caption">Learn demo · UR Lessons vs Random GW Allies. Automated checked setup; Start game repeats it.</p>
+      {:else if demoName}<p class="type-caption" data-testid="demo-origin">Precision demo · custom stress decks · automated checked setup. Choose actions from the legal choices below. Start game repeats setup.</p>{/if}
+      {#if demoName}<button class="btn btn-primary" disabled={gameStore.newGamePending} onclick={startNewGame}>{gameStore.newGamePending ? 'Preparing game…' : 'Start game'}</button>{/if}
       <div class="flex items-center gap-4">
         <div role="group" aria-label="Table interaction mode" class="flex gap-1">
           <button class="btn btn-secondary btn-sm" aria-pressed={tableMode === 'play'} onclick={() => changeMode('play')}>Play</button>

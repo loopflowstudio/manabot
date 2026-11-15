@@ -34,7 +34,7 @@ test('installed Academy plays and opens its recorded decisions', async ({ page }
   await page.goto('/');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await expect(page.getByTestId('opponent-select')).toHaveValue('search-64');
-  await page.getByRole('button', { name: 'New Game', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
   const action = page.getByTestId('action-option').first();
   await expect(action).toBeEnabled();
   await action.click();

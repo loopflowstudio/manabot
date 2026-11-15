@@ -48,7 +48,7 @@ async function installPosition(page: Page, family: Family): Promise<Command[]> {
   });
   await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-  await page.getByRole('button', { name: 'New Game', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
   await expect(page.getByTestId('action-panel')).toHaveAttribute('data-action-space-kind', family);
   return commands;
 }
@@ -159,7 +159,7 @@ for (const family of ['CHOOSE_TARGET', 'DISCARD'] as const) {
     }, position.config);
     await page.goto('/');
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-    await page.getByRole('button', { name: 'New Game', exact: true }).first().click();
+    await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
     await expect(page.getByTestId('action-option').first()).toBeVisible();
     for (const [ordinal, step] of position.prefix.entries()) {
       await expect.poll(() => page.evaluate(() => window.__choiceNavigation.working)).toBe(false);

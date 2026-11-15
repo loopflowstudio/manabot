@@ -51,12 +51,12 @@ select a file named `ur_lessons`.
 
 The same choices are in the browser. Open **New game**, expand **Browse decks
 and cards**, and assign a bundled deck to each native seat. Choose an opponent
-such as **Search 64**, then click **New Game**.
+such as **Search 64**, then click **Start game**.
 
 For your own lists, expand **Import decklist files** and check **Use imported
 decks for the next game**. Upload or paste both decks, one `count card name`
 per line, with optional `Main` and `Sideboard` headings. Click **Check decklists**,
-fix any reported issues, and select **New Game**. Imported decks use the
+fix any reported issues, and select **Start game**. Imported decks use the
 development format and supported cards. Registered policies check the complete
 setup, including imported lists, against their own admission requirements. See the
 [play guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#play-a-game).

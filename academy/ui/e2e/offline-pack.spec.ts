@@ -88,7 +88,7 @@ test('fresh-cache play, reload, and replay need no public network', async ({ pag
     timeout: 15_000,
   });
   await page.getByTestId('opponent-select').selectOption('random');
-  await page.getByRole('button', { name: 'New Game' }).first().click();
+  await page.getByRole('button', { name: 'Start game' }).first().click();
 
   const board = page.getByTestId('game-board');
   await expect(board).toBeVisible({ timeout: 15_000 });

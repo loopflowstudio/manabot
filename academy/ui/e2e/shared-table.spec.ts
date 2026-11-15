@@ -8,7 +8,7 @@ test('participant access, transfer and real Study survive the simpler table', as
     await pilot.goto('/');
     await expect(pilot.getByTestId('connection-badge')).toHaveText('connected');
     await pilot.getByTestId('opponent-select').selectOption('passive');
-    await pilot.getByRole('button', {name:'New Game', exact:true}).click();
+    await pilot.getByRole('button', {name:'Start game', exact:true}).click();
     await pilot.getByText('Table and Study tools', {exact:true}).click();
     await pilot.getByTestId('copy-watcher-invite').click();
     const invite = await pilot.evaluate(() => navigator.clipboard.readText());

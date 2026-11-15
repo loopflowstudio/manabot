@@ -273,7 +273,7 @@ async function runPromptProof(
   await installCombatAuthority(page, commands);
   await page.goto('/');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-  await page.getByRole('button', { name: 'New Game' }).first().click();
+  await page.getByRole('button', { name: 'Start game' }).first().click();
 
   await assertPrompt(page, 'DECLARE_ATTACKER', [
     'Attack with Otter-Penguin',
@@ -305,7 +305,7 @@ test('a taller decision sidebar does not stretch the board', async ({ page }) =>
   await installCombatAuthority(page, [], combatSequence.events as PresentationEvent[]);
   await page.goto('/');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-  await page.getByRole('button', { name: 'New Game' }).first().click();
+  await page.getByRole('button', { name: 'Start game' }).first().click();
   const board = page.getByTestId('game-board');
   await expect(board).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
@@ -326,7 +326,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
     await page.clock.install({ time: 0 });
     await page.clock.pauseAt(10_000);
-    await page.getByRole('button', { name: 'New Game' }).first().click();
+    await page.getByRole('button', { name: 'Start game' }).first().click();
     const history = page.getByTestId('presentation-history');
     await page.getByText('History and settings', { exact: true }).click();
     await history.locator('summary').click();
@@ -346,7 +346,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await page.getByRole('banner').getByRole('link', { name: 'New game', exact: true }).click();
     await page.clock.runFor(32); // Flush the navigation's animation frame while narration time is controlled.
     page.once('dialog', dialog => dialog.accept());
-    await page.getByRole('button', { name: 'New Game', exact: true }).click();
+    await page.getByRole('button', { name: 'Start game', exact: true }).click();
     await expect(stage).toBeVisible();
     await page.getByRole('button', { name: 'Skip beat' }).click();
     await page.getByRole('button', { name: 'Fast-forward' }).click();
@@ -366,7 +366,7 @@ test('terminal capture finishes JavaScript narration and retains consequences', 
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.clock.install({ time: 0 });
   await page.clock.pauseAt(10_000);
-  await page.getByRole('button', { name: 'New Game' }).first().click();
+  await page.getByRole('button', { name: 'Start game' }).first().click();
   const board = page.getByTestId('game-board');
   const stage = page.getByTestId('presentation-stage');
   const resultAction = page.getByTestId('game-result-action');
@@ -435,7 +435,7 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 800
       await expect(page.getByTestId('connection-badge')).toHaveText('connected');
       await page.clock.install({ time: 0 });
       await page.clock.pauseAt(10000);
-      await page.getByRole('button', { name: 'New Game', exact: true }).click();
+      await page.getByRole('button', { name: 'Start game', exact: true }).click();
       await page.getByText('History and settings', { exact: true }).click();
       const panel = page.getByTestId('presentation-history');
       await panel.locator('summary').click();
@@ -551,7 +551,7 @@ test('player damage emphasizes its exact subject while choices stay focused', as
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.clock.install({ time: 0 });
   await page.clock.pauseAt(10000);
-  await page.getByRole('button', { name: 'New Game', exact: true }).click();
+  await page.getByRole('button', { name: 'Start game', exact: true }).click();
   await expect(page.locator('[data-player-id="0"]')).toHaveAttribute('data-narrated-seq', '0');
   await expect(page.locator('[data-player-id="0"]')).toHaveCSS('outline-style', 'solid');
   await expect(page.locator('[data-player-id="1"]')).not.toHaveAttribute('data-narrated-seq');
@@ -593,7 +593,7 @@ test('partial history recovery preserves event pixels, focus and recovered unrea
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.clock.install({ time: 0 });
   await page.clock.pauseAt(10000);
-  await page.getByRole('button', { name: 'New Game', exact: true }).click();
+  await page.getByRole('button', { name: 'Start game', exact: true }).click();
   await page.getByText('History and settings', { exact: true }).click();
   const panel = page.getByTestId('presentation-history');
   await panel.locator('summary').click();

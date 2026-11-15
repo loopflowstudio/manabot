@@ -117,14 +117,14 @@ publish, land or choose the next Graph step from here.
   SIGINT is ignored and the server looks hung.
 - Academy table: `./scripts/play --port <unused> --frontend-port <unused>`; wait
   for the `ACADEMY_PLAY_READY` line (it names Python, native ABI and module
-  path), open the frontend URL, press New Game, play a land and Pass Turn.
+  path), open the frontend URL, press Start game, play a land and Pass Turn.
   Stop with SIGINT to the `scripts/play.py` Python process (`pgrep -f
   'scripts/play.py'`); SIGINT to the `./scripts/play` shell wrapper's PID
   leaves both servers running. To play specific cards, open "Import decklist
   files", check "Use imported decks for the next game", set both files
   (`setInputFiles` with counted lines such as `4 Heartbeat of Spring`), press
   "Check decklists", wait for `Ready —`, pick the `passive` opponent and press
-  New Game; imported decks take any number of copies.
+  Start game; imported decks take any number of copies.
   Under heavy host load the first frontend probe in `scripts/play.py` keeps a
   fixed 30-second deadline whatever `--ready-timeout` says, so the launch
   fails with `ready.timeout`. Then start the two servers as it does: from the
@@ -133,12 +133,12 @@ publish, land or choose the next Graph step from here.
   `ACADEMY_API_PORT=<api> npm run dev -- --host 127.0.0.1 --port <ui>
   --strictPort`; poll `/` and `/api/traces` until both return 200. Demos:
   open `/?demo=learn|precision|precision-mana`, wait a second after the
-  `connected` badge, then press New Game (an immediate click can leave "No
+  `connected` badge, then press Start game (an immediate click can leave "No
   game in progress").
   Without a connected browser, run a Node Playwright script from `academy/ui`
   (its `playwright` package and cached Chromium resolve there; delete the
   script afterwards). Click only `[data-testid=action-panel] button` offers:
-  other buttons open the deck picker or start a New Game. Triggered abilities
+  other buttons open the deck picker or start a game. Triggered abilities
   appear under "Stack · top first" as `Card — <trigger>: <effects> ·
   triggered ability · Seat N`; read that text while the stack is non-empty.
   Detect the end by a visible "Play Again" button (the page holds hidden
@@ -266,7 +266,7 @@ publish, land or choose the next Graph step from here.
   before launch. Read `/api/opponents` for its digest, then open
   `/?hero=ur_lessons&villain=gw_allies&opponent=<digest>` for the local recipe's
   bound decks (Elemental UR/GW are different lists and correctly refuse it).
-  Click New Game, then the legal Play Island offer and Pass Turn. Wait until
+  Click Start game, then the legal Play Island offer and Pass Turn. Wait until
   an action offer is enabled and automation has settled before recording
   `main[data-frame-revision]`; reload must restore that revision. A merely
   visible offer can still belong to an automated pending transition.

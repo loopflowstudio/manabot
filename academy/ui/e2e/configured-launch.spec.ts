@@ -46,7 +46,7 @@ test('launch replaces unrelated resume, reloads pending game and opens selected 
   await page.goto('/');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByTestId('opponent-select').selectOption('passive');
-  await page.getByRole('button', { name: 'New Game', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
   await expect(page.getByTestId('action-option').first()).toBeEnabled();
   const unrelated = frames.at(-1)!.match_id;
   await page.goto(addresses.game);
@@ -67,7 +67,7 @@ test('launch replaces unrelated resume, reloads pending game and opens selected 
   await expect(page.getByTestId('opponent-select')).toHaveValue('passive');
   await expect(page.getByRole('combobox',{name:'Seat 1 deck',exact:true})).toHaveValue('gw_allies_jeong');
   page.on('dialog',dialog => dialog.accept());
-  await page.getByRole('button', { name: 'New Game', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
   await expect(page.getByTestId('action-option').first()).toBeEnabled();
   expect(page.url()).not.toContain('launch=');
   await expect.poll(() => frames.at(-1)?.match_id).not.toBe(launched.match_id);
@@ -114,7 +114,7 @@ test('imported launch setup shows selected sources and switches back to bundled 
   await imports.check();
   await expect(page.getByTestId('deck-browser')).toHaveCount(0);
   await expect(page.getByLabel('Opponent deck source', { exact: true })).toHaveValue('20 Mountain\n');
-  await page.getByRole('button', { name: 'New Game', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
   await expect(page.getByTestId('action-option').first()).toBeEnabled();
   expect(page.url()).not.toContain('launch=');
   await expect(page.getByTestId('deck-names')).toContainText('Imported deck');

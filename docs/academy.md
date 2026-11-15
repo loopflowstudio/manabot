@@ -33,8 +33,13 @@ links continue to open their intended games.
 
 **New game** opens setup for a separate session, starting from retained choices.
 Edits here do not save into your current session; **Cancel** returns without
-committing them. Setup shows two native seats. Choose each controller, deck and optional
-**Search**. One controller can be you; choosing bots in both seats starts a
+committing them. Setup shows two native seats. For each seat, choose a **Controller** (**You**
+or **Bot**) and a **Deck**. A bot seat also has a player picker: choose a
+built-in bot or a **Registered policy**, with optional **Search** for a compatible
+policy. Built-in **Search 16/64/256** runs that many random playouts per
+decision without a policy; **Random** chooses uniformly among legal actions;
+**Passive** passes when possible and otherwise takes the first legal action.
+One controller can be you; choosing bots in both seats starts a
 watched game through the same setup. Seat 1 plays first; seat 2 draws first.
 Policies are chosen directly by name and execution identity. Their provider,
 artifacts and runner remain available in details. **Browse decks and cards**
@@ -426,18 +431,12 @@ it as you would share both hands.
 
 ### Play a game
 
-The table opens with UR Lessons (you) against GW Allies. Before starting:
-
-- **Opponent** chooses who you face: **Search 16**, **Search 64** or
-  **Search 256** (the engine's built-in search, with that many simulated
-  playouts per decision), **Random**, or **Passive**, which always passes.
-  It also offers **Registered policy**, which adds a **Policy** menu for
-  policies registered with this server
-  ([Play and watch a trained checkpoint](#play-and-watch-a-trained-checkpoint)).
-- **New game** assigns a deck to each seat from the bundled packs.
-- **New Game** starts a new session with the selected matchup. Replacing an
-  active game requires confirmation that it will be stopped. To keep games
-  together, use [Rematch, Swap sides or Change opponent](#playing-a-series-against-a-model).
+The table opens with UR Lessons (you) against GW Allies. Open **New game**
+to use the [two-seat setup](#one-game-from-setup-to-its-recorded-decisions):
+choose controllers, decks and bot players, then select **Start game** to start
+a separate session. Replacing an active game requires confirmation that it
+will be stopped. To keep games together, use
+[Rematch, Swap sides or Change opponent](#playing-a-series-against-a-model).
 
 To use your own decks, open **New game**, expand **Import decklist files**
 and check **Use imported decks for the next game**. Upload a UTF-8 `.txt` or
@@ -445,7 +444,7 @@ and check **Use imported decks for the next game**. Upload a UTF-8 `.txt` or
 into its source box. Write one `count card name` per line, with optional
 `Main` and `Sideboard` headings. Select **Check decklists**, correct any
 reported lines, choose a built-in opponent such as **Search 64**, then select
-**New Game**. Imported decks use the development format and supported cards;
+**Start game**. Imported decks use the development format and supported cards;
 this is not tournament legality validation. Registered policies check the complete
 setup, including imported lists, against their own admission requirements. Uncheck
 the import option to return to bundled decks.
@@ -463,7 +462,7 @@ pending decision.
 
 Choose **Registered policy**, select the intended policy, and import your decks
 through **New game**. Check the matchup, decklist disclosure, priority stops
-and deal mode, then select **New Game**. After the game finishes, select
+and deal mode, then select **Start game**. After the game finishes, select
 **Rematch** to play again with that setup. After the next game, select
 **Swap sides**: you keep your deck and move from playing first to drawing first,
 or the reverse. Both games and the next one belong to the same session.
@@ -485,7 +484,7 @@ its admitted decks, disclosure, actual seed and native seats.
 | **Rematch** | Both decks and imported source lists, exact opponent configuration, disclosure, stops and your seat |
 | **Swap sides** | The rematch setup, with your native play/draw seat reversed; your deck stays yours |
 | **Change opponent** | Your decks, disclosure, stops and seat/deal plan; only the explicitly edited opponent settings change |
-| **New Game** | Starts a separate session from setup |
+| **Start game** | Starts a separate session from setup |
 
 Your preferred **Play** or **Inspect** mode stays selected across games. To
 exchange decks within the series, choose **Edit next game** in the session strip.

@@ -25,7 +25,7 @@ for (const [hero, villain] of [['elemental_ug', 'elemental_bg'], ['elemental_bg'
     await selectDeck(page, 'hero', hero);
     await selectDeck(page, 'villain', villain);
     const previousMatch = frame?.match_id;
-    await page.getByRole('button', { name: 'New Game', exact: true }).first().click();
+    await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
     await expect.poll(() => frame?.match_id).not.toBe(previousMatch);
     await expect(page.getByTestId('action-option').first()).toBeVisible();
     const current = frame!;

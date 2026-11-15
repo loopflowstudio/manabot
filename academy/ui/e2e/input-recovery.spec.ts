@@ -181,7 +181,7 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(setup).toBeVisible();
       await setup.focus();
       await page.keyboard.press('Enter');
-      await page.getByRole('button', { name: 'New Game', exact: true }).click();
+      await page.getByRole('button', { name: 'Start game', exact: true }).click();
       await expect(page.getByTestId('action-option').first()).toBeEnabled();
       expect((await retainedFrame(page))!.match_id).not.toBe(frame!.match_id);
     } finally { await stopChild(child); }

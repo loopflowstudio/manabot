@@ -73,7 +73,7 @@ test('shared history identifies both players and preserves private prefixes and 
     await page.getByTestId('opponent-select').selectOption('passive');
     await selectDeck(page, 'hero', 'gw_allies');
     await selectDeck(page, 'villain', 'ur_lessons');
-    await page.getByRole('button', { name: 'New Game', exact: true }).click();
+    await page.getByRole('button', { name: 'Start game', exact: true }).click();
     await expect(page.getByTestId('game-board')).toBeVisible();
   }
   try {

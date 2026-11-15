@@ -101,7 +101,7 @@ async function installTable(page: Page, options: TableOptions = {}): Promise<{
   await page.route('**/api/card-art/**', route => route.fulfill({ status: 404 }));
   await page.goto('/');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-  await page.getByRole('button', { name: 'New Game', exact: true }).click();
+  await page.getByRole('button', { name: 'Start game', exact: true }).click();
   await expect(page.getByTestId('action-option')).toHaveCount(frame.offers.length);
   return { commands, frame, rejectPending: () => rejectPending(), publish: (advance = true) => publish(advance), control: message => control(message), closeSocket: () => closeSocket() };
 }
@@ -381,7 +381,7 @@ for (const [seed, viewport] of [
     await page.goto('/');
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
     await page.getByTestId('opponent-select').selectOption('random');
-    await page.getByRole('button', { name: 'New Game', exact: true }).click();
+    await page.getByRole('button', { name: 'Start game', exact: true }).click();
     await page.getByRole('group', { name: 'Table interaction mode' }).getByRole('button', { name: 'Play', exact: true }).click();
     const receipts: { kind: string | null; label: string | null; scroll: number }[] = [];
     try {

@@ -100,7 +100,7 @@ for (const [seed, width, height, motion] of [
     await page.goto('/');
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
     await page.getByTestId('opponent-select').selectOption(seed === 0 ? 'random' : 'search-64');
-    await page.getByRole('button', { name: 'New Game', exact: true }).click();
+    await page.getByRole('button', { name: 'Start game', exact: true }).click();
     await page.getByRole('button', { name: 'Play', exact: true }).click();
     let declarations = 0;
     for (let input = 0; input < 30; input += 1) {
@@ -180,7 +180,7 @@ test('cold visible-art delivery receipt', async ({ page, browser }, info) => {
   await page.goto('/');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByTestId('opponent-select').selectOption('random');
-  await page.getByRole('button', { name: 'New Game', exact: true }).click();
+  await page.getByRole('button', { name: 'Start game', exact: true }).click();
   await expect(page.getByTestId('action-option').first()).toBeVisible();
   await page.waitForLoadState('networkidle');
   await expect.poll(() => delivered.length, { timeout: 30_000 }).toBe(started.size);

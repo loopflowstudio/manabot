@@ -67,7 +67,7 @@ test('Sepia Etude parchment palette and typography resolve in light mode', async
   await expect(page.locator('body')).toHaveCSS('font-family', /Lato/);
   await expect(page.getByTestId('brand-name')).toHaveCSS('font-family', /Cormorant Garamond/);
 
-  const newGame = page.getByRole('button', { name: 'New Game' }).first();
+  const newGame = page.getByRole('button', { name: 'Start game' }).first();
   await expect(newGame).toHaveCSS('background-color', 'rgb(151, 52, 39)');
   expect((await newGame.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(32);
   await newGame.focus();
@@ -81,7 +81,7 @@ test('the library-after-dark palette lifts Mountain red for dark mode', async ({
   expect(await palette(page)).toEqual(dark);
   // The banner is a fixed rich world in both modes; the brand is literal ivory.
   await expect(page.getByTestId('brand-name')).toHaveCSS('color', 'rgb(248, 241, 224)');
-  await expect(page.getByRole('button', { name: 'New Game' }).first()).toHaveCSS(
+  await expect(page.getByRole('button', { name: 'Start game' }).first()).toHaveCSS(
     'background-color',
     'rgb(178, 77, 56)',
   );
@@ -92,7 +92,7 @@ test('card name plate stays legible on the light palette', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', { timeout: 15_000 });
   await page.getByTestId('opponent-select').selectOption('random');
-  await page.getByRole('button', { name: 'New Game' }).first().click();
+  await page.getByRole('button', { name: 'Start game' }).first().click();
   await expect(page.getByTestId('game-board')).toBeVisible({ timeout: 15_000 });
 
   // Card art palettes are fixed dark colors, so the name plate must keep its
@@ -110,6 +110,6 @@ test('touch controls meet the shared 44px target', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
 
-  const newGame = page.getByRole('button', { name: 'New Game' }).first();
+  const newGame = page.getByRole('button', { name: 'Start game' }).first();
   expect((await newGame.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
 });
