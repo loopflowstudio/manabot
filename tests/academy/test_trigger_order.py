@@ -137,7 +137,7 @@ def test_survival_orders_cross_consumers(
     evidence = json.loads(
         (
             Path(__file__).parents[2]
-            / "managym/academy/fixtures/trigger-order-w17-token-cards.json"
+            / "managym/academy/fixtures/trigger-order-w17-mana-actions.json"
         ).read_text()
     )
     capture = json.loads(env.capture_decision(0).to_json())

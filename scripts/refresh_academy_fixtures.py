@@ -11,7 +11,7 @@ Run from the repository root after rebuilding the extension:
     uv run --extra dev python scripts/refresh_academy_fixtures.py
 
 Refreshes `managym/academy/fixtures/{learn,precision,precision-mana}-demo-w17-mana-actions.json`,
-`choice-navigation-w17-mana-actions.json` and `trigger-order-w17-token-cards.json`. The conformance and
+`choice-navigation-w17-mana-actions.json` and `trigger-order-w17-mana-actions.json`. The conformance and
 parity receipts have their own writers (see `conformance/README.md`).
 """
 
@@ -118,7 +118,7 @@ def refresh_navigation(trace_dir: Path) -> None:
 
 
 def refresh_trigger_order() -> None:
-    path = FIXTURES / "trigger-order-w17-token-cards.json"
+    path = FIXTURES / "trigger-order-w17-mana-actions.json"
     fixture = json.loads(path.read_text())
     env, _ = root()
     capture = json.loads(env.capture_decision(0).to_json())
