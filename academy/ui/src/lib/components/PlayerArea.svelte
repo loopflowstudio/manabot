@@ -12,8 +12,7 @@
     CastPermission,
     PermanentState,
     PlayerState,
-    PlayerTurnHistory,
-    RestrictedMana
+    PlayerTurnHistory
   } from '$lib/types';
   import type { PlayerIdentity } from '$lib/player-identity';
   import PlayerName from './PlayerName.svelte';
@@ -94,14 +93,6 @@
     if (permission.any_mana) terms.push('with mana of any type');
     if (permission.waterbend) terms.push('waterbending for generic');
     return terms.join(' ');
-  }
-
-  function spendingText(restricted: RestrictedMana): string {
-    if (restricted.except_nonartifact_spells) return 'anything but nonartifact spells';
-    const parts = [];
-    if (restricted.spells?.length) parts.push(`${restricted.spells.join(' or ')} spells`);
-    if (restricted.abilities?.length) parts.push(`abilities of ${restricted.abilities.join(' or ')} sources`);
-    return parts.join(' or ');
   }
 
   // The bar wears its deck's colors at full Magic saturation — G→W for
@@ -333,42 +324,38 @@
   {#if !opponent}
       <div class="hand-staff">
         {@render rubric(`Hand (${player.hand.length})`)}
-        {@render handCards()}
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex (keyboard access to horizontal hand scrolling) -->
+        <div role="region" aria-label={`${label} hand`} tabindex="0" class="hand-cards"
+          onfocusin={(event) => {
+            if (event.target instanceof HTMLElement) revealWithinScrollRegions(event.target);
+          }}>
+          {#if player.hand.length === 0}
+            <div class="type-caption px-1 py-1 text-ink-3">Empty hand</div>
+          {/if}
+          {#each player.hand as card}
+            <Card
+              objectId={card.id}
+              name={card.name}
+              copyDescription={copyLabel(player.hand, card.id)}
+              power={card.types.is_creature ? card.power : null}
+              toughness={card.types.is_creature ? card.toughness : null}
+              focused={focusedIds.has(card.id)}
+              clickable={onSelectTarget !== undefined}
+              onSelect={() => onSelectTarget?.(card.id)}
+              onHoverStart={() => {
+                onHoverTarget?.(clickableTargets?.has(card.id) ? card.id : null);
+                preview(card);
+              }}
+              onHoverEnd={() => {
+                onHoverTarget?.(null);
+                onPreviewCard?.(null);
+              }}
+            />
+          {/each}
+        </div>
       </div>
   {/if}
 </section>
-
-{#snippet handCards()}
-  <!-- svelte-ignore a11y_no_noninteractive_tabindex (keyboard access to horizontal hand scrolling) -->
-  <div role="region" aria-label={`${label} hand`} tabindex="0" class="hand-cards"
-    onfocusin={(event) => {
-      if (event.target instanceof HTMLElement) revealWithinScrollRegions(event.target);
-    }}>
-    {#if player.hand.length === 0}
-      <div class="type-caption px-1 py-1 text-ink-3">Empty hand</div>
-    {/if}
-    {#each player.hand as card}
-      <Card
-        objectId={card.id}
-        name={card.name}
-        copyDescription={copyLabel(player.hand, card.id)}
-        power={card.types.is_creature ? card.power : null}
-        toughness={card.types.is_creature ? card.toughness : null}
-        focused={focusedIds.has(card.id)}
-        clickable={onSelectTarget !== undefined}
-        onSelect={() => onSelectTarget?.(card.id)}
-        onHoverStart={() => {
-          onHoverTarget?.(clickableTargets?.has(card.id) ? card.id : null);
-          preview(card);
-        }}
-        onHoverEnd={() => {
-          onHoverTarget?.(null);
-          onPreviewCard?.(null);
-        }}
-      />
-    {/each}
-  </div>
-{/snippet}
 
 <style>
   [data-narrated-seq] { outline: 2px solid var(--info); outline-offset: 2px; }

@@ -102,7 +102,6 @@ for (const [seed, width, height, motion] of [
     await page.getByTestId('opponent-select').selectOption(seed === 0 ? 'random' : 'search-64');
     await page.getByRole('button', { name: 'Start game', exact: true }).click();
     await page.getByRole('button', { name: 'Play', exact: true }).click();
-    let declarations = 0;
     for (let input = 0; input < 30; input += 1) {
       // The receipt can render before following bot work finishes. Keep that
       // render sample, but wait for settled authority before choosing again.

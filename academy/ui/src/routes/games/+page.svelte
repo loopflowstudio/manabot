@@ -59,7 +59,7 @@
         checkSessionResponse(summary, sequence);
         const data = await summary.json();
         if (sequence === requestSequence) { sessionResults = data.results; sessionTotals = data.totals; nextResultOffset = data.next_result_offset; }
-      } else sessionResults = [];
+      }
       const response = await recordFetch(`/api/traces?${params}`);
       if (!response.ok) {
         const payload = await response.json();
@@ -245,7 +245,7 @@
     {#if sessionAccessDenied}<a class="underline" href={filterUrl('session', null)}>Browse games outside this session</a>
     {:else}<button class="underline" onclick={() => void load(page.url.search)}>Try again</button>{/if}
   </p>{/if}
-  <p role="status" class="mb-3 text-ink-2">{loading ? 'Loading games…' : `${games.length} ${games.length === 1 ? 'game' : 'games'} on this page`}</p>
+  <p role="status" class="mb-3 text-ink-2">{loading ? 'Loading games…' : `${count(games.length, 'game')} on this page`}</p>
   {#if !loading && !error && !games.length}<p class="rounded border border-line bg-panel p-8 text-center">No games match these filters. Try another player or clear the filters.</p>{/if}
   {#if games.length}
     <div class="overflow-x-auto rounded border border-line bg-panel" aria-busy={loading}>
