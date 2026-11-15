@@ -577,6 +577,10 @@ def test_games_reach_the_service_directly_and_its_failure_is_infrastructure(
             execution=execution,
             inference=runtime,
             max_commands=4,
+            # Both deck assignments, with the served policy on the play.
+            # A random opening seat can use its whole Command budget on mana
+            # activations before the served policy ever requests inference.
+            legs=(0, 2),
         )
         lifecycle = runtime.performance.snapshot()["counters"]
         os.kill(runtime.process.pid, signal.SIGCONT)

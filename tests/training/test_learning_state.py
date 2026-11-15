@@ -387,6 +387,23 @@ def test_raw_only_import_resets_ema_and_adam_at_the_monitoring_export(
     expected, _ = load_checkpoint(receipt.artifact["path"])
     seeded: list[dict[str, torch.Tensor]] = []
     original_update_ema = resolve("torch").learner.update_ema
+    original_step = torch.optim.Adam.step
+    parameter_steps: dict[int, int] = {}
+    optimizer_steps = 0
+
+    def checked_step(optimizer: torch.optim.Adam) -> None:
+        nonlocal optimizer_steps
+        if optimizer_steps == 0:
+            assert not optimizer.state, "raw-only import must start with fresh Adam"
+        optimizer_steps += 1
+        # Conditional heads have no gradient on batches that don't use them.
+        # Adam advances only parameters with gradients, not every model weight.
+        for index, parameter in enumerate(
+            p for group in optimizer.param_groups for p in group["params"]
+        ):
+            if parameter.grad is not None:
+                parameter_steps[index] = parameter_steps.get(index, 0) + 1
+        original_step(optimizer)
 
     def checked_ema(averaged: ActorCritic, learner: ActorCritic, rate: float) -> None:
         if not seeded:
@@ -396,6 +413,7 @@ def test_raw_only_import_resets_ema_and_adam_at_the_monitoring_export(
         original_update_ema(averaged, learner, rate)
 
     monkeypatch.setattr(resolve("torch").learner, "update_ema", checked_ema)
+    monkeypatch.setattr(torch.optim.Adam, "step", checked_step)
     with VerifyStore(tmp_path / "training.sqlite") as store:
         run = execution.execute_regime(
             continued, 197, tmp_path / "continued", store, backend=resolve("torch")
@@ -414,9 +432,9 @@ def test_raw_only_import_resets_ema_and_adam_at_the_monitoring_export(
     assert set(record.inputs) == {"learning_state/source_run", "learning_state/raw"}
     # Fresh Adam: its step counters count only this segment's optimizer steps.
     final = torch.load(record.artifacts["optimizer"]["path"], weights_only=True)
-    assert record.optimizer_updates is not None
-    assert {s["step"].item() for s in final["state"].values()} <= {
-        float(record.optimizer_updates)
+    assert record.optimizer_updates == optimizer_steps
+    assert {index: state["step"].item() for index, state in final["state"].items()} == {
+        index: float(steps) for index, steps in parameter_steps.items()
     }
 
 

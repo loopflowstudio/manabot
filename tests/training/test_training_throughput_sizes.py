@@ -1,6 +1,7 @@
 """Step 3's size variants and launch legs (Task b015d5)."""
 
 from pathlib import Path
+import subprocess
 
 from etude.declarations import read_training_jobs
 import pytest
@@ -156,23 +157,38 @@ def test_unknown_legs_and_seeds_are_refused() -> None:
 def test_a_size_cell_trains_through_the_real_worker_on_cpu(
     tmp_path: Path, leg: str
 ) -> None:
-    """The leg's regime at 2 streams and 1 update, moved to CPU.
+    """Train each network through the worker on a bounded CPU rollout.
 
-    Collection plays every stream's game to its end, so the stream count, not
-    the transition floor, sets how long the largest model takes here.
+    Full-game collection depends on the untrained policy's trajectory. One
+    learning seat with an exact quota exercises collection and a real update
+    without requiring the largest network to finish two games on a CPU.
     """
     chosen = sizes.LEGS[leg]
     regime = sizes.recipe(chosen.size, chosen.precision, 1)
     regime.wall_seconds = 600
     stage = regime.stages[0]
     stage.streams = 2
+    stage.learning_seats = "one"
+    stage.batch_closure = "exact-quota"
+    stage.transitions = 4
     stage.execution.device = "cpu"
     stage.execution.wall_seconds = 600
     spec = TrainingJob(regime=regime, experiment=sizes.EXPERIMENT)
 
     process, training = _worker(tmp_path, spec, "cell", 26301)
 
-    assert process.wait() == 0, (tmp_path / "cell" / "log.txt").read_text()[-4000:]
+    try:
+        assert process.wait(timeout=120) == 0, (
+            tmp_path / "cell" / "log.txt"
+        ).read_text()[-4000:]
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
     receipt = TrainingRun.model_validate_json((training / "run.json").read_bytes())
     assert receipt.status == "completed"
     assert receipt.stages[0].updates == 1
