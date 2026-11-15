@@ -894,7 +894,7 @@ turn/phase/decision context. Its native boundary distinguishes:
 | Phase | Interpretation |
 | --- | --- |
 | `preparing` | Inputs are durable before native decision-frame reads; cached decision context is explicitly last-known. Execution has not started. |
-| `executing` | The selected action and fresh pre-action binding are durable; execution has no durable return acknowledgment yet. |
+| `executing` | The named native mutation (step, reset, reassignment or failed-row replacement) was entered without a durable return acknowledgment. For an indexed step, the selected action and its fresh pre-action binding are durable. |
 | `synchronizing` | The native call returned; current seeds, decks or game generations are still being read. |
 | `ready` | Synchronization completed and the snapshot describes the current known game prefixes. |
 
@@ -918,8 +918,10 @@ uv run python -m manabot.training.state.game_errors .runs/journal-demo/game-jour
 ```
 
 Replay uses the [existing source/native and world checks](#automatic-capture-and-replay).
-An execution snapshot can attempt its pending action under the retained fresh
-binding. Preparation and synchronization snapshots reconstruct the last-known
+An indexed-step execution snapshot can attempt its pending action under the
+retained fresh binding. A reset, reassignment or replacement snapshot
+reconstructs the last-known prefix and reports its new setup unavailable; it
+never replays proposed seeds or decks as observed native state. Preparation and synchronization snapshots reconstruct the last-known
 prefix where possible and report unavailable binding or setup; replay cannot
 reconstruct an unobserved sampled root or settle the original unknown outcome.
 These journals are diagnostic inputs, not optimizer or process-recovery
