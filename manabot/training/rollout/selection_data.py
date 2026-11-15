@@ -7,26 +7,44 @@ Rows are ordered by game, seat, then decision for same-viewer estimators.
 """
 
 from collections.abc import Callable
+from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Protocol
 
+import numpy as np
 from pydantic import ConfigDict, Field, model_validator
-import torch
 
-from manabot.backends.torch.policy import ActorCritic
 from manabot.env.failures import ScalarCapture
 from manabot.env.match import Match
 from manabot.env.observation import ACTION_TYPE_DIM, ObservationSpace
 from manabot.infra.config import MatchConfig
 from manabot.infra.identity import canonical_sha256
-from manabot.model.admission import admit_observation
 from manabot.model.world import validate_agent_setup
-from manabot.policy.prepare import reference_distribution
+from manabot.policy.protocol import BackendPolicy
 from manabot.training.regime import SelectionGameSpec, Strict
 import managym
 from managym.decision import Command, DecisionFrame, Observation
+
+
+@dataclass(frozen=True)
+class SelectionPrediction:
+    action: int
+    value: float
+    probability: float
+    entropy: float
+    reference_kl: float
+
+
+class SelectionPredictor(Protocol):
+    """Frozen-policy numerics with an independently seeded game-local stream."""
+
+    def predict(
+        self,
+        encoded: dict[str, np.ndarray],
+        reference: Literal["uniform", "action_type_uniform"],
+    ) -> SelectionPrediction: ...
 
 
 class FrozenRecord(Strict):
@@ -80,15 +98,15 @@ class SelectionDataset(FrozenRecord):
         return self
 
 
-@torch.inference_mode()
 def collect_selection_game(
-    agent: ActorCritic,
+    agent: BackendPolicy,
     space: ObservationSpace,
     match: Match,
     spec: SelectionGameSpec,
     path: Path,
     *,
     reference: Literal["uniform", "action_type_uniform"],
+    predictor: SelectionPredictor,
     max_steps: int,
     check: Callable[[], None],
 ) -> SelectionGame:
@@ -106,7 +124,6 @@ def collect_selection_game(
     env = managym.Env(seed=spec.seed, skip_trivial=True)
     capture = ScalarCapture(spec.seed, True)
     raw, _ = capture.reset(env, match.to_rust())
-    generator = torch.Generator().manual_seed(spec.action_seed)
     rows: list[SelectionDecision] = []
     capture.context["receipt_path"] = str(path)
     with (
@@ -139,33 +156,18 @@ def collect_selection_game(
             encoded = space.encode(raw)
             if len(frame.offers) != int(encoded["actions_valid"].sum()):
                 raise ValueError("selection policy cannot encode every legal offer")
-            tensors = admit_observation(
-                agent, {k: torch.as_tensor(v).unsqueeze(0) for k, v in encoded.items()}
-            )
-            logits, value = agent(tensors)
-            probabilities = logits.softmax(-1)
-            action = int(torch.multinomial(probabilities[0], 1, generator=generator))
-            logs = probabilities.clamp_min(1e-12).log()
-            ref = torch.from_numpy(
-                reference_distribution(
-                    {k: encoded[k][None] for k in ("actions_valid", "actions")},
-                    reference,
-                )
-            )
+            prediction = predictor.predict(encoded, reference)
+            action = prediction.action
             row = SelectionDecision(
                 step=len(rows),
                 actor=actor,
                 observation_identity=observation.viewer_state_hash,
                 action=action,
-                action_type=int(
-                    tensors["actions"][0, action, :ACTION_TYPE_DIM].argmax()
-                ),
-                value=float(value.item()),
-                action_probability=float(probabilities[0, action]),
-                entropy=float(-(probabilities * logs).sum()),
-                reference_kl=float(
-                    (probabilities * (logs - ref.clamp_min(1e-12).log())).sum()
-                ),
+                action_type=int(encoded["actions"][action, :ACTION_TYPE_DIM].argmax()),
+                value=prediction.value,
+                action_probability=prediction.probability,
+                entropy=prediction.entropy,
+                reference_kl=prediction.reference_kl,
             )
             command = Command(
                 f"selection-{spec.seed}-{row.step}",

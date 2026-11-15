@@ -60,7 +60,7 @@ test('UR vs GW plays to terminal with deck names and choice prompts rendered', a
   await page.getByTestId('opponent-select').selectOption('random');
   // Default stops stay on: my main1/main2 + opponent end step + stack.
 
-  await page.getByRole('button', { name: 'New Game' }).first().click();
+  await page.getByRole('button', { name: 'Start game' }).first().click();
   const board = page.getByTestId('game-board');
   await expect(board).toBeVisible({ timeout: 15_000 });
 

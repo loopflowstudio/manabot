@@ -352,8 +352,8 @@ def test_declared_arm_reaches_the_frozen_schedule(
     def native_job(native_artifact: str, native_source: str) -> Job:
         return Job(command="fixture", max_hours=11)
 
-    monkeypatch.setattr(campaign.original, "runs", native_job)
-    job = campaign.runs("unused", "unused", arm=arm, games=1)
+    monkeypatch.setattr(campaign.original, "training_jobs", native_job)
+    job = campaign.training_jobs("unused", "unused", arm=arm, games=1).plain()
     assert job.config is not None
     config = campaign.Campaign.model_validate_json(job.config)
     games = campaign._prepare_schedule(config, tmp_path)
@@ -734,7 +734,7 @@ def test_attempt_beyond_remaining_budget_is_refused_before_launch(
 ) -> None:
     # Missing provenance files prove refusal precedes any launch preparation.
     with pytest.raises(ValueError, match="attempt_usd"):
-        campaign.runs(
+        campaign.training_jobs(
             str(tmp_path / "absent.json"), str(tmp_path / "absent.json"), attempt_usd
         )
 
@@ -745,8 +745,8 @@ def test_small_nothink_pilot_retains_its_deadline_and_rental_bound(
     def native_job(native_artifact: str, native_source: str) -> Job:
         return Job(command="fixture", max_hours=11)
 
-    monkeypatch.setattr(campaign.original, "runs", native_job)
-    job = campaign.runs(
+    monkeypatch.setattr(campaign.original, "training_jobs", native_job)
+    job = campaign.training_jobs(
         "unused",
         "unused",
         attempt_usd="0.80",
@@ -754,7 +754,7 @@ def test_small_nothink_pilot_retains_its_deadline_and_rental_bound(
         games=1,
         concurrency=1,
         decision_seconds=300,
-    )
+    ).plain()
     assert job.config is not None
     config = campaign.Campaign.model_validate_json(job.config)
     games = campaign._prepare_schedule(config, tmp_path)
@@ -775,7 +775,9 @@ def test_small_nothink_pilot_retains_its_deadline_and_rental_bound(
 @pytest.mark.parametrize("attempt_usd", ["0.60", "0.80", "0.92"])
 def test_rental_without_a_full_decision_window_is_refused(attempt_usd: str) -> None:
     with pytest.raises(ValueError, match="complete decision admission"):
-        campaign.runs("absent", "absent", attempt_usd=attempt_usd, arm="nothink")
+        campaign.training_jobs(
+            "absent", "absent", attempt_usd=attempt_usd, arm="nothink"
+        )
 
 
 def test_collection_waits_for_game_owner_to_finish(tmp_path: Path) -> None:

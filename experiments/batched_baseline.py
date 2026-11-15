@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from manabot.infra.config import ModelConfig
+from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.recipes.builders import GIB, PACK, move_learning
 from manabot.sim.matchup import selected_match
 from manabot.training.regime import (
@@ -26,6 +26,9 @@ def batched_baseline() -> TrainingRegime:
         id="batching-grid-small-s64",
         world=managym.WORLD_VERSION,
         match=selected_match(),
+        # The family was frozen reading input v9; it keeps that input and its
+        # digests while fresh recipes read v11.
+        observation=ObservationConfig(policy_input_version=9),
         agent=ModelConfig(
             world=PACK, value_aggregation="masked_mean", attention_layers=2
         ),

@@ -4,6 +4,7 @@ from pathlib import Path
 
 import torch
 
+from manabot.backends import resolve
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
@@ -14,7 +15,9 @@ from manabot.training.loops.minimal import train
 def test_minimal_loop_returns_a_moved_finite_average(tmp_path: Path) -> None:
     torch.set_num_threads(1)
     tiny = ModelConfig(attention_on=False, hidden_dim=8)
-    trained = train(2, streams=2, decisions=8, seed=3, model=tiny)
+    trained = train(
+        2, streams=2, decisions=8, seed=3, model=tiny, backend=resolve("torch")
+    )
     torch.manual_seed(3)
     initial = ActorCritic(trained.observation_space, tiny)
     assert all(torch.isfinite(p).all() for p in trained.parameters())

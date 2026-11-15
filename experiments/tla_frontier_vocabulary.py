@@ -49,10 +49,11 @@ from typing import Literal
 
 from etude.eval.query import statsdb
 from etude.eval.records import Environment
-from etude.experiment import Checkpoint, ExperimentState, TrainingRun, observe
+from etude.experiment import Checkpoint, TrainingRun, observe
+from etude.jobs import ExperimentState
 from etude.launch.records import Job, Run
-from etude.run.listing import as_storage
-from etude.run.storage import S3Storage, Storage, run_prefix, storage_from_uri
+from etude.run import as_storage
+from etude.storage import S3Storage, Storage, run_prefix, storage_from_uri
 from etude.train.read import RunData, read_all
 
 from experiments.tla_frontier import (
@@ -133,7 +134,7 @@ def vocabulary_regime(
     )
 
 
-def runs(revision: str, extend_from: str = "") -> list[Run]:
+def training_jobs(revision: str, extend_from: str = "") -> list[Run]:
     """One capped allocation per arm, at the frontier's training seed.
 
     With `extend_from`, the Etude store holding the first segments, each arm
@@ -187,8 +188,8 @@ def runs(revision: str, extend_from: str = "") -> list[Run]:
 
 # A worker's final learner exports, beside its run record, under each attempt.
 _EXPORTS = {
-    "raw": "self-play-raw.pt",
-    "ema": "self-play-ema.pt",
+    "raw": "self-play-raw.safetensors",
+    "ema": "self-play-ema.safetensors",
     "optimizer": "self-play-optimizer.pt",
 }
 
@@ -377,7 +378,7 @@ def _environment(protocol: Protocol) -> Environment:
     )
 
 
-def eval(state: ExperimentState) -> list[Job]:
+def eval_jobs(state: ExperimentState) -> list[Job]:
     """Early comparisons as interior exports arrive; the endpoint once both ended."""
     if state.experiment != EXPERIMENT:
         raise ValueError("the vocabulary check requires its own runs")

@@ -14,10 +14,10 @@ import math
 from pathlib import Path
 from typing import Literal
 
-from etude.run.storage import storage_from_uri
+from etude.storage import storage_from_uri
 from etude.train.read import read
 from etude.train.records import Step
-from etude.train.run import seal_runs, track
+from etude.train.tracking import seal_runs, track
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from manabot.eval.monitor import MonitorResult
@@ -241,6 +241,7 @@ def publish_dashboard(
             directory=directory,
             storages=[storage_from_uri(destination)] if destination else (),
             strict=True,
+            resume=True,
         )
         try:
             for index in range(len(recorded), len(rows)):
@@ -255,9 +256,11 @@ def publish_dashboard(
                 {
                     "projection/summary_json": json.dumps(
                         dashboard.summary, sort_keys=True
-                    )
+                    ),
                 },
-                observation=max(0, len(rows) - 1),
+                # The prefix boundary keeps summary-only retries from replacing
+                # its last immutable row under first-row supersession.
+                observation=len(rows),
             )
         except Exception:
             tracked.finish("failed")

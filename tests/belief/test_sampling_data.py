@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 import torch
 
+from manabot.backends import resolve
 from manabot.backends.torch.policy import ActorCritic
-from manabot.belief.sampling import SamplerInput, SamplerSchema
 from manabot.belief.sampling_data import (
     SamplerDataset,
     SamplerExample,
@@ -19,6 +19,7 @@ from manabot.belief.sampling_data import (
     read_dataset,
     save_dataset,
 )
+from manabot.belief.sampling_types import SamplerInput, SamplerSchema
 from manabot.belief.state import ViewerHistory
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
@@ -108,6 +109,7 @@ def test_real_frozen_collection_keeps_both_viewers_and_three_game_splits(
                 games=3,
                 seed=51,
                 max_steps=300,
+                backend=resolve("torch"),
             )
         return
     dataset = collect_frozen_policy(
@@ -116,6 +118,7 @@ def test_real_frozen_collection_keeps_both_viewers_and_three_game_splits(
         games=3,
         seed=51,
         max_steps=300,
+        backend=resolve("torch"),
     )
     assert len(dataset.games) == 3
     assert {game.split for game in dataset.games} == {"train", "validation", "test"}

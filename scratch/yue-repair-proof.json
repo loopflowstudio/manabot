@@ -1,0 +1,4554 @@
+{
+  "admission": "changed-runtime diagnostic, not original private binary",
+  "source_revision": "fd7a7ed36c21553d419504daafeb36f70b3ab4ed",
+  "repair": "Only payment_model and reserve_announced_payment from production candidate; no performance overlay or experimental source-preference edits.",
+  "original_receipt_sha256": "2a575ed1eba230fda450c2be7534182f6ba663922a35ecbeda9a963bf8d9c007",
+  "original_rebuild_extension_sha256": "9458a2ae4652d8098d9439740aafc88713a80dec29f161bc9b2356f955ad14ec",
+  "candidate_extension_sha256": "af23cebf5ddcff2a93b65def0c4b7dca0d459532dc84a3d0f05176bb11a98dc0",
+  "diagnostic_patch_sha256": "8338423bb2f04bb3ca9c4311b16779ee35378478c4854ff03d1abd1109e639cd",
+  "retained_original_frame_matched": true,
+  "common_prefix_inputs": 193,
+  "first_divergence": 193,
+  "frames": {
+    "original": {
+      "frame": {
+        "schema_version": 8,
+        "revision": 194,
+        "actor": 0,
+        "fingerprint": "dd8c61b16f837e94cdccada59de0119414623dbbc553baa21344c7e63f0783cf",
+        "offers": [
+          {
+            "id": 0,
+            "actor": 0,
+            "verb": "activate_ability",
+            "source": null,
+            "label": "PriorityActivateAbility",
+            "help": null,
+            "choices": [],
+            "confirm_label": "PriorityActivateAbility"
+          },
+          {
+            "id": 1,
+            "actor": 0,
+            "verb": "waterbend_tap",
+            "source": null,
+            "label": "TapForCost",
+            "help": null,
+            "choices": [],
+            "confirm_label": "TapForCost"
+          },
+          {
+            "id": 2,
+            "actor": 0,
+            "verb": "waterbend_tap",
+            "source": null,
+            "label": "TapForCost",
+            "help": null,
+            "choices": [],
+            "confirm_label": "TapForCost"
+          }
+        ],
+        "object_candidates": []
+      },
+      "context": {
+        "recent_facts": [
+          "Lost Days was cast; its announced costs are committed.",
+          "Lost Days finished resolving.",
+          "Seat 2 sacrificed Clue."
+        ],
+        "actor": 0,
+        "stage": "payment",
+        "instruction": "Produce mana or finish the announced payment. Reserved sacrifices are not paid yet; activated mana abilities commit their own costs immediately.",
+        "source": {
+          "entity_id": 39,
+          "subject": {
+            "kind": "object",
+            "id": {
+              "entity": 153,
+              "incarnation": 3
+            }
+          },
+          "display_id": 153,
+          "label": "Yue, the Moon Spirit"
+        },
+        "targets": [],
+        "reserved_sacrifice": null,
+        "mana_cost": "{5}",
+        "chosen_mode": null
+      },
+      "subjects": [
+        [
+          {
+            "role": "source",
+            "object": {
+              "entity_id": 30,
+              "subject": {
+                "kind": "object",
+                "id": {
+                  "entity": 181,
+                  "incarnation": 2
+                }
+              },
+              "display_id": 181,
+              "label": "Rumble Arena"
+            }
+          }
+        ],
+        [
+          {
+            "role": "choice",
+            "object": {
+              "entity_id": 19,
+              "subject": {
+                "kind": "object",
+                "id": {
+                  "entity": 155,
+                  "incarnation": 3
+                }
+              },
+              "display_id": 155,
+              "label": "Knowledge Seeker"
+            }
+          }
+        ],
+        [
+          {
+            "role": "choice",
+            "object": {
+              "entity_id": 18,
+              "subject": {
+                "kind": "object",
+                "id": {
+                  "entity": 163,
+                  "incarnation": 3
+                }
+              },
+              "display_id": 163,
+              "label": "Knowledge Seeker"
+            }
+          }
+        ]
+      ],
+      "resources": {
+        "mana": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "life": 18,
+        "actions": {
+          "actions": [
+            {
+              "ability_index": 0,
+              "continuation_index": null,
+              "declared": null,
+              "focus": [
+                181
+              ],
+              "mode_index": null,
+              "type": 6
+            },
+            {
+              "ability_index": null,
+              "continuation_index": null,
+              "declared": null,
+              "focus": [
+                155
+              ],
+              "mode_index": null,
+              "type": 13
+            },
+            {
+              "ability_index": null,
+              "continuation_index": null,
+              "declared": null,
+              "focus": [
+                163
+              ],
+              "mode_index": null,
+              "type": 13
+            }
+          ],
+          "type": 10
+        },
+        "permanents": [
+          {
+            "id": 113,
+            "registry_key": 334,
+            "tapped": true,
+            "is_summoning_sick": false,
+            "definition": {
+              "name": "Secret Tunnel",
+              "card_types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_castable": false,
+                "is_creature": false,
+                "is_enchantment": false,
+                "is_kindred": false,
+                "is_land": true,
+                "is_non_creature_permanent": true,
+                "is_non_land_permanent": false,
+                "is_permanent": true,
+                "is_planeswalker": false,
+                "is_spell": false
+              },
+              "text_box": "This land can't be blocked.\n{T}: Add {C}.\n{4}, {T}: Two target creatures you control that share a creature type can't be blocked this turn."
+            }
+          },
+          {
+            "id": 118,
+            "registry_key": 170,
+            "tapped": true,
+            "is_summoning_sick": false,
+            "definition": {
+              "name": "Forest",
+              "card_types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_castable": false,
+                "is_creature": false,
+                "is_enchantment": false,
+                "is_kindred": false,
+                "is_land": true,
+                "is_non_creature_permanent": true,
+                "is_non_land_permanent": false,
+                "is_permanent": true,
+                "is_planeswalker": false,
+                "is_spell": false
+              },
+              "text_box": "({T}: Add {G}.)"
+            }
+          },
+          {
+            "id": 122,
+            "registry_key": 170,
+            "tapped": false,
+            "is_summoning_sick": false,
+            "definition": {
+              "name": "Forest",
+              "card_types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_castable": false,
+                "is_creature": false,
+                "is_enchantment": false,
+                "is_kindred": false,
+                "is_land": true,
+                "is_non_creature_permanent": true,
+                "is_non_land_permanent": false,
+                "is_permanent": true,
+                "is_planeswalker": false,
+                "is_spell": false
+              },
+              "text_box": "({T}: Add {G}.)"
+            }
+          },
+          {
+            "id": 128,
+            "registry_key": 215,
+            "tapped": true,
+            "is_summoning_sick": false,
+            "definition": {
+              "name": "Island",
+              "card_types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_castable": false,
+                "is_creature": false,
+                "is_enchantment": false,
+                "is_kindred": false,
+                "is_land": true,
+                "is_non_creature_permanent": true,
+                "is_non_land_permanent": false,
+                "is_permanent": true,
+                "is_planeswalker": false,
+                "is_spell": false
+              },
+              "text_box": "({T}: Add {U}.)"
+            }
+          },
+          {
+            "id": 133,
+            "registry_key": 270,
+            "tapped": false,
+            "is_summoning_sick": false,
+            "definition": {
+              "name": "Mountain",
+              "card_types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_castable": false,
+                "is_creature": false,
+                "is_enchantment": false,
+                "is_kindred": false,
+                "is_land": true,
+                "is_non_creature_permanent": true,
+                "is_non_land_permanent": false,
+                "is_permanent": true,
+                "is_planeswalker": false,
+                "is_spell": false
+              },
+              "text_box": "({T}: Add {R}.)"
+            }
+          },
+          {
+            "id": 145,
+            "registry_key": 215,
+            "tapped": true,
+            "is_summoning_sick": false,
+            "definition": {
+              "name": "Island",
+              "card_types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_castable": false,
+                "is_creature": false,
+                "is_enchantment": false,
+                "is_kindred": false,
+                "is_land": true,
+                "is_non_creature_permanent": true,
+                "is_non_land_permanent": false,
+                "is_permanent": true,
+                "is_planeswalker": false,
+                "is_spell": false
+              },
+              "text_box": "({T}: Add {U}.)"
+            }
+          },
+          {
+            "id": 153,
+            "registry_key": 459,
+            "tapped": false,
+            "is_summoning_sick": false,
+            "definition": {
+              "name": "Yue, the Moon Spirit",
+              "card_types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_castable": true,
+                "is_creature": true,
+                "is_enchantment": false,
+                "is_kindred": false,
+                "is_land": false,
+                "is_non_creature_permanent": false,
+                "is_non_land_permanent": true,
+                "is_permanent": true,
+                "is_planeswalker": false,
+                "is_spell": false
+              },
+              "text_box": "Flying, vigilance\nWaterbend {5}, {T}: You may cast a noncreature spell from your hand without paying its mana cost. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)"
+            }
+          },
+          {
+            "id": 155,
+            "registry_key": 231,
+            "tapped": false,
+            "is_summoning_sick": false,
+            "definition": {
+              "name": "Knowledge Seeker",
+              "card_types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_castable": true,
+                "is_creature": true,
+                "is_enchantment": false,
+                "is_kindred": false,
+                "is_land": false,
+                "is_non_creature_permanent": false,
+                "is_non_land_permanent": true,
+                "is_permanent": true,
+                "is_planeswalker": false,
+                "is_spell": false
+              },
+              "text_box": "Vigilance\nWhenever you draw your second card each turn, put a +1/+1 counter on this creature.\nWhen this creature dies, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")"
+            }
+          },
+          {
+            "id": 156,
+            "registry_key": 270,
+            "tapped": true,
+            "is_summoning_sick": false,
+            "definition": {
+              "name": "Mountain",
+              "card_types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_castable": false,
+                "is_creature": false,
+                "is_enchantment": false,
+                "is_kindred": false,
+                "is_land": true,
+                "is_non_creature_permanent": true,
+                "is_non_land_permanent": false,
+                "is_permanent": true,
+                "is_planeswalker": false,
+                "is_spell": false
+              },
+              "text_box": "({T}: Add {R}.)"
+            }
+          },
+          {
+            "id": 163,
+            "registry_key": 231,
+            "tapped": false,
+            "is_summoning_sick": false,
+            "definition": {
+              "name": "Knowledge Seeker",
+              "card_types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_castable": true,
+                "is_creature": true,
+                "is_enchantment": false,
+                "is_kindred": false,
+                "is_land": false,
+                "is_non_creature_permanent": false,
+                "is_non_land_permanent": true,
+                "is_permanent": true,
+                "is_planeswalker": false,
+                "is_spell": false
+              },
+              "text_box": "Vigilance\nWhenever you draw your second card each turn, put a +1/+1 counter on this creature.\nWhen this creature dies, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")"
+            }
+          },
+          {
+            "id": 181,
+            "registry_key": 322,
+            "tapped": false,
+            "is_summoning_sick": false,
+            "definition": {
+              "name": "Rumble Arena",
+              "card_types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_castable": false,
+                "is_creature": false,
+                "is_enchantment": false,
+                "is_kindred": false,
+                "is_land": true,
+                "is_non_creature_permanent": true,
+                "is_non_land_permanent": false,
+                "is_permanent": true,
+                "is_planeswalker": false,
+                "is_spell": false
+              },
+              "text_box": "Vigilance\nWhen this land enters, scry 1. (Look at the top card of your library. You may put it on the bottom.)\n{T}: Add {C}.\n{1}, {T}: Add one mana of any color."
+            }
+          }
+        ]
+      }
+    },
+    "candidate": {
+      "frame": {
+        "schema_version": 8,
+        "revision": 194,
+        "actor": 0,
+        "fingerprint": "de241ee9abb73633467961a60a27bfbc2b1760d552c4c7a86248abfc7e5153b2",
+        "offers": [
+          {
+            "id": 0,
+            "actor": 0,
+            "verb": "waterbend_tap",
+            "source": null,
+            "label": "TapForCost",
+            "help": null,
+            "choices": [],
+            "confirm_label": "TapForCost"
+          },
+          {
+            "id": 1,
+            "actor": 0,
+            "verb": "waterbend_tap",
+            "source": null,
+            "label": "TapForCost",
+            "help": null,
+            "choices": [],
+            "confirm_label": "TapForCost"
+          }
+        ],
+        "object_candidates": []
+      },
+      "context": {
+        "recent_facts": [
+          "Lost Days was cast; its announced costs are committed.",
+          "Lost Days finished resolving.",
+          "Seat 2 sacrificed Clue."
+        ],
+        "actor": 0,
+        "stage": "payment",
+        "instruction": "Produce mana or finish the announced payment. Reserved sacrifices are not paid yet; activated mana abilities commit their own costs immediately.",
+        "source": {
+          "entity_id": 39,
+          "subject": {
+            "kind": "object",
+            "id": {
+              "entity": 153,
+              "incarnation": 3
+            }
+          },
+          "display_id": 153,
+          "label": "Yue, the Moon Spirit"
+        },
+        "targets": [],
+        "reserved_sacrifice": null,
+        "mana_cost": "{5}",
+        "chosen_mode": null
+      },
+      "subjects": [
+        [
+          {
+            "role": "choice",
+            "object": {
+              "entity_id": 19,
+              "subject": {
+                "kind": "object",
+                "id": {
+                  "entity": 155,
+                  "incarnation": 3
+                }
+              },
+              "display_id": 155,
+              "label": "Knowledge Seeker"
+            }
+          }
+        ],
+        [
+          {
+            "role": "choice",
+            "object": {
+              "entity_id": 18,
+              "subject": {
+                "kind": "object",
+                "id": {
+                  "entity": 163,
+                  "incarnation": 3
+                }
+              },
+              "display_id": 163,
+              "label": "Knowledge Seeker"
+            }
+          }
+        ]
+      ],
+      "resources": {
+        "mana": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "life": 18,
+        "actions": {
+          "actions": [
+            {
+              "ability_index": null,
+              "continuation_index": null,
+              "declared": null,
+              "focus": [
+                155
+              ],
+              "mode_index": null,
+              "type": 13
+            },
+            {
+              "ability_index": null,
+              "continuation_index": null,
+              "declared": null,
+              "focus": [
+                163
+              ],
+              "mode_index": null,
+              "type": 13
+            }
+          ],
+          "type": 10
+        },
+        "permanents": [
+          {
+            "id": 113,
+            "registry_key": 334,
+            "tapped": true,
+            "is_summoning_sick": false,
+            "definition": {
+              "name": "Secret Tunnel",
+              "card_types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_castable": false,
+                "is_creature": false,
+                "is_enchantment": false,
+                "is_kindred": false,
+                "is_land": true,
+                "is_non_creature_permanent": true,
+                "is_non_land_permanent": false,
+                "is_permanent": true,
+                "is_planeswalker": false,
+                "is_spell": false
+              },
+              "text_box": "This land can't be blocked.\n{T}: Add {C}.\n{4}, {T}: Two target creatures you control that share a creature type can't be blocked this turn."
+            }
+          },
+          {
+            "id": 118,
+            "registry_key": 170,
+            "tapped": true,
+            "is_summoning_sick": false,
+            "definition": {
+              "name": "Forest",
+              "card_types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_castable": false,
+                "is_creature": false,
+                "is_enchantment": false,
+                "is_kindred": false,
+                "is_land": true,
+                "is_non_creature_permanent": true,
+                "is_non_land_permanent": false,
+                "is_permanent": true,
+                "is_planeswalker": false,
+                "is_spell": false
+              },
+              "text_box": "({T}: Add {G}.)"
+            }
+          },
+          {
+            "id": 122,
+            "registry_key": 170,
+            "tapped": false,
+            "is_summoning_sick": false,
+            "definition": {
+              "name": "Forest",
+              "card_types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_castable": false,
+                "is_creature": false,
+                "is_enchantment": false,
+                "is_kindred": false,
+                "is_land": true,
+                "is_non_creature_permanent": true,
+                "is_non_land_permanent": false,
+                "is_permanent": true,
+                "is_planeswalker": false,
+                "is_spell": false
+              },
+              "text_box": "({T}: Add {G}.)"
+            }
+          },
+          {
+            "id": 128,
+            "registry_key": 215,
+            "tapped": true,
+            "is_summoning_sick": false,
+            "definition": {
+              "name": "Island",
+              "card_types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_castable": false,
+                "is_creature": false,
+                "is_enchantment": false,
+                "is_kindred": false,
+                "is_land": true,
+                "is_non_creature_permanent": true,
+                "is_non_land_permanent": false,
+                "is_permanent": true,
+                "is_planeswalker": false,
+                "is_spell": false
+              },
+              "text_box": "({T}: Add {U}.)"
+            }
+          },
+          {
+            "id": 133,
+            "registry_key": 270,
+            "tapped": false,
+            "is_summoning_sick": false,
+            "definition": {
+              "name": "Mountain",
+              "card_types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_castable": false,
+                "is_creature": false,
+                "is_enchantment": false,
+                "is_kindred": false,
+                "is_land": true,
+                "is_non_creature_permanent": true,
+                "is_non_land_permanent": false,
+                "is_permanent": true,
+                "is_planeswalker": false,
+                "is_spell": false
+              },
+              "text_box": "({T}: Add {R}.)"
+            }
+          },
+          {
+            "id": 145,
+            "registry_key": 215,
+            "tapped": true,
+            "is_summoning_sick": false,
+            "definition": {
+              "name": "Island",
+              "card_types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_castable": false,
+                "is_creature": false,
+                "is_enchantment": false,
+                "is_kindred": false,
+                "is_land": true,
+                "is_non_creature_permanent": true,
+                "is_non_land_permanent": false,
+                "is_permanent": true,
+                "is_planeswalker": false,
+                "is_spell": false
+              },
+              "text_box": "({T}: Add {U}.)"
+            }
+          },
+          {
+            "id": 153,
+            "registry_key": 459,
+            "tapped": false,
+            "is_summoning_sick": false,
+            "definition": {
+              "name": "Yue, the Moon Spirit",
+              "card_types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_castable": true,
+                "is_creature": true,
+                "is_enchantment": false,
+                "is_kindred": false,
+                "is_land": false,
+                "is_non_creature_permanent": false,
+                "is_non_land_permanent": true,
+                "is_permanent": true,
+                "is_planeswalker": false,
+                "is_spell": false
+              },
+              "text_box": "Flying, vigilance\nWaterbend {5}, {T}: You may cast a noncreature spell from your hand without paying its mana cost. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)"
+            }
+          },
+          {
+            "id": 155,
+            "registry_key": 231,
+            "tapped": false,
+            "is_summoning_sick": false,
+            "definition": {
+              "name": "Knowledge Seeker",
+              "card_types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_castable": true,
+                "is_creature": true,
+                "is_enchantment": false,
+                "is_kindred": false,
+                "is_land": false,
+                "is_non_creature_permanent": false,
+                "is_non_land_permanent": true,
+                "is_permanent": true,
+                "is_planeswalker": false,
+                "is_spell": false
+              },
+              "text_box": "Vigilance\nWhenever you draw your second card each turn, put a +1/+1 counter on this creature.\nWhen this creature dies, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")"
+            }
+          },
+          {
+            "id": 156,
+            "registry_key": 270,
+            "tapped": true,
+            "is_summoning_sick": false,
+            "definition": {
+              "name": "Mountain",
+              "card_types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_castable": false,
+                "is_creature": false,
+                "is_enchantment": false,
+                "is_kindred": false,
+                "is_land": true,
+                "is_non_creature_permanent": true,
+                "is_non_land_permanent": false,
+                "is_permanent": true,
+                "is_planeswalker": false,
+                "is_spell": false
+              },
+              "text_box": "({T}: Add {R}.)"
+            }
+          },
+          {
+            "id": 163,
+            "registry_key": 231,
+            "tapped": false,
+            "is_summoning_sick": false,
+            "definition": {
+              "name": "Knowledge Seeker",
+              "card_types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_castable": true,
+                "is_creature": true,
+                "is_enchantment": false,
+                "is_kindred": false,
+                "is_land": false,
+                "is_non_creature_permanent": false,
+                "is_non_land_permanent": true,
+                "is_permanent": true,
+                "is_planeswalker": false,
+                "is_spell": false
+              },
+              "text_box": "Vigilance\nWhenever you draw your second card each turn, put a +1/+1 counter on this creature.\nWhen this creature dies, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")"
+            }
+          },
+          {
+            "id": 181,
+            "registry_key": 322,
+            "tapped": false,
+            "is_summoning_sick": false,
+            "definition": {
+              "name": "Rumble Arena",
+              "card_types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_castable": false,
+                "is_creature": false,
+                "is_enchantment": false,
+                "is_kindred": false,
+                "is_land": true,
+                "is_non_creature_permanent": true,
+                "is_non_land_permanent": false,
+                "is_permanent": true,
+                "is_planeswalker": false,
+                "is_spell": false
+              },
+              "text_box": "Vigilance\nWhen this land enters, scry 1. (Look at the top card of your library. You may put it on the bottom.)\n{T}: Add {C}.\n{1}, {T}: Add one mana of any color."
+            }
+          }
+        ]
+      }
+    }
+  },
+  "continuation": {
+    "status": "payment_advanced",
+    "frame": {
+      "schema_version": 8,
+      "revision": 195,
+      "actor": 0,
+      "fingerprint": "6607773f0e7a5ccc14a684481d6f300274a5d880b1250111f6bf65b5cd5fcbf4",
+      "offers": [
+        {
+          "id": 0,
+          "actor": 0,
+          "verb": "select_card",
+          "source": null,
+          "label": "SelectCard",
+          "help": null,
+          "choices": [],
+          "confirm_label": "SelectCard"
+        },
+        {
+          "id": 1,
+          "actor": 0,
+          "verb": "select_card",
+          "source": null,
+          "label": "SelectCard",
+          "help": null,
+          "choices": [],
+          "confirm_label": "SelectCard"
+        },
+        {
+          "id": 2,
+          "actor": 0,
+          "verb": "select_card",
+          "source": null,
+          "label": "SelectCard",
+          "help": null,
+          "choices": [],
+          "confirm_label": "SelectCard"
+        },
+        {
+          "id": 3,
+          "actor": 0,
+          "verb": "select_card",
+          "source": null,
+          "label": "SelectCard",
+          "help": null,
+          "choices": [],
+          "confirm_label": "SelectCard"
+        },
+        {
+          "id": 4,
+          "actor": 0,
+          "verb": "decline",
+          "source": null,
+          "label": "DeclineChoice",
+          "help": null,
+          "choices": [],
+          "confirm_label": "DeclineChoice"
+        }
+      ],
+      "object_candidates": []
+    },
+    "context": {
+      "recent_facts": [
+        "Lost Days was cast; its announced costs are committed.",
+        "Lost Days finished resolving.",
+        "Seat 2 sacrificed Clue."
+      ],
+      "actor": 0,
+      "stage": "free_cast",
+      "instruction": "Choose a spell to cast without paying its mana cost, or decline.",
+      "source": {
+        "entity_id": 39,
+        "subject": {
+          "kind": "object",
+          "id": {
+            "entity": 153,
+            "incarnation": 3
+          }
+        },
+        "display_id": 153,
+        "label": "Yue, the Moon Spirit"
+      },
+      "targets": [],
+      "reserved_sacrifice": null,
+      "mana_cost": null,
+      "chosen_mode": null
+    },
+    "continuation": [
+      {
+        "command": {
+          "command_id": "mtg350.0",
+          "expected_revision": 194,
+          "offer_id": 0,
+          "answers": []
+        },
+        "seconds": 0.0008094999939203262,
+        "result": {
+          "receipt": {
+            "schema_version": 8,
+            "before_revision": 194,
+            "after_revision": 195,
+            "command_id": "mtg350.0",
+            "public_commitment": null,
+            "events": [],
+            "next_decision": "6607773f0e7a5ccc14a684481d6f300274a5d880b1250111f6bf65b5cd5fcbf4"
+          },
+          "observation": {
+            "identity": {
+              "schema_version": 8,
+              "revision": 195,
+              "viewer": 0,
+              "viewer_state_hash": "646fe845457fcd1f6b753fa02996e95f89e146e5b7473bf7f7ac31ff1d23b02d"
+            },
+            "viewer_state": {
+              "action_space": {
+                "actions": [
+                  {
+                    "ability_index": null,
+                    "continuation_index": null,
+                    "declared": null,
+                    "focus": [
+                      23
+                    ],
+                    "mode_index": null,
+                    "type": 9
+                  },
+                  {
+                    "ability_index": null,
+                    "continuation_index": null,
+                    "declared": null,
+                    "focus": [
+                      27
+                    ],
+                    "mode_index": null,
+                    "type": 9
+                  },
+                  {
+                    "ability_index": null,
+                    "continuation_index": null,
+                    "declared": null,
+                    "focus": [
+                      36
+                    ],
+                    "mode_index": null,
+                    "type": 9
+                  },
+                  {
+                    "ability_index": null,
+                    "continuation_index": null,
+                    "declared": null,
+                    "focus": [
+                      37
+                    ],
+                    "mode_index": null,
+                    "type": 9
+                  },
+                  {
+                    "ability_index": null,
+                    "continuation_index": null,
+                    "declared": null,
+                    "focus": [
+                      41
+                    ],
+                    "mode_index": null,
+                    "type": 10
+                  }
+                ],
+                "type": 6
+              },
+              "agent": {
+                "combat_mana": 0,
+                "graveyard_lessons": 3,
+                "id": 0,
+                "is_active": true,
+                "is_agent": true,
+                "known_hand": {},
+                "lesson_mana": [
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ],
+                "life": 18,
+                "main_counts": {
+                  "1": 1,
+                  "155": 1,
+                  "170": 4,
+                  "193": 2,
+                  "215": 6,
+                  "231": 2,
+                  "261": 2,
+                  "270": 3,
+                  "277": 1,
+                  "278": 1,
+                  "279": 2,
+                  "305": 1,
+                  "322": 1,
+                  "334": 1,
+                  "34": 1,
+                  "344": 2,
+                  "35": 1,
+                  "361": 1,
+                  "38": 1,
+                  "384": 1,
+                  "392": 1,
+                  "407": 1,
+                  "446": 1,
+                  "459": 1,
+                  "47": 1
+                },
+                "mana": [
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ],
+                "player_index": 0,
+                "remaining_sideboard_counts": {
+                  "114": 1,
+                  "164": 1,
+                  "197": 1,
+                  "199": 1,
+                  "274": 1,
+                  "282": 1,
+                  "344": 1,
+                  "353": 1,
+                  "422": 1,
+                  "425": 1,
+                  "466": 1,
+                  "85": 1,
+                  "88": 1,
+                  "96": 1
+                },
+                "sideboard_counts": {
+                  "114": 1,
+                  "164": 1,
+                  "197": 1,
+                  "199": 1,
+                  "274": 1,
+                  "282": 1,
+                  "344": 1,
+                  "353": 1,
+                  "422": 1,
+                  "425": 1,
+                  "466": 1,
+                  "85": 1,
+                  "88": 1,
+                  "96": 1
+                },
+                "turn_history": {
+                  "bent": 1,
+                  "cards_drawn": 1,
+                  "land_entered": true
+                },
+                "unseen_counts": {
+                  "155": 1,
+                  "170": 2,
+                  "193": 1,
+                  "215": 4,
+                  "261": 1,
+                  "270": 1,
+                  "279": 1,
+                  "34": 1,
+                  "344": 2,
+                  "35": 1,
+                  "407": 1
+                },
+                "zone_counts": [
+                  16,
+                  6,
+                  11,
+                  7,
+                  0,
+                  0,
+                  0
+                ]
+              },
+              "agent_cards": [
+                {
+                  "card_types": {
+                    "is_artifact": true,
+                    "is_battle": false,
+                    "is_castable": true,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": false,
+                    "is_non_creature_permanent": true,
+                    "is_non_land_permanent": true,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 23,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 7
+                  },
+                  "name": "Meteor Sword",
+                  "owner_id": 0,
+                  "power": 0,
+                  "registry_key": 261,
+                  "text_box": "When this Equipment enters, destroy target permanent.\nEquipped creature gets +3/+3.\nEquip {3} ({3}: Attach to target creature you control. Equip only as a sorcery.)",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 1
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": true,
+                    "is_creature": true,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": false,
+                    "is_non_creature_permanent": false,
+                    "is_non_land_permanent": true,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 38,
+                  "is_ally": false,
+                  "is_legendary": true,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": true,
+                    "trample": false,
+                    "vigilance": true
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      1,
+                      0,
+                      0,
+                      1,
+                      0
+                    ],
+                    "mana_value": 3
+                  },
+                  "name": "The Lion-Turtle",
+                  "owner_id": 0,
+                  "power": 3,
+                  "registry_key": 392,
+                  "text_box": "Reach, vigilance\nWhen The Lion-Turtle enters, you gain 3 life.\nThe Lion-Turtle can't attack or block unless there are three or more Lesson cards in your graveyard.\n{T}: Add one mana of any color.",
+                  "toughness": 6,
+                  "ward_cost": 0,
+                  "zone": 1
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": true,
+                    "is_creature": true,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": false,
+                    "is_non_creature_permanent": false,
+                    "is_non_land_permanent": true,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 31,
+                  "is_ally": false,
+                  "is_legendary": true,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": true,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      0,
+                      0,
+                      2,
+                      0,
+                      0
+                    ],
+                    "mana_value": 5
+                  },
+                  "name": "Ran and Shaw",
+                  "owner_id": 0,
+                  "power": 4,
+                  "registry_key": 305,
+                  "text_box": "Flying, firebending 2\nWhen Ran and Shaw enter, if you cast them and there are three or more Dragon and/or Lesson cards in your graveyard, create a token that's a copy of Ran and Shaw, except it's not legendary.\n{3}{R}: Dragons you control get +2/+0 until end of turn.",
+                  "toughness": 4,
+                  "ward_cost": 0,
+                  "zone": 1
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": true,
+                    "is_creature": false,
+                    "is_enchantment": true,
+                    "is_kindred": false,
+                    "is_land": false,
+                    "is_non_creature_permanent": true,
+                    "is_non_land_permanent": true,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 37,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      2,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 4
+                  },
+                  "name": "The Legend of Kuruk",
+                  "owner_id": 0,
+                  "power": 0,
+                  "registry_key": 384,
+                  "text_box": "(As this Saga enters and after your draw step, add a lore counter.)\nI, II \u2014 Scry 2, then draw a card.\nIII \u2014 Exile this Saga, then return it to the battlefield transformed under your control.",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 1
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": true,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": false,
+                    "is_non_creature_permanent": false,
+                    "is_non_land_permanent": false,
+                    "is_permanent": false,
+                    "is_planeswalker": false,
+                    "is_spell": true
+                  },
+                  "id": 36,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 6,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      2,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 3
+                  },
+                  "name": "Spirit Water Revival",
+                  "owner_id": 0,
+                  "power": 0,
+                  "registry_key": 361,
+                  "text_box": "As an additional cost to cast this spell, you may waterbend {6}. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)\nDraw two cards. If this spell's additional cost was paid, instead shuffle your graveyard into your library, draw seven cards, and you have no maximum hand size for the rest of the game.\nExile Spirit Water Revival.",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 1
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": true,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": false,
+                    "is_non_creature_permanent": false,
+                    "is_non_land_permanent": false,
+                    "is_permanent": false,
+                    "is_planeswalker": false,
+                    "is_spell": true
+                  },
+                  "id": 27,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": true,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      1,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 1
+                  },
+                  "name": "Octopus Form",
+                  "owner_id": 0,
+                  "power": 0,
+                  "registry_key": 277,
+                  "text_box": "Target creature you control gets +1/+1 and gains hexproof until end of turn. Untap it. (It can't be the target of spells or abilities your opponents control.)",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 1
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": true,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": false,
+                    "is_non_creature_permanent": false,
+                    "is_non_land_permanent": false,
+                    "is_permanent": false,
+                    "is_planeswalker": false,
+                    "is_spell": true
+                  },
+                  "id": 2,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": true,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 2,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 2
+                  },
+                  "name": "Aang's Journey",
+                  "owner_id": 0,
+                  "power": 0,
+                  "registry_key": 1,
+                  "text_box": "Kicker {2} (You may pay an additional {2} as you cast this spell.)\nSearch your library for a basic land card. If this spell was kicked, instead search your library for a basic land card and a Shrine card. Reveal those cards, put them into your hand, then shuffle.\nYou gain 2 life.",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 3
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": false,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": true,
+                    "is_non_creature_permanent": true,
+                    "is_non_land_permanent": false,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 28,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 0
+                  },
+                  "name": "Omashu City",
+                  "owner_id": 0,
+                  "power": 0,
+                  "registry_key": 278,
+                  "text_box": "This land enters tapped.\n{T}: Add {R} or {G}.\n{4}, {T}, Sacrifice this land: Draw a card.",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 3
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": true,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": false,
+                    "is_non_creature_permanent": false,
+                    "is_non_land_permanent": false,
+                    "is_permanent": false,
+                    "is_planeswalker": false,
+                    "is_spell": true
+                  },
+                  "id": 30,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": true,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      1,
+                      0
+                    ],
+                    "mana_value": 2
+                  },
+                  "name": "Origin of Metalbending",
+                  "owner_id": 0,
+                  "power": 0,
+                  "registry_key": 279,
+                  "text_box": "Choose one \u2014\n\u2022 Destroy target artifact or enchantment.\n\u2022 Put a +1/+1 counter on target creature you control. It gains indestructible until end of turn. (Damage and effects that say \"destroy\" don't destroy it.)",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 3
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": true,
+                    "is_creature": true,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": false,
+                    "is_non_creature_permanent": false,
+                    "is_non_land_permanent": true,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 13,
+                  "is_ally": true,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      1,
+                      0,
+                      0,
+                      1,
+                      0
+                    ],
+                    "mana_value": 2
+                  },
+                  "name": "Hermitic Herbalist",
+                  "owner_id": 0,
+                  "power": 2,
+                  "registry_key": 193,
+                  "text_box": "{T}: Add one mana of any color.\n{T}: Add two mana in any combination of colors. Spend this mana only to cast Lesson spells.",
+                  "toughness": 3,
+                  "ward_cost": 0,
+                  "zone": 3
+                },
+                {
+                  "card_types": {
+                    "is_artifact": true,
+                    "is_battle": false,
+                    "is_castable": true,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": false,
+                    "is_non_creature_permanent": true,
+                    "is_non_land_permanent": true,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 5,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 1
+                  },
+                  "name": "Barrels of Blasting Jelly",
+                  "owner_id": 0,
+                  "power": 0,
+                  "registry_key": 38,
+                  "text_box": "{1}: Add one mana of any color. Activate only once each turn.\n{5}, {T}, Sacrifice this artifact: It deals 5 damage to target creature.",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 3
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": true,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": false,
+                    "is_non_creature_permanent": false,
+                    "is_non_land_permanent": false,
+                    "is_permanent": false,
+                    "is_planeswalker": false,
+                    "is_spell": true
+                  },
+                  "id": 40,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": true,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      1,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 4
+                  },
+                  "name": "Waterbending Lesson",
+                  "owner_id": 0,
+                  "power": 0,
+                  "registry_key": 446,
+                  "text_box": "Draw three cards. Then discard a card unless you waterbend {2}. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 3
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": true,
+                    "is_creature": false,
+                    "is_enchantment": true,
+                    "is_kindred": false,
+                    "is_land": false,
+                    "is_non_creature_permanent": true,
+                    "is_non_land_permanent": true,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 6,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      0,
+                      0,
+                      1,
+                      1,
+                      0
+                    ],
+                    "mana_value": 3
+                  },
+                  "name": "Bitter Work",
+                  "owner_id": 0,
+                  "power": 0,
+                  "registry_key": 47,
+                  "text_box": "Whenever you attack a player with one or more creatures with power 4 or greater, draw a card.\nExhaust \u2014 {4}: Earthbend 4. Activate only during your turn. (Target land you control becomes a 0/0 creature with haste that's still a land. Put four +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped. Activate each exhaust ability only once.)",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 3
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": false,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": true,
+                    "is_non_creature_permanent": true,
+                    "is_non_land_permanent": false,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 33,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 0
+                  },
+                  "name": "Secret Tunnel",
+                  "owner_id": 0,
+                  "power": 0,
+                  "registry_key": 334,
+                  "text_box": "This land can't be blocked.\n{T}: Add {C}.\n{4}, {T}: Two target creatures you control that share a creature type can't be blocked this turn.",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 2
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": false,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": true,
+                    "is_non_creature_permanent": true,
+                    "is_non_land_permanent": false,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 11,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 0
+                  },
+                  "name": "Forest",
+                  "owner_id": 0,
+                  "power": 0,
+                  "registry_key": 170,
+                  "text_box": "({T}: Add {G}.)",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 2
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": false,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": true,
+                    "is_non_creature_permanent": true,
+                    "is_non_land_permanent": false,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 10,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 0
+                  },
+                  "name": "Forest",
+                  "owner_id": 0,
+                  "power": 0,
+                  "registry_key": 170,
+                  "text_box": "({T}: Add {G}.)",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 2
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": false,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": true,
+                    "is_non_creature_permanent": true,
+                    "is_non_land_permanent": false,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 17,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 0
+                  },
+                  "name": "Island",
+                  "owner_id": 0,
+                  "power": 0,
+                  "registry_key": 215,
+                  "text_box": "({T}: Add {U}.)",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 2
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": false,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": true,
+                    "is_non_creature_permanent": true,
+                    "is_non_land_permanent": false,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 24,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 0
+                  },
+                  "name": "Mountain",
+                  "owner_id": 0,
+                  "power": 0,
+                  "registry_key": 270,
+                  "text_box": "({T}: Add {R}.)",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 2
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": false,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": true,
+                    "is_non_creature_permanent": true,
+                    "is_non_land_permanent": false,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 15,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 0
+                  },
+                  "name": "Island",
+                  "owner_id": 0,
+                  "power": 0,
+                  "registry_key": 215,
+                  "text_box": "({T}: Add {U}.)",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 2
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": true,
+                    "is_creature": true,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": false,
+                    "is_non_creature_permanent": false,
+                    "is_non_land_permanent": true,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 41,
+                  "is_ally": true,
+                  "is_legendary": true,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": true,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": true
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      1,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 4
+                  },
+                  "name": "Yue, the Moon Spirit",
+                  "owner_id": 0,
+                  "power": 3,
+                  "registry_key": 459,
+                  "text_box": "Flying, vigilance\nWaterbend {5}, {T}: You may cast a noncreature spell from your hand without paying its mana cost. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)",
+                  "toughness": 3,
+                  "ward_cost": 0,
+                  "zone": 2
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": true,
+                    "is_creature": true,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": false,
+                    "is_non_creature_permanent": false,
+                    "is_non_land_permanent": true,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 21,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": true
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      1,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 2
+                  },
+                  "name": "Knowledge Seeker",
+                  "owner_id": 0,
+                  "power": 2,
+                  "registry_key": 231,
+                  "text_box": "Vigilance\nWhenever you draw your second card each turn, put a +1/+1 counter on this creature.\nWhen this creature dies, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")",
+                  "toughness": 1,
+                  "ward_cost": 0,
+                  "zone": 2
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": false,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": true,
+                    "is_non_creature_permanent": true,
+                    "is_non_land_permanent": false,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 26,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 0
+                  },
+                  "name": "Mountain",
+                  "owner_id": 0,
+                  "power": 0,
+                  "registry_key": 270,
+                  "text_box": "({T}: Add {R}.)",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 2
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": true,
+                    "is_creature": true,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": false,
+                    "is_non_creature_permanent": false,
+                    "is_non_land_permanent": true,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 20,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": true
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      1,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 2
+                  },
+                  "name": "Knowledge Seeker",
+                  "owner_id": 0,
+                  "power": 2,
+                  "registry_key": 231,
+                  "text_box": "Vigilance\nWhenever you draw your second card each turn, put a +1/+1 counter on this creature.\nWhen this creature dies, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")",
+                  "toughness": 1,
+                  "ward_cost": 0,
+                  "zone": 2
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": false,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": true,
+                    "is_non_creature_permanent": true,
+                    "is_non_land_permanent": false,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 32,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": true
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 0
+                  },
+                  "name": "Rumble Arena",
+                  "owner_id": 0,
+                  "power": 0,
+                  "registry_key": 322,
+                  "text_box": "Vigilance\nWhen this land enters, scry 1. (Look at the top card of your library. You may put it on the bottom.)\n{T}: Add {C}.\n{1}, {T}: Add one mana of any color.",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 2
+                }
+              ],
+              "agent_permanents": [
+                {
+                  "cant_be_blocked_this_turn": false,
+                  "controller_id": 0,
+                  "damage": 0,
+                  "exile_if_dies_this_turn": false,
+                  "has_exile_link": false,
+                  "id": 113,
+                  "is_animated": false,
+                  "is_summoning_sick": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "plus1_counters": 0,
+                  "power": 0,
+                  "registry_key": 334,
+                  "tapped": true,
+                  "temp_subtypes": [],
+                  "toughness": 0
+                },
+                {
+                  "cant_be_blocked_this_turn": false,
+                  "controller_id": 0,
+                  "damage": 0,
+                  "exile_if_dies_this_turn": false,
+                  "has_exile_link": false,
+                  "id": 118,
+                  "is_animated": false,
+                  "is_summoning_sick": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "plus1_counters": 0,
+                  "power": 0,
+                  "registry_key": 170,
+                  "tapped": true,
+                  "temp_subtypes": [],
+                  "toughness": 0
+                },
+                {
+                  "cant_be_blocked_this_turn": false,
+                  "controller_id": 0,
+                  "damage": 0,
+                  "exile_if_dies_this_turn": false,
+                  "has_exile_link": false,
+                  "id": 122,
+                  "is_animated": false,
+                  "is_summoning_sick": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "plus1_counters": 0,
+                  "power": 0,
+                  "registry_key": 170,
+                  "tapped": true,
+                  "temp_subtypes": [],
+                  "toughness": 0
+                },
+                {
+                  "cant_be_blocked_this_turn": false,
+                  "controller_id": 0,
+                  "damage": 0,
+                  "exile_if_dies_this_turn": false,
+                  "has_exile_link": false,
+                  "id": 128,
+                  "is_animated": false,
+                  "is_summoning_sick": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "plus1_counters": 0,
+                  "power": 0,
+                  "registry_key": 215,
+                  "tapped": true,
+                  "temp_subtypes": [],
+                  "toughness": 0
+                },
+                {
+                  "cant_be_blocked_this_turn": false,
+                  "controller_id": 0,
+                  "damage": 0,
+                  "exile_if_dies_this_turn": false,
+                  "has_exile_link": false,
+                  "id": 133,
+                  "is_animated": false,
+                  "is_summoning_sick": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "plus1_counters": 0,
+                  "power": 0,
+                  "registry_key": 270,
+                  "tapped": true,
+                  "temp_subtypes": [],
+                  "toughness": 0
+                },
+                {
+                  "cant_be_blocked_this_turn": false,
+                  "controller_id": 0,
+                  "damage": 0,
+                  "exile_if_dies_this_turn": false,
+                  "has_exile_link": false,
+                  "id": 145,
+                  "is_animated": false,
+                  "is_summoning_sick": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "plus1_counters": 0,
+                  "power": 0,
+                  "registry_key": 215,
+                  "tapped": true,
+                  "temp_subtypes": [],
+                  "toughness": 0
+                },
+                {
+                  "cant_be_blocked_this_turn": false,
+                  "controller_id": 0,
+                  "damage": 0,
+                  "exile_if_dies_this_turn": false,
+                  "has_exile_link": false,
+                  "id": 153,
+                  "is_animated": false,
+                  "is_summoning_sick": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": true,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": true
+                  },
+                  "plus1_counters": 0,
+                  "power": 3,
+                  "registry_key": 459,
+                  "tapped": true,
+                  "temp_subtypes": [],
+                  "toughness": 3
+                },
+                {
+                  "cant_be_blocked_this_turn": true,
+                  "controller_id": 0,
+                  "damage": 0,
+                  "effects": [
+                    {
+                      "duration": "EndOfTurn",
+                      "modification": "CantBeBlocked",
+                      "source_name": "Secret Tunnel",
+                      "source_registry_key": 334,
+                      "timestamp": 179
+                    }
+                  ],
+                  "exile_if_dies_this_turn": false,
+                  "has_exile_link": false,
+                  "id": 155,
+                  "is_animated": false,
+                  "is_summoning_sick": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": true
+                  },
+                  "plus1_counters": 0,
+                  "power": 2,
+                  "registry_key": 231,
+                  "tapped": true,
+                  "temp_subtypes": [],
+                  "toughness": 1
+                },
+                {
+                  "cant_be_blocked_this_turn": false,
+                  "controller_id": 0,
+                  "damage": 0,
+                  "exile_if_dies_this_turn": false,
+                  "has_exile_link": false,
+                  "id": 156,
+                  "is_animated": false,
+                  "is_summoning_sick": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "plus1_counters": 0,
+                  "power": 0,
+                  "registry_key": 270,
+                  "tapped": true,
+                  "temp_subtypes": [],
+                  "toughness": 0
+                },
+                {
+                  "cant_be_blocked_this_turn": true,
+                  "controller_id": 0,
+                  "damage": 0,
+                  "effects": [
+                    {
+                      "duration": "EndOfTurn",
+                      "modification": "CantBeBlocked",
+                      "source_name": "Secret Tunnel",
+                      "source_registry_key": 334,
+                      "timestamp": 180
+                    }
+                  ],
+                  "exile_if_dies_this_turn": false,
+                  "has_exile_link": false,
+                  "id": 163,
+                  "is_animated": false,
+                  "is_summoning_sick": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": true
+                  },
+                  "plus1_counters": 0,
+                  "power": 2,
+                  "registry_key": 231,
+                  "tapped": true,
+                  "temp_subtypes": [],
+                  "toughness": 1
+                },
+                {
+                  "cant_be_blocked_this_turn": false,
+                  "controller_id": 0,
+                  "damage": 0,
+                  "exile_if_dies_this_turn": false,
+                  "has_exile_link": false,
+                  "id": 181,
+                  "is_animated": false,
+                  "is_summoning_sick": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": true
+                  },
+                  "plus1_counters": 0,
+                  "power": 0,
+                  "registry_key": 322,
+                  "tapped": true,
+                  "temp_subtypes": [],
+                  "toughness": 0
+                }
+              ],
+              "agent_sideboard": [
+                {
+                  "candidate_id": 82,
+                  "name": "Cunning Maneuver",
+                  "owner_id": 0,
+                  "registry_key": 85,
+                  "text_box": "Target creature gets +3/+1 until end of turn.\nCreate a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")"
+                },
+                {
+                  "candidate_id": 83,
+                  "name": "Dai Li Agents",
+                  "owner_id": 0,
+                  "registry_key": 88,
+                  "text_box": "When this creature enters, earthbend 1, then earthbend 1. (To earthbend 1, target land you control becomes a 0/0 creature with haste that's still a land. Put a +1/+1 counter on it. When it dies or is exiled, return it to the battlefield tapped.)\nWhenever this creature attacks, each opponent loses X life and you gain X life, where X is the number of creatures you control with +1/+1 counters on them."
+                },
+                {
+                  "candidate_id": 84,
+                  "name": "Destined Confrontation",
+                  "owner_id": 0,
+                  "registry_key": 96,
+                  "text_box": "Each player chooses any number of creatures they control with total power 4 or less, then sacrifices all other creatures they control."
+                },
+                {
+                  "candidate_id": 85,
+                  "name": "Earth Rumble Wrestlers",
+                  "owner_id": 0,
+                  "registry_key": 114,
+                  "text_box": "Reach\nThis creature gets +1/+0 and has trample as long as you control a land creature or a land entered the battlefield under your control this turn."
+                },
+                {
+                  "candidate_id": 86,
+                  "name": "Foggy Swamp Spirit Keeper",
+                  "owner_id": 0,
+                  "registry_key": 164,
+                  "text_box": "Lifelink\nWhenever you draw your second card each turn, create a 1/1 colorless Spirit creature token with \"This token can't block or be blocked by non-Spirit creatures.\""
+                },
+                {
+                  "candidate_id": 87,
+                  "name": "Hog-Monkey",
+                  "owner_id": 0,
+                  "registry_key": 197,
+                  "text_box": "At the beginning of combat on your turn, target creature you control with a +1/+1 counter on it gains menace until end of turn. (It can't be blocked except by two or more creatures.)\nExhaust \u2014 {5}: Put two +1/+1 counters on this creature. (Activate each exhaust ability only once.)"
+                },
+                {
+                  "candidate_id": 88,
+                  "name": "How to Start a Riot",
+                  "owner_id": 0,
+                  "registry_key": 199,
+                  "text_box": "Target creature gains menace until end of turn. (It can't be blocked except by two or more creatures.)\nCreatures target player controls get +2/+0 until end of turn."
+                },
+                {
+                  "candidate_id": 89,
+                  "name": "Northern Air Temple",
+                  "owner_id": 0,
+                  "registry_key": 274,
+                  "text_box": "When Northern Air Temple enters, each opponent loses X life and you gain X life, where X is the number of Shrines you control.\nWhenever another Shrine you control enters, each opponent loses 1 life and you gain 1 life."
+                },
+                {
+                  "candidate_id": 90,
+                  "name": "Ozai's Cruelty",
+                  "owner_id": 0,
+                  "registry_key": 282,
+                  "text_box": "Ozai's Cruelty deals 2 damage to target player. That player discards two cards."
+                },
+                {
+                  "candidate_id": 91,
+                  "name": "Sokka's Haiku",
+                  "owner_id": 0,
+                  "registry_key": 344,
+                  "text_box": "Counter target spell.\nDraw a card, then mill three cards.\nUntap target land."
+                },
+                {
+                  "candidate_id": 92,
+                  "name": "Solstice Revelations",
+                  "owner_id": 0,
+                  "registry_key": 353,
+                  "text_box": "Exile cards from the top of your library until you exile a nonland card. You may cast that card without paying its mana cost if the spell's mana value is less than the number of Mountains you control. If you don't cast that card this way, put it into your hand.\nFlashback {6}{R} (You may cast this card from your graveyard for its flashback cost. Then exile it.)"
+                },
+                {
+                  "candidate_id": 93,
+                  "name": "Ty Lee, Artful Acrobat",
+                  "owner_id": 0,
+                  "registry_key": 422,
+                  "text_box": "Prowess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)\nWhenever Ty Lee attacks, you may pay {1}. When you do, target creature can't block this turn."
+                },
+                {
+                  "candidate_id": 94,
+                  "name": "Uncle Iroh",
+                  "owner_id": 0,
+                  "registry_key": 425,
+                  "text_box": "Firebending 1 (Whenever this creature attacks, add {R}. This mana lasts until end of combat.)\nLesson spells you cast cost {1} less to cast."
+                },
+                {
+                  "candidate_id": 95,
+                  "name": "Zuko's Exile",
+                  "owner_id": 0,
+                  "registry_key": 466,
+                  "text_box": "Exile target artifact, creature, or enchantment. Its controller creates a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")"
+                }
+              ],
+              "game_over": false,
+              "opponent": {
+                "combat_mana": 0,
+                "graveyard_lessons": 3,
+                "id": 1,
+                "is_active": false,
+                "is_agent": false,
+                "known_hand": {},
+                "lesson_mana": [
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ],
+                "life": 22,
+                "main_counts": {
+                  "1": 2,
+                  "110": 1,
+                  "164": 1,
+                  "178": 2,
+                  "215": 5,
+                  "218": 1,
+                  "249": 2,
+                  "260": 1,
+                  "264": 2,
+                  "288": 5,
+                  "3": 1,
+                  "308": 1,
+                  "309": 1,
+                  "322": 1,
+                  "33": 1,
+                  "370": 3,
+                  "376": 1,
+                  "38": 1,
+                  "381": 1,
+                  "385": 1,
+                  "444": 1,
+                  "62": 1,
+                  "7": 1,
+                  "75": 1,
+                  "93": 2
+                },
+                "mana": [
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ],
+                "player_index": 1,
+                "remaining_sideboard_counts": {
+                  "112": 3,
+                  "114": 1,
+                  "127": 1,
+                  "155": 1,
+                  "159": 1,
+                  "162": 1,
+                  "239": 1,
+                  "281": 2,
+                  "320": 1,
+                  "366": 1,
+                  "93": 2
+                },
+                "sideboard_counts": {
+                  "112": 3,
+                  "114": 1,
+                  "127": 1,
+                  "155": 1,
+                  "159": 1,
+                  "162": 1,
+                  "239": 1,
+                  "281": 2,
+                  "320": 1,
+                  "366": 1,
+                  "93": 2
+                },
+                "unseen_counts": {
+                  "1": 1,
+                  "110": 1,
+                  "164": 1,
+                  "178": 1,
+                  "218": 1,
+                  "260": 1,
+                  "288": 3,
+                  "3": 1,
+                  "308": 1,
+                  "309": 1,
+                  "33": 1,
+                  "370": 2,
+                  "376": 1,
+                  "38": 1,
+                  "381": 1,
+                  "62": 1,
+                  "7": 1,
+                  "75": 1,
+                  "93": 1
+                },
+                "zone_counts": [
+                  16,
+                  6,
+                  10,
+                  8,
+                  0,
+                  0,
+                  0
+                ]
+              },
+              "opponent_cards": [
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": false,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": true,
+                    "is_non_creature_permanent": true,
+                    "is_non_land_permanent": false,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 66,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 0
+                  },
+                  "name": "Misty Palms Oasis",
+                  "owner_id": 1,
+                  "power": 0,
+                  "registry_key": 264,
+                  "text_box": "This land enters tapped.\n{T}: Add {W} or {B}.\n{4}, {T}, Sacrifice this land: Draw a card.",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 3
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": true,
+                    "is_creature": true,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": false,
+                    "is_non_creature_permanent": false,
+                    "is_non_land_permanent": true,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 55,
+                  "is_ally": true,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": true,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      1,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 3
+                  },
+                  "name": "Glider Kids",
+                  "owner_id": 1,
+                  "power": 2,
+                  "registry_key": 178,
+                  "text_box": "Flying\nWhen this creature enters, scry 1. (Look at the top card of your library. You may put it on the bottom.)",
+                  "toughness": 3,
+                  "ward_cost": 0,
+                  "zone": 3
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": true,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": false,
+                    "is_non_creature_permanent": false,
+                    "is_non_land_permanent": false,
+                    "is_permanent": false,
+                    "is_planeswalker": false,
+                    "is_spell": true
+                  },
+                  "id": 51,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      0,
+                      1,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 1
+                  },
+                  "name": "Deadly Precision",
+                  "owner_id": 1,
+                  "power": 0,
+                  "registry_key": 93,
+                  "text_box": "As an additional cost to cast this spell, pay {4} or sacrifice an artifact or creature.\nDestroy target creature.",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 3
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": true,
+                    "is_creature": true,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": false,
+                    "is_non_creature_permanent": false,
+                    "is_non_land_permanent": true,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 81,
+                  "is_ally": true,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      1,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 2
+                  },
+                  "name": "Water Tribe Rallier",
+                  "owner_id": 1,
+                  "power": 2,
+                  "registry_key": 444,
+                  "text_box": "Waterbend {5}: Look at the top four cards of your library. You may reveal a creature card with power 3 or less from among them and put it into your hand. Put the rest on the bottom of your library in a random order. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)",
+                  "toughness": 2,
+                  "ward_cost": 0,
+                  "zone": 3
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": true,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": false,
+                    "is_non_creature_permanent": false,
+                    "is_non_land_permanent": false,
+                    "is_permanent": false,
+                    "is_planeswalker": false,
+                    "is_spell": true
+                  },
+                  "id": 43,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": true,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 2,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 2
+                  },
+                  "name": "Aang's Journey",
+                  "owner_id": 1,
+                  "power": 0,
+                  "registry_key": 1,
+                  "text_box": "Kicker {2} (You may pay an additional {2} as you cast this spell.)\nSearch your library for a basic land card. If this spell was kicked, instead search your library for a basic land card and a Shrine card. Reveal those cards, put them into your hand, then shuffle.\nYou gain 2 life.",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 3
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": true,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": false,
+                    "is_non_creature_permanent": false,
+                    "is_non_land_permanent": false,
+                    "is_permanent": false,
+                    "is_planeswalker": false,
+                    "is_spell": true
+                  },
+                  "id": 62,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": true,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      1,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 5
+                  },
+                  "name": "Lost Days",
+                  "owner_id": 1,
+                  "power": 0,
+                  "registry_key": 249,
+                  "text_box": "The owner of target creature or enchantment puts it into their library second from the top or on the bottom. You create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 3
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": false,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": true,
+                    "is_non_creature_permanent": true,
+                    "is_non_land_permanent": false,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 65,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 0
+                  },
+                  "name": "Misty Palms Oasis",
+                  "owner_id": 1,
+                  "power": 0,
+                  "registry_key": 264,
+                  "text_box": "This land enters tapped.\n{T}: Add {W} or {B}.\n{4}, {T}, Sacrifice this land: Draw a card.",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 3
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": true,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": false,
+                    "is_non_creature_permanent": false,
+                    "is_non_land_permanent": false,
+                    "is_permanent": false,
+                    "is_planeswalker": false,
+                    "is_spell": true
+                  },
+                  "id": 63,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": true,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      1,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 5
+                  },
+                  "name": "Lost Days",
+                  "owner_id": 1,
+                  "power": 0,
+                  "registry_key": 249,
+                  "text_box": "The owner of target creature or enchantment puts it into their library second from the top or on the bottom. You create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 3
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": false,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": true,
+                    "is_non_creature_permanent": true,
+                    "is_non_land_permanent": false,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 58,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 0
+                  },
+                  "name": "Island",
+                  "owner_id": 1,
+                  "power": 0,
+                  "registry_key": 215,
+                  "text_box": "({T}: Add {U}.)",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 2
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": false,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": true,
+                    "is_non_creature_permanent": true,
+                    "is_non_land_permanent": false,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 71,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 0
+                  },
+                  "name": "Plains",
+                  "owner_id": 1,
+                  "power": 0,
+                  "registry_key": 288,
+                  "text_box": "({T}: Add {W}.)",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 2
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": false,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": true,
+                    "is_non_creature_permanent": true,
+                    "is_non_land_permanent": false,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 59,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 0
+                  },
+                  "name": "Island",
+                  "owner_id": 1,
+                  "power": 0,
+                  "registry_key": 215,
+                  "text_box": "({T}: Add {U}.)",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 2
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": false,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": true,
+                    "is_non_creature_permanent": true,
+                    "is_non_land_permanent": false,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 68,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 0
+                  },
+                  "name": "Plains",
+                  "owner_id": 1,
+                  "power": 0,
+                  "registry_key": 288,
+                  "text_box": "({T}: Add {W}.)",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 2
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": false,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": true,
+                    "is_non_creature_permanent": true,
+                    "is_non_land_permanent": false,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 76,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 0
+                  },
+                  "name": "Swamp",
+                  "owner_id": 1,
+                  "power": 0,
+                  "registry_key": 370,
+                  "text_box": "({T}: Add {B}.)",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 2
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": false,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": true,
+                    "is_non_creature_permanent": true,
+                    "is_non_land_permanent": false,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 60,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 0
+                  },
+                  "name": "Island",
+                  "owner_id": 1,
+                  "power": 0,
+                  "registry_key": 215,
+                  "text_box": "({T}: Add {U}.)",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 2
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": false,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": true,
+                    "is_non_creature_permanent": true,
+                    "is_non_land_permanent": false,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 57,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 0
+                  },
+                  "name": "Island",
+                  "owner_id": 1,
+                  "power": 0,
+                  "registry_key": 215,
+                  "text_box": "({T}: Add {U}.)",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 2
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": false,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": true,
+                    "is_non_creature_permanent": true,
+                    "is_non_land_permanent": false,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 74,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": true
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 0
+                  },
+                  "name": "Rumble Arena",
+                  "owner_id": 1,
+                  "power": 0,
+                  "registry_key": 322,
+                  "text_box": "Vigilance\nWhen this land enters, scry 1. (Look at the top card of your library. You may put it on the bottom.)\n{T}: Add {C}.\n{1}, {T}: Add one mana of any color.",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 2
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": true,
+                    "is_creature": true,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": false,
+                    "is_non_creature_permanent": false,
+                    "is_non_land_permanent": true,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 80,
+                  "is_ally": false,
+                  "is_legendary": true,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 0
+                  },
+                  "name": "Avatar Kuruk",
+                  "owner_id": 1,
+                  "power": 4,
+                  "registry_key": 385,
+                  "text_box": "Whenever you cast a spell, create a 1/1 colorless Spirit creature token with \"This token can't block or be blocked by non-Spirit creatures.\"\nExhaust \u2014 Waterbend {20}: Take an extra turn after this one. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}. Activate each exhaust ability only once.)",
+                  "toughness": 3,
+                  "ward_cost": 0,
+                  "zone": 2
+                },
+                {
+                  "card_types": {
+                    "is_artifact": false,
+                    "is_battle": false,
+                    "is_castable": false,
+                    "is_creature": false,
+                    "is_enchantment": false,
+                    "is_kindred": false,
+                    "is_land": true,
+                    "is_non_creature_permanent": true,
+                    "is_non_land_permanent": false,
+                    "is_permanent": true,
+                    "is_planeswalker": false,
+                    "is_spell": false
+                  },
+                  "id": 56,
+                  "is_ally": false,
+                  "is_legendary": false,
+                  "is_lesson": false,
+                  "is_token": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "kicker_cost": 0,
+                  "mana_cost": {
+                    "cost": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "mana_value": 0
+                  },
+                  "name": "Island",
+                  "owner_id": 1,
+                  "power": 0,
+                  "registry_key": 215,
+                  "text_box": "({T}: Add {U}.)",
+                  "toughness": 0,
+                  "ward_cost": 0,
+                  "zone": 2
+                }
+              ],
+              "opponent_permanents": [
+                {
+                  "cant_be_blocked_this_turn": false,
+                  "controller_id": 1,
+                  "damage": 0,
+                  "exile_if_dies_this_turn": false,
+                  "has_exile_link": false,
+                  "id": 112,
+                  "is_animated": false,
+                  "is_summoning_sick": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "plus1_counters": 0,
+                  "power": 0,
+                  "registry_key": 215,
+                  "tapped": true,
+                  "temp_subtypes": [],
+                  "toughness": 0
+                },
+                {
+                  "cant_be_blocked_this_turn": false,
+                  "controller_id": 1,
+                  "damage": 0,
+                  "exile_if_dies_this_turn": false,
+                  "has_exile_link": false,
+                  "id": 121,
+                  "is_animated": false,
+                  "is_summoning_sick": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "plus1_counters": 0,
+                  "power": 0,
+                  "registry_key": 288,
+                  "tapped": true,
+                  "temp_subtypes": [],
+                  "toughness": 0
+                },
+                {
+                  "cant_be_blocked_this_turn": false,
+                  "controller_id": 1,
+                  "damage": 0,
+                  "exile_if_dies_this_turn": false,
+                  "has_exile_link": false,
+                  "id": 124,
+                  "is_animated": false,
+                  "is_summoning_sick": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "plus1_counters": 0,
+                  "power": 0,
+                  "registry_key": 215,
+                  "tapped": true,
+                  "temp_subtypes": [],
+                  "toughness": 0
+                },
+                {
+                  "cant_be_blocked_this_turn": false,
+                  "controller_id": 1,
+                  "damage": 0,
+                  "exile_if_dies_this_turn": false,
+                  "has_exile_link": false,
+                  "id": 132,
+                  "is_animated": false,
+                  "is_summoning_sick": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "plus1_counters": 0,
+                  "power": 0,
+                  "registry_key": 288,
+                  "tapped": true,
+                  "temp_subtypes": [],
+                  "toughness": 0
+                },
+                {
+                  "cant_be_blocked_this_turn": false,
+                  "controller_id": 1,
+                  "damage": 0,
+                  "exile_if_dies_this_turn": false,
+                  "has_exile_link": false,
+                  "id": 138,
+                  "is_animated": false,
+                  "is_summoning_sick": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "plus1_counters": 0,
+                  "power": 0,
+                  "registry_key": 370,
+                  "tapped": true,
+                  "temp_subtypes": [],
+                  "toughness": 0
+                },
+                {
+                  "cant_be_blocked_this_turn": false,
+                  "controller_id": 1,
+                  "damage": 0,
+                  "exile_if_dies_this_turn": false,
+                  "has_exile_link": false,
+                  "id": 150,
+                  "is_animated": false,
+                  "is_summoning_sick": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "plus1_counters": 0,
+                  "power": 0,
+                  "registry_key": 215,
+                  "tapped": true,
+                  "temp_subtypes": [],
+                  "toughness": 0
+                },
+                {
+                  "cant_be_blocked_this_turn": false,
+                  "controller_id": 1,
+                  "damage": 0,
+                  "exile_if_dies_this_turn": false,
+                  "has_exile_link": false,
+                  "id": 157,
+                  "is_animated": false,
+                  "is_summoning_sick": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "plus1_counters": 0,
+                  "power": 0,
+                  "registry_key": 215,
+                  "tapped": true,
+                  "temp_subtypes": [],
+                  "toughness": 0
+                },
+                {
+                  "cant_be_blocked_this_turn": false,
+                  "controller_id": 1,
+                  "damage": 0,
+                  "exile_if_dies_this_turn": false,
+                  "has_exile_link": false,
+                  "id": 166,
+                  "is_animated": false,
+                  "is_summoning_sick": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": true
+                  },
+                  "plus1_counters": 0,
+                  "power": 0,
+                  "registry_key": 322,
+                  "tapped": true,
+                  "temp_subtypes": [],
+                  "toughness": 0
+                },
+                {
+                  "cant_be_blocked_this_turn": false,
+                  "controller_id": 1,
+                  "damage": 0,
+                  "exile_if_dies_this_turn": false,
+                  "has_exile_link": false,
+                  "id": 175,
+                  "is_animated": false,
+                  "is_summoning_sick": true,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "plus1_counters": 0,
+                  "power": 4,
+                  "registry_key": 385,
+                  "tapped": false,
+                  "temp_subtypes": [],
+                  "toughness": 3
+                },
+                {
+                  "cant_be_blocked_this_turn": false,
+                  "controller_id": 1,
+                  "damage": 0,
+                  "exile_if_dies_this_turn": false,
+                  "has_exile_link": false,
+                  "id": 176,
+                  "is_animated": false,
+                  "is_summoning_sick": false,
+                  "keywords": {
+                    "deathtouch": false,
+                    "defender": false,
+                    "double_strike": false,
+                    "first_strike": false,
+                    "flash": false,
+                    "flying": false,
+                    "haste": false,
+                    "hexproof": false,
+                    "indestructible": false,
+                    "lifelink": false,
+                    "menace": false,
+                    "reach": false,
+                    "trample": false,
+                    "vigilance": false
+                  },
+                  "plus1_counters": 0,
+                  "power": 0,
+                  "registry_key": 215,
+                  "tapped": true,
+                  "temp_subtypes": [],
+                  "toughness": 0
+                }
+              ],
+              "recent_events": [],
+              "shared_effects": [
+                {
+                  "controller_id": 0,
+                  "effect": {
+                    "duration": "EndOfTurn",
+                    "modification": "CantBeBlocked",
+                    "source_name": "Secret Tunnel",
+                    "source_registry_key": 334,
+                    "timestamp": 179
+                  },
+                  "members": [
+                    {
+                      "order": 0,
+                      "target": {
+                        "incarnation": 3,
+                        "object_id": 155
+                      }
+                    }
+                  ],
+                  "source": null
+                },
+                {
+                  "controller_id": 0,
+                  "effect": {
+                    "duration": "EndOfTurn",
+                    "modification": "CantBeBlocked",
+                    "source_name": "Secret Tunnel",
+                    "source_registry_key": 334,
+                    "timestamp": 180
+                  },
+                  "members": [
+                    {
+                      "order": 1,
+                      "target": {
+                        "incarnation": 3,
+                        "object_id": 163
+                      }
+                    }
+                  ],
+                  "source": null
+                }
+              ],
+              "stack_objects": [
+                {
+                  "ability_index": 0,
+                  "chosen_mode": null,
+                  "controller_id": 0,
+                  "description": "Rumble Arena \u2014 When this enters the battlefield: Scry 1",
+                  "kind": 2,
+                  "source_card_registry_key": 322,
+                  "source_permanent_id": null,
+                  "stack_object_id": 182,
+                  "targets": []
+                }
+              ],
+              "turn": {
+                "active_player_id": 0,
+                "agent_player_id": 0,
+                "phase": 1,
+                "step": 3,
+                "turn_number": 25
+              },
+              "won": false
+            },
+            "events": [],
+            "decision": {
+              "schema_version": 8,
+              "revision": 195,
+              "actor": 0,
+              "fingerprint": "6607773f0e7a5ccc14a684481d6f300274a5d880b1250111f6bf65b5cd5fcbf4",
+              "offers": [
+                {
+                  "id": 0,
+                  "actor": 0,
+                  "verb": "select_card",
+                  "source": null,
+                  "label": "SelectCard",
+                  "help": null,
+                  "choices": [],
+                  "confirm_label": "SelectCard"
+                },
+                {
+                  "id": 1,
+                  "actor": 0,
+                  "verb": "select_card",
+                  "source": null,
+                  "label": "SelectCard",
+                  "help": null,
+                  "choices": [],
+                  "confirm_label": "SelectCard"
+                },
+                {
+                  "id": 2,
+                  "actor": 0,
+                  "verb": "select_card",
+                  "source": null,
+                  "label": "SelectCard",
+                  "help": null,
+                  "choices": [],
+                  "confirm_label": "SelectCard"
+                },
+                {
+                  "id": 3,
+                  "actor": 0,
+                  "verb": "select_card",
+                  "source": null,
+                  "label": "SelectCard",
+                  "help": null,
+                  "choices": [],
+                  "confirm_label": "SelectCard"
+                },
+                {
+                  "id": 4,
+                  "actor": 0,
+                  "verb": "decline",
+                  "source": null,
+                  "label": "DeclineChoice",
+                  "help": null,
+                  "choices": [],
+                  "confirm_label": "DeclineChoice"
+                }
+              ],
+              "object_candidates": []
+            }
+          }
+        }
+      }
+    ]
+  }
+}

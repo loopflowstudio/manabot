@@ -386,7 +386,7 @@ def run(probe: Probe) -> None:
 # Launch
 
 
-def runs(
+def training_jobs(
     revision: str, machines: int = 1, hours: float = 1.5, usd_per_run: float = 1.05
 ) -> list[Run]:
     """One probe run per machine; the seed only names the run (phase seeds are fixed)."""

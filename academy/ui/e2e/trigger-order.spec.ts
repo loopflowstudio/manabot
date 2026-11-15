@@ -50,7 +50,7 @@ for (const first of ['Callous Inspector', 'Bastion of Remembrance']) {
     await track(page);
     await page.goto('/');
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-    await page.getByRole('button', { name: 'New Game', exact: true }).click();
+    await page.getByRole('button', { name: 'Start game', exact: true }).click();
     await expect(page.getByTestId('decision-surface')).toBeVisible();
     // Callous Inspector is the only permanent Deadly Dispute can sacrifice, so
     // native skipping commits it and the cast arrives at the order decision.

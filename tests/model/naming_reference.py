@@ -8,9 +8,10 @@ from typing import Dict
 
 import torch
 
+from manabot.backends.torch._semantic_cards import SemanticCardEncoder
 from manabot.backends.torch.policy import ActorCritic, EmbeddedObservation
 from manabot.env.observation import RELATION_VALID_INDEX
-from manabot.model.semantic_cards import SemanticCardEncoder
+from tests.model.prepared_routes import device_input
 
 
 def packed_definitions(
@@ -47,9 +48,15 @@ class DenseActionReference(ActorCritic):
         critic and shared encoder directly without passing through its mean.
         A distributional head alone does not select a categorical loss.
         """
-        state = self._gather_object_embeddings(obs)
+        prepared = device_input(self, obs)
+        state = self._gather_object_embeddings(prepared)
 
-        encoded = self._attend_objects(state.objects, state.is_agent, state.validity)
+        encoded = self._attend_objects(
+            state.objects,
+            state.is_agent,
+            state.validity,
+            prepared.attention_columns,
+        )
         # The optional trailing token is a critic input, never an action focus.
         post_attention_objects = encoded[:, : state.validity.shape[1]]
 
@@ -155,11 +162,23 @@ class DenseActionReference(ActorCritic):
             candidates = torch.where(
                 valid.bool().unsqueeze(-1), obs["name_candidates"][:, :action_count], 0
             )
-            actions = actions + self.name_candidates(candidates)
+            names = self.name_candidates.embedding(candidates[..., 0].long())
+            first, last = candidates[..., 2].long(), candidates[..., 3].long()
+            weights = self.name_candidates.embedding.weight[1:]
+            prefix = torch.cat(
+                (weights.new_zeros((1, weights.shape[1])), weights.cumsum(0))
+            )
+            groups = (prefix[last] - prefix[(first - 1).clamp_min(0)]) / (
+                last - first + 1
+            ).clamp_min(1).unsqueeze(-1)
+            actions = (
+                actions + names + torch.where((first > 0).unsqueeze(-1), groups, 0)
+            )
             ids = candidates[..., 1]
             if self.semantic_cards is not None and state.programs is not None:
-                actions = actions + self.semantic_cards.embed_definitions(
-                    ids, state.programs
+                actions = (
+                    actions
+                    + state.programs[self.semantic_cards.definition_rows[ids.long()]]
                 )
         if state.shared_context is not None:
             # Focus-free actions also receive the same context without attention.

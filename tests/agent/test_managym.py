@@ -86,7 +86,9 @@ class TestManagym:
         assert obs.game_over, "Observation should indicate game is over"
         assert isinstance(reward, (int, float))
 
-    def test_invalid_action_handling(self, basic_deck_configs):
+    def test_invalid_action_handling(
+        self, basic_deck_configs: list[dict[str, int]]
+    ) -> None:
         """Test that out-of-range action indices raise an error."""
         player_configs = [
             managym.PlayerConfig("Red Mage", basic_deck_configs[0]),
@@ -96,9 +98,14 @@ class TestManagym:
         obs, _ = env.reset(player_configs)
 
         num_actions = len(obs.action_space.actions)
-        invalid_actions = [-1, num_actions, num_actions + 1]
+        with pytest.raises(
+            managym.AgentError,
+            match=r"external chooser \(seat 0\) requires an action index",
+        ):
+            env.step(-1)
+        invalid_actions = [num_actions, num_actions + 1]
         for invalid_action in invalid_actions:
-            with pytest.raises(Exception) as excinfo:
+            with pytest.raises(managym.AgentError) as excinfo:
                 env.step(invalid_action)
             assert "Action index" in str(excinfo.value)
 

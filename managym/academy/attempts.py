@@ -11,6 +11,13 @@ from pathlib import Path
 import secrets
 import sqlite3
 import threading
+from typing import Any
+
+from managym.academy.play_session import (
+    PlaySessionRecord,
+    SessionMembership,
+    SessionStart,
+)
 
 PROCESS_ID = secrets.token_hex(16)
 RECORD_VERSION = 2
@@ -38,7 +45,7 @@ class RecordedPlayer:
     inference: dict | None = None
 
 
-def bot_player(config: dict) -> RecordedPlayer:
+def bot_player(config: dict[str, Any]) -> RecordedPlayer:
     identity = config.get("opponent") or {}
     policy = config["villain_type"]
     digest = identity.get("sha256")
@@ -47,6 +54,9 @@ def bot_player(config: dict) -> RecordedPlayer:
         inference["deterministic"] = config.get("villain_deterministic", False)
     elif policy == "search":
         inference["simulations"] = config.get("villain_sims")
+    provenance = config.get("opponent_checkpoint") or {}
+    if provenance.get("schema") == "managym-policy-1":
+        inference.update(runtime=provenance["policy"], sha256=digest)
     version = (
         digest
         or hashlib.sha256(json.dumps(inference, sort_keys=True).encode()).hexdigest()
@@ -56,7 +66,7 @@ def bot_player(config: dict) -> RecordedPlayer:
         f"checkpoint:{digest}" if digest else f"control:{policy}"
     )
     return RecordedPlayer(
-        1,
+        1 - config.get("human_seat", 0),
         bot_id,
         "bot",
         identity.get("name") or policy.title(),
@@ -89,7 +99,7 @@ def decode_cursor(cursor: str | None) -> tuple[str, str] | None:
 
 
 class AttemptStore:
-    def __init__(self, path: Path):
+    def __init__(self, path: Path) -> None:
         self.path = path
         path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
@@ -125,11 +135,34 @@ class AttemptStore:
                 CREATE INDEX IF NOT EXISTS history_order ON attempts(started_at DESC, id DESC);
                 CREATE INDEX IF NOT EXISTS history_player ON attempt_players(player_id, attempt_id);
                 CREATE INDEX IF NOT EXISTS history_version ON attempt_players(version, attempt_id);
+                CREATE INDEX IF NOT EXISTS arena_source ON attempt_players(
+                    json_extract(inference_json, '$.source_sha256'), attempt_id
+                );
                 CREATE TABLE IF NOT EXISTS feedback (
                     attempt_id TEXT NOT NULL REFERENCES attempts(id),
                     request_id TEXT NOT NULL, created_at TEXT NOT NULL,
                     note TEXT NOT NULL, author_id TEXT, decision_address TEXT,
                     PRIMARY KEY (attempt_id, request_id)
+                );
+            """)
+            db.executescript("""
+                CREATE INDEX IF NOT EXISTS feedback_history ON feedback(attempt_id,created_at,request_id);
+                CREATE TABLE IF NOT EXISTS play_sessions (
+                    id TEXT PRIMARY KEY, owner TEXT NOT NULL, created_at TEXT NOT NULL,
+                    title TEXT NOT NULL, revision INTEGER NOT NULL, draft_json TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS session_owner ON play_sessions(owner,id);
+                CREATE TABLE IF NOT EXISTS session_games (
+                    attempt_id TEXT PRIMARY KEY REFERENCES attempts(id),
+                    session_id TEXT NOT NULL REFERENCES play_sessions(id),
+                    game_number INTEGER NOT NULL,
+                    matchup_json TEXT NOT NULL,
+                    UNIQUE(session_id,game_number)
+                );
+                CREATE TABLE IF NOT EXISTS continuation_receipts (
+                    owner TEXT NOT NULL, request_id TEXT NOT NULL, fingerprint TEXT NOT NULL,
+                    attempt_id TEXT NOT NULL REFERENCES attempts(id),
+                    PRIMARY KEY(owner,request_id)
                 );
             """)
             self._migrate(db)
@@ -211,7 +244,11 @@ class AttemptStore:
             )
 
     def players_for_game(
-        self, owner: str, config: dict, token=None, name=None
+        self,
+        owner: str,
+        config: dict[str, Any],
+        token: str | None = None,
+        name: str | None = None,
     ) -> list[RecordedPlayer]:
         if token is not None:
             human = self.profile(token, name)
@@ -220,7 +257,7 @@ class AttemptStore:
                 human = self._profile(db, "legacy:" + owner)
         return [
             RecordedPlayer(
-                0,
+                config.get("human_seat", 0),
                 human["id"],
                 "human",
                 human["name"],
@@ -255,23 +292,29 @@ class AttemptStore:
         attempt: str,
         owner: str,
         revision: int,
-        world: dict,
-        trace: dict,
+        world: dict[str, Any],
+        trace: dict[str, Any],
         *,
         finished: bool,
         players: list[RecordedPlayer],
         origin: str | None = None,
+        session_start: SessionStart | None = None,
     ) -> None:
         config = trace["config"]
         ending = trace["end_reason"] if finished else None
         status = (
-            ("completed" if ending == "game_over" else "stopped")
+            "interrupted"
+            if ending == "server_shutdown"
+            else ("completed" if ending == "game_over" else "stopped")
             if finished
             else "active"
         )
         origin = origin or os.getenv("ACADEMY_PLAY_RECORD_ORIGIN", "unknown")
         if origin not in ORIGINS:
             raise ValueError("Unknown game record origin.")
+        # Serialize the growing trace before taking the writer lock.
+        world_json = json.dumps(world)
+        trace_json = json.dumps(trace)
         with self.connect() as db:
             exists = db.execute(
                 "SELECT 1 FROM attempts WHERE id=?", (attempt,)
@@ -296,8 +339,8 @@ class AttemptStore:
                     hex(config["seed"]),
                     trace["winner"] if ending == "game_over" else None,
                     revision,
-                    json.dumps(world),
-                    json.dumps(trace),
+                    world_json,
+                    trace_json,
                     RECORD_VERSION,
                     origin,
                     len(trace["events"]),
@@ -305,6 +348,193 @@ class AttemptStore:
             )
             if not exists:
                 self._save_players(db, attempt, players)
+                if session_start is not None:
+                    self._start_session_game(
+                        db, attempt, trace["timestamp"], session_start, config
+                    )
+
+    @staticmethod
+    def _start_session_game(
+        db: sqlite3.Connection,
+        attempt: str,
+        timestamp: str,
+        start: SessionStart,
+        config: dict[str, Any],
+    ) -> None:
+        if start.revision == 0:
+            db.execute(
+                "INSERT INTO play_sessions VALUES(?,?,?,?,1,?)",
+                (
+                    start.session_id,
+                    start.owner,
+                    timestamp,
+                    "Play session",
+                    json.dumps(start.draft),
+                ),
+            )
+        else:
+            changed = db.execute(
+                "UPDATE play_sessions SET revision=revision+1,draft_json=? WHERE id=? AND owner=? AND revision=?",
+                (
+                    json.dumps(start.draft),
+                    start.session_id,
+                    start.owner,
+                    start.revision,
+                ),
+            ).rowcount
+            if changed != 1:
+                raise ValueError("Session setup changed; recover before continuing.")
+        db.execute(
+            "INSERT INTO session_games SELECT ?,?,coalesce(max(game_number),0)+1,? FROM session_games WHERE session_id=?",
+            (
+                attempt,
+                start.session_id,
+                json.dumps(
+                    {
+                        key: config.get(key)
+                        for key in (
+                            "hero_deck",
+                            "villain_deck",
+                            "hero_sideboard",
+                            "villain_sideboard",
+                            "decklists",
+                        )
+                    },
+                    sort_keys=True,
+                ),
+                start.session_id,
+            ),
+        )
+        db.execute(
+            "INSERT INTO continuation_receipts VALUES(?,?,?,?)",
+            (start.owner, start.request_id, start.fingerprint, attempt),
+        )
+
+    def continuation_receipt(
+        self, owner: str, request_id: str, fingerprint: str
+    ) -> str | None:
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT fingerprint,attempt_id FROM continuation_receipts WHERE owner=? AND request_id=?",
+                (owner, request_id),
+            ).fetchone()
+        if row is None:
+            return None
+        if row["fingerprint"] != fingerprint:
+            raise ValueError("Request id was already used for different setup.")
+        return str(row["attempt_id"])
+
+    def session(self, identifier: str, owners: set[str]) -> PlaySessionRecord:
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT * FROM play_sessions WHERE id=?", (identifier,)
+            ).fetchone()
+        if row is None or row["owner"] not in owners:
+            raise ValueError("Session owner credential required.")
+        return PlaySessionRecord(
+            id=row["id"],
+            created_at=row["created_at"],
+            title=row["title"],
+            revision=row["revision"],
+            draft=json.loads(row["draft_json"]),
+        )
+
+    def session_for_attempt(self, attempt: str) -> SessionMembership | None:
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT g.session_id,g.game_number,s.revision FROM session_games g JOIN play_sessions s ON s.id=g.session_id WHERE g.attempt_id=?",
+                (attempt,),
+            ).fetchone()
+        return (
+            SessionMembership(
+                session_id=row["session_id"],
+                game_number=row["game_number"],
+                revision=row["revision"],
+            )
+            if row
+            else None
+        )
+
+    def latest_session_attempt(self, identifier: str) -> str:
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT attempt_id FROM session_games WHERE session_id=? ORDER BY game_number DESC LIMIT 1",
+                (identifier,),
+            ).fetchone()
+        if row is None:
+            raise ValueError("Session has no recorded games.")
+        return str(row[0])
+
+    def update_session(
+        self, identifier: str, owner: str, revision: int, draft: dict[str, Any]
+    ) -> None:
+        with self.connect() as db:
+            changed = db.execute(
+                "UPDATE play_sessions SET draft_json=?,revision=revision+1 WHERE id=? AND owner=? AND revision=?",
+                (json.dumps(draft), identifier, owner, revision),
+            ).rowcount
+            if changed != 1:
+                raise ValueError(
+                    "Session setup changed or owner credential is missing."
+                )
+
+    def session_results(
+        self, identifier: str, owners: set[str], *, offset: int = 0, limit: int = 101
+    ) -> list[dict[str, Any]]:
+        self.session(identifier, owners)
+        if offset < 0 or not 1 <= limit <= 101:
+            raise ValueError("Invalid session results page.")
+        # Each group is an exact execution/matchup/origin/seat, never a rating.
+        with self.connect() as db:
+            rows = db.execute(
+                """
+                SELECT a.origin,h.seat AS human_seat,h.deck AS human_deck,
+                    b.name AS opponent_name,b.player_id AS opponent_id,
+                    b.deck AS opponent_deck,b.version,b.inference_json,
+                    json_extract(g.matchup_json,'$.decklists') AS decklists,g.matchup_json,
+                    count(*) AS total,
+                    sum(a.status='completed') AS completed,
+                    coalesce(sum(a.status='completed' AND a.winner=h.seat),0) AS wins,
+                    sum(a.status='completed' AND a.winner IS NULL) AS draws,
+                    sum(a.status='completed' AND a.winner IS NOT NULL AND a.winner<>h.seat) AS losses,
+                    sum(a.status='active') AS active,sum(a.status='stopped') AS stopped,
+                    sum(a.status='interrupted') AS interrupted,
+                    sum(CASE WHEN a.ended_at IS NOT NULL THEN (julianday(a.ended_at)-julianday(a.started_at))*86400 END) AS wall_elapsed_seconds,
+                    sum(a.ended_at IS NOT NULL) AS elapsed_samples
+                FROM session_games g JOIN attempts a ON a.id=g.attempt_id
+                JOIN attempt_players h ON h.attempt_id=a.id AND h.kind='human'
+                JOIN attempt_players b ON b.attempt_id=a.id AND b.kind='bot'
+                WHERE g.session_id=?
+                GROUP BY a.origin,h.seat,h.deck,b.deck,b.version,b.inference_json,g.matchup_json,b.player_id,b.name
+                ORDER BY a.origin,h.seat,b.version,g.matchup_json,h.deck,b.deck,b.inference_json,b.player_id,b.name
+                LIMIT ? OFFSET ?
+            """,
+                (identifier, limit, offset),
+            ).fetchall()
+        return [dict(row) | {"response_measurements": None} for row in rows]
+
+    def session_totals(self, identifier: str, owners: set[str]) -> list[dict[str, Any]]:
+        self.session(identifier, owners)
+        with self.connect() as db:
+            rows = db.execute(
+                """SELECT a.origin, a.status, count(*) AS count
+                FROM session_games g JOIN attempts a ON a.id=g.attempt_id
+                WHERE g.session_id=? GROUP BY a.origin,a.status ORDER BY a.origin,a.status""",
+                (identifier,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def arena_recording(self, source_sha256: str) -> str | None:
+        """Find one finished import by retained source identity, without reading traces."""
+        with self.connect() as db:
+            row = db.execute(
+                """SELECT p.attempt_id FROM attempt_players AS p
+                JOIN attempts AS a ON a.id=p.attempt_id
+                WHERE json_extract(p.inference_json, '$.source_sha256')=?
+                AND a.status='completed' LIMIT 1""",
+                (source_sha256,),
+            ).fetchone()
+        return None if row is None else str(row[0])
 
     def owner(self, attempt: str) -> str | None:
         with self.connect() as db:
@@ -323,10 +553,11 @@ class AttemptStore:
             trace["end_reason"] = "server_restart"
         return trace
 
-    def metadata(self, attempt: str) -> dict:
+    def metadata(self, attempt: str) -> dict[str, Any]:
         with self.connect() as db:
             row = db.execute(
-                "SELECT record_version,origin FROM attempts WHERE id=?", (attempt,)
+                "SELECT record_version,origin,revision,status,ending_reason FROM attempts WHERE id=?",
+                (attempt,),
             ).fetchone()
             if row is None:
                 return {}
@@ -334,17 +565,27 @@ class AttemptStore:
         return {**dict(row), "players": players}
 
     @staticmethod
-    def _players(db, attempt):
-        players = []
+    def _players(db: sqlite3.Connection, attempt: str) -> list[dict[str, Any]]:
+        return AttemptStore._players_for(db, [attempt]).get(attempt, [])
+
+    @staticmethod
+    def _players_for(
+        db: sqlite3.Connection, attempts: list[str]
+    ) -> dict[str, list[dict[str, Any]]]:
+        if not attempts:
+            return {}
+        placeholders = ",".join("?" for _ in attempts)
+        result: dict[str, list[dict[str, Any]]] = {}
         for row in db.execute(
-            "SELECT seat,player_id,kind,name,deck,version,inference_json FROM attempt_players WHERE attempt_id=? ORDER BY seat",
-            (attempt,),
+            f"SELECT attempt_id,seat,player_id,kind,name,deck,version,inference_json FROM attempt_players WHERE attempt_id IN ({placeholders}) ORDER BY attempt_id,seat",
+            attempts,
         ):
             player = dict(row)
+            attempt = player.pop("attempt_id")
             inference = player.pop("inference_json")
             player["inference"] = json.loads(inference) if inference else None
-            players.append(player)
-        return players
+            result.setdefault(attempt, []).append(player)
+        return result
 
     @staticmethod
     def _mine(owners, token):
@@ -380,21 +621,22 @@ class AttemptStore:
         self,
         owners: set[str],
         *,
-        token=None,
-        scope="mine",
-        q="",
-        player=None,
-        other=None,
-        pairing=None,
-        version=None,
-        deck=None,
-        status=None,
-        result=None,
-        after=None,
-        before=None,
-        cursor=None,
-        limit=50,
-    ) -> list[dict]:
+        token: str | None = None,
+        session: str | None = None,
+        scope: str = "mine",
+        q: str = "",
+        player: str | None = None,
+        other: str | None = None,
+        pairing: str | None = None,
+        version: str | None = None,
+        deck: str | None = None,
+        status: str | None = None,
+        result: str | None = None,
+        after: str | None = None,
+        before: str | None = None,
+        cursor: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
         if scope not in {"all", "mine"} or status not in {
             None,
             "active",
@@ -423,8 +665,15 @@ class AttemptStore:
                 except ValueError as exc:
                     raise ValueError("Dates must use YYYY-MM-DD.") from exc
         mine, mine_args = self._mine(owners, token)
+        if session is not None:
+            self.session(session, owners)
         clauses = [mine if scope == "mine" else f"(a.visibility='shared' OR {mine})"]
         args = list(mine_args)
+        if session is not None:
+            clauses.append(
+                "a.id IN (SELECT attempt_id FROM session_games WHERE session_id=?)"
+            )
+            args.append(session)
         if q:
             pattern = (
                 "%"
@@ -486,23 +735,32 @@ class AttemptStore:
             args.extend(position)
         with self.connect() as db:
             rows = db.execute(
-                f"SELECT a.id,a.started_at,a.ended_at,a.winner,a.status,a.ending_reason,a.num_events,a.revision,a.record_version,a.origin,a.visibility, {mine} AS mine FROM attempts a WHERE {' AND '.join(clauses)} ORDER BY started_at DESC,id DESC LIMIT ?",
+                f"SELECT a.id,a.started_at,a.ended_at,a.winner,a.status,a.ending_reason,a.num_events,a.revision,a.record_version,a.origin,a.visibility,g.session_id,g.game_number, {mine} AS mine FROM attempts a LEFT JOIN session_games g ON g.attempt_id=a.id WHERE {' AND '.join(clauses)} ORDER BY started_at DESC,id DESC LIMIT ?",
                 [*mine_args, *args, limit],
             ).fetchall()
+            players_by_attempt = self._players_for(db, [row["id"] for row in rows])
+            own_attempts = [row["id"] for row in rows if row["mine"]]
+            notes_by_attempt: dict[str, list[dict[str, Any]]] = {}
+            if own_attempts:
+                placeholders = ",".join("?" for _ in own_attempts)
+                # Each selected attempt reads only its latest 101 notes through
+                # the date index. The extra row makes the visible cap explicit.
+                note_rows = db.execute(
+                    f"""SELECT a.id, (SELECT json_group_array(json_object(
+                        'created_at',created_at,'note',note,'author_id',author_id,'decision_address',decision_address))
+                        FROM (SELECT created_at,note,author_id,decision_address FROM feedback
+                            WHERE attempt_id=a.id ORDER BY created_at DESC,request_id DESC LIMIT 101)) AS notes
+                        FROM attempts a WHERE a.id IN ({placeholders})""",
+                    own_attempts,
+                )
+                for note_row in note_rows:
+                    notes_by_attempt[note_row["id"]] = list(
+                        reversed(json.loads(note_row["notes"]))
+                    )
             summaries = []
             for row in rows:
-                seats = self._players(db, row["id"])
-                notes = (
-                    [
-                        dict(n)
-                        for n in db.execute(
-                            "SELECT created_at,note,author_id,decision_address FROM feedback WHERE attempt_id=? ORDER BY created_at,request_id",
-                            (row["id"],),
-                        )
-                    ]
-                    if row["mine"]
-                    else []
-                )
+                seats = players_by_attempt.get(row["id"], [])
+                notes = notes_by_attempt.get(row["id"], [])
                 summaries.append(
                     {
                         "id": row["id"],
@@ -514,6 +772,8 @@ class AttemptStore:
                         "num_events": row["num_events"],
                         "revision": row["revision"],
                         "players": seats,
+                        "play_session_id": row["session_id"] if row["mine"] else None,
+                        "game_number": row["game_number"] if row["mine"] else None,
                         "record_version": row["record_version"],
                         "origin": row["origin"],
                         "mine": bool(row["mine"]),
@@ -522,7 +782,8 @@ class AttemptStore:
                             row["visibility"] == "shared"
                             and row["status"] == "completed"
                         ),
-                        "feedback": notes,
+                        "feedback": notes[-100:],
+                        "feedback_truncated": len(notes) > 100,
                     }
                 )
         return summaries

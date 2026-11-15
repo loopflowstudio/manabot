@@ -12,7 +12,7 @@ experiments/protocols/closure-lambda-elemental-v1.md, calibration section.
 from etude.launch.records import Run
 
 from experiments.elemental_variants import closure_comparison
-from experiments.learning_signal import training_runs
+from experiments.learning_signal import build_training_jobs
 
 EXPERIMENT = "elemental_closure_calibration"
 SEED = 70100
@@ -22,8 +22,8 @@ HOURS = 0.75
 USD_PER_RUN = 0.6
 
 
-def runs(revision: str) -> list[Run]:
-    return training_runs(
+def training_jobs(revision: str) -> list[Run]:
+    return build_training_jobs(
         [closure_comparison("complete-games", UPDATES)],
         updates=UPDATES,
         revision=revision,

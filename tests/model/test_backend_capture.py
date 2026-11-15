@@ -6,10 +6,11 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from manabot.backends.parity import backend, backend_module, minibatch_loss, minibatches
+from manabot.backends import resolve
+from manabot.backends.parity import minibatch_loss, minibatches
 from manabot.backends.torch.capture import capture
 from manabot.backends.torch.checkpoint import load_checkpoint
-from manabot.infra.config import MatchConfig, ModelConfig
+from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.policy.checkpoint import from_torch_state
 from manabot.training.regime import (
     DampedPolicyLearning,
@@ -28,6 +29,8 @@ def test_capture_replays_both_seat_update(tmp_path: Path) -> None:
             hero_deck={"Mountain": 8, "Gray Ogre": 8},
             villain_deck={"Forest": 8, "Llanowar Elves": 8},
         ),
+        # The framework container implements input v9 only.
+        observation=ObservationConfig(policy_input_version=9),
         agent=ModelConfig(
             hidden_dim=8,
             num_attention_heads=2,
@@ -70,15 +73,16 @@ def test_capture_replays_both_seat_update(tmp_path: Path) -> None:
         agent.config,
         space.encoder.config,
         {k: v.numpy() for k, v in agent.state_dict().items()},
+        parameter_names=dict(agent.named_parameters()),
     )
-    policy, learner = backend("torch").load(weights)
+    policy, learner = resolve("torch").load(weights)
     rows = 0
     for obs, targets, settings, recorded in minibatches(out, None):
         assert targets.actions.shape == targets.advantages.shape
         assert targets.value_targets.shape == targets.actions.shape
         assert len(targets.actions) <= 2
         loss = minibatch_loss(
-            backend_module("torch"),
+            resolve("torch"),
             policy,
             learner,
             policy.prepare(obs),

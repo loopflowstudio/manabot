@@ -6,11 +6,15 @@ trackers must score them the way the scenario docs say they should.
 
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
+from manabot.backends import resolve
+from manabot.env.env import Env
 from manabot.verify.competency import (
     MICRO_AGGRO,
     MICRO_CONTROL,
+    BehaviorProbe,
     parse_agent_specs,
     play_probed_games,
     run_scenario_once,
@@ -21,8 +25,10 @@ from manabot.verify.scenarios import (
     SPACE_BLOCKER,
     SPACE_PRIORITY,
     SPACE_TARGET,
+    battlefield_permanents,
     build_scenario_env,
     find_cast_action,
+    hero_view,
     pass_index,
     stack_names,
 )
@@ -64,16 +70,20 @@ class CastWhenLegalHero(PassHero):
 class CounterBombHero(PassHero):
     """Holds Counterspell until the named bomb is on the stack."""
 
-    def __init__(self, bomb: str):
+    def __init__(self, bomb: str) -> None:
         self.bomb = bomb
+        self.probe = BehaviorProbe()
 
-    def act(self, env, obs):
+    def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
         raw = env.last_raw_obs
         if int(raw.action_space.action_space_type) == SPACE_PRIORITY:
             index = find_cast_action(raw, "Counterspell")
             if index is not None and self.bomb in stack_names(raw):
+                self.probe.observe(raw, index)
                 return index
-        return super().act(env, obs)
+        action = super().act(env, obs)
+        self.probe.observe(raw, action)
+        return action
 
 
 def test_micro_decks_are_forty_cards_and_six_or_fewer_names():
@@ -114,12 +124,15 @@ def test_scenario_positions_construct(name):
         env.close()
 
 
-def test_counter_bomb_scored_correct_when_bomb_countered():
+def test_counter_bomb_scored_correct_when_bomb_countered() -> None:
     scenario = SCENARIOS["s1_counter_the_bomb"]
-    result = run_scenario_once(scenario, CounterBombHero("Shivan Dragon"), None, seed=3)
+    hero = CounterBombHero("Shivan Dragon")
+    result = run_scenario_once(scenario, hero, None, seed=3)
     assert result["correct"] is True
     assert result["counter_cast_on"] == "Shivan Dragon"
     assert not result["bomb_resolved"]
+    assert hero.probe.countered_names == {"Shivan Dragon": 1}
+    assert hero.probe.countered_mana_values == [6]
 
 
 def test_counter_bomb_scored_wrong_when_bait_countered():
@@ -189,9 +202,7 @@ class BlockLineHero(PassHero):
     def __init__(self):
         self._blocks_this_turn: dict[int, int] = {}
 
-    def act(self, env, obs):
-        from manabot.verify.scenarios import battlefield_pairs, hero_view
-
+    def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
         raw = env.last_raw_obs
         kind = int(raw.action_space.action_space_type)
         actions = raw.action_space.actions
@@ -200,8 +211,8 @@ class BlockLineHero(PassHero):
             hero_side, _ = hero_view(raw)
             name = next(
                 (
-                    str(card.name)
-                    for card, perm in battlefield_pairs(raw, hero_side)
+                    str(perm.characteristics.name)
+                    for perm in battlefield_permanents(raw, hero_side)
                     if int(perm.id) == focus
                 ),
                 "?",
@@ -246,6 +257,7 @@ def test_probed_games_smoke():
         villain_deck=MICRO_AGGRO,
         num_games=2,
         seed=11,
+        backend=resolve("torch"),
     )
     assert len(out["records"]) == 2
     assert len(out["probes"]) == 2

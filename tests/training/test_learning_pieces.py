@@ -7,6 +7,7 @@ import pytest
 import torch
 from torch import Tensor
 
+import manabot.backends.torch as torch_backend
 from manabot.backends.torch.learner import StepRecorder, gradient_step, update_ema
 from manabot.backends.torch.rl import (
     NumericalError,
@@ -112,7 +113,11 @@ def test_gradient_step_clips_steps_and_records_when_observed() -> None:
     loss = model(torch.full((1, 2), 10.0)).sum()
     health = _health()
     norm = gradient_step(
-        loss, model, optimizer, 1.0, recorder=OptimizerHealth(health, 1)
+        loss,
+        model,
+        optimizer,
+        1.0,
+        recorder=OptimizerHealth(health, 1, backend=torch_backend),
     )
     control(torch.full((1, 2), 10.0)).sum().backward()
     expected = torch.nn.utils.get_total_norm([p.grad for p in control.parameters()])

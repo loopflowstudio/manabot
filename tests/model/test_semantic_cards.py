@@ -7,12 +7,12 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch._semantic_cards import SemanticCardEncoder
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model.admission import admit_observation
-from manabot.model.semantic_cards import SemanticCardEncoder
 from manabot.semantic.decision_contract import SemanticDecisionContract
+from tests.model.prepared_routes import device_input
 from tests.semantic.test_learn_contract import learn_root  # noqa: F401
 
 
@@ -57,7 +57,7 @@ def test_definition_lookup_preserves_values_and_producer_gradients(
     bias = torch.ones(4, device=device, requires_grad=True)
     definitions = producer * 2 + bias
     definitions.retain_grad()
-    actual = encoder.embed_definitions(ids, definitions)
+    actual = encoder.lookup(definitions, rows)
     torch.testing.assert_close(actual, definitions[rows], atol=0, rtol=0)
     assert actual.dtype == definitions.dtype and actual.device == definitions.device
 
@@ -101,7 +101,7 @@ def test_definition_lookup_preserves_autograd_contract(
     )
     ids = (encoder.definition_rows >= 0).nonzero().flatten()[:3]
     with torch.set_grad_enabled(grad_enabled):
-        actual = encoder.embed_definitions(ids, definitions)
+        actual = encoder.lookup(definitions, encoder.definition_rows[ids])
         expected = definitions[encoder.definition_rows[ids]]
     torch.testing.assert_close(actual, expected, atol=0, rtol=0)
     assert actual.requires_grad == (requires_grad and grad_enabled)
@@ -128,7 +128,7 @@ def test_programs_and_known_definitions_reach_actual_policy(learn_root):  # noqa
         ),
     )
     obs = tensors(space, before)
-    logits, _ = agent(admit_observation(agent, obs))
+    logits, _ = agent(device_input(agent, obs))
     take = [
         index
         for index, action in enumerate(before.action_space.actions)
@@ -149,17 +149,17 @@ def test_programs_and_known_definitions_reach_actual_policy(learn_root):  # noqa
     public = tensors(space, after)
     assert public["known_hand"][0, 1, :, 1].sum() == 1
     assert all(int(card.zone) != 1 for card in after.opponent_cards)
-    _, value = agent(admit_observation(agent, public))
+    _, value = agent(device_input(agent, public))
     forgotten = {key: value.clone() for key, value in public.items()}
     forgotten["known_hand"].zero_()
-    _, forgotten_value = agent(admit_observation(agent, forgotten))
+    _, forgotten_value = agent(device_input(agent, forgotten))
     assert not torch.equal(value, forgotten_value)
     # The opponent's open decklist (main, unseen and sideboard rows) also
     # reaches the value; a closed decklist would encode as these zero rows.
     assert public["decklists"][0, 1, :, 1].sum() == 41
     closed = {key: value.clone() for key, value in public.items()}
     closed["decklists"][:, 1].zero_()
-    _, closed_value = agent(admit_observation(agent, closed))
+    _, closed_value = agent(device_input(agent, closed))
     assert not torch.equal(value, closed_value)
     for seed in (17, 91):
         hidden = engine.clone_env()
@@ -181,4 +181,4 @@ def test_semantic_policy_rejects_unadmitted_definition(learn_root):  # noqa: F81
     obs = tensors(space, learn_root.observation_for_player(actor))
     obs["semantic_cards"][0, 0, 0] = 1000000
     with pytest.raises(ValueError, match="unadmitted"):
-        agent(admit_observation(agent, obs))
+        agent(device_input(agent, obs))

@@ -12,6 +12,9 @@ import pytest
 import torch
 
 import manabot.backends.torch as torch_backend
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import transition_gae
@@ -149,7 +152,7 @@ def attempt(failed: bool, seed: int = 0) -> GameAttempt:
 
 
 @pytest.mark.parametrize("error_class", ["ObservationCapacity", "AgentError", None])
-def test_resource_limit_receipt_replays_its_retained_encoding_boundary(
+def test_resource_limit_replay_rejects_old_schema_and_reproduces_current_boundary(
     error_class: str | None,
 ) -> None:
     evidence = read_failure(
@@ -187,6 +190,26 @@ def test_resource_limit_receipt_replays_its_retained_encoding_boundary(
         ),
     )
     result = replay_attempt(row)
+    # The frozen receipt predates the current semantic frame schema. Reject it
+    # before execution; reproducing its allocation failure needs a fresh binding.
+    assert result["status"] == "binding_mismatch"
+    assert result["matches_binding"] is False
+    assert result["at_retained_failure"] is False
+    assert result["matches_error"] is None
+    assert result["action_index"] == 370
+    current_frame = result["frame"]
+    assert isinstance(current_frame, str)
+    assert isinstance(game.frame, str)
+    retained = json.loads(game.frame)
+    current = json.loads(current_frame)
+    assert retained.pop("schema_version") == 7
+    assert current.pop("schema_version") == 8
+    assert retained.pop("fingerprint") != current.pop("fingerprint")
+    assert retained == current
+
+    # This current-world attempt is separate from the retained evidence. Keep
+    # the original bytes and binding check, and exercise the same capacity limit.
+    result = replay_attempt(row.model_copy(update={"frame_json": current_frame}))
     assert result["status"] == "failed"
     assert result["matches_binding"] and result["at_retained_failure"]
     assert result["matches_error"] is (
@@ -214,6 +237,7 @@ def _tolerant_collector(
         batch_closure=closure,
         game_errors=ledger.policy,
         record_attempt=lambda row: ledger.record(row, {}),
+        numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
     )
 
 
@@ -378,6 +402,7 @@ def test_native_partial_vector_and_replay(workers: int) -> None:
         num_envs=3,
         opponent_mode="self",
         workers=workers,
+        numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
     )
     try:
         _assert_native_failure_replay(collector)

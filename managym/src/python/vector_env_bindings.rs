@@ -21,9 +21,8 @@ use crate::{
         observation_encoder::{
             encode, encode_into, EncodedObservationMut, ObservationEncoderConfig, ACTION_DIM,
         },
-        opponent::OpponentPolicy,
         rollout_pool::RolloutPool,
-        vector_env::{ObservationWriteError, VectorEnv},
+        vector_env::{ObservationRead, ObservationWriteError, VectorEnv},
     },
     infra::profiler::InfoDict,
     python::{
@@ -51,6 +50,8 @@ struct ObservationBuffers {
     decklists: Option<Py<PyAny>>,
     player_turn_state: Option<Py<PyAny>>,
     card_turn_state: Option<Py<PyAny>>,
+    stack: Option<Py<PyAny>>,
+    stack_valid: Option<Py<PyAny>>,
     agent_player: Py<PyAny>,
     opponent_player: Py<PyAny>,
     agent_cards: Py<PyAny>,
@@ -129,16 +130,17 @@ impl PyVectorEnv {
     }
 
     #[new]
-    #[pyo3(signature = (num_envs, seed=0, skip_trivial=true, opponent_policy="none", seed_stride=None))]
+    #[pyo3(signature = (num_envs, seed=0, skip_trivial=true, opponent_policy=None, seed_stride=None, *, player_policies=None))]
     fn new(
         num_envs: usize,
         seed: u64,
         skip_trivial: bool,
-        opponent_policy: &str,
+        opponent_policy: Option<&str>,
         seed_stride: Option<u64>,
+        player_policies: Option<Vec<String>>,
     ) -> PyResult<Self> {
-        let policy = parse_opponent_policy(opponent_policy)?;
-        let mut inner = VectorEnv::new(num_envs, seed, skip_trivial, policy);
+        let policies = parse_player_policies(player_policies, opponent_policy)?;
+        let mut inner = VectorEnv::new(num_envs, seed, skip_trivial, policies);
         if let Some(stride) = seed_stride {
             inner = inner.with_seed_stride(stride).map_err(map_agent_err)?;
         }
@@ -352,6 +354,30 @@ impl PyVectorEnv {
         self.inner.current_game_generations()
     }
 
+    /// Caller-owned observation-only buffers; registered execution buffers and
+    /// diagnostics are untouched. Keep the GIL held throughout the read/write.
+    #[pyo3(signature = (players, buffers, action_overflow="error"))]
+    fn write_observations_for_players(
+        &self,
+        py: Python<'_>,
+        players: Vec<usize>,
+        buffers: Bound<'_, PyDict>,
+        action_overflow: &str,
+    ) -> PyResult<Vec<ObservationRead>> {
+        let mut config = input_buffer_config(&buffers)?;
+        config.action_overflow = action_overflow.parse().map_err(PyValueError::new_err)?;
+        let buffers = read_observation_buffers(&buffers, self.num_envs, &config, false)?;
+        with_observation_field_slices(py, &buffers, |out| {
+            self.inner
+                .write_observations_for_players(&players, |slot, observation| {
+                    let row = out.encoded_row_mut(slot, &config)?;
+                    encode_into(observation, &config, row)
+                        .map_err(|err| AgentError(err.to_string()))
+                })
+                .map_err(map_agent_err)
+        })
+    }
+
     fn hand_snapshots(&self, players: Vec<usize>) -> PyResult<Vec<HandSnapshot>> {
         self.inner.hand_snapshots(&players).map_err(map_agent_err)
     }
@@ -561,6 +587,32 @@ pub(super) fn input_buffer_config(
             ))
         }
     };
+    // Input v11 is the one-token layout: a stack buffer and the turn state.
+    // Without a stack buffer the buffers are the deprecated v9/v10 rows.
+    if buffers.contains("stack")? {
+        let [rows, width] = shape("stack")?;
+        if width != crate::agent::observation_encoder::STACK_DIM || !config.turn_state {
+            return Err(PyValueError::new_err(format!(
+                "policy input v11 requires stack of shape [capacity, {}] and the turn-state buffers",
+                crate::agent::observation_encoder::STACK_DIM
+            )));
+        }
+        config.max_stack_objects = rows;
+    } else {
+        config.layout = crate::agent::observation_encoder::InputLayout::Legacy;
+    }
+    let permanent_width = shape("agent_permanents")?[1];
+    if permanent_width != config.permanent_dim() {
+        return Err(PyValueError::new_err(format!(
+            "agent_permanents width {permanent_width} does not match the {} layout's {}",
+            if config.layout == crate::agent::observation_encoder::InputLayout::OneToken {
+                "v11"
+            } else {
+                "v9/v10"
+            },
+            config.permanent_dim()
+        )));
+    }
     Ok(config)
 }
 
@@ -641,6 +693,23 @@ fn read_observation_buffers(
         } else {
             None
         },
+        stack: if c.stack_rows() > 0 {
+            required(
+                "stack",
+                &[
+                    n,
+                    c.max_stack_objects,
+                    crate::agent::observation_encoder::STACK_DIM,
+                ],
+            )?
+        } else {
+            None
+        },
+        stack_valid: if c.stack_rows() > 0 {
+            required("stack_valid", &[n, c.max_stack_objects])?
+        } else {
+            None
+        },
         decklists: required(
             "decklists",
             &[
@@ -696,22 +765,14 @@ fn read_observation_buffers(
         agent_permanents: require_numpy_array(
             buffers,
             "agent_permanents",
-            &[
-                n,
-                c.max_permanents_per_player,
-                crate::agent::observation_encoder::PERMANENT_DIM,
-            ],
+            &[n, c.max_permanents_per_player, c.permanent_dim()],
             "float32",
         )?
         .unbind(),
         opponent_permanents: require_numpy_array(
             buffers,
             "opponent_permanents",
-            &[
-                n,
-                c.max_permanents_per_player,
-                crate::agent::observation_encoder::PERMANENT_DIM,
-            ],
+            &[n, c.max_permanents_per_player, c.permanent_dim()],
             "float32",
         )?
         .unbind(),
@@ -1021,14 +1082,47 @@ fn encode_observations_into(
 }
 
 #[cfg(feature = "python")]
-fn parse_opponent_policy(value: &str) -> PyResult<OpponentPolicy> {
-    match value {
-        "none" => Ok(OpponentPolicy::None),
-        "random" => Ok(OpponentPolicy::Random),
-        _ => Err(PyValueError::new_err(format!(
-            "unsupported opponent_policy: {value}"
-        ))),
+pub(crate) fn parse_player_policies(
+    values: Option<Vec<String>>,
+    legacy: Option<&str>,
+) -> PyResult<[crate::agent::player_policy::PlayerPolicy; 2]> {
+    use crate::agent::player_policy::PlayerPolicy;
+    if values.is_some() && legacy.is_some() {
+        return Err(PyValueError::new_err(
+            "use player_policies or opponent_policy, not both",
+        ));
     }
+    let values = if let Some(legacy) = legacy {
+        if !["none", "random", "heuristic"].contains(&legacy) {
+            return Err(PyValueError::new_err(format!(
+                "unsupported opponent_policy: {legacy}"
+            )));
+        }
+        Python::with_gil(|py| -> PyResult<()> {
+            py.import_bound("warnings")?.call_method1("warn", ("opponent_policy is deprecated; use player_policies=('agent', '<policy>'); removal in 0.3.0", py.get_type_bound::<pyo3::exceptions::PyDeprecationWarning>(), 2))?;
+            Ok(())
+        })?;
+        vec![
+            "agent".into(),
+            if legacy == "none" { "agent" } else { legacy }.into(),
+        ]
+    } else {
+        values.unwrap_or_else(|| vec!["agent".into(); 2])
+    };
+    if values.len() != 2 {
+        return Err(PyValueError::new_err(
+            "player_policies requires exactly two seats",
+        ));
+    }
+    let parse = |value: &str| match value {
+        "agent" => Ok(PlayerPolicy::Agent),
+        "random" => Ok(PlayerPolicy::Random),
+        "heuristic" => Ok(PlayerPolicy::Heuristic),
+        _ => Err(PyValueError::new_err(format!(
+            "unsupported player policy: {value}"
+        ))),
+    };
+    Ok([parse(&values[0])?, parse(&values[1])?])
 }
 
 #[cfg(feature = "python")]
@@ -1136,6 +1230,8 @@ struct SendObservationFieldSlices {
     decklists: Option<SendSlice<f32>>,
     player_turn_state: Option<SendSlice<f32>>,
     card_turn_state: Option<SendSlice<f32>>,
+    stack: Option<SendSlice<f32>>,
+    stack_valid: Option<SendSlice<f32>>,
     agent_player: SendSlice<f32>,
     opponent_player: SendSlice<f32>,
     agent_cards: SendSlice<f32>,
@@ -1300,6 +1396,28 @@ impl SendObservationFieldSlices {
                     slice::from_raw_parts_mut(
                         buffer.row_ptr(env_index, config.card_turn_state_len())?,
                         config.card_turn_state_len(),
+                    )
+                }
+            } else {
+                &mut []
+            },
+            stack: if let Some(buffer) = self.stack {
+                // SAFETY: the registered buffer is partitioned into disjoint rows.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(env_index, config.stack_len())?,
+                        config.stack_len(),
+                    )
+                }
+            } else {
+                &mut []
+            },
+            stack_valid: if let Some(buffer) = self.stack_valid {
+                // SAFETY: the registered buffer is partitioned into disjoint rows.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(env_index, config.stack_rows())?,
+                        config.stack_rows(),
                     )
                 }
             } else {
@@ -1515,6 +1633,16 @@ fn with_observation_field_slices<R>(
         .as_ref()
         .map(|array| typed_numpy_buffer::<f32>(py, array, "card_turn_state"))
         .transpose()?;
+    let stack_buffer = buffers
+        .stack
+        .as_ref()
+        .map(|array| typed_numpy_buffer::<f32>(py, array, "stack"))
+        .transpose()?;
+    let stack_valid_buffer = buffers
+        .stack_valid
+        .as_ref()
+        .map(|array| typed_numpy_buffer::<f32>(py, array, "stack_valid"))
+        .transpose()?;
     let agent_player_buffer = typed_numpy_buffer::<f32>(py, &buffers.agent_player, "agent_player")?;
     let opponent_player_buffer =
         typed_numpy_buffer::<f32>(py, &buffers.opponent_player, "opponent_player")?;
@@ -1586,6 +1714,14 @@ fn with_observation_field_slices<R>(
         card_turn_state: card_turn_state_buffer
             .as_ref()
             .map(|buffer| send_slice_from_buffer(py, buffer, "card_turn_state"))
+            .transpose()?,
+        stack: stack_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "stack"))
+            .transpose()?,
+        stack_valid: stack_valid_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "stack_valid"))
             .transpose()?,
         semantic_cards: send_slice_from_buffer(py, &semantic_cards_buffer, "semantic_cards")?,
         agent_player: send_slice_from_buffer(py, &agent_player_buffer, "agent_player")?,

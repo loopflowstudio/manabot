@@ -133,7 +133,7 @@ class PlayerRegistration(StrictModel):
                 ):
                     raise ValueError("checkpoint inference spec must be fully explicit")
             elif kind == "local_update":
-                from manabot.sim.search.local_update import (
+                from manabot.sim.search.local_update_receipt import (
                     LocalSearchConfig,
                     SamplerArtifact,
                 )

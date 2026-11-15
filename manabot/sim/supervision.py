@@ -32,9 +32,10 @@ from manabot.sim.serving_protocol import InferenceFailure, InferenceRuntime
 from manabot.sim.threads import REPLAY_BUDGET
 
 
-def _failure(
+def failure_record(
     game: dict[str, Any], reason: str, message: str, player_id: str | None
 ) -> None:
+    """Mark the retained game as failed, clearing any apparent winning result."""
     game.setdefault("integrity", {})["execution_failures"] = 1
     game.update(
         termination_reason=reason,
@@ -46,9 +47,9 @@ def _failure(
     )
 
 
-def _infrastructure_failure(game: dict[str, Any], message: str) -> dict[str, Any]:
+def infrastructure_failure(game: dict[str, Any], message: str) -> dict[str, Any]:
     """Fail the game without blaming a player: the harness, not play, broke."""
-    _failure(game, "crash", message, None)
+    failure_record(game, "crash", message, None)
     game["infrastructure_failure"] = True
     return game
 
@@ -116,7 +117,7 @@ def supervise_game(
                 try:
                     client = inference.connect()
                 except InferenceFailure as exc:
-                    return _infrastructure_failure(game, str(exc))
+                    return infrastructure_failure(game, str(exc))
             try:
                 descriptor = None if client is None else client.fileno()
                 process = ChildProcess(
@@ -142,9 +143,11 @@ def supervise_game(
                     try:
                         inference.check()
                     except InferenceFailure as exc:
-                        return _infrastructure_failure(game, str(exc))
+                        return infrastructure_failure(game, str(exc))
                 if remaining <= 0:
-                    _failure(game, "timeout", "game wall-clock budget exhausted", None)
+                    failure_record(
+                        game, "timeout", "game wall-clock budget exhausted", None
+                    )
                     return game
                 if not receiver.poll(min(remaining, 0.1)):
                     if process.is_alive():
@@ -152,7 +155,7 @@ def supervise_game(
                     # Exit may race the timed poll. Drain queued phase/Command
                     # events before deciding which player, if any, failed.
                     if not receiver.poll():
-                        _failure(
+                        failure_record(
                             game,
                             "crash",
                             f"worker exited {process.exitcode}",
@@ -162,7 +165,7 @@ def supervise_game(
                 try:
                     kind, value = receiver.recv()
                 except EOFError:
-                    _failure(
+                    failure_record(
                         game, "crash", "worker exited without a result", responsible
                     )
                     return game
@@ -171,7 +174,7 @@ def supervise_game(
                     # trusted for any game; stop the allocation, as for a crash.
                     if inference is not None:
                         inference.fail(value)
-                    return _infrastructure_failure(game, value)
+                    return infrastructure_failure(game, value)
                 with perf.span("durable_evidence"):
                     retain(kind, value)
                 game = apply_game_event(game, kind, value)
@@ -181,7 +184,7 @@ def supervise_game(
                     try:
                         receiver.send("retained")
                     except (BrokenPipeError, ConnectionResetError):
-                        _failure(
+                        failure_record(
                             game, "crash", "worker exited before acknowledgement", None
                         )
                         return game

@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 import torch
 
+from manabot.backends import resolve
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.training import execution
 from manabot.training.records import TrainingRun
@@ -39,7 +40,12 @@ def fork(parent: TrainingRun, export: Path, updates: int = 2) -> TrainingRegime:
 def run(recipe: TrainingRegime, tmp_path: Path, name: str, seed: int) -> TrainingRun:
     with VerifyStore(tmp_path / "training.sqlite") as store:
         return execution.execute_regime(
-            recipe, seed, tmp_path / name, store, checkpoint_updates=1
+            recipe,
+            seed,
+            tmp_path / name,
+            store,
+            checkpoint_updates=1,
+            backend=resolve("torch"),
         )
 
 
@@ -82,7 +88,11 @@ def test_ancestor_costs_reach_the_newest_run(
     export = tmp_path / "producer/run.json"
     with VerifyStore(tmp_path / "training.sqlite") as store:
         extended = execution.execute_regime(
-            continuation(producer, export, 3), 197, tmp_path / "extended", store
+            continuation(producer, export, 3),
+            197,
+            tmp_path / "extended",
+            store,
+            backend=resolve("torch"),
         )
     assert extended.status == "completed", extended.error
     first = run(fork(extended, tmp_path / "extended/run.json"), tmp_path, "first", 5)
@@ -117,7 +127,9 @@ def test_rejects_weights_this_model_cannot_hold(
         stage.pretrained.weights = "raw"
     with VerifyStore(tmp_path / "training.sqlite") as store:
         with pytest.raises(ValueError):
-            execution.execute_regime(recipe, 198, tmp_path / "rejected", store)
+            execution.execute_regime(
+                recipe, 198, tmp_path / "rejected", store, backend=resolve("torch")
+            )
     failed = TrainingRun.model_validate_json(
         (tmp_path / "rejected/run.json").read_text()
     )

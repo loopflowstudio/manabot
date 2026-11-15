@@ -10,16 +10,16 @@ end is each update's `selection_groups` metrics, under the report's ML details.
     uv run etude report experiments/lambda_sweep.py --source r2://manabot/jobs --open
 """
 
-from etude.experiment import ExperimentState
+from etude.jobs import ExperimentState
 from etude.launch.records import Job, Run
 from etude.report import Report
 
 from experiments.batched_baseline import lambda_sweep
 from experiments.learning_signal import (
     ALLIES_LESSONS,
+    build_training_jobs,
     evaluation_jobs,
     learning_report,
-    training_runs,
 )
 
 EXPERIMENT = "lambda_sweep"
@@ -36,7 +36,7 @@ ARMS: tuple[tuple[float, float], ...] = (
 BASELINE = "lambda-sweep-p0.5-v0.8-v1"
 
 
-def runs(
+def training_jobs(
     revision: str,
     hours: float = 1.2,
     usd_per_run: float = 0.72,
@@ -44,7 +44,7 @@ def runs(
     seeds: tuple[int, ...] = SEEDS,
     experiment: str = EXPERIMENT,
 ) -> list[Run]:
-    return training_runs(
+    return build_training_jobs(
         (lambda_sweep(*arm, updates) for arm in ARMS),
         updates=updates,
         revision=revision,
@@ -55,7 +55,7 @@ def runs(
     )
 
 
-def eval(state: ExperimentState) -> list[Job]:
+def eval_jobs(state: ExperimentState) -> list[Job]:
     return evaluation_jobs(
         state, "lambda-sweep-v1", ALLIES_LESSONS, hours=0.75, usd=0.96
     )

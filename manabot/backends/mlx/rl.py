@@ -12,7 +12,7 @@ surrogate ratio is float32 (`clipped_surrogate` states the limit) and
 `float64_operand` is the identity. Returns and advantage selection run on the
 host through `manabot.policy.returns`, whose NumPy functions match torch's
 bit for bit. The categorical critic's functions are absent: the backend
-refuses a categorical checkpoint (`manabot.policy.checkpoint.require_supported`).
+refuses a categorical checkpoint (`manabot.backends.mlx.checkpoint.require_supported`).
 """
 
 from collections.abc import Mapping
@@ -296,3 +296,26 @@ def selected_mean(values: mx.array, selected: mx.array) -> mx.array:
     selection is zero with zero gradient."""
     count = selected.astype(mx.float32).sum()
     return mx.where(selected, values, 0.0).sum() / mx.maximum(count, 1)
+
+
+def check_behavior(
+    logs: mx.array, actions: mx.array, selected_logs: mx.array, valid: mx.array
+) -> None:
+    """Admit normalized behavior and its selected legal action without Torch."""
+    check_logs(logs, valid)
+    tensors = dict(logs=logs, actions=actions, selected_logs=selected_logs, valid=valid)
+    if actions.shape != valid.shape[:-1] or selected_logs.shape != actions.shape:
+        raise NumericalError("behavior_shape", tensors)
+    require(
+        (actions >= 0) & (actions < logs.shape[-1]), "action_out_of_range", **tensors
+    )
+    chosen = actions[..., None]
+    require(
+        mx.take_along_axis(valid, chosen, axis=-1), "illegal_sampled_action", **tensors
+    )
+    require(
+        mx.abs(mx.take_along_axis(logs, chosen, axis=-1).squeeze(-1) - selected_logs)
+        <= 1e-5 + 1e-5 * mx.abs(selected_logs),
+        "selected_log_mismatch",
+        **tensors,
+    )

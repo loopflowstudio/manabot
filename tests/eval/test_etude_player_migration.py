@@ -20,7 +20,7 @@ from etude.eval.records import (
     Match,
     MatchRecord,
 )
-from etude.run.records import ArtifactRef
+from etude.records import ArtifactRef
 import pytest
 
 from experiments import (
@@ -283,7 +283,7 @@ def test_historical_and_current_game_columns_union_without_losing_seats(
     retained = _retained_bytes(root)
     convert(run, store)
     # A new synthetic deal follows the retained match; its producer uses the new schema.
-    extra = matches[0].model_copy(update={"conditions": {"deals": [99]}, "games": 4})
+    extra = matches[0].model_copy(update={"config": {"deals": [99]}, "games": 4})
 
     def play(match: Match) -> Tables:
         assert match == extra

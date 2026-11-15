@@ -1,5 +1,6 @@
 """Focused test fixtures for belief contracts; production demos use managym."""
 
+import numpy as np
 import torch
 
 from manabot.backends.torch.policy import ActorCritic
@@ -73,15 +74,12 @@ def fixture_schema(space: PossibleWorldSpace) -> BeliefEncodingSchema:
     )
 
 
-def fixture_torch_observation() -> dict[str, torch.Tensor]:
+def fixture_observation() -> dict[str, np.ndarray]:
     # Use the policy's allocation contract, including versioned fact capacity.
-    observation = {
-        key: torch.from_numpy(value)
-        for key, value in ObservationSpace().encoder.allocate(1).items()
-    }
-    observation["action_focus"].fill_(-1)
-    observation["agent_player_valid"].fill_(1)
-    observation["opponent_player_valid"].fill_(1)
+    observation = ObservationSpace().encoder.allocate(1)
+    observation["action_focus"].fill(-1)
+    observation["agent_player_valid"].fill(1)
+    observation["opponent_player_valid"].fill(1)
     observation["actions"][0, 0, 0] = 1.0
     observation["actions"][0, 1, 1] = 1.0
     observation["actions"][0, 2, 2] = 1.0
@@ -95,7 +93,7 @@ def fixture_decision() -> tuple[ViewerDecision, BeliefEncodingSchema]:
     space = fixture_space(history)
     return (
         ViewerDecision(
-            observation=fixture_torch_observation(),
+            observation=fixture_observation(),
             world_space=space,
             viewer_history=history,
             legal_commands=(

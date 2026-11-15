@@ -19,13 +19,15 @@ import os
 from pathlib import Path
 import time
 
+from etude.jobs import TrainingJob
 from etude.launch.records import Job
 from pydantic import Field, TypeAdapter
 
 from experiments import qwen_mtg183 as original
+from manabot.backends import resolve
 from manabot.llm.schema import InferenceConfig, RuntimeIdentity
 from manabot.sim.child import ChildProcess
-from manabot.verify.llm_game import GameSummary, _write
+from manabot.verify.llm_game import GameSummary, write_payload
 
 # Leave this much campaign time after a full decision window at every admission.
 _ADMISSION_RESERVE_SECONDS = 120
@@ -91,18 +93,18 @@ def _prepare_schedule(config: Campaign, out: Path) -> list[original.ScheduledGam
         }
     )
     path = (out / "inference.json").absolute()
-    _write(path, inference.model_dump_json(indent=2))
+    write_payload(path, inference.model_dump_json(indent=2))
     games = [
         game.model_copy(
             update={"config": game.config.model_copy(update={"inference": path})}
         )
         for game in original.schedule(config)[: config.games]
     ]
-    _write(
+    write_payload(
         out / "schedule.json",
         json.dumps([g.model_dump(mode="json") for g in games], indent=2),
     )
-    _write(
+    write_payload(
         out / "games.json",
         json.dumps(
             {
@@ -137,6 +139,7 @@ def _play_game(
             Path(os.environ["ETUDE_INPUTS_DIR"]) / "checkpoint.pt",
             original.CHECKPOINT_SHA256,
             original.CHECKPOINT_BYTES,
+            backend=resolve("torch"),
         )
         factory = partial(VLLMRuntime, identity_path=out / "vllm-identity.json")
         with InferenceSession(inference, load_seconds=60, factory=factory) as session:
@@ -151,8 +154,9 @@ def _play_game(
                 record,
                 session,
                 opponent=opponent,
+                backend=resolve("torch"),
             )
-            _write(
+            write_payload(
                 record / "actor-startup.json",
                 json.dumps(
                     {
@@ -168,8 +172,8 @@ def _play_game(
             mode="qwen-v-checkpoint", failure=f"{type(error).__name__}: {error}"
         )
         record.mkdir(parents=True, exist_ok=True)
-        _write(record / "config.json", game.config.model_dump_json(indent=2))
-        _write(record / "summary.json", summary.model_dump_json(indent=2))
+        write_payload(record / "config.json", game.config.model_dump_json(indent=2))
+        write_payload(record / "summary.json", summary.model_dump_json(indent=2))
     return original.GameResult(game=game, summary=summary)
 
 
@@ -270,11 +274,11 @@ def worker(config: Campaign, out: Path) -> None:
         if admitting is not None:
             pending_games.append(admitting.index)
         attempted = len(results) + len(pending_games)
-        _write(
+        write_payload(
             out / "results.json",
             json.dumps([r.model_dump(mode="json") for r in results], indent=2),
         )
-        _write(
+        write_payload(
             out / "campaign.json",
             json.dumps(
                 {
@@ -366,8 +370,8 @@ def run(config: Campaign) -> None:
     out = Path(os.environ["ETUDE_OUTPUT_DIR"])
     out.mkdir(parents=True, exist_ok=True)
     games = _prepare_schedule(config, out)
-    _write(out / "campaign-config.json", config.model_dump_json(indent=2))
-    _write(
+    write_payload(out / "campaign-config.json", config.model_dump_json(indent=2))
+    write_payload(
         out / "campaign.json",
         json.dumps(
             {
@@ -394,7 +398,7 @@ def run(config: Campaign) -> None:
         with VLLMServer(
             inference, out, config.concurrency, config.speculative_tokens
         ) as server:
-            _write(
+            write_payload(
                 out / "readiness.json",
                 json.dumps(
                     {
@@ -418,10 +422,10 @@ def run(config: Campaign) -> None:
             pending_games=[],
             settled=receipt["settled"] + len(canceled),
         )
-        _write(out / "campaign.json", json.dumps(receipt, indent=2))
+        write_payload(out / "campaign.json", json.dumps(receipt, indent=2))
         raise
     finally:
-        _write(
+        write_payload(
             out / "campaign-wall.json",
             json.dumps(
                 {
@@ -432,7 +436,7 @@ def run(config: Campaign) -> None:
         )
 
 
-def runs(
+def training_jobs(
     native_artifact: str,
     native_source: str,
     attempt_usd: str = "9.40",
@@ -477,17 +481,22 @@ def runs(
         context_tokens=inference.context_tokens,
         seconds=seconds,
     )
-    job = original.runs(native_artifact, native_source)
+    job = original.training_jobs(native_artifact, native_source).plain()
     mtp = f"-mtp{speculative_tokens}" if speculative_tokens else ""
-    return job.model_copy(
-        update={
-            "name": f"bb4160-w13-qwen-vllm-{arm}-v-mtg183-u5950-g{games}-c{concurrency}{mtp}",
-            "command": "uv run python -m etude.call --function experiments.qwen_mtg183_vllm:run",
-            "config": config.model_dump_json(),
-            "setup": "sh scripts/qwen-mtg183-vllm-setup.sh",
-            "max_usd": ceiling,
-            "max_hours": hours,
-        }
+    return TrainingJob(
+        train=run,
+        config=config,
+        name=f"bb4160-w13-qwen-vllm-{arm}-v-mtg183-u5950-g{games}-c{concurrency}{mtp}",
+        setup="sh scripts/qwen-mtg183-vllm-setup.sh",
+        max_usd=ceiling,
+        max_hours=hours,
+        repo=job.repo,
+        revision=job.revision,
+        inputs=job.inputs,
+        environment=job.environment,
+        cleanup=job.cleanup,
+        cleanup_seconds=job.cleanup_seconds,
+        max_attempts=job.max_attempts,
     )
 
 

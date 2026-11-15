@@ -135,10 +135,11 @@ def test_source_dependent_shared_transport_has_exact_public_join() -> None:
 
 
 def _history(env: managym.Env, viewer: int) -> np.ndarray:
-    capacity = ObservationEncoder(ObservationConfig()).cards_per_player
-    return np.array(
-        env.observation_for_player(viewer).encode_policy_history(32, capacity)
+    """The viewer's valid public history v1 rows."""
+    encoded = ObservationEncoder(ObservationConfig(policy_history_version=1)).encode(
+        env.observation_for_player(viewer)
     )
+    return encoded["events"][encoded["events_valid"] == 1]
 
 
 def _effect_durations(env: managym.Env, viewer: int) -> set[float]:

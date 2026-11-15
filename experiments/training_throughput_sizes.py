@@ -37,7 +37,7 @@ from experiments.elemental_variants import self_play_stage, sized
 from experiments.learning_signal import (
     FINALIZATION_SECONDS,
     SETUP_SECONDS,
-    training_runs,
+    build_training_jobs,
 )
 from experiments.training_throughput_packing import GPU_SAMPLER, LEG_VARIABLE
 from manabot.training.regime import Precision, TrainingRegime
@@ -158,7 +158,9 @@ def limits(leg: Leg, pace: float) -> Limits:
     )
 
 
-def runs(revision: str, leg: str, seeds: str = "", pace: str = "") -> list[Run]:
+def training_jobs(
+    revision: str, leg: str, seeds: str = "", pace: str = ""
+) -> list[Run]:
     """One cell's runs. `seeds`, comma-separated, picks some of its seeds; `pace`
     is the previous size's K=1 seconds per update on this GPU (default: w64's)."""
     if leg not in LEGS:
@@ -172,7 +174,7 @@ def runs(revision: str, leg: str, seeds: str = "", pace: str = "") -> list[Run]:
         raise ValueError(f"leg {leg} declares no seeds {sorted(unknown)}")
     limit = limits(chosen, float(pace) if pace else FIRST_PACE_SECONDS)
     regime = recipe(chosen.size, chosen.precision, chosen.updates)
-    job = training_runs(
+    job = build_training_jobs(
         (regime,),
         updates=chosen.updates,
         revision=revision,

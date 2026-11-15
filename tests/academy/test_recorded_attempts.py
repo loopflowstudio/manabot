@@ -8,6 +8,7 @@ import pytest
 
 from managym.academy import server, trace
 from managym.academy.attempts import AttemptStore, participant_id
+from tests.academy.socket_messages import settled_message
 
 
 def rows(path):
@@ -33,7 +34,7 @@ def test_replacement_preserves_authority_and_records_prefix(tmp_path):
             game.new_game({"villain_type": "random", **invalid})
     assert game.match_id == match
     assert game.current_recovery("explicit_resync")["frame"] == initial["frame"]
-    game.new_game({"villain_type": "random", "request_id": "first"})
+    game.new_game({"villain_type": "random", "seed": 79, "request_id": "first"})
     assert game.match_id == match
     assert len(rows(tmp_path)) == 1
     game.new_game({"villain_type": "random"})
@@ -142,12 +143,12 @@ def test_websocket_reports_recording_failure_even_when_close_also_fails(
             socket.send_json(
                 {"type": "new_game", "config": {"villain_type": "passive"}}
             )
-            assert socket.receive_json()["type"] == "observation"
+            assert settled_message(socket)["type"] == "observation"
             monkeypatch.setattr(AttemptStore, "save", fail)
             socket.send_json(
                 {"type": "new_game", "config": {"villain_type": "passive"}}
             )
-            message = socket.receive_json()
+            message = settled_message(socket)
             assert message["type"] == "error"
             assert "recording failed" in message["message"].lower()
             assert "not have been saved" in message["message"]

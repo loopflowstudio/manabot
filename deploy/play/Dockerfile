@@ -4,10 +4,8 @@ FROM node:22-slim AS web
 WORKDIR /build/academy/ui
 COPY academy/ui/package.json academy/ui/package-lock.json ./
 RUN npm ci --no-audit --no-fund
-COPY academy/ui/scripts/fetch-card-art.mjs scripts/fetch-card-art.mjs
 COPY managym/academy/packs/ /build/managym/academy/packs/
 COPY managym/academy/fixtures/ /build/managym/academy/fixtures/
-RUN node scripts/fetch-card-art.mjs
 COPY academy/ui/ ./
 RUN ACADEMY_STATIC_BUILD=1 npm run build
 
@@ -43,6 +41,7 @@ RUN uv sync --locked --only-group play-runtime --no-install-project \
     && uv pip install --no-deps /wheels/*.whl
 COPY deploy/play/asgi.py ./
 ENV ACADEMY_TRACES_DIR=/data/traces
+ENV ACADEMY_CARD_ART_DIR=/data/card-art
 RUN uv run --no-sync python -c "import asgi; from managym.academy.extensions import bot_extension; assert bot_extension() is not None"
 EXPOSE 8000
 CMD [".venv/bin/uvicorn", "asgi:app", "--host", "0.0.0.0", "--port", "8000"]

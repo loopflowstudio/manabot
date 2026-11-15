@@ -16,9 +16,12 @@ import subprocess
 import sys
 import tempfile
 from threading import Thread
+from time import monotonic
+from typing import Any
+from urllib.parse import parse_qs, urlparse
 from urllib.request import urlopen
 
-from websockets.sync.client import connect
+from websockets.sync.client import ClientConnection, connect
 
 import managym
 
@@ -29,15 +32,35 @@ LAUNCH_COMMAND = "uv run --no-project managym academy"
 DEFAULT_URL = "http://127.0.0.1:8000"
 
 
+def _settled_message(ws: ClientConnection) -> dict[str, Any]:
+    """Wait up to 30 seconds for a reply after progress and early receipts.
+
+    An accepted command can still be running the opponent; only its settled
+    reply supplies the next playable frame. Errors pass through to assertions.
+    """
+    deadline = monotonic() + 30
+    while True:
+        # The wire envelope contains heterogeneous JSON frames and receipts.
+        message: dict[str, Any] = json.loads(
+            ws.recv(timeout=max(0, deadline - monotonic()))
+        )
+        if message["type"] == "work_status":
+            continue
+        if (
+            message["type"] == "command_outcome"
+            and message.get("status") == "accepted"
+            and (message.get("work") or {}).get("state") == "running"
+        ):
+            continue
+        return message
+
+
 def main() -> None:
     prefix = Path(sys.prefix).resolve()
     assert Path(managym.__file__).resolve().is_relative_to(prefix)
     assert Path(managym._managym.__file__).resolve().is_relative_to(prefix)
     installed = {d.metadata["Name"].lower() for d in distributions()}
     assert not installed.intersection({"manabot", "torch", "etude-sdk"})
-    with socket.socket() as listener:
-        listener.bind(("127.0.0.1", 0))
-        port = listener.getsockname()[1]
     with tempfile.TemporaryDirectory(prefix="academy-wheel-") as directory:
         ready: Queue[str] = Queue()
         log: list[str] = []
@@ -46,9 +69,18 @@ def main() -> None:
                 sys.executable,
                 "-m",
                 "managym.academy",
+                "play",
+                "--deck",
+                "interactive",
+                "--opponent-deck",
+                "interactive",
+                "--opponent",
+                "passive",
+                "--seed",
+                "7",
                 "--no-open",
                 "--port",
-                str(port),
+                "0",
                 "--traces-dir",
                 directory,
             ],
@@ -72,8 +104,12 @@ def main() -> None:
             record = json.loads(
                 ready.get(timeout=30).removeprefix("ACADEMY_PLAY_READY ")
             )
-            url = f"http://127.0.0.1:{port}"
-            assert record == {"traces_dir": str(Path(directory).resolve()), "url": url}
+            url = record["url"]
+            port = urlparse(url).port
+            assert port is not None
+            assert record["traces_dir"] == str(Path(directory).resolve())
+            launch_id = parse_qs(urlparse(record["open"]).query)["launch"][0]
+            assert record["open"].startswith(url + "/?launch=")
 
             def get(path: str) -> bytes:
                 with urlopen(url + path, timeout=10) as response:
@@ -93,6 +129,17 @@ def main() -> None:
                     json.dumps(
                         {
                             "type": "new_game",
+                            "config": {"launch": launch_id},
+                        }
+                    )
+                )
+                payload = _settled_message(ws)
+                assert payload["launch"] == launch_id
+                assert payload["frame"]["prompt"]
+                ws.send(
+                    json.dumps(
+                        {
+                            "type": "new_game",
                             "config": {
                                 "hero_deck": {"Mountain": 1, "Gray Ogre": 1},
                                 "villain_deck": {"Forest": 1, "Llanowar Elves": 1},
@@ -103,7 +150,7 @@ def main() -> None:
                         }
                     )
                 )
-                payload = json.loads(ws.recv(timeout=30))
+                payload = _settled_message(ws)
                 frame = payload["frame"]
                 for step in range(300):
                     if frame["projection"]["game_over"]:
@@ -124,7 +171,7 @@ def main() -> None:
                             }
                         )
                     )
-                    payload = json.loads(ws.recv(timeout=30))
+                    payload = _settled_message(ws)
                     assert payload["status"] == "accepted", payload
                     frame = payload["update"]["frame"]
                 else:

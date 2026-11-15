@@ -6,6 +6,10 @@ Install the `managym` distribution for `import managym` without the training
 stack. `manabot` depends on the exact same version and keeps `manabot.managym`
 as a compatibility alias. Rust sources stay in this directory. Start with the
 [Python installation example](https://github.com/loopflowstudio/manabot/blob/main/docs/engine-python.md).
+Both `Env` and `VectorEnv` accept `player_policies=("agent", "heuristic")`:
+each native seat can use an external agent, random play or the built-in
+heuristic, without installing `manabot`. See
+[per-seat players](https://github.com/loopflowstudio/manabot/blob/main/docs/engine.md#per-seat-players).
 
 ## Play in the browser
 
@@ -23,23 +27,48 @@ ready; Ctrl-C stops it. It needs CPython 3.12 or 3.13 and nothing else: no
 manabot, Torch, Node or Rust. Finished and unfinished games are listed under
 **Games** and open in **Replay**. `uv run --no-project python -m managym.academy` is the same
 command, and `uv run --no-project managym academy --help` lists the port, host and storage
-options. Installing `manabot` in the same environment adds trained opponents.
+options. Cards show their Scryfall art with no extra step: the server fetches
+each image the first time it is shown and keeps it in `~/.cache/managym/card-art`;
+`ACADEMY_CARD_ART=off` turns that off ([card art](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#card-art)).
+Installing `manabot` in the same environment adds trained opponents.
 The [Academy guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#running-academy)
 covers playing, replays, trained bots and launch troubleshooting.
 
 ### Start a game with your chosen decks
 
-After launching Academy, open **Choose decks**. Browse a bundled deck and
-select **Use for me** or **Use for opponent** to assign each seat, choose an
-opponent such as **Search 64**, then click **New Game**.
+```bash
+uv run --no-project managym academy play --deck ur_lessons --opponent-deck ./my-deck.txt \
+    --opponent search --sims 64 --seed 7
+```
+
+The browser opens already in that game: UR Lessons against the decklist in
+`my-deck.txt`, played by Search 64, with deal seed 7. Each deck is a bundled
+deck name or a decklist file; `--opponent` is `search`, `random`, `passive`
+or a registered policy alias/identity. A rejected decklist or unknown deck stops the command
+with the reason before anything opens.
+Bundled names take precedence over same-named files; use `./ur_lessons` to
+select a file named `ur_lessons`.
+
+The same choices are in the browser. Open **New game**, expand **Browse decks
+and cards**, and assign a bundled deck to each native seat. Choose an opponent
+such as **Search 64**, then click **Start game**.
 
 For your own lists, expand **Import decklist files** and check **Use imported
 decks for the next game**. Upload or paste both decks, one `count card name`
 per line, with optional `Main` and `Sideboard` headings. Click **Check decklists**,
-fix any reported issues, and select **New Game**. Imported decks use the
-development format and supported cards; choose a built-in opponent, since
-checkpoint opponents do not accept imported decks. See the
+fix any reported issues, and select **Start game**. Imported decks use the
+development format and supported cards. Registered policies check the complete
+setup, including imported lists, against their own admission requirements. See the
 [play guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#play-a-game).
+
+For several games against a model, **Rematch**, **Swap sides** and **Change
+opponent** retain unrelated setup and group recordings in one session. See
+[playing a series](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#playing-a-series-against-a-model)
+for deal modes, results and recovery. **Edit next game** opens the session draft:
+**Save next setup** retains it, and **Start next game** starts a continuation.
+Global **New game** opens a separate session setup; **Cancel** discards edits.
+Changing both controllers to bots in the session editor offers **Start new
+watched game**, preserving the Play session.
 
 ### Watch a replay from an evaluation
 
@@ -48,19 +77,66 @@ the same environment and at the same release version as managym:
 
 ```bash
 uv pip install --python .venv/bin/python --only-binary :all: --torch-backend cpu manabot
-uv run --no-project managym academy
 ```
 
-Open **Watch** at `http://127.0.0.1:8000/replay?watch=1`. Under **Open arena /
-Tournament game**, select the evaluation's retained command trace, usually
-`traces/<cell-id>.commands.jsonl.gz` in its output directory. Download the
-artifact first if the evaluation ran remotely. Select a **Recorded game** and
-**Open selected game** when the file contains more than one game, then use
-**Step decision**, **Previous decision** or **Play**. Import verifies the
+With any earlier Academy server stopped, open one game of the evaluation's
+retained command trace, usually
+`traces/<cell-id>.commands.jsonl.gz` in its output directory (download the
+artifact first if the evaluation ran remotely):
+
+```bash
+uv run --no-project managym academy replay out/traces/<cell-id>.commands.jsonl.gz --game 3
+```
+
+The browser opens in **Replay** at the first recorded choice or this tab's saved
+position; use **Next**, **Previous** or **Play** to follow choices, consequences
+and the result. `--game` is the game's
+position in the file, counted from 0, or the start of its trace digest; run
+the command without it to list the file's games. `managym academy replay
+<recording-id>` reopens a game from **Games**, with or without manabot, in the
+same browser and address (including port), or when it is shared and finished. In
+the browser, the same import is **Open a game file** under
+**Watch** (`/replay?watch=1`). Import verifies the
 recorded actions and state digests without running the original players or
 loading their checkpoints. Incompatible historical worlds need their original
 revision. The [evaluation replay guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#watch-a-game-from-an-evaluation)
 covers supported files and troubleshooting.
+
+### Watch a game from your training loop
+
+A game the training loop itself played opens the same way, once manabot has
+exported it:
+
+```bash
+uv run manabot export-game runs/jace/games --game 0 --out jace.game.jsonl.gz
+uv run --no-project managym academy replay jace.game.jsonl.gz
+```
+
+**Replay** opens headed **Training game** with both players' names, on the
+first of the decisions the loop actually made; an evaluation's game is headed
+**Evaluation game**. Recording the games is one `with record_games(...)` block
+around the loop:
+[Watch a game from your training loop](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#watch-a-game-from-your-training-loop).
+
+### Launch from Python
+
+```python
+from pathlib import Path
+
+from managym.academy.launch import serve
+
+with serve(port=0) as academy:
+    game = academy.new_game(deck="ur_lessons", opponent_deck=Path("my-deck.txt"), seed=7)
+    replay = academy.replay(Path("out/traces/c41.commands.jsonl.gz"), game=3)
+    academy.open(game.url)
+    academy.wait()  # until Ctrl-C; leaving the block stops the server
+```
+
+`serve` opens no browser; call `academy.open()` to open the bare table.
+`game.url` and imported evaluation replay URLs open in any browser that can
+reach the server; recording ids retain the access rules above. Failures raise
+`AcademyLaunchError` with a `code`. See
+[Launch from Python](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#launch-from-python).
 
 For building a deck before play, see [Limited deck building](../docs/deck-building.md):
 `CardPool` holds the cards available, `format.Limited` holds the rules, and a
@@ -101,7 +177,9 @@ Each card is a function in the file of its first printing's set under
 with the same `PrintedCharacteristics`, keyed `token.*` and created by that
 key, with a Scryfall id unless it has no printing. The engine registers both
 as `ObjectDefinition` rows with token status. In a game every object has a kind
-(`ObjectKind::Card`, `Token` or `SpellCopy`): a token is never a card, and
+(`ObjectKind::Card`, `Token` or `SpellCopy`): a token is never a card, every
+zone change makes a new object with a new `ObjectId` while a `CardId` follows
+the physical card, and
 each zone holds only the objects the Comprehensive Rules allow it
 ([objects and zones](../docs/engine.md#objects-and-zones)). The engine runs these values
 directly, and
@@ -127,7 +205,7 @@ absence from game zones. They are not part of the library or a new game zone.
 
 Viewer observations carry remaining owner copies in `agent_sideboard`, using
 private `candidate_id` values that join Learn action focus. These are outside-game
-descriptors, not `CardData` with a fabricated zone or in-game `ObjectRef`.
+descriptors, not `CardData` with a fabricated zone or in-game `ObjectId`.
 Both players expose definition-only initial and remaining sideboard counts;
 only the owner gets copy candidates. Python observation JSON and validation
 use the native Rust implementations so new visibility fields cannot drift.
@@ -135,8 +213,8 @@ use the native Rust implementations so new visibility fields cannot drift.
 The policy input factors resolved `EffectRecords` through `agent/shared_effects.rs`
 before admission: complete equal payloads share one header and typed detail
 slice, with one explicit membership per original record. Controller, exact
-source incarnation, timestamps, fixed affected sets and duplicate edges survive.
-Public object IDs are joins; private object storage IDs (`ObjectId`) do not enter this view.
+source appearance, timestamps, fixed affected sets and duplicate edges survive.
+Public object IDs are joins; private object storage slots do not enter this view.
 Native scalar/vector and Python encoders mirror bounded arrays of 128 × 18,
 4096 × 3 and 2048 × 2; every capacity fails explicitly. Local facts exclude
 active effects.
@@ -166,8 +244,8 @@ in one event batch. `ForEachTarget` instead runs a separate child program per
 slot, retaining its position across choices. Leaves from the Vine's simultaneous
 counter placement uses the former.
 Graveyard targets
-carry an exact `ObjectRef`, so continuations cannot follow a physical card into
-a later incarnation. Mutate permanents at their event authority;
+carry an exact `ObjectId`, so continuations cannot follow a physical card into
+the object it later becomes. Mutate permanents at their event authority;
 source-relative effects require the original battlefield object.
 
 Delayed abilities compose event matching, frequency, expiry, captured subjects
@@ -175,13 +253,13 @@ and effects. `CreateDelayedTrigger.event` only matches the event;
 `DelayedFrequency::Once` consumes its watcher on the first match, even if the
 occurrence is countered or later does nothing. `EachMatch` keeps waiting until
 `DelayedExpiry::ThisTurn` removes the watcher at cleanup, or `Never` supplies no
-stated expiry. Exact-object death watchers retire when the watched incarnation
+stated expiry. Exact-object death watchers retire when the watched appearance
 leaves, regardless of frequency. Expiry removes waiting watchers, never queued
 or stacked occurrences. No printed trigger vocabulary is migrated.
 `CreateDelayedTrigger.remember` resolves an ordinary `ObjectSelector` when the
-ability is created. Its exact incarnations travel through placement, stack and
+ability is created. Its exact appearances travel through placement, stack and
 suspended resolution; `ObjectSelector::Remembered` never follows a departed
-object into a new incarnation. Event context (such as the spell just cast) stays
+object into a new appearance. Event context (such as the spell just cast) stays
 separate. End-step timing can wait for either player's step or the controller's,
 independently of what was captured. Viewer-safe relations and text expose
 the remembered references, expiry and frequency. Relation row kind 9 carries
@@ -295,8 +373,7 @@ immediate output decision. `Game::characteristics` derives battlefield grants;
 those granted mana abilities never become activated stack objects. Waterbend
 taps are cost payment, not tapping for mana. The view is the one reader of a
 battlefield permanent's characteristics, legendary and ward included: the
-legend rule reads its `is_legendary`, and every `CardData` field that states a
-characteristic reads it there (`tests/cards/observability.rs` classifies each
+legend rule reads its `is_legendary`, and every permanent observation characteristic reads it there (`tests/cards/observability.rs` classifies each
 field as layered or printed by definition).
 
 The cached raw layer board tracks discovered reads of mana pools and tapped
@@ -517,10 +594,10 @@ subset constraints: exact weights count only compatible ordered fills, and the
 materializer samples that conditional measure. Commitments are captured before
 zone reassignment, so a sampled face-down slot cannot erase an earlier selection.
 Frozen count-only belief samplers reject these additional constraints before
-inference. `ObjectBinding` carries exact incarnation, captured zone/predicate and
+inference. `ObjectBinding` carries exact appearance, captured zone/predicate and
 per-seat exact knowledge through waiting, queued, placing, stack and resolving
 trigger lifetimes. Both samplers use one assignment across those captures and
-active selections; known exact captures remain fixed, and departed incarnations
+active selections; known exact captures remain fixed, and departed appearances
 never follow a later object. Capturing `Moved` uses its new zone. This binding
 provenance is canonical state, independent of viewer-safe reference projection. Library inspection exposes membership in stable definition/object order,
 never draw order. Prospective battlefield entrants are public during replacement
@@ -535,27 +612,3 @@ retired codes 5, 6 and 7 keep their historical meanings.
 `SuspendedResolution::continuation` walks retained frames and decisions root first;
 observation projection and hidden-world sampling share that chain for caller
 ancestry and inspection permissions.
-
-### Offline payment-shape measurement
-
-After `Env.reset`, `capture_payment_shapes(cap)` enables an offline diagnostic
-outside policy inputs and rules state. Replay the game, then call
-`take_payment_shapes_json()` once to drain its rows. A reset disables capture.
-The cap (2–65,536) bounds source-subset and receipt traversal work per payment;
-`cap_hit` marks incomplete lower bounds. The diagnostic enumerates fixed-source
-payments using the existing payment model and native unit spending. It records
-untapped-source capabilities, floating pools, receipts, exact source identities
-and today's offered spend steps separately. It also counts capability and exact
-identity outcomes over non-redundant source sets: no selected source's whole
-output can be removed while keeping the current cost pooled and saved callers
-feasible on the post-tap board (the over-tap counter's criterion). Unavoidable
-surplus from an indivisible source remains. All counts share the same traversal
-and cap; a cap hit makes every count a lower bound, including non-redundant
-counts. Saved payment obligations must stay
-feasible. Activated mana abilities are counted as present but are not enumerated.
-
-`MANAGYM_EXPERIMENT_AUTOSPEND=1` is MTG-347's temporary comparison arm. It selects
-the first feasible pooled unit and preserves automatic source order, saved costs
-and receipts. The experiment's job command records the switch; replay and
-heuristic evaluation must use the same value. Ordinary runs leave it unset.
-This switch is experiment scaffolding, pending the report's design review.

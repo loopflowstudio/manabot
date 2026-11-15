@@ -45,7 +45,8 @@ from etude.launch.records import Run, Variable
 import torch
 
 from experiments.elemental_variants import elemental_recipe, self_play_stage
-from experiments.learning_signal import training_runs
+from experiments.learning_signal import build_training_jobs
+from manabot.backends.torch.checkpoint import load_checkpoint, load_metadata
 from manabot.infra.identity import file_sha256
 from manabot.training.records import TrainingRun
 from manabot.training.regime import TrainingRegime
@@ -136,7 +137,7 @@ LEGS: dict[str, Leg] = {
 }
 
 
-def runs(revision: str, leg: str, seeds: str = "") -> list[Run]:
+def training_jobs(revision: str, leg: str, seeds: str = "") -> list[Run]:
     """One leg's runs. `seeds`, comma-separated, picks some of the leg's seeds."""
     if leg not in LEGS:
         raise ValueError(f"unknown leg {leg!r}; choose from {sorted(LEGS)}")
@@ -146,7 +147,7 @@ def runs(revision: str, leg: str, seeds: str = "") -> list[Run]:
         raise ValueError(f"leg {leg} declares no seeds {sorted(unknown)}")
     regime = chosen.recipe()
     stage = self_play_stage(regime)
-    job = training_runs(
+    job = build_training_jobs(
         (regime,),
         updates=stage.updates,
         revision=revision,
@@ -189,9 +190,9 @@ _VOLATILE_ATTEMPT = frozenset(
     }
 )
 _POLICY_FILES = (
-    "self-play-initial-raw.pt",
-    "self-play-raw.pt",
-    "self-play-ema.pt",
+    "self-play-initial-raw.safetensors",
+    "self-play-raw.safetensors",
+    "self-play-ema.safetensors",
 )
 _OPTIMIZER_FILE = "self-play-optimizer.pt"
 _ATTEMPTS_FILE = "game-attempts.jsonl"
@@ -220,7 +221,9 @@ def training_digest(training: Path) -> dict[str, Leaf]:
     digest: dict[str, Leaf] = {}
     for name in _POLICY_FILES:
         # These are the run's own exports, whose metadata needs full unpickling.
-        policy = torch.load(training / name, map_location="cpu", weights_only=False)
+        policy = load_metadata(training / name)
+        agent, _ = load_checkpoint(str(training / name))
+        policy["model_state_dict"] = agent.state_dict()
         for path, leaf in _flatten(policy):
             if path not in _VOLATILE_POLICY:
                 digest[f"{name}/{path}"] = leaf

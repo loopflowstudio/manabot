@@ -13,16 +13,16 @@ end is each update's `selection_groups` metrics, under the report's ML details.
     uv run etude report experiments/elemental_lambda.py --source r2://manabot/jobs --open
 """
 
-from etude.experiment import ExperimentState
+from etude.jobs import ExperimentState
 from etude.launch.records import Job, Run
 from etude.report import Report
 
 from experiments.elemental_variants import lambda_sweep
 from experiments.learning_signal import (
     ELEMENTAL_PAIRS,
+    build_training_jobs,
     evaluation_jobs,
     learning_report,
-    training_runs,
 )
 
 EXPERIMENT = "elemental_lambda"
@@ -46,7 +46,7 @@ def _arm(name: str) -> tuple[float, float]:
     return float(policy), float(value)
 
 
-def runs(
+def training_jobs(
     revision: str,
     updates: int = UPDATES,
     hours: float = HOURS,
@@ -57,7 +57,7 @@ def runs(
     """`arms` ("0.5/0.8,...") and `seeds` are comma-separated, so one arm launches
     all-or-nothing."""
     chosen = tuple(arm for arm in ARMS if arm in {_arm(a) for a in arms.split(",")})
-    return training_runs(
+    return build_training_jobs(
         (lambda_sweep(*arm, updates) for arm in chosen),
         updates=updates,
         revision=revision,
@@ -68,7 +68,7 @@ def runs(
     )
 
 
-def eval(state: ExperimentState) -> list[Job]:
+def eval_jobs(state: ExperimentState) -> list[Job]:
     return evaluation_jobs(
         state, "elemental-lambda-v1", ELEMENTAL_PAIRS, hours=2.0, usd=2.4
     )

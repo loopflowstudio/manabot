@@ -222,7 +222,7 @@ pub struct CastPermissionData {
     pub foretold: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Default, Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CardTypeData {
     pub is_castable: bool,
@@ -281,52 +281,50 @@ impl CardTypeData {
     }
 }
 
-/// An object in any zone, under the published `CardData` name. Every field
-/// that states a characteristic (name,
-/// power/toughness, types, supertypes, subtypes, keywords, ward) reads
-/// `Game::characteristics` while the card is on the battlefield and the
-/// printed card elsewhere; identity, token status and the costs paid when
-/// casting are printed by definition. `tests/cards/observability.rs`
-/// classifies each field as layered or printed.
+/// Viewer-safe characteristics, effective on the battlefield. Rules text and
+/// mana cost describe the definition; this is not the engine's full layered view.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CharacteristicsData {
+    pub name: String,
+    /// Printed rules text, not a rendering of effective abilities.
+    pub text_box: String,
+    /// Effective P/T, including counters and continuous effects on the battlefield.
+    pub power: i32,
+    pub toughness: i32,
+    pub is_legendary: bool,
+    pub is_ally: bool,
+    pub is_lesson: bool,
+    /// Mana value of ward (zero without ward).
+    pub ward_cost: i32,
+    /// Printed optional kicker cost; payment is stack state.
+    pub kicker_cost: i32,
+    pub card_types: CardTypeData,
+    pub keywords: KeywordData,
+    pub mana_cost: ManaCost,
+}
+
+/// A visible card outside the battlefield and stack. Historical card-list
+/// records are normalized at the JSON boundary; legacy encoders synthesize
+/// their old rows only when explicitly selected.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(from = "super::observation_json::WireCardData")]
 pub struct CardData {
-    #[serde(deserialize_with = "super::observation_json::zone")]
+    pub characteristics: CharacteristicsData,
     pub zone: ZoneType,
     pub owner_id: i32,
     pub id: i32,
     pub registry_key: i32,
-    pub name: String,
-    pub text_box: String,
-    pub power: i32,
-    pub toughness: i32,
     /// Set for an object that is no card: a token or a copy of a spell.
     pub is_token: bool,
-    pub is_legendary: bool,
-    /// Subtype tags the current pool cares about.
-    pub is_ally: bool,
-    pub is_lesson: bool,
-    /// Ward cost (mana value; 0 = no ward).
-    pub ward_cost: i32,
-    /// Kicker cost (mana value; 0 = no kicker).
-    pub kicker_cost: i32,
-    pub card_types: CardTypeData,
-    pub keywords: KeywordData,
-    #[serde(deserialize_with = "super::observation_json::mana_cost")]
-    pub mana_cost: ManaCost,
     /// Foretold and face down in exile; listed only for its owner.
-    #[serde(default)]
     pub face_down: bool,
     /// The permission to play this card from exile, when it has one.
-    #[serde(default)]
     pub cast_permission: Option<CastPermissionData>,
     /// The value of X announced for this spell on the stack (CR 107.3),
     /// when its mana cost has X.
-    #[serde(default)]
     pub x: Option<i32>,
     /// A graveyard card that was put there from the battlefield this turn
     /// (`TurnState::graveyard_from_battlefield`); policy input v10.
-    #[serde(default)]
     pub from_battlefield_this_turn: bool,
 }
 
@@ -452,13 +450,11 @@ pub struct StackTargetData {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(from = "super::observation_json::WireStackObjectData")]
 pub struct StackObjectData {
     /// Derived ability text; absent on spells and historical observations.
-    #[serde(default)]
     pub description: Option<String>,
     pub stack_object_id: i32,
-    #[serde(deserialize_with = "super::observation_json::stack_kind")]
     pub kind: StackObjectKindData,
     pub controller_id: i32,
     pub source_card_registry_key: i32,
@@ -467,12 +463,15 @@ pub struct StackObjectData {
     pub ability_index: Option<i32>,
     pub targets: Vec<StackTargetData>,
     /// The announced value of X (CR 107.3); omitted when zero.
-    #[serde(default)]
     pub x: i32,
     /// Keywords a static grants this spell while on the stack (a Lesson's
     /// lifelink); absent when none.
-    #[serde(default)]
     pub granted_keywords: Option<KeywordData>,
+    /// Whether a spell's kicker cost was paid (CR 702.33).
+    pub kicked: bool,
+    /// A spell owns identity and characteristics; abilities do not.
+    #[serde(default)]
+    pub spell: Option<SpellData>,
 }
 
 /// One continuous-effect record (`state::effect`) affecting a player or
@@ -742,16 +741,18 @@ impl ContinuousEffectData {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Deserialize)]
+#[serde(from = "super::observation_json::WirePermanentData")]
 pub struct PermanentData {
+    pub characteristics: CharacteristicsData,
+    /// Underlying object identity; absent only during historical decoding.
+    pub object_id: Option<i32>,
+    pub owner_id: i32,
+    pub is_token: bool,
     /// Effective colors when a layer changes the copiable colors.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub colors: Option<Vec<String>>,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub keyword_counter_timestamps: BTreeMap<String, i32>,
     /// Transformations of this exact permanent; repeated flips still count.
-    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub transforms: u32,
     pub id: i32,
     /// Definition of the backing card, in the match's bound content pack.
@@ -762,10 +763,6 @@ pub struct PermanentData {
     pub is_summoning_sick: bool,
     pub plus1_counters: i32,
     pub cant_be_blocked_this_turn: bool,
-    /// Effective power/toughness — CDA base, static continuous effects,
-    /// until-EOT deltas, and +1/+1 counters all applied.
-    pub power: i32,
-    pub toughness: i32,
     /// A creature only through an effect: earthbend (a land that's also a
     /// 0/0 creature), crew, or another type-changing effect.
     pub is_animated: bool,
@@ -774,67 +771,47 @@ pub struct PermanentData {
     pub exile_if_dies_this_turn: bool,
     /// Declared as an attacker in the current combat. Omitted when false, so
     /// observations retained before this field stay canonical.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub attacking: bool,
     /// Exhaust abilities this object has activated; each can never be
     /// activated again by this object (CR 702.177a).
-    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub exhausted_abilities: i32,
     /// "Once each turn" abilities this object has used this turn: activated
     /// abilities, once-each-turn triggers that fired and "do this only once
     /// each turn" options taken.
-    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub once_each_turn_used: i32,
     /// Firebending granted until end of turn, summed over grants.
-    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub granted_firebending: i32,
     pub temp_subtypes: Vec<String>,
-    /// Effective keywords — printed keywords unioned with until-EOT grants
-    /// (Yip Yip! flying, Enter the Avatar State, ...): what the permanent can
-    /// actually do now. The battlefield card entry reads the same layered view.
-    pub keywords: KeywordData,
     /// Counters other than +1/+1 by kind (CR 122.1; `CounterKind` names in
     /// snake case), only the kinds present.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub counters: BTreeMap<String, i32>,
     /// The permanent this Aura or Equipment is attached to (CR 301.5, 303.4).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attached_to: Option<i32>,
     /// Name and creature types set by an effect (Honest Work); absent while
     /// the printed ones apply.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub creature_types: Option<Vec<String>>,
     /// A land only through an effect (a static land-type grant).
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub is_granted_land: bool,
     /// The attacking creature this one blocks (CR 509.1).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub blocking: Option<i32>,
     /// It has lost all abilities (CR 613.1f), until end of turn or while an
     /// Aura sets its characteristics.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub abilities_lost: bool,
     /// Activated abilities (indices in its ability list) whose limit is
     /// spent: exhaust (CR 702.177a) or once each turn (CR 602.5b).
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub used_abilities: Vec<usize>,
     /// It was dealt damage this turn, whether or not that damage is still
     /// marked.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub dealt_damage_this_turn: bool,
     /// Continuous effects on this permanent, in timestamp order; the
     /// effective values above already apply them.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<ContinuousEffectData>,
     /// Its timestamp (CR 613.7d/e), the order its static abilities apply in
     /// among the records; absent while it is `id`, the timestamp it entered
     /// with (an attachment renews it).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timestamp: Option<i32>,
     /// The copy effect that made it a copy; absent for an original.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub copy: Option<CopyData>,
 }
 
@@ -1115,16 +1092,10 @@ impl Observation {
     }
 
     /// Copies of each definition id among `objects`.
-    fn definition_counts(
-        game: &Game,
-        objects: impl IntoIterator<Item = impl Into<ObjectId>>,
-    ) -> BTreeMap<u32, u32> {
+    fn definition_counts(definitions: impl IntoIterator<Item = u32>) -> BTreeMap<u32, u32> {
         let mut counts = BTreeMap::new();
-        for object in objects {
-            let object: ObjectId = object.into();
-            *counts
-                .entry(game.state.objects[object].definition_id.0)
-                .or_default() += 1;
+        for definition in definitions {
+            *counts.entry(definition).or_default() += 1;
         }
         counts
     }
@@ -1133,7 +1104,11 @@ impl Observation {
     /// an opponent's hand. The possible-world pool keeps those copies, since
     /// a sampled world must still place them in the hand.
     fn unseen_counts(game: &Game, player: PlayerId, viewer: PlayerId) -> BTreeMap<u32, u32> {
-        let mut counts = Self::definition_counts(game, game.unseen_objects(player, viewer));
+        let mut counts = Self::definition_counts(
+            game.unseen_objects(player, viewer)
+                .into_iter()
+                .map(|object| game.state[object].definition_id.0),
+        );
         if player != viewer {
             for (definition, known) in &game.state.players[player.0].known_hand {
                 if let Some(count) = counts.get_mut(&definition.0) {
@@ -1158,18 +1133,27 @@ impl Observation {
                 .size(Self::zone_from_index(zone_index), player) as i32;
         }
 
+        // V16 roster counts used the current row's face for in-game cards.
+        // Preserve that viewer projection separately from immutable Card identity.
         let (main_counts, unseen_counts, sideboard_counts, remaining_sideboard_counts) =
             if game.decklist_known(player, viewer) {
-                let outside = p
-                    .sideboard
-                    .iter()
-                    .copied()
-                    .filter(|object| game.state.zones.zone_of(*object).is_none());
+                let outside = p.sideboard.iter().copied().filter(|card| {
+                    game.state
+                        .zones
+                        .zone_of(game.state.object_of(*card))
+                        .is_none()
+                });
                 (
-                    Some(Self::definition_counts(game, p.deck.iter().copied())),
+                    Some(Self::definition_counts(p.deck.iter().map(|card| {
+                        game.state.source_base(game.state.object_of(*card)).0 .0
+                    }))),
                     Some(Self::unseen_counts(game, player, viewer)),
-                    Some(Self::definition_counts(game, p.sideboard.iter().copied())),
-                    Some(Self::definition_counts(game, outside)),
+                    Some(Self::definition_counts(p.sideboard.iter().map(|card| {
+                        game.state.source_base(game.state.object_of(*card)).0 .0
+                    }))),
+                    Some(Self::definition_counts(outside.map(|card| {
+                        game.state.source_base(game.state.object_of(card)).0 .0
+                    }))),
                 )
             } else {
                 (None, None, None, None)
@@ -1268,12 +1252,22 @@ impl Observation {
 
     fn populate_cards(&mut self, game: &Game, agent_player: PlayerId) {
         for card in &game.state.players[agent_player.0].sideboard {
-            if game.state.zones.zone_of(*card).is_none() {
-                let record = &game.state.objects[*card];
+            if game
+                .state
+                .zones
+                .zone_of(game.state.object_of(*card))
+                .is_none()
+            {
+                let record = game
+                    .state
+                    .objects
+                    .retained_base(game.state.object_of(*card))
+                    .expect("roster printing")
+                    .1;
                 self.agent_sideboard.push(SideboardCardData {
-                    candidate_id: record.id.0 as i32,
+                    candidate_id: game.state.cards[*card].public_id.0 as i32,
                     owner_id: self.agent.id,
-                    registry_key: record.definition_id.0 as i32,
+                    registry_key: game.state.cards[*card].definition.0 as i32,
                     name: record.name.clone(),
                     text_box: record.text_box.clone(),
                 });
@@ -1287,7 +1281,7 @@ impl Observation {
             if seen.insert(object_id) {
                 self.push_card(
                     Self::card_data(game, object_id, zone),
-                    game.state.objects[object_id].owner,
+                    game.state[object_id].owner,
                 );
             }
         };
@@ -1295,9 +1289,8 @@ impl Observation {
         // A replacement question identifies prospective battlefield entrants
         // publicly before their retained zone moves commit.
         for object in game.pending_public_entries() {
-            let object_id = ObjectId::from(object.entity);
-            if let Some(zone) = game.state.zones.zone_of(object_id) {
-                add_object(object_id, zone);
+            if let Some(zone) = game.state.zones.zone_of(object) {
+                add_object(object, zone);
             }
         }
 
@@ -1338,7 +1331,7 @@ impl Observation {
                         .filter(|object_id| {
                             game.state.zones.zone_of(*object_id) == Some(ZoneType::Library)
                                 || (game.state.zones.zone_of(*object_id) == Some(ZoneType::Hand)
-                                    && game.state.objects[*object_id].owner != perspective)
+                                    && game.state[*object_id].owner != perspective)
                         })
                         .collect(),
                     Decision::SelectCards {
@@ -1386,19 +1379,23 @@ impl Observation {
                 }
             }
         }
+    }
 
-        for stack_object in game.state.stack_objects.iter().rev() {
-            if let StackObject::Spell(spell) = stack_object {
-                let mut card = Self::card_data(game, spell.object, ZoneType::Stack);
-                let definition = &game.state.objects[spell.object];
-                // A replicated spell's announced count is its X.
-                if definition.mana_cost.as_ref().is_some_and(|cost| cost.x > 0)
-                    || definition.replicate().is_some()
-                {
-                    card.x = Some(i32::from(spell.x));
-                }
-                self.push_card(card, game.state.objects[spell.object].owner);
-            }
+    /// A spell owns characteristics and identity; a copy is never a card.
+    fn spell_data(game: &Game, spell: &crate::state::stack_object::SpellOnStack) -> SpellData {
+        let object = &game.state[spell.object];
+        let has_x = object.mana_cost.as_ref().is_some_and(|cost| cost.x > 0)
+            || object.replicate().is_some();
+        SpellData {
+            object_id: object.id.0 as i32,
+            owner_id: game.state.players[object.owner.0].id.0 as i32,
+            registry_key: object.registry_key.0 as i32,
+            is_copy: !object.is_card(),
+            has_announced_x: has_x,
+            characteristics: CharacteristicsData {
+                power: game.object_power(spell.object),
+                ..Self::printed_characteristics_data(game, spell.object)
+            },
         }
     }
 
@@ -1419,8 +1416,7 @@ impl Observation {
         }
     }
 
-    /// List a card on `side`: its owner's, except that battlefield cards
-    /// sit with their permanent's controller, in permanent order.
+    /// List a card on `side`, its owner's.
     fn push_card(&mut self, card_data: CardData, side: PlayerId) {
         if side.0 == self.agent.player_index as usize {
             self.agent_cards.push(card_data);
@@ -1437,15 +1433,13 @@ impl Observation {
         characteristics: &Characteristics,
     ) {
         let pdat = PermanentData {
-            colors: (characteristics.colors != game.state.objects[permanent.object].colors()).then(
-                || {
-                    characteristics
-                        .colors
-                        .iter()
-                        .map(|c| format!("{c:?}"))
-                        .collect()
-                },
-            ),
+            colors: (characteristics.colors != game.state[permanent.object].colors()).then(|| {
+                characteristics
+                    .colors
+                    .iter()
+                    .map(|c| format!("{c:?}"))
+                    .collect()
+            }),
             keyword_counter_timestamps: permanent
                 .keyword_counter_timestamps
                 .iter()
@@ -1453,7 +1447,7 @@ impl Observation {
                 .collect(),
             transforms: permanent.transforms,
             id: permanent.id.0 as i32,
-            registry_key: game.state.objects[permanent.object].registry_key.0 as i32,
+            registry_key: game.state[permanent.object].registry_key.0 as i32,
             controller_id: game.state.players[permanent.controller.0].id.0 as i32,
             tapped: permanent.tapped,
             damage: permanent.damage,
@@ -1463,7 +1457,7 @@ impl Observation {
             attacking: permanent.attacking,
             exhausted_abilities: permanent.exhausted.len() as i32,
             once_each_turn_used: (permanent.activated_this_turn.len()
-                + game.permanent_object_ref(perm_id).map_or(0, |object| {
+                + game.permanent_object(perm_id).map_or(0, |object| {
                     game.state
                         .turn
                         .ability_triggers_this_turn
@@ -1477,18 +1471,13 @@ impl Observation {
                 .map(|subtype| subtype.to_string())
                 .collect(),
             cant_be_blocked_this_turn: game.cant_be_blocked(perm_id),
-            power: characteristics.power,
-            toughness: characteristics.toughness,
             is_animated: characteristics.is_animated,
-            has_exile_link: game
-                .permanent_object_ref(perm_id)
-                .is_some_and(|object_ref| {
-                    game.state
-                        .exile_links
-                        .iter()
-                        .any(|link| link.source == object_ref)
-                }),
-            keywords: KeywordData::from_keywords(&characteristics.keywords),
+            has_exile_link: game.permanent_object(perm_id).is_some_and(|object_ref| {
+                game.state
+                    .exile_links
+                    .iter()
+                    .any(|link| link.source == object_ref)
+            }),
             counters: permanent
                 .counters
                 .iter()
@@ -1510,7 +1499,7 @@ impl Observation {
                     .collect()
             }),
             is_granted_land: characteristics.is_land()
-                && !game.state.objects[permanent.object].types.is_land(),
+                && !game.state[permanent.object].types.is_land(),
             blocking: game.state.combat.as_ref().and_then(|combat| {
                 combat
                     .attacker_to_blockers
@@ -1531,10 +1520,27 @@ impl Observation {
             effects: ContinuousEffectData::list(game, game.affected_permanent(perm_id)),
             timestamp: (permanent.timestamp != permanent.id)
                 .then_some(permanent.timestamp.0 as i32),
-            copy: game.state.objects[permanent.object]
+            copy: game.state[permanent.object]
                 .copy
                 .as_ref()
                 .map(|copy| CopyData::new(copy, permanent.timestamp.0 as i32)),
+            object_id: Some(game.state[permanent.object].id.0 as i32),
+            owner_id: game.state.players[game.state[permanent.object].owner.0]
+                .id
+                .0 as i32,
+            is_token: !game.state[permanent.object].is_card(),
+            characteristics: CharacteristicsData {
+                name: characteristics.name.clone(),
+                power: characteristics.power,
+                toughness: characteristics.toughness,
+                is_legendary: characteristics.is_legendary,
+                is_ally: characteristics.has_subtype("Ally"),
+                is_lesson: characteristics.has_subtype("Lesson"),
+                ward_cost: ward_value(characteristics.ward.as_ref()),
+                card_types: CardTypeData::from_types(&characteristics.types),
+                keywords: KeywordData::from_keywords(&characteristics.keywords),
+                ..Self::printed_characteristics_data(game, permanent.object)
+            },
         };
 
         if permanent.controller.0 == self.agent.player_index as usize {
@@ -1542,63 +1548,25 @@ impl Observation {
         } else {
             self.opponent_permanents.push(pdat);
         }
-
-        self.push_card(
-            Self::card_data(game, permanent.object, ZoneType::Battlefield),
-            permanent.controller,
-        );
     }
 
     /// A card's row. On the battlefield every characteristic reads the
     /// layered view (`Game::characteristics`); elsewhere CDAs still set power.
     fn card_data(game: &Game, object_id: ObjectId, zone: ZoneType) -> CardData {
-        let printed = Self::printed_card_data(game, object_id, zone);
-        match game.state.object_to_permanent[object_id] {
-            Some(permanent) if zone == ZoneType::Battlefield => {
-                let view = game.characteristics(permanent);
-                CardData {
-                    name: view.name.clone(),
-                    power: view.power,
-                    toughness: view.toughness,
-                    is_legendary: view.is_legendary,
-                    is_ally: view.has_subtype("Ally"),
-                    is_lesson: view.has_subtype("Lesson"),
-                    ward_cost: ward_value(view.ward.as_ref()),
-                    card_types: CardTypeData::from_types(&view.types),
-                    keywords: KeywordData::from_keywords(&view.keywords),
-                    ..printed
-                }
-            }
-            _ => CardData {
-                power: game.object_power(object_id),
-                ..printed
-            },
-        }
+        let mut card = Self::printed_card_data(game, object_id, zone);
+        card.characteristics.power = game.object_power(object_id);
+        card
     }
 
     fn printed_card_data(game: &Game, object_id: ObjectId, zone: ZoneType) -> CardData {
-        let object = &game.state.objects[object_id];
+        let object = &game.state[object_id];
         CardData {
             zone,
             owner_id: game.state.players[object.owner.0].id.0 as i32,
             id: object.id.0 as i32,
             registry_key: object.registry_key.0 as i32,
-            name: object.name.clone(),
-            text_box: object.text_box.clone(),
-            power: object.power.unwrap_or(0),
-            toughness: object.toughness.unwrap_or(0),
             is_token: !object.is_card(),
-            is_legendary: object.is_legendary(),
-            is_ally: object.has_subtype("Ally"),
-            is_lesson: object.has_subtype("Lesson"),
-            ward_cost: ward_value(object.ward()),
-            kicker_cost: object
-                .optional_cost()
-                .map(|cost| i32::from(cost.mana_value))
-                .unwrap_or(0),
-            card_types: CardTypeData::from_types(&object.types),
-            keywords: KeywordData::from_keywords(&object.keywords),
-            mana_cost: object.mana_cost.clone().unwrap_or_default(),
+            characteristics: Self::printed_characteristics_data(game, object_id),
             face_down: zone == ZoneType::Exile && game.is_foretold(object_id),
             cast_permission: game
                 .exile_grant_on(object_id)
@@ -1621,9 +1589,30 @@ impl Observation {
                 }),
             x: None,
             from_battlefield_this_turn: zone == ZoneType::Graveyard
-                && game.current_object_ref(object_id).is_some_and(|object| {
+                && game.state.live(object_id).is_some_and(|object| {
                     game.state.turn.graveyard_from_battlefield.contains(&object)
                 }),
+        }
+    }
+
+    fn printed_characteristics_data(game: &Game, object_id: ObjectId) -> CharacteristicsData {
+        let object = &game.state[object_id];
+        CharacteristicsData {
+            name: object.name.clone(),
+            text_box: object.text_box.clone(),
+            power: object.power.unwrap_or(0),
+            toughness: object.toughness.unwrap_or(0),
+            is_legendary: object.is_legendary(),
+            is_ally: object.has_subtype("Ally"),
+            is_lesson: object.has_subtype("Lesson"),
+            ward_cost: ward_value(object.ward()),
+            kicker_cost: object
+                .optional_cost()
+                .map(|cost| i32::from(cost.mana_value))
+                .unwrap_or(0),
+            card_types: CardTypeData::from_types(&object.types),
+            keywords: KeywordData::from_keywords(&object.keywords),
+            mana_cost: object.mana_cost.clone().unwrap_or_default(),
         }
     }
 
@@ -1635,7 +1624,8 @@ impl Observation {
                 }
                 StackObject::TriggeredAbility(a) => {
                     Some(super::ability_description::trigger_description(
-                        &game.state.objects[a.source_object],
+                        game.source_face(a.source_object(), a.source_definition_id)
+                            .expect("trigger face"),
                         a.ability_index,
                         a.inline_effects.as_deref(),
                     ))
@@ -1652,7 +1642,7 @@ impl Observation {
             source_card_registry_key: stack_object.source_card_registry_key().0 as i32,
             source_permanent_id: match stack_object {
                 StackObject::ActivatedAbility(ability) => game
-                    .object_event_ref(ability.source_ref)
+                    .object_event_ref(ability.source_object())
                     .map(|object| object.entity.0 as i32),
                 _ => None,
             },
@@ -1672,6 +1662,11 @@ impl Observation {
                     (!crate::state::is_zero(&keywords))
                         .then(|| KeywordData::from_keywords(&keywords))
                 }
+                _ => None,
+            },
+            kicked: matches!(stack_object, StackObject::Spell(spell) if spell.kicked),
+            spell: match stack_object {
+                StackObject::Spell(spell) => Some(Self::spell_data(game, spell)),
                 _ => None,
             },
             targets: stack_object
@@ -1706,7 +1701,7 @@ impl Observation {
                 player_id: None,
                 permanent_id: None,
                 stack_object_id: None,
-                card_id: Some(game.state.objects[ObjectId::from(object.entity)].id.0 as i32),
+                card_id: Some(game.state[object].id.0 as i32),
             }),
             Target::StackSpell(object_id) => {
                 let stack_object_id = Self::stack_spell_object_id(game, object_id)?.0 as i32;
@@ -1771,6 +1766,7 @@ impl Observation {
                 to,
                 controller,
                 face_down,
+                ..
             } => {
                 let mut data = Self::card_event_data(EventType::CardMoved, *object_id, *controller);
                 data.from_zone = from.map_or(-1, |zone| zone as i32);
@@ -1948,12 +1944,12 @@ impl Observation {
         if let Some(source) = source {
             data.source_kind = EventEntityKind::Object as i32;
             data.source_id = source.entity.0 as i32;
-            data.source_incarnation = source.incarnation.0 as i32;
+            data.source_incarnation = source.incarnation as i32;
         }
         if let Some(target) = target {
             data.target_kind = EventEntityKind::Object as i32;
             data.target_id = target.entity.0 as i32;
-            data.target_incarnation = target.incarnation.0 as i32;
+            data.target_incarnation = target.incarnation as i32;
         }
         data
     }
@@ -1995,7 +1991,7 @@ impl Observation {
 
     fn event_entity(entity: Option<EventEntity>) -> (i32, i32) {
         match entity {
-            Some(EventEntity::Card(object)) => (EventEntityKind::Card as i32, object.0 as i32),
+            Some(EventEntity::Card(object)) => (EventEntityKind::Card as i32, object.slot() as i32),
             Some(EventEntity::Permanent(permanent)) => {
                 (EventEntityKind::Permanent as i32, permanent.0 as i32)
             }
@@ -2011,7 +2007,7 @@ impl Observation {
                 .trigger_placement
                 .as_ref()
                 .and_then(|p| p.remaining.iter().find(|t| t.id == *trigger_id))
-                .and_then(|t| t.source_ref)
+                .and_then(|t| t.source_ref())
                 .and_then(|r| game.visible_reference(r, *player).object)
                 .map(|id| vec![PublicId(id as u32)])
                 .unwrap_or_default(),
@@ -2021,8 +2017,12 @@ impl Observation {
             | Action::Foretell { object, .. }
             | Action::ScryCard { object, .. }
             | Action::SelectCard { object, .. }
-            | Action::LearnDiscard { object, .. }
-            | Action::LearnTakeLesson { object, .. } => vec![game.state.objects[object].id],
+            | Action::LearnDiscard { object, .. } => vec![game.state[object].id],
+            Action::LearnTakeLesson { object, .. } => game
+                .state
+                .card_id(*object)
+                .map(|card| vec![game.state.cards[card].public_id])
+                .unwrap_or_default(),
             Action::ActivateAbility { permanent, .. }
             | Action::DeclareAttacker { permanent, .. }
             | Action::WaterbendTap { permanent, .. } => game.state.permanents[*permanent]
@@ -2054,10 +2054,10 @@ impl Observation {
                     .map(|perm| vec![perm.id])
                     .unwrap_or_default(),
                 crate::state::target::Target::GraveyardCard(object) => {
-                    vec![game.state.objects[ObjectId::from(object.entity)].id]
+                    vec![game.state[object].id]
                 }
                 crate::state::target::Target::StackSpell(object_id) => {
-                    vec![game.state.objects[object_id].id]
+                    vec![game.state[object_id].id]
                 }
                 crate::state::target::Target::StackAbility(id) => vec![*id],
             },
@@ -2071,9 +2071,7 @@ impl Observation {
                 ) {
                     return candidates
                         .get(*mode)
-                        .map(|candidate| {
-                            game.state.objects[ObjectId::from(candidate.source().entity)].id
-                        })
+                        .map(|candidate| game.state[candidate.source()].id)
                         .into_iter()
                         .collect();
                 }
@@ -2082,7 +2080,7 @@ impl Observation {
                     .state
                     .suspended_decision
                     .as_ref()
-                    .and_then(|suspended| suspended.frame.source)
+                    .and_then(|suspended| suspended.frame.source())
                     .or(match &game.pending_choice {
                         Some(crate::flow::game::PendingChoice::SpellMode {
                             object: object_id,
@@ -2111,7 +2109,7 @@ impl Observation {
                         | Some(crate::flow::game::PendingChoice::TapPayment {
                             source: crate::flow::game::ActivationSource::Card(card),
                             ..
-                        }) => Some((*card).into()),
+                        }) => Some(game.state.object_of(*card)),
                         Some(crate::flow::game::PendingChoice::ActivatedTarget {
                             source: crate::flow::game::ActivationSource::Permanent(permanent),
                             ..
@@ -2146,10 +2144,87 @@ impl Observation {
                         None => None,
                     });
                 object_id
-                    .map(|object_id| vec![game.state.objects[object_id].id])
+                    .map(|object_id| {
+                        vec![
+                            game.state
+                                .objects
+                                .provenance(object_id)
+                                .expect("source provenance")
+                                .0,
+                        ]
+                    })
                     .unwrap_or_default()
             }
         }
+    }
+
+    /// All visible object identities, with borrowed characteristics.
+    pub fn object_records(&self) -> impl Iterator<Item = ObjectData<'_>> + Clone + '_ {
+        self.agent_cards
+            .iter()
+            .chain(&self.opponent_cards)
+            .map(|c| ObjectData {
+                id: c.id,
+                owner_id: c.owner_id,
+                registry_key: c.registry_key,
+                zone: c.zone,
+                characteristics: &c.characteristics,
+            })
+            .chain(
+                self.agent_permanents
+                    .iter()
+                    .chain(&self.opponent_permanents)
+                    .filter_map(|p| {
+                        Some(ObjectData {
+                            id: p.object_id?,
+                            owner_id: p.owner_id,
+                            registry_key: p.registry_key,
+                            zone: ZoneType::Battlefield,
+                            characteristics: &p.characteristics,
+                        })
+                    }),
+            )
+            .chain(self.stack_objects.iter().filter_map(|s| {
+                let p = s.spell.as_ref()?;
+                Some(ObjectData {
+                    id: p.object_id,
+                    owner_id: p.owner_id,
+                    registry_key: p.registry_key,
+                    zone: ZoneType::Stack,
+                    characteristics: &p.characteristics,
+                })
+            }))
+    }
+
+    /// Deprecated compatibility records; non-card objects are synthesized only here.
+    #[deprecated(note = "use object_records; removed in 0.4.0")]
+    pub fn card_records(&self) -> impl Iterator<Item = CardData> + Clone + '_ {
+        self.agent_cards
+            .iter()
+            .chain(&self.opponent_cards)
+            .cloned()
+            .chain(
+                self.agent_permanents
+                    .iter()
+                    .chain(&self.opponent_permanents)
+                    .filter_map(PermanentData::legacy_card),
+            )
+            .chain(
+                self.stack_objects
+                    .iter()
+                    .filter_map(|s| s.spell.as_ref().map(|spell| spell.legacy_card(s.x))),
+            )
+    }
+
+    pub fn historical(&self) -> bool {
+        self.agent_permanents
+            .iter()
+            .chain(&self.opponent_permanents)
+            .any(|p| p.object_id.is_none())
+            || self
+                .stack_objects
+                .iter()
+                .any(|s| s.kind == StackObjectKindData::Spell && s.spell.is_none())
     }
 
     pub fn validate(&self) -> bool {
@@ -2164,7 +2239,8 @@ impl Observation {
                 return false;
             }
         }
-        // A battlefield card sits with its controller, who may not own it.
+        // A battlefield card in a historical capture sits with its
+        // controller, who may not own it.
         for (objects, side) in [
             (&self.agent_cards, self.agent.id),
             (&self.opponent_cards, self.opponent.id),
@@ -2243,5 +2319,184 @@ mod card_type_tests {
                 "type subset {mask}"
             );
         }
+    }
+}
+
+impl std::ops::Deref for CardData {
+    type Target = CharacteristicsData;
+    fn deref(&self) -> &Self::Target {
+        &self.characteristics
+    }
+}
+impl std::ops::DerefMut for CardData {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.characteristics
+    }
+}
+impl std::ops::Deref for PermanentData {
+    type Target = CharacteristicsData;
+    fn deref(&self) -> &Self::Target {
+        &self.characteristics
+    }
+}
+impl std::ops::DerefMut for PermanentData {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.characteristics
+    }
+}
+
+/// A spell's own object identity and characteristics, including spell copies.
+/// Abilities have no spell record; their source reference lives on the stack item.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SpellData {
+    pub object_id: i32,
+    pub owner_id: i32,
+    pub registry_key: i32,
+    pub is_copy: bool,
+    pub has_announced_x: bool,
+    pub characteristics: CharacteristicsData,
+}
+impl std::ops::Deref for SpellData {
+    type Target = CharacteristicsData;
+    fn deref(&self) -> &Self::Target {
+        &self.characteristics
+    }
+}
+
+/// Borrowed identity and characteristics of a visible game object in any zone.
+#[derive(Clone, Copy)]
+pub struct ObjectData<'a> {
+    pub id: i32,
+    pub owner_id: i32,
+    pub registry_key: i32,
+    pub zone: ZoneType,
+    pub characteristics: &'a CharacteristicsData,
+}
+impl std::ops::Deref for ObjectData<'_> {
+    type Target = CharacteristicsData;
+    fn deref(&self) -> &Self::Target {
+        self.characteristics
+    }
+}
+
+#[cfg(test)]
+mod characteristics_tests {
+    use super::*;
+    use crate::{
+        agent::observation_encoder::{encode, ObservationEncoderConfig},
+        state::player::PlayerConfig,
+    };
+
+    fn game() -> Game {
+        Game::new(
+            vec![
+                PlayerConfig::new("a", [("United Front".into(), 20)].into()),
+                PlayerConfig::new("b", [("Forest".into(), 20)].into()),
+            ],
+            111,
+            false,
+        )
+    }
+
+    #[test]
+    fn identical_tokens_keep_distinct_effective_characteristics_and_focus() {
+        let mut game = game();
+        let first = game
+            .create_token("token.spirit", PlayerId(0), false)
+            .unwrap();
+        let second = game
+            .create_token("token.spirit", PlayerId(0), false)
+            .unwrap();
+        game.state.permanents[first]
+            .as_mut()
+            .unwrap()
+            .change_counters(CounterKind::PlusOnePlusOne, 1);
+        let mut observation = Observation::for_player(&game, PlayerId(0));
+        let first_row = &observation.agent_permanents[0];
+        let second_row = &observation.agent_permanents[1];
+        assert!(first_row.is_token && second_row.is_token);
+        assert_eq!(
+            (
+                first_row.characteristics.power,
+                first_row.characteristics.toughness
+            ),
+            (2, 2)
+        );
+        assert_eq!(
+            (
+                second_row.characteristics.power,
+                second_row.characteristics.toughness
+            ),
+            (1, 1)
+        );
+        assert_eq!(first_row.registry_key, second_row.registry_key);
+        assert_ne!(first_row.id, second_row.id);
+        assert_ne!(first_row.object_id, second_row.object_id);
+        assert_eq!(
+            game.state.object_to_permanent[game.state.permanents[second]
+                .as_ref()
+                .unwrap()
+                .object
+                .slot()],
+            Some(second)
+        );
+        let identity = first_row.object_id.unwrap();
+        let action = ActionOption {
+            action_type: ActionType::SelectCard,
+            focus: vec![identity],
+            declared: None,
+            description: None,
+            mode_index: None,
+            name_definition: None,
+            name_index: None,
+            name_group: None,
+            ability_index: None,
+            continuation_index: None,
+        };
+        observation.action_space.actions = vec![action];
+        let config = ObservationEncoderConfig::default();
+        let encoded = encode(&observation, &config).unwrap();
+        assert_eq!(
+            encoded.action_focus[0],
+            (2 + 2 * config.max_cards_per_player) as i32
+        );
+        assert!(!observation.agent_cards.iter().any(|c| c.id == identity));
+        let parsed = crate::agent::observation_json::parse(&observation.to_json()).unwrap();
+        assert_eq!(parsed.to_json(), observation.to_json());
+    }
+
+    #[test]
+    fn copied_spells_keep_identity_and_x_without_becoming_cards() {
+        let mut game = game();
+        let source = game.state.zones.latest().next().unwrap();
+        let spell =
+            game.push_spell_to_stack(source, PlayerId(0), vec![], vec![], Default::default());
+        let target = Target::StackSpell(spell);
+        game.copy_stack_object(target, PlayerId(0)).unwrap();
+        for (index, object) in game.state.stack_objects.iter_mut().enumerate() {
+            if let StackObject::Spell(spell) = object {
+                spell.x = (index + 1) as u8;
+            }
+        }
+        let observation = Observation::for_player(&game, PlayerId(0));
+        let copy = observation.stack_objects[0].spell.as_ref().unwrap();
+        let original = observation.stack_objects[1].spell.as_ref().unwrap();
+        assert!(copy.is_copy && !original.is_copy);
+        assert!(copy.has_announced_x);
+        assert_eq!(observation.stack_objects[0].x, 2);
+        assert!(original.has_announced_x);
+        assert_eq!(observation.stack_objects[1].x, 1);
+        assert_ne!(copy.object_id, original.object_id);
+        assert_eq!(copy.registry_key, original.registry_key);
+        let json = observation.to_json();
+        let parsed = crate::agent::observation_json::parse(&json).unwrap();
+        assert_eq!(parsed.to_json(), json);
+        let mut historical = crate::agent::legacy_input::view(&observation);
+        for object in &mut historical.stack_objects {
+            object.spell = None;
+        }
+        assert!(crate::agent::observation_json::parse(&historical.to_json())
+            .unwrap_err()
+            .contains("ambiguous"));
     }
 }

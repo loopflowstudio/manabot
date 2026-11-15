@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import JsonValue
 
+from manabot.backends import resolve
 from manabot.llm.cache import CacheManifest, prepare
 from manabot.llm.schema import InferenceConfig, SelectionResult
 from manabot.llm.selection import Runtime
@@ -89,7 +90,9 @@ def execute(
             game = game.model_copy(
                 update={"max_seconds": min(game.max_seconds, deadline - time.time())}
             )
-            summary = play(game, out / f"game-{index:03d}", session)
+            summary = play(
+                game, out / f"game-{index:03d}", session, backend=resolve("torch")
+            )
             decisions += summary.decisions
             if not summary.completed or not summary.replay_matches:
                 return {

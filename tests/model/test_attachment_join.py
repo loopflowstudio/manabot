@@ -12,9 +12,9 @@ from manabot.env.observation import (
     ObservationSpace,
 )
 from manabot.infra.config import ModelConfig
-from manabot.model.admission import admit_observation
 from manabot.verify.action_cases import reorder_objects
 import managym
+from tests.model.prepared_routes import device_input
 
 
 def _attached_observation() -> tuple[ObservationSpace, dict[str, np.ndarray], int]:
@@ -52,14 +52,14 @@ def test_attachment_link_is_a_join_not_a_numeric_feature() -> None:
     with torch.no_grad():
         # Zero-initialized joins leave the initial function unchanged.
         same = [
-            agent._gather_object_embeddings(admit_observation(agent, _batch(e))).objects
+            agent._gather_object_embeddings(device_input(agent, _batch(e))).objects
             for e in (encoded, detached)
         ]
         torch.testing.assert_close(same[0], same[1])
         for layer in (*agent.link_to_target, *agent.link_from_target):
             layer.weight.normal_()
         linked, unlinked = (
-            agent._gather_object_embeddings(admit_observation(agent, _batch(e))).objects
+            agent._gather_object_embeddings(device_input(agent, _batch(e))).objects
             for e in (encoded, detached)
         )
     changed = (linked - unlinked).abs().sum(-1)[0]
@@ -84,8 +84,8 @@ def test_object_permutation_preserves_learned_permanent_links(column: int) -> No
         permuted = reorder_objects(obs)
         count = obs["agent_permanents"].shape[1]
         assert permuted["agent_permanents"][0, count - 2, column] == host + count
-        expected_logits, expected_value = agent(admit_observation(agent, obs))
-        logits, value = agent(admit_observation(agent, permuted))
+        expected_logits, expected_value = agent(device_input(agent, obs))
+        logits, value = agent(device_input(agent, permuted))
         torch.testing.assert_close(logits.softmax(-1), expected_logits.softmax(-1))
         torch.testing.assert_close(value, expected_value)
         for key, original in obs.items():

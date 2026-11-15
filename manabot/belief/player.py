@@ -9,17 +9,18 @@ import sys
 import time
 from typing import Any
 
-from managym.decision import Command, DecisionFrame, SemanticTransition
-from managym.possible_worlds import PossibleWorldSpace
 import numpy as np
 
 from manabot.belief.tracker import ActionLikelihood, BeliefTracker
 from manabot.env.env import Env
+from manabot.env.observation import ObservationBuffers
 from manabot.sim.search.flat_mc import (
     DEFAULT_MAX_PLAYOUT_STEPS,
     DEFAULT_ROLLOUTS_PER_WORLD,
     SearchStats,
 )
+from managym.decision import Command, DecisionFrame, SemanticTransition
+from managym.possible_worlds import PossibleWorldSpace
 
 
 class RangeSampling(str, Enum):
@@ -150,7 +151,7 @@ class ExactRangePlayer:
         self._pending_likelihood_root = None
         self.stats.update_seconds.append(time.perf_counter() - observe_started)
 
-    def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
+    def act(self, env: Env, obs: ObservationBuffers) -> int:
         del obs
         if self.tracker is None or self.seat is None:
             raise RuntimeError("start_game must run before act")
