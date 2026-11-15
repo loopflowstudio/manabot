@@ -2118,6 +2118,7 @@ impl PyCard {
         self.data.x = value;
     }
     #[getter]
+    #[allow(clippy::wrong_self_convention)]
     fn from_battlefield_this_turn(&self) -> bool {
         self.data.from_battlefield_this_turn
     }
