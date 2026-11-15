@@ -330,21 +330,6 @@ publish, land or choose the next Graph step from here.
   (about 20 s on CPU), save and reload the policy as it says, call both
   maintained rules directly on a collected batch, and compare the tables'
   signatures with `inspect.signature`.
-- Training game journals (`--training-game-logs`): a real stall needs no
-  fixture. Start `uv run manabot train --recipe local --training-game-logs
-  --out .runs/<x>` with `Popen(start_new_session=True)`, wait for
-  `game-journals/operation.json`, then `os.killpg(pid, SIGSTOP)`: the files
-  must stay byte-identical while frozen. Copy them, SIGKILL the group and run
-  the documented `manabot.training.state.game_errors` replay on the copy. To
-  die inside one native call on the real CLI path, wrap
-  `manabot.env.failures.CapturedVector.__init__` so `self.native` is a proxy
-  whose Nth `step_into_buffers`, `semantic_decision_frames_json` or
-  `reset_each_into_buffers` call runs `os._exit(77)`, then call
-  `manabot.cli.main(["train", ...])`; the local recipe reaches 150 steps in
-  about 20 s. Replay refuses journals written before a source edit; pass
-  `--allow-changed-runtime` only for those. For shards, dump
-  `local_smoke(steps=3, device="cpu")` with `streams=4`, `execution.workers=2`
-  and pass `--regime`; files are named by global stream offset.
 - Training recipes: write a regime JSON from Python
   (`TrainingRegime(...).model_dump_json()`) and run
   `uv run manabot train --regime <file> --seed N --out /tmp/<dir>/<run>` with a
