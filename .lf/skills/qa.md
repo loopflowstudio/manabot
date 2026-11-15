@@ -141,9 +141,13 @@ publish, land or choose the next Graph step from here.
   other buttons open the deck picker or start a game. Triggered abilities
   appear under "Stack · top first" as `Card — <trigger>: <effects> ·
   triggered ability · Seat N`; read that text while the stack is non-empty.
-  Detect the end by a visible "Play Again" button (the page holds hidden
-  "game over" text); after clicking it, wait for the button to hide before
-  reading offers again.
+  The session strip always shows **Rematch** (mid-game it asks to stop the
+  game), so detect the end by a second Rematch button, in the "Game Over"
+  dialog (`getByRole('button', {name: 'Rematch', exact: true}).count() >= 2`),
+  and bound play loops by time, since the bot can win first. Live bot work
+  ("Searching · Seat 2") shows in the table masthead. Opening `/games?session=`
+  needs the owner credential from the same browser profile; a fresh browser
+  context gets 403.
   To play specific cards, open **Import decklist files**, check "Use imported
   decks for the next game" (the `#hero-deck-source`/`#villain-deck-source`
   textareas appear only then), fill both, press Check decklists, then New
@@ -278,7 +282,7 @@ publish, land or choose the next Graph step from here.
   card ids to pick a card. Read `observation_for_player(p).agent_cards`
   (`zone`, `is_token`) at every decision. A token in the graveyard during a
   mana ability's color choice is correct: SBAs wait for priority. Academy's
-  game end is a "Game Over" dialog with "Play Again".
+  game end is a "Game Over" dialog with "Rematch".
   Battlefield permanents are `agent_permanents`, with their own ids (the ones
   activation offers focus) and an integer `registry_key`; join them to a name
   through `agent_cards` rows that have the same `registry_key`.
