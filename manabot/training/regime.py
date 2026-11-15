@@ -697,8 +697,8 @@ class TrainRotisserie(Stage):
     set: str = "tla"
     seats: int = Field(default=8, ge=2, le=8, multiple_of=2)
     picks_per_seat: int = Field(default=45, ge=1)
-    drafts_per_update: int = Field(default=2, ge=1)
-    updates: int = Field(default=2, ge=1)
+    drafts_per_update: int = Field(default=1, ge=1)
+    updates: int = Field(default=1, ge=1)
     evaluate: bool = True
     evaluate_initial: bool = True
 

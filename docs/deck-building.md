@@ -174,6 +174,10 @@ reward comparison, see [TLA Rotisserie](../experiments/tla-rotisserie.md).
 
 ## Learning public drafting and construction
 
+Preparation, training and evaluation share `manabot.drafting.collect_draft`,
+including its native choices, per-seat sampling, durable intents and completion
+receipt. `prepare` selects the uniform legal reference through that collector.
+
 `TrainRotisserie` in `manabot.training.regime` trains a separate random draft
 policy through the maintained executor and Learner. Both phases use shared
 `Prepared` inputs: `DraftPrepared` carries native card ids, exact legal masks,

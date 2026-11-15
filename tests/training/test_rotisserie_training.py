@@ -15,6 +15,7 @@ from manabot.backends.torch.checkpoint import save_checkpoint
 from manabot.backends.torch.draft import DraftConfig, create, load, save
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
+from manabot.drafting import collect_draft, draft_catalog
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.infra.identity import file_sha256
@@ -27,8 +28,9 @@ from manabot.policy.draft import (
 from manabot.policy.prepare import Prepared
 from manabot.training.draft_rewards import FrozenRewardRunner, RewardSample
 from manabot.training.execution import execute_regime
+from manabot.training.records import TrainingRun
 from manabot.training.regime import Execution, TrainingRegime, TrainRotisserie
-from manabot.training.rotisserie import collect_draft, draft_catalog, evaluate_drafter
+from manabot.training.rotisserie import evaluate_drafter
 from manabot.training.state.game_errors import GameErrorLedger, GameErrorPolicy
 from manabot.training.updates.rotisserie import RunningBaseline, update_rotisserie
 from manabot.verify.store import VerifyStore
@@ -147,7 +149,10 @@ def test_draft_policy_reload_reproduces_transcript_and_legal_construction(
         picks=1,
         check=_check,
     )
-    assert first.episode == again.episode
+    timing = {"parent_cpu_seconds", "wall_seconds"}
+    assert first.episode.model_dump(exclude=timing) == again.episode.model_dump(
+        exclude=timing
+    )
     assert (tmp_path / "first/choices.jsonl").read_bytes() == (
         tmp_path / "again/choices.jsonl"
     ).read_bytes()
@@ -199,25 +204,26 @@ def test_fixed_reference_evaluation_crosses_draft_and_game_seats(
         picks=1,
         seats=2,
     )
-    assert len(calls) == 16
+    assert len(calls) == 8
     assert {s.bundle for s in calls} == {
         "initial-seat0",
         "initial-seat1",
         "uniform-seat0",
         "uniform-seat1",
     }
-    for start in range(0, 16, 4):
-        a, b, c, d = calls[start : start + 4]
-        assert (a.seat, b.seat, c.seat, d.seat) == (0, 1, 0, 1)
-        assert a.seed == b.seed and c.seed == d.seed == a.seed + 1
+    for start in range(0, 8, 2):
+        a, b = calls[start : start + 2]
+        assert (a.seat, b.seat) == (0, 1)
+        assert a.seed == b.seed
         assert a.match.hero_deck == b.match.villain_deck
         assert a.match.villain_deck == b.match.hero_deck
     rows = json.loads((tmp_path / "eval/results.json").read_text())
     assert all(r["value"] == 1 and r["opening"] == -0.25 for r in rows)
 
 
+@pytest.mark.parametrize("evaluation_deadline", [False, True])
 def test_regime_executes_draft_update_with_controlled_rewards(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, evaluation_deadline: bool
 ) -> None:
 
     torch.set_num_threads(1)
@@ -236,6 +242,11 @@ def test_regime_executes_draft_update_with_controlled_rewards(
     )
 
     def run(self: object, sample: RewardSample, journal: Path) -> dict[str, Any]:
+        if evaluation_deadline and "initial-seat" in sample.id:
+            return {
+                "failure": "controlled evaluation deadline",
+                "termination_reason": "timeout",
+            }
         return {"terminated": True, "winner": sample.seat}
 
     monkeypatch.setattr(FrozenRewardRunner, "__call__", run)
@@ -251,7 +262,7 @@ def test_regime_executes_draft_update_with_controlled_rewards(
         picks_per_seat=1,
         drafts_per_update=1,
         updates=1,
-        evaluate=False,
+        evaluate=evaluation_deadline,
         execution=Execution(wall_seconds=60, threads=1),
     )
     regime = TrainingRegime(
@@ -262,11 +273,71 @@ def test_regime_executes_draft_update_with_controlled_rewards(
         wall_seconds=60,
     )
     with VerifyStore(tmp_path / "store.sqlite") as store:
-        result = execute_regime(regime, 370, tmp_path / "run", store)
+        if evaluation_deadline:
+            with pytest.raises(TimeoutError, match="controlled evaluation deadline"):
+                execute_regime(regime, 370, tmp_path / "run", store)
+            result = TrainingRun.model_validate_json(
+                (tmp_path / "run/run.json").read_text()
+            )
+        else:
+            result = execute_regime(regime, 370, tmp_path / "run", store)
     (record,) = result.stages
-    assert result.status == record.status == "completed"
+    assert (
+        result.status
+        == record.status
+        == ("interrupted" if evaluation_deadline else "completed")
+    )
     assert record.updates == record.optimizer_updates == 1
     assert record.optimizer_exposures == record.learner_transitions == 41
     assert set(record.artifacts) == {"draft-update-0", "draft-update-1"}
     assert result.selected_artifact is None  # Draft artifacts are not game players.
     assert result.metrics_run
+    # Every return is +1, but the first update had no earlier batch to subtract.
+    row = json.loads((tmp_path / "run/draft/drafts/update-0001.json").read_text())
+    assert row["baseline"] == 0 and row["valid_trajectories"] == 1
+
+    if evaluation_deadline:
+        summary = json.loads(
+            (tmp_path / "run/draft/drafts/eval-0000/summary.json").read_text()
+        )
+        assert sum(row["planned"] for row in summary) == 8
+        assert sum(row["attempted"] for row in summary) == 1
+        assert sum(row["failed"] for row in summary) == 1
+        assert sum(row["missing"] for row in summary) == 7
+
+
+def test_evaluation_deadline_before_draft_retains_missing_denominators(
+    tmp_path: Path,
+) -> None:
+    def deadline() -> None:
+        raise TimeoutError("controlled draft deadline")
+
+    def never(sample: RewardSample, journal: Path) -> dict[str, Any]:
+        raise AssertionError("must not dispatch")
+
+    catalog = draft_catalog("tla", 2, 1)
+    candidate = create(
+        DraftConfig(len(catalog.names), seats=2, width=8, heads=2),
+        catalog.cards,
+        catalog.binding,
+        3,
+    )
+    with pytest.raises(TimeoutError, match="controlled draft deadline"):
+        evaluate_drafter(
+            candidate,
+            candidate,
+            catalog,
+            never,
+            tmp_path / "eval",
+            seed=7,
+            check=deadline,
+            ledger=GameErrorLedger(tmp_path / "errors.jsonl", GameErrorPolicy()),
+            picks=1,
+            seats=2,
+        )
+    rows = json.loads((tmp_path / "eval/summary.json").read_text())
+    assert len(rows) == 2
+    assert all(row["planned"] == row["missing"] == 4 for row in rows)
+    assert all(
+        row["attempted"] == row["completed"] == row["failed"] == 0 for row in rows
+    )

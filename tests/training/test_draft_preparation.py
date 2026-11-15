@@ -7,7 +7,7 @@ from typing import TextIO
 import pytest
 
 import manabot.drafting as drafting
-from manabot.drafting import BuildChoice, DraftChoice, DraftPreparation, prepare_draft
+from manabot.drafting import BuildChoice, DraftChoice, DraftEpisode, prepare_draft
 from manabot.infra.identity import file_sha256
 import managym
 from managym.format import Limited, Rotisserie
@@ -18,7 +18,7 @@ def test_prepared_draft_replays_journal_to_all_eight_legal_builds(
 ) -> None:
     out = tmp_path / "draft"
     result = prepare_draft(out, 370)
-    restored = DraftPreparation.model_validate_json((out / "receipt.json").read_bytes())
+    restored = DraftEpisode.model_validate_json((out / "receipt.json").read_bytes())
     assert restored.model_dump(mode="json") == result.model_dump(mode="json")
     assert result.status == "software_validation"
     assert result.draft_picks == 360 and result.construction_picks == 320

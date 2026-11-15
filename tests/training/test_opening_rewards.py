@@ -91,7 +91,15 @@ def test_terminal_outcomes_are_chooser_relative_and_opening_is_separate(
 
 @pytest.mark.parametrize(
     "failure",
-    ["engine", "truncated", "action_limit", "deadline", "death", "early_terminal"],
+    [
+        "engine",
+        "truncated",
+        "action_limit",
+        "deadline",
+        "raised_deadline",
+        "death",
+        "early_terminal",
+    ],
 )
 def test_partial_bundles_never_learn_and_dispatched_slots_settle(
     tmp_path: Path, failure: str
@@ -115,14 +123,19 @@ def test_partial_bundles_never_learn_and_dispatched_slots_settle(
             return {"failure": "Command cap", "termination_reason": "command_cap"}
         if failure == "deadline":
             return {"failure": "deadline fixture", "termination_reason": "timeout"}
+        if failure == "raised_deadline":
+            raise TimeoutError("controlled runner deadline")
         if failure == "death":
             raise EOFError("controlled worker exit")
         return {"terminated": True, "winner": 0}
 
     batch = score_schedule(_samples("value"), tmp_path / failure, run, check=_check)
     assert batch.rewards == {"learner-0": None}
-    expected = 2 if failure in ("death", "deadline") else 4
+    expected = 2 if failure in ("death", "deadline", "raised_deadline") else 4
     assert len(batch.results) == expected
+    assert batch.timed_out == (failure in ("deadline", "raised_deadline"))
+    if batch.stopped:
+        assert batch.stop_reason and "sample-1" in batch.stop_reason
     receipt = json.loads((tmp_path / failure / "receipt.json").read_text())
     assert receipt["planned"] == 4 and receipt["missing"] == 4 - expected
     events = [
@@ -200,6 +213,8 @@ def test_deadline_before_dispatch_preserves_all_missing_slots(tmp_path: Path) ->
     assert batch.stopped and not batch.results and batch.rewards == {"learner-0": None}
     receipt = json.loads((tmp_path / "deadline/receipt.json").read_text())
     assert receipt["attempted"] == 0 and receipt["missing"] == 4
+    assert batch.timed_out and receipt["timed_out"]
+    assert receipt["stop_reason"] == "TimeoutError: controlled run deadline"
 
 
 @pytest.mark.parametrize(

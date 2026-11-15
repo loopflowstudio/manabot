@@ -74,7 +74,7 @@ loader's current world, setup and policy-input admission:
 ```sh
 uv run --extra artifacts --extra evaluation python experiments/tla_rotisserie.py compare \
     --player /path/to/compatible-player.pt \
-    --out .runs/tla-rotisserie --seed 370 --updates 2 --seconds 1800
+    --out .runs/tla-rotisserie --seed 370 --updates 1 --seconds 1800
 ```
 
 `--player` is the game player and opening critic, not the drafter being trained.
@@ -84,10 +84,30 @@ stays frozen for training rewards and evaluation.
 
 `--out` selects the evidence directory; `--seed` selects the reproducible sampling
 schedule; `--updates` selects updates per arm; `--seconds` caps whole-run elapsed
-time. The bounded exploratory comparison uses the values above: one seed, two
-updates per arm and 30 minutes. It runs locally, with one numerical thread and
+time. The bounded exploratory comparison uses the values above: one seed, one
+update per arm and 30 minutes. It runs locally, with one numerical thread and
 one supervised game at a time. Check available capacity first; this workflow
 does not authorize a rental or additional work on the occupied MTG-349 host.
+
+2026-11-14 local software check with a barely trained width-64 world-bound
+TLA checkpoint (not a competent player): complete games took 8–20 seconds each
+on a heavily loaded 16-CPU laptop, mostly scalar policy inference. One
+game-reward update (32 games) took 280 seconds; one value-reward update
+(32 opening scores) took 45 seconds. The two-update schedule plays 384
+complete games (320 evaluation, 64 game rewards) plus 64 opening scores, so 30
+minutes would leave most of that earlier schedule missing at that rate. The
+prospectively revised default uses one draft/update per arm, 16 training reward
+samples per arm, and 96 evaluation games: 112 complete games and 16 opening
+scores total. The observed range suggests roughly 16–38 minutes; 30 minutes
+still does not guarantee completion. This test player establishes no strength.
+
+Value runs first with at most half the wall time remaining after admission;
+game receives the remaining time, including unused value time. An arm timeout
+retains its interrupted record and permits the next arm to start. Infrastructure
+or integrity failures stop the comparison. Each arm completes its training
+before evaluating saved checkpoints, so initial evaluation cannot prevent that
+arm's first update. Training interrupted mid-bundle still supplies no gradient.
+The time reservation guarantees an opportunity, not successful learning.
 
 The output retains draft transcripts, eight admitted decks per episode,
 initialization receipts, policy artifacts, per-arm exposure and CPU/wall costs,
@@ -125,7 +145,7 @@ finished decks are revealed together.
 
 Both arms use one randomly initialized width-64 policy with two attention layers,
 four heads and zero dropout for drafting and construction. Each update collects
-two drafts with four learner seats and four frozen opponent seats. Seat roles
+one draft with four learner seats and four frozen opponent seats. Seat roles
 rotate. Opponents include initialization and previous learner snapshots, with at
 most two historical snapshots retained, including initialization permanently.
 Initialization, draft, reward and evaluation randomness use separate streams so
@@ -157,18 +177,19 @@ its complete four-sample bundle before contributing a gradient.
 
 ## Read the comparison
 
-The two-update schedule contains 64 training reward samples per arm and 1,360
-learner draft/build decisions per arm. Drafted opponent decisions are recorded
+The default one-update schedule contains 16 training reward samples per arm and
+340 learner draft/build decisions per arm. Drafted opponent decisions are recorded
 separately from gradient exposure. Equal updates do not imply equal execution
 cost: complete games and opening scoring do different amounts of work.
 
-Evaluation plays complete games at initialization and after updates 1 and 2.
+Evaluation plays complete games at shared initialization and each trained endpoint.
 Each candidate occupies every draft seat against two fixed reference tables:
 seven initialization policies, and seven policies sampling uniformly from legal
 definitions during drafting and native legal additions during construction.
-The candidate plays the opposite draft seat, `(candidate + 4) mod 8`, on two
-deals and both game seats. This gives 64 games per checkpoint and 320 scheduled
-evaluation games across shared initialization and the four trained checkpoints.
+The candidate plays the opposite draft seat, `(candidate + 4) mod 8`, on
+one deal crossed with both game seats. This gives 32 games per checkpoint and
+96 scheduled evaluation games across shared initialization and the two trained
+endpoints. Training retains its four-sample (two-deal) bundles.
 
 Compare wins, draws and losses with their valid denominators, opening-value
 means/ranges and value-versus-outcome divergence by checkpoint, reference and
@@ -236,6 +257,13 @@ the other opponent snapshot is the previous update and stays frozen throughout
 collection. The two arms use the same initialization seed and independent
 per-seat action generators, with separate reward and evaluation seeds.
 
+Preparation, training and evaluation use one collector in `manabot/drafting.py`
+and one `DraftEpisode` completion schema. New preparation uses the same per-seat
+NumPy sampler as the uniform evaluation reference; its transcript for a given
+seed differs from the earlier Python-random preparation above. Historical
+receipts retain their original bytes. Every collected episode now retains source,
+native, catalog and printing identities plus its journal digest and timing.
+
 Per-episode setup and choice journals precede native mutation. Reward schedules
 precede dispatch; dispatch and settlement rows are fsynced. Game traces, opening
 observations and failed journals remain in the reward directory. Completed games
@@ -251,9 +279,11 @@ decisions, prior-batch baseline, collection/learning time and parent CPU/wall
 cost; game receipts keep worker CPU separately (unknown after an abrupt exit).
 Different rewards do not consume draft/evaluation schedule randomness.
 
-The initial evaluation is shared between arms; each trained checkpoint is
+The initial evaluation is shared between arms and retained in the value arm; each trained checkpoint is
 scored separately. `comparison.json` keeps expected checkpoint endpoints even
-when a deadline leaves an arm unstarted. Unreached schedules are incomplete;
+when a deadline leaves an endpoint unscored. It also totals planned, attempted,
+completed, failed and missing games for every expected endpoint, including
+wholly unstarted evaluations. Unreached schedules are incomplete;
 there is no automatic resume or replacement of failed evaluation samples.
 
 
@@ -280,3 +310,23 @@ ledger threshold and acknowledged-worker-exit cases. Backend conformance include
 two skips for unavailable optional backend coverage. Ruff and diff checks passed.
 The new tests are included in the training CI group. Broader gate/CI validation
 and the admitted competent-player dependency remain; no measured arm was launched.
+
+## Bounded schedule implementation check, 2026-11-14
+
+The prospective default now uses one draft/update per arm and one evaluation
+deal crossed with both game seats. Both fixed reference tables and every draft
+seat remain required. Value runs first within half the post-admission remaining
+time; game can consume the remainder. Each arm trains before evaluating its
+saved checkpoints. An arm timeout preserves artifacts and an interrupted record,
+then permits the other arm to start; other fatal errors stop the comparison.
+Missing evaluations remain in `comparison.json` even when never started.
+
+Focused draft-training and reward checks: 24 passed in 7.51 seconds. Controlled
+checks cover retained optimizer exposure/artifacts before evaluation timeout,
+missing denominators before drafting, raised and settled deadlines, and fixed
+reference/game-seat crossings. An injected-clock composition check gave each arm
+900 seconds after a simulated value timeout and retained both run identities,
+64 missing and 32 completed simulated evaluation slots. No games ran in that
+composition check. These are software checks with dirty source, not strength,
+throughput or a supported competent-player comparison. Competent compatible
+player admission remains required before measured execution.

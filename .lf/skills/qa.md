@@ -418,3 +418,17 @@ publish, land or choose the next Graph step from here.
   file. A checkpoint bound to other decks is refused at Start, not disabled, and
   mixing an Elemental roster deck with the default `ur_lessons`/`gw_allies`
   fails before any policy admission.
+- Rotisserie drafting (`experiments/tla_rotisserie.py`, `TrainRotisserie`):
+  `prepare` and `compare --fixtures` take seconds. `compare --player` admits
+  only a world-bound checkpoint (`world_digest` in its binding); `--recipe
+  local` writes a setup-bound one and is refused. For a non-competent
+  world-bound player to drive the real reward games, load
+  `experiments/regimes/tla-frontier-c5fba4-w64.json` as a `TrainingRegime`,
+  set the stage to 4 streams, 32 transitions, 2 updates and a CPU
+  single-worker `execution`, then `manabot train --regime` (about 50 s). To
+  reach rewards without the 64-game initial evaluation, run `execute_regime`
+  on a `TrainRotisserie(evaluate=False, updates=1)` stage: about 45 s for
+  value, about 5 minutes for game rewards on a loaded laptop. Check reward
+  perspective against each `*.game.json` `winner` and the schedule's `seat`.
+  On a laptop, wrap long runs in `caffeinate -i`. A low-battery hibernate
+  stalled one run for an hour and cut its in-flight game as `deadline`.

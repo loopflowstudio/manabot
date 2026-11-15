@@ -19,11 +19,22 @@ from manabot.infra.files import atomic_json
 from manabot.infra.identity import file_sha256
 from manabot.infra.source import source_commit, source_dirty
 from manabot.training.execution import execute_regime
+from manabot.training.records import TrainingRun
 from manabot.training.regime import Execution, TrainingRegime, TrainRotisserie
 from manabot.training.rotisserie import validate_software
 from manabot.verify.store import VerifyStore
 import managym
 from managym import _managym
+
+
+def _arm_record(arm: str, run: TrainingRun) -> dict[str, object]:
+    return {
+        "arm": arm,
+        "id": run.id,
+        "status": run.status,
+        "error": run.error,
+        "metrics_run": run.metrics_run,
+    }
 
 
 def compare(player: Path, out: Path, seed: int, updates: int, seconds: float) -> None:
@@ -38,8 +49,12 @@ def compare(player: Path, out: Path, seed: int, updates: int, seconds: float) ->
         "seconds": seconds,
         "expected_checkpoints": [
             "shared-initialization",
-            *[f"{arm}-{i}" for arm in ("game", "value") for i in range(1, updates + 1)],
+            *[f"{arm}-{i}" for arm in ("value", "game") for i in range(1, updates + 1)],
         ],
+        "arm_order": ["value", "game"],
+        "budget_policy": "half remaining time reserved for each arm at admission",
+        "drafts_per_update": 1,
+        "evaluation_deals": 1,
         "player": str(player),
         "native_sha256": file_sha256(_managym.__file__),
         "world": managym.world_identity(),
@@ -72,12 +87,15 @@ def compare(player: Path, out: Path, seed: int, updates: int, seconds: float) ->
     runs = []
     try:
         with VerifyStore(out / "training.sqlite") as store:
-            for arm in ("game", "value"):
+            arm_seconds = (seconds - (perf_counter() - started)) / 2
+            for arm in ("value", "game"):
                 left = seconds - (perf_counter() - started)
                 if left <= 0:
                     raise TimeoutError(
                         "comparison deadline; remaining arm/checkpoints are missing"
                     )
+                # The first arm cannot consume the second arm's reservation.
+                budget = min(left, arm_seconds) if arm == "value" else left
                 regime = TrainingRegime(
                     id=f"tla-rotisserie-{arm}",
                     world=managym.WORLD_VERSION,
@@ -88,45 +106,85 @@ def compare(player: Path, out: Path, seed: int, updates: int, seconds: float) ->
                             player=reference,
                             reward=arm,
                             updates=updates,
-                            evaluate_initial=arm == "game",
-                            execution=Execution(wall_seconds=left, threads=1),
+                            drafts_per_update=1,
+                            evaluate_initial=arm == "value",
+                            execution=Execution(wall_seconds=budget, threads=1),
                         )
                     ],
-                    wall_seconds=left,
+                    wall_seconds=budget,
                 )
-                run = execute_regime(
-                    regime, seed, out / arm, store, experiment="tla_rotisserie"
-                )
-                initial_path = out / arm / arm / "drafts" / "initialization.json"
-                initial = json.loads(initial_path.read_text())
-                if (
-                    "initial_parameter_digest" in receipt
-                    and receipt["initial_parameter_digest"]
-                    != initial["parameter_digest"]
-                ):
-                    raise ValueError(
-                        "reward arms have different initialization tensors"
+                try:
+                    run = execute_regime(
+                        regime, seed, out / arm, store, experiment="tla_rotisserie"
                     )
-                receipt["initial_parameter_digest"] = initial["parameter_digest"]
-                runs.append(
-                    {
-                        "arm": arm,
-                        "id": run.id,
-                        "status": run.status,
-                        "error": run.error,
-                        "metrics_run": run.metrics_run,
-                    }
-                )
+                except Exception as error:
+                    # Deadline stops retain exported state and leave the other
+                    # arm's reservation available. Other failures stop both arms.
+                    record = out / arm / "run.json"
+                    if not record.exists() or not isinstance(error, TimeoutError):
+                        if record.exists():
+                            failed = TrainingRun.model_validate_json(record.read_text())
+                            runs.append(_arm_record(arm, failed))
+                            receipt["runs"] = runs
+                        raise
+                    run = TrainingRun.model_validate_json(record.read_text())
+                initial_path = out / arm / arm / "drafts" / "initialization.json"
+                if initial_path.exists():
+                    initial = json.loads(initial_path.read_text())
+                    if (
+                        "initial_parameter_digest" in receipt
+                        and receipt["initial_parameter_digest"]
+                        != initial["parameter_digest"]
+                    ):
+                        raise ValueError(
+                            "reward arms have different initialization tensors"
+                        )
+                    receipt["initial_parameter_digest"] = initial["parameter_digest"]
+                elif run.status == "completed":
+                    raise ValueError(f"{arm} arm has no initialization receipt")
+                runs.append(_arm_record(arm, run))
                 receipt["runs"] = runs
                 atomic_json(out / "comparison.json", receipt)
-                if run.status != "completed":
+                if run.status != "completed" and not (
+                    run.status == "interrupted"
+                    and (run.error or "").startswith("TimeoutError:")
+                ):
                     raise RuntimeError(f"{arm} arm {run.status}: {run.error}")
     except Exception as error:
         receipt.update(status="incomplete", error=f"{type(error).__name__}: {error}")
         raise
     else:
-        receipt["status"] = "completed_exploratory"
+        receipt["status"] = (
+            "completed_exploratory"
+            if len(runs) == 2 and all(run["status"] == "completed" for run in runs)
+            else "incomplete"
+        )
+        if receipt["status"] == "incomplete":
+            receipt["error"] = (
+                "arm deadline exceeded; see retained run errors and missing evaluation slots"
+            )
+            raise TimeoutError(receipt["error"])
     finally:
+        checkpoints = []
+        for name in receipt["expected_checkpoints"]:
+            arm, update = (
+                ("value", 0) if name == "shared-initialization" else name.rsplit("-", 1)
+            )
+            summary = (
+                out / arm / arm / "drafts" / f"eval-{int(update):04d}" / "summary.json"
+            )
+            totals = {
+                "planned": 32,
+                "attempted": 0,
+                "completed": 0,
+                "failed": 0,
+                "missing": 32,
+            }
+            if summary.exists():
+                rows = json.loads(summary.read_text())
+                totals = {key: sum(row[key] for row in rows) for key in totals}
+            checkpoints.append({"checkpoint": name, **totals})
+        receipt["checkpoints"] = checkpoints
         receipt["wall_seconds"] = perf_counter() - started
         atomic_json(out / "comparison.json", receipt)
 
@@ -143,7 +201,7 @@ def main() -> None:
     comparison.add_argument("--out", type=Path, required=True)
     comparison.add_argument("--seed", type=int, default=370)
     comparison.add_argument("--player", type=Path)
-    comparison.add_argument("--updates", type=int, default=2)
+    comparison.add_argument("--updates", type=int, default=1)
     comparison.add_argument("--seconds", type=float, default=1800)
     comparison.add_argument("--fixtures", action="store_true")
     args = parser.parse_args()
@@ -167,7 +225,8 @@ def main() -> None:
             compare(args.player, args.out, args.seed, args.updates, args.seconds)
             print(f"exploratory comparison: {args.out / 'comparison.json'}")
     except (ValueError, RuntimeError, OSError, TimeoutError) as error:
-        raise SystemExit(f"No completed comparison: {error}") from None
+        failed = "preparation" if args.command == "prepare" else "comparison"
+        raise SystemExit(f"No completed {failed}: {error}") from None
 
 
 if __name__ == "__main__":

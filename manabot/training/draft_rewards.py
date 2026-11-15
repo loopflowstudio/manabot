@@ -39,18 +39,21 @@ class RewardSample(StrictModel):
     match: MatchConfig
 
 
+RewardStatus = Literal[
+    "completed",
+    "scored",
+    "unavailable",
+    "engine_error",
+    "truncated",
+    "action_limit",
+    "deadline",
+    "infrastructure",
+]
+
+
 class RewardResult(StrictModel):
     id: str
-    status: Literal[
-        "completed",
-        "scored",
-        "unavailable",
-        "engine_error",
-        "truncated",
-        "action_limit",
-        "deadline",
-        "infrastructure",
-    ]
+    status: RewardStatus
     value: float | None = None
     opening: float | None = None
     commands: int = 0
@@ -67,6 +70,8 @@ class RewardBatch:
     results: tuple[RewardResult, ...]
     rewards: dict[str, float | None]
     stopped: bool
+    stop_reason: str | None = None
+    timed_out: bool = False
 
 
 def _append(path: Path, row: dict[str, object]) -> None:
@@ -84,16 +89,7 @@ def settle(
     reason = game.get("termination_reason")
     opening = game.get("opening_value")
     value: float | None = None
-    status: Literal[
-        "completed",
-        "scored",
-        "unavailable",
-        "engine_error",
-        "truncated",
-        "action_limit",
-        "deadline",
-        "infrastructure",
-    ]
+    status: RewardStatus
     if game.get("infrastructure_failure"):
         status = "infrastructure"
     elif any(
@@ -211,11 +207,13 @@ def score_schedule(
     results: list[RewardResult] = []
     stopped = False
     stop_reason = None
+    timed_out = False
     for sample in samples:
         try:
             check()
         except Exception as error:
             stopped = True
+            timed_out = isinstance(error, TimeoutError)
             stop_reason = f"{type(error).__name__}: {error}"
             break
         journal = out / f"{len(results):05d}.journal.jsonl"
@@ -228,7 +226,10 @@ def score_schedule(
         except Exception as error:
             game = {
                 "failure": f"{type(error).__name__}: {error}",
-                "infrastructure_failure": True,
+                "infrastructure_failure": not isinstance(error, TimeoutError),
+                "termination_reason": "timeout"
+                if isinstance(error, TimeoutError)
+                else "crash",
             }
         atomic_json(out / f"{len(results):05d}.game.json", game)
         result = settle(sample, game, journal, ledger)
@@ -238,6 +239,8 @@ def score_schedule(
         )
         if result.status in ("infrastructure", "deadline") or ledger.state.stop_reason:
             stopped = True
+            timed_out = result.status == "deadline"
+            stop_reason = f"sample {sample.id}: {result.status}: {game.get('failure') or ledger.state.stop_reason}"
             break
     rewards = {}
     for bundle in dict.fromkeys(s.bundle for s in samples):
@@ -259,10 +262,11 @@ def score_schedule(
             "failed_or_unavailable": sum(r.value is None for r in results),
             "stopped": stopped,
             "stop_reason": stop_reason,
+            "timed_out": timed_out,
             "rewards": rewards,
         },
     )
-    return RewardBatch(tuple(results), rewards, stopped)
+    return RewardBatch(tuple(results), rewards, stopped, stop_reason, timed_out)
 
 
 class FrozenRewardRunner:
@@ -278,13 +282,12 @@ class FrozenRewardRunner:
         game_seconds: float = 60,
         max_commands: int = 4000,
     ) -> None:
-        self.path, self.backend, self.digest, self.deadline = (
-            path,
-            backend,
-            digest,
-            deadline,
-        )
-        self.game_seconds, self.max_commands = game_seconds, max_commands
+        self.path = path
+        self.backend = backend
+        self.digest = digest
+        self.deadline = deadline
+        self.game_seconds = game_seconds
+        self.max_commands = max_commands
 
     def __call__(self, sample: RewardSample, journal: Path) -> dict[str, Any]:
         if file_sha256(self.path) != self.digest:
@@ -359,7 +362,13 @@ class FrozenRewardRunner:
                 or not replay.receipts
                 or not all(row["passed"] for row in replay.receipts)
             ):
-                result["infrastructure_failure"] = True
+                replay_deadline = replay.error in (
+                    "allocation deadline exhausted before replay",
+                    "replay wall-clock budget exhausted",
+                )
+                result["infrastructure_failure"] = not replay_deadline
+                if replay_deadline:
+                    result["termination_reason"] = "timeout"
                 result["failure"] = replay.error or "completed-game replay diverged"
             result.pop("game_trace_sha256")
             result["game_trace_sha256"] = canonical_sha256(result)
