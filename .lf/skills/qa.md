@@ -91,6 +91,19 @@ publish, land or choose the next Graph step from here.
   (buttons are disabled while a Command is in flight, and `Pass Turn (F6)` in
   the panel is not an offer). Tapped lands show only in a `fullPage`
   screenshot, not in the board's text.
+- Academy policy/session recovery: build the static SPA before browser servers
+  (`ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build`). Then use
+  `npm --prefix academy/ui run test:e2e -- --config playwright.policy.config.ts`
+  for policy refusal, both Watch seats, original-Command reload and backend
+  restart; `--config playwright.search.config.ts` covers explicit Search retry
+  and saved evidence. Ports are scoped by `ACADEMY_POLICY_PORT` and
+  `ACADEMY_SEARCH_PORT`. The release config covers unified replay, session
+  continuation and laptop navigation. Keep generation/builds finished while
+  browser proofs run; rebuilding replaces chunks under a preview server.
+  Combat remains ordinary per-creature offers, including nonparticipation.
+  A swapped human is native seat 1; check player-target role labels against
+  actual native seats. Floating mana has its own disclosure outside player
+  status; status retains full policy identity and provenance.
 - Configured launch (`managym academy play|replay`, `managym.academy.launch.serve`):
   from a checkout first build the static SPA with
   `ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build`, then set
@@ -104,14 +117,14 @@ publish, land or choose the next Graph step from here.
   SIGINT is ignored and the server looks hung.
 - Academy table: `./scripts/play --port <unused> --frontend-port <unused>`; wait
   for the `ACADEMY_PLAY_READY` line (it names Python, native ABI and module
-  path), open the frontend URL, press New Game, play a land and Pass Turn.
+  path), open the frontend URL, press Start game, play a land and Pass Turn.
   Stop with SIGINT to the `scripts/play.py` Python process (`pgrep -f
   'scripts/play.py'`); SIGINT to the `./scripts/play` shell wrapper's PID
   leaves both servers running. To play specific cards, open "Import decklist
   files", check "Use imported decks for the next game", set both files
   (`setInputFiles` with counted lines such as `4 Heartbeat of Spring`), press
   "Check decklists", wait for `Ready —`, pick the `passive` opponent and press
-  New Game; imported decks take any number of copies.
+  Start game; imported decks take any number of copies.
   Under heavy host load the first frontend probe in `scripts/play.py` keeps a
   fixed 30-second deadline whatever `--ready-timeout` says, so the launch
   fails with `ready.timeout`. Then start the two servers as it does: from the
@@ -120,17 +133,23 @@ publish, land or choose the next Graph step from here.
   `ACADEMY_API_PORT=<api> npm run dev -- --host 127.0.0.1 --port <ui>
   --strictPort`; poll `/` and `/api/traces` until both return 200. Demos:
   open `/?demo=learn|precision|precision-mana`, wait a second after the
-  `connected` badge, then press New Game (an immediate click can leave "No
+  `connected` badge, then press Start game (an immediate click can leave "No
   game in progress").
   Without a connected browser, run a Node Playwright script from `academy/ui`
   (its `playwright` package and cached Chromium resolve there; delete the
   script afterwards). Click only `[data-testid=action-panel] button` offers:
-  other buttons open the deck picker or start a New Game. Triggered abilities
+  other buttons open the deck picker or start a game. Triggered abilities
   appear under "Stack · top first" as `Card — <trigger>: <effects> ·
   triggered ability · Seat N`; read that text while the stack is non-empty.
-  Detect the end by a visible "Play Again" button (the page holds hidden
-  "game over" text); after clicking it, wait for the button to hide before
-  reading offers again.
+  The session strip always shows **Rematch** (mid-game it asks to stop the
+  game), so detect the end by a second Rematch button, in the "Game Over"
+  dialog (`getByRole('button', {name: 'Rematch', exact: true}).count() >= 2`),
+  and bound play loops by time, since the bot can win first. Live bot work
+  ("Searching · Seat 2") shows in the table masthead. Opening `/games?session=`
+  needs the owner credential from the same browser profile; a fresh browser
+  context gets 403. Games-page Replay links are labelled `Replay game <id>`;
+  select them with `locator('a', {hasText: /^Replay$/})`. The game-over
+  dialog moves focus and scrolls the table, so screenshot it as it is.
   To play specific cards, open **Import decklist files**, check "Use imported
   decks for the next game" (the `#hero-deck-source`/`#villain-deck-source`
   textareas appear only then), fill both, press Check decklists, then New
@@ -231,6 +250,13 @@ publish, land or choose the next Graph step from here.
   (wheel paths plus `--find-links`
   and the CPU Torch index), since uv's one-step upgrade hides file-ownership
   problems that pip's install order exposes.
+- Release installed-Academy proof (`scripts/release/academy_smoke.py`, the
+  Release packages job): `./scripts/verify-installed-academy` builds the staged
+  sdist, its wheel, a no-build-tools venv, the smoke and the wheel Playwright
+  spec (about 10 minutes under load). It deletes its directory on exit; to rerun
+  an older smoke against the same wheel, copy the script into `.runs/` with the
+  `trap` line replaced by `echo $proof_dir`. Socket readers must skip
+  `work_status` and early accepted `command_outcome` receipts.
 - Installed Academy (`managym[academy]` wheel): build as above, then in a fresh
   `/tmp` directory `uv venv --python 3.13 --seed` (without `--seed` there is
   no `pip`) and
@@ -253,7 +279,7 @@ publish, land or choose the next Graph step from here.
   before launch. Read `/api/opponents` for its digest, then open
   `/?hero=ur_lessons&villain=gw_allies&opponent=<digest>` for the local recipe's
   bound decks (Elemental UR/GW are different lists and correctly refuse it).
-  Click New Game, then the legal Play Island offer and Pass Turn. Wait until
+  Click Start game, then the legal Play Island offer and Pass Turn. Wait until
   an action offer is enabled and automation has settled before recording
   `main[data-frame-revision]`; reload must restore that revision. A merely
   visible offer can still belong to an automated pending transition.
@@ -265,7 +291,7 @@ publish, land or choose the next Graph step from here.
   card ids to pick a card. Read `observation_for_player(p).agent_cards`
   (`zone`, `is_token`) at every decision. A token in the graveyard during a
   mana ability's color choice is correct: SBAs wait for priority. Academy's
-  game end is a "Game Over" dialog with "Play Again".
+  game end is a "Game Over" dialog with "Rematch".
   Battlefield permanents are `agent_permanents`, with their own ids (the ones
   activation offers focus) and an integer `registry_key`; join them to a name
   through `agent_cards` rows that have the same `registry_key`.

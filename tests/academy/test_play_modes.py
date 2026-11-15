@@ -21,6 +21,7 @@ from managym import experience_projection
 from managym.academy import server, trace as trace_store
 from managym.academy.server import app
 from managym.experience import UNVERSIONED_CONTENT_HASH
+from tests.academy.socket_messages import settled_message
 
 MAX_HERO_MOVES = 3000
 CURATED_COMBAT_FIXTURE = json.loads(
@@ -72,7 +73,7 @@ def _play_full_game(client: TestClient, config: dict, hero_seed: int) -> dict:
     rng = random.Random(hero_seed)
     with client.websocket_connect("/ws/play") as websocket:
         websocket.send_json({"type": "new_game", "config": config})
-        payload = websocket.receive_json()
+        payload = settled_message(websocket)
 
         for _ in range(MAX_HERO_MOVES):
             assert payload["type"] in {"observation", "game_over"}, payload
@@ -91,7 +92,7 @@ def _play_full_game(client: TestClient, config: dict, hero_seed: int) -> dict:
 
             choice = actions[rng.randrange(len(actions))]
             websocket.send_json({"type": "action", "index": choice["index"]})
-            payload = websocket.receive_json()
+            payload = settled_message(websocket)
 
         pytest.fail("Game did not reach a terminal state within the move budget")
 
@@ -204,7 +205,7 @@ def test_new_game_rejects_bad_villain_configs(isolated_traces):
         with client.websocket_connect("/ws/play") as websocket:
             for config, expected_fragment in cases:
                 websocket.send_json({"type": "new_game", "config": config})
-                payload = websocket.receive_json()
+                payload = settled_message(websocket)
                 assert payload["type"] == "error", (config, payload)
                 assert expected_fragment.lower() in payload["message"].lower()
 

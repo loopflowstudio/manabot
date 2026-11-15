@@ -1,6 +1,87 @@
 import { selectDeck } from './deck-selection';
 import { expect, test, type Page } from '@playwright/test';
 
+test('unauthorized session history explains access and offers to leave the session filter', async ({ page }) => {
+  await page.route('**/api/play-sessions/private-session', route => route.fulfill({ status: 403, json: { detail: 'Session not owned' } }));
+  await page.route('**/api/traces?**', route => route.fulfill({ json: [] }));
+  await page.goto('/games?session=private-session&q=Passive');
+  const alert = page.getByRole('alert');
+  await expect(alert).toContainText('browser and address (including port) where you played');
+  await expect(alert).toContainText('credentials were cleared');
+  await expect(alert.getByRole('button', { name: 'Try again' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Session results' })).toHaveCount(0);
+  await alert.getByRole('link', { name: 'Browse games outside this session' }).click();
+  await expect(page).toHaveURL(/\/games\?q=Passive$/);
+  await expect(alert).toHaveCount(0);
+});
+
+test('temporary session history failure retains retry and recovers authorized results', async ({ page }) => {
+  let unavailable = true;
+  await page.route('**/api/play-sessions/retry-session', route => route.fulfill(unavailable
+    ? { status: 503, json: { detail: 'Unavailable' } }
+    : { json: { results: [], totals: [{ origin: 'automated_validation', status: 'completed', count: 2 }], next_result_offset: null } }));
+  await page.route('**/api/traces?**', route => route.fulfill({ json: [] }));
+  await page.goto('/games?session=retry-session');
+  await expect(page.getByRole('alert')).toContainText('Session history could not be loaded.');
+  await expect(page.getByRole('alert')).not.toContainText('credentials');
+  await expect(page.getByRole('region', { name: 'Session results' })).toHaveCount(0);
+  unavailable = false;
+  await page.getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Session results' })).toContainText('2 completed');
+  await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test('session history pagination denial gives the same access guidance', async ({ page }) => {
+  await page.route('**/api/play-sessions/paged-session*', route => route.fulfill(new URL(route.request().url()).searchParams.has('result_offset')
+    ? { status: 403, json: { detail: 'Session not owned' } }
+    : { json: { results: [], totals: [{ origin: 'human', status: 'completed', count: 3 }], next_result_offset: 100 } }));
+  await page.route('**/api/traces?**', route => route.fulfill({ json: [] }));
+  await page.goto('/games?session=paged-session');
+  await page.getByRole('button', { name: 'More result configurations' }).click();
+  await expect(page.getByRole('alert')).toContainText('Copying the link does not copy access');
+  await expect(page.getByRole('region', { name: 'Session results' })).toContainText('human: 3 completed');
+  await expect(page.getByRole('alert').getByRole('button', { name: 'Try again' })).toHaveCount(0);
+});
+
+test('session result pagination ignores responses from a prior history view', async ({ page }) => {
+  let releasePage!: () => void;
+  let requestedPage!: () => void;
+  const released = new Promise<void>(resolve => { releasePage = resolve; });
+  const requested = new Promise<void>(resolve => { requestedPage = resolve; });
+  const result = (name: string) => ({
+    opponent_name: name, opponent_id: 'control:passive', version: null,
+    origin: 'automated_validation', human_seat: 0, human_deck: 'ur_lessons',
+    opponent_deck: 'gw_allies', decklists: 'open', completed: 1, wins: 1,
+    draws: 0, losses: 0, active: 0, stopped: 0, interrupted: 0,
+    wall_elapsed_seconds: null, elapsed_samples: 0,
+  });
+  await page.route('**/api/traces?**', route => route.fulfill({ json: [] }));
+  await page.route('**/api/play-sessions/session-a*', async route => {
+    const more = new URL(route.request().url()).searchParams.has('result_offset');
+    if (more) { requestedPage(); await released; }
+    await route.fulfill({ json: {
+      results: [result(more ? 'Stale opponent' : 'Current opponent')],
+      totals: [], next_result_offset: more ? null : 100,
+    } });
+  });
+  await page.goto('/games?session=session-a');
+  await expect(page.getByRole('region', { name: 'Session results' })).toContainText('Current opponent');
+  await page.getByRole('button', { name: 'More result configurations' }).click();
+  await requested;
+  await page.getByRole('link', { name: 'Remove Session filter' }).click();
+  await expect(page.getByRole('region', { name: 'Session results' })).toHaveCount(0);
+  await page.goBack();
+  const results = page.getByRole('region', { name: 'Session results' });
+  await expect(results).toContainText('Current opponent');
+  const response = page.waitForResponse('**/api/play-sessions/session-a?result_offset=100');
+  releasePage();
+  await (await response).finished();
+  // Let the browser apply the delivered fetch before inspecting the current view.
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  await expect(results).not.toContainText('Stale opponent');
+  await expect(page.getByRole('button', { name: 'More result configurations' })).toBeEnabled();
+});
+
 test('shared history identifies both players and preserves private prefixes and notes', async ({ browser }) => {
   test.setTimeout(180_000);
   const contexts = await Promise.all([browser.newContext(), browser.newContext(), browser.newContext()]);
@@ -34,7 +115,7 @@ test('shared history identifies both players and preserves private prefixes and 
     await page.getByTestId('opponent-select').selectOption('passive');
     await selectDeck(page, 'hero', 'gw_allies');
     await selectDeck(page, 'villain', 'ur_lessons');
-    await page.getByRole('button', { name: 'New Game', exact: true }).click();
+    await page.getByRole('button', { name: 'Start game', exact: true }).click();
     await expect(page.getByTestId('game-board')).toBeVisible();
   }
   try {
@@ -44,6 +125,7 @@ test('shared history identifies both players and preserves private prefixes and 
     for (let step = 0; step < 600 && !(await over.isVisible()); step++) {
       await expect(actions.first().or(over)).toBeVisible();
       if (await over.isVisible()) break;
+      await expect(actions.first()).toBeEnabled();
       const before = Number(await alice.locator('main').getAttribute('data-update-seq'));
       const labels = await actions.allTextContents();
       let pick = labels.findIndex((label) => /^Play |^Cast |^Attack with/.test(label));
@@ -75,10 +157,10 @@ test('shared history identifies both players and preserves private prefixes and 
     await aliceRow.getByRole('link', { name: /^Replay game/ }).click();
     await expect(visitor.getByTestId('game-board')).toBeVisible();
     // Trivial opening windows are skipped natively; the first frame is a real decision.
-    await expect(visitor.getByText('Decision before · Chosen action · Consequences after', { exact: true })).toBeVisible();
+    await expect(visitor.getByTestId('replay-perspective')).toContainText('Acting view · seat 1');
     await expect(visitor.getByRole('textbox', { name: /How did this game feel/ })).toHaveCount(0);
     await visitor.getByTestId('study-decision').first().click();
-    await expect(visitor.getByText("Shared replay from Player 1's perspective.", { exact: false })).toBeVisible();
+    await expect(visitor.getByTestId('replay-perspective')).toContainText('Acting view · seat 1');
     await expect(visitor.getByTestId('game-board')).toBeVisible();
     await visitor.getByRole('link', { name: 'Back to games' }).focus();
     await visitor.keyboard.press('Enter');
