@@ -145,8 +145,8 @@ checkpoints or experiment evidence.
   `manabot.backends.*`. Only composition roots choose one: `experiments/`,
   `scripts/`, recipe entry points, the CLI and child-process entry points, `manabot/sim/table_bots.py` and the
   backends' tests, by import or `manabot.backends.resolve("torch")`.
-  `tests/test_package_boundaries.py` lists the remaining exceptions by name;
-  that list only shrinks ([who chooses a backend](manabot/backends/README.md#who-chooses-a-backend)).
+  `tests/test_package_boundaries.py` enforces roots and named entry-point scopes
+  in mixed CLI/library modules ([who chooses a backend](manabot/backends/README.md#who-chooses-a-backend)).
 - Generic backend learning helpers (`rl`, `learner`, `arrays`) keep role-specific
   types under `TYPE_CHECKING`; importing their annotations at runtime must not
   pull in checkpoint, player, observation or training-configuration modules.

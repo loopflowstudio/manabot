@@ -509,9 +509,8 @@ def test_backend_resolver_selects_configured_backends_and_names_missing_extras(
         resolve("mlx")
 
 
-# CLI and child-process entry points choose the policy before passing it to
-# library code. Remaining coupled training, belief and verification modules
-# are explicit migration debt; removing an import must remove its entry.
+# CLI and child-process entry points choose the backend before passing its
+# capabilities to library code. Mixed modules permit only named entry points.
 _BACKEND_ROOTS = frozenset(
     (
         "manabot/sim/table_bots.py",
@@ -529,6 +528,7 @@ _BACKEND_ROOTS = frozenset(
 _BACKEND_ENTRYPOINTS = {
     "manabot/belief/demo.py": {"main"},
     "manabot/recipes/local.py": {"run_local"},
+    "manabot/recipes/baseline.py": {"run_baseline"},
     "manabot/experiment/runner.py": {"main"},
     "manabot/experiment/job.py": {"run_worker"},
     "manabot/experiment/study.py": {"main"},

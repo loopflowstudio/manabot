@@ -26,6 +26,7 @@ from typing import Callable, Sequence
 import numpy as np
 from numpy.typing import NDArray
 
+from manabot.belief.checkpoint import load_belief_sampler
 from manabot.belief.likelihood import FrozenPolicyLikelihood, RulesProviderGap
 from manabot.belief.player import ExactRangePlayer, RangeSampling
 from manabot.belief.protocol import SamplerBackend
@@ -131,8 +132,9 @@ class LocalUpdateTeacher:
                 raise ValueError(
                     "sampler generating policy or world differs from rollout policy"
                 )
-            model = backend.belief.load_belief_sampler(
+            model = load_belief_sampler(
                 sampler.path,
+                codec=backend.belief,
                 expected_checkpoint_identity=sampler.sha256,
                 expected_dataset_identity=sampler.dataset_identity,
                 expected_schema_identity=sampler.schema_identity,

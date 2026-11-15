@@ -11,7 +11,6 @@ slots. This domain does not represent library order or other hidden state.
 from __future__ import annotations
 
 import io
-from pathlib import Path
 from typing import Any, Callable, Sequence, cast
 
 import torch
@@ -288,14 +287,6 @@ def restore_sampler(
     model.load_state_dict(state, strict=True)
     model.eval()
     return model
-
-
-def load_belief_sampler(path: Path, **bindings: str) -> AutoregressiveBeliefSampler:
-    import sys
-
-    from manabot.belief.checkpoint import load_belief_sampler as admit
-
-    return admit(path, codec=sys.modules[__name__], **bindings)
 
 
 def freeze_sampler(model: object) -> None:

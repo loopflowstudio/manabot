@@ -767,7 +767,7 @@ class SeatRoutedCollector:
     # -- opponent routing -----------------------------------------------------
 
     def _opponent_actions(
-        self, agent: BackendPolicy, rows: np.ndarray, inference: CollectionScope
+        self, rows: np.ndarray, inference: CollectionScope
     ) -> np.ndarray:
         if self.opponent_mode == "self":
             return inference.opponent_actions(self._slice_obs_rows(rows))
@@ -817,7 +817,6 @@ class SeatRoutedCollector:
         # Both seats in self-play use this same unchanged behavior-policy scope.
         with self.profiler.track("Collection"), self.numerics.scope(agent) as inference:
             batch = self._collect(
-                agent,
                 num_steps,
                 inference,
                 deadline_monotonic=deadline_monotonic,
@@ -845,7 +844,6 @@ class SeatRoutedCollector:
             self.numerics.scope(self.opponent_agent) as opponent_inference,
         ):
             batches = self._collect(
-                agent,
                 num_steps,
                 inference,
                 deadline_monotonic=deadline_monotonic,
@@ -857,7 +855,6 @@ class SeatRoutedCollector:
 
     def _collect(
         self,
-        agent: BackendPolicy,
         num_steps: int,
         inference: CollectionScope,
         *,
@@ -953,7 +950,7 @@ class SeatRoutedCollector:
                 opp_rows = np.array([], dtype=np.int64)
             if len(learner_rows):
                 actions[learner_rows] = self._sample_learning_rows(
-                    agent, learner_rows, acting, inference
+                    learner_rows, acting, inference
                 )
                 self._count_action_types(
                     self.stats.learner_action_types, learner_rows, actions[learner_rows]
@@ -962,15 +959,12 @@ class SeatRoutedCollector:
             if len(opp_rows):
                 with self.profiler.track("Opponent policy"):
                     if self.opponent_mode == "learning":
-                        assert (
-                            self.opponent_agent is not None
-                            and opponent_inference is not None
-                        )
+                        assert opponent_inference is not None
                         opp_acts = self._sample_learning_rows(
-                            self.opponent_agent, opp_rows, acting, opponent_inference
+                            opp_rows, acting, opponent_inference
                         )
                     else:
-                        opp_acts = self._opponent_actions(agent, opp_rows, inference)
+                        opp_acts = self._opponent_actions(opp_rows, inference)
                 actions[opp_rows] = opp_acts
                 if not both:
                     self.stats.opponent_decisions += len(opp_rows)
@@ -1393,7 +1387,6 @@ class SeatRoutedCollector:
 
     def _sample_learning_rows(
         self,
-        agent: BackendPolicy,
         rows: np.ndarray,
         acting: np.ndarray,
         inference: CollectionScope,

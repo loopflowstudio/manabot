@@ -609,9 +609,7 @@ def run_arm(
         health = NumericalHealth(
             optimizer_steps=0, skipped_steps=0, rejected_steps=0, sampled_steps=1
         )
-        observer = OptimizerHealth(
-            learner.agent, learner.optimizer, health, 2, backend=torch_backend
-        )
+        observer = OptimizerHealth(health, 2, backend=torch_backend)
         steps: list[dict[str, float]] = []
         for epoch in range(probe.epochs):
             for index in _order(arm, epoch, len(minibatches)):

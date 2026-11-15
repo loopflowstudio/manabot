@@ -2,21 +2,11 @@
 
 import hashlib
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any
 
+from manabot.belief.protocol import SamplerCodec
 from manabot.belief.sampling_types import SamplerSchema
 from manabot.sim.search.sampling import LearnedDistribution
-
-
-class SamplerCodec(Protocol):
-    def decode_sampler(self, data: bytes) -> Any: ...
-    def restore_sampler(
-        self,
-        schema: SamplerSchema,
-        hidden_size: int,
-        history_dropout: float,
-        state: Any,
-    ) -> LearnedDistribution: ...
 
 
 def load_belief_sampler(

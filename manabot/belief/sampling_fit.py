@@ -93,11 +93,13 @@ def calibration_error(bins: Sequence[CalibrationBin]) -> float:
     return sum(abs(bin.probability_sum - bin.truth_sum) for bin in bins) / total
 
 
-class BeliefTrainer(Protocol):
+class SamplerEncoder(Protocol):
     def encode_sampler(
         self, result: SamplerFitResult, dataset: SamplerDataset
     ) -> bytes: ...
 
+
+class BeliefTrainer(SamplerEncoder, Protocol):
     def evaluate_physical_sampler(
         self, examples: Sequence[SamplerExample], *, samples: int = 32, seed: int = 0
     ) -> SamplerArmMetrics: ...
@@ -123,12 +125,6 @@ class BeliefTrainer(Protocol):
         seed: int = 0,
         check: Callable[[], None] | None = None,
     ) -> SamplerFitResult: ...
-
-
-class SamplerEncoder(Protocol):
-    def encode_sampler(
-        self, result: SamplerFitResult, dataset: SamplerDataset
-    ) -> bytes: ...
 
 
 def evaluate_physical_sampler(

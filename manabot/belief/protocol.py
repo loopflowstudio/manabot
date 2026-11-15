@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from contextlib import AbstractContextManager
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
 from manabot.policy.protocol import Backend
@@ -13,7 +12,7 @@ if TYPE_CHECKING:
     from manabot.sim.search.sampling import HandDistribution, LearnedDistribution
 
 
-class BeliefSampling(Protocol):
+class SamplerCodec(Protocol):
     def decode_sampler(self, data: bytes) -> Any: ...
     def restore_sampler(
         self,
@@ -22,10 +21,10 @@ class BeliefSampling(Protocol):
         history_dropout: float,
         state: Any,
     ) -> LearnedDistribution: ...
+
+
+class BeliefSampling(SamplerCodec, Protocol):
     def PhysicalDistribution(self) -> HandDistribution: ...
-    def load_belief_sampler(
-        self, path: Path, **bindings: str
-    ) -> LearnedDistribution: ...
     def freeze_sampler(self, model: LearnedDistribution) -> None: ...
 
 

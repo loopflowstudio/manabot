@@ -240,6 +240,8 @@ def run_baseline(
     padded_shapes: bool = False,
 ) -> ExperimentRun:
     """Train, export and evaluate; retain every failure without automatic retry."""
+    from manabot.backends import resolve
+
     plan = baseline(
         steps,
         seconds=seconds,
@@ -247,4 +249,4 @@ def run_baseline(
         device=device,
         padded_shapes=padded_shapes,
     )
-    return plan.run(seed=seed, out=out)
+    return plan.run(seed=seed, out=out, backend=resolve("torch"))
