@@ -147,7 +147,9 @@ publish, land or choose the next Graph step from here.
   and bound play loops by time, since the bot can win first. Live bot work
   ("Searching · Seat 2") shows in the table masthead. Opening `/games?session=`
   needs the owner credential from the same browser profile; a fresh browser
-  context gets 403.
+  context gets 403. Games-page Replay links are labelled `Replay game <id>`;
+  select them with `locator('a', {hasText: /^Replay$/})`. The game-over
+  dialog moves focus and scrolls the table, so screenshot it as it is.
   To play specific cards, open **Import decklist files**, check "Use imported
   decks for the next game" (the `#hero-deck-source`/`#villain-deck-source`
   textareas appear only then), fill both, press Check decklists, then New
