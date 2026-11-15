@@ -1676,7 +1676,7 @@ impl Game {
             .fixed_mana_actions(player, None)
             .contains(&Action::TapForMana { player, permanent })
         {
-            return Err(AgentError("illegal fixed mana activation".into()));
+            return Err(AgentError::Rules("illegal fixed mana activation".into()));
         }
         let caller = self.state.suspended_decision_mut().take();
         let (frame, resume) = match caller {

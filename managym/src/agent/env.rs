@@ -734,11 +734,11 @@ impl Env {
         action_index: usize,
     ) -> Result<crate::flow::mana::PaymentPreview, AgentError> {
         if viewer >= 2 {
-            return Err(AgentError("viewer out of bounds".into()));
+            return Err(AgentError::Rules("viewer out of bounds".into()));
         }
         self.game
             .as_ref()
-            .ok_or_else(|| AgentError("no active game".into()))?
+            .ok_or_else(|| AgentError::Rules("no active game".into()))?
             .payment_preview(PlayerId(viewer), revision, fingerprint, action_index)
     }
 

@@ -210,22 +210,22 @@ impl Game {
         action_index: usize,
     ) -> Result<PaymentPreview, AgentError> {
         let _scan = self.board_scan();
-        let frame = self
-            .semantic_decision_frame()
-            .map_err(|e| AgentError(e.to_string()))?;
+        let frame = self.semantic_decision_frame().map_err(AgentError::from)?;
         if frame.actor as usize != viewer.0
             || frame.revision != revision
             || frame.fingerprint != fingerprint
         {
-            return Err(AgentError("stale or unauthorized payment preview".into()));
+            return Err(AgentError::Rules(
+                "stale or unauthorized payment preview".into(),
+            ));
         }
         let space = self
             .action_space()
-            .ok_or_else(|| AgentError("no decision".into()))?;
+            .ok_or_else(|| AgentError::Rules("no decision".into()))?;
         let action = space
             .actions
             .get(action_index)
-            .ok_or_else(|| AgentError("unknown payment action".into()))?;
+            .ok_or_else(|| AgentError::Rules("unknown payment action".into()))?;
         let (scope, continuation) = self.preview_boundary(action);
         let player = action.player();
         let mut reservation = None;
@@ -520,7 +520,8 @@ mod tests {
             ],
             165,
             true,
-        );
+        )
+        .unwrap();
         game.scenario_force_card_in_hand(PlayerId(0), "Ancestral Recall")
             .unwrap();
         for _ in 0..2 {
@@ -792,7 +793,8 @@ mod tests {
             ],
             165,
             true,
-        );
+        )
+        .unwrap();
         let source = game
             .scenario_force_battlefield(PlayerId(0), "Tarnished Citadel", true)
             .unwrap();
