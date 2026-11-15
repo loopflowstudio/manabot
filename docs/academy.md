@@ -673,13 +673,9 @@ fixed while later bot actions advance the table.
 
 **Who chooses.** Read the chooser and requested input beside the current prompt.
 The player choosing can differ from the player whose turn it is. Target and
-cost prompts identify their source and required input. Focus or inspect a
-visible card to discover its current cast or attack restriction; payment
-guidance explains when the complete cost cannot be paid. A reason describes
-the current decision and may change after you act. Finish a pending target or
-cost choice before trying another spell. Inspection and **Show all** keep the
-complete legal choices accessible. Older recordings without explanations say
-they were not recorded.
+cost prompts identify their source and required input. Finish a pending target
+or cost choice before trying another spell. Inspection and **Show all** keep
+the complete legal choices accessible.
 
 **What is taking time.** Live status distinguishes loading a bot, choosing its
 action, searching and advancing the live game. When a wait lasts more than a
