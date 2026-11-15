@@ -480,6 +480,13 @@ publish, land or choose the next Graph step from here.
   Check the hand ends above history. Recorded terminal results have no next-game
   action and must leave keyboard navigation available; the live Play Again
   dialog retains its focus behavior.
+- Repeated sessions and Watch setup: the Play session strip (`region` "Play session")
+  offers Rematch, Swap sides, Edit next game and Change opponent; editors end in
+  Save next setup / Start next game / Cancel, and Cancel must leave the next
+  draft unchanged. Session results load after their region appears; wait for a
+  row before reading counts. The standalone bot-matchup setup is
+  `/replay?watch=1` (`region` "Game setup for watching"); plain `/replay` shows
+  none. Its "Continue to play" after switching a seat to You lands on `/?setup=1`.
 - Play/Inspect QA: fresh storage starts in Inspect. In Play, activate the exact
   hand `[data-object-id]` by pointer or Enter, then commit its labeled
   `[data-offer-id]`; selection, Inspect card, mode switches and Escape send no

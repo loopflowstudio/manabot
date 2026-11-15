@@ -1,9 +1,9 @@
 import { rememberCurrentGame } from './current-game.svelte';
-import { gameStore, type GameStore } from './game.svelte';
+import type { GameStore } from './game.svelte';
 import { recordFetch } from './records';
 
 /** Map the retained human/opponent setup roles to Watch's two native seats. */
-export async function startConfiguredWatch(setup: GameStore = gameStore): Promise<string> {
+export async function startConfiguredWatch(setup: GameStore): Promise<string> {
   if (setup.seedError) throw new Error(setup.seedError);
   const humanFirst = setup.humanSeat === 0;
   const rolePlayers = [setup.watchPlayerChoice, setup.opponentChoice];

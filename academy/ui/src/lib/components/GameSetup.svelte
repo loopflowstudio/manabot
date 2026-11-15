@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { gameStore, type GameStore } from '$lib/game.svelte';
+  import type { GameStore } from '$lib/game.svelte';
   import { DECK_CHOICES, type DeckChoice } from '$lib/decks';
   import type { OpponentCatalog, TrainedOpponent } from '$lib/types';
   import PlayerPicker from './PlayerPicker.svelte';
@@ -7,7 +7,15 @@
   import DeckImport from './DeckImport.svelte';
   import DecklistsSelector from './DecklistsSelector.svelte';
   import { onMount } from 'svelte';
-  let {setup = gameStore, onStart, disabled = false, opponentOnly = false, humanActionLabel = 'New Game', watchActionLabel = 'Start watching', showStart = true}: {setup?:GameStore; showStart?:boolean; watchActionLabel?:string; humanActionLabel?:string; onStart: () => void; disabled?:boolean; opponentOnly?:boolean} = $props();
+  interface Props {
+    setup: GameStore;
+    onStart: () => void;
+    disabled?: boolean;
+    opponentOnly?: boolean;
+    humanActionLabel?: string;
+    showStart?: boolean;
+  }
+  let { setup, onStart, disabled = false, opponentOnly = false, humanActionLabel = 'New Game', showStart = true }: Props = $props();
   let trained = $state<TrainedOpponent[]>([]);
   let catalogError = $state<string | null>(null);
   let extension = $state<string | null | undefined>(undefined);
@@ -80,6 +88,6 @@
     {#key setup.humanSeat}<DeckImport {setup} heroLabel={setup.watchMode ? `Seat ${setup.humanSeat + 1} deck` : 'Your deck'} villainLabel={setup.watchMode ? `Seat ${2 - setup.humanSeat} deck` : 'Opponent deck'} />{/key}
   {/if}
   {#if showStart}
-    <button class="btn btn-primary" {disabled} onclick={onStart}>{setup.newGamePending ? 'Preparing game…' : setup.watchMode ? watchActionLabel : humanActionLabel}</button>
+    <button class="btn btn-primary" {disabled} onclick={onStart}>{setup.newGamePending ? 'Preparing game…' : setup.watchMode ? 'Start watching' : humanActionLabel}</button>
   {/if}
 </section>

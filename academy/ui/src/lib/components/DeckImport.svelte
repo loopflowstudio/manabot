@@ -1,8 +1,8 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { gameStore, type GameStore } from '$lib/game.svelte';
+  import type { GameStore } from '$lib/game.svelte';
 
-  let {setup = gameStore, heroLabel = 'Your deck', villainLabel = 'Opponent deck'}: {setup?:GameStore;heroLabel?:string;villainLabel?:string} = $props();
+  let {setup, heroLabel = 'Your deck', villainLabel = 'Opponent deck'}: {setup:GameStore;heroLabel?:string;villainLabel?:string} = $props();
   const seats = $derived([
     { key: 'hero', label: heroLabel },
     { key: 'villain', label: villainLabel },

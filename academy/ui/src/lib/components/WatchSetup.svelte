@@ -33,13 +33,13 @@
     if (!gameStore.watchMode) { await goto('/?setup=1'); return; }
     busy = true; error = '';
     try {
-      onOpen(await startConfiguredWatch());
+      onOpen(await startConfiguredWatch(gameStore));
     } catch (reason) { fail(reason); }
     finally { busy = false; }
   }
 </script>
 <section aria-label="Game setup for watching">
-  {#if setupReady}<GameSetup onStart={() => void start()} disabled={busy || disabled} humanActionLabel="Continue to play" />{/if}
+  {#if setupReady}<GameSetup setup={gameStore} onStart={() => void start()} disabled={busy || disabled} humanActionLabel="Continue to play" />{/if}
   <GameFileImport {onOpen} disabled={busy || disabled} />
   {#if error}<p role="alert">{error}</p>{/if}
 </section>
