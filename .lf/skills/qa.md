@@ -306,9 +306,17 @@ publish, land or choose the next Graph step from here.
   manabot -o .runs/<dir>` builds in seconds; install it into a fresh `/tmp`
   venv with `uv pip install <wheel> --index-url https://pypi.org/simple
   --extra-index-url https://download.pytorch.org/whl/cpu --index-strategy
-  unsafe-best-match` (the matching `managym` comes from PyPI), then run user
-  scripts from `/tmp` with `<venv>/bin/python -I`. Outside a checkout,
-  `save_checkpoint` prints a harmless `fatal: not a git repository`.
+  unsafe-best-match`. If the checkout uses engine APIs newer than the same-version
+  PyPI wheel, supply the current engine wheel too: a version match alone does
+  not establish source compatibility. A wheel from `maturin develop` may contain
+  a `.pth` pointing back to the checkout; it is not an installed-wheel proof.
+  Use a release wheel from the build-and-verify procedure, then confirm both
+  packages' `__file__` paths are inside the fresh venv. Run user scripts from
+  `/tmp` with `uv run --no-project --python <venv>/bin/python python -I`.
+  Training CLI QA requires the staged manabot wheel from
+  `scripts/release/prepare.py`: its `.manabot-source.json` supplies verified
+  source provenance outside Git. A direct workspace wheel lacks that receipt
+  and training fails at `source_commit`; do not patch the installed files.
 - Training guide (`docs/training-loop.md`): run its example command verbatim
   (about 20 s on CPU), save and reload the policy as it says, call both
   maintained rules directly on a collected batch, and compare the tables'
@@ -334,6 +342,12 @@ publish, land or choose the next Graph step from here.
   check, then fails with "no committed recovery boundary". Resume with the same
   regime file, `--seed` and a new `--out`. `wall_seconds` counts the parent's
   time. macOS has no `timeout`; use the tool's own timeout.
+  For a public safe-pause proof, pass an existing `pause_path` to
+  `execute_regime(..., backend=resolve("torch"))`; catch `TrainingPaused` and
+  read the retained run from the store. It is recorded as `interrupted` with
+  a committed snapshot. Continue by ID through the CLI, then compare the
+  final `load_update(..., backend=resolve("torch").state)` payload against
+  uninterrupted execution, including Adam, EMA and collector sampling RNG.
 - TLA Limited decks (the MTG-282 pool corpus) overflow default observation
   capacities within a few dozen games; copy the `observation` block and the
   `game_errors` policy (`recover_capacity: true`) of
@@ -359,7 +373,15 @@ publish, land or choose the next Graph step from here.
 - Ctrl-C a run: start it with `subprocess.Popen(..., start_new_session=True,
   preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))` and
   `os.killpg(pid, SIGINT)`. A job started with `&` from a non-interactive shell
-  ignores SIGINT, so `pkill -INT` appears to hang.
+  ignores SIGINT, so `pkill -INT` appears to hang. When the child is `uv run`,
+  `killpg` delivers SIGINT twice (uv forwards it) and the server prints an
+  ignored `KeyboardInterrupt` at exit; signal only the Python child for a
+  clean shutdown.
+- Scripted Play against a searched opponent: one human Command runs the whole
+  opponent turn, so a 2×2 Mirror reply took 49 s (ten searched decisions) and
+  the waiting badge reached 170 s+. Do not treat a long badge as a hang; set
+  stall detectors above a full opponent turn, and confirm with the trace's
+  `events[].bot_decision.mirror.seconds` in the attempts table.
 - Experiment reports and figures: arrive as a new reader with
   `MANABOT_DATA_CACHE` set to an empty directory, then `doppler run --project
   manabot --config prd -- uv run --extra artifacts python -m manabot.data fetch
@@ -373,6 +395,27 @@ publish, land or choose the next Graph step from here.
   experiments/l4_step_profile.py job --smoke`. For `live` it took about 6
   minutes and 2.2 GB and runs every stage as a real child process.
 
+- Mirror search (search-capable policy in Play/Watch): `uv run manabot train
+  --recipe local --device cpu --out .runs/<x>` gives a compatible
+  `self-play-raw.safetensors` in about 90 s; save `{"provider": "manabot",
+  "artifact": "<abs path>", "config": {}}` as `<alias>.json` and launch `uv run managym
+  academy --policy <alias>.json play --opponent <alias> --mirror
+  '{"worlds":1,"depth":1}' --seed 7` (or `watch --player <alias> --player
+  random --mirror '[{...},null]'`, then press Start watching). Seed 7 puts the
+  bot on the play. The initial budget is 1×1 with a 30 s ceiling. With the
+  provider's cached card catalog, full games at 1×1 (Watch, both seats) and
+  4×2 (Play) completed with median decisions near 0.5 s and 1 s at load ~150;
+  16×20 still exceeded 30 s. If one evaluation takes seconds, profile it:
+  re-encoding the card catalog per forward (`_encode_programs`, `torch.gru`)
+  means the session is not using `inference_scope()`. To time decisions
+  without a browser, drive `create_watch`/`step_watch` in-process as
+  `tests/academy/test_mirror_baseline.py` does. Retained evidence is in
+  the attempts table's `trace_json`
+  (`events[].bot_decision.mirror`). To probe reconnect, click an offer that hands
+  priority to the bot and reload about 1.5 s later while the table shows
+  `Mirror search W×D· N s`; the game must stay `active` and resume at the
+  committed state. A reload before the first response has no resume
+  credentials and launches a new game by design.
 - Live Academy QA without fixtures: build first, then start the ordinary
   `managym.academy.server:app` with `ACADEMY_TRACES_DIR` pointing into an ignored
   `.runs/` directory and `ACADEMY_PLAY_RECORD_ORIGIN=automated_validation`.

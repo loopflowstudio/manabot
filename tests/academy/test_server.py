@@ -7,7 +7,9 @@ from datetime import timedelta
 import json
 from pathlib import Path
 import sqlite3
+import threading
 from types import SimpleNamespace
+from typing import Any
 
 from fastapi.testclient import TestClient
 from jsonschema import Draft202012Validator
@@ -434,6 +436,69 @@ def test_disconnect_after_acceptance_recovers_without_replaying_command(
 
         assert record.game.revision == accepted["update"]["frame"]["revision"]
         assert len(record.game.trace.events) == trace_length
+
+
+def test_reload_during_slow_command_resumes_after_commit(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
+    """A reload while a bot reply is computing keeps the game and its result.
+
+    The old socket's transport fails when its response is sent, as uvicorn's
+    does after the browser leaves; the new socket's resume must wait for the
+    commit rather than read a half-applied step.
+    """
+    monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
+    server.SESSION_REGISTRY.clear()
+    entered, release = threading.Event(), threading.Event()
+    dispatch = server._dispatch_table_request
+
+    def slow_dispatch(record: Any, participant: Any, request: Any) -> Any:
+        if request.type == "command":
+            old_socket = participant.websocket
+
+            async def lost_transport(message: Any) -> None:
+                raise OSError("client left")
+
+            old_socket._send = lost_transport
+            entered.set()
+            assert release.wait(10)
+        return dispatch(record, participant, request)
+
+    monkeypatch.setattr(server, "_dispatch_table_request", slow_dispatch)
+    config = {
+        "hero_deck": {"Mountain": 12, "Lightning Bolt": 12},
+        "villain_deck": {"Island": 20},
+        "villain_type": "passive",
+        "seed": 3,
+        "auto_pass": False,
+    }
+    with TestClient(app) as client:
+        with client.websocket_connect("/ws/play") as websocket:
+            websocket.send_json({"type": "new_game", "config": config})
+            initial = websocket.receive_json()
+            frame = initial["recovery"]["frame"]
+            offer = _offer(frame, action_type="PRIORITY_PASS_PRIORITY")
+            websocket.send_json(
+                {"type": "command", "command": _command(frame, offer, "slow")}
+            )
+            assert entered.wait(10)
+            with client.websocket_connect("/ws/play") as resumed:
+                resumed.send_json(
+                    {
+                        "type": "resume",
+                        "session_id": initial["session_id"],
+                        "resume_token": initial["resume_token"],
+                    }
+                )
+                threading.Timer(0.3, release.set).start()
+                message = resumed.receive_json()
+                while message.get("recovery", {}).get("reason") != "reconnect":
+                    message = resumed.receive_json()
+                record = server.SESSION_REGISTRY[initial["session_id"]]
+                assert message["recovery"]["frame"]["revision"] == record.game.revision
+                assert record.game.revision > frame["revision"]
+            websocket.close()
+        assert initial["session_id"] in server.SESSION_REGISTRY
 
 
 def test_websocket_rejects_invalid_presentation_cursor(monkeypatch, tmp_path):

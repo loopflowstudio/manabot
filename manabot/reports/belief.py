@@ -29,6 +29,7 @@ from manabot.belief.sampling_fit import (
     evaluate_sampler,
 )
 from manabot.infra.torch import deterministic_cpu
+from manabot.training.state.backend import TrainingBackend
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,6 +123,7 @@ def _pool_games(
 def report_saved_sampler(
     dataset_path: Path,
     *,
+    backend: TrainingBackend,
     checkpoint: Path | None = None,
     checkpoint_identity: str | None = None,
     training_dataset_path: Path | None = None,
@@ -174,6 +176,7 @@ def report_saved_sampler(
                 expected_schema_identity=training.schema.identity,
                 expected_world_identity=training.world_identity,
                 expected_checkpoint_identity=checkpoint_identity,
+                codec=backend.belief,
             )
         # The admitted bytes own the fit seed when historical exports retained it.
         # Missing metadata stays unavailable; a sampling seed cannot replace it.
@@ -202,12 +205,19 @@ def report_saved_sampler(
                         raise ValueError("duplicate saved observation within a game")
                     if model is None:
                         prior = evaluate_physical_sampler(
-                            game.examples, samples=count, seed=game_seed
+                            game.examples,
+                            samples=count,
+                            seed=game_seed,
+                            backend=backend.belief_fit,
                         )
                         learned = None
                     else:
                         result = evaluate_sampler(
-                            model, game.examples, samples=count, seed=game_seed
+                            model,
+                            game.examples,
+                            samples=count,
+                            seed=game_seed,
+                            backend=backend.belief_fit,
                         )
                         prior, learned = result.physical_baseline, result.learned
                     evidence.append(
@@ -257,7 +267,8 @@ def report_saved_sampler(
                 for name in (
                     "manabot/reports/belief.py",
                     "manabot/belief/sampling_fit.py",
-                    "manabot/belief/sampling.py",
+                    "manabot/backends/torch/belief_fit.py",
+                    "manabot/backends/torch/belief.py",
                     "manabot/belief/sampling_data.py",
                     "manabot/belief/population.py",
                 )
@@ -307,8 +318,11 @@ def main(argv: Sequence[str] | None = None) -> None:
     args = parser.parse_args(argv)
     if args.out.exists():
         raise FileExistsError(args.out)
+    from manabot.backends import resolve
+
     report = report_saved_sampler(
         args.dataset,
+        backend=resolve("torch"),
         checkpoint=args.checkpoint,
         checkpoint_identity=args.checkpoint_sha256,
         training_dataset_path=args.training_dataset,

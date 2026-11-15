@@ -637,6 +637,7 @@ export type VillainType = 'passive' | 'random' | 'search' | 'policy';
 // Provider-authored presentation from GET /api/opponents.
 export interface TrainedOpponent {
   supports_search?: boolean;
+  search_reason?: string | null;
   policy?: PolicyRuntimeIdentity;
   sha256: string;
   name: string;
@@ -674,6 +675,7 @@ export interface TraceConfig {
   opponent?: { name: string; sha256: string; producer?: string } | null;
   opponent_checkpoint?: CheckpointProvenance | null;
   watch_players?: string[] | null;
+  mirror?: import('./watch').MirrorSearch | null;
   hero_deck: Record<string, number>;
   villain_deck: Record<string, number>;
   villain_type: string;
@@ -803,6 +805,8 @@ export type ServerMessage = (
     ))
   | { type: 'error'; message: string; session_ended?: boolean }
 ) & {
+  mirror_retry?: import('./watch').PendingMirror | null;
+  mirror?: import('./watch').MirrorSearch | null;
   table?: import('./shared-table-protocol').TableSnapshot;
   session_id?: string;
   resume_token?: string;
@@ -812,6 +816,7 @@ export type ServerMessage = (
 };
 
 export interface LaunchSetup {
+  mirror?: import('./watch').MirrorSearch | null;
   hero_deck?: string;
   villain_deck?: string;
   villain_type: string;

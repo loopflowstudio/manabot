@@ -11,6 +11,7 @@ import pytest
 import torch
 from typer.testing import CliRunner
 
+from manabot.backends import resolve
 from manabot.env.failures import GameInputs, TrainingExposureReceipt
 from manabot.infra.identity import canonical_sha256
 from manabot.sim.recording import TrainingGames, record_actions, record_games
@@ -26,7 +27,7 @@ def captured(tmp_path_factory: pytest.TempPathFactory) -> Path:
     torch.set_num_threads(1)
     try:
         with record_games(directory, players=("learner", "learner")):
-            train(1, streams=2, decisions=16, seed=3)
+            train(1, streams=2, decisions=16, seed=3, backend=resolve("torch"))
     finally:
         torch.set_num_threads(previous)
     return directory

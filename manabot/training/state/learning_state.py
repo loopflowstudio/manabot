@@ -14,20 +14,16 @@ raw, fresh moments). The reset is recorded in the origin as a declared
 discontinuity, never inferred.
 """
 
-from copy import deepcopy
 from dataclasses import dataclass
 import json
 from pathlib import Path
 from typing import Any
 
-import torch
-
-from manabot.backends.torch.checkpoint import load_checkpoint, load_metadata
-from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.infra.config import MatchConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.model.world import validate_agent_setup
+from manabot.policy.protocol import BackendPolicy
 from manabot.training.records import StageRecord, TrainingRun
 from manabot.training.regime import (
     ArtifactReference,
@@ -35,15 +31,16 @@ from manabot.training.regime import (
     TrainingRegime,
     TrainSelfPlay,
 )
-from manabot.training.state.admission import _admit_setups, copy_verified_artifact
+from manabot.training.state.admission import admit_setups, copy_verified_artifact
+from manabot.training.state.backend import TrainingBackend
 
 
 @dataclass(frozen=True)
 class AdmittedLearningState:
     artifacts: dict[str, ArtifactReference]
     origin: LearningStateOrigin
-    raw: ActorCritic
-    ema: ActorCritic
+    raw: BackendPolicy
+    ema: BackendPolicy
     # Adam's nested torch serialization boundary; validated before application.
     # None when a raw-only import starts Adam afresh.
     optimizer: dict[str, Any] | None
@@ -129,33 +126,6 @@ def _monitoring_origin(
     )
 
 
-def validate_adam(optimizer: torch.optim.Adam) -> None:
-    """Reject absent/corrupt moments; unused parameters may legitimately lack state."""
-    if not optimizer.state:
-        raise ValueError("learning-state Adam has no populated state")
-    for parameter, state in optimizer.state.items():
-        if not isinstance(parameter, torch.Tensor) or not isinstance(state, dict):
-            raise ValueError("invalid Adam parameter state")
-        step = state.get("step")
-        if (
-            not isinstance(step, torch.Tensor)
-            or step.numel() != 1
-            or not torch.isfinite(step).all()
-            or step.item() <= 0
-            or step.item() != int(step.item())
-        ):
-            raise ValueError("invalid Adam step counter")
-        for name in ("exp_avg", "exp_avg_sq"):
-            value = state.get(name)
-            if (
-                not isinstance(value, torch.Tensor)
-                or value.shape != parameter.shape
-                or not torch.isfinite(value).all()
-                or (name == "exp_avg_sq" and (value < 0).any())
-            ):
-                raise ValueError(f"invalid Adam moment: {name}")
-
-
 def _admit_setup_transfer(source: MatchConfig, regime: TrainingRegime) -> None:
     """A deck switch stays inside the agent's world and changes decks."""
     world = regime.agent.world
@@ -168,7 +138,7 @@ def _admit_setup_transfer(source: MatchConfig, regime: TrainingRegime) -> None:
 
 
 def admit_learning_state(
-    stage: TrainSelfPlay, regime: TrainingRegime, out: Path
+    stage: TrainSelfPlay, regime: TrainingRegime, out: Path, *, backend: TrainingBackend
 ) -> AdmittedLearningState:
     """Verify relocated copies against an unmodified historical producer export."""
     spec = stage.learning_state
@@ -237,7 +207,7 @@ def admit_learning_state(
     if origin.iteration >= stage.updates:
         raise ValueError("learning-state target must exceed parent absolute iteration")
     artifacts = {"parent_run": receipt}
-    policies: dict[str, ActorCritic] = {}
+    policies: dict[str, BackendPolicy] = {}
     for role in spec.roles:
         reference = getattr(spec, role)
         if spec.monitoring_update is None:
@@ -250,21 +220,21 @@ def admit_learning_state(
         artifacts[f"parent_{role}"] = copied
         if role == "optimizer":
             continue
-        with torch.random.fork_rng(devices=[]):
-            agent, space = load_checkpoint(copied["path"])
+        with backend.state.preserve_rng():
+            agent, space = backend.load_policy(copied["path"])
         # The parent export is bound to what it trained on: a transferred setup's
         # match, else the regime's match or every deck its deck source lists. The
         # segment's own exports are bound to the regime when they are written.
         if spec.source_match is not None:
             validate_agent_setup(agent, Match(source_match).to_rust())
         else:
-            _admit_setups(agent, regime)
+            admit_setups(agent, regime)
         if agent.config != regime.agent or space.encoder.config != regime.observation:
             raise ValueError("learning-state checkpoint architecture mismatch")
-        payload = load_metadata(copied["path"])
+        payload = backend.metadata(copied["path"])
         # Adam stores positional parameter IDs. The historical checkpoint's
         # ordered state dictionary must agree with today's parameter ordering.
-        parameter_names = list(dict(agent.named_parameters()))
+        parameter_names = backend.state.parameter_names(agent)
         if [
             name for name in payload["parameter_names"] if name in parameter_names
         ] != parameter_names:
@@ -288,10 +258,7 @@ def admit_learning_state(
             raise ValueError("learning-state EMA iteration/rate mismatch")
         if role == "raw" and averaging is not None:
             raise ValueError("learning-state raw policy cannot be averaged")
-        if any(
-            not torch.isfinite(value).all() for value in agent.state_dict().values()
-        ):
-            raise ValueError("learning-state policy contains nonfinite tensors")
+        backend.state.validate_policy(agent)
         policies[role] = agent
     if spec.monitoring_update is not None:
         # Declared reset: the EMA restarts as the raw weights at the origin
@@ -300,41 +267,13 @@ def admit_learning_state(
             artifacts,
             origin,
             policies["raw"],
-            deepcopy(policies["raw"]),
+            backend.state.clone_policy(policies["raw"]),
             None,
             source.seed,
         )
-    state = torch.load(
-        artifacts["parent_optimizer"]["path"], map_location="cpu", weights_only=True
+    state = backend.state.admit_adam(
+        artifacts["parent_optimizer"]["path"], policies["raw"]
     )
-    if not isinstance(state, dict) or set(state) != {"state", "param_groups"}:
-        raise ValueError("invalid Adam artifact")
-    optimizer = torch.optim.Adam(policies["raw"].parameters(), eps=1e-5)
-    groups = state["param_groups"]
-    expected_group = optimizer.state_dict()["param_groups"][0]
-    if (
-        not isinstance(groups, list)
-        or len(groups) != 1
-        or not isinstance(groups[0], dict)
-        or groups[0].get("params") != expected_group["params"]
-        or not isinstance(state["state"], dict)
-        or not set(state["state"]).issubset(expected_group["params"])
-        or any(
-            groups[0].get(key) != expected_group[key]
-            for key in (
-                "betas",
-                "eps",
-                "weight_decay",
-                "amsgrad",
-                "maximize",
-                "capturable",
-                "differentiable",
-            )
-        )
-    ):
-        raise ValueError("learning-state Adam parameter groups or settings mismatch")
-    optimizer.load_state_dict(state)
-    validate_adam(optimizer)
     return AdmittedLearningState(
         artifacts, origin, policies["raw"], policies["ema"], state, source.seed
     )

@@ -6,9 +6,7 @@ from dataclasses import replace
 from typing import Any, Mapping
 
 import numpy as np
-import torch
 
-from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.agent import AgentMemory, AgentStep, Manabot, ViewerDecision
 from manabot.belief.encoding import (
     BeliefCheckpointBinding,
@@ -21,6 +19,7 @@ from manabot.belief.state import (
     CompatibleDealBeliefModel,
     ViewerHistory,
 )
+from manabot.policy.protocol import BackendPolicy
 from managym.decision import Command, Observation, SemanticTransition
 from managym.possible_worlds import PossibleWorldSpace
 
@@ -30,11 +29,11 @@ def _engine(runtime_env: Any) -> Any:
 
 
 def _batched_observation(
-    observation: Mapping[str, np.ndarray | torch.Tensor],
-) -> dict[str, torch.Tensor]:
+    observation: Mapping[str, np.ndarray],
+) -> dict[str, np.ndarray]:
     if "actions_valid" not in observation:
         raise BeliefError("runtime observation is missing its legal-action mask")
-    action_mask = torch.as_tensor(observation["actions_valid"])
+    action_mask = np.asarray(observation["actions_valid"])
     if action_mask.ndim not in {1, 2}:
         raise BeliefError(
             "runtime legal-action mask must be unbatched or singly batched"
@@ -42,16 +41,16 @@ def _batched_observation(
     already_batched = action_mask.ndim == 2
     if already_batched and action_mask.shape[0] != 1:
         raise BeliefError("ManabotPlayer consumes one engine decision at a time")
-    tensors: dict[str, torch.Tensor] = {}
+    tensors: dict[str, np.ndarray] = {}
     for key, value in observation.items():
-        tensor = torch.as_tensor(value)
-        tensors[key] = tensor if already_batched else tensor.unsqueeze(0)
+        tensor = np.asarray(value)
+        tensors[key] = tensor if already_batched else tensor[None]
     return tensors
 
 
 def viewer_decision_from_engine(
     engine: Any,
-    observation: Mapping[str, np.ndarray | torch.Tensor],
+    observation: Mapping[str, np.ndarray],
     history: ViewerHistory,
 ) -> ViewerDecision:
     """Bind one encoded observation to native semantic and world authority."""
@@ -69,10 +68,7 @@ def viewer_decision_from_engine(
 
     tensors = _batched_observation(observation)
     legal_indexes = tuple(
-        int(index)
-        for index in torch.nonzero(tensors["actions_valid"][0] > 0, as_tuple=False)
-        .flatten()
-        .tolist()
+        int(index) for index in np.flatnonzero(tensors["actions_valid"][0] > 0)
     )
     if legal_indexes != tuple(range(len(frame.offers))):
         raise BeliefError(
@@ -100,7 +96,7 @@ class ManabotPlayer:
 
     def __init__(
         self,
-        policy_value: ActorCritic,
+        policy_value: BackendPolicy,
         *,
         belief_model: BeliefModel | None = None,
         belief_schema: BeliefEncodingSchema | None = None,
@@ -150,7 +146,7 @@ class ManabotPlayer:
     def act(
         self,
         env: Any,
-        observation: Mapping[str, np.ndarray | torch.Tensor],
+        observation: Mapping[str, np.ndarray],
     ) -> int:
         if self.manabot is None or self.viewer is None or self.history is None:
             raise RuntimeError("start_game must run before ManabotPlayer.act")

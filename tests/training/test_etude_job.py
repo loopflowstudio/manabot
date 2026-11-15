@@ -17,6 +17,7 @@ from etude.train.read import read_all
 import pytest
 
 from experiments.ataraxos_move import ataraxos_move_scalar
+from manabot.backends import resolve
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.experiment.config import Baseline, Case, Experiment
@@ -205,7 +206,12 @@ def test_a_terminated_worker_records_its_end_and_keeps_its_exports(
     tracking = tmp_path / "tracking"
     try:
         deadline = time.monotonic() + 120
-        while not any(tracking.rglob("*.pt")) and worker.poll() is None:
+        while worker.poll() is None:
+            if any(
+                run.checkpoints.last is not None
+                for run in observe(tracking, "fixture").runs
+            ):
+                break
             assert time.monotonic() < deadline, "the worker exported nothing"
             time.sleep(0.2)
         assert worker.poll() is None, worker.stderr and worker.stderr.read()
@@ -229,7 +235,12 @@ def test_executor_cancellation_retains_failed_receipt(tmp_path: Path) -> None:
     with VerifyStore(tmp_path / "store.sqlite") as store:
         with pytest.raises(RuntimeError, match="cancelled by launcher"):
             execute_regime(
-                specification().regime, 12250, tmp_path / "run", store, stop_path=stop
+                specification().regime,
+                12250,
+                tmp_path / "run",
+                store,
+                stop_path=stop,
+                backend=resolve("torch"),
             )
     run = TrainingRun.model_validate_json((tmp_path / "run/run.json").read_text())
     assert run.status == "failed"
@@ -265,7 +276,14 @@ def test_nonrecoverable_collection_cancellation_retains_receipt(
     assert not regime.recoverable
     with VerifyStore(tmp_path / "store.sqlite") as store:
         with pytest.raises(RuntimeError, match="cancelled by launcher"):
-            execute_regime(regime, 12250, tmp_path / "run", store, stop_path=stop)
+            execute_regime(
+                regime,
+                12250,
+                tmp_path / "run",
+                store,
+                stop_path=stop,
+                backend=resolve("torch"),
+            )
     run = TrainingRun.model_validate_json((tmp_path / "run/run.json").read_bytes())
     assert run.status == "failed" and run.stages[0].updates == 0
     assert run.selected_artifact is None
@@ -348,7 +366,9 @@ def staged_continuation(
 ) -> tuple[LearnerContinuation, Path]:
     """Train a parent, then lay its exports out as Etude delivers inputs."""
     with VerifyStore(tmp_path / "parent.sqlite") as store:
-        parent = execute_regime(ema_regime(2), 12250, tmp_path / "parent", store)
+        parent = execute_regime(
+            ema_regime(2), 12250, tmp_path / "parent", store, backend=resolve("torch")
+        )
     inputs = tmp_path / "inputs"
     inputs.mkdir()
     sources = {
@@ -514,7 +534,12 @@ def test_monitoring_continuation_stages_raw_alone_and_resets_learner_state(
 ) -> None:
     with VerifyStore(tmp_path / "parent.sqlite") as store:
         parent = execute_regime(
-            ema_regime(3), 12250, tmp_path / "parent", store, checkpoint_updates=1
+            ema_regime(3),
+            12250,
+            tmp_path / "parent",
+            store,
+            checkpoint_updates=1,
+            backend=resolve("torch"),
         )
     # Retained as a watchdog kill would leave it: interrupted after update 3.
     record = json.loads((tmp_path / "parent/run.json").read_text())

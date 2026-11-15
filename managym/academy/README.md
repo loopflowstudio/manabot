@@ -218,6 +218,21 @@ The browser renders provider-authored groups and detail lines and precise unavai
 missing training counts remain "not recorded". Optional advice/import capabilities
 are separate from policy loading.
 
+An optional `MirrorSearch` per bot composes an admitted policy with the
+framework-free `managym.mirror_search` owner in Play, Watch and launch APIs
+([Mirror search](../../docs/academy.md#mirror-search)). Its initial budget is one
+world at depth one, with a 30-second ceiling; explicit larger budgets are retained.
+Native physical-deal sampling and bound Commands remain authoritative; the two-KL numerical update
+has one implementation in `managym.mirror`. Full legal probabilities, compatible
+signed values and isolated current-view forks are mandatory. Deadline failure
+retains the live decision for an explicit, match/revision-bound pilot retry.
+Budget checks bracket synchronous provider calls; an in-flight call returns
+before its overdue result is rejected, and no overdue action is accepted.
+`BotDecision.mirror` retains prior probabilities, budget, timing, hexadecimal seed
+and receipt digest; model outputs stay out of an opponent's live/viewer export.
+Completed Play games expose retained actor-view evidence through Replay's
+**Inspect bot search** link without loading a provider.
+
 Replacement admission must keep the old GameSession authority intact until the
 new environment resets successfully. Invalid native deck setup can raise
 PyO3's `PanicException` (a direct `BaseException`, with no importable Python
@@ -244,7 +259,10 @@ one seat or both, and the random, greedy, heuristic and search anchors use
 GameSession's normal Command authority. Step advances one native decision;
 Play/Pause and speed control that same operation. Previous decisions read saved
 outputs without rerunning the policy. Completed watched games open from Games
-in this same table. Reloading retains the watch credential in the browser.
+in this same table. Reloading retains the watch credential in the browser and
+opens the latest recorded decision, including any pending search retry and its
+message. A `decision` URL parameter opens that historical decision instead.
+Inspection never retries the pending search; **Retry search** does so explicitly.
 
 `watch.py` admits controllers and verified exported training games or evaluation
 traces through **Open a game file**; choose a game when a trace contains several.

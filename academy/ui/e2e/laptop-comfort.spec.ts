@@ -772,7 +772,7 @@ test('Watch keeps recorded identities attached to the acting viewer seat', async
     { seat: 1, player_id: `checkpoint:${checkpointDigest}`, name: checkpointName, kind: 'bot', deck: 'ur_lessons', version: checkpointDigest, inference: null },
   ];
   await page.route('**/api/card-art/**', route => route.fulfill({ status: 404 }));
-  await page.route('**/api/watch/identity-watch/decisions/0?**', route => route.fulfill({ json: {
+  await page.route('**/api/watch/identity-watch/decisions/-1?**', route => route.fulfill({ json: {
     id: 'identity-watch', players: ['random', 'checkpoint'], identities,
     decision: { address: 'recorded', ordinal: 0, viewer: 1, source: 'policy', revision: frame.revision,
       prompt_id: frame.prompt!.id, offer_id: frame.offers[0].id, command_id: 'recorded', presentation_cursor: 0,

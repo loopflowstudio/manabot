@@ -146,8 +146,8 @@ checkpoints or experiment evidence.
   `manabot.backends.*`. Only composition roots choose one: `experiments/`,
   `scripts/`, recipe entry points, the CLI and child-process entry points, `manabot/sim/policy_provider.py` and the
   backends' tests, by import or `manabot.backends.resolve("torch")`.
-  `tests/test_package_boundaries.py` lists the remaining exceptions by name;
-  that list only shrinks ([who chooses a backend](manabot/backends/README.md#who-chooses-a-backend)).
+  `tests/test_package_boundaries.py` enforces roots and named entry-point scopes
+  in mixed CLI/library modules ([who chooses a backend](manabot/backends/README.md#who-chooses-a-backend)).
 - Generic backend learning helpers (`rl`, `learner`, `arrays`) keep role-specific
   types under `TYPE_CHECKING`; importing their annotations at runtime must not
   pull in checkpoint, player, observation or training-configuration modules.
@@ -619,6 +619,9 @@ the untargeted rest (`ActivatedAbilityDefinition::mana_suffix`) runs once, off
 the stack, as the source's frame before the output choice (CR 605.3b).
 
 ### Etude training records
+
+Etude preserves a checkpoint's source suffix. Worker tests wait for a registered
+checkpoint through the SDK, rather than assuming the file ends in `.pt`.
 
 Training row tables belong under the metric run's `artifacts/`, named by their
 content digest, with `.partial` staging before atomic rename. Etude's tracker
