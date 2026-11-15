@@ -51,7 +51,9 @@ uv run etude database status
 uv run etude status
 ```
 
-The lock pins the merged single-database client. All experiments and compatible
+The lock pins the merged single-database client. Older command-only GPU probes
+keep their frozen source and SDK; their old `runs()` helpers are not current
+experiment declarations. All experiments and compatible
 branches use `~/.etude/launcher.sqlite`; ordinary reads validate its schema
 without migrating it. When status reports pending migrations, use
 `uv run etude database upgrade` explicitly. Upgrades retain recovery backups

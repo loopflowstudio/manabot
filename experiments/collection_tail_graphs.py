@@ -884,7 +884,7 @@ def _finish(out: Path, captures: Path) -> None:
     shutil.move(packed, out / "results.tar.gz")
 
 
-def training_jobs(revision: str, hours: str = "1.5") -> Any:
+def runs(revision: str, hours: str = "1.5") -> Any:
     from etude.launch.records import Job, Variable
 
     from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup

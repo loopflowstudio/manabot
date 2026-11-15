@@ -1018,7 +1018,7 @@ def _finish(out: Path, captures: Path) -> None:
     shutil.move(packed, out / "results.tar.gz")
 
 
-def training_jobs(
+def runs(
     revision: str,
     candidate: str = "option3",
     hours: str = "1.25",

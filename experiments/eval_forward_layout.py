@@ -349,7 +349,7 @@ def _serving(evaluation: Path) -> dict[str, Any]:
     return found
 
 
-def training_jobs(revision: str, hours: str = "1.0", usd: str = "3.00") -> Any:
+def runs(revision: str, hours: str = "1.0", usd: str = "3.00") -> Any:
     """One L4 job at `revision`."""
     from etude.launch.records import Job
 

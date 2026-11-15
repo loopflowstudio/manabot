@@ -63,15 +63,9 @@ def keep_imported_modules() -> Iterator[None]:
 def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
     found = {path.stem for path in experiment_files(EXPERIMENTS)}
     assert found == {
-        "collection_tail_graphs",
-        "cuda_precision",
         "elemental_closure_calibration",
-        "eval_forward_layout",
-        "l4_step_profile",
-        "live_token_attention",
         "llm_game",
         "policy_inference_gpu",
-        "ppo_cuda",
         "qwen_mtg183",
         "qwen_mtg183_vllm",
         "training_throughput",

@@ -33,9 +33,9 @@ import numpy as np
 from experiments import l4_step_profile
 
 
-def training_jobs(revision: str, hours: str = "2.0", usd: str = "3.00") -> Any:
+def runs(revision: str, hours: str = "2.0", usd: str = "3.00") -> Any:
     """One L4 job of the `live` candidate at `revision`."""
-    return l4_step_profile.training_jobs(
+    return l4_step_profile.runs(
         revision,
         candidate="live",
         hours=hours,

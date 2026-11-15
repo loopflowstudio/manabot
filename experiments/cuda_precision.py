@@ -861,7 +861,7 @@ def measure(probe: Probe) -> None:
     )
 
 
-def training_jobs(
+def runs(
     revision: str, hours: float = 1.5, usd: float = 1.5, sizes: str = ""
 ) -> list[Run]:
     """The one L4 job at `revision`; `sizes` (comma-separated `SIZES` keys)

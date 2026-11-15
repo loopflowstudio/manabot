@@ -16,7 +16,7 @@ from etude.launch.records import Job, Run
 from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
 
 
-def training_jobs(
+def runs(
     revision: str, hours: float = 1, diagnostic: bool = False, paired: bool = False
 ) -> list[Run]:
     """One bounded L4 baseline; no retries or other tasks on this allocation."""
