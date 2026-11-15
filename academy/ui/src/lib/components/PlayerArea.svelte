@@ -12,9 +12,9 @@
     PermanentState,
     PlayerState,
     PlayerTurnHistory,
-    RestrictedMana
   } from '$lib/types';
   import type { PlayerIdentity } from '$lib/player-identity';
+  import ManaPool from './ManaPool.svelte';
   import PlayerName from './PlayerName.svelte';
   import Card from './Card.svelte';
   import CardBack from './CardBack.svelte';
@@ -94,14 +94,6 @@
     return terms.join(' ');
   }
 
-  function spendingText(restricted: RestrictedMana): string {
-    if (restricted.except_nonartifact_spells) return 'anything but nonartifact spells';
-    const parts = [];
-    if (restricted.spells?.length) parts.push(`${restricted.spells.join(' or ')} spells`);
-    if (restricted.abilities?.length) parts.push(`abilities of ${restricted.abilities.join(' or ')} sources`);
-    return parts.join(' or ');
-  }
-
   // The bar wears its deck's colors at full Magic saturation — G→W for
   // Allies, U→R for Lessons. Like the banner and the card plates it is a
   // fixed rich world in both modes: vivid ends, a whisper of scrim, and
@@ -140,9 +132,6 @@
       toughness: card.types.is_creature ? card.toughness : null,
     });
   }
-  function manaText(pool: number[]): string {
-    return pool.map((amount, index) => amount ? `${amount} {${['W', 'U', 'B', 'R', 'G', 'C'][index]}}` : '').filter(Boolean).join(' · ') || 'Empty';
-  }
 </script>
 
 {#snippet rubric(text: string)}
@@ -152,7 +141,8 @@
 {/snippet}
 
 <section class="player-area" class:empty-battlefield={opponent && player.battlefield.length === 0} aria-label={`${label}${deckName ? ` — ${deckName}` : ''}`}>
-  <details class="player-status type-caption"><summary>{label} status and mana</summary>
+  <div class="player-readouts">
+  <details class="player-status type-caption"><summary>{label} status</summary>
   {#if identity.digest || identity.producer || identity.full !== identity.compact}
   <div class="identity-details" data-testid="player-identity">
     <p>{identity.full}</p>
@@ -164,21 +154,6 @@
     {/each}
   </div>
   {/if}
-  {#if player.mana}
-    <p class="type-caption py-1" data-testid="mana-pool">{label} mana: {manaText(player.mana)}
-      {#if player.restricted_mana?.length}
-        {#each player.restricted_mana as restricted}
-          · {manaText(restricted.mana)} only for {spendingText(restricted)}
-        {/each}
-      {:else if player.lesson_mana?.some(Boolean)} · Restricted mana: {manaText(player.lesson_mana)}{/if}
-      <!-- Class rows are subsets of the amounts above, not additional mana. -->
-      {#each player.pooled_mana_classes ?? [] as pooled, index}
-        {index ? '; ' : ' — including '}{manaText(pooled.mana)}{pooled.restriction ? ` only for ${pooled.restriction}` : ''}{pooled.effect ? ` that puts ${pooled.effect}` : ''}, expiring {pooled.combat ? 'at end of combat' : 'at step end'}
-      {/each}
-      {#if !player.pooled_mana_classes?.length && player.combat_mana} · {player.combat_mana} mana expires at end of combat{/if}
-      {#if player.keeps_red_mana} · Keeps unspent red mana until end of turn{/if}
-    </p>
-  {:else}<p class="type-caption text-ink-2">Mana details not recorded.</p>{/if}
   {#if player.hand_only_until !== undefined}
     <p class="type-caption py-1" data-testid="hand-only">
       {label} can cast spells only from hand until the other player's next turn.
@@ -207,6 +182,8 @@
     </p>
   {/if}
   </details>
+  <ManaPool {player} {label} />
+  </div>
   <!-- Identity and life stay above the scrolling battlefield and zones. -->
   <div
     data-player-id={player.id}
@@ -376,6 +353,9 @@
 <style>
   [data-narrated-seq] { outline: 2px solid var(--info); outline-offset: 2px; }
   .identity-details { overflow-wrap: anywhere; user-select: text; }
+  .player-readouts { display: flex; align-items: flex-start; gap: 1rem; min-width: 0; flex-shrink: 0; }
+  .player-readouts > :global(*) { max-height: 90px; overflow-y: auto; }
+  .player-readouts > :global(:last-child) { min-width: 0; flex: 1; }
   .player-area { min-width: 0; padding: .25rem 0; }
   .hand-cards { display: flex; align-items: end; gap: .5rem; overflow-x: auto; overscroll-behavior: contain; padding: .25rem; }
   .hand-cards > :global(*) { flex-shrink: 0; }
@@ -387,6 +367,8 @@
     .staves { display: flex; flex-direction: column; gap: .25rem; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 .25rem; }
     .empty-battlefield .staves { max-height: 64px; }
     .hand-staff { flex-shrink: 0; }
+    .hand-staff > :global(:first-child) { padding-top: 0; }
+    .hand-cards { padding-top: 0; padding-bottom: 0; }
     .staff { display: flex; flex-direction: column; flex: 1 0 auto; min-height: 0; }
     .staves > :global(:not(.staff)) { flex-shrink: 0; }
   }

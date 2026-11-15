@@ -3786,6 +3786,23 @@ impl PyEnv {
         serde_json::to_string(&frame).map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
+    fn payment_preview_json(
+        &self,
+        viewer: usize,
+        revision: u64,
+        fingerprint: &str,
+        action_index: usize,
+    ) -> PyResult<String> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let preview = env
+            .payment_preview(viewer, revision, fingerprint, action_index)
+            .map_err(map_agent_err)?;
+        serde_json::to_string(&preview).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
     /// Public event identities used to explain a committed transition.
     fn presentation_subjects_json(&self) -> PyResult<String> {
         let env = self

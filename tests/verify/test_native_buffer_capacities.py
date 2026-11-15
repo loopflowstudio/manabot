@@ -623,3 +623,95 @@ def test_incomplete_buffer_set_is_rejected_before_any_write(
     vector = managym.VectorEnv(num_envs=1, seed=213)
     with pytest.raises(ValueError, match="policy input v9 requires"):
         vector.set_buffers(batched)
+
+
+def test_fixed_and_indexed_mana_actions_match_scalar_vector_and_python() -> None:
+    """Equal focus and action category must retain distinct ability selectors."""
+    encoder = ObservationEncoder(ObservationConfig())
+    players = [
+        managym.PlayerConfig("payer", {"Tarnished Citadel": 40}),
+        managym.PlayerConfig("other", {"Plains": 40}),
+    ]
+    scalar = managym.Env(seed=165, skip_trivial=True)
+    vector = managym.VectorEnv(num_envs=1, seed=165, skip_trivial=True)
+    buffers = _vector_buffers(encoder)
+    vector.set_buffers(buffers)
+    obs, _ = scalar.reset(players)
+    vector.reset_all_into_buffers(players)
+    play = next(
+        index
+        for index, action in enumerate(obs.action_space.actions)
+        if action.action_type == managym.ActionEnum.PRIORITY_PLAY_LAND
+    )
+    obs, *_ = scalar.step(play)
+    vector.step_into_buffers([play])
+    reference = _assert_encoding_parity(encoder, scalar, obs, buffers)
+    fixed = next(
+        index
+        for index, action in enumerate(obs.action_space.actions)
+        if action.description is not None
+        and action.description.startswith("Tap Tarnished Citadel for")
+    )
+    indexed = next(
+        index
+        for index, action in enumerate(obs.action_space.actions)
+        if action.action_type == managym.ActionEnum.PRIORITY_ACTIVATE_ABILITY
+        and action.ability_index == 0
+    )
+    assert (
+        obs.action_space.actions[fixed].focus == obs.action_space.actions[indexed].focus
+    )
+    assert obs.action_space.actions[fixed].ability_index is None
+    assert not np.array_equal(
+        reference["actions"][fixed], reference["actions"][indexed]
+    )
+
+
+def test_compound_waterbend_preserves_deliberate_mana_source_offers() -> None:
+    """A grouped tap plan cannot erase production by noncandidate lands."""
+    env = managym.Env(seed=165)
+    env.reset(
+        [
+            managym.PlayerConfig(
+                "payer",
+                {
+                    "Island": 24,
+                    "Crashing Wave": 8,
+                    "Waterbending Scroll": 4,
+                    "Spectral Sailor": 4,
+                },
+            ),
+            managym.PlayerConfig("other", {"Plains": 40}),
+        ]
+    )
+    env.scenario_clear_hand(0)
+    env.scenario_force_card_in_hand(0, "Crashing Wave")
+    for name in ("Island", "Island", "Waterbending Scroll", "Spectral Sailor"):
+        env.scenario_force_battlefield(0, name, ready=True)
+    obs = env.scenario_refresh()
+    cast = next(
+        i
+        for i, action in enumerate(obs.action_space.actions)
+        if action.action_type == managym.ActionEnum.PRIORITY_CAST_SPELL
+    )
+    obs, *_ = env.step(cast)
+    x = next(
+        i for i, action in enumerate(obs.action_space.actions) if action.mode_index == 2
+    )
+    obs, *_ = env.step(x)
+    decline = next(
+        i
+        for i, action in enumerate(obs.action_space.actions)
+        if action.action_type == managym.ActionEnum.DECLINE_CHOICE
+    )
+    obs, *_ = env.step(decline)
+    assert obs.action_space.action_space_type == managym.ActionSpaceEnum.WATERBEND
+    assert any(
+        action.description is not None
+        and action.description.startswith("Tap Island for")
+        for action in obs.action_space.actions
+    )
+    projection = json.loads(env.compound_offers().projection_json())
+    complete = json.loads(env.structured_search_offers().projection_json())
+    assert projection == complete
+    assert len(projection["offers"]) == len(obs.action_space.actions)

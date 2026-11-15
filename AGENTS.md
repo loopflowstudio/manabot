@@ -262,6 +262,10 @@ checkpoints or experiment evidence.
   Replace it atomically (write a new
   file, then rename); overwriting a mapped extension in place can trigger macOS
   code-signature termination on subsequent imports.
+- After a non-editable wheel install in the development venv, run checkout
+  tests with `uv run python -m pytest` (or `PYTHONPATH=.`). The `pytest` console
+  entry point can otherwise import the installed wheel's Python modules instead
+  of the edited checkout, even after the local extension was replaced.
 - Format all Rust workspace members with `cargo fmt --manifest-path managym/Cargo.toml --all`;
   formatting only the root package does not format the `state` and `cards` crates.
 - Inspect a bot in the browser: `./scripts/play` (installs locked local dependencies,
@@ -589,6 +593,12 @@ Activated abilities that function from hand or graveyard set
 `ActivatedAbilityDefinition.zone` (landcycling included); they are offered as
 `Action::ActivateCardAbility`. An ability's index is its position in
 `activated_abilities`.
+
+Fixed production uses `Action::TapForMana` and the activation action category,
+with no `ability_index`; indexed ability zero encodes as one, so both remain
+separate choices on a dual-purpose source. Preview queries bind to the current
+semantic revision/fingerprint and actor; Academy additionally binds match,
+prompt, frame hash and participant credentials under its Command lock.
 
 Fixed mana abilities on a card are additive: multiple fixed productions
 produce all listed colors together. A land that produces one chosen color uses

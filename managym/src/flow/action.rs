@@ -24,6 +24,57 @@ impl Game {
     pub(crate) fn action_description(&self, action: &Action) -> Option<String> {
         use crate::flow::decision::Decision;
         match action {
+            Action::TapForMana { permanent, .. } => Some(format!(
+                "Tap {} for {} (commits mana activation)",
+                self.characteristics(*permanent).name,
+                mana_description(&self.fixed_mana_output(*permanent))
+            )),
+            Action::ActivateAbility {
+                permanent,
+                ability_index,
+                ..
+            } => {
+                let view = self.characteristics(*permanent);
+                let ability = &view.activated_abilities[*ability_index];
+                // A source with several indexed mana abilities must name the
+                // particular output and fee before the person commits it.
+                if view.activated_abilities.len() <= 1 {
+                    return None;
+                }
+                let outputs = ability.mana_choices()?;
+                let mut costs = vec![crate::agent::ability_description::cost_description(
+                    &ability.mana_cost,
+                )];
+                if ability.tap_source {
+                    costs.push("tap this source".into());
+                }
+                if ability.sacrifice_source {
+                    costs.push("sacrifice this source".into());
+                }
+                if ability.life_cost > 0 {
+                    costs.push(format!("{} life", ability.life_cost));
+                }
+                if let Some(cost) = &ability.tap_cost {
+                    costs.push(format!("tap {} eligible permanents", cost.count));
+                }
+                let suffix =
+                    crate::agent::ability_description::effects_description(ability.mana_suffix());
+                Some(format!(
+                    "Activate ability: {} — pay {}: add {}{}",
+                    view.name,
+                    costs.join(", "),
+                    outputs
+                        .iter()
+                        .map(mana_description)
+                        .collect::<Vec<_>>()
+                        .join(" or "),
+                    if suffix.is_empty() {
+                        String::new()
+                    } else {
+                        format!("; {suffix}")
+                    }
+                ))
+            }
             Action::ChooseTrigger { trigger_id, player } => {
                 let trigger = self
                     .state
@@ -267,7 +318,7 @@ impl Game {
     }
 
     fn priority_activate_ability_actions(&self, player: PlayerId) -> Vec<Action> {
-        let mut actions = Vec::new();
+        let mut actions = self.fixed_mana_actions(player, None);
         for permanent_id in self.iter_battlefield_permanents(player) {
             let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
                 continue;
@@ -827,6 +878,9 @@ impl Game {
             }
             Action::CastSpell { player, object } => {
                 self.cast_spell_action(*player, self.chosen_card(*object)?)
+            }
+            Action::TapForMana { player, permanent } => {
+                self.activate_fixed_mana(*player, *permanent)
             }
             Action::ActivateAbility {
                 player,

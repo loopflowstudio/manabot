@@ -14,6 +14,7 @@ digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 - [Shared decision surface](#shared-decision-surface)
 - [Using the laptop table](#using-the-laptop-table)
 - [Play and Inspect modes](#play-and-inspect-modes)
+- [Previewing payments and floating mana](#previewing-payments-and-floating-mana)
 - [Choosing priority stops](#choosing-priority-stops)
 - [Reading consequences and controlling narration](#reading-consequences-and-controlling-narration)
 - [Choice navigation](#choice-navigation)
@@ -478,7 +479,8 @@ Hover or focus previews the card; **Inspect card** opens its details without
 committing. Player targets have explicit named controls. During combat, choose
 for the creature named by the current prompt: attack or decline, or select one
 of its legal blocks or decline. Each choice commits separately before the next
-creature's prompt. Mana-source choices likewise follow the offered decisions;
+creature's prompt. To choose mana sources before casting, use their explicit
+activation actions ([payment controls below](#previewing-payments-and-floating-mana));
 dragging a spell does not configure manual tapping.
 
 Choose **Inspect** to examine the acting viewer's observation and every legal
@@ -494,6 +496,70 @@ unavailable while disconnected, awaiting a submitted action or changing settings
 These live-play shortcuts do not submit moves in Watch, recorded Replay or Study;
 use their own decision controls. Cancellation only discards local selection:
 after commitment, costs and revealed information remain committed.
+
+### Previewing payments and floating mana
+
+With two untapped Islands and a spell costing one blue mana, hover or
+keyboard-focus the spell's legal cast action in **Your choices**. The payment
+preview marks the particular Island the automatic payer would tap and lists
+its output. Selecting the spell's card on the board keeps the explanation open
+without casting.
+To use the other Island instead, choose that Island's mana activation action,
+then consider the spell again. The Island taps, blue mana appears in your
+floating pool, and the revised preview shows how that pool funds the spell.
+Activate the cast action when ready, then follow any target and payment prompts.
+
+The preview describes the current automatic payer's source choices, including
+any extra mana it would produce. Each source keeps its own identity even when
+several sources produce the same colors. Preview marks show a proposal;
+a source's tapped state shows what has committed. Hovering, focusing or
+selecting for preview spends nothing and activates nothing. Card details remain
+available in **Inspect**.
+
+Read the explanation before relying on the marks:
+
+- An exact source plan lists the sources and output for the current cost.
+  It shows the pool after production and any spending choices still needed.
+  An exact source plan can still require you to choose which mana to spend;
+  a final remaining pool is shown only when that outcome is determined.
+- If X, an optional or alternative cost, or a target can change the price,
+  the preview names the missing choice and leaves source marks clear. Follow
+  the offered prompts; the preview refreshes as those choices become known.
+  A target-independent cost can be previewed before choosing targets.
+- A zero-mana cost or payment covered by floating mana needs no source taps.
+  A message that no automatic route is available is different: you may need
+  to use an offered mana ability and make its output or cost choices first.
+- Actions without a mana payment have no automatic payment plan.
+
+To float mana deliberately, inspect or select a battlefield source and choose
+its offered mana activation. For a source with several abilities or outputs,
+choose the intended ability and follow its color or other prompts. Activation
+costs, including any mana fee or sacrifice, commit through those actions.
+Sources remain reachable beside the payment choices; **Show all** returns to
+the complete legal list. Only currently legal activations are offered.
+
+The floating-mana line stays visible beside the board. Open its details to read
+spending restrictions, effects granted when mana is spent,
+and when the mana expires. Restricted amounts are included in the pool totals;
+they are not additional mana. Producing mana and spending it are separate:
+follow the remaining payment prompt when several spends are legal.
+
+Closing a preview or clearing selection only dismisses the local proposal.
+It does not untap an activated source, recover a sacrificed permanent, refund
+an activation fee or undo spent mana. A decline action applies only to the
+choice it names. Reversal is available only when the game explicitly offers
+a legal reversal action.
+
+Every preview belongs to the current decision. Submitting an action, changing
+the viewed player, disconnecting or receiving a new decision clears it. If a
+preview request fails, retry from the current action; legal choices remain
+available. After reconnecting or reloading in the same tab, read the recovered
+pending prompt and select again to request a fresh preview. Already committed
+activations and payments remain committed.
+
+Recorded Replay shows recorded activations and spending without live source
+controls. If preview information was not recorded, it is identified as missing;
+historical decisions are not filled in using a live game's payment plan.
 
 ### Choosing priority stops
 

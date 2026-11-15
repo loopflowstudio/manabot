@@ -1,6 +1,6 @@
 <script lang="ts">
   import { revealWithinScrollRegions } from '$lib/scroll-regions';
-  import { onMount, tick, untrack } from 'svelte';
+  import { onMount, tick, untrack, setContext } from 'svelte';
 
   import {
     dragMoved, dragOffer, loadTableMode, saveTableMode, selectForPlay, selectedOffers,
@@ -8,6 +8,9 @@
   } from '$lib/play-selection';
   import { visibleCardLabel } from '$lib/decision-labels';
   import { offerFocus, offerTargets } from '$lib/offer-map';
+  import { PaymentPreviewController, PAYMENT_PREVIEW_CONTEXT, type PreviewState } from '$lib/payment-preview';
+  import PaymentPreview from '$lib/components/PaymentPreview.svelte';
+  import { fetchPaymentPreview } from '$lib/socket.svelte';
   import DecisionSurface from '$lib/components/DecisionSurface.svelte';
   import DecisionContext from '$lib/components/DecisionContext.svelte';
   import DecisionAdvice from '$lib/components/DecisionAdvice.svelte';
@@ -43,6 +46,11 @@
     sendTransferPilot,
   } from '$lib/socket.svelte';
   import type { InteractionOffer, OpponentCatalog, StopSide, TrainedOpponent } from '$lib/types';
+
+  let paymentState = $state<PreviewState | null>(null);
+  const payments = new PaymentPreviewController(fetchPaymentPreview, state => paymentState = state);
+  setContext(PAYMENT_PREVIEW_CONTEXT, () => paymentState?.preview?.state === 'exact'
+    ? paymentState.preview.sources.flatMap((source, index) => source.source.kind === 'object' ? [{ id: source.source.id.entity, order: index + 1 }] : []) : []);
 
   let demoName = $state<string | null>(null);
   let learnDemo = $state(false);
@@ -97,6 +105,7 @@
 
     void loadOpponents();
     return () => {
+      payments.invalidate();
       disconnect();
     };
   });
@@ -213,7 +222,7 @@
 
   $effect(() => {
     gameStore.updateSeq;
-    untrack(clearPlaySelection);
+    untrack(() => { payments.invalidate(); clearPlaySelection(); });
   });
   $effect(() => {
     if (!liveInput || (selection && !selectionMatches(selection, tableFrame))) untrack(clearPlaySelection);
@@ -223,6 +232,7 @@
   });
 
   function clearPlaySelection(): void {
+    payments.clear();
     if (drag?.moved) suppressClick = true;
     selection = null;
     drag = null;
@@ -356,6 +366,7 @@
     if (tableMode === 'play' && selection
       && !selectedOffers(selection, gameStore.protocolFrame).some(offer => offer.id === action.id)) return;
 
+    payments.invalidate();
     if (!sendAction(action.id)) {
       return;
     }
@@ -363,8 +374,13 @@
     clearPlaySelection();
   }
 
+  $effect(() => {
+    if (!canSubmitLive || gameStore.connection !== 'connected') untrack(() => payments.invalidate());
+  });
+
   function handleActionHover(action: InteractionOffer | null): void {
     if (action) {
+      if (canSubmitLive && tableFrame) void payments.select(tableFrame, action.id, action.label);
       gameStore.setFocus(offerFocus(action));
       return;
     }
@@ -377,6 +393,11 @@
       selection = selectForPlay(tableFrame, objectId);
     }
     const offerIds = targetOfferIds(objectId);
+    if (canSubmitLive && tableFrame) {
+      const candidates = tableFrame.offers.filter(offer => offerIds.includes(offer.id));
+      if (candidates.length === 1) void payments.select(tableFrame, candidates[0].id, candidates[0].label);
+      else payments.clear();
+    }
     gameStore.selectTarget(objectId);
     gameStore.setFocus(focusIdsForOffers(offerIds));
   }
@@ -562,6 +583,7 @@
           <DecisionContext observation={gameStore.branchProjection} actor={gameStore.branchProjection.decision_context?.actor ?? null} />
           <p class="type-caption">Alternate action played. Return to recorded decision to try another choice.</p>
         {:else if tableFrame}
+        {#if paymentState}<PaymentPreview state={paymentState} observation={tableFrame.projection} onClose={() => payments.clear()} onRetry={() => { if (tableFrame && paymentState) void payments.select(tableFrame, paymentState.offer, paymentState.label); }} />{/if}
         <DecisionSurface
           workspace
           frame={tableFrame}

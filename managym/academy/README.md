@@ -111,6 +111,13 @@ can also be committed by dragging into the play area. Hover, focus and **Inspect
 card** retain inspection without submission. **Inspect**, the initial default,
 keeps card inspection and the complete legal-offer workflow. Switching modes
 clears uncommitted selection without changing the game or priority automation.
+Hover or focus a legal cast to read the native automatic payment proposal.
+The marked sources are proposed taps; deliberate mana activations commit through
+ordinary legal offers. Floating mana stays beside the board, with restrictions,
+spend effects and expiry in its details. Closing a proposal does not reverse an
+activation. [Payment controls](../../docs/academy.md#previewing-payments-and-floating-mana)
+cover source/output choice, stale requests and reload recovery.
+
 See [Play and Inspect controls](../../docs/academy.md#play-and-inspect-modes)
 for keyboard, drag cancellation, combat and recovery behavior.
 Card locations and copy labels distinguish same-name choices; focusing an offer highlights its exact board subjects. The complete offer count

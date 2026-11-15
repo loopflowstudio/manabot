@@ -881,10 +881,16 @@ impl Game {
         }
         let player = *player;
         let legal_taps = self.waterbend_payment_candidates(player, payment);
-        if legal_taps.iter().any(|id| {
-            self.state.permanents[*id]
-                .as_ref()
-                .is_some_and(|permanent| !self.state[permanent.object].mana_abilities.is_empty())
+        // Production is a distinct deliberate choice, even when its source
+        // is a land outside the waterbend candidates. Keep the complete
+        // action-aligned surface rather than replacing those offers.
+        if self.action_space().is_some_and(|space| {
+            space.actions.iter().any(|action| {
+                matches!(
+                    action,
+                    Action::TapForMana { .. } | Action::ActivateAbility { .. }
+                )
+            })
         }) {
             return Ok(None);
         }
@@ -1971,7 +1977,8 @@ fn search_offer_verb(action: &Action) -> OfferVerb {
     match action {
         Action::PlayLand { .. } => OfferVerb::PlayLand,
         Action::CastSpell { .. } => OfferVerb::Cast,
-        Action::ActivateAbility { .. }
+        Action::TapForMana { .. }
+        | Action::ActivateAbility { .. }
         | Action::ActivateCardAbility { .. }
         | Action::Foretell { .. } => OfferVerb::ActivateAbility,
         Action::PassPriority { .. } => OfferVerb::PassPriority,

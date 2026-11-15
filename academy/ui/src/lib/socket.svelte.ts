@@ -800,3 +800,14 @@ export function sendReturnFromBranch(): void {
 export function sendReturnToLive(): void {
   controller.sendReturnToLive();
 }
+
+export async function fetchPaymentPreview(address: import('./payment-preview').PreviewAddress, signal: AbortSignal): Promise<import('./payment-preview').PreviewResponse> {
+  const credentials = loadResumeCredentials();
+  if (!credentials) throw new Error('No live session');
+  const response = await fetch(`/api/sessions/${encodeURIComponent(credentials.session_id)}/payment-preview`, {
+    method: 'POST', signal, headers: { 'Content-Type': 'application/json', 'x-etude-participant-token': credentials.resume_token },
+    body: JSON.stringify(address),
+  });
+  if (!response.ok) throw new Error('Payment preview unavailable');
+  return response.json();
+}

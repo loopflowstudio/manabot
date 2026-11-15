@@ -50,6 +50,11 @@ pub enum Action {
         #[serde(rename = "card")]
         object: ObjectId,
     },
+    /// Deliberate activation of the fixed printed mana output.
+    TapForMana {
+        player: PlayerId,
+        permanent: PermanentId,
+    },
     ActivateAbility {
         player: PlayerId,
         permanent: PermanentId,
@@ -140,6 +145,7 @@ impl Action {
             Action::ChooseTrigger { player, .. }
             | Action::PlayLand { player, .. }
             | Action::CastSpell { player, .. }
+            | Action::TapForMana { player, .. }
             | Action::ActivateAbility { player, .. }
             | Action::ActivateCardAbility { player, .. }
             | Action::Foretell { player, .. }
@@ -163,7 +169,8 @@ impl Action {
             Action::ChooseTrigger { .. } => ActionType::ChooseTrigger,
             Action::PlayLand { .. } => ActionType::PriorityPlayLand,
             Action::CastSpell { .. } => ActionType::PriorityCastSpell,
-            Action::ActivateAbility { .. }
+            Action::TapForMana { .. }
+            | Action::ActivateAbility { .. }
             | Action::ActivateCardAbility { .. }
             | Action::Foretell { .. } => ActionType::PriorityActivateAbility,
             Action::PassPriority { .. } => ActionType::PriorityPassPriority,

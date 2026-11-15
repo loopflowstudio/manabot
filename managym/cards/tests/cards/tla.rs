@@ -3860,6 +3860,7 @@ fn firebending_lesson_kicked_deals_five() {
     assert!(s.take_action_by_type(ActionType::PayCost));
     assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Permanent(wall)));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     // All five mountains paid for {R} + kicker {4}.
     assert_eq!(s.untapped_permanents_named(0, "Mountain"), 0);
     s.pass_priority();
@@ -3874,6 +3875,7 @@ fn firebending_lesson_unkicked_deals_two() {
     assert_eq!(s.action_space().kind, ActionSpaceKind::PayOrNot);
     assert!(s.take_action_by_type(ActionType::DeclineChoice));
     assert!(s.choose_target(Target::Permanent(wall)));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority();
     s.pass_priority();
     assert_eq!(permanent(&s, wall).damage, 2);
@@ -3887,6 +3889,7 @@ fn firebending_lesson_kicker_not_offered_when_unaffordable() {
     cast_only(&mut s);
     assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Permanent(wall)));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority();
     s.pass_priority();
     assert_eq!(permanent(&s, wall).damage, 2);

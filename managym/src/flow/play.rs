@@ -398,17 +398,7 @@ impl Game {
         object: ObjectId,
         cast: CastChoices,
     ) -> Result<(), AgentError> {
-        let card_ref = &self.state[object];
-        let printed_x = card_ref.mana_cost.as_ref().is_some_and(|cost| cost.x > 0);
-        let selected_x = self
-            .casting_mana_cost(player, object, cast)
-            .is_some_and(|cost| cost.x > 0);
-        // CR 107.3a/b: additional X costs still apply to free casts when the
-        // printed mana cost has no X. A replaced printed X, however, is zero.
-        let additional_x = card_ref.required_waterbend().is_some_and(|cost| cost.x > 0);
-        // CR 702.56a: the replicate count is announced with the other costs.
-        let replicate = card_ref.replicate().is_some();
-        if selected_x || (!printed_x && additional_x) || replicate {
+        if self.cast_needs_x_announcement(player, object, cast) {
             self.pending_choice = Some(PendingChoice::AnnounceX {
                 player,
                 object,
@@ -417,6 +407,26 @@ impl Game {
             return Ok(());
         }
         self.begin_kicker_choice(player, object, cast)
+    }
+
+    /// Announcement and read-only explanation use the selected casting cost,
+    /// including a fixed zone permission that can replace a printed X.
+    pub(crate) fn cast_needs_x_announcement(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        cast: CastChoices,
+    ) -> bool {
+        let card = &self.state[object];
+        let printed_x = card.mana_cost.as_ref().is_some_and(|cost| cost.x > 0);
+        let selected_x = self
+            .casting_mana_cost(player, object, cast)
+            .is_some_and(|cost| cost.x > 0);
+        // CR 107.3a/b: additional X applies to a free cast when the printed
+        // cost has no X; a replaced printed X is zero. Replicate announces
+        // its count at the same boundary (CR 702.56a).
+        let additional_x = card.required_waterbend().is_some_and(|cost| cost.x > 0);
+        selected_x || (!printed_x && additional_x) || card.replicate().is_some()
     }
 
     /// Whether `player` can pay the total cost of `card` with `cast`'s
@@ -515,42 +525,43 @@ impl Game {
         object: ObjectId,
         cast: CastChoices,
     ) -> Result<(), AgentError> {
+        match self.fixed_cast_cost_choices(player, object, cast) {
+            Some(fixed) => self.begin_mode_selection(player, object, fixed),
+            None => {
+                self.pending_choice = Some(PendingChoice::KickerChoice {
+                    player,
+                    object,
+                    cast,
+                });
+                Ok(())
+            }
+        }
+    }
+
+    /// The announcement and preview share forced cost choices. None means
+    /// both the base and optional/alternative payment are still possible.
+    pub(crate) fn fixed_cast_cost_choices(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        cast: CastChoices,
+    ) -> Option<CastChoices> {
         let kicked = CastChoices {
             kicked: true,
             ..cast
         };
-        // A spell cast without paying its mana cost can't also take an
-        // alternative cost (CR 118.9a).
-        if !cast.free
-            && self.state[object].exile_alternative().is_some()
-            && self.can_pay_cast(player, object, kicked)
-        {
-            // The mana cost or the alternative: asked only when both are
-            // payable.
-            if !self.can_pay_cast(player, object, cast) {
-                return self.begin_mode_selection(player, object, kicked);
+        // CR 118.9a: a free cast cannot also take an alternative cost.
+        let alternative = !cast.free && self.state[object].exile_alternative().is_some();
+        let optional = self.state[object].optional_cost().is_some();
+        if (alternative || optional) && self.can_pay_cast(player, object, kicked) {
+            if self.can_pay_cast(player, object, cast) {
+                None
+            } else {
+                Some(kicked)
             }
-            self.pending_choice = Some(PendingChoice::KickerChoice {
-                player,
-                object,
-                cast,
-            });
-            return Ok(());
+        } else {
+            Some(cast)
         }
-        if self.state[object].optional_cost().is_some() && self.can_pay_cast(player, object, kicked)
-        {
-            // Only the mana is payable: "pay 5 life or pay {2}" at low life.
-            if !self.can_pay_cast(player, object, cast) {
-                return self.begin_mode_selection(player, object, kicked);
-            }
-            self.pending_choice = Some(PendingChoice::KickerChoice {
-                player,
-                object,
-                cast,
-            });
-            return Ok(());
-        }
-        self.begin_mode_selection(player, object, cast)
     }
 
     /// Resolve the pending kicker choice, then continue the pipeline.

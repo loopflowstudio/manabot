@@ -28,13 +28,14 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.responses import FileResponse, JSONResponse, Response
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 import managym
 from managym.academy.card_art import card_art
 from managym.bots import BotDecision, BotPolicy, choose_bot
 from managym.decision import (
     Command as SemanticCommand,
+    DecisionFrame as SemanticDecisionFrame,
     SemanticTransition,
     TransitionReceipt,
 )
@@ -60,6 +61,7 @@ from managym.experience_projection import (
     redact_observation,
     serialize_observation,
 )
+from managym.payment import preview_payment
 
 from . import trace as trace_store, villain as villain_module
 from .advice import (
@@ -3640,3 +3642,70 @@ def validate_decklists(payload: DeckImportInput) -> dict[str, Any]:
         "world_version": world["world_version"],
         "card_digest": world["card_digest"],
     }
+
+
+class PaymentPreviewRequest(BaseModel):
+    """One current offer, with every Academy authority coordinate."""
+
+    model_config = ConfigDict(extra="forbid")
+    match_id: str
+    revision: int
+    prompt_id: int
+    frame_hash: str
+    offer_id: int
+    request_id: str
+
+
+@app.post("/api/sessions/{session_id}/payment-preview")
+async def get_payment_preview(
+    session_id: str,
+    payload: PaymentPreviewRequest,
+    x_etude_participant_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    record = SESSION_REGISTRY.get(session_id)
+    if record is None:
+        raise HTTPException(404, "session_not_found")
+    async with record.lock:
+        participant = next(
+            (
+                p
+                for p in record.participants.values()
+                if x_etude_participant_token is not None
+                and secrets.compare_digest(p.resume_token, x_etude_participant_token)
+            ),
+            None,
+        )
+        if participant is None or participant.role != ViewerRole.PILOT:
+            raise HTTPException(403, "payment_preview_forbidden")
+        game = record.game
+        context = game.published_prompt
+        if context is None or game.env is None or game.match_id != payload.match_id:
+            raise HTTPException(409, "payment_preview_stale")
+        frame = ExperienceFrame.model_validate(context.frame)
+        if (
+            frame.revision != payload.revision
+            or frame.prompt is None
+            or frame.prompt.id != payload.prompt_id
+            or frame.frame_hash != payload.frame_hash
+            or context.viewer != HERO_PLAYER_INDEX
+            or payload.offer_id not in context.action_by_offer
+        ):
+            raise HTTPException(409, "payment_preview_stale")
+        native = SemanticDecisionFrame.from_json(
+            game.env.semantic_decision_frame_json()
+        )
+        try:
+            preview = preview_payment(
+                game.env,
+                viewer=context.viewer,
+                revision=native.revision,
+                fingerprint=native.fingerprint,
+                action_index=context.action_by_offer[payload.offer_id],
+            )
+        except managym.AgentError as exc:
+            raise HTTPException(409, "payment_preview_stale") from exc
+        return {
+            **payload.model_dump(),
+            "viewer": context.viewer,
+            "preview": preview.model_dump(mode="json"),
+        }

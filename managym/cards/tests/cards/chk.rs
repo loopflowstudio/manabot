@@ -210,3 +210,27 @@ fn heartbeat_of_spring_ignores_nonlands_and_badgermole_stays_with_its_controller
     choose_mode(&mut s, 1);
     assert_eq!(*pool(&s, 0), Mana::parse("U"));
 }
+
+/// A deliberate fixed tap can produce several types; Heartbeat's bonus is a
+/// real choice after production, rather than an automatic output guess.
+#[test]
+fn heartbeat_of_spring_fixed_source_bonus_remains_a_choice() {
+    let (mut s, lands) = heartbeat_setup(0, &["Forest"]);
+    let source = card_of(&s, lands[0]);
+    // Controlled multi-type fixed production, like the indexed fixture above;
+    // no printed card is claimed to have this combination.
+    s.game_mut().state[source].mana_abilities = vec![managym::state::card::ManaAbility {
+        mana: Mana::parse("WU"),
+    }];
+    s.game_mut().scenario_refresh_priority().unwrap();
+    choose(&mut s, |action| {
+        matches!(action,
+        Action::TapForMana { permanent, .. } if *permanent == lands[0])
+    });
+    assert!(tapped(&s, lands[0]));
+    assert_eq!(*pool(&s, 0), Mana::parse("WU"));
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
+    assert_eq!(s.action_space().actions.len(), 2);
+    choose_mode(&mut s, 0);
+    assert_eq!(*pool(&s, 0), Mana::parse("WWU"));
+}

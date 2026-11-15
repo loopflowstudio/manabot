@@ -574,3 +574,15 @@ retired codes 5, 6 and 7 keep their historical meanings.
 `SuspendedResolution::continuation` walks retained frames and decisions root first;
 observation projection and hidden-world sampling share that chain for caller
 ancestry and inspection permissions.
+
+### Read-only payment explanation
+
+`managym.payment.preview_payment` explains one action in the current native
+observation. Pass the actor and the revision/fingerprint from
+`env.semantic_decision_frame_json()`, and the action's index in that observation.
+It rejects stale or non-actor requests. `exact` means the ordered automatic
+production plan, including surplus; it does not necessarily resolve which mana
+to spend. Choice-dependent prices return `needs_choice` without source marks.
+Fixed-output sources have deliberate activation offers alongside indexed mana
+abilities. Their absent `ability_index` remains distinct from ability zero on
+all policy input paths. No preview executes a spell or activation.

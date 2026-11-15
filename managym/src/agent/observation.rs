@@ -2041,7 +2041,8 @@ impl Observation {
                 .card_id(*object)
                 .map(|card| vec![game.state.cards[card].public_id])
                 .unwrap_or_default(),
-            Action::ActivateAbility { permanent, .. }
+            Action::TapForMana { permanent, .. }
+            | Action::ActivateAbility { permanent, .. }
             | Action::DeclareAttacker { permanent, .. }
             | Action::WaterbendTap { permanent, .. } => game.state.permanents[*permanent]
                 .as_ref()

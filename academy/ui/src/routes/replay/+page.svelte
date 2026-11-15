@@ -688,6 +688,7 @@
             {#if studyStore.phase === 'score' && recordedDecision}
               <p class="type-rubric mt-3">Decision before · Chosen action · Consequences after</p>
               <DecisionSurface frame={recordedDecision.frame} readOnly chosenOffer={recordedDecision.offer_id} />
+              <p class="type-caption text-ink-2">Automatic payment preview was not recorded. Recorded activations and spending remain visible.</p>
             {:else if studyStore.phase === 'score'}
               <p class="type-caption mt-3 text-ink-2">{replayStore.trace.events[replayStore.currentFrameIndex]?.auto ? 'Automatic action · configured automation' : 'No recorded decision at this transition.'}</p>
             {/if}
