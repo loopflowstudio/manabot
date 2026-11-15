@@ -14,7 +14,9 @@ digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 - [Shared decision surface](#shared-decision-surface)
 - [Using the laptop table](#using-the-laptop-table)
 - [Play and Inspect modes](#play-and-inspect-modes)
+- [Planning and confirming combat](#planning-and-confirming-combat)
 - [Choosing priority stops](#choosing-priority-stops)
+- [Playing a series against a model](#playing-a-series-against-a-model)
 - [Reading consequences and controlling narration](#reading-consequences-and-controlling-narration)
 - [Inspect a replay](#inspect-a-replay): timeline, live Watch, perspectives and recovery
 - [Choice navigation](#choice-navigation)
@@ -22,6 +24,30 @@ digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 - [Playing a trained challenger](#playing-a-trained-challenger)
 - [Attempts and shared history](#attempts-and-shared-history)
 - [Experience proof gate](#experience-proof-gate)
+
+## One game, from setup to its recorded decisions
+
+**New game** and **Games** are the main destinations. **Current game** returns
+this tab to its last table or watched game. Existing launch, replay and Watch
+links continue to open their intended games.
+
+**New game** opens setup for a separate session, starting from retained choices.
+Edits here do not save into your current session; **Cancel** returns without
+committing them. Setup shows two native seats. Choose each controller, deck and optional
+**Search**. One controller can be you; choosing bots in both seats starts a
+watched game through the same setup. Seat 1 plays first; seat 2 draws first.
+Policies are chosen directly by name and execution identity. Their provider,
+artifacts and runner remain available in details. **Browse decks and cards**
+opens the full deck browser; imported sources and disclosure use the same
+admission checks for played and watched games.
+
+Inspect a card through hover, focus or its **Inspect card** action without
+changing how you play. The Play/Inspect click preference controls gestures;
+it never gates reading. **Open a recorded game file** in Games imports a training game or evaluation
+trace without changing its original evidence. Games links back to recorded positions, their legal
+choices and available recorded policy/search evidence. Trying another line
+creates a separate Study branch with an explicit return to the source decision.
+There is no live example Advice panel or example-scenario read selector.
 
 ## Running Academy
 
@@ -165,8 +191,10 @@ before loading; a baseline bound to specific decks refuses another matchup.
 Missing or changed policy artifacts are refused with the provider's reason.
 
 Reloading the page returns to the same game and its pending decision; it does
-not deal again. **New Game** returns to ordinary setup with the launched
-decks, opponent and decklist mode selected. For imported matchups, setup shows
+not deal again. To continue the series, use
+[Rematch or Swap sides](#playing-a-series-against-a-model). **New game** opens a separate session setup with the launched decks, opponent
+and decklist mode selected.
+For imported matchups, setup shows
 both selected source files and their editable lists. Uncheck **Use imported
 decks for the next game** to choose bundled decks instead.
 
@@ -401,14 +429,15 @@ The table opens with UR Lessons (you) against GW Allies. Before starting:
 - **Opponent** chooses who you face: **Search 16**, **Search 64** or
   **Search 256** (the engine's built-in search, with that many simulated
   playouts per decision), **Random**, or **Passive**, which always passes.
-  With manabot installed it also offers **Registered policy**, which adds a
-  **Run** and a **Checkpoint** menu
+  It also offers **Registered policy**, which adds a **Policy** menu for
+  policies registered with this server
   ([Play and watch a trained checkpoint](#play-and-watch-a-trained-checkpoint)).
-- **Choose decks** assigns a deck to each seat from the bundled packs.
-- **New Game** starts the selected matchup. During a game it ends the current
-  attempt and starts another.
+- **New game** assigns a deck to each seat from the bundled packs.
+- **New Game** starts a new session with the selected matchup. Replacing an
+  active game requires confirmation that it will be stopped. To keep games
+  together, use [Rematch, Swap sides or Change opponent](#playing-a-series-against-a-model).
 
-To use your own decks, open **Choose decks**, expand **Import decklist files**
+To use your own decks, open **New game**, expand **Import decklist files**
 and check **Use imported decks for the next game**. Upload a UTF-8 `.txt` or
 `.dek` file for both **Your deck** and **Opponent deck**, or paste each list
 into its source box. Write one `count card name` per line, with optional
@@ -423,10 +452,119 @@ the import option to return to bundled decks.
 
 The table reads **Who decides / What is happening / Your choices**. It starts in
 **Inspect** mode: clicking a card inspects it and sends nothing; choosing one of
-the listed legal actions commits it. **Play** adds card selection and a hand-drag
+the listed legal actions commits it. Combat controls add an editable
+plan and explicit **Confirm** step ([planning combat](#planning-and-confirming-combat)).
+**Play** adds card selection and a hand-drag
 shortcut ([controls below](#play-and-inspect-modes)). Decisions with a single
 legal action are taken for you and never shown. Reloading the page restores the
 pending decision.
+
+### Playing a series against a model
+
+Choose **Registered policy**, select the intended policy, and import your decks
+through **New game**. Check the matchup, decklist disclosure, priority stops
+and deal mode, then select **New Game**. After the game finishes, select
+**Rematch** to play again with that setup. After the next game, select
+**Swap sides**: you keep your deck and move from playing first to drawing first,
+or the reverse. Both games and the next one belong to the same session.
+
+A trained or independent policy must first be registered with this Academy
+server; see [Play and watch a trained checkpoint](#play-and-watch-a-trained-checkpoint).
+The provider checks that it can play the selected decks and configuration.
+Built-in opponents need no registration.
+
+The session strip at the table shows the game number, matchup, your play/draw
+seat and deal mode. Open its configuration details with a pointer or Tab and
+Enter to check the full Policy ID, model artifacts, runner and available search
+configuration. A familiar model name alone does not identify the execution.
+Each game's recording keeps the exact configuration used to start it, including
+its admitted decks, disclosure, actual seed and native seats.
+
+| Next action | What carries forward |
+|---|---|
+| **Rematch** | Both decks and imported source lists, exact opponent configuration, disclosure, stops and your seat |
+| **Swap sides** | The rematch setup, with your native play/draw seat reversed; your deck stays yours |
+| **Change opponent** | Your decks, disclosure, stops and seat/deal plan; only the explicitly edited opponent settings change |
+| **New Game** | Starts a separate session from setup |
+
+Your preferred **Play** or **Inspect** mode stays selected across games. To
+exchange decks within the series, choose **Edit next game** in the session strip.
+**Change opponent** opens only the opponent settings. Both editors show that
+edits belong to this session's next game. **Save next setup** retains the draft
+without starting or admitting a game; **Start next game** admits it and starts
+one continuation in the same session. **Cancel** discards unsaved edits.
+Earlier recordings keep their original setup. Stop edits during play also carry
+into the next game.
+
+If both controllers become bots in **Edit next game**, choose **Start new
+watched game**. This creates a separate Watch game and preserves the Play
+session and current attempt. **Current game** then returns to that watched game;
+reading another session's history does not change that destination.
+Admission refusal keeps the editor, edits, current game and saved draft usable.
+Reload discards unsaved edits and restores committed setup and the actual
+pending game; it never silently starts another game. Replacing an unfinished
+game warns that it will be stopped; inspecting setup or opening a recording does not stop it.
+
+#### Choose the deal deliberately
+
+**Fresh deal** is the default when no seed was supplied. Each successfully
+started game gets a new random seed, recorded with that game. **Repeat seed**
+keeps an explicitly supplied seed, including one supplied with CLI `--seed` or
+Python `seed=`. Enter a seed as a decimal unsigned 64-bit integer, from `0` to
+`18446744073709551615`. The selected mode is visible before starting.
+
+Rematching or swapping sides preserves this mode. Repeating a seed does not
+repeat policy decisions, and swapping native seats changes which player gets
+each seat's deal. These controls do not establish a paired evaluation.
+
+#### Read results and return from a recording
+
+Open session history from the table to see its games in **Games**. Each entry
+links to its recording. Use Replay's return link to return to the filtered
+history, then return to Play in the same tab to continue the current game.
+Opening an earlier recording does not replace the live game.
+
+Results count wins, draws and losses from your seat only among completed games,
+with the completed-game denominator. Active, stopped and interrupted games are
+counted separately. For example, two wins, one loss and one stopped game means
+**2 wins / 0 draws / 1 loss out of 3 completed**, plus **1 stopped**. Counts cover
+the full authorized session selection, including games on other history pages.
+
+Breakdowns keep exact policy/search configuration, matchup, disclosure, native
+seat and evidence origin distinct. Changing opponent stays in the session and
+creates a separate breakdown. Human exploratory play, automated validation,
+training and evaluation recordings retain their declared origins; unknown
+origin stays unknown. An evaluation label alone does not establish a controlled
+study. These counts describe recorded games, not a strength estimate or rating.
+
+Each collapsed breakdown names its recorded opponent and policy identity, where
+available. Expand it for decks and the full execution configuration.
+
+Wall elapsed time includes pauses and appears only when start/end times were
+recorded. Response measurements appear only when recorded by the provider,
+with their measured sample count; otherwise they are unavailable.
+
+#### Reloads, failures and privacy
+
+Reload in the same tab to recover the session and its actual pending decision.
+Independent tabs and launches start independently. Opening session history in
+another tab is read access and does not resume that session's live game. Keep
+using the same browser address, including its port. If browser session storage
+is unavailable, Academy explains that reload continuity is unavailable; the
+current in-memory game remains usable.
+
+If the next policy or decks cannot be admitted or loaded, Academy shows the
+reason and preserves the existing game and setup for correction and retry. A
+missing or changed policy is never silently replaced. Restore its pinned
+artifacts, or deliberately select the replacement offered by the picker.
+Retrying a continuation after a lost reply recovers the game already started
+by that request. After a backend restart, the unfinished game is interrupted;
+start the next game explicitly rather than expecting its live state to resume.
+
+Session setup, imported source lists and seeds remain owner-private. Sharing a
+completed recording follows the existing replay rules; it grants neither session
+configuration access nor control of the live table. Earlier ungrouped games stay
+in **Games** without being assigned to a session retroactively.
 
 ### Using the laptop table
 
@@ -439,8 +577,8 @@ action.
 At laptop widths and heights, the board and hand sit beside the current
 decision. Scroll the legal choices while the current instruction, legal count,
 **Show all** and filter controls remain available. Long instructions scroll
-independently. Open **History and settings** for decision details, consequences,
-advice and stop configuration without losing the pending decision. The current
+independently. Open **History and settings** for decision details, recorded
+consequences and stop configuration without losing the pending decision. The current
 priority-stop automation setting and **Edit stops** remain visible beside the choices. At narrow or short windows, board and
 choices stack; use the board/choices jump links to move between them. Changing decisions
 moves focus within the choices region without pulling the page away from the
@@ -498,16 +636,16 @@ several actions, choose an explicit alternative from the list. A card with no
 current action remains available for inspection.
 
 Hover or focus previews the card; **Inspect card** opens its details without
-committing. Player targets have explicit named controls. During combat, choose
-for the creature named by the current prompt: attack or decline, or select one
-of its legal blocks or decline. Each choice commits separately before the next
-creature's prompt. Mana-source choices likewise follow the offered decisions;
+committing. Player targets have explicit named controls. Combat
+controls let you edit an attack or block plan, then confirm the declaration
+([planning combat](#planning-and-confirming-combat)). Mana-source choices follow the offered decisions;
 dragging a spell does not configure manual tapping.
 
 Choose **Inspect** to examine the acting viewer's observation and every legal
 offer. Card selection narrows navigation; **Show all** restores the full list.
-Both modes retain the legal count and complete choices. Switching modes clears
-uncommitted selection, sends no game action and leaves priority automation at
+Both modes retain the legal count and complete choices. Switching modes preserves
+a combat draft for the same pending decision; other uncommitted card selections
+are cleared. It sends no game action and leaves priority automation at
 its configured setting. Inspect is the initial default; an explicit mode
 preference is remembered in this browser.
 
@@ -517,6 +655,82 @@ unavailable while disconnected, awaiting a submitted action or changing settings
 These live-play shortcuts do not submit moves in Watch, recorded Replay or Study;
 use their own decision controls. Cancellation only discards local selection:
 after commitment, costs and revealed information remain committed.
+
+### Planning and confirming combat
+
+At your attack declaration, choose **Play**, select an eligible creature on
+the board, then its named player destination. Repeat for another creature and
+read their assignments in **Your choices**. Each assignment names
+the exact creature and the opposing player it will attack. Remove one creature,
+inspect the other, then choose **Confirm**. Only the confirmed declaration makes
+the creature attack and taps it if required. Editing or inspecting the plan
+spends nothing and leaves the game at the same decision.
+
+The board stays in view while you plan. Drafted creatures carry a **Planned attack**
+or **Planned block** marker, also included in their accessible names. Clearing an
+assignment removes its marker; changing focus leaves the other markers in place.
+The summary lists selected creatures, their destinations, counts and current power
+totals. Power is the creatures'
+current power, not a prediction of damage or the opponent's remaining life.
+Copies with the same name remain separate selectable objects.
+
+- **Attack:** select a creature and its named attack destination using the
+  board controls or the labeled choices. The current game offers the opposing
+  player as the destination. Remove a selection to leave that creature out.
+  **Select all eligible** adds the eligible attackers to the draft; review the
+  result before confirming.
+- **Block:** select a blocker, then the attacker it should block. Use the same
+  controls to reassign it to another offered attacker or clear its assignment.
+  The summary keeps all blocker-to-attacker links visible together. Academy
+  does not choose blocker assignments for you.
+- **Clear:** removes the editable assignments so you can start again. It does
+  not submit an empty declaration. To attack or block with no creatures, clear
+  the plan and explicitly confirm it, if the rules permit that declaration.
+- **Inspect:** hover or focus a card for its preview, or open **Inspect card**
+  for details. Switching to **Inspect** lets you examine the acting viewer's
+  observation and complete legal choices without changing the draft. Return
+  to **Play** to continue editing the same pending declaration.
+- **Keyboard:** Tab to the labeled creature and destination or assignment
+  controls, then activate them with Enter or Space. The same controls support
+  pointer input; dragging is not required. Tab to **Confirm** when ready.
+
+The rules engine checks the whole declaration, including restrictions involving
+several creatures. For example, assigning only one blocker to an attacker with
+menace leaves an invalid draft visible with an explanation. Add another eligible
+blocker or change the plan before confirming. Invalid plans open the native combat
+requirements for review; these describe the board’s restrictions rather than
+claiming to identify which restriction the draft violated. Open **Rules response**
+to read the engine's rejection. A creature's presence among the available choices
+does not mean every combination is legal. Academy never drops
+an invalid assignment or substitutes another plan to make confirmation succeed.
+
+**Confirm** waits for validation of the current draft and checks it again when
+submitted. While validation or submission is pending, wait for its result.
+A correctable rules rejection keeps your draft for editing and commits none of
+it. If validation reports a capacity limit, it cannot establish legality;
+confirmation remains unavailable. Invalid and capacity results keep your draft
+editable; retrying an unchanged plan does not resolve those results. **Retry
+validation** is offered when a validation request could not be sent.
+A connection or submission failure is shown separately from a rules rejection. Recover the connection and read the current
+declaration before trying again; a lost confirmation reply does not mean the
+declaration was cancelled.
+
+If the game has advanced, Academy discards the outdated draft and shows the
+current decision. Reloading or reconnecting also discards unconfirmed local
+plans, with an explanation, and restores the game's actual pending and committed
+choices. If part of a declaration was already committed through individual
+decisions, those assignments remain visible and fixed; only the remaining part
+can be edited. **Clear** cannot remove committed assignments, untap creatures
+or undo costs and revealed information.
+
+A confirmed declaration is recorded as its exact individual game decisions.
+Replay can therefore show several decisions from one confirmation. Those are
+the choices that were committed, not additional selections made by the browser.
+Confirmation also lets forced consequences run normally. If no further choice
+is needed, the returned board may already show combat damage or a later phase;
+confirmation does not create another pause at the end of the declaration.
+Watch, recorded Replay and Study keep their own decision controls; the live
+combat plan does not submit actions there.
 
 ### Choosing priority stops
 
@@ -817,9 +1031,9 @@ It adds:
 
 Independent Python policies work without manabot. A saved game that was played
 against a checkpoint still replays without its provider; continuing it needs
-the original admitted policy. The decision-advice panel reads
-fixtures from a checkout of this repository and is absent from an installed
-package.
+the original admitted policy. Recorded policy and search evidence comes from
+the saved game and works in installed Academy; missing outputs stay unavailable.
+The live table does not load example analysis from a repository checkout.
 
 #### How a trained opponent is named
 
@@ -853,9 +1067,10 @@ uv run --no-project managym academy --policy challenger.json watch \
     --player challenger --player random
 ```
 
-Watch opens at setup with both seats selected. Choose decks and press **Start**.
-Either seat can use a registered policy. **Registered policy**, **Provider / group**
-and **Policy** are the same native selects in Play and Watch. They preserve an
+Watch opens at setup with both seats selected. Choose decks and press **Start watching**.
+Either seat can use a registered policy. **Registered policy** and **Policy**
+use the same direct selection in Play and Watch; provider and runner details
+remain available as provenance. They preserve an
 unavailable selection rather than substituting a newer model. Keyboard navigation
 uses the browser's select controls.
 
@@ -904,12 +1119,14 @@ pending decision intact. Qwen does not support Search. A provider's
 `supports_search` defaults false; a true flag alone is no search admission.
 Search-capable policies can use the shared composition below.
 
+<a id="mirror-search"></a>
+
 #### Search
 
 Choose a registered policy, then change its **Search** control from **None
 (raw policy)** to **Search**. This works for the opponent in Play and
-for either Watch seat. The label includes the budget, for example
-`challenger + search 1×1`. While a decision is pending, the table shows
+for either Watch seat. Its configuration includes the exact budget; details retain the magnetic
+mirror update algorithm and recorded identities. While a decision is pending, the table shows
 its search budget and elapsed waiting time. Reload preserves the configuration.
 
 | Setting | Default | Range |
@@ -1138,8 +1355,8 @@ browser. The invariants that follow:
   Imported game files get their own Academy identity while retaining the
   source digest; frozen `erd1` evidence keeps its original bindings.
 
-`/api/advice` serves fixture advice for the decision-advice surface; Academy has
-no live belief runtime.
+The historical `/api/advice` fixture API remains available to conformance tools.
+The live table does not fetch or display that example as current-game analysis.
 
 ## Choice navigation
 
@@ -1242,10 +1459,10 @@ Checkpoint records live in `.runs/elemental-play/checkpoints/`, attempts in
 `.runs/elemental-play/human-play/play.sqlite` marked `human_exploratory`.
 
 The printed **Elemental deck browser** link assigns either seat from the ten
-`elemental-world-v2` setups (mirrors allowed) with **Use for me** / **Use for
-opponent**. **Choose decks** prepares the next matchup; only **New Game**
-replaces the current attempt. On a scripted seed-0 game (2026-10-26), stop and
-forced-step automation cut deliberate inputs from 289 to 73.
+`elemental-world-v2` setups (mirrors allowed) with a deck assignment for each
+native seat. **Edit next game** prepares the next matchup in the current session;
+starting it replaces the current attempt. **New game** starts a separate session.
+On a scripted seed-0 game (2026-10-26), stop and forced-step automation cut deliberate inputs from 289 to 73.
 
 ### Other checkpoints
 

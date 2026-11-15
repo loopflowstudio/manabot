@@ -73,6 +73,9 @@ reconnect, replay/fork identity and accessibility. Cancellation or undo needs an
 explicit shared action and cannot erase committed costs or revealed information.
 Configured priority-stop automation must remain identifiable as automation,
 separate from deliberate human decisions.
+Play's retained `hero_*`/`villain_*` setup fields name human/opponent roles;
+`GameConfig.human_seat` orders them at the native boundary. Record and project
+actual native seats; Watch keeps its two-seat acting-view contract.
 Academy resume credentials and the started-launch marker live in browser
 `sessionStorage`. Keep them scoped together; a launch must not resume another
 tab's or another launch's game.
@@ -303,6 +306,10 @@ from rules/deck PlayerConfig and world identity.
 Every game runner, benchmark and Academy session uses native trivial-decision
 skipping (`skip_trivial`, on by default); a decision with one legal action is
 never shown to a person or sent to a model or policy (Jack Heart, 2026-10-28).
+With trivial skipping, an ordinary Command returns at the next nontrivial
+decision, which can be in a later turn: its final declaration choice may also
+resolve forced combat damage.
+The returned game state is not a snapshot of the declaration boundary.
 Turning it off is for explicit debugging only. Outside tests, the only code
 that does is the constructed-position fixtures listed in
 `tests/env/test_skip_forced_decisions.py`; they play no game for a person,
@@ -337,6 +344,11 @@ admission. Admission-rejection fixtures must mark the config as submitted
   Replay compares these through
   `manabot.env.replay.matches_retained_error`, retaining original class names and
   full vector diagnostic payloads in evidence.
+  Capacity is the typed `AgentError::Capacity` payload (Python
+  `managym.CapacityError`, an `AgentError` subtype): preserve resource, limit and
+  visited counts through semantic/search/vector wrappers. Failed in-place
+  progression quarantines the stream until reset; it is no successful terminal
+  transition. Declaration candidates roll back by being discarded.
 - Frozen experiment scheduling/analysis tests use an explicit compatible-world
   fixture for synthetic outcomes, with separate real-runtime rejection tests.
   Pin declared input capacities rather than inheriting fresh defaults; never
@@ -536,7 +548,9 @@ across `&self` code that reads the board per source or per ability. Continuous-e
 live in `EffectRecords` (indexed by affected object and player); trigger
 sources are looked up per event kind through `TriggerIndex`
 (`flow/triggers.rs`), invalidated by trigger and layer dependencies; departed-object
-facts are an `ObjectLkiLog`. A cloned `Game` carries these caches.
+facts are an `ObjectLkiLog`. A cloned `Game` carries these caches. Search clones
+omit card/exposure capture; a transactional candidate for the live game must
+explicitly preserve that capture and publish it only on success.
 Layer rebuilds reuse immutable copiable source objects and static plans, bound to
 exact definition identity, appearance and timestamp; copy/transform definition
 changes invalidate that source. Intermediate layer objects detach on writes.

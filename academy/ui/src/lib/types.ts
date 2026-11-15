@@ -397,6 +397,7 @@ export interface InteractionOffer {
 }
 
 export interface ExperienceFrame {
+  declaration?: DeclarationProjection | null;
   protocol: ProtocolVersion;
   match_id: string;
   revision: number;
@@ -425,7 +426,45 @@ export interface Command {
   answers: ChoiceAnswer[];
 }
 
+export interface DeclarationBinding { revision: number; fingerprint: string }
+export interface DeclarationAnswer { subject: ObjectRenderId; destination: SubjectRef | null }
+export interface DeclarationPlan { binding: DeclarationBinding; assignments: DeclarationAnswer[] }
+export interface DeclarationSubject {
+  object: DecisionObjectView;
+  power: number;
+  destinations: SubjectRef[];
+  fixed: boolean;
+  assigned_to?: SubjectRef | null;
+}
+export interface DeclarationProjection {
+  binding: DeclarationBinding;
+  stage: 'attackers' | 'blockers';
+  actor: number;
+  rules_player: number;
+  subjects: DeclarationSubject[];
+  destinations: DecisionObjectView[];
+  constraints: string[];
+}
+export interface DeclarationCommand {
+  command_id: string;
+  match_id: string;
+  expected_revision: number;
+  prompt_id: number;
+  plan: DeclarationPlan;
+}
+export interface DeclarationCommitment {
+  stage: 'attackers' | 'blockers';
+  rules_player: number;
+  assignments: DeclarationAnswer[];
+}
+export interface DeclarationReceipt {
+  command: DeclarationCommand;
+  child_command_ids: string[];
+  completion: DeclarationCommitment;
+}
+
 export interface CommandReceipt {
+  declaration?: DeclarationReceipt | null;
   command_id: string;
   actor: number;
   accepted_at: number;
@@ -556,6 +595,8 @@ export interface RecoveryEnvelope {
 
 /** Root of the checked-in Rust-generated cross-language fixture. */
 export interface ProtocolV1ConformanceBundle {
+  declaration_command?: DeclarationCommand | null;
+  declaration_receipt?: CommandReceipt | null;
   recovery: RecoveryEnvelope;
   command: Command;
 }
@@ -614,6 +655,9 @@ export interface GameSummary extends TraceSummary {
   revision: number | null;
   mine: boolean;
   replay_available: boolean;
+  play_session_id?: string | null;
+  game_number?: number | null;
+  feedback_truncated?: boolean;
   feedback: { note: string; created_at: string; author_id: string | null; decision_address: string | null }[];
 }
 

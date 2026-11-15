@@ -30,6 +30,28 @@ def watch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[WatchCrea
     server._drop_session(result["id"], "test")
 
 
+def test_watch_starting_at_second_seat_preserves_acting_view(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(server.trace_store, "TRACES_DIR", tmp_path)
+    result = create_watch(WatchRequest(players=["random", "passive"], seed=7))
+    try:
+        game = server._live_record_for_trace(result["id"]).game
+        assert game.obs is not None
+        assert game.obs.agent.player_index == 1
+        recovery = game.current_recovery("explicit_resync")
+        assert recovery["frame"]["projection"]["agent"]["player_index"] == 0
+        assert recovery["frame"]["prompt"] is None
+        assert recovery["frame"]["offers"] == []
+        step_watch(result["id"], result["token"], 0)
+        row = inspect_watch(result["id"], 0, result["token"])
+        assert row["decision"]["viewer"] == 1
+        assert row["observation"]["agent"]["player_index"] == 1
+        assert row["observation"]["opponent"]["hand"] == []
+    finally:
+        server._drop_session(result["id"], "test")
+
+
 def test_watch_steps_are_exact_and_actor_safe(watch: WatchCreated) -> None:
     trace_id, token = watch["id"], watch["token"]
     client = TestClient(server.app)

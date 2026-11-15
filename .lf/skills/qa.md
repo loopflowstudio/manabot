@@ -91,6 +91,17 @@ publish, land or choose the next Graph step from here.
   (buttons are disabled while a Command is in flight, and `Pass Turn (F6)` in
   the panel is not an offer). Tapped lands show only in a `fullPage`
   screenshot, not in the board's text.
+  Combat declarations are not offers: they show `[data-testid=combat-composer]`
+  (whole plan, `data-testid=combat-validation` `data-status`, one Confirm), so
+  a game loop waiting only for `action-option` stalls at the first combat.
+  Specs use `confirmCombat` from `academy/ui/e2e/combat.ts`. Opponent select
+  values are `search-16`, `random`, `passive`, `policy` (not labels). For real
+  combat, import `16 Mountain\n10 Gray Ogre\n8 Boggart Brute\n6 Raging Goblin`
+  (menace via Boggart Brute) against Search 16. A `vite preview` server dies
+  when a later build replaces `.svelte-kit/output`; restart it after building.
+  Setup/navigation changes also run `npm --prefix academy/ui run test:e2e:policy`
+  and `npm --prefix academy/ui run test:e2e:search`; the release browser config
+  does not include those policy refusal, reload and Search journeys.
 - Configured launch (`managym academy play|replay`, `managym.academy.launch.serve`):
   from a checkout first build the static SPA with
   `ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build`, then set
@@ -151,6 +162,12 @@ publish, land or choose the next Graph step from here.
   result deliberately receives focus and may scroll; assert document stability
   during active decisions. After Play Again, select the completed replay by its
   result label, since the newest entry is the unfinished next game.
+  A Node `net` forwarder in the Playwright script, listening in front of the
+  `npm run preview` port, works because preview proxies `/ws/play` to the API.
+  To test a lost reply, click Confirm and cut in the same tick. Then check the
+  trace for a single commit: `attempts.trace_json` in
+  `<ACADEMY_TRACES_DIR>/play.sqlite`, `events[].action_description` by turn.
+  Forced children (one legal action) are skipped and absent from `events`.
 - First-time clone: copy tracked plus untracked non-ignored files
   (`git ls-files -co --exclude-standard`) to an empty `/tmp` directory and run
   `ACADEMY_CLEAN_API_PORT=… ACADEMY_CLEAN_FRONTEND_PORT=… ./scripts/verify-clean-machine`
@@ -434,6 +451,11 @@ publish, land or choose the next Graph step from here.
   otherwise a reload comparison uses a stale opening frame. For a short real
   target/recovery game, import `20 Mountain\n40 Lightning Bolt` against
   `40 Plains`, select Passive, play Mountains and cast Bolts at Villain.
+  The ordinary server also lists manabot's Heuristic and Greedy as Registered
+  policies; after a restart `/api/opponents` can stay empty for a while, so
+  poll it before selecting one. Repeated sessions: after **Swap sides** the
+  human sits at native seat 1, so check whose life a "Target …" offer lowers
+  and confirm the session's swapped game is a win, not just completed.
   Replay's newest entry can be an unfinished Play Again attempt: select the
   completed result explicitly before checking Next frame. Playwright offline
   mode did not close an existing localhost WebSocket in the MTG-355 run; it
@@ -475,6 +497,13 @@ publish, land or choose the next Graph step from here.
   Check the hand ends above history. Recorded terminal results have no next-game
   action and must leave keyboard navigation available; the live Play Again
   dialog retains its focus behavior.
+- Repeated sessions and Watch setup: the Play session strip (`region` "Play session")
+  offers Rematch, Swap sides, Edit next game and Change opponent; editors end in
+  Save next setup / Start next game / Cancel, and Cancel must leave the next
+  draft unchanged. Session results load after their region appears; wait for a
+  row before reading counts. The standalone bot-matchup setup is
+  `/replay?watch=1` (`region` "Game setup for watching"); plain `/replay` shows
+  none. Its "Continue to play" after switching a seat to You lands on `/?setup=1`.
 - Play/Inspect QA: fresh storage starts in Inspect. In Play, activate the exact
   hand `[data-object-id]` by pointer or Enter, then commit its labeled
   `[data-offer-id]`; selection, Inspect card, mode switches and Escape send no
