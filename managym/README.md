@@ -407,8 +407,10 @@ witnesses from `flow/mana.rs`. A mana source is reserved while its printed
 upfront cost is pending; `Decision::ManaUpfront` retains the parent decision
 and frame. Only after that obligation finishes do its tap/life/sacrifice costs
 commit and its output become a visible color decision. Mana abilities do not
-create stack objects. Fixed production keeps source order; a nested automatic
-prefix considers concrete pool remainders and the parent's completion.
+create stack objects. The initial fixed-source witness keeps source order;
+[automatic source preference](#automatic-source-preference) selects the taps.
+A nested automatic prefix considers concrete pool remainders and the parent's
+completion.
 
 Most payment questions never reach the search. With four untapped Islands and
 an empty pool, "can this player pay `{2}{U}`?" is answered by adding: the pool
@@ -434,8 +436,8 @@ The direct answer is exact or it is not used. Modal lands, filters, mana
 abilities with other costs, counted taps, nested activations and the automatic
 prefix of a nested activation go to the search described below, which stays
 the one definition of a legal payment: debug builds run it beside every direct
-answer and assert the same affordability and the same first witness, so
-automatic tapping order cannot differ between the two. Adding a kind of mana
+answer and assert the same affordability and the same first witness. Automatic
+source preference starts from that shared witness. Adding a kind of mana
 source needs no change here unless it should join the direct class, which
 requires a test comparing both paths on that source.
 
@@ -585,6 +587,13 @@ observation projection and hidden-world sampling share that chain for caller
 ancestry and inspection permissions.
 
 ### Automatic source preference
+
+Pay `{1}{G}` with an empty mana pool and two untapped Mountains and a Forest:
+automatic payment taps one Mountain and the Forest, leaving the other Mountain
+untapped. With equal follow-up scores, it uses a basic Forest before a green
+mana creature to pay `{G}`. Any remaining native spending decision still
+determines which mana units are spent; source preference adds no new option
+to configure.
 
 Automatic payment removes unnecessary fixed-source taps and uses a bounded
 mana-cost heuristic to prefer the remaining sources (`flow/mana/tap_choice.rs`).
