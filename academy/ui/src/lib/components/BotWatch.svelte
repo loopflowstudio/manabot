@@ -91,8 +91,10 @@
       }
     } catch { /* Ignore invalid browser preferences. */ }
     players = players.map((player, seat) => (params.get(`seat${seat + 1}`) ?? player) as PlayerChoice);
-    if (params.has('mirror')) {
-      try { searchConfigs = parseSearchConfigs(JSON.parse(params.get('mirror')!)); }
+    // `mirror` is the earlier spelling of the `search` query parameter.
+    const searchParam = params.get('search') ?? params.get('mirror');
+    if (searchParam !== null) {
+      try { searchConfigs = parseSearchConfigs(JSON.parse(searchParam)); }
       catch (reason) { fail(reason); }
     }
     const selected = params.get('trace');
