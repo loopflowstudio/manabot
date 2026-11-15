@@ -161,6 +161,15 @@ must match the match's world, use observation-only inputs, and supply either a
 categorical win/draw/loss value or a scalar declared as `signed_outcome`.
 Search requires open decklists.
 
+Academy can compose the baseline provider with its own framework-free
+[Search](../docs/academy.md#search) in `managym.search`, in Play and either
+Watch seat. Academy starts with one world at depth one and a 30-second
+ceiling; its controls accept larger explicit budgets. Other providers with
+compatible probabilities, signed values and isolated current-view forks can use
+it too. Qwen v1 remains search-disabled. Arena's samplers, receipts and
+numerical update stay here, unchanged; Academy Search carries an equal copy of
+the update, and a test holds the two to identical results.
+
 At each decision, search samples 16 worlds and rolls out every root action with
 positive base-policy probability in each world, for up to 20 policy choices
 including the root action. Native trivial-decision skipping remains enabled.

@@ -42,8 +42,8 @@ test('play page reacts to the full game loop', async ({ page }) => {
   // 2. Play against the random villain (fast, no search/checkpoint needed).
   await page.getByTestId('opponent-select').selectOption('random');
 
-  // 3. New Game must actually render a board (observation applied to DOM).
-  await page.getByRole('button', { name: 'New Game' }).first().click();
+  // 3. Start game must actually render a board (observation applied to DOM).
+  await page.getByRole('button', { name: 'Start game' }).first().click();
   const board = page.getByTestId('game-board');
   await expect(board).toBeVisible({ timeout: 15_000 });
   await expect(board).toContainText('Battlefield');

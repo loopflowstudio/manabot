@@ -1041,6 +1041,19 @@
     "OpponentIdentity": {
       "additionalProperties": false,
       "properties": {
+        "base_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Base Sha256"
+        },
         "bot_id": {
           "anyOf": [
             {
@@ -1242,6 +1255,18 @@
     "RematchMessage": {
       "additionalProperties": false,
       "properties": {
+        "attempt_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attempt Id"
+        },
         "config": {
           "additionalProperties": true,
           "title": "Config",
@@ -1252,6 +1277,44 @@
           "minimum": 0,
           "title": "Grant Revision",
           "type": "integer"
+        },
+        "intent": {
+          "default": "rematch",
+          "enum": [
+            "rematch",
+            "swap_sides",
+            "change_opponent"
+          ],
+          "title": "Intent",
+          "type": "string"
+        },
+        "request_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Request Id"
+        },
+        "setup_revision": {
+          "anyOf": [
+            {
+              "maximum": 18446744073709551615,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Setup Revision"
         },
         "type": {
           "const": "rematch",
@@ -1296,6 +1359,18 @@
     "ResumeMessage": {
       "additionalProperties": false,
       "properties": {
+        "play_session_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Play Session Id"
+        },
         "presentation_cursor": {
           "anyOf": [
             {
@@ -1361,6 +1436,47 @@
         "command"
       ],
       "title": "RetryDecisionMessage",
+      "type": "object"
+    },
+    "RetryMirrorMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "expected_revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Expected Revision",
+          "type": "integer"
+        },
+        "grant_revision": {
+          "anyOf": [
+            {
+              "maximum": 18446744073709551615,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Grant Revision"
+        },
+        "match_id": {
+          "title": "Match Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "retry_mirror",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "match_id",
+        "expected_revision"
+      ],
+      "title": "RetryMirrorMessage",
       "type": "object"
     },
     "ReturnFromBranchMessage": {
@@ -1803,8 +1919,11 @@
       "additionalProperties": false,
       "properties": {
         "rules_viewer": {
-          "const": 0,
           "default": 0,
+          "enum": [
+            0,
+            1
+          ],
           "title": "Rules Viewer",
           "type": "integer"
         },
@@ -1898,6 +2017,7 @@
             "restore_decision": "#/$defs/RestoreDecisionMessage",
             "resume": "#/$defs/ResumeMessage",
             "retry_decision": "#/$defs/RetryDecisionMessage",
+            "retry_mirror": "#/$defs/RetryMirrorMessage",
             "return_from_branch": "#/$defs/ReturnFromBranchMessage",
             "return_to_live": "#/$defs/ReturnToLiveMessage",
             "set_stops": "#/$defs/SetStopsMessage",
@@ -1927,6 +2047,9 @@
           },
           {
             "$ref": "#/$defs/PassTurnMessage"
+          },
+          {
+            "$ref": "#/$defs/RetryMirrorMessage"
           },
           {
             "$ref": "#/$defs/SetStopsMessage"

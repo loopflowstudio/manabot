@@ -1,4 +1,12 @@
 <script lang="ts">
+  import { currentGame } from '$lib/current-game.svelte';
+  import { goto } from '$app/navigation';
+  import { page } from '$app/state';
+  import GameSetup from '$lib/components/GameSetup.svelte';
+  import { startConfiguredWatch } from '$lib/new-game';
+  import { onDestroy } from 'svelte';
+  onDestroy(() => watchStart.cancel());
+  import { watchStart } from '$lib/watch-start.svelte';
   import { revealWithinScrollRegions } from '$lib/scroll-regions';
   import { onMount, tick, untrack } from 'svelte';
 
@@ -10,63 +18,45 @@
   import { offerFocus, offerTargets } from '$lib/offer-map';
   import DecisionSurface from '$lib/components/DecisionSurface.svelte';
   import DecisionContext from '$lib/components/DecisionContext.svelte';
-  import DecisionAdvice from '$lib/components/DecisionAdvice.svelte';
+  import PlaySessionStrip from '$lib/components/PlaySessionStrip.svelte';
+  import { recordFetch } from '$lib/records';
+  import type { PlaySession } from '$lib/play-session';
   import DeckIdentity from '$lib/components/DeckIdentity.svelte';
-  import DeckSelector from '$lib/components/DeckSelector.svelte';
-  import DeckImport from '$lib/components/DeckImport.svelte';
   import { checkpointIdentity, playerIdentity } from '$lib/player-identity';
   import GameBoard from '$lib/components/GameBoard.svelte';
   import Feedback from '$lib/components/Feedback.svelte';
   import GameLog from '$lib/components/GameLog.svelte';
   import PresentationHistory from '$lib/components/PresentationHistory.svelte';
-  import OpponentSelector from '$lib/components/OpponentSelector.svelte';
-  import DecklistsSelector from '$lib/components/DecklistsSelector.svelte';
+  import WorkStatus from '$lib/components/WorkStatus.svelte';
   import StopsPanel from '$lib/components/StopsPanel.svelte';
   import SharedTablePanel from '$lib/components/SharedTablePanel.svelte';
-  import { fetchAdviceMeta, postAdvice, type AdviceMeta, type AdviceResponse } from '$lib/advice';
-  import { checkpointChoice, gameStore } from '$lib/game.svelte';
+  import { policyChoice, gameStore, type GameStore } from '$lib/game.svelte';
   import { sanitizeDeckSelection } from '$lib/decks';
   import { presentationPlayer, studyPresentationPlayer } from '$lib/presentation.svelte';
   import {
     connect,
     disconnect,
     sendAction,
-    sendAuthorBelief,
     sendNewGame,
+    sendContinuation,
     sendPassTurn,
+    sendRetrySearch,
     sendRestoreDecision,
     sendRetryDecision,
     sendReturnFromBranch,
     sendReturnToLive,
     sendSetStops,
-    sendShareBelief,
     sendTransferPilot,
   } from '$lib/socket.svelte';
-  import type { InteractionOffer, OpponentCatalog, StopSide, TrainedOpponent } from '$lib/types';
+  import type { InteractionOffer, StopSide } from '$lib/types';
 
   let demoName = $state<string | null>(null);
   let learnDemo = $state(false);
-  let showSetup = $state(false);
-  let launchedSetup = $state(false);
-
-  let trainedOpponents = $state<TrainedOpponent[]>([]);
-  // undefined until the catalog answers, so absence is never claimed early.
-  let botExtension = $state<string | null | undefined>(undefined);
-  let catalogError = $state<string | null>(null);
-  async function loadOpponents(): Promise<void> {
-    try {
-      const response = await fetch('/api/opponents');
-      if (!response.ok) throw new Error('Trained opponents could not be loaded.');
-      const data: OpponentCatalog = await response.json();
-      botExtension = data.extension ?? null;
-      trainedOpponents = data.opponents;
-      catalogError = data.catalog_error;
-      if (data.advice_available) void loadAdviceMeta();
-      else adviceStatus = 'unavailable';
-    } catch {
-      catalogError = 'Trained opponents could not be loaded.';
-    }
-  }
+  type Editor = {kind:'closed'} | {kind:'new' | 'next'; setup:GameStore; opponentOnly:boolean; pendingAttempt?:string | null};
+  let editor = $state<Editor>({kind:'closed'});
+  let mounted = $state(false);
+  let awaitingRecovery = $state(false);
+  let setupStatus = $state('');
 
   let tableMode = $state<TableMode>('inspect');
   let selection = $state<PlaySelection | null>(null);
@@ -88,68 +78,20 @@
         gameStore.setVillainDeck(decks.villain);
       }
       const opponent = params.get('opponent');
-      if (opponent && /^[a-f0-9]{64}$/.test(opponent)) gameStore.setOpponentChoice(checkpointChoice(opponent));
+      if (opponent && /^[a-f0-9]{64}$/.test(opponent)) gameStore.setOpponentChoice(policyChoice(opponent));
     }
     learnDemo = demoName === 'learn';
     if (demoName) gameStore.setOpponentChoice(learnDemo ? 'random' : 'passive');
-    launchedSetup = params.has('launch');
+    try { awaitingRecovery = !gameStore.resumeToken && sessionStorage.getItem('etude.gui.resume') !== null; } catch { /* In-memory setup remains usable. */ }
+    mounted = true;
     connect(params.get('launch'));
 
-    void loadOpponents();
     return () => {
       disconnect();
     };
   });
 
-  // The live advice surface loads the fixture's pinned completed-match
-  // decision as the demonstration beside the ActionPanel. The live frame
-  // during play has no erd1 address yet (the canonical replay finalizes at
-  // game close), so live-address advice is a future GAM-4 integration point
-  // via this same POST /api/advice seam.
-  let adviceMetaState = $state<AdviceMeta | null>(null);
-  let adviceResponse = $state<AdviceResponse | null>(null);
-  let adviceSelectedScenario = $state('');
-  let adviceStatus = $state<'ok' | 'unavailable' | 'loading'>('loading');
   let secondaryOpen = $state(false);
-  let adviceOpen = $state(false);
-  let advicePanel: HTMLDetailsElement | null = $state(null);
-
-  async function compareBelief(scenarioId: string): Promise<void> {
-    secondaryOpen = true;
-    adviceOpen = true;
-    void loadAdvice(scenarioId);
-    await tick();
-    advicePanel?.querySelector('summary')?.focus({ preventScroll: true });
-    if (advicePanel) revealWithinScrollRegions(advicePanel);
-  }
-
-  async function loadAdviceMeta(): Promise<void> {
-    try {
-      const meta = await fetchAdviceMeta();
-      adviceMetaState = meta;
-      adviceSelectedScenario = meta.scenarios[0]?.landmark_id ?? '';
-      await loadAdvice(adviceSelectedScenario);
-    } catch {
-      adviceStatus = 'unavailable';
-    }
-  }
-
-  async function loadAdvice(scenarioId: string): Promise<void> {
-    if (!adviceMetaState || !scenarioId) return;
-    adviceSelectedScenario = scenarioId;
-    adviceStatus = 'loading';
-    try {
-      const response = await postAdvice({
-        address: adviceMetaState.address,
-        scenario_id: scenarioId,
-        identity: adviceMetaState.identity,
-      });
-      adviceResponse = response;
-      adviceStatus = response.status;
-    } catch {
-      adviceStatus = 'unavailable';
-    }
-  }
 
   const tableFrame = $derived(gameStore.restoredDecision?.frame ?? gameStore.protocolFrame);
   const offers = $derived(tableFrame?.offers ?? []);
@@ -173,35 +115,103 @@
     gameStore.clearFocus();
   }
 
-  function startNewGame(): void {
-    if (!gameStore.hasCapability('configure_match')) {
-      gameStore.setError('Only the acting pilot can start or reset the match.');
-      return;
-    }
-    if (demoName) {
-      sendNewGame({ demo: demoName });
-      return;
-    }
-    if (launchedSetup && gameStore.observation && !showSetup) {
-      launchedSetup = false;
-      showSetup = true;
-      return;
-    }
-    launchedSetup = false;
-    sendNewGame(gameStore.newGameConfig());
-    showSetup = false;
+  function openEditor(kind: 'new' | 'next', opponentOnly = false): void {
+    const draft = kind === 'next' ? gameStore.playSession?.draft : undefined;
+    editor = {kind, opponentOnly, setup:gameStore.editableSetup(draft)};
+    setupStatus = '';
+    gameStore.setError(null);
   }
 
-  const gameActive = $derived(gameStore.observation !== null && !gameStore.gameOver);
+  function cancelEditor(): void {
+    const destination = editor.kind === 'new' ? currentGame.href ?? '/' : '/';
+    editor = {kind:'closed'};
+    setupStatus = '';
+    gameStore.setError(null);
+    if (page.url.searchParams.has('setup')) void goto(destination);
+  }
+
+  function startNewGame(): void {
+    if (gameStore.newGamePending) return;
+    if (demoName) { sendNewGame({demo:demoName}); return; }
+    if (editor.kind === 'closed') { openEditor('new'); return; }
+    const setup = editor.setup;
+    if (setup.seedError) { gameStore.setError(setup.seedError); return; }
+    if (setup.watchMode) {
+      gameStore.newGamePending = true;
+      gameStore.setError(null);
+      void startConfiguredWatch(setup).then(id => goto(`/replay?trace=${encodeURIComponent(id)}`))
+        .catch(error => gameStore.setError(error.message)).finally(() => gameStore.newGamePending = false);
+      return;
+    }
+    if (!gameStore.hasCapability('configure_match')) { gameStore.setError('Only the acting pilot can start or reset the match.'); return; }
+    if (gameActive && !window.confirm('Stop the current game and start a new session?')) return;
+    editor.pendingAttempt = gameStore.table?.attempt_id ?? null;
+    sendNewGame(setup.newGameConfig());
+  }
+
+  function editorConfig(): Record<string, unknown> {
+    if (editor.kind === 'closed') return {};
+    const setup = editor.setup;
+    return editor.opponentOnly ? {...setup.opponentConfig(), mirror:setup.searchConfig} : setup.setupConfig();
+  }
+
+  async function saveNextSetup(): Promise<void> {
+    const session = gameStore.playSession;
+    const table = gameStore.table;
+    if (editor.kind !== 'next' || editor.setup.watchMode || !session || !table || !gameStore.resumeToken) return;
+    if (editor.setup.seedError) { gameStore.setError(editor.setup.seedError); return; }
+    gameStore.setError(null);
+    try {
+      const response = await recordFetch(`/api/play-sessions/${encodeURIComponent(session.id)}`, {
+        method: 'PUT', headers: {'content-type':'application/json', 'x-etude-participant-token':gameStore.resumeToken},
+        body: JSON.stringify({table_id:table.table_id, grant_revision:table.access.grant_revision, revision:session.revision, config:editorConfig()}),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(typeof payload.detail === 'string' ? payload.detail : 'Setup could not be saved.');
+      gameStore.applyPlaySession(payload as PlaySession);
+      setupStatus = 'Next-game setup saved. The current game is unchanged; admission is checked when starting.';
+      gameStore.tableAnnouncement = setupStatus;
+    } catch (error) { gameStore.setError(error instanceof Error ? error.message : 'Setup could not be saved.'); }
+  }
+
+  function continueWithSetup(): void {
+    if (editor.kind !== 'next' || editor.setup.watchMode || gameStore.newGamePending) return;
+    if (editor.setup.seedError) { gameStore.setError(editor.setup.seedError); return; }
+    if (gameActive && !window.confirm('Stop the current game and start the next game in this session?')) return;
+    editor.pendingAttempt = gameStore.table?.attempt_id ?? null;
+    sendContinuation(editor.opponentOnly ? 'change_opponent' : 'rematch', editorConfig());
+  }
+
+  $effect(() => {
+    if (awaitingRecovery && (gameStore.resumeToken || gameStore.resumeFailed || gameStore.tableUnavailable)) awaitingRecovery = false;
+    if (!mounted || awaitingRecovery || demoName || page.url.searchParams.has('launch')) return;
+    const wantsNew = page.url.searchParams.has('setup');
+    untrack(() => {
+      if (wantsNew) openEditor('new');
+      else if (!gameStore.observation && editor.kind === 'closed') openEditor('new');
+      else if (editor.kind === 'new') editor = {kind:'closed'};
+    });
+  });
+
+  // A refusal leaves intent and edits intact. Only a new authoritative attempt closes it.
+  $effect(() => {
+    if (editor.kind !== 'closed' && editor.pendingAttempt !== undefined && !gameStore.newGamePending) {
+      const attempt = gameStore.table?.attempt_id;
+      if (attempt && attempt !== editor.pendingAttempt) untrack(cancelEditor);
+      else editor.pendingAttempt = undefined;
+    }
+  });
+
+  const gameActive = $derived(gameStore.observation !== null && !gameStore.gameOver && !gameStore.resumeFailed);
   const pilotCanAct = $derived(gameStore.hasCapability('submit_live_command'));
   const participantStudying = $derived(gameStore.restoredDecision !== null);
   const tablePresentation = $derived(participantStudying ? studyPresentationPlayer : presentationPlayer);
-  const inputReady = $derived(!gameStore.commandPending && stopsPending === null && gameStore.connection === 'connected');
+  const inputReady = $derived(!gameStore.commandPending && gameStore.work?.state !== 'running' && stopsPending === null && gameStore.connection === 'connected');
   // Both table modes submit through the same live authority gate. Play only
   // adds selection and gestures; Study retains its separate retry capability.
   const canSubmitLive = $derived(gameActive && pilotCanAct && !participantStudying
     && !gameStore.branchProjection && !gameStore.newGamePending && inputReady);
-  const canPassTurn = $derived(canSubmitLive && offers.length > 0);
+  const canPassTurn = $derived(canSubmitLive && tableFrame?.action_space === 'PRIORITY' && offers.length > 0);
   const boardObservation = $derived(
     gameStore.branchProjection
       ?? gameStore.restoredDecision?.frame.projection
@@ -294,14 +304,16 @@
     random: 'Random',
     passive: 'Passive',
   };
-  const opponentIdentity = $derived(gameStore.table?.opponent
-    ? checkpointIdentity(gameStore.table.opponent)
-    : playerIdentity({
-        name: gameStore.table?.opponent_label ?? OPPONENT_LABELS[gameStore.opponentChoice] ?? 'Opponent',
-      }));
+  const tableIdentity = $derived(gameStore.table ?? gameStore.interruptedIdentity);
+  const opponentIdentity = $derived(tableIdentity?.opponent
+    ? checkpointIdentity(tableIdentity.opponent)
+    : playerIdentity({ name: tableIdentity?.opponent_label ?? OPPONENT_LABELS[gameStore.opponentChoice] ?? 'Opponent' }));
 
   function syncStopsToServer(): void {
-    if (gameActive && gameStore.hasCapability('configure_match')) {
+    if (!gameStore.observation && editor.kind !== 'closed') {
+      editor.setup.applyServerStops({ ...gameStore.stops, my: [...gameStore.stops.my], opponent: [...gameStore.stops.opponent] });
+    }
+    if (gameStore.observation && gameStore.hasCapability('configure_match')) {
       clearPlaySelection();
       stopsPending = gameStore.updateSeq;
       sendSetStops();
@@ -394,18 +406,32 @@
 </script>
 
 <main
-  class:table-active={gameStore.observation !== null && !gameStore.gameOver && !showSetup}
+  class:table-active={gameStore.observation !== null && editor.kind === 'closed'}
   class="play-page mx-auto w-full max-w-[1600px] px-4 py-4"
   data-update-seq={gameStore.updateSeq}
   data-frame-revision={gameStore.protocolFrame?.revision ?? -1}
   data-table-revision={gameStore.table?.table_revision ?? -1}
 >
-  <h1 class="sr-only">Play</h1>
+  <h1 class="sr-only">{!gameStore.observation || editor.kind !== 'closed' ? 'New game' : 'Current game'}</h1>
 
   {#if gameStore.errorMessage}
     <section role="alert" aria-atomic="true" class="mb-4 rounded border border-mountain/50 bg-mountain/20 px-4 py-3 text-mountain-ink">
-      {gameStore.errorMessage}
+      {#if gameStore.resumeFailed}<strong>Interrupted.</strong>{' '}{/if}{gameStore.errorMessage}
+      {#if gameStore.resumeFailed && gameStore.recordingId}
+        <a class="ml-2 underline" href={`/replay?trace=${encodeURIComponent(gameStore.recordingId)}`}>Open saved recording</a>
+      {/if}
     </section>
+  {/if}
+  {#if gameStore.searchRetry}
+    <section role="alert" class="mb-4 rounded border border-line bg-panel px-4 py-3">
+      <p>{gameStore.submissionAccepted ? 'Your choice was accepted. ' : ''}{gameStore.searchRetry.message}</p>
+      <button class="mt-2 rounded border border-line px-3 py-2" disabled={gameStore.commandPending || !pilotCanAct || gameStore.connection !== 'connected'} onclick={sendRetrySearch}>{(gameStore.searchRetry.code.startsWith('search_') || gameStore.searchRetry.code.startsWith('mirror_')) ? 'Retry search' : 'Retry bot decision'}</button>
+    </section>
+  {/if}
+  <WorkStatus work={watchStart.work} connected={!watchStart.checking} />
+  {#if watchStart.checking}<p role="status">Checking the same Watch setup; loading status is unavailable.</p>{/if}
+  {#if gameStore.observation && gameStore.activeSearchConfig}
+    <p class="type-caption mb-2 text-ink-2">Opponent: Search {gameStore.activeSearchConfig.worlds}×{gameStore.activeSearchConfig.depth} · Uniform belief (physical deal)</p>
   {/if}
 
   <!-- The sheet: one continuous leaf. Regions are ruled, never boxed. -->
@@ -428,31 +454,19 @@
       {:else}
         <span class="type-annotation text-ink-2">No game in progress</span>
       {/if}
+      <!-- Bot work shows in the masthead's free side, so the board never shifts while a bot thinks. -->
+      <WorkStatus work={gameStore.work} connected={gameStore.connection === 'connected'} inline />
     </div>
 
     <div class="flex min-w-0 max-w-full flex-wrap items-end gap-x-5 gap-y-3">
-      {#if learnDemo}<p class="type-caption">Learn demo · UR Lessons vs Random GW Allies. Automated checked setup; New Game repeats it.</p>
-      {:else if demoName}<p class="type-caption" data-testid="demo-origin">Precision demo · custom stress decks · automated checked setup. Choose actions from the legal choices below. New Game repeats setup.</p>{/if}
-      {#if !demoName && (!gameStore.observation || gameStore.gameOver || showSetup) && gameStore.hasCapability('configure_match')}
-        <OpponentSelector
-          value={gameStore.opponentChoice}
-          trained={trainedOpponents}
-          {catalogError}
-          extension={botExtension}
-          decklists={gameStore.decklists}
-          onChange={(value) => gameStore.setOpponentChoice(value)}
-        />
-      {/if}
+      {#if learnDemo}<p class="type-caption">Learn demo · UR Lessons vs Random GW Allies. Automated checked setup; Start game repeats it.</p>
+      {:else if demoName}<p class="type-caption" data-testid="demo-origin">Precision demo · custom stress decks · automated checked setup. Choose actions from the legal choices below. Start game repeats setup.</p>{/if}
+      {#if demoName}<button class="btn btn-primary" disabled={gameStore.newGamePending} onclick={startNewGame}>{gameStore.newGamePending ? 'Preparing game…' : 'Start game'}</button>{/if}
       <div class="flex items-center gap-4">
         <div role="group" aria-label="Table interaction mode" class="flex gap-1">
           <button class="btn btn-secondary btn-sm" aria-pressed={tableMode === 'play'} onclick={() => changeMode('play')}>Play</button>
           <button class="btn btn-secondary btn-sm" aria-pressed={tableMode === 'inspect'} onclick={() => changeMode('inspect')}>Inspect</button>
         </div>
-        {#if !demoName && gameStore.observation && !gameStore.gameOver && gameStore.hasCapability('configure_match')}
-          <button class="btn" aria-expanded={showSetup} onclick={() => showSetup = !showSetup}>
-            {showSetup ? 'Return to game' : 'Choose decks'}
-          </button>
-        {/if}
         <div data-testid="connection-summary" class="flex items-center gap-1.5">
           <i
             aria-hidden="true"
@@ -470,46 +484,47 @@
             role="status"
             aria-live="polite"
             aria-atomic="true"
-            aria-label={`Connection status: ${gameStore.connection}`}
+            aria-label={gameStore.resumeFailed ? 'Session status: interrupted' : `Connection status: ${gameStore.connection}`}
             class="type-label uppercase text-ink-3"
           >
-            {gameStore.connection}
+            {gameStore.resumeFailed ? 'Interrupted' : gameStore.connection}
           </span>
         </div>
-        <button
-          class="btn btn-primary"
-          onclick={startNewGame}
-          disabled={gameStore.newGamePending || !gameStore.hasCapability('configure_match')}
-        >
-          {gameStore.newGamePending ? 'Preparing game…' : gameStore.hasCapability('configure_match') ? 'New Game' : 'Pilot only'}
-        </button>
+
       </div>
     </div>
   </div>
 
+  {#if gameStore.tableUnavailable}<p role="status" class="mt-2 text-sm">The previous table is no longer live. Its recording is retained; start the next game explicitly.</p>{/if}
+  {#if gameStore.storageWarning}<p role="status" class="mt-2 text-sm">{gameStore.storageWarning}</p>{/if}
+  {#if !demoName}<PlaySessionStrip onEditNext={() => openEditor('next')} onChangeOpponent={() => openEditor('next', true)} />{/if}
   {#if !gameStore.observation}
     <p class="mt-3 text-sm text-ink-2">New games appear in shared <a href="/games" class="underline">Games history</a>, where you can set your player name. Completed replays are shared; feedback stays private.</p>
   {/if}
-  {#if !demoName && (!gameStore.observation || gameStore.gameOver || showSetup) && gameStore.hasCapability('configure_match')}
-    {#if gameStore.observation && !gameStore.gameOver}
-      <p class="type-caption mt-4 text-ink-2">Choose your next matchup. New Game ends this attempt and starts the selected decks; Return to game keeps playing.</p>
-    {/if}
-    {#if !gameStore.deckImport}
-    <DeckSelector
-      hero={gameStore.decks.hero}
-      villain={gameStore.decks.villain}
-      disabled={gameStore.newGamePending}
-      onHeroChange={(value) => gameStore.setHeroDeck(value)}
-      onVillainChange={(value) => gameStore.setVillainDeck(value)}
-    />
-    {/if}
-    <DecklistsSelector
-      value={gameStore.decklists}
-      opponent={gameStore.opponentChoice}
-      disabled={gameStore.newGamePending}
-      onChange={(value) => gameStore.setDecklists(value)}
-    />
-    <DeckImport />
+  {#if !demoName && editor.kind !== 'closed' && gameStore.hasCapability('configure_match')}
+    <section aria-label={editor.kind === 'new' ? 'New session setup' : 'Next game setup'} class="mt-4 border-b border-line pb-4">
+      <h2 class="type-title">{editor.kind === 'new' ? 'New session' : editor.opponentOnly ? 'Change opponent' : 'Edit next game'}</h2>
+      <p class="type-caption mt-2">{editor.kind === 'new'
+        ? gameStore.playSession
+          ? 'Start a separate session. These edits do not change your current session draft.'
+          : 'Choose your setup to start a new session.'
+        : 'Setup for the next game in this Play session. Earlier games keep their recorded configuration.'}</p>
+      {#key editor.setup}
+        <GameSetup setup={editor.setup} onStart={startNewGame} disabled={gameStore.newGamePending}
+          opponentOnly={editor.opponentOnly} showStart={editor.kind === 'new'} />
+      {/key}
+      {#if setupStatus}<p role="status" class="type-caption mt-2">{setupStatus}</p>{/if}
+      {#if editor.kind === 'next'}
+        {#if editor.setup.watchMode}
+          <p class="type-caption">Two bots start a separate watched game. Your Play session and its current game stay available in Games.</p>
+          <button class="btn btn-primary mt-3" disabled={gameStore.newGamePending} onclick={startNewGame}>Start new watched game</button>
+        {:else}
+          <button class="btn btn-secondary mt-3" disabled={gameStore.newGamePending} onclick={saveNextSetup}>Save next setup</button>
+          <button class="btn btn-primary mt-3" disabled={gameStore.newGamePending} onclick={continueWithSetup}>Start next game</button>
+        {/if}
+      {/if}
+      <button class="btn btn-secondary mt-3" disabled={gameStore.newGamePending} onclick={cancelEditor}>Cancel</button>
+    </section>
   {/if}
   {#if gameStore.observation && boardObservation}
     <div class="play-workspace" data-testid="play-workspace">
@@ -535,8 +550,8 @@
         deckNames={gameStore.deckNames}
         heroIdentity={playerIdentity({ name: 'You', kind: 'human' })}
         villainIdentity={opponentIdentity}
-        overlayActionLabel="Play Again"
-        onOverlayAction={startNewGame}
+        overlayActionLabel={demoName ? 'Play Again' : 'Rematch'}
+        onOverlayAction={demoName ? startNewGame : () => sendContinuation('rematch')}
         presentationPlayer={tablePresentation}
       />
       </div>
@@ -564,6 +579,7 @@
         {:else if tableFrame}
         <DecisionSurface
           workspace
+          interrupted={gameStore.resumeFailed}
           frame={tableFrame}
           navigationKey={String(gameStore.updateSeq)}
           selectedTargetId={gameStore.selectedTargetId}
@@ -584,26 +600,7 @@
           <div class="secondary-content space-y-4" tabindex="0" role="region" aria-label="History and settings">
             <PresentationHistory player={tablePresentation} observation={boardObservation} />
             {#if tableFrame && !gameStore.branchProjection}
-              <DecisionContext observation={tableFrame.projection} actor={tableFrame.prompt?.actor ?? null} />
-            {/if}
-
-            {#if adviceMetaState}
-            <details bind:this={advicePanel} bind:open={adviceOpen} class="border-t border-line pt-4"><summary class="type-rubric cursor-pointer">Advice</summary>
-              <DecisionAdvice
-                mode="live"
-                scenarios={adviceMetaState?.scenarios ?? []}
-                selectedScenarioId={adviceSelectedScenario}
-                frame={adviceResponse?.frame ?? null}
-                offers={adviceResponse?.offers ?? []}
-                evidence={adviceResponse?.evidence ?? null}
-                deltas={adviceResponse?.deltas ?? null}
-                status={adviceStatus}
-                reason={adviceResponse?.reason ?? null}
-                advisorId={adviceMetaState?.identity.advisor_id ?? ''}
-                computeId={adviceMetaState?.identity.compute_id ?? ''}
-                onSelectScenario={(id) => void loadAdvice(id)}
-              />
-            </details>
+              <DecisionContext observation={tableFrame.projection} actor={tableFrame.prompt?.actor ?? null} interrupted={gameStore.resumeFailed} />
             {/if}
 
             <div class="border-t border-line pt-4">
@@ -653,15 +650,10 @@
       <summary class="type-rubric cursor-pointer">Table and Study tools</summary>
       <SharedTablePanel
         table={gameStore.table}
-        scenarios={adviceMetaState?.scenarios ?? []}
-        selectedScenarioId={adviceSelectedScenario}
         restored={gameStore.restoredDecision}
         branchAttemptId={gameStore.branchAttemptId}
         announcement={gameStore.tableAnnouncement}
         onTransferPilot={sendTransferPilot}
-        onAuthorBelief={sendAuthorBelief}
-        onShareBelief={sendShareBelief}
-        onSelectBelief={(scenarioId) => void compareBelief(scenarioId)}
         onRestoreDecision={sendRestoreDecision}
         onReturnFromBranch={sendReturnFromBranch}
         onReturnToLive={sendReturnToLive}

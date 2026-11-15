@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
-import { checkpointChoice, createGameStore } from './game.svelte';
+import { policyChoice, createGameStore } from './game.svelte';
 import type { Command, Observation, RecoveryEnvelope } from './types';
 
 interface BoltProtocolFixture {
@@ -154,16 +154,24 @@ describe('GameStore', () => {
     expect(store.actions).toEqual([]);
   });
 
-  it('marks failed resume and clears stale session state', () => {
+  it('keeps the last confirmed table readable after authority is lost', () => {
     const store = createGameStore();
-    store.applyObservation(makeObservation(), [], 'session-a', 'token-a');
-
+    const frame = structuredClone(boltProtocolFixture.recovery.frame);
+    store.applyFrame(frame, 'session-a', 'token-a');
+    store.recordingId = 'saved-attempt';
+    store.beginCommand();
+    store.beginFastForward();
     store.markResumeFailed('expired');
 
     expect(store.resumeFailed).toBe(true);
     expect(store.sessionId).toBeNull();
     expect(store.resumeToken).toBeNull();
-    expect(store.observation).toBeNull();
+    expect(store.protocolFrame).toEqual(frame);
+    expect(store.observation).toEqual(frame.projection);
+    expect(store.recordingId).toBe('saved-attempt');
+    expect(store.commandPending).toBe(false);
+    expect(store.fastForwarding).toBe(false);
+    expect(store.decisionStatus).toContain('Interrupted');
   });
 
   it('starts with default stops and toggles individual stop steps', () => {
@@ -204,11 +212,20 @@ describe('GameStore', () => {
   it('names a chosen trained checkpoint by its digest', () => {
     const store = createGameStore();
     const sha256 = 'a'.repeat(64);
-    store.setOpponentChoice(checkpointChoice(sha256));
+    store.setOpponentChoice(policyChoice(sha256));
 
     const config = store.newGameConfig();
-    expect(config.villain_type).toBe('checkpoint');
+    expect(config.villain_type).toBe('policy');
     expect(config.opponent_sha256).toBe(sha256);
+  });
+
+  it('keeps next-game search edits separate from the running opponent budget', () => {
+    const store = createGameStore();
+    store.activeSearchConfig = { algorithm: 'local_update', belief: 'physical_deal',
+      worlds: 1, depth: 2, decision_seconds: 30, alpha: 0.02, beta: 1 };
+    store.searchConfig = { ...store.activeSearchConfig, worlds: 4 };
+    expect(store.newGameConfig().mirror).toEqual(store.searchConfig);
+    expect(store.activeSearchConfig.worlds).toBe(1);
   });
 
   it('adopts the server stops echo from observation payloads', () => {

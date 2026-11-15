@@ -103,7 +103,7 @@
       onclick={() => onReturn?.()}
       disabled={busy}
     >
-      Return to score
+      Return to recorded decision
     </button>
   </div>
 

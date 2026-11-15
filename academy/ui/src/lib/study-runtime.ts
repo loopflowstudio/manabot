@@ -1,9 +1,6 @@
 import type {
-  CanonicalReplayProjectionV1,
-  CanonicalReplayProjectionResponseV1,
   RestoredReplayDecision,
 } from './replay-index';
-import { canonicalReplayProjectionSha256 } from './replay-index';
 import {
   assertViewerSafeStudyArtifact,
   type StudyArtifact,
@@ -86,30 +83,27 @@ function sameJson(left: unknown, right: unknown): boolean {
   return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
 }
 
-function projectionWithoutAddresses(
-  projection: CanonicalReplayProjectionResponseV1,
-): CanonicalReplayProjectionV1 {
-  const snapshot = JSON.parse(
-    JSON.stringify(projection),
-  ) as CanonicalReplayProjectionResponseV1;
-  return {
-    ...snapshot,
-    decisions: snapshot.decisions.map(({ address: _address, ...row }) => row),
-  };
+/** Identity of one authorized viewer projection, hashed by the recording reader.
+ * Study binds this source without downloading every other decision and board.
+ */
+export interface StudySource {
+  replay_id: string;
+  match_id: string;
+  viewer: number;
+  content_hash: string;
+  asset_manifest_hash: string;
+  sha256: string;
 }
 
-export async function bindStudyArtifact(
+export function bindStudyArtifact(
   artifact: StudyArtifact,
-  projection: CanonicalReplayProjectionResponseV1,
+  projection: StudySource,
   restored: RestoredReplayDecision,
-): Promise<StudyLandmark> {
+): StudyLandmark {
   assertViewerSafeStudyArtifact(artifact);
-  const digest = await canonicalReplayProjectionSha256(
-    projectionWithoutAddresses(projection),
-  );
   if (
     artifact.identity.source_replay_id !== projection.replay_id
-    || artifact.identity.source_replay_sha256 !== digest
+    || artifact.identity.source_replay_sha256 !== projection.sha256
     || artifact.identity.match_id !== projection.match_id
     || artifact.identity.content_pack.content_hash !== projection.content_hash
     || artifact.identity.content_pack.asset_manifest_sha256
