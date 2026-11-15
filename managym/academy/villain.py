@@ -60,6 +60,6 @@ def build_villain_policy(config: "GameConfig", *, seat: int = 1) -> BotPolicy:
             config.to_rust(),
             seat=seat,
             seed=seed,
-            mirror=mirror,
+            search=mirror,
         )
     raise ValueError(f"Unsupported villain_type: {villain_type}")

@@ -9,12 +9,12 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Any
 
-from managym.mirror_search import (
-    MirrorSearch,
-    descriptor_mirror_unavailable,
-    mirror_descriptor,
-)
 from managym.policy import PolicyDescriptor, PolicyRegistry
+from managym.search import (
+    SearchConfig,
+    descriptor_search_unavailable,
+    search_descriptor,
+)
 
 from . import advice
 
@@ -48,9 +48,9 @@ class Opponent:
         )
         return " · ".join((self.descriptor.name, *aliases))
 
-    def identity(self, mirror: MirrorSearch | None = None) -> dict[str, str]:
+    def identity(self, mirror: SearchConfig | None = None) -> dict[str, str]:
         base = replace(self.descriptor, name=self.name)
-        descriptor = base if mirror is None else mirror_descriptor(base, mirror)
+        descriptor = base if mirror is None else search_descriptor(base, mirror)
         return {
             "name": descriptor.name,
             "producer": descriptor.provider,
@@ -59,11 +59,11 @@ class Opponent:
             **({"base_sha256": self.descriptor.id} if mirror is not None else {}),
         }
 
-    def record(self, mirror: MirrorSearch | None = None) -> dict[str, Any]:
+    def record(self, mirror: SearchConfig | None = None) -> dict[str, Any]:
         descriptor = (
             self.descriptor
             if mirror is None
-            else mirror_descriptor(self.descriptor, mirror)
+            else search_descriptor(self.descriptor, mirror)
         )
         return {
             **self.identity(mirror),
@@ -82,7 +82,7 @@ def opponent_catalog() -> dict[str, Any]:
         error = "; ".join(registry.discovery_errors) or None
         for descriptor in registry.descriptors():
             record = descriptor.record()
-            search_reason = descriptor_mirror_unavailable(descriptor)
+            search_reason = descriptor_search_unavailable(descriptor)
             entries.append(
                 {
                     "sha256": descriptor.id,
