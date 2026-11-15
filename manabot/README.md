@@ -154,7 +154,7 @@ categorical win/draw/loss value or a scalar declared as `signed_outcome`.
 Search requires open decklists.
 
 Academy can compose the baseline provider with the framework-free
-[Mirror search](../docs/academy.md#mirror-search) owner in managym, in Play and
+[Search](../docs/academy.md#search) owner in managym, in Play and
 either Watch seat. Academy starts with one world at depth one and a 30-second
 ceiling; its controls accept larger explicit budgets. Other providers with
 compatible probabilities, signed values and isolated current-view forks can use

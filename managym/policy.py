@@ -18,16 +18,17 @@ import math
 from pathlib import Path
 from typing import Protocol, TypeAlias
 import uuid
+import warnings
 
 import managym
 from managym.bots import BotDecision
-from managym.mirror_search import (
-    MirrorSearch,
-    MirrorSearchError,
-    mirror_decision,
-    mirror_descriptor,
-    mirror_source_identity,
-    mirror_unavailable,
+from managym.search import (
+    SearchConfig,
+    SearchError,
+    search_decision,
+    search_descriptor,
+    search_source_identity,
+    search_unavailable,
 )
 
 JSONValue: TypeAlias = (
@@ -290,8 +291,18 @@ class PolicyRegistry:
         *,
         seat: int,
         seed: int,
-        mirror: MirrorSearch | None = None,
+        search: SearchConfig | None = None,
+        mirror: SearchConfig | None = None,
     ) -> PolicyRunner:
+        if mirror is not None:
+            warnings.warn(
+                "mirror= is deprecated; use search= (removed in 0.4.0)",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            if search is not None:
+                raise ValueError("Pass search= only; do not combine it with mirror=.")
+            search = mirror
         descriptor = self.admit(key, setup)
         factory = self._factories[descriptor.id]
         session = factory.load(seat=seat, seed=seed)
@@ -315,7 +326,7 @@ class PolicyRegistry:
             release=lambda: self._active_sessions.discard(id(session)),
         )
         try:
-            runner.configure_mirror(mirror, seed=seed)
+            runner.configure_search(search, seed=seed)
         except BaseException:
             runner.close()
             raise
@@ -340,29 +351,58 @@ class PolicyRunner:
         self.last_decision: BotDecision | None = None
         self._closed = False
         self._release = release
-        self.mirror: MirrorSearch | None = None
-        self.mirror_runtime: str | None = None
-        self._mirror_seed = 0
-        self._mirror_calls = 0
+        self.search: SearchConfig | None = None
+        self.search_runtime: str | None = None
+        self._search_seed = 0
+        self._search_calls = 0
         self._started = False
 
-    def configure_mirror(self, mirror: MirrorSearch | None, *, seed: int) -> None:
+    def configure_search(self, search: SearchConfig | None, *, seed: int) -> None:
         """Configure before play; preserve the base runner as a distinct identity."""
         if self._started:
             raise ValueError("Search cannot change after a decision.")
-        if mirror is not None:
-            reason = mirror_unavailable(self)
+        if search is not None:
+            reason = search_unavailable(self)
             if reason:
-                raise MirrorSearchError("mirror_unavailable", reason)
-            self.mirror_runtime = mirror_source_identity()
-            self.descriptor = mirror_descriptor(
-                self.base_descriptor, mirror, source=self.mirror_runtime
+                raise SearchError("mirror_unavailable", reason)
+            self.search_runtime = search_source_identity()
+            self.descriptor = search_descriptor(
+                self.base_descriptor, search, source=self.search_runtime
             )
         else:
             self.descriptor = self.base_descriptor
-            self.mirror_runtime = None
-        self.mirror = mirror
-        self._mirror_seed = seed
+            self.search_runtime = None
+        self.search = search
+        self._search_seed = seed
+
+    def configure_mirror(self, mirror: SearchConfig | None, *, seed: int) -> None:
+        """Deprecated spelling of configure_search, removed in 0.4.0."""
+        warnings.warn(
+            "configure_mirror is deprecated; use configure_search (removed in 0.4.0)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        self.configure_search(mirror, seed=seed)
+
+    @property
+    def mirror(self) -> SearchConfig | None:
+        """Deprecated spelling of search, removed in 0.4.0."""
+        warnings.warn(
+            "mirror is deprecated; use search (removed in 0.4.0)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.search
+
+    @property
+    def mirror_runtime(self) -> str | None:
+        """Deprecated spelling of search_runtime, removed in 0.4.0."""
+        warnings.warn(
+            "mirror_runtime is deprecated; use search_runtime (removed in 0.4.0)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.search_runtime
 
     def observe(self, observation: managym.Observation) -> None:
         self._started = True
@@ -383,12 +423,12 @@ class PolicyRunner:
         self._started = True
         if int(obs.agent.player_index) != self.seat:
             raise ValueError("Policy received another chooser’s observation.")
-        if self.mirror is not None:
+        if self.search is not None:
             # Retry the same uncommitted decision with the same random streams.
             # Increment only once a complete searched proposal exists.
-            seed = (self._mirror_seed * 1_000_003 + self._mirror_calls + 1) % 2**63
-            self.last_decision = mirror_decision(self, env, obs, self.mirror, seed=seed)
-            self._mirror_calls += 1
+            seed = (self._search_seed * 1_000_003 + self._search_calls + 1) % 2**63
+            self.last_decision = search_decision(self, env, obs, self.search, seed=seed)
+            self._search_calls += 1
             return self.last_decision.action
 
         view = replace(

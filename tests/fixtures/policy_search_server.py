@@ -9,19 +9,19 @@ import threading
 from types import FrameType
 from unittest.mock import patch
 
-from managym import mirror_search
+from managym import search
 from managym.academy import server
 from managym.academy.launch import serve
 from managym.academy.opponent import policy_registry
 from managym.academy.trace import load_trace
 from managym.academy.watch import WatchRequest, create_watch, step_watch
 from managym.bots import passive_policy
-from managym.mirror_search import MirrorSearch
 from managym.policy import PolicySpec
-from tests.academy.test_mirror_baseline import write_search_checkpoint
-from tests.academy.test_mirror_play import SearchFactory
+from managym.search import SearchConfig
 from tests.academy.test_policy_runtime import IndependentFactory
-from tests.semantic.test_mirror_policy_search import Clock
+from tests.academy.test_policy_search_play import SearchFactory
+from tests.academy.test_search_baseline import write_search_checkpoint
+from tests.semantic.test_policy_search import Clock
 
 
 def _pending_watch(factory: SearchFactory) -> dict[str, str]:
@@ -30,7 +30,7 @@ def _pending_watch(factory: SearchFactory) -> dict[str, str]:
     created = create_watch(
         WatchRequest(
             players=[f"policy:{key}"] * 2,
-            mirror=[MirrorSearch(), MirrorSearch()],
+            mirror=[SearchConfig(), SearchConfig()],
             seed=42,
         )
     )
@@ -40,9 +40,9 @@ def _pending_watch(factory: SearchFactory) -> dict[str, str]:
     for session in factory.sessions:
         session.clock = clock
     try:
-        with patch.object(mirror_search, "time", clock):
+        with patch.object(search, "time", clock):
             step_watch(created["id"], created["token"], 3)
-    except mirror_search.MirrorSearchError as error:
+    except search.SearchError as error:
         assert error.reason == "mirror_deadline_exceeded"
     else:
         raise AssertionError("Expected a retained Watch timeout")
@@ -61,7 +61,7 @@ def _finished_play(key: str) -> str:
                 "villain_deck": {"Forest": 8, "Llanowar Elves": 8},
                 "villain_type": "policy",
                 "opponent_sha256": key,
-                "mirror": asdict(MirrorSearch(worlds=1, depth=1)),
+                "mirror": asdict(SearchConfig(worlds=1, depth=1)),
                 "seed": 42,
                 "auto_pass": False,
             }
@@ -77,7 +77,7 @@ def _finished_play(key: str) -> str:
 
 
 def main() -> None:
-    output = Path(os.environ["ACADEMY_MIRROR_PROOF"])
+    output = Path(os.environ["ACADEMY_SEARCH_PROOF"])
     output.parent.mkdir(parents=True, exist_ok=True)
     checkpoint = output.parent / "untrained-smoke.pt"
     write_search_checkpoint(checkpoint)
@@ -91,7 +91,7 @@ def main() -> None:
     signal.signal(signal.SIGINT, request_shutdown)
     independent_factory = SearchFactory()
     with serve(
-        port=int(os.environ["ACADEMY_MIRROR_PORT"]),
+        port=int(os.environ["ACADEMY_SEARCH_PORT"]),
         traces_dir=output.parent / "traces",
         policies={
             "independent": independent_factory,
@@ -99,8 +99,8 @@ def main() -> None:
             "action-only": IndependentFactory("Action-only"),
         },
     ) as academy:
-        spec = MirrorSearch(worlds=1, depth=1)
-        timeout = MirrorSearch(worlds=1, depth=1, decision_seconds=1e-9)
+        spec = SearchConfig(worlds=1, depth=1)
+        timeout = SearchConfig(worlds=1, depth=1, decision_seconds=1e-9)
         saved = _finished_play(policy_registry().descriptor("independent").id)
         trace = load_trace(saved)
         ordinal = next(
@@ -112,16 +112,16 @@ def main() -> None:
             json.dumps(
                 {
                     "play": academy.new_game(
-                        opponent="baseline", mirror=spec, seed=7
+                        opponent="baseline", search=spec, seed=7
                     ).url,
                     "timeout": academy.new_game(
-                        opponent="baseline", mirror=timeout, seed=7
+                        opponent="baseline", search=timeout, seed=7
                     ).url,
                     "watch": academy.watch(
-                        players=("independent", "baseline"), mirror=(spec, None)
+                        players=("independent", "baseline"), search=(spec, None)
                     ).url,
                     "watch_timeout": academy.watch(
-                        players=("independent", "baseline"), mirror=(timeout, None)
+                        players=("independent", "baseline"), search=(timeout, None)
                     ).url,
                     "saved": f"{academy.url}/replay?trace={saved}",
                     "saved_ordinal": ordinal,
@@ -133,7 +133,7 @@ def main() -> None:
                 }
             )
         )
-        print("ACADEMY_MIRROR_READY", flush=True)
+        print("ACADEMY_SEARCH_READY", flush=True)
         shutdown.wait()
 
 

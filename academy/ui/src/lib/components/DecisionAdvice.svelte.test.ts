@@ -84,7 +84,7 @@ describe('DecisionAdvice', () => {
     expect(body).toContain('Raw policy');
     expect(body).toContain('Updated policy');
     expect(body).toContain('Search values');
-    expect(body).toContain('Mirror search:');
+    expect(body).toContain('Search:');
     expect(body).toContain('managym.determinize/physical-deal/v1');
     expect(body).toContain('50.00%');
     expect(body).toContain('80.00%');
