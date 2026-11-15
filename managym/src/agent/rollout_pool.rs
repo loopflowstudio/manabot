@@ -53,26 +53,27 @@ impl RolloutPool {
         seed: u64,
         max_steps: usize,
     ) -> Result<Self, AgentError> {
+        game.ensure_playable()?;
         if worlds == 0 || rollouts == 0 {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "rollout_pool: worlds and rollouts must be >= 1".to_string(),
             ));
         }
         if game.is_game_over() {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "rollout_pool: called after game over".to_string(),
             ));
         }
         let action_space = game
             .action_space()
-            .ok_or_else(|| AgentError("rollout_pool: no active action space".to_string()))?;
+            .ok_or_else(|| AgentError::Rules("rollout_pool: no active action space".to_string()))?;
         let hero = action_space.player.ok_or_else(|| {
-            AgentError("rollout_pool: no agent player in current action space".to_string())
+            AgentError::Rules("rollout_pool: no agent player in current action space".to_string())
         })?;
         game.require_open_decklist(hero)?;
         let num_actions = action_space.actions.len();
         if num_actions == 0 {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "rollout_pool: no valid actions available".to_string(),
             ));
         }
@@ -203,7 +204,7 @@ impl RolloutPool {
         F: Fn(usize, &Observation) -> Result<(), AgentError>,
     {
         if actions.len() != self.slots.len() {
-            return Err(AgentError(format!(
+            return Err(AgentError::Rules(format!(
                 "rollout_pool: expected {} actions, got {}",
                 self.slots.len(),
                 actions.len()
@@ -217,7 +218,7 @@ impl RolloutPool {
             }
             let action = actions[index];
             let action = usize::try_from(action).map_err(|_| {
-                AgentError(format!(
+                AgentError::Rules(format!(
                     "rollout_pool: negative action {action} for slot {index}"
                 ))
             })?;
@@ -318,7 +319,7 @@ mod tests {
                 ]),
             ),
         ];
-        Game::new(configs, 7, true)
+        Game::new(configs, 7, true).expect("valid game setup")
     }
 
     #[test]
@@ -363,6 +364,6 @@ mod tests {
         let err = pool
             .step_active_into(&[0], |_, _| Ok(()))
             .expect_err("wrong length must fail");
-        assert!(err.0.contains("expected"));
+        assert!(err.to_string().contains("expected"));
     }
 }

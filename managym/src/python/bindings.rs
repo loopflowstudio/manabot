@@ -72,8 +72,34 @@ impl HandSnapshot {
 pyo3::create_exception!(_managym, PyAgentError, PyRuntimeError);
 
 #[cfg(feature = "python")]
+pyo3::create_exception!(_managym, CapacityError, PyAgentError);
+
+#[cfg(feature = "python")]
 pub(crate) fn map_agent_err(err: AgentError) -> PyErr {
-    PyAgentError::new_err(err.to_string())
+    if let Some(capacity) = err.capacity() {
+        let exception = CapacityError::new_err(err.to_string());
+        Python::with_gil(|py| {
+            let value = exception.value_bound(py);
+            value
+                .setattr("resource", capacity.resource)
+                .expect("exception attributes");
+            value
+                .setattr("limit", capacity.limit)
+                .expect("exception attributes");
+            value
+                .setattr("visited", capacity.visited)
+                .expect("exception attributes");
+            if let AgentError::Stream { slot, frame, .. } = &err {
+                value.setattr("slot", *slot).expect("exception attributes");
+                value
+                    .setattr("frame", frame.as_deref())
+                    .expect("exception attributes");
+            }
+        });
+        exception
+    } else {
+        PyAgentError::new_err(err.to_string())
+    }
 }
 
 #[cfg(feature = "python")]
@@ -2776,6 +2802,147 @@ pub struct PyEnv {
 }
 
 #[cfg(feature = "python")]
+#[pyclass(name = "PreparedDeclaration")]
+pub struct PyPreparedDeclaration {
+    source: Arc<Mutex<Env>>,
+    prepared_lease: Option<PreparedBranchLease>,
+    prepared: Option<crate::agent::env::PreparedDeclaration>,
+}
+
+#[cfg(feature = "python")]
+#[pyclass(name = "DeclarationChild", frozen)]
+pub struct PyDeclarationChild {
+    env: Py<PyEnv>,
+    observation: PyObservation,
+    #[pyo3(get)]
+    transition_json: String,
+    #[pyo3(get)]
+    reward: f64,
+    #[pyo3(get)]
+    done: bool,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl PyDeclarationChild {
+    #[getter]
+    fn env(&self, py: Python<'_>) -> Py<PyEnv> {
+        self.env.clone_ref(py)
+    }
+
+    #[getter]
+    fn observation(&self) -> PyObservation {
+        self.observation.clone()
+    }
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl PyPreparedDeclaration {
+    fn to_json(&self) -> PyResult<String> {
+        let prepared = self
+            .prepared
+            .as_ref()
+            .ok_or_else(|| PyAgentError::new_err("declaration candidate was consumed"))?;
+        serde_json::to_string(&json!({
+            "commands": prepared.commands(),
+            "transitions": prepared.transitions(),
+            "completion": prepared.transaction.commitment().map_err(map_agent_err)?,
+            "done": prepared.transaction.done,
+        }))
+        .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    /// Exact child root for canonical recording and Study, preserving capture.
+    fn root(&self, index: usize) -> PyResult<PyEnv> {
+        let prepared = self
+            .prepared
+            .as_ref()
+            .ok_or_else(|| PyAgentError::new_err("declaration candidate was consumed"))?;
+        let env = self
+            .source
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let root = env
+            .declaration_child_env(prepared, index, false)
+            .map_err(map_agent_err)?;
+        Ok(PyEnv {
+            inner: Arc::new(Mutex::new(root)),
+            selected_guard: false,
+            prepared_lease: self
+                .prepared_lease
+                .as_ref()
+                .map(PreparedBranchLease::clone_lease),
+        })
+    }
+
+    /// Actual ordinary child result; neither steps nor publishes the source.
+    fn result(&self, py: Python<'_>, index: usize) -> PyResult<PyDeclarationChild> {
+        let prepared = self
+            .prepared
+            .as_ref()
+            .ok_or_else(|| PyAgentError::new_err("declaration candidate was consumed"))?;
+        let observation = prepared
+            .transaction
+            .observations
+            .get(index)
+            .ok_or_else(|| PyAgentError::new_err("declaration child index out of range"))?;
+        let env = self
+            .source
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let result = env
+            .declaration_child_env(prepared, index, true)
+            .map_err(map_agent_err)?;
+        let root = &prepared.transaction.roots[index];
+        let actor = root
+            .action_space()
+            .and_then(|space| space.player)
+            .ok_or_else(|| PyAgentError::new_err("declaration child has no chooser"))?;
+        let reward = if observation.game_over {
+            prepared
+                .transaction
+                .game
+                .winner_index()
+                .map_or(0.0, |winner| if winner == actor.0 { 1.0 } else { -1.0 })
+        } else {
+            0.0
+        };
+        let transition = serde_json::to_string(&prepared.transaction.transitions[index])
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        Ok(PyDeclarationChild {
+            transition_json: transition,
+            env: Py::new(
+                py,
+                PyEnv {
+                    inner: Arc::new(Mutex::new(result)),
+                    selected_guard: false,
+                    prepared_lease: self
+                        .prepared_lease
+                        .as_ref()
+                        .map(PreparedBranchLease::clone_lease),
+                },
+            )?,
+            observation: PyObservation::from(observation.clone()),
+            reward,
+            done: observation.game_over,
+        })
+    }
+
+    fn publish(&mut self) -> PyResult<()> {
+        let prepared = self
+            .prepared
+            .take()
+            .ok_or_else(|| PyAgentError::new_err("declaration candidate was consumed"))?;
+        self.source
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .publish_declaration(prepared)
+            .map_err(map_agent_err)
+    }
+}
+
+#[cfg(feature = "python")]
 #[derive(Debug, Default)]
 struct PreparedBranchLeaseCounters {
     current: AtomicUsize,
@@ -3786,6 +3953,46 @@ impl PyEnv {
         serde_json::to_string(&frame).map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
+    fn declaration_projection_json(&self, viewer: usize) -> PyResult<String> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let projection = env.declaration_projection(viewer).map_err(map_agent_err)?;
+        serde_json::to_string(&projection)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    fn validate_declaration_plan_json(&self, plan_json: &str) -> PyResult<()> {
+        let plan = serde_json::from_str(plan_json)
+            .map_err(|error| PyAgentError::new_err(format!("invalid declaration plan: {error}")))?;
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .validate_declaration_plan(&plan)
+            .map_err(map_agent_err)
+    }
+
+    fn prepare_declaration_plan_json(&self, plan_json: &str) -> PyResult<PyPreparedDeclaration> {
+        self.reject_guarded_mutation("Env.prepare_declaration_plan_json")?;
+        let plan = serde_json::from_str(plan_json)
+            .map_err(|error| PyAgentError::new_err(format!("invalid declaration plan: {error}")))?;
+        let prepared = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .prepare_declaration_plan(&plan)
+            .map_err(map_agent_err)?;
+        Ok(PyPreparedDeclaration {
+            source: Arc::clone(&self.inner),
+            prepared_lease: self
+                .prepared_lease
+                .as_ref()
+                .map(PreparedBranchLease::clone_lease),
+            prepared: Some(prepared),
+        })
+    }
+
     /// Public event identities used to explain a committed transition.
     fn presentation_subjects_json(&self) -> PyResult<String> {
         let env = self
@@ -3880,7 +4087,13 @@ impl PyEnv {
                 capture.capture.observation.identity.viewer as usize,
                 capture.capture.history.capacity,
             )
-            .map_err(|error| PyAgentError::new_err(format!("stale_capture: {error}")))?;
+            .map_err(|error| {
+                if error.capacity().is_some() {
+                    map_agent_err(error)
+                } else {
+                    PyAgentError::new_err(format!("stale_capture: {error}"))
+                }
+            })?;
         if current.digest != capture.capture.digest {
             return Err(PyAgentError::new_err(
                 "stale_capture: captured input has changed",
@@ -4778,6 +4991,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     )?;
     m.add("NAME_BRANCHING", crate::cards::names::NAME_BRANCHING)?;
     m.add("AgentError", py.get_type_bound::<PyAgentError>())?;
+    m.add("CapacityError", py.get_type_bound::<CapacityError>())?;
 
     m.add_class::<ZoneEnum>()?;
     m.add_class::<PhaseEnum>()?;
@@ -4841,6 +5055,8 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PySelectedBranchRuntime>()?;
     m.add_class::<PyPreparedPossibleWorldMaterializer>()?;
     m.add_class::<PyDecisionCapture>()?;
+    m.add_class::<PyPreparedDeclaration>()?;
+    m.add_class::<PyDeclarationChild>()?;
     m.add_class::<PyEnv>()?;
     m.add_class::<crate::python::heuristic_bindings::PyHeuristic>()?;
     m.add_class::<HandSnapshot>()?;

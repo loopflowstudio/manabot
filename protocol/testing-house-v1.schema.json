@@ -898,6 +898,274 @@
       "title": "DecisionRestoredEvent",
       "type": "object"
     },
+    "DeclarationAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "destination": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "object": "#/$defs/ObjectSubject",
+                  "player": "#/$defs/PlayerSubject",
+                  "stack": "#/$defs/StackSubject"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/ObjectSubject"
+                },
+                {
+                  "$ref": "#/$defs/StackSubject"
+                },
+                {
+                  "$ref": "#/$defs/PlayerSubject"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Destination"
+        },
+        "subject": {
+          "$ref": "#/$defs/ObjectRenderId"
+        }
+      },
+      "required": [
+        "subject",
+        "destination"
+      ],
+      "title": "DeclarationAnswer",
+      "type": "object"
+    },
+    "DeclarationBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "fingerprint": {
+          "title": "Fingerprint",
+          "type": "string"
+        },
+        "revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Revision",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "revision",
+        "fingerprint"
+      ],
+      "title": "DeclarationBinding",
+      "type": "object"
+    },
+    "DeclarationCapacity": {
+      "additionalProperties": false,
+      "properties": {
+        "limit": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "resource": {
+          "title": "Resource",
+          "type": "string"
+        },
+        "visited": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Visited",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "resource",
+        "limit",
+        "visited"
+      ],
+      "title": "DeclarationCapacity",
+      "type": "object"
+    },
+    "DeclarationCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "command_id": {
+          "title": "Command Id",
+          "type": "string"
+        },
+        "expected_revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Expected Revision",
+          "type": "integer"
+        },
+        "match_id": {
+          "title": "Match Id",
+          "type": "string"
+        },
+        "plan": {
+          "$ref": "#/$defs/DeclarationPlan"
+        },
+        "prompt_id": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Prompt Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command_id",
+        "match_id",
+        "expected_revision",
+        "prompt_id",
+        "plan"
+      ],
+      "title": "DeclarationCommand",
+      "type": "object"
+    },
+    "DeclarationMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "$ref": "#/$defs/DeclarationCommand"
+        },
+        "grant_revision": {
+          "anyOf": [
+            {
+              "maximum": 18446744073709551615,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Grant Revision"
+        },
+        "type": {
+          "const": "declaration",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "command"
+      ],
+      "title": "DeclarationMessage",
+      "type": "object"
+    },
+    "DeclarationPlan": {
+      "additionalProperties": false,
+      "properties": {
+        "assignments": {
+          "items": {
+            "$ref": "#/$defs/DeclarationAnswer"
+          },
+          "title": "Assignments",
+          "type": "array"
+        },
+        "binding": {
+          "$ref": "#/$defs/DeclarationBinding"
+        }
+      },
+      "required": [
+        "binding",
+        "assignments"
+      ],
+      "title": "DeclarationPlan",
+      "type": "object"
+    },
+    "DeclarationValidationEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "capacity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DeclarationCapacity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "match_id": {
+          "title": "Match Id",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "prompt_id": {
+          "anyOf": [
+            {
+              "maximum": 18446744073709551615,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Prompt Id"
+        },
+        "request_id": {
+          "title": "Request Id",
+          "type": "string"
+        },
+        "revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "status": {
+          "enum": [
+            "valid",
+            "invalid",
+            "stale",
+            "capacity",
+            "unavailable"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "table": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TableSnapshot"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "declaration_validation",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "request_id",
+        "match_id",
+        "revision",
+        "prompt_id",
+        "status",
+        "message"
+      ],
+      "title": "DeclarationValidationEvent",
+      "type": "object"
+    },
     "JoinTableMessage": {
       "additionalProperties": false,
       "properties": {
@@ -1036,6 +1304,48 @@
         "value"
       ],
       "title": "NumberChoiceAnswer",
+      "type": "object"
+    },
+    "ObjectRenderId": {
+      "additionalProperties": false,
+      "properties": {
+        "entity": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Entity",
+          "type": "integer"
+        },
+        "incarnation": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Incarnation",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "entity",
+        "incarnation"
+      ],
+      "title": "ObjectRenderId",
+      "type": "object"
+    },
+    "ObjectSubject": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ObjectRenderId"
+        },
+        "kind": {
+          "const": "object",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "title": "ObjectSubject",
       "type": "object"
     },
     "OpponentIdentity": {
@@ -1237,6 +1547,28 @@
         "created_at_table_revision"
       ],
       "title": "PlayerAuthoredBeliefProvenance",
+      "type": "object"
+    },
+    "PlayerSubject": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maximum": 255,
+          "minimum": 0,
+          "title": "Id",
+          "type": "integer"
+        },
+        "kind": {
+          "const": "player",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "title": "PlayerSubject",
       "type": "object"
     },
     "RematchMessage": {
@@ -1529,6 +1861,28 @@
       "title": "ShareBeliefMessage",
       "type": "object"
     },
+    "StackSubject": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Id",
+          "type": "integer"
+        },
+        "kind": {
+          "const": "stack",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "title": "StackSubject",
+      "type": "object"
+    },
     "TableAudience": {
       "additionalProperties": false,
       "properties": {
@@ -1767,6 +2121,44 @@
       "title": "TransferPilotMessage",
       "type": "object"
     },
+    "ValidateDeclarationMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "$ref": "#/$defs/DeclarationCommand"
+        },
+        "grant_revision": {
+          "anyOf": [
+            {
+              "maximum": 18446744073709551615,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Grant Revision"
+        },
+        "request_id": {
+          "title": "Request Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "validate_declaration",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "request_id",
+        "command"
+      ],
+      "title": "ValidateDeclarationMessage",
+      "type": "object"
+    },
     "ViewerAccess": {
       "additionalProperties": false,
       "properties": {
@@ -1850,6 +2242,7 @@
             "branch_updated": "#/$defs/BranchUpdatedEvent",
             "control_error": "#/$defs/ControlErrorEvent",
             "decision_restored": "#/$defs/DecisionRestoredEvent",
+            "declaration_validation": "#/$defs/DeclarationValidationEvent",
             "role_changed": "#/$defs/RoleChangedEvent",
             "table_snapshot": "#/$defs/TableSnapshotEvent"
           },
@@ -1876,6 +2269,9 @@
           },
           {
             "$ref": "#/$defs/ControlErrorEvent"
+          },
+          {
+            "$ref": "#/$defs/DeclarationValidationEvent"
           }
         ]
       },
@@ -1891,6 +2287,7 @@
             "branch_preview": "#/$defs/BranchPreviewMessage",
             "branch_reveal": "#/$defs/BranchRevealMessage",
             "command": "#/$defs/CommandMessage",
+            "declaration": "#/$defs/DeclarationMessage",
             "join_table": "#/$defs/JoinTableMessage",
             "new_game": "#/$defs/NewGameMessage",
             "pass_turn": "#/$defs/PassTurnMessage",
@@ -1902,7 +2299,8 @@
             "return_to_live": "#/$defs/ReturnToLiveMessage",
             "set_stops": "#/$defs/SetStopsMessage",
             "share_belief": "#/$defs/ShareBeliefMessage",
-            "transfer_pilot": "#/$defs/TransferPilotMessage"
+            "transfer_pilot": "#/$defs/TransferPilotMessage",
+            "validate_declaration": "#/$defs/ValidateDeclarationMessage"
           },
           "propertyName": "type"
         },
@@ -1921,6 +2319,12 @@
           },
           {
             "$ref": "#/$defs/CommandMessage"
+          },
+          {
+            "$ref": "#/$defs/DeclarationMessage"
+          },
+          {
+            "$ref": "#/$defs/ValidateDeclarationMessage"
           },
           {
             "$ref": "#/$defs/ActionMessage"

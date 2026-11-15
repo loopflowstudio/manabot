@@ -1754,7 +1754,8 @@ fn ogre_game() -> (Game, PermanentId) {
         ],
         7,
         false,
-    );
+    )
+    .expect("valid game setup");
     let ogre = game
         .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
         .unwrap();
@@ -2392,6 +2393,7 @@ fn opponent_hidden_cards_do_not_reach_the_viewer_tensor() {
             11,
             false,
         )
+        .expect("valid game setup")
     };
     let mountains = game(&[("Mountain", 40)]);
     let ogres = game(&[("Gray Ogre", 20), ("Mountain", 20)]);

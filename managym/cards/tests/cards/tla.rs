@@ -10587,8 +10587,8 @@ fn revised_forty_card_deck_completes_and_replays_every_command_exactly() {
             } else {
                 vec![ur.clone(), gw.clone()]
             };
-            let mut game = Game::new(configs.clone(), seed, true);
-            let mut replay = Game::new(configs, seed, true);
+            let mut game = Game::new(configs.clone(), seed, true).expect("valid game setup");
+            let mut replay = Game::new(configs, seed, true).expect("valid game setup");
             for step in 0..20_000_u64 {
                 if game.is_game_over() {
                     break;

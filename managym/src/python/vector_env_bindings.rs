@@ -261,7 +261,7 @@ impl PyVectorEnv {
                 |_, obs| {
                     encode(obs, &config)
                         .map(|_| ())
-                        .map_err(|error| AgentError(error.to_string()))
+                        .map_err(|error| AgentError::Rules(error.to_string()))
                 },
                 |index, obs, reward, terminated, truncated| {
                     buffers
@@ -282,7 +282,7 @@ impl PyVectorEnv {
         self.run_into_buffers(py, move |inner, write_buffers, config| {
             if let Some(mask) = &active {
                 if mask.len() != inner.len() {
-                    return Err(AgentError(
+                    return Err(AgentError::Rules(
                         "active mask length must match environments".into(),
                     ));
                 }
@@ -370,7 +370,7 @@ impl PyVectorEnv {
                 .write_observations_for_players(&players, |slot, observation| {
                     let row = out.encoded_row_mut(slot, &config)?;
                     encode_into(observation, &config, row)
-                        .map_err(|err| AgentError(err.to_string()))
+                        .map_err(|err| AgentError::Rules(err.to_string()))
                 })
                 .map_err(map_agent_err)
         })
@@ -1149,15 +1149,15 @@ impl<T> SendSlice<T> {
     }
 
     fn row_ptr(&self, row_index: usize, row_len: usize) -> Result<*mut T, AgentError> {
-        let start = row_index
-            .checked_mul(row_len)
-            .ok_or_else(|| AgentError(format!("overflow while indexing '{}'", self.field)))?;
-        let end = start
-            .checked_add(row_len)
-            .ok_or_else(|| AgentError(format!("overflow while indexing '{}'", self.field)))?;
+        let start = row_index.checked_mul(row_len).ok_or_else(|| {
+            AgentError::Rules(format!("overflow while indexing '{}'", self.field))
+        })?;
+        let end = start.checked_add(row_len).ok_or_else(|| {
+            AgentError::Rules(format!("overflow while indexing '{}'", self.field))
+        })?;
 
         if end > self.len {
-            return Err(AgentError(format!(
+            return Err(AgentError::Rules(format!(
                 "row {row_index} for '{}' out of bounds (row_len={row_len}, total={})",
                 self.field, self.len
             )));
@@ -1169,7 +1169,7 @@ impl<T> SendSlice<T> {
 
     fn element_ptr(&self, index: usize) -> Result<*mut T, AgentError> {
         if index >= self.len {
-            return Err(AgentError(format!(
+            return Err(AgentError::Rules(format!(
                 "index {index} for '{}' out of bounds (total={})",
                 self.field, self.len
             )));

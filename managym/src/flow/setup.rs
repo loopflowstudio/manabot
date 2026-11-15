@@ -5,7 +5,7 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 
 use crate::{
-    agent::behavior_tracker::BehaviorTracker,
+    agent::{action::AgentError, behavior_tracker::BehaviorTracker},
     cards::{content_pack::default_content_pack, deck_admission::admit_submitted},
     flow::{
         game::{Game, GameState, TrackedState},
@@ -20,9 +20,13 @@ use crate::{
 };
 
 impl Game {
-    /// A match on the catalog. Panics when a deck submitted to the world fails
-    /// admission; [`crate::agent::env::Env::reset`] checks that first.
-    pub fn new(player_configs: Vec<PlayerConfig>, seed: u64, skip_trivial: bool) -> Self {
+    /// Construct and advance to the first strategic decision. Admission and
+    /// progression failures return no playable match.
+    pub fn new(
+        player_configs: Vec<PlayerConfig>,
+        seed: u64,
+        skip_trivial: bool,
+    ) -> Result<Self, AgentError> {
         Self::construct(player_configs, seed, skip_trivial, false)
     }
 
@@ -30,7 +34,7 @@ impl Game {
         player_configs: Vec<PlayerConfig>,
         seed: u64,
         skip_trivial: bool,
-    ) -> Self {
+    ) -> Result<Self, AgentError> {
         Self::construct(player_configs, seed, skip_trivial, true)
     }
 
@@ -39,9 +43,8 @@ impl Game {
         seed: u64,
         skip_trivial: bool,
         capture: bool,
-    ) -> Self {
-        admit_submitted(&player_configs)
-            .unwrap_or_else(|error| panic!("submitted deck is not admitted: {error}"));
+    ) -> Result<Self, AgentError> {
+        admit_submitted(&player_configs).map_err(|error| AgentError::Rules(error.to_string()))?;
         let content = default_content_pack();
         assert_eq!(player_configs.len(), 2, "game supports exactly two players");
 
@@ -154,6 +157,8 @@ impl Game {
                 id_gen,
             }),
             policy_history: Default::default(),
+            combat_solver_limit: crate::flow::block_declaration::COMBAT_SOLVER_LIMIT,
+            progression_error: None,
             skip_trivial,
             current_action_space: None,
             decision_epoch: 0,
@@ -170,7 +175,7 @@ impl Game {
         if capture {
             game.card_capture = Some(crate::flow::card_capture::CardCapture::new(&game));
         }
-        let _ = game.tick();
-        game
+        game.tick()?;
+        Ok(game)
     }
 }

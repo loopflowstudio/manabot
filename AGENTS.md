@@ -330,6 +330,11 @@ admission. Admission-rejection fixtures must mark the config as submitted
   Replay compares these through
   `manabot.env.replay.matches_retained_error`, retaining original class names and
   full vector diagnostic payloads in evidence.
+  Capacity is the typed `AgentError::Capacity` payload (Python
+  `managym.CapacityError`, an `AgentError` subtype): preserve resource, limit and
+  visited counts through semantic/search/vector wrappers. Failed in-place
+  progression quarantines the stream until reset; it is no successful terminal
+  transition. Declaration candidates roll back by being discarded.
 - Frozen experiment scheduling/analysis tests use an explicit compatible-world
   fixture for synthetic outcomes, with separate real-runtime rejection tests.
   Pin declared input capacities rather than inheriting fresh defaults; never

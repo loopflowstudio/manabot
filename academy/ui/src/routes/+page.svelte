@@ -9,6 +9,8 @@
   import { visibleCardLabel } from '$lib/decision-labels';
   import { offerFocus, offerTargets } from '$lib/offer-map';
   import DecisionSurface from '$lib/components/DecisionSurface.svelte';
+  import CombatComposer from '$lib/components/CombatComposer.svelte';
+  import { combatFocus, combatKey, newCombatDraft, objectKey, selectCombatObject, type CombatDraft } from '$lib/combat-plan';
   import DecisionContext from '$lib/components/DecisionContext.svelte';
   import DecisionAdvice from '$lib/components/DecisionAdvice.svelte';
   import DeckIdentity from '$lib/components/DeckIdentity.svelte';
@@ -70,6 +72,7 @@
 
   let tableMode = $state<TableMode>('inspect');
   let selection = $state<PlaySelection | null>(null);
+  let combatDraft = $state<CombatDraft | null>(null);
   let drag = $state<HandDrag | null>(null);
   let suppressClick = false;
   let stopsPending = $state<number | null>(null);
@@ -201,7 +204,35 @@
   // adds selection and gestures; Study retains its separate retry capability.
   const canSubmitLive = $derived(gameActive && pilotCanAct && !participantStudying
     && !gameStore.branchProjection && !gameStore.newGamePending && inputReady);
-  const canPassTurn = $derived(canSubmitLive && offers.length > 0);
+  const canPassTurn = $derived(canSubmitLive && tableFrame?.action_space === 'PRIORITY' && offers.length > 0);
+  const combatProjection = $derived(!participantStudying && !gameStore.branchProjection ? tableFrame?.declaration ?? null : null);
+  const combatScope = $derived(tableFrame ? combatKey(tableFrame, gameStore.updateSeq) : '');
+  const boardFocus = $derived(new Set([...gameStore.focusIds, ...combatFocus(combatDraft, combatProjection)]));
+  const combatSelected = $derived(combatProjection?.subjects.find(row => row.object.subject.kind === 'object' && objectKey(row.object.subject.id) === combatDraft?.active)?.object.display_id ?? null);
+  const boardTargets = $derived.by(() => {
+    if (!combatProjection) return clickableTargets;
+    // These keys navigate a native draft; no positional offer ID is invented.
+    const targets = new Map<number, number[]>();
+    for (const row of combatProjection.subjects) if (!row.fixed) targets.set(row.object.display_id, []);
+    for (const row of combatProjection.destinations) targets.set(row.display_id, []);
+    return targets;
+  });
+  $effect(() => {
+    const projection = combatProjection;
+    const key = combatScope;
+    untrack(() => {
+      if (!projection) combatDraft = null;
+      else if (combatDraft?.key !== key) combatDraft = newCombatDraft(projection, key);
+    });
+  });
+
+  function editCombatDraft(next: CombatDraft): void {
+    if (JSON.stringify(next.assignments) !== JSON.stringify(combatDraft?.assignments)) {
+      gameStore.setError(null);
+      gameStore.lastCommandRejection = null;
+    }
+    combatDraft = next;
+  }
   const boardObservation = $derived(
     gameStore.branchProjection
       ?? gameStore.restoredDecision?.frame.projection
@@ -370,6 +401,10 @@
   }
 
   function handleBoardTargetSelect(objectId: number): void {
+    if (combatProjection && combatDraft && liveInput) {
+      editCombatDraft(selectCombatObject(combatDraft, combatProjection, objectId));
+      return;
+    }
     if (tableMode === 'play' && !participantStudying && pilotCanAct) {
       if (!liveInput || !tableFrame) return;
       selection = selectForPlay(tableFrame, objectId);
@@ -511,13 +546,14 @@
     <DeckImport />
   {/if}
   {#if gameStore.observation && boardObservation}
-    <div class="play-workspace" data-testid="play-workspace">
+    <div class="play-workspace" class:combat-planning={combatProjection !== null} data-testid="play-workspace">
       <div id="table-board" class="board-region" tabindex="-1"><a href="#table-choices" class="table-jump type-caption underline">Choose a play</a>
       <GameBoard
         workspace
+        combatPlanning={combatProjection !== null}
         playMode={tableMode === 'play' && !participantStudying}
         canSelectForPlay={liveInput}
-        selectedId={selection?.object ?? null}
+        selectedId={combatProjection ? combatSelected : selection?.object ?? null}
         onHandClickCapture={suppressDragClick}
         onHandPointerDown={startHandDrag}
         onHandPointerMove={moveHandDrag}
@@ -526,8 +562,8 @@
         gestureActive={drag?.moved ?? false}
         dragLabel={draggingOffer?.confirm_label ?? draggingOffer?.label ?? null}
         observation={boardObservation}
-        focusedIds={gameStore.focusIds}
-        {clickableTargets}
+        focusedIds={boardFocus}
+        clickableTargets={boardTargets}
         onSelectTarget={handleBoardTargetSelect}
         onHoverTarget={handleBoardTargetHover}
         winner={gameStore.winner}
@@ -560,6 +596,9 @@
         {#if gameStore.branchProjection}
           <DecisionContext observation={gameStore.branchProjection} actor={gameStore.branchProjection.decision_context?.actor ?? null} />
           <p class="type-caption">Alternate action played. Return to recorded decision to try another choice.</p>
+        {:else if tableFrame && combatProjection && combatDraft}
+          <CombatComposer frame={tableFrame} projection={combatProjection} draft={combatDraft}
+            disabled={!canSubmitLive} readOnly={!pilotCanAct} inspect={tableMode !== 'play'} onChange={editCombatDraft} />
         {:else if tableFrame}
         <DecisionSurface
           workspace
@@ -694,6 +733,8 @@
     .board-region :global([data-testid="game-board"]) { flex: 1; min-height: 0; }
     .choices-region { min-height: 0; overflow-y: auto; gap: .5rem; border-top: 0; border-left: 1px solid var(--border); padding: 0 .5rem 1rem 1rem; scrollbar-gutter: stable; }
     .choices-region > :global(*) { flex-shrink: 0; }
+    .combat-planning :global(.workspace-board .hero-area) { flex-basis: 3rem; }
+    .choices-region > :global(.combat-composer) { flex: 1; min-height: 0; }
     .choices-region > :global(.workspace-decision) { flex: 1; min-height: min-content; }
     .secondary-panels { flex-shrink: 1; min-height: 2rem; overflow-y: auto; overscroll-behavior: contain; }
     [data-testid="current-decision"] { max-height: 3rem; overflow-y: auto; overscroll-behavior: contain; }

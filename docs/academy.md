@@ -421,8 +421,8 @@ the import option to return to bundled decks.
 
 The table reads **Who decides / What is happening / Your choices**. It starts in
 **Inspect** mode: clicking a card inspects it and sends nothing; choosing one of
-the listed legal actions commits it. The proposed combat controls add an editable
-plan and explicit **Confirm** step ([proposal](#planning-and-confirming-combat)).
+the listed legal actions commits it. Combat controls add an editable
+plan and explicit **Confirm** step ([planning combat](#planning-and-confirming-combat)).
 **Play** adds card selection and a hand-drag
 shortcut ([controls below](#play-and-inspect-modes)). Decisions with a single
 legal action are taken for you and never shown. Reloading the page restores the
@@ -498,9 +498,9 @@ several actions, choose an explicit alternative from the list. A card with no
 current action remains available for inspection.
 
 Hover or focus previews the card; **Inspect card** opens its details without
-committing. Player targets have explicit named controls. The proposed combat
+committing. Player targets have explicit named controls. Combat
 controls let you edit an attack or block plan, then confirm the declaration
-([proposal](#planning-and-confirming-combat)). Mana-source choices follow the offered decisions;
+([planning combat](#planning-and-confirming-combat)). Mana-source choices follow the offered decisions;
 dragging a spell does not configure manual tapping.
 
 Choose **Inspect** to examine the acting viewer's observation and every legal
@@ -520,12 +520,9 @@ after commitment, costs and revealed information remain committed.
 
 ### Planning and confirming combat
 
-**Proposed controls:** this section describes the intended combat composer;
-it is not yet implemented. Current combat choices commit one creature at a time.
-The combat-specific mode-switch behavior described above is also proposed.
-
-At your attack declaration, choose **Play**, select two eligible creatures on
-the board and read their assignments in **Your choices**. Each assignment names
+At your attack declaration, choose **Play**, select an eligible creature on
+the board, then its named player destination. Repeat for another creature and
+read their assignments in **Your choices**. Each assignment names
 the exact creature and the opposing player it will attack. Remove one creature,
 inspect the other, then choose **Confirm**. Only the confirmed declaration makes
 the creature attack and taps it if required. Editing or inspecting the plan

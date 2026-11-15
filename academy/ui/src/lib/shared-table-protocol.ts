@@ -1,7 +1,7 @@
 // Implements the `testing-house-v1` wire schema (frozen identifier).
 import type { RestoredReplayDecision } from './replay-index';
 import type { AdviceRequestIdentity } from './advice';
-import type { Command, Observation, PresentationEvent } from './types';
+import type { Command, DeclarationCommand, Observation, PresentationEvent } from './types';
 
 export const SHARED_TABLE_VERSION = 'testing-house-v1' as const;
 
@@ -11,6 +11,8 @@ export const SHARED_TABLE_REQUEST_TYPES = [
   'new_game',
   'rematch',
   'command',
+  'declaration',
+  'validate_declaration',
   'action',
   'pass_turn',
   'set_stops',
@@ -115,6 +117,8 @@ export type SharedTableRequest =
   | ({ type: 'new_game'; grant_revision?: number | null; config?: Record<string, unknown> })
   | (GrantedRequest & { type: 'rematch'; config?: Record<string, unknown> })
   | ({ type: 'command'; grant_revision?: number | null; command: Command })
+  | ({ type: 'declaration'; grant_revision?: number | null; command: DeclarationCommand })
+  | ({ type: 'validate_declaration'; grant_revision?: number | null; request_id: string; command: DeclarationCommand })
   | ({ type: 'action'; grant_revision?: number | null; index: number })
   | ({ type: 'pass_turn'; grant_revision?: number | null })
   | ({
@@ -149,6 +153,7 @@ export interface BranchRetryPayload {
 }
 
 export type SharedTableControlEvent =
+  | DeclarationValidationEvent
   | { type: 'table_snapshot'; table: TableSnapshot }
   | { type: 'belief_changed'; table: TableSnapshot; belief: BeliefScenario }
   | { type: 'role_changed'; table: TableSnapshot }
@@ -187,4 +192,16 @@ export interface SharedTableV1ConformanceBundle {
   contract: typeof SHARED_TABLE_VERSION;
   requests: SharedTableRequest[];
   events: SharedTableControlEvent[];
+}
+
+export interface DeclarationValidationEvent {
+  type: 'declaration_validation';
+  request_id: string;
+  match_id: string;
+  revision: number;
+  prompt_id: number | null;
+  status: 'valid' | 'invalid' | 'stale' | 'capacity' | 'unavailable';
+  message: string;
+  capacity?: { resource: string; limit: number; visited: number } | null;
+  table?: TableSnapshot | null;
 }

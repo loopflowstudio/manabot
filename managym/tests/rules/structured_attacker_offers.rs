@@ -396,7 +396,8 @@ fn structured_attacker_adapter_matches_seeded_two_deck_traces() {
                 ],
                 seed,
                 false,
-            );
+            )
+            .expect("valid game setup");
             let mut legacy = structured.clone();
             let mut structured_trace = Vec::new();
             let mut legacy_trace = Vec::new();
@@ -816,4 +817,159 @@ fn structured_attacker_final_child_retains_native_forced_progression() {
     );
     assert_eq!(root.state.players[1].life, 18);
     assert!(root.state.combat.is_none());
+}
+
+#[test]
+fn structured_attacker_completion_proves_empty_and_damage_declarations() {
+    use managym::{flow::declaration::DeclarationAssignments, state::game_object::PlayerId};
+
+    for selected in [false, true] {
+        let deck = || BTreeMap::from([("Mountain".into(), 24), ("Gray Ogre".into(), 16)]);
+        let mut root = arranged_attack_scenario(deck(), deck(), &["Gray Ogre"], 199)
+            .game()
+            .clone();
+        root.skip_trivial = true;
+        let first = root
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .find_map(|action| match action {
+                Action::DeclareAttacker { permanent, .. } => root.permanent_object(*permanent),
+                _ => None,
+            })
+            .unwrap();
+        let offers = root.structured_attacker_offers().unwrap();
+        let offer = attacker_offer(&offers);
+        let (role, candidates) = attacker_candidates(offer);
+        let (submission, _) = submission_for_mask(offer, role, candidates, usize::from(selected));
+        let command = offers.decode(&submission).unwrap();
+        let before = format!("{root:?}");
+        let mut transaction = root.prepare_declaration(&command).unwrap();
+        assert_eq!(format!("{root:?}"), before, "preparation is read-only");
+        assert_eq!(transaction.completion.player, PlayerId(0));
+        assert_eq!(
+            transaction.completion.assignments,
+            DeclarationAssignments::Attackers {
+                destination: PlayerId(1),
+                attackers: if selected { vec![first] } else { vec![] },
+            }
+        );
+        assert!(transaction.game.state.combat.is_none());
+        assert_eq!(
+            transaction.game.state.players[1].life,
+            if selected { 18 } else { 20 }
+        );
+        let mut replay = root.clone();
+        for (child, transition) in transaction.commands.iter().zip(&transaction.transitions) {
+            let actual = replay.execute_semantic_command(child).unwrap();
+            assert_eq!(
+                serde_json::to_value(actual).unwrap(),
+                serde_json::to_value(transition).unwrap()
+            );
+        }
+        transaction.game.take_observation_events();
+        assert_equivalent_surface(&transaction.game, &replay);
+    }
+}
+
+#[test]
+fn structured_attacker_completion_precedes_a_trigger_removing_the_attacker() {
+    use managym::{
+        flow::declaration::DeclarationAssignments,
+        state::{
+            ability::{Ability, Effect, ObjectSelector, Per, TriggerCondition, TriggerSubject},
+            game_object::PlayerId,
+        },
+    };
+    let deck = || BTreeMap::from([("Mountain".into(), 24), ("Gray Ogre".into(), 16)]);
+    let mut scenario = arranged_attack_scenario(deck(), deck(), &["Gray Ogre"], 200);
+    let attacker = scenario
+        .action_space()
+        .actions
+        .iter()
+        .find_map(|action| match action {
+            Action::DeclareAttacker { permanent, .. } => Some(*permanent),
+            _ => None,
+        })
+        .unwrap();
+    let object = scenario.game().permanent_object(attacker).unwrap();
+    crate::support::game::inject_ability(
+        &mut scenario,
+        object,
+        Ability::Triggered {
+            intervening_if: None,
+            condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+            effects: vec![
+                Effect::AdditionalCombatPhase { attackers: None },
+                Effect::destroy(ObjectSelector::This),
+            ],
+        },
+    );
+    let mut root = scenario.game().clone();
+    root.skip_trivial = true;
+    let offers = root.structured_attacker_offers().unwrap();
+    let offer = attacker_offer(&offers);
+    let (role, candidates) = attacker_candidates(offer);
+    let (submission, _) = submission_for_mask(offer, role, candidates, 1);
+    let transaction = root
+        .prepare_declaration(&offers.decode(&submission).unwrap())
+        .unwrap();
+    assert_eq!(
+        transaction.completion.assignments,
+        DeclarationAssignments::Attackers {
+            destination: PlayerId(1),
+            attackers: vec![object],
+        }
+    );
+    assert!(transaction.game.state.permanents[attacker].is_none());
+    assert_eq!(transaction.game.state.players[1].life, 20);
+}
+
+#[test]
+fn structured_attacker_completion_returns_an_unanswered_trigger_decision() {
+    use managym::state::ability::{
+        Ability, Effect, ObjectSelector, Per, TargetSpec, TriggerCondition, TriggerSubject,
+    };
+    let deck = || BTreeMap::from([("Mountain".into(), 24), ("Gray Ogre".into(), 16)]);
+    let mut scenario = arranged_attack_scenario(deck(), deck(), &["Gray Ogre"], 201);
+    scenario.force_permanent_on_battlefield(1, "Gray Ogre");
+    let object = scenario
+        .action_space()
+        .actions
+        .iter()
+        .find_map(|action| match action {
+            Action::DeclareAttacker { permanent, .. } => {
+                scenario.game().permanent_object(*permanent)
+            }
+            _ => None,
+        })
+        .unwrap();
+    crate::support::game::inject_ability(
+        &mut scenario,
+        object,
+        Ability::Triggered {
+            intervening_if: None,
+            condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+            effects: vec![Effect::deal_damage(
+                1,
+                ObjectSelector::Target(TargetSpec::Creature),
+            )],
+        },
+    );
+    let mut root = scenario.game().clone();
+    root.skip_trivial = true;
+    let offers = root.structured_attacker_offers().unwrap();
+    let offer = attacker_offer(&offers);
+    let (role, candidates) = attacker_candidates(offer);
+    let (submission, _) = submission_for_mask(offer, role, candidates, 1);
+    let transaction = root
+        .prepare_declaration(&offers.decode(&submission).unwrap())
+        .unwrap();
+    assert_eq!(transaction.commands.len(), 1);
+    assert_eq!(
+        transaction.game.action_space().unwrap().kind,
+        ActionSpaceKind::ChooseTarget
+    );
+    assert_eq!(transaction.game.action_space().unwrap().actions.len(), 2);
 }

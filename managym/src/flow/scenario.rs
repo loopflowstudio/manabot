@@ -71,7 +71,7 @@ impl Game {
             .as_mut()
             .map(|pending| &mut pending.decision)
         else {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "scenario_naming_vocabulary requires a naming decision".into(),
             ));
         };
@@ -131,7 +131,7 @@ impl Game {
                 return Ok(());
             }
         }
-        Err(AgentError(format!(
+        Err(AgentError::Rules(format!(
             "scenario_force_card_in_hand: no '{name}' in library/graveyard of player {}",
             player.0
         )))
@@ -158,7 +158,7 @@ impl Game {
                     .find(|object| self.state[*object].name == name)
             });
         let Some(object_id) = found else {
-            return Err(AgentError(format!(
+            return Err(AgentError::Rules(format!(
                 "scenario_force_battlefield: no '{name}' outside battlefield for player {}",
                 player.0
             )));
@@ -199,12 +199,12 @@ impl Game {
         self.invalidate_mana_cache(PlayerId(0));
         self.invalidate_mana_cache(PlayerId(1));
         let Some(space) = self.current_action_space.as_ref() else {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "scenario_refresh_priority: no active action space".to_string(),
             ));
         };
         if space.kind != ActionSpaceKind::Priority {
-            return Err(AgentError(format!(
+            return Err(AgentError::Rules(format!(
                 "scenario_refresh_priority: current action space is {:?}, not Priority",
                 space.kind
             )));
@@ -214,7 +214,9 @@ impl Game {
             .first()
             .map(|action| action.player())
             .ok_or_else(|| {
-                AgentError("scenario_refresh_priority: priority space has no player".to_string())
+                AgentError::Rules(
+                    "scenario_refresh_priority: priority space has no player".to_string(),
+                )
             })?;
         let actions = self.compute_player_actions(player);
         self.publish_action_space(ActionSpace {

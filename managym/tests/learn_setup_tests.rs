@@ -56,7 +56,7 @@ fn learn_authored_setup_keeps_main_decks_and_sideboards_together_in_both_seats()
             .iter()
             .map(|key| pack.player_config(key, key).unwrap())
             .collect();
-        let game = Game::new(configs.clone(), 9, false);
+        let game = Game::new(configs.clone(), 9, false).expect("valid game setup");
         for (player, config) in configs.iter().enumerate() {
             let roster = &game.state.players[player].sideboard;
             assert_eq!(roster.len(), config.deck.sideboard.values().sum::<usize>());
@@ -71,12 +71,13 @@ fn learn_authored_setup_keeps_main_decks_and_sideboards_together_in_both_seats()
 
 #[test]
 fn learn_sideboard_does_not_change_opening_deal_or_library_order() {
-    let empty = Game::new(configs(BTreeMap::new()), 9, false);
+    let empty = Game::new(configs(BTreeMap::new()), 9, false).expect("valid game setup");
     let sideboard = Game::new(
         configs(counts(&[("Firebending Lesson", 2), ("Island", 1)])),
         9,
         false,
-    );
+    )
+    .expect("valid game setup");
     for player in [PlayerId(0), PlayerId(1)] {
         for zone in [ZoneType::Hand, ZoneType::Library] {
             assert_eq!(
@@ -103,8 +104,9 @@ fn learn_sideboard_unknown_token_and_zero_counts_fail_admission() {
         vec![("Clue", 1)],
         vec![("Firebending Lesson", 0)],
     ] {
-        assert!(
-            std::panic::catch_unwind(|| Game::new(configs(counts(&entries)), 9, false)).is_err()
-        );
+        assert!(std::panic::catch_unwind(
+            || Game::new(configs(counts(&entries)), 9, false).expect("valid game setup")
+        )
+        .is_err());
     }
 }

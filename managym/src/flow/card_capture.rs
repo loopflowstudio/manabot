@@ -277,8 +277,8 @@ mod tests {
 
     #[test]
     fn capture_preserves_rules_and_excludes_forks() {
-        let plain = Game::new(configs(), 17, true);
-        let mut captured = Game::new_capturing(configs(), 17, true);
+        let plain = Game::new(configs(), 17, true).expect("valid game setup");
+        let mut captured = Game::new_capturing(configs(), 17, true).expect("valid game setup");
         assert_eq!(
             plain.state.deterministic_hash(),
             captured.state.deterministic_hash()
@@ -321,14 +321,15 @@ mod tests {
                 ],
                 17,
                 false,
-            );
+            )
+            .expect("valid game setup");
             let attacker = game
                 .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
                 .unwrap();
             game.state.turn.current_phase = PhaseKind::Combat as usize;
             game.state.turn.current_step = 1; // Declare attackers.
             game.state.turn.step_initialized = false;
-            game.tick();
+            game.tick().unwrap();
             game.card_capture.as_mut().unwrap().exposure = Some(ExposureCapture::default());
             let revision = game.semantic_decision_frame().unwrap().revision;
             let offers = game.structured_attacker_offers().unwrap();
@@ -378,7 +379,7 @@ mod tests {
 
     #[test]
     fn selection_bounce_and_redraw_keep_distinct_causes() {
-        let mut game = Game::new_capturing(configs(), 18, true);
+        let mut game = Game::new_capturing(configs(), 18, true).expect("valid game setup");
         let object = game
             .state
             .zones
@@ -410,7 +411,8 @@ mod tests {
                 ],
                 17,
                 false,
-            );
+            )
+            .expect("valid game setup");
             game.scenario_force_card_in_hand(PlayerId(0), "Gray Ogre")
                 .unwrap();
             let object_id = *game
@@ -486,7 +488,7 @@ mod tests {
     #[test]
     fn exposure_capture_keeps_physical_identity_across_face_changes() {
         use std::sync::Arc;
-        let mut game = Game::new_capturing(configs(), 17, true);
+        let mut game = Game::new_capturing(configs(), 17, true).expect("valid game setup");
         let object = game.state.zones.zone_objects(ZoneType::Hand, PlayerId(0))[0];
         let before = snapshot(&game, object);
         // A controlled face switch uses two real definitions without asserting
