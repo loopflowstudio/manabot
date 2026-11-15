@@ -142,15 +142,15 @@ class Reward:
         if self.config.land_play_reward != 0.0:
             reward += self.config.land_play_reward * max(
                 0,
-                self._count_battlefield_lands(new_obs.agent_cards)
-                - self._count_battlefield_lands(last_obs.agent_cards),
+                self._count_battlefield_lands(new_obs.agent_permanents)
+                - self._count_battlefield_lands(last_obs.agent_permanents),
             )
 
         if self.config.creature_play_reward != 0.0:
             reward += self.config.creature_play_reward * max(
                 0,
-                self._count_battlefield_creatures(new_obs.agent_cards)
-                - self._count_battlefield_creatures(last_obs.agent_cards),
+                self._count_battlefield_creatures(new_obs.agent_permanents)
+                - self._count_battlefield_creatures(last_obs.agent_permanents),
             )
 
         if self.config.opponent_life_loss_reward != 0.0:
@@ -184,13 +184,13 @@ class Reward:
         phi = 0.0
         if self.config.potential_land_weight != 0.0:
             phi += self.config.potential_land_weight * (
-                self._count_battlefield_lands(obs.agent_cards)
-                - self._count_battlefield_lands(obs.opponent_cards)
+                self._count_battlefield_lands(obs.agent_permanents)
+                - self._count_battlefield_lands(obs.opponent_permanents)
             )
         if self.config.potential_creature_weight != 0.0:
             phi += self.config.potential_creature_weight * (
-                self._count_battlefield_creatures(obs.agent_cards)
-                - self._count_battlefield_creatures(obs.opponent_cards)
+                self._count_battlefield_creatures(obs.agent_permanents)
+                - self._count_battlefield_creatures(obs.opponent_permanents)
             )
         if self.config.potential_life_weight != 0.0:
             phi += (
@@ -201,19 +201,19 @@ class Reward:
         return phi
 
     @staticmethod
-    def _count_battlefield_lands(cards: list[managym.Card]) -> int:
+    def _count_battlefield_lands(permanents: list[managym.Permanent]) -> int:
+        """Lands among a side's permanents, by their effective characteristics."""
         return sum(
             1
-            for card in cards
-            if int(card.zone) == int(managym.ZoneEnum.BATTLEFIELD)
-            and bool(card.card_types.is_land)
+            for permanent in permanents
+            if bool(permanent.characteristics.card_types.is_land)
         )
 
     @staticmethod
-    def _count_battlefield_creatures(cards: list[managym.Card]) -> int:
+    def _count_battlefield_creatures(permanents: list[managym.Permanent]) -> int:
+        """Creatures among a side's permanents, by their effective characteristics."""
         return sum(
             1
-            for card in cards
-            if int(card.zone) == int(managym.ZoneEnum.BATTLEFIELD)
-            and bool(card.card_types.is_creature)
+            for permanent in permanents
+            if bool(permanent.characteristics.card_types.is_creature)
         )

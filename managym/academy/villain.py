@@ -43,9 +43,7 @@ def build_villain_policy(config: "GameConfig", *, seat: int = 1) -> BotPolicy:
     """Build the policy for one seat from a parsed GameConfig."""
     seed = config.seed if config.seed is not None else 0
     villain_type = config.villain_type
-    search = config.search[1] if config.search else None
-    if search is not None and villain_type != "policy":
-        raise ValueError("Mirror search requires a registered search-capable policy.")
+    mirror = config.mirror
 
     if villain_type == "passive":
         return passive_policy
@@ -62,6 +60,6 @@ def build_villain_policy(config: "GameConfig", *, seat: int = 1) -> BotPolicy:
             config.to_rust(),
             seat=seat,
             seed=seed,
-            search=search,
+            search=mirror,
         )
     raise ValueError(f"Unsupported villain_type: {villain_type}")

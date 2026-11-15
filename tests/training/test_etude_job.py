@@ -17,6 +17,7 @@ from etude.train.read import read_all
 import pytest
 
 from experiments.ataraxos_move import ataraxos_move_scalar
+from manabot.backends import resolve
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.experiment.config import Baseline, Case, Experiment
@@ -101,7 +102,8 @@ def test_job_freezes_recipe_without_submission(tmp_path: Path) -> None:
     assert "--default-toolchain 1.98.1" in job.setup
     assert "uv sync --locked --python 3.13\n" in job.setup
     assert "RUSTUP_TOOLCHAIN=1.98.1" in job.command
-    assert job.command.endswith("uv run --locked python -m manabot.experiment.job")
+    assert " -m etude.call " in job.command
+    assert "manabot.experiment.job:train" in job.command
     gated = TrainingJob(
         regime=spec.regime,
         experiment=spec.experiment,
@@ -109,7 +111,7 @@ def test_job_freezes_recipe_without_submission(tmp_path: Path) -> None:
         validate_numerics=True,
     ).job(repo=ROOT, revision="HEAD", max_hours=1)
     assert gated.setup is not None and "--extra dev" in gated.setup
-    assert "uv run --locked --extra dev python" in gated.command
+    assert "uv run --extra dev python" in gated.command
     assert not list(tmp_path.iterdir())
     with pytest.raises(ValueError, match="lifetime"):
         spec.job(repo=ROOT, revision="HEAD", max_hours=0.0001)
@@ -132,7 +134,9 @@ def test_worker_runs_real_learner_and_reports_admitted_policy(
             "--active",
             "python",
             "-m",
-            "manabot.experiment.job",
+            "etude.call",
+            "--function",
+            "manabot.experiment.job:train",
         ],
         cwd=ROOT,
         stdout=subprocess.PIPE,
@@ -197,7 +201,13 @@ def test_a_terminated_worker_records_its_end_and_keeps_its_exports(
         tmp_path, monkeypatch, spec.model_copy(update={"milestones": ()})
     )
     worker = subprocess.Popen(
-        [sys.executable, "-m", "manabot.experiment.job"],
+        [
+            sys.executable,
+            "-m",
+            "etude.call",
+            "--function",
+            "manabot.experiment.job:train",
+        ],
         cwd=ROOT,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
@@ -205,7 +215,12 @@ def test_a_terminated_worker_records_its_end_and_keeps_its_exports(
     tracking = tmp_path / "tracking"
     try:
         deadline = time.monotonic() + 120
-        while not any(tracking.rglob("*.pt")) and worker.poll() is None:
+        while worker.poll() is None:
+            if any(
+                run.checkpoints.last is not None
+                for run in observe(tracking, "fixture").runs
+            ):
+                break
             assert time.monotonic() < deadline, "the worker exported nothing"
             time.sleep(0.2)
         assert worker.poll() is None, worker.stderr and worker.stderr.read()
@@ -229,7 +244,12 @@ def test_executor_cancellation_retains_failed_receipt(tmp_path: Path) -> None:
     with VerifyStore(tmp_path / "store.sqlite") as store:
         with pytest.raises(RuntimeError, match="cancelled by launcher"):
             execute_regime(
-                specification().regime, 12250, tmp_path / "run", store, stop_path=stop
+                specification().regime,
+                12250,
+                tmp_path / "run",
+                store,
+                stop_path=stop,
+                backend=resolve("torch"),
             )
     run = TrainingRun.model_validate_json((tmp_path / "run/run.json").read_text())
     assert run.status == "failed"
@@ -265,7 +285,14 @@ def test_nonrecoverable_collection_cancellation_retains_receipt(
     assert not regime.recoverable
     with VerifyStore(tmp_path / "store.sqlite") as store:
         with pytest.raises(RuntimeError, match="cancelled by launcher"):
-            execute_regime(regime, 12250, tmp_path / "run", store, stop_path=stop)
+            execute_regime(
+                regime,
+                12250,
+                tmp_path / "run",
+                store,
+                stop_path=stop,
+                backend=resolve("torch"),
+            )
     run = TrainingRun.model_validate_json((tmp_path / "run/run.json").read_bytes())
     assert run.status == "failed" and run.stages[0].updates == 0
     assert run.selected_artifact is None
@@ -348,7 +375,9 @@ def staged_continuation(
 ) -> tuple[LearnerContinuation, Path]:
     """Train a parent, then lay its exports out as Etude delivers inputs."""
     with VerifyStore(tmp_path / "parent.sqlite") as store:
-        parent = execute_regime(ema_regime(2), 12250, tmp_path / "parent", store)
+        parent = execute_regime(
+            ema_regime(2), 12250, tmp_path / "parent", store, backend=resolve("torch")
+        )
     inputs = tmp_path / "inputs"
     inputs.mkdir()
     sources = {
@@ -514,7 +543,12 @@ def test_monitoring_continuation_stages_raw_alone_and_resets_learner_state(
 ) -> None:
     with VerifyStore(tmp_path / "parent.sqlite") as store:
         parent = execute_regime(
-            ema_regime(3), 12250, tmp_path / "parent", store, checkpoint_updates=1
+            ema_regime(3),
+            12250,
+            tmp_path / "parent",
+            store,
+            checkpoint_updates=1,
+            backend=resolve("torch"),
         )
     # Retained as a watchdog kill would leave it: interrupted after update 3.
     record = json.loads((tmp_path / "parent/run.json").read_text())

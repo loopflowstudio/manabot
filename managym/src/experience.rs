@@ -56,7 +56,7 @@ impl<T> RequiredNullable<T> {
     }
 }
 
-fn deserialize_required_nullable<'de, D, T>(
+pub(crate) fn deserialize_required_nullable<'de, D, T>(
     deserializer: D,
 ) -> Result<RequiredNullable<T>, D::Error>
 where
@@ -262,6 +262,24 @@ pub struct Command {
     pub prompt_id: PromptId,
     pub offer_id: OfferId,
     pub answers: Vec<ChoiceAnswer>,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DeclarationCommand {
+    pub command_id: CommandId,
+    pub match_id: MatchId,
+    pub expected_revision: Revision,
+    pub prompt_id: PromptId,
+    pub plan: crate::flow::declaration::DeclarationPlan,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DeclarationReceipt {
+    pub command: DeclarationCommand,
+    pub child_command_ids: Vec<CommandId>,
+    pub completion: crate::flow::declaration::DeclarationCommitment,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
@@ -747,6 +765,8 @@ pub struct AssetPackReference {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExperienceFrame {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub declaration: Option<crate::flow::declaration::DeclarationProjection>,
     pub protocol: ProtocolVersion,
     pub match_id: MatchId,
     pub revision: Revision,
@@ -844,6 +864,8 @@ pub struct PresentationEvent {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CommandReceipt {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub declaration: Option<DeclarationReceipt>,
     pub command_id: CommandId,
     pub actor: PlayerId,
     pub accepted_at: Revision,
@@ -888,6 +910,10 @@ pub struct RecoveryEnvelope {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProtocolV1ConformanceBundle {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub declaration_receipt: Option<CommandReceipt>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub declaration_command: Option<DeclarationCommand>,
     pub recovery: RecoveryEnvelope,
     pub command: Command,
 }

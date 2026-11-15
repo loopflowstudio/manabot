@@ -18,16 +18,17 @@ import math
 from pathlib import Path
 from typing import Protocol, TypeAlias
 import uuid
+import warnings
 
 import managym
 from managym.bots import BotDecision
-from managym.mirror_search import (
+from managym.search import (
+    SearchConfig,
     SearchError,
-    SearchSpec,
-    mirror_decision,
+    search_decision,
+    search_descriptor,
     search_source_identity,
     search_unavailable,
-    searched_descriptor,
 )
 
 JSONValue: TypeAlias = (
@@ -209,12 +210,13 @@ class PolicyRegistry:
         if descriptor.contract_version != 1:
             raise ValueError("Unsupported policy adapter contract version.")
         key = descriptor.id
-        self._factories.setdefault(key, policy)
-        self._descriptors.setdefault(key, descriptor)
         name = name if name is not None else descriptor.alias
         if name is not None:
             if name in self.aliases and self.aliases[name] != key:
                 raise ValueError(f"Policy alias {name!r} is already registered.")
+        self._factories.setdefault(key, policy)
+        self._descriptors.setdefault(key, descriptor)
+        if name is not None:
             self.aliases[name] = key
         return key
 
@@ -230,7 +232,11 @@ class PolicyRegistry:
                 if discover is not None:
                     try:
                         for policy in discover(None):
-                            self.register(policy)
+                            try:
+                                self.register(policy)
+                            except (ImportError, OSError, ValueError) as exc:
+                                # One unusable entry must not hide later policies.
+                                self.discovery_errors.append(f"{name}: {exc}")
                     except (ImportError, OSError, ValueError) as exc:
                         self.discovery_errors.append(f"{name}: {exc}")
         for source in sources:
@@ -285,8 +291,18 @@ class PolicyRegistry:
         *,
         seat: int,
         seed: int,
-        search: SearchSpec | None = None,
+        search: SearchConfig | None = None,
+        mirror: SearchConfig | None = None,
     ) -> PolicyRunner:
+        if mirror is not None:
+            warnings.warn(
+                "mirror= is deprecated; use search= (removed in 0.4.0)",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            if search is not None:
+                raise ValueError("Pass search= only; do not combine it with mirror=.")
+            search = mirror
         descriptor = self.admit(key, setup)
         factory = self._factories[descriptor.id]
         session = factory.load(seat=seat, seed=seed)
@@ -335,22 +351,22 @@ class PolicyRunner:
         self.last_decision: BotDecision | None = None
         self._closed = False
         self._release = release
-        self.search: SearchSpec | None = None
+        self.search: SearchConfig | None = None
         self.search_runtime: str | None = None
         self._search_seed = 0
         self._search_calls = 0
         self._started = False
 
-    def configure_search(self, search: SearchSpec | None, *, seed: int) -> None:
+    def configure_search(self, search: SearchConfig | None, *, seed: int) -> None:
         """Configure before play; preserve the base runner as a distinct identity."""
         if self._started:
             raise ValueError("Search cannot change after a decision.")
         if search is not None:
             reason = search_unavailable(self)
             if reason:
-                raise SearchError("search_unavailable", reason)
+                raise SearchError("mirror_unavailable", reason)
             self.search_runtime = search_source_identity()
-            self.descriptor = searched_descriptor(
+            self.descriptor = search_descriptor(
                 self.base_descriptor, search, source=self.search_runtime
             )
         else:
@@ -358,6 +374,35 @@ class PolicyRunner:
             self.search_runtime = None
         self.search = search
         self._search_seed = seed
+
+    def configure_mirror(self, mirror: SearchConfig | None, *, seed: int) -> None:
+        """Deprecated spelling of configure_search, removed in 0.4.0."""
+        warnings.warn(
+            "configure_mirror is deprecated; use configure_search (removed in 0.4.0)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        self.configure_search(mirror, seed=seed)
+
+    @property
+    def mirror(self) -> SearchConfig | None:
+        """Deprecated spelling of search, removed in 0.4.0."""
+        warnings.warn(
+            "mirror is deprecated; use search (removed in 0.4.0)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.search
+
+    @property
+    def mirror_runtime(self) -> str | None:
+        """Deprecated spelling of search_runtime, removed in 0.4.0."""
+        warnings.warn(
+            "mirror_runtime is deprecated; use search_runtime (removed in 0.4.0)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.search_runtime
 
     def observe(self, observation: managym.Observation) -> None:
         self._started = True
@@ -382,7 +427,7 @@ class PolicyRunner:
             # Retry the same uncommitted decision with the same random streams.
             # Increment only once a complete searched proposal exists.
             seed = (self._search_seed * 1_000_003 + self._search_calls + 1) % 2**63
-            self.last_decision = mirror_decision(self, env, obs, self.search, seed=seed)
+            self.last_decision = search_decision(self, env, obs, self.search, seed=seed)
             self._search_calls += 1
             return self.last_decision.action
 

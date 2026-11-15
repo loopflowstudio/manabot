@@ -816,9 +816,9 @@ fn azula_has_the_opponent_exile_and_casts_with_any_mana() {
         .iter()
         .any(|p| p.id == permanent.id.0 as i32));
     assert!(observation
-        .agent_cards
+        .agent_permanents
         .iter()
-        .any(|c| c.id == id && c.zone == ZoneType::Battlefield));
+        .any(|p| p.object_id == Some(id)));
 
     // It dies into its owner's graveyard.
     s.set_player_mana_pool(0, "1R");
@@ -1507,9 +1507,9 @@ fn hama_casts_an_opponents_artifact_under_your_control() {
         let view = Observation::for_player(s.game(), viewer);
         assert!(view.validate());
         let mine = view
-            .agent_cards
+            .agent_permanents
             .iter()
-            .any(|object| object.zone == ZoneType::Battlefield && object.name == "Prophetic Prism");
+            .any(|permanent| permanent.characteristics.name == "Prophetic Prism");
         assert_eq!(mine, viewer == PlayerId(0));
     }
 }
@@ -4657,7 +4657,7 @@ fn observed(s: &Scenario, id: PermanentId) -> PermanentData {
 }
 
 fn observed_keywords(s: &Scenario, id: PermanentId) -> KeywordData {
-    observed(s, id).keywords
+    observed(s, id).characteristics.keywords
 }
 
 fn mark_damage(s: &mut Scenario, id: PermanentId, damage: i32) {
@@ -10084,9 +10084,7 @@ fn yip_yip_buffs_and_grants_flying_to_allies_only() {
     );
     assert!(!kyoshi_perm.keywords.hexproof);
     let kyoshi_card = obs
-        .agent_cards
-        .iter()
-        .chain(obs.opponent_cards.iter())
+        .object_records()
         .find(|object| object.name == "Kyoshi Warriors")
         .expect("Kyoshi Warriors card should be observable");
     assert!(
@@ -10444,7 +10442,12 @@ fn printed_trample_first_strike_lifelink_and_menace_affect_combat() {
         s.advance_to_active_step(0, StepKind::DeclareAttackers);
         s.declare_attack();
         s.advance_to_active_step(0, StepKind::DeclareBlockers);
-        s.declare_block();
+        if name == "Callous Inspector" {
+            // Menace makes a lone blocker illegal, so only declining is offered.
+            s.decline_block();
+        } else {
+            s.declare_block();
+        }
         s.advance_to_active_step(0, StepKind::EndOfCombat);
         match name {
             "Earth King's Lieutenant" => assert_eq!(s.life(1), 18),
@@ -10587,8 +10590,8 @@ fn revised_forty_card_deck_completes_and_replays_every_command_exactly() {
             } else {
                 vec![ur.clone(), gw.clone()]
             };
-            let mut game = Game::new(configs.clone(), seed, true);
-            let mut replay = Game::new(configs, seed, true);
+            let mut game = Game::new(configs.clone(), seed, true).expect("valid game setup");
+            let mut replay = Game::new(configs, seed, true).expect("valid game setup");
             for step in 0..20_000_u64 {
                 if game.is_game_over() {
                     break;

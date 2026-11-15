@@ -7,17 +7,49 @@ from pathlib import Path
 import signal
 import threading
 from types import FrameType
+from unittest.mock import patch
 
+from managym import search
 from managym.academy import server
 from managym.academy.launch import serve
 from managym.academy.opponent import policy_registry
 from managym.academy.trace import load_trace
+from managym.academy.watch import WatchRequest, create_watch, step_watch
 from managym.bots import passive_policy
-from managym.mirror_search import SearchSpec
 from managym.policy import PolicySpec
-from tests.academy.test_mirror_baseline import write_search_checkpoint
-from tests.academy.test_mirror_play import SearchFactory
+from managym.search import SearchConfig
 from tests.academy.test_policy_runtime import IndependentFactory
+from tests.academy.test_policy_search_play import SearchFactory
+from tests.academy.test_search_baseline import write_search_checkpoint
+from tests.semantic.test_policy_search import Clock
+
+
+def _pending_watch(factory: SearchFactory) -> dict[str, str]:
+    """Retain a real timeout after history, using a clock rather than slow work."""
+    key = policy_registry().descriptor("independent").id
+    created = create_watch(
+        WatchRequest(
+            players=[f"policy:{key}"] * 2,
+            mirror=[SearchConfig(), SearchConfig()],
+            seed=42,
+        )
+    )
+    for revision in range(3):
+        step_watch(created["id"], created["token"], revision)
+    clock = Clock()
+    for session in factory.sessions:
+        session.clock = clock
+    try:
+        with patch.object(search, "time", clock):
+            step_watch(created["id"], created["token"], 3)
+    except search.SearchError as error:
+        assert error.reason == "mirror_deadline_exceeded"
+    else:
+        raise AssertionError("Expected a retained Watch timeout")
+    finally:
+        for session in factory.sessions:
+            session.clock = None
+    return {"id": created["id"], "token": created["token"]}
 
 
 def _finished_play(key: str) -> str:
@@ -29,7 +61,7 @@ def _finished_play(key: str) -> str:
                 "villain_deck": {"Forest": 8, "Llanowar Elves": 8},
                 "villain_type": "policy",
                 "opponent_sha256": key,
-                "search": [None, asdict(SearchSpec(worlds=1, depth=1))],
+                "mirror": asdict(SearchConfig(worlds=1, depth=1)),
                 "seed": 42,
                 "auto_pass": False,
             }
@@ -45,7 +77,7 @@ def _finished_play(key: str) -> str:
 
 
 def main() -> None:
-    output = Path(os.environ["ACADEMY_MIRROR_PROOF"])
+    output = Path(os.environ["ACADEMY_SEARCH_PROOF"])
     output.parent.mkdir(parents=True, exist_ok=True)
     checkpoint = output.parent / "untrained-smoke.pt"
     write_search_checkpoint(checkpoint)
@@ -57,17 +89,18 @@ def main() -> None:
     # A supervisor may forward SIGINT twice. Keep later signals from interrupting
     # retained-record persistence while the context closes the real server.
     signal.signal(signal.SIGINT, request_shutdown)
+    independent_factory = SearchFactory()
     with serve(
-        port=int(os.environ["ACADEMY_MIRROR_PORT"]),
+        port=int(os.environ["ACADEMY_SEARCH_PORT"]),
         traces_dir=output.parent / "traces",
         policies={
-            "independent": SearchFactory(),
+            "independent": independent_factory,
             "baseline": PolicySpec("manabot", str(checkpoint)),
             "action-only": IndependentFactory("Action-only"),
         },
     ) as academy:
-        spec = SearchSpec(worlds=1, depth=1)
-        timeout = SearchSpec(worlds=1, depth=1, decision_seconds=1e-9)
+        spec = SearchConfig(worlds=1, depth=1)
+        timeout = SearchConfig(worlds=1, depth=1, decision_seconds=1e-9)
         saved = _finished_play(policy_registry().descriptor("independent").id)
         trace = load_trace(saved)
         ordinal = next(
@@ -92,6 +125,7 @@ def main() -> None:
                     ).url,
                     "saved": f"{academy.url}/replay?trace={saved}",
                     "saved_ordinal": ordinal,
+                    "pending_watch": _pending_watch(independent_factory),
                     "ids": {
                         name: policy_registry().descriptor(name).id
                         for name in ("independent", "baseline", "action-only")
@@ -99,7 +133,7 @@ def main() -> None:
                 }
             )
         )
-        print("ACADEMY_MIRROR_READY", flush=True)
+        print("ACADEMY_SEARCH_READY", flush=True)
         shutdown.wait()
 
 

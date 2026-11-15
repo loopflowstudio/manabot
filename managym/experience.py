@@ -261,6 +261,59 @@ class Command(ProtocolModel):
     answers: list[ChoiceAnswer]
 
 
+class DeclarationBinding(ProtocolModel):
+    revision: UInt64
+    fingerprint: str
+
+
+class DeclarationAnswer(ProtocolModel):
+    subject: ObjectRenderId
+    destination: SubjectRef | None
+
+
+class DeclarationPlan(ProtocolModel):
+    binding: DeclarationBinding
+    assignments: list[DeclarationAnswer]
+
+
+class DeclarationSubject(ProtocolModel):
+    object: DecisionObjectView
+    power: Int32
+    destinations: list[SubjectRef]
+    fixed: bool
+    assigned_to: SubjectRef | None = None
+
+
+class DeclarationProjection(ProtocolModel):
+    binding: DeclarationBinding
+    stage: Literal["attackers", "blockers"]
+    actor: UInt8
+    rules_player: UInt8
+    subjects: list[DeclarationSubject]
+    destinations: list[DecisionObjectView]
+    constraints: list[str]
+
+
+class DeclarationCommitment(ProtocolModel):
+    stage: Literal["attackers", "blockers"]
+    rules_player: UInt8
+    assignments: list[DeclarationAnswer]
+
+
+class DeclarationCommand(ProtocolModel):
+    command_id: str
+    match_id: str
+    expected_revision: UInt64
+    prompt_id: UInt64
+    plan: DeclarationPlan
+
+
+class DeclarationReceipt(ProtocolModel):
+    command: DeclarationCommand
+    child_command_ids: list[str]
+    completion: DeclarationCommitment
+
+
 class PromptView(ProtocolModel):
     id: UInt64
     actor: UInt8
@@ -634,6 +687,9 @@ class AssetPackReference(ProtocolModel):
 
 
 class ExperienceFrame(ProtocolModel):
+    declaration: DeclarationProjection | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     protocol: Literal[1]
     match_id: str
     revision: UInt64
@@ -752,6 +808,9 @@ class PresentationEvent(ProtocolModel):
 
 
 class CommandReceipt(ProtocolModel):
+    declaration: DeclarationReceipt | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     command_id: str
     actor: UInt8
     accepted_at: UInt64
@@ -784,5 +843,11 @@ class RecoveryEnvelope(ProtocolModel):
 
 
 class ProtocolV1ConformanceBundle(ProtocolModel):
+    declaration_receipt: CommandReceipt | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    declaration_command: DeclarationCommand | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     recovery: RecoveryEnvelope
     command: Command

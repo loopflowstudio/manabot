@@ -14,7 +14,7 @@ from typing import Annotated, Literal, TypeAlias
 
 from pydantic import ConfigDict, Field, TypeAdapter
 
-from managym.experience import Command, ProtocolModel, UInt64
+from managym.experience import Command, DeclarationCommand, ProtocolModel, UInt64
 
 from .advice_identity import AdviceIdentity
 
@@ -52,7 +52,7 @@ ROLE_CAPABILITIES: dict[ViewerRole, tuple[TableCapability, ...]] = {
 class ViewerIdentity(ProtocolModel):
     viewer_id: str
     table_id: str
-    rules_viewer: Literal[0] = 0
+    rules_viewer: Literal[0, 1] = 0
 
 
 class ViewerAccess(ProtocolModel):
@@ -159,6 +159,7 @@ class JoinTableMessage(ProtocolModel):
 
 class ResumeMessage(ProtocolModel):
     type: Literal["resume"]
+    play_session_id: str | None = None
     session_id: str
     resume_token: str
     presentation_cursor: UInt64 | None = None
@@ -173,6 +174,10 @@ class NewGameMessage(ProtocolModel):
 class RematchMessage(ProtocolModel):
     type: Literal["rematch"]
     grant_revision: UInt64
+    request_id: str | None = Field(default=None, min_length=1, max_length=128)
+    attempt_id: str | None = None
+    setup_revision: UInt64 | None = None
+    intent: Literal["rematch", "swap_sides", "change_opponent"] = "rematch"
     config: dict[str, object] = Field(default_factory=dict)
 
 
@@ -180,6 +185,19 @@ class CommandMessage(ProtocolModel):
     type: Literal["command"]
     grant_revision: UInt64 | None = None
     command: Command
+
+
+class DeclarationMessage(ProtocolModel):
+    type: Literal["declaration"]
+    grant_revision: UInt64 | None = None
+    command: DeclarationCommand
+
+
+class ValidateDeclarationMessage(ProtocolModel):
+    type: Literal["validate_declaration"]
+    grant_revision: UInt64 | None = None
+    request_id: str
+    command: DeclarationCommand
 
 
 class ActionMessage(ProtocolModel):
@@ -193,8 +211,8 @@ class PassTurnMessage(ProtocolModel):
     grant_revision: UInt64 | None = None
 
 
-class RetrySearchMessage(ProtocolModel):
-    type: Literal["retry_search"]
+class RetryMirrorMessage(ProtocolModel):
+    type: Literal["retry_mirror"]
     grant_revision: UInt64 | None = None
     match_id: str
     expected_revision: UInt64
@@ -269,9 +287,11 @@ SharedTableRequest: TypeAlias = Annotated[
     | NewGameMessage
     | RematchMessage
     | CommandMessage
+    | DeclarationMessage
+    | ValidateDeclarationMessage
     | ActionMessage
     | PassTurnMessage
-    | RetrySearchMessage
+    | RetryMirrorMessage
     | SetStopsMessage
     | TransferPilotMessage
     | AuthorBeliefMessage
@@ -292,9 +312,11 @@ REQUEST_TYPES = (
     "new_game",
     "rematch",
     "command",
+    "declaration",
+    "validate_declaration",
     "action",
     "pass_turn",
-    "retry_search",
+    "retry_mirror",
     "set_stops",
     "transfer_pilot",
     "author_belief",
@@ -359,6 +381,24 @@ class ControlErrorEvent(ProtocolModel):
     table: TableSnapshot | None = None
 
 
+class DeclarationCapacity(ProtocolModel):
+    resource: str
+    limit: UInt64
+    visited: UInt64
+
+
+class DeclarationValidationEvent(ProtocolModel):
+    type: Literal["declaration_validation"]
+    request_id: str
+    match_id: str
+    revision: UInt64
+    prompt_id: UInt64 | None
+    status: Literal["valid", "invalid", "stale", "capacity", "unavailable"]
+    message: str
+    capacity: DeclarationCapacity | None = None
+    table: TableSnapshot | None = None
+
+
 SharedTableControlEvent: TypeAlias = Annotated[
     TableSnapshotEvent
     | BeliefChangedEvent
@@ -366,7 +406,8 @@ SharedTableControlEvent: TypeAlias = Annotated[
     | DecisionRestoredEvent
     | BranchUpdatedEvent
     | BranchReturnedEvent
-    | ControlErrorEvent,
+    | ControlErrorEvent
+    | DeclarationValidationEvent,
     Field(discriminator="type"),
 ]
 

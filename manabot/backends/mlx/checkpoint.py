@@ -147,6 +147,36 @@ class MLXBackend:
     name = "mlx"
 
     @property
+    def verification(self) -> ModuleType:
+        raise NotImplementedError("MLX does not support numerical verification probes")
+
+    @property
+    def runtime(self) -> ModuleType:
+        raise NotImplementedError("MLX does not support full regime execution")
+
+    def save_policy(self, *args: object, **kwargs: object) -> None:
+        raise NotImplementedError("MLX does not support regime policy exports")
+
+    @property
+    def state(self) -> ModuleType:
+        raise NotImplementedError("MLX does not support training state recovery")
+
+    @property
+    def belief_fit(self) -> ModuleType:
+        raise NotImplementedError("MLX does not support belief fitting")
+
+    @property
+    def belief(self) -> ModuleType:
+        raise NotImplementedError("MLX does not support belief sampling or training")
+
+    @property
+    def collection(self) -> ModuleType:
+        raise NotImplementedError("MLX does not support regime collection")
+
+    def seeded_inference(self, seed: int, *, cpu_only: bool = False) -> object:
+        raise NotImplementedError("MLX does not support frozen belief collection")
+
+    @property
     def rl(self) -> ModuleType:
         return importlib.import_module("manabot.backends.mlx.rl")
 
@@ -187,6 +217,10 @@ class MLXBackend:
     @staticmethod
     def metadata(path: str) -> dict[str, Any]:
         return read_metadata(path)
+
+    @staticmethod
+    def seed_training(seed: int, *, torch_deterministic: bool = True) -> None:
+        mx.random.seed(seed)
 
     @staticmethod
     def seed(seed: int) -> None:

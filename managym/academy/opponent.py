@@ -6,15 +6,15 @@ existing tables and traces; new records bind the complete runtime descriptor.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
-from managym.mirror_search import (
-    SearchSpec,
-    descriptor_search_unavailable,
-    searched_descriptor,
-)
 from managym.policy import PolicyDescriptor, PolicyRegistry
+from managym.search import (
+    SearchConfig,
+    descriptor_search_unavailable,
+    search_descriptor,
+)
 
 from . import advice
 
@@ -48,28 +48,25 @@ class Opponent:
         )
         return " · ".join((self.descriptor.name, *aliases))
 
-    def identity(self, search: SearchSpec | None = None) -> dict[str, str]:
-        descriptor = (
-            self.descriptor
-            if search is None
-            else searched_descriptor(self.descriptor, search)
-        )
+    def identity(self, mirror: SearchConfig | None = None) -> dict[str, str]:
+        base = replace(self.descriptor, name=self.name)
+        descriptor = base if mirror is None else search_descriptor(base, mirror)
         return {
             "name": descriptor.name,
             "producer": descriptor.provider,
             "sha256": descriptor.id,
             "bot_id": f"policy:{descriptor.id}",
-            **({"base_sha256": self.descriptor.id} if search is not None else {}),
+            **({"base_sha256": self.descriptor.id} if mirror is not None else {}),
         }
 
-    def record(self, search: SearchSpec | None = None) -> dict[str, Any]:
+    def record(self, mirror: SearchConfig | None = None) -> dict[str, Any]:
         descriptor = (
             self.descriptor
-            if search is None
-            else searched_descriptor(self.descriptor, search)
+            if mirror is None
+            else search_descriptor(self.descriptor, mirror)
         )
         return {
-            **self.identity(search),
+            **self.identity(mirror),
             "schema": "managym-policy-1",
             "policy": descriptor.record(),
         }
@@ -85,6 +82,7 @@ def opponent_catalog() -> dict[str, Any]:
         error = "; ".join(registry.discovery_errors) or None
         for descriptor in registry.descriptors():
             record = descriptor.record()
+            search_reason = descriptor_search_unavailable(descriptor)
             entries.append(
                 {
                     "sha256": descriptor.id,
@@ -94,9 +92,8 @@ def opponent_catalog() -> dict[str, Any]:
                     "details": record["details"],
                     "available": descriptor.incompatibility is None,
                     "reason": descriptor.incompatibility,
-                    "supports_search": descriptor_search_unavailable(descriptor)
-                    is None,
-                    "search_reason": descriptor_search_unavailable(descriptor),
+                    "supports_search": search_reason is None,
+                    "search_reason": search_reason,
                     "policy": record,
                 }
             )

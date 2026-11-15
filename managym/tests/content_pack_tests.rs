@@ -35,6 +35,7 @@ fn make_game(seed: u64) -> Game {
         seed,
         true,
     )
+    .expect("valid game setup")
 }
 
 fn zone_trace(zones: &ZoneManager) -> Vec<(ZoneType, PlayerId, Vec<usize>)> {

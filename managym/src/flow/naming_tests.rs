@@ -36,7 +36,8 @@ fn naming_game() -> Game {
         ],
         243,
         false,
-    );
+    )
+    .expect("valid game setup");
     game.run_frame(EffectFrame {
         context_target: Some(Target::Player(PlayerId(1))),
         ..EffectFrame::new(
@@ -356,7 +357,8 @@ fn catalog_naming_cost_attribution() {
         ],
         243,
         true,
-    );
+    )
+    .expect("valid game setup");
     measure("ordinary_search_fork", || ordinary.clone());
     measure("ordinary_fork_and_step", || {
         let mut branch = ordinary.clone();

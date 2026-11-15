@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from manabot.backends import resolve
 from manabot.experiment.evaluation_queue import (
     CheckpointQueue,
     MonitoringBudget,
@@ -51,7 +52,12 @@ def test_real_iterations_export_exact_milestones_and_one_endpoint(
     stage.updates = 6
     with VerifyStore(tmp_path / "runs.sqlite") as store:
         run = execution.execute_regime(
-            recipe, 197, tmp_path / "run", store, checkpoint_updates=cadence
+            recipe,
+            197,
+            tmp_path / "run",
+            store,
+            checkpoint_updates=cadence,
+            backend=resolve("torch"),
         )
     assert run.status == "completed", run.error
     rows = tracked_updates(run, tmp_path)
@@ -87,7 +93,12 @@ def test_continuation_anchors_after_inherited_step(
     recipe = portable.continuation(producer, tmp_path / "producer/run.json", 7)
     with VerifyStore(tmp_path / "segments.sqlite") as store:
         run = execution.execute_regime(
-            recipe, 197, tmp_path / "segment", store, checkpoint_updates=interval
+            recipe,
+            197,
+            tmp_path / "segment",
+            store,
+            checkpoint_updates=interval,
+            backend=resolve("torch"),
         )
     assert run.status == "completed", run.error
     assert run.updates_through() == 7
@@ -127,7 +138,12 @@ def test_recovery_preserves_prior_exports_and_cadence(
             patch.setattr(execution, "export_training_run", interrupt)
             with pytest.raises(KeyboardInterrupt):
                 execution.execute_regime(
-                    recipe, 197, tmp_path / "first", store, checkpoint_updates=2
+                    recipe,
+                    197,
+                    tmp_path / "first",
+                    store,
+                    checkpoint_updates=2,
+                    backend=resolve("torch"),
                 )
         parent = TrainingRun.model_validate_json(
             (tmp_path / "first/run.json").read_text()
@@ -141,6 +157,7 @@ def test_recovery_preserves_prior_exports_and_cadence(
                 store,
                 resume_from=parent.id,
                 checkpoint_updates=3,
+                backend=resolve("torch"),
             )
         resumed = execution.execute_regime(
             recipe,
@@ -149,6 +166,7 @@ def test_recovery_preserves_prior_exports_and_cadence(
             store,
             resume_from=parent.id,
             checkpoint_updates=2,
+            backend=resolve("torch"),
         )
     assert resumed.status == "completed", resumed.error
     assert resumed.optimizer_updates_through() == sum(
@@ -205,7 +223,12 @@ def test_empty_filter_still_advances_steps_without_optimizer_calls(
     stage.learning.min_advantage = 1e20
     with VerifyStore(tmp_path / "empty.sqlite") as store:
         run = execution.execute_regime(
-            recipe, 197, tmp_path / "empty", store, checkpoint_updates=1
+            recipe,
+            197,
+            tmp_path / "empty",
+            store,
+            checkpoint_updates=1,
+            backend=resolve("torch"),
         )
     assert run.status == "completed", run.error
     assert run.updates_through() == 2

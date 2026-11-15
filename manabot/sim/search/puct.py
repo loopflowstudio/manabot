@@ -57,7 +57,7 @@ def _no_deadline() -> None:
     pass
 
 
-def _mix_seed(a: int, b: int) -> int:
+def mix_seed(a: int, b: int) -> int:
     """Match the engine's SplitMix64-style deterministic sub-seed derivation."""
 
     z = (
@@ -278,14 +278,16 @@ class PuctSearchStats(SearchStats):
 
 
 @dataclass
-class _Node:
+class Node:
+    """One determinized game state and the visit/value totals of its actions."""
+
     env: Any
     player: int | None
     visits: np.ndarray
     value_sums: np.ndarray
     priors: np.ndarray
     terminal: bool
-    children: dict[int, "_Node"] = field(default_factory=dict)
+    children: dict[int, "Node"] = field(default_factory=dict)
 
     @classmethod
     def from_env(
@@ -294,7 +296,7 @@ class _Node:
         *,
         terminal: bool | None = None,
         priors: np.ndarray | None = None,
-    ) -> "_Node":
+    ) -> "Node":
         is_terminal = env.is_game_over() if terminal is None else terminal
         if is_terminal:
             return cls(
@@ -334,7 +336,7 @@ def _root_score(winner: int | None, hero: int) -> float:
     return 1.0 if int(winner) == hero else 0.0
 
 
-def _select_action(node: _Node, hero: int, c_puct: float) -> int:
+def _select_action(node: Node, hero: int, c_puct: float) -> int:
     total = int(node.visits.sum())
     q = np.divide(
         node.value_sums,
@@ -348,8 +350,8 @@ def _select_action(node: _Node, hero: int, c_puct: float) -> int:
     return int(np.argmax(np.where(node.priors > 0, acting_q + exploration, -np.inf)))
 
 
-def _simulate(
-    root: _Node,
+def simulate(
+    root: Node,
     *,
     hero: int,
     c_puct: float,
@@ -359,8 +361,9 @@ def _simulate(
     branch_session: BranchSession,
     check: Callable[[], None] = _no_deadline,
 ) -> tuple[float, bool, int, int]:
+    """Run and back up one playout; return value, cap status, depth and additions."""
     node = root
-    path: list[tuple[_Node, int]] = []
+    path: list[tuple[Node, int]] = []
     depth = 0
     added_nodes = 0
     hit_cap = False
@@ -403,7 +406,7 @@ def _simulate(
                 )
                 if not math.isfinite(evaluation.root_value):
                     raise ValueError("PUCT leaf returned a nonfinite value")
-            child = _Node.from_env(
+            child = Node.from_env(
                 child_env,
                 terminal=is_terminal,
                 priors=evaluation.priors if evaluation is not None else None,
@@ -504,17 +507,17 @@ def determinized_puct(
 
     for world_index, world_simulations in enumerate(per_world):
         check()
-        world_seed = _mix_seed(seed, world_index)
+        world_seed = mix_seed(seed, world_index)
         world = branch_session.fork_exact(root_env, "world")
         branch_session.determinize(world, seed=world_seed, perspective=hero)
         if int(world.action_count()) != action_count:
             raise RuntimeError("determinization changed the root legal action count")
-        root = _Node.from_env(world, priors=root_priors.copy())
+        root = Node.from_env(world, priors=root_priors.copy())
         tree_nodes += 1
         world_value = 0.0
         for simulation_index in range(world_simulations):
-            rollout_seed = _mix_seed(world_seed, simulation_index + 1)
-            value, hit_cap, depth, added = _simulate(
+            rollout_seed = mix_seed(world_seed, simulation_index + 1)
+            value, hit_cap, depth, added = simulate(
                 root,
                 hero=hero,
                 c_puct=c_puct,
@@ -615,7 +618,7 @@ class DeterminizedPuctPlayer:
         if agent is not None:
             validate_agent_setup(agent, env.match.to_rust())
         self._calls += 1
-        call_seed = _mix_seed(self._seed, self._calls)
+        call_seed = mix_seed(self._seed, self._calls)
         started = time.perf_counter()
         result = determinized_puct(
             env._engine,

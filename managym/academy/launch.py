@@ -21,10 +21,11 @@ import threading
 import time
 from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import urlencode
+import warnings
 import webbrowser
 
-from managym.mirror_search import SearchError, SearchSpec, searched_descriptor
 from managym.policy import PolicyFactory, PolicySource, PolicySpec
+from managym.search import SearchConfig, SearchError, search_descriptor
 
 if TYPE_CHECKING:
     import uvicorn
@@ -274,9 +275,19 @@ class Academy:
         sims: int = 64,
         seed: int | None = None,
         decklists: Literal["open", "closed"] = "open",
-        search: SearchSpec | None = None,
+        search: SearchConfig | None = None,
+        mirror: SearchConfig | None = None,
     ) -> Launched:
         self._require_open()
+        if mirror is not None:
+            warnings.warn(
+                "mirror= is deprecated; use search= (removed in 0.4.0)",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            if search is not None:
+                raise ValueError("Pass search= only; do not combine it with mirror=.")
+            search = mirror
         import managym
         from managym.academy import server
         from managym.academy.villain import player_fields
@@ -300,7 +311,7 @@ class Academy:
             "villain_sims": sims,
             "seed": seed,
             "decklists": decklists,
-            "search": [None, asdict(search) if search is not None else None],
+            "mirror": asdict(search) if search is not None else None,
             **player_fields(opponent),
         }
         if imported:
@@ -353,10 +364,20 @@ class Academy:
         self,
         *,
         players: tuple[str | Path, str | Path],
-        search: tuple[SearchSpec | None, SearchSpec | None] = (None, None),
+        search: tuple[SearchConfig | None, SearchConfig | None] = (None, None),
+        mirror: tuple[SearchConfig | None, SearchConfig | None] | None = None,
     ) -> Launched:
         """Open Watch setup with exact seats selected, without starting a game."""
         self._require_open()
+        if mirror is not None:
+            warnings.warn(
+                "mirror= is deprecated; use search= (removed in 0.4.0)",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            if search != (None, None):
+                raise ValueError("Pass search= only; do not combine it with mirror=.")
+            search = mirror
         seats = [self._player(player, "player.unavailable") for player in players]
         from managym.academy.opponent import policy_registry
 
@@ -365,10 +386,10 @@ class Academy:
                 if not player.startswith("policy:"):
                     raise AcademyLaunchError(
                         "setup.invalid",
-                        "Mirror search requires a registered search-capable policy.",
+                        "Search requires a registered search-capable policy.",
                     )
                 try:
-                    searched_descriptor(
+                    search_descriptor(
                         policy_registry().descriptor(player.removeprefix("policy:")),
                         spec,
                     )

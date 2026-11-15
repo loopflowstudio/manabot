@@ -812,7 +812,7 @@ impl Game {
     fn chosen_card(&self, object: ObjectId) -> Result<CardId, AgentError> {
         self.state
             .card_of(object)
-            .ok_or_else(|| AgentError("choice must name a card".into()))
+            .ok_or_else(|| AgentError::Rules("choice must name a card".into()))
     }
 
     pub(crate) fn execute_action(&mut self, action: &Action) -> Result<(), AgentError> {
@@ -846,7 +846,9 @@ impl Game {
             } => self.activate_card_ability_action(*player, *object, *ability_index),
             Action::Foretell { player, object } => {
                 if self.state.priority.holder != *player {
-                    return Err(AgentError("player does not have priority".to_string()));
+                    return Err(AgentError::Rules(
+                        "player does not have priority".to_string(),
+                    ));
                 }
                 self.foretell(*player, self.chosen_card(*object)?)
             }
@@ -872,12 +874,14 @@ impl Game {
                 } else if self.state.suspended_decision.is_some() {
                     self.execute_decision_action(action)
                 } else {
-                    Err(AgentError("no pending target choice".to_string()))
+                    Err(AgentError::Rules("no pending target choice".to_string()))
                 }
             }
             Action::PassPriority { player } => {
                 if self.state.priority.holder != *player {
-                    return Err(AgentError("player does not have priority".to_string()));
+                    return Err(AgentError::Rules(
+                        "player does not have priority".to_string(),
+                    ));
                 }
                 let next = self.next_player(*player);
                 self.state.priority_mut().on_pass(next);
@@ -978,7 +982,7 @@ impl Game {
                         // choosing a target.
                         self.decline_trigger_target(*player)
                     }
-                    _ => Err(AgentError("nothing to decline".to_string())),
+                    _ => Err(AgentError::Rules("nothing to decline".to_string())),
                 }
             }
             Action::PayCost { player } => {
@@ -996,7 +1000,7 @@ impl Game {
                     Some(PendingChoice::Waterbend { .. }) => {
                         self.waterbend_pay_remainder_action(*player)
                     }
-                    _ => Err(AgentError("no cost payment is pending".to_string())),
+                    _ => Err(AgentError::Rules("no cost payment is pending".to_string())),
                 }
             }
             Action::WaterbendTap { player, permanent } => {
@@ -1060,7 +1064,8 @@ mod identity_tests {
             ],
             400_715,
             false,
-        );
+        )
+        .expect("valid game setup");
         let player = game.active_player();
         game.state.turn.current_phase = 1;
         game.state.turn.current_step = 0;

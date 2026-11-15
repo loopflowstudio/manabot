@@ -15,7 +15,10 @@ use crate::{
         zone::ZoneType,
     },
 };
-use std::{collections::VecDeque, sync::Arc};
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::Arc,
+};
 
 pub const HISTORY_DIM: usize = history::WIDTH;
 pub const HISTORY_LIMIT: usize = 32;
@@ -245,10 +248,23 @@ pub(crate) fn record(game: &mut Game, event: &GameEvent) {
 /// v1 rows: kind, signed amount; two references each containing definition+1,
 /// owner role (0 unknown, 1 viewer, 2 opponent), zone+1, context index (-1 absent),
 /// availability (0 unknown, 1 exact current object/player, 2 definition without a current link).
+/// A context is the zero-based object-table index of the object's one row
+/// (`object_to_index`): a card, a permanent or a stack row.
 pub fn encode(
     obs: &Observation,
     capacity: usize,
-    cards_per_player: usize,
+    object_to_index: &HashMap<i32, i32>,
+) -> Vec<[f32; HISTORY_DIM]> {
+    encode_rows(obs, capacity, |id| {
+        object_to_index.get(&id).map(|index| *index as usize)
+    })
+}
+
+/// Rows whose object contexts `context` resolves from an object id.
+pub(crate) fn encode_rows(
+    obs: &Observation,
+    capacity: usize,
+    context: impl Fn(i32) -> Option<usize>,
 ) -> Vec<[f32; HISTORY_DIM]> {
     let reference = |value: &HistoryReference| -> [f32; 5] {
         let role = |owner: PlayerId| {
@@ -267,18 +283,7 @@ pub fn encode(
                 zone,
                 context_id,
             } => {
-                let context = context_id.and_then(|id| {
-                    obs.agent_cards
-                        .iter()
-                        .position(|object| object.id == id)
-                        .map(|slot| 2 + slot)
-                        .or_else(|| {
-                            obs.opponent_cards
-                                .iter()
-                                .position(|object| object.id == id)
-                                .map(|slot| 2 + cards_per_player + slot)
-                        })
-                });
+                let context = context_id.and_then(&context);
                 [
                     (*definition + 1) as f32,
                     role(*owner),
@@ -310,6 +315,23 @@ mod tests {
     use super::*;
     use crate::state::{game_object::PublicId, player::PlayerConfig};
 
+    /// The v11 encoder's valid history rows, at `capacity` rows.
+    fn rows(obs: &Observation, capacity: usize) -> Vec<Vec<f32>> {
+        let config = crate::agent::observation_encoder::ObservationEncoderConfig {
+            policy_history: true,
+            max_events: capacity,
+            ..Default::default()
+        };
+        let encoded = crate::agent::observation_encoder::encode(obs, &config).unwrap();
+        encoded
+            .events
+            .chunks(HISTORY_DIM)
+            .zip(&encoded.events_valid)
+            .filter(|(_, valid)| **valid > 0.0)
+            .map(|(row, _)| row.to_vec())
+            .collect()
+    }
+
     fn game() -> Game {
         Game::new(
             vec![
@@ -325,6 +347,7 @@ mod tests {
             111,
             false,
         )
+        .expect("valid game setup")
     }
 
     #[test]
@@ -355,11 +378,11 @@ mod tests {
                 ..
             }
         ));
-        let expected = encode(&initial, 32, 60);
+        let expected = rows(&initial, 32);
         game.take_observation_events();
         assert_eq!(
             expected,
-            encode(&Observation::for_player(&game, PlayerId(0)), 32, 60)
+            rows(&Observation::for_player(&game, PlayerId(0)), 32)
         );
         // Consistent presentation-ID renaming cannot alter learned rows.
         for object in game.state.objects.iter_mut() {
@@ -378,7 +401,7 @@ mod tests {
         }
         assert_eq!(
             expected,
-            encode(&Observation::for_player(&game, PlayerId(0)), 32, 60)
+            rows(&Observation::for_player(&game, PlayerId(0)), 32)
         );
         let object = game.move_object(object, ZoneType::Hand);
         let other = game.move_object(other, ZoneType::Graveyard);
@@ -403,13 +426,13 @@ mod tests {
                 ..
             }
         ));
-        let before = encode(&projected, 32, 60);
+        let before = rows(&projected, 32);
         // Future hidden placement cannot rewrite a previously public identity.
         game.state
             .place_object(object, PlayerId(0), ZoneType::Library);
         assert_eq!(
             before,
-            encode(&Observation::for_player(&game, PlayerId(0)), 32, 60)
+            rows(&Observation::for_player(&game, PlayerId(0)), 32)
         );
         assert!(self::game().policy_history.is_empty());
     }
@@ -430,8 +453,8 @@ mod tests {
         let first = Observation::for_player(&game, PlayerId(0));
         let second = Observation::for_player(&game, PlayerId(1));
         assert_eq!(first.policy_history.len(), HISTORY_LIMIT);
-        let a = encode(&first, 3, 60);
-        let b = encode(&second, 3, 60);
+        let a = rows(&first, 3);
+        let b = rows(&second, 3);
         assert_eq!(
             a.iter().map(|row| row[1]).collect::<Vec<_>>(),
             vec![-37.0, -38.0, -39.0]
@@ -468,7 +491,7 @@ mod tests {
             // An observation is an O(1) shared-suffix read, regardless of ledger
             // length. No history-off encoding walks these rows.
             assert!(Arc::ptr_eq(&root, &obs.policy_history));
-            assert_eq!(encode(&obs, 32, 60).len(), 2);
+            assert_eq!(rows(&obs, 32).len(), 2);
         }
         assert!(matches!(
             root.back().unwrap().source,
@@ -513,7 +536,8 @@ mod tests {
         // Identical public definitions instantiated in different physical slots.
         let first = root(0, 40);
         let second = root(1, 41);
-        assert_ne!(first.agent_cards[0].id, second.agent_cards[0].id);
-        assert_eq!(encode(&first, 32, 60), encode(&second, 32, 60));
+        let spell = |obs: &Observation| obs.stack_objects[0].spell.as_ref().unwrap().object_id;
+        assert_ne!(spell(&first), spell(&second));
+        assert_eq!(rows(&first, 32), rows(&second, 32));
     }
 }

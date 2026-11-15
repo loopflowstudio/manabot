@@ -11,7 +11,8 @@ serialized keys remain unchanged; these are not training snapshots.
 beside the native torch API (see the protocol section below).
 """
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 import importlib
 import json
 from pathlib import Path
@@ -315,6 +316,42 @@ class _Torch:
     name = "torch"
 
     @property
+    def verification(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.torch.verification")
+
+    @property
+    def runtime(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.torch.runtime")
+
+    save_policy = staticmethod(save_checkpoint)
+
+    @property
+    def state(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.torch.state")
+
+    @property
+    def belief_fit(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.torch.belief_fit")
+
+    @property
+    def belief(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.torch.belief")
+
+    @property
+    def collection(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.torch.collection")
+
+    @staticmethod
+    @contextmanager
+    def seeded_inference(seed: int, *, cpu_only: bool = False) -> Iterator[None]:
+        with (
+            torch.random.fork_rng(devices=[] if cpu_only else None),
+            torch.inference_mode(),
+        ):
+            torch.manual_seed(seed)
+            yield
+
+    @property
     def rl(self) -> ModuleType:
         return importlib.import_module("manabot.backends.torch.rl")
 
@@ -341,6 +378,11 @@ class _Torch:
     @staticmethod
     def metadata(path: str) -> dict[str, Any]:
         return load_metadata(path)
+
+    @staticmethod
+    def seed_training(seed: int, *, torch_deterministic: bool = True) -> None:
+        torch.manual_seed(seed)
+        torch.backends.cudnn.deterministic = torch_deterministic
 
     @staticmethod
     def seed(seed: int) -> None:

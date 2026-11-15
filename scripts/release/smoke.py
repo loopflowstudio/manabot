@@ -131,7 +131,12 @@ def main() -> None:
             )
         ]
     )
-    [descriptor] = registry.descriptors()
+    # Ambient reference players coexist with the explicitly discovered artifact.
+    [descriptor] = [
+        descriptor
+        for descriptor in registry.descriptors()
+        if descriptor.artifacts.get("actor") == file_sha256(checkpoint_path)
+    ]
     assert descriptor.incompatibility is None
     assert descriptor.artifacts["actor"]
     print(

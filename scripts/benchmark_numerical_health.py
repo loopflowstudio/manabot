@@ -11,6 +11,7 @@ import time
 
 import torch
 
+import manabot.backends.torch as torch_backend
 from manabot.backends.torch.learner import gradient_step
 from manabot.training.updates.health import NumericalHealth, OptimizerHealth
 
@@ -31,7 +32,11 @@ def measure(device: str, steps: int, guarded: bool) -> float:
                 optimizer_steps=0, rejected_steps=0, skipped_steps=0, sampled_steps=0
             )
             gradient_step(
-                loss, model, optimizer, 0.5, recorder=OptimizerHealth(health, iteration)
+                loss,
+                model,
+                optimizer,
+                0.5,
+                recorder=OptimizerHealth(health, iteration, backend=torch_backend),
             )
         else:
             optimizer.zero_grad(set_to_none=True)

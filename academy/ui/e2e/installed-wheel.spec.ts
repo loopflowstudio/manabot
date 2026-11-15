@@ -41,22 +41,25 @@ test('installed Academy plays and opens its recorded decisions', async ({ page }
   await expect.poll(() => outcomes.some(row => row.status === 'accepted'), { timeout: 90_000 }).toBe(true);
   // Use the app's navigation: hard document loads cancel in-flight Image requests.
   await expect.poll(() => artRequested).toBe(true);
-  await page.getByRole('link', { name: 'Replay', exact: true }).first().click();
+  await page.getByRole('banner').getByRole('link', { name: 'Games', exact: true }).click();
   releaseArt();
   await expect.poll(() => artFinished).toBe(true);
-  const select = page.getByTestId('trace-select');
-  await expect(select).toBeVisible();
-  await select.selectOption({ index: 1 });
+  await page.locator('a[aria-label^="Replay game"]').first().click();
   await expect(page.getByTestId('game-board')).toBeVisible();
-  await expect(page.getByText(/^Frame 1 \/ \d+$/)).toBeVisible();
-  await page.getByRole('button', { name: 'Next frame', exact: true }).click();
-  await expect(page.getByText(/^Frame 2 \/ \d+$/)).toBeVisible();
-  await page.getByRole('link', { name: 'Watch', exact: true }).first().click();
+  const counter = page.getByTestId('position-counter');
+  await expect(counter).toBeVisible();
+  const initialPosition = Number(/Position (\d+)/.exec(await counter.innerText())![1]);
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(counter).toHaveText(new RegExp(`Position ${initialPosition + 1} / \\d+`));
+  await page.getByRole('banner').getByRole('link', { name: 'New game', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Seat 1 controller', exact: true }).selectOption('bot');
   await expect(page.getByRole('button', { name: 'Start watching' })).toBeEnabled();
   for (const seat of ['Seat 1', 'Seat 2']) {
-    await expect(page.getByRole('combobox', { name: seat, exact: true }).locator('option')).toHaveText(['random', 'search']);
+    await expect(page.getByRole('combobox', { name: `${seat} bot`, exact: true }).locator('option')).toHaveText([
+      'Search 16', 'Search 64', 'Search 256', 'Random', 'Passive', 'Registered policy',
+    ]);
   }
-  await expect(page.getByText('Trained bots need manabot installed on this server.')).toBeVisible();
+  await expect(page.getByText('No policies registered on this server. Supply a Python policy factory or a saved specification.').first()).toBeVisible();
   await expect(page.getByLabel('Open a game file')).toHaveCount(0);
   expect(errors).toEqual([]);
 });

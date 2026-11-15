@@ -4,7 +4,6 @@ Each match contains all eight deck/seat legs of one deal."""
 
 from __future__ import annotations
 
-from functools import partial
 import json
 import os
 from pathlib import Path
@@ -21,7 +20,7 @@ from etude.eval.records import (
     Seating,
 )
 from etude.eval.tournament import hold
-from etude.run.records import ArtifactRef
+from etude.records import ArtifactRef
 import numpy as np
 from pydantic import BaseModel
 
@@ -292,10 +291,14 @@ def evaluate(path: Path, *, execution: EvalExecution | None = None) -> None:
         ),
     )
     with callback_allocation(execution, directory / "allocation") as inference:
+
+        def play_match(match: Match) -> Tables:
+            return play(match, inference=inference)
+
         result = hold(
             benchmark,
             experiment=EXPERIMENT,
-            play=partial(play, inference=inference) if inference else play,
+            play=play_match,
             checkpoint=_checkpoint(duel.two_seat),
             directory=directory.parent.parent / "track",
             workers=execution.max_active_games if execution else 1,

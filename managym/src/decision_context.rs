@@ -21,7 +21,7 @@ use crate::{
 };
 
 impl Game {
-    fn decision_object(&self, object: ObjectId) -> Option<DecisionObjectView> {
+    pub(crate) fn decision_object(&self, object: ObjectId) -> Option<DecisionObjectView> {
         self.state.live(object)?;
         let display_id = self
             .state
@@ -43,7 +43,7 @@ impl Game {
         })
     }
 
-    fn decision_target(&self, target: &Target) -> Option<DecisionObjectView> {
+    pub(crate) fn decision_target(&self, target: &Target) -> Option<DecisionObjectView> {
         match target {
             Target::Player(player) => Some(DecisionObjectView {
                 entity_id: self.state.players[player.0].id.0,
@@ -120,9 +120,7 @@ impl Game {
                             ))
                         } else {
                             observation
-                                .agent_cards
-                                .iter()
-                                .chain(observation.opponent_cards.iter())
+                                .object_records()
                                 .find(|card| card.id == id.0 as i32)
                                 .and_then(|_| {
                                     self.state

@@ -32,7 +32,7 @@ impl PyHeuristic {
         let raw: Observation = observation.clone().into();
         self.inner
             .select_action(&raw, self.max_actions)
-            .map_err(|e| PyValueError::new_err(e.0))
+            .map_err(|e| PyValueError::new_err(e.to_string()))
     }
     fn reset(&mut self) {
         self.inner.reset();

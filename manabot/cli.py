@@ -121,6 +121,8 @@ def train_command(
         help="Retired training overrides; use an explicit --regime JSON",
     ),
 ) -> None:
+    from manabot.backends import resolve
+
     if preset is not None or set_values:
         raise typer.BadParameter(
             "training --preset/--set are retired; use --recipe local, --recipe baseline, "
@@ -220,6 +222,7 @@ def train_command(
             checkpoint_seconds=checkpoint_seconds,
             checkpoint_updates=checkpoint_updates,
             initial_admission=Path(initial_admission) if initial_admission else None,
+            backend=resolve("torch"),
         )
 
 

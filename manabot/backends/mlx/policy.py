@@ -360,6 +360,9 @@ class MLXActorCritic(nn.Module):
     def has_programs(self) -> bool:
         return True
 
+    def admit_belief(self, belief_schema: object) -> None:
+        raise NotImplementedError("MLX does not support belief inputs")
+
     def inference_scope(self, *, cache_catalog: bool = True) -> "PolicyInference":
         return PolicyInference(self, cache_catalog=cache_catalog)
 
@@ -530,6 +533,15 @@ class MLXActorCritic(nn.Module):
             logits, values = self(batch)
             mx.eval(logits, values)
         return to_numpy(logits), to_numpy(values)[:, 0]
+
+    def evaluate_probabilities(
+        self, batch: Prepared[np.ndarray]
+    ) -> tuple[np.ndarray, np.ndarray]:
+        with mx.stream(getattr(self, "_inference_device", mx.default_device())):
+            logits, values = self(batch)
+            probabilities = mx.softmax(logits, axis=-1)
+            mx.eval(probabilities, values)
+        return to_numpy(probabilities), to_numpy(values)[:, 0]
 
     def forward_distribution(
         self, batch: Prepared[np.ndarray]

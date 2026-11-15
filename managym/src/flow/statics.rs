@@ -958,8 +958,9 @@ mod cache_tests {
             ],
             244,
             true,
-        );
-        game.play();
+        )
+        .expect("valid game setup");
+        game.play().unwrap();
         game
     }
 
@@ -1024,8 +1025,9 @@ mod cache_tests {
             ],
             244,
             true,
-        );
-        game.play();
+        )
+        .expect("valid game setup");
+        game.play().unwrap();
         let id = game
             .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
             .unwrap();
@@ -1097,8 +1099,9 @@ mod cache_tests {
             ],
             244,
             true,
-        );
-        game.play();
+        )
+        .expect("valid game setup");
+        game.play().unwrap();
         let id = game
             .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
             .unwrap();

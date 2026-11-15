@@ -10,6 +10,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 import random
 from typing import Literal
+import warnings
 
 import managym
 from managym.enums import ActionEnum
@@ -60,7 +61,7 @@ class BotDecision:
     unavailable: str | None = None
     factors: list[PolicyFactor] = field(default_factory=list)
     belief: BeliefSummary | None = None
-    search: SearchSummary | None = None
+    mirror: SearchSummary | None = None
 
 
 class FlatSearchPolicy:
@@ -187,3 +188,14 @@ class VerifiedArena:
     observation: managym.Observation
     configs: Sequence[managym.PlayerConfig]
     decisions: list[BotDecision]
+
+
+def __getattr__(name: str) -> object:
+    if name != "MirrorSummary":
+        raise AttributeError(name)
+    warnings.warn(
+        "MirrorSummary is deprecated; use SearchSummary (removed in 0.4.0)",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return SearchSummary

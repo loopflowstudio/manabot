@@ -8,12 +8,13 @@
     /** Every visible permanent at the table, for attachments across seats. */
     tablePermanents: PermanentState[];
     focusedIds?: Set<number>;
+    combatMarkers?: Map<number, string>;
     clickableTargets?: Map<number, number[]>;
     onSelectTarget?: (id: number) => void;
     onHoverTarget?: (id: number | null) => void;
     onPreviewCard?: (card: CardPreview | null) => void;
   }
-  let { permanents, tablePermanents, focusedIds = new Set<number>(), clickableTargets,
+  let { permanents, tablePermanents, focusedIds = new Set<number>(), combatMarkers = new Map<number, string>(), clickableTargets,
     onSelectTarget, onHoverTarget, onPreviewCard }: Props = $props();
   const groups = $derived(groupBattlefield(permanents));
   const lanes: { lane: BattlefieldLane; label: string }[] = [
@@ -27,7 +28,7 @@
 <div class="battlefield-grid" data-testid="battlefield">
   {#each lanes.filter(({ lane }) => groups[lane].length > 0) as { lane, label }}
     <BattlefieldZone {lane} {label} permanents={groups[lane]} allPermanents={permanents} {tablePermanents}
-      {focusedIds} {clickableTargets} {onSelectTarget} {onHoverTarget} {onPreviewCard} />
+      {focusedIds} {combatMarkers} {clickableTargets} {onSelectTarget} {onHoverTarget} {onPreviewCard} />
   {/each}
 </div>
 <div class="empty-lanes flex flex-wrap gap-x-3 type-caption text-ink-2">

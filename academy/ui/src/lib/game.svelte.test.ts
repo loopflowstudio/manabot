@@ -221,11 +221,11 @@ describe('GameStore', () => {
 
   it('keeps next-game search edits separate from the running opponent budget', () => {
     const store = createGameStore();
-    store.activeMirrorSearch = { algorithm: 'local_update', belief: 'physical_deal',
+    store.activeSearchConfig = { algorithm: 'local_update', belief: 'physical_deal',
       worlds: 1, depth: 2, decision_seconds: 30, alpha: 0.02, beta: 1 };
-    store.mirrorSearch = { ...store.activeMirrorSearch, worlds: 4 };
-    expect(store.newGameConfig().search).toEqual([null, store.mirrorSearch]);
-    expect(store.activeMirrorSearch.worlds).toBe(1);
+    store.searchConfig = { ...store.activeSearchConfig, worlds: 4 };
+    expect(store.newGameConfig().mirror).toEqual(store.searchConfig);
+    expect(store.activeSearchConfig.worlds).toBe(1);
   });
 
   it('adopts the server stops echo from observation payloads', () => {

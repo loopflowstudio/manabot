@@ -8,17 +8,26 @@ buffers and returned logits retain their configured action axis.
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Protocol
 
 import numpy as np
 from numpy.typing import NDArray
-import torch
 
-from manabot.backends.torch.rl import (
-    NumericalError,
-    check_behavior,
-    legal_mask,
-    require,
-)
+
+class ActionValidator(Protocol):
+    """Numerical admission of retained behavior, preserving backend evidence."""
+
+    def packing_mask(
+        self, mask: NDArray[np.generic], logs: NDArray[np.generic]
+    ) -> NDArray[np.bool_]: ...
+
+    def check_packed(
+        self,
+        packed: "PackedActions",
+        actions: NDArray[np.generic],
+        selected_logs: NDArray[np.generic],
+    ) -> None: ...
+
 
 ACTION_FIELDS = frozenset(
     {"actions", "actions_valid", "action_focus", "name_candidates"}
@@ -44,29 +53,16 @@ class PackedActions:
         cls,
         observation: dict[str, NDArray[np.generic]],
         log_probabilities: NDArray[np.generic],
+        *,
+        validator: ActionValidator,
     ) -> "PackedActions":
         """Copy legal rows from [B,A,...]; reject malformed masks or padding mass.
 
         Distribution/selected-action checks run before learning on every row.
         Padding must be checked here because it is deliberately not retained.
         """
-        valid = legal_mask(torch.as_tensor(observation["actions_valid"])).numpy()
-        if valid.ndim != 2 or log_probabilities.shape != valid.shape:
-            raise ValueError("packed actions require matching [B,A] distributions")
-        if np.any(~np.isneginf(log_probabilities[~valid])):
-            require(
-                torch.as_tensor(np.isneginf(log_probabilities) | valid),
-                "illegal_log_mass",
-                logs=torch.as_tensor(log_probabilities),
-                valid=torch.as_tensor(valid),
-            )
+        valid = validator.packing_mask(observation["actions_valid"], log_probabilities)
         counts = valid.sum(-1)
-        if np.any(counts == 0):
-            require(
-                torch.as_tensor(counts != 0),
-                "empty_legal_support",
-                valid=torch.as_tensor(valid),
-            )
         # Boolean indexing owns its result; no second copy of legal rows is needed.
         return cls(
             np.concatenate(([0], counts.cumsum())).astype(np.int64),
@@ -135,35 +131,14 @@ class PackedActions:
         return ActionRows(obs, logs)
 
     def check(
-        self, actions: NDArray[np.generic], selected_logs: NDArray[np.generic]
+        self,
+        actions: NDArray[np.generic],
+        selected_logs: NDArray[np.generic],
+        *,
+        validator: ActionValidator,
     ) -> None:
-        """Admit all behavior evidence in bounded CPU chunks, before any update."""
-        if (
-            actions.size != len(self.offsets) - 1
-            or selected_logs.shape != actions.shape
-        ):
-            raise NumericalError(
-                "behavior_shape",
-                {
-                    "actions": torch.as_tensor(actions),
-                    "selected_logs": torch.as_tensor(selected_logs),
-                    "offsets": torch.as_tensor(self.offsets),
-                },
-            )
-        for start in range(0, len(self.offsets) - 1, 32):
-            indexes = np.arange(start, min(start + 32, len(self.offsets) - 1))
-            rows = self.unpack(indexes)
-            try:
-                check_behavior(
-                    torch.as_tensor(rows.log_probabilities),
-                    torch.as_tensor(actions.reshape(-1)[indexes]),
-                    torch.as_tensor(selected_logs.reshape(-1)[indexes]),
-                    torch.as_tensor(rows.observation["actions_valid"]).bool(),
-                )
-            except NumericalError as error:
-                # Preserve original rollout coordinates in incident evidence.
-                error.tensors["minibatch_indexes"] = torch.as_tensor(indexes)
-                raise
+        """Admit behavior evidence before learning through the chosen backend."""
+        validator.check_packed(self, actions, selected_logs)
 
     def selected_types(
         self, actions: NDArray[np.generic], type_width: int

@@ -7,14 +7,8 @@ import numpy as np
 import pytest
 
 import managym
-from managym import mirror_search
+from managym import search
 from managym.mirror import regularized_update
-from managym.mirror_search import (
-    SearchError,
-    SearchSpec,
-    mirror_decision,
-    searched_descriptor,
-)
 from managym.policy import (
     PolicyDecision,
     PolicyDescriptor,
@@ -22,6 +16,12 @@ from managym.policy import (
     PolicyRunner,
     PolicyView,
     ValueEstimate,
+)
+from managym.search import (
+    SearchConfig,
+    SearchError,
+    search_decision,
+    search_descriptor,
 )
 
 
@@ -120,23 +120,23 @@ def _runner(session: IndependentSession, seat: int) -> PolicyRunner:
     )
 
 
-def test_independent_mirror_search_preserves_live_game_rng_and_zero_support() -> None:
+def test_independent_search_preserves_live_game_rng_and_zero_support() -> None:
     engine, observation = _game()
     live = IndependentSession()
     runner = _runner(live, int(engine.current_agent_index()))
     original = engine.state_digest()
     rng = live.rng.getstate()
-    spec = SearchSpec(worlds=2, depth=2)
-    decision = mirror_decision(runner, engine, observation, spec, seed=7)
+    spec = SearchConfig(worlds=2, depth=2)
+    decision = search_decision(runner, engine, observation, spec, seed=7)
     assert engine.state_digest() == original
     assert live.rng.getstate() == rng
     assert live.evaluations == [] and not live.closed
     assert all(child.closed for child in live.children)
-    assert decision.search is not None and decision.belief is not None
-    assert decision.search.worlds == decision.belief.sampled_worlds == 2
-    assert decision.search.rollouts == 2 * sum(p > 0 for p in decision.search.prior)
-    assert decision.belief.model == "physical-compatible-hand/v1"
-    prior = np.array(decision.search.prior)
+    assert decision.mirror is not None and decision.belief is not None
+    assert decision.mirror.worlds == decision.belief.sampled_worlds == 2
+    assert decision.mirror.rollouts == 2 * sum(p > 0 for p in decision.mirror.prior)
+    assert decision.belief.model == "managym.determinize/physical-deal/v1"
+    prior = np.array(decision.mirror.prior)
     np.testing.assert_allclose(
         decision.probabilities,
         regularized_update(
@@ -149,28 +149,28 @@ def test_independent_mirror_search_preserves_live_game_rng_and_zero_support() ->
     )
     assert np.array_equal(np.array(decision.probabilities) > 0, prior > 0)
     assert decision.probabilities[decision.action] > 0
-    repeated = mirror_decision(runner, engine, observation, spec, seed=7)
+    repeated = search_decision(runner, engine, observation, spec, seed=7)
     assert repeated.action == decision.action
-    assert repeated.search is not None
-    assert repeated.search.receipt_sha256 == decision.search.receipt_sha256
+    assert repeated.mirror is not None
+    assert repeated.mirror.receipt_sha256 == decision.mirror.receipt_sha256
 
 
 def test_search_leaf_values_follow_the_rollout_actor_perspective() -> None:
     engine, observation = _game()
     viewer = int(engine.current_agent_index())
     live = IndependentSession()
-    decision = mirror_decision(
+    decision = search_decision(
         _runner(live, viewer),
         engine,
         observation,
-        SearchSpec(worlds=1, depth=1),
+        SearchConfig(worlds=1, depth=1),
         seed=19,
     )
-    assert decision.search is not None
+    assert decision.mirror is not None
     root = live.children[0]
     assert len(root.evaluations) == 1
     leaves = iter(live.children[1:])
-    for prior, score in zip(decision.search.prior, decision.search_scores, strict=True):
+    for prior, score in zip(decision.mirror.prior, decision.search_scores, strict=True):
         if prior == 0:
             assert score is None
             continue
@@ -188,19 +188,19 @@ def test_search_is_independent_of_the_actual_hidden_deal() -> None:
     assert engine.semantic_viewer_state_hash(
         seat
     ) == alternative.semantic_viewer_state_hash(seat)
-    spec = SearchSpec(worlds=2, depth=2)
-    first = mirror_decision(
+    spec = SearchConfig(worlds=2, depth=2)
+    first = search_decision(
         _runner(IndependentSession(), seat), engine, observation, spec, seed=18
     )
-    second = mirror_decision(
+    second = search_decision(
         _runner(IndependentSession(), seat),
         alternative,
         observation,
         spec,
         seed=18,
     )
-    assert first.search is not None and second.search is not None
-    assert first.search.receipt_sha256 == second.search.receipt_sha256
+    assert first.mirror is not None and second.mirror is not None
+    assert first.mirror.receipt_sha256 == second.mirror.receipt_sha256
     assert first.probabilities == second.probabilities
 
 
@@ -217,11 +217,11 @@ def test_search_evaluates_the_live_root_projection_with_recent_events() -> None:
         int(engine.current_agent_index())
     ).recent_events
     session = IndependentSession()
-    mirror_decision(
+    search_decision(
         _runner(session, int(engine.current_agent_index())),
         engine,
         observation,
-        SearchSpec(worlds=1, depth=1),
+        SearchConfig(worlds=1, depth=1),
         seed=8,
     )
     received = session.children[0].evaluations[0].observation
@@ -232,19 +232,19 @@ def test_runner_retains_search_evidence_and_complete_composition_identity() -> N
     engine, observation = _game()
     runner = _runner(IndependentSession(), int(engine.current_agent_index()))
     base = runner.descriptor
-    spec = SearchSpec(worlds=1, depth=1)
+    spec = SearchConfig(worlds=1, depth=1)
     runner.configure_search(spec, seed=7)
     assert runner.descriptor.id != base.id
     assert runner.descriptor.config["base_policy"] == base.id
     assert runner.descriptor.base_policy == base
     first_id = runner.descriptor.id
-    runner.configure_search(SearchSpec(worlds=2, depth=1), seed=7)
+    runner.configure_search(SearchConfig(worlds=2, depth=1), seed=7)
     assert runner.descriptor.id != first_id
     original = engine.state_digest()
     action = runner(engine, observation)
-    assert runner.last_decision is not None and runner.last_decision.search is not None
+    assert runner.last_decision is not None and runner.last_decision.mirror is not None
     assert action == runner.last_decision.action
-    assert runner.last_decision.search.worlds == 2
+    assert runner.last_decision.mirror.worlds == 2
     assert engine.state_digest() == original
     with pytest.raises(ValueError, match="cannot change"):
         runner.configure_search(None, seed=7)
@@ -254,15 +254,15 @@ def test_search_identity_binds_execution_and_keeps_display_metadata_separate() -
     base = PolicyDescriptor(
         "First label", "independent", "test-runner", supports_search=True
     )
-    spec = SearchSpec(worlds=1, depth=1)
-    original = searched_descriptor(base, spec)
-    renamed = searched_descriptor(
+    spec = SearchConfig(worlds=1, depth=1)
+    original = search_descriptor(base, spec)
+    renamed = search_descriptor(
         replace(base, name="Better label", group="Training run"), spec
     )
     assert original.id == renamed.id
     assert (
         original.id
-        != searched_descriptor(replace(base, runner="changed-runner"), spec).id
+        != search_descriptor(replace(base, runner="changed-runner"), spec).id
     )
 
 
@@ -271,14 +271,14 @@ def test_closed_decklists_refuse_before_policy_evaluation() -> None:
     live = IndependentSession()
     original = engine.state_digest()
     with pytest.raises(SearchError, match="decklist closed") as failure:
-        mirror_decision(
+        search_decision(
             _runner(live, int(engine.current_agent_index())),
             engine,
             observation,
-            SearchSpec(worlds=1, depth=1),
+            SearchConfig(worlds=1, depth=1),
             seed=0,
         )
-    assert failure.value.reason == "search_world_unavailable"
+    assert failure.value.reason == "mirror_world_unavailable"
     assert live.children == []
     assert engine.state_digest() == original
 
@@ -294,11 +294,11 @@ def test_invalid_search_capabilities_commit_nothing_and_release_forks(
     live = IndependentSession(invalid=invalid)
     runner = _runner(live, int(engine.current_agent_index()))
     with pytest.raises(SearchError) as failure:
-        mirror_decision(
-            runner, engine, observation, SearchSpec(worlds=1, depth=1), seed=3
+        search_decision(
+            runner, engine, observation, SearchConfig(worlds=1, depth=1), seed=3
         )
     assert failure.value.reason == (
-        "search_branch_isolation" if invalid == "fork" else "search_invalid_evaluation"
+        "mirror_branch_isolation" if invalid == "fork" else "mirror_invalid_evaluation"
     )
     assert engine.state_digest() == original
     assert all(child.closed for child in live.children)
@@ -316,7 +316,7 @@ def test_unsupported_or_recurrent_policy_cannot_search(recurrent: bool) -> None:
         runner.seat,
     )
     with pytest.raises(SearchError, match="current view|does not support"):
-        mirror_decision(runner, engine, observation, SearchSpec(), seed=0)
+        search_decision(runner, engine, observation, SearchConfig(), seed=0)
     assert live.children == []
 
 
@@ -326,19 +326,19 @@ def test_search_timeout_preserves_pending_decision_and_allows_explicit_retry(
     engine, observation = _game()
     original = engine.state_digest()
     clock = Clock()
-    monkeypatch.setattr(mirror_search, "time", clock)
+    monkeypatch.setattr(search, "time", clock)
     live = IndependentSession(clock=clock)
     runner = _runner(live, int(engine.current_agent_index()))
     with pytest.raises(SearchError) as failure:
-        mirror_decision(
-            runner, engine, observation, SearchSpec(worlds=1, depth=1), seed=4
+        search_decision(
+            runner, engine, observation, SearchConfig(worlds=1, depth=1), seed=4
         )
-    assert failure.value.reason == "search_deadline_exceeded"
+    assert failure.value.reason == "mirror_deadline_exceeded"
     assert engine.state_digest() == original
     assert all(child.closed for child in live.children)
     live.clock = None
-    decision = mirror_decision(
-        runner, engine, observation, SearchSpec(worlds=1, depth=1), seed=4
+    decision = search_decision(
+        runner, engine, observation, SearchConfig(worlds=1, depth=1), seed=4
     )
     assert decision.probabilities[decision.action] > 0
     assert engine.state_digest() == original

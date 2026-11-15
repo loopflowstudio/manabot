@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends import resolve
 from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
@@ -45,12 +46,14 @@ def _checkpoint(tmp_path: Path, name: str, *, max_actions: int = 64) -> Path:
 @pytest.mark.parametrize("name", SCENARIOS)
 def test_bound_checkpoint_scores_and_replays(tmp_path: Path, name: str) -> None:
     checkpoint = _checkpoint(tmp_path, name)
-    score, game = score_checkpoint(name, checkpoint)
+    score, game = score_checkpoint(name, checkpoint, backend=resolve("torch"))
     assert score.status == "scored", score.error
     assert score.replay_passed and score.decisions > 0
     assert score.correct is not None
     assert game is not None
-    repeated, repeated_game = score_checkpoint(name, checkpoint)
+    repeated, repeated_game = score_checkpoint(
+        name, checkpoint, backend=resolve("torch")
+    )
     assert repeated.model_dump(exclude={"seconds"}) == score.model_dump(
         exclude={"seconds"}
     )
@@ -71,17 +74,17 @@ def test_wrong_world_setup_and_capacity_fail_admission(tmp_path: Path) -> None:
     name = next(iter(SCENARIOS))
     path = _checkpoint(tmp_path, name)
     other = list(SCENARIOS)[1]
-    score, _ = score_checkpoint(other, path)
+    score, _ = score_checkpoint(other, path, backend=resolve("torch"))
     assert score.status == "failed" and score.correct is None
     assert "setup differs" in (score.error or "")
     data = read_checkpoint(path, weights_only=False)
     data["world_binding"]["world"] = "wrong-world"
     write_checkpoint(data, path)
-    score, game = score_checkpoint(name, path)
+    score, game = score_checkpoint(name, path, backend=resolve("torch"))
     assert score.status == "failed" and game is None
     assert "world binding" in (score.error or "")
     path = _checkpoint(tmp_path, name, max_actions=1)
-    score, _ = score_checkpoint(name, path)
+    score, _ = score_checkpoint(name, path, backend=resolve("torch"))
     assert score.status == "failed" and score.correct is None
     assert "capacity" in (score.error or "").lower()
 
@@ -137,7 +140,9 @@ def test_hidden_hand_swap_preserves_checkpoint_inputs_and_decision(
 
 def test_command_cap_retains_failed_prefix(tmp_path: Path) -> None:
     name = next(iter(SCENARIOS))
-    score, game = score_checkpoint(name, _checkpoint(tmp_path, name), max_steps=1)
+    score, game = score_checkpoint(
+        name, _checkpoint(tmp_path, name), max_steps=1, backend=resolve("torch")
+    )
     assert score.status == "failed" and score.correct is None
     assert score.decisions == 1 and score.replay_passed
     assert "Command cap" in (score.error or "")

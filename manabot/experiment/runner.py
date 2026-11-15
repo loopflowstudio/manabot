@@ -22,7 +22,6 @@ import time
 import uuid
 
 from pydantic import JsonValue
-import torch
 
 from manabot.eval.monitor import MonitorProtocol
 from manabot.experiment.checkpoint_evaluation import Checkpoint
@@ -37,17 +36,18 @@ from manabot.training.clock import arm_worker_deadline, boot_identity
 from manabot.training.execution import execute_regime
 from manabot.training.records import TrainingRun
 from manabot.training.regime import TrainingRegime
+from manabot.training.state.backend import TrainingBackend
 from manabot.training.state.recovery import attempt_lock
 from manabot.verify.store import VerifyStore
 import managym
 
 
-def _runtime() -> dict[str, str]:
+def _runtime(*, backend: TrainingBackend) -> dict[str, str]:
     root = Path(__file__).resolve().parents[2]
     return {
         "python": platform.python_version(),
         "platform": platform.platform(),
-        "torch": torch.__version__,
+        "torch": str(backend.runtime.identities([])["torch"]),
         "world": managym.WORLD_VERSION,
         "source": source_bundle_sha256(sorted((root / "manabot").rglob("*.py"))),
         "native": source_bundle_sha256(sorted((root / "managym").glob("*.so"))),
@@ -65,6 +65,7 @@ def run_experiment(
     *,
     resume: bool = False,
     recover: tuple[int, ...] = (),
+    backend: TrainingBackend,
 ) -> ExperimentRun:
     """Run an explicit allocation; resume pending work, never silently retry failures.
 
@@ -133,7 +134,7 @@ def run_experiment(
             if (
                 record.intent_sha256 != identity
                 or record.hardware != selected
-                or record.runtime != _runtime()
+                or record.runtime != _runtime(backend=backend)
             ):
                 raise ValueError("experiment intent, hardware or runtime changed")
             gap = max(0, time.time() - (record.last_seen_unix or time.time()))
@@ -194,7 +195,7 @@ def run_experiment(
                 intent=intent,
                 intent_sha256=identity,
                 hardware=selected,
-                runtime=_runtime(),
+                runtime=_runtime(backend=backend),
                 notebook=str(out / "comparison.ipynb"),
             )
             for seed, indexes in zip(schedule.seeds, order, strict=True):
@@ -445,6 +446,8 @@ def run_experiment(
 
 
 def main() -> None:
+    from manabot.backends import resolve
+
     parser = argparse.ArgumentParser(description="Internal Experiment training worker")
     parser.add_argument("--job", type=Path, required=True)
     args = parser.parse_args()
@@ -471,6 +474,7 @@ def main() -> None:
             checkpoint_updates=tuple(payload["checkpoint_updates"])
             if isinstance(payload.get("checkpoint_updates"), list)
             else payload.get("checkpoint_updates"),
+            backend=resolve("torch"),
         )
     if run.status != "completed":
         raise SystemExit(1)

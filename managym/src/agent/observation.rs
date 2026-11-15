@@ -222,7 +222,7 @@ pub struct CastPermissionData {
     pub foretold: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Default, Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CardTypeData {
     pub is_castable: bool,
@@ -281,52 +281,50 @@ impl CardTypeData {
     }
 }
 
-/// An object in any zone, under the published `CardData` name. Every field
-/// that states a characteristic (name,
-/// power/toughness, types, supertypes, subtypes, keywords, ward) reads
-/// `Game::characteristics` while the card is on the battlefield and the
-/// printed card elsewhere; identity, token status and the costs paid when
-/// casting are printed by definition. `tests/cards/observability.rs`
-/// classifies each field as layered or printed.
+/// Viewer-safe characteristics, effective on the battlefield. Rules text and
+/// mana cost describe the definition; this is not the engine's full layered view.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CharacteristicsData {
+    pub name: String,
+    /// Printed rules text, not a rendering of effective abilities.
+    pub text_box: String,
+    /// Effective P/T, including counters and continuous effects on the battlefield.
+    pub power: i32,
+    pub toughness: i32,
+    pub is_legendary: bool,
+    pub is_ally: bool,
+    pub is_lesson: bool,
+    /// Mana value of ward (zero without ward).
+    pub ward_cost: i32,
+    /// Printed optional kicker cost; payment is stack state.
+    pub kicker_cost: i32,
+    pub card_types: CardTypeData,
+    pub keywords: KeywordData,
+    pub mana_cost: ManaCost,
+}
+
+/// A visible card outside the battlefield and stack. Historical card-list
+/// records are normalized at the JSON boundary; legacy encoders synthesize
+/// their old rows only when explicitly selected.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(from = "super::observation_json::WireCardData")]
 pub struct CardData {
-    #[serde(deserialize_with = "super::observation_json::zone")]
+    pub characteristics: CharacteristicsData,
     pub zone: ZoneType,
     pub owner_id: i32,
     pub id: i32,
     pub registry_key: i32,
-    pub name: String,
-    pub text_box: String,
-    pub power: i32,
-    pub toughness: i32,
     /// Set for an object that is no card: a token or a copy of a spell.
     pub is_token: bool,
-    pub is_legendary: bool,
-    /// Subtype tags the current pool cares about.
-    pub is_ally: bool,
-    pub is_lesson: bool,
-    /// Ward cost (mana value; 0 = no ward).
-    pub ward_cost: i32,
-    /// Kicker cost (mana value; 0 = no kicker).
-    pub kicker_cost: i32,
-    pub card_types: CardTypeData,
-    pub keywords: KeywordData,
-    #[serde(deserialize_with = "super::observation_json::mana_cost")]
-    pub mana_cost: ManaCost,
     /// Foretold and face down in exile; listed only for its owner.
-    #[serde(default)]
     pub face_down: bool,
     /// The permission to play this card from exile, when it has one.
-    #[serde(default)]
     pub cast_permission: Option<CastPermissionData>,
     /// The value of X announced for this spell on the stack (CR 107.3),
     /// when its mana cost has X.
-    #[serde(default)]
     pub x: Option<i32>,
     /// A graveyard card that was put there from the battlefield this turn
     /// (`TurnState::graveyard_from_battlefield`); policy input v10.
-    #[serde(default)]
     pub from_battlefield_this_turn: bool,
 }
 
@@ -452,13 +450,11 @@ pub struct StackTargetData {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(from = "super::observation_json::WireStackObjectData")]
 pub struct StackObjectData {
     /// Derived ability text; absent on spells and historical observations.
-    #[serde(default)]
     pub description: Option<String>,
     pub stack_object_id: i32,
-    #[serde(deserialize_with = "super::observation_json::stack_kind")]
     pub kind: StackObjectKindData,
     pub controller_id: i32,
     pub source_card_registry_key: i32,
@@ -467,12 +463,15 @@ pub struct StackObjectData {
     pub ability_index: Option<i32>,
     pub targets: Vec<StackTargetData>,
     /// The announced value of X (CR 107.3); omitted when zero.
-    #[serde(default)]
     pub x: i32,
     /// Keywords a static grants this spell while on the stack (a Lesson's
     /// lifelink); absent when none.
-    #[serde(default)]
     pub granted_keywords: Option<KeywordData>,
+    /// Whether a spell's kicker cost was paid (CR 702.33).
+    pub kicked: bool,
+    /// A spell owns identity and characteristics; abilities do not.
+    #[serde(default)]
+    pub spell: Option<SpellData>,
 }
 
 /// One continuous-effect record (`state::effect`) affecting a player or
@@ -742,16 +741,18 @@ impl ContinuousEffectData {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Deserialize)]
+#[serde(from = "super::observation_json::WirePermanentData")]
 pub struct PermanentData {
+    pub characteristics: CharacteristicsData,
+    /// Underlying object identity; absent only during historical decoding.
+    pub object_id: Option<i32>,
+    pub owner_id: i32,
+    pub is_token: bool,
     /// Effective colors when a layer changes the copiable colors.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub colors: Option<Vec<String>>,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub keyword_counter_timestamps: BTreeMap<String, i32>,
     /// Transformations of this exact permanent; repeated flips still count.
-    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub transforms: u32,
     pub id: i32,
     /// Definition of the backing card, in the match's bound content pack.
@@ -762,10 +763,6 @@ pub struct PermanentData {
     pub is_summoning_sick: bool,
     pub plus1_counters: i32,
     pub cant_be_blocked_this_turn: bool,
-    /// Effective power/toughness — CDA base, static continuous effects,
-    /// until-EOT deltas, and +1/+1 counters all applied.
-    pub power: i32,
-    pub toughness: i32,
     /// A creature only through an effect: earthbend (a land that's also a
     /// 0/0 creature), crew, or another type-changing effect.
     pub is_animated: bool,
@@ -774,67 +771,47 @@ pub struct PermanentData {
     pub exile_if_dies_this_turn: bool,
     /// Declared as an attacker in the current combat. Omitted when false, so
     /// observations retained before this field stay canonical.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub attacking: bool,
     /// Exhaust abilities this object has activated; each can never be
     /// activated again by this object (CR 702.177a).
-    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub exhausted_abilities: i32,
     /// "Once each turn" abilities this object has used this turn: activated
     /// abilities, once-each-turn triggers that fired and "do this only once
     /// each turn" options taken.
-    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub once_each_turn_used: i32,
     /// Firebending granted until end of turn, summed over grants.
-    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub granted_firebending: i32,
     pub temp_subtypes: Vec<String>,
-    /// Effective keywords — printed keywords unioned with until-EOT grants
-    /// (Yip Yip! flying, Enter the Avatar State, ...): what the permanent can
-    /// actually do now. The battlefield card entry reads the same layered view.
-    pub keywords: KeywordData,
     /// Counters other than +1/+1 by kind (CR 122.1; `CounterKind` names in
     /// snake case), only the kinds present.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub counters: BTreeMap<String, i32>,
     /// The permanent this Aura or Equipment is attached to (CR 301.5, 303.4).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attached_to: Option<i32>,
     /// Name and creature types set by an effect (Honest Work); absent while
     /// the printed ones apply.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub creature_types: Option<Vec<String>>,
     /// A land only through an effect (a static land-type grant).
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub is_granted_land: bool,
     /// The attacking creature this one blocks (CR 509.1).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub blocking: Option<i32>,
     /// It has lost all abilities (CR 613.1f), until end of turn or while an
     /// Aura sets its characteristics.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub abilities_lost: bool,
     /// Activated abilities (indices in its ability list) whose limit is
     /// spent: exhaust (CR 702.177a) or once each turn (CR 602.5b).
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub used_abilities: Vec<usize>,
     /// It was dealt damage this turn, whether or not that damage is still
     /// marked.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub dealt_damage_this_turn: bool,
     /// Continuous effects on this permanent, in timestamp order; the
     /// effective values above already apply them.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<ContinuousEffectData>,
     /// Its timestamp (CR 613.7d/e), the order its static abilities apply in
     /// among the records; absent while it is `id`, the timestamp it entered
     /// with (an attachment renews it).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timestamp: Option<i32>,
     /// The copy effect that made it a copy; absent for an original.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub copy: Option<CopyData>,
 }
 
@@ -1402,19 +1379,23 @@ impl Observation {
                 }
             }
         }
+    }
 
-        for stack_object in game.state.stack_objects.iter().rev() {
-            if let StackObject::Spell(spell) = stack_object {
-                let mut card = Self::card_data(game, spell.object, ZoneType::Stack);
-                let definition = &game.state[spell.object];
-                // A replicated spell's announced count is its X.
-                if definition.mana_cost.as_ref().is_some_and(|cost| cost.x > 0)
-                    || definition.replicate().is_some()
-                {
-                    card.x = Some(i32::from(spell.x));
-                }
-                self.push_card(card, game.state[spell.object].owner);
-            }
+    /// A spell owns characteristics and identity; a copy is never a card.
+    fn spell_data(game: &Game, spell: &crate::state::stack_object::SpellOnStack) -> SpellData {
+        let object = &game.state[spell.object];
+        let has_x = object.mana_cost.as_ref().is_some_and(|cost| cost.x > 0)
+            || object.replicate().is_some();
+        SpellData {
+            object_id: object.id.0 as i32,
+            owner_id: game.state.players[object.owner.0].id.0 as i32,
+            registry_key: object.registry_key.0 as i32,
+            is_copy: !object.is_card(),
+            has_announced_x: has_x,
+            characteristics: CharacteristicsData {
+                power: game.object_power(spell.object),
+                ..Self::printed_characteristics_data(game, spell.object)
+            },
         }
     }
 
@@ -1435,8 +1416,7 @@ impl Observation {
         }
     }
 
-    /// List a card on `side`: its owner's, except that battlefield cards
-    /// sit with their permanent's controller, in permanent order.
+    /// List a card on `side`, its owner's.
     fn push_card(&mut self, card_data: CardData, side: PlayerId) {
         if side.0 == self.agent.player_index as usize {
             self.agent_cards.push(card_data);
@@ -1491,8 +1471,6 @@ impl Observation {
                 .map(|subtype| subtype.to_string())
                 .collect(),
             cant_be_blocked_this_turn: game.cant_be_blocked(perm_id),
-            power: characteristics.power,
-            toughness: characteristics.toughness,
             is_animated: characteristics.is_animated,
             has_exile_link: game.permanent_object(perm_id).is_some_and(|object_ref| {
                 game.state
@@ -1500,7 +1478,6 @@ impl Observation {
                     .iter()
                     .any(|link| link.source == object_ref)
             }),
-            keywords: KeywordData::from_keywords(&characteristics.keywords),
             counters: permanent
                 .counters
                 .iter()
@@ -1547,6 +1524,23 @@ impl Observation {
                 .copy
                 .as_ref()
                 .map(|copy| CopyData::new(copy, permanent.timestamp.0 as i32)),
+            object_id: Some(game.state[permanent.object].id.0 as i32),
+            owner_id: game.state.players[game.state[permanent.object].owner.0]
+                .id
+                .0 as i32,
+            is_token: !game.state[permanent.object].is_card(),
+            characteristics: CharacteristicsData {
+                name: characteristics.name.clone(),
+                power: characteristics.power,
+                toughness: characteristics.toughness,
+                is_legendary: characteristics.is_legendary,
+                is_ally: characteristics.has_subtype("Ally"),
+                is_lesson: characteristics.has_subtype("Lesson"),
+                ward_cost: ward_value(characteristics.ward.as_ref()),
+                card_types: CardTypeData::from_types(&characteristics.types),
+                keywords: KeywordData::from_keywords(&characteristics.keywords),
+                ..Self::printed_characteristics_data(game, permanent.object)
+            },
         };
 
         if permanent.controller.0 == self.agent.player_index as usize {
@@ -1554,38 +1548,14 @@ impl Observation {
         } else {
             self.opponent_permanents.push(pdat);
         }
-
-        self.push_card(
-            Self::card_data(game, permanent.object, ZoneType::Battlefield),
-            permanent.controller,
-        );
     }
 
     /// A card's row. On the battlefield every characteristic reads the
     /// layered view (`Game::characteristics`); elsewhere CDAs still set power.
     fn card_data(game: &Game, object_id: ObjectId, zone: ZoneType) -> CardData {
-        let printed = Self::printed_card_data(game, object_id, zone);
-        match game.state.permanent_of(object_id) {
-            Some(permanent) if zone == ZoneType::Battlefield => {
-                let view = game.characteristics(permanent);
-                CardData {
-                    name: view.name.clone(),
-                    power: view.power,
-                    toughness: view.toughness,
-                    is_legendary: view.is_legendary,
-                    is_ally: view.has_subtype("Ally"),
-                    is_lesson: view.has_subtype("Lesson"),
-                    ward_cost: ward_value(view.ward.as_ref()),
-                    card_types: CardTypeData::from_types(&view.types),
-                    keywords: KeywordData::from_keywords(&view.keywords),
-                    ..printed
-                }
-            }
-            _ => CardData {
-                power: game.object_power(object_id),
-                ..printed
-            },
-        }
+        let mut card = Self::printed_card_data(game, object_id, zone);
+        card.characteristics.power = game.object_power(object_id);
+        card
     }
 
     fn printed_card_data(game: &Game, object_id: ObjectId, zone: ZoneType) -> CardData {
@@ -1595,22 +1565,8 @@ impl Observation {
             owner_id: game.state.players[object.owner.0].id.0 as i32,
             id: object.id.0 as i32,
             registry_key: object.registry_key.0 as i32,
-            name: object.name.clone(),
-            text_box: object.text_box.clone(),
-            power: object.power.unwrap_or(0),
-            toughness: object.toughness.unwrap_or(0),
             is_token: !object.is_card(),
-            is_legendary: object.is_legendary(),
-            is_ally: object.has_subtype("Ally"),
-            is_lesson: object.has_subtype("Lesson"),
-            ward_cost: ward_value(object.ward()),
-            kicker_cost: object
-                .optional_cost()
-                .map(|cost| i32::from(cost.mana_value))
-                .unwrap_or(0),
-            card_types: CardTypeData::from_types(&object.types),
-            keywords: KeywordData::from_keywords(&object.keywords),
-            mana_cost: object.mana_cost.clone().unwrap_or_default(),
+            characteristics: Self::printed_characteristics_data(game, object_id),
             face_down: zone == ZoneType::Exile && game.is_foretold(object_id),
             cast_permission: game
                 .exile_grant_on(object_id)
@@ -1636,6 +1592,27 @@ impl Observation {
                 && game.state.live(object_id).is_some_and(|object| {
                     game.state.turn.graveyard_from_battlefield.contains(&object)
                 }),
+        }
+    }
+
+    fn printed_characteristics_data(game: &Game, object_id: ObjectId) -> CharacteristicsData {
+        let object = &game.state[object_id];
+        CharacteristicsData {
+            name: object.name.clone(),
+            text_box: object.text_box.clone(),
+            power: object.power.unwrap_or(0),
+            toughness: object.toughness.unwrap_or(0),
+            is_legendary: object.is_legendary(),
+            is_ally: object.has_subtype("Ally"),
+            is_lesson: object.has_subtype("Lesson"),
+            ward_cost: ward_value(object.ward()),
+            kicker_cost: object
+                .optional_cost()
+                .map(|cost| i32::from(cost.mana_value))
+                .unwrap_or(0),
+            card_types: CardTypeData::from_types(&object.types),
+            keywords: KeywordData::from_keywords(&object.keywords),
+            mana_cost: object.mana_cost.clone().unwrap_or_default(),
         }
     }
 
@@ -1685,6 +1662,11 @@ impl Observation {
                     (!crate::state::is_zero(&keywords))
                         .then(|| KeywordData::from_keywords(&keywords))
                 }
+                _ => None,
+            },
+            kicked: matches!(stack_object, StackObject::Spell(spell) if spell.kicked),
+            spell: match stack_object {
+                StackObject::Spell(spell) => Some(Self::spell_data(game, spell)),
                 _ => None,
             },
             targets: stack_object
@@ -2176,6 +2158,75 @@ impl Observation {
         }
     }
 
+    /// All visible object identities, with borrowed characteristics.
+    pub fn object_records(&self) -> impl Iterator<Item = ObjectData<'_>> + Clone + '_ {
+        self.agent_cards
+            .iter()
+            .chain(&self.opponent_cards)
+            .map(|c| ObjectData {
+                id: c.id,
+                owner_id: c.owner_id,
+                registry_key: c.registry_key,
+                zone: c.zone,
+                characteristics: &c.characteristics,
+            })
+            .chain(
+                self.agent_permanents
+                    .iter()
+                    .chain(&self.opponent_permanents)
+                    .filter_map(|p| {
+                        Some(ObjectData {
+                            id: p.object_id?,
+                            owner_id: p.owner_id,
+                            registry_key: p.registry_key,
+                            zone: ZoneType::Battlefield,
+                            characteristics: &p.characteristics,
+                        })
+                    }),
+            )
+            .chain(self.stack_objects.iter().filter_map(|s| {
+                let p = s.spell.as_ref()?;
+                Some(ObjectData {
+                    id: p.object_id,
+                    owner_id: p.owner_id,
+                    registry_key: p.registry_key,
+                    zone: ZoneType::Stack,
+                    characteristics: &p.characteristics,
+                })
+            }))
+    }
+
+    /// Deprecated compatibility records; non-card objects are synthesized only here.
+    #[deprecated(note = "use object_records; removed in 0.4.0")]
+    pub fn card_records(&self) -> impl Iterator<Item = CardData> + Clone + '_ {
+        self.agent_cards
+            .iter()
+            .chain(&self.opponent_cards)
+            .cloned()
+            .chain(
+                self.agent_permanents
+                    .iter()
+                    .chain(&self.opponent_permanents)
+                    .filter_map(PermanentData::legacy_card),
+            )
+            .chain(
+                self.stack_objects
+                    .iter()
+                    .filter_map(|s| s.spell.as_ref().map(|spell| spell.legacy_card(s.x))),
+            )
+    }
+
+    pub fn historical(&self) -> bool {
+        self.agent_permanents
+            .iter()
+            .chain(&self.opponent_permanents)
+            .any(|p| p.object_id.is_none())
+            || self
+                .stack_objects
+                .iter()
+                .any(|s| s.kind == StackObjectKindData::Spell && s.spell.is_none())
+    }
+
     pub fn validate(&self) -> bool {
         if self.agent.id == self.opponent.id {
             return false;
@@ -2188,7 +2239,8 @@ impl Observation {
                 return false;
             }
         }
-        // A battlefield card sits with its controller, who may not own it.
+        // A battlefield card in a historical capture sits with its
+        // controller, who may not own it.
         for (objects, side) in [
             (&self.agent_cards, self.agent.id),
             (&self.opponent_cards, self.opponent.id),
@@ -2267,5 +2319,185 @@ mod card_type_tests {
                 "type subset {mask}"
             );
         }
+    }
+}
+
+impl std::ops::Deref for CardData {
+    type Target = CharacteristicsData;
+    fn deref(&self) -> &Self::Target {
+        &self.characteristics
+    }
+}
+impl std::ops::DerefMut for CardData {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.characteristics
+    }
+}
+impl std::ops::Deref for PermanentData {
+    type Target = CharacteristicsData;
+    fn deref(&self) -> &Self::Target {
+        &self.characteristics
+    }
+}
+impl std::ops::DerefMut for PermanentData {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.characteristics
+    }
+}
+
+/// A spell's own object identity and characteristics, including spell copies.
+/// Abilities have no spell record; their source reference lives on the stack item.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SpellData {
+    pub object_id: i32,
+    pub owner_id: i32,
+    pub registry_key: i32,
+    pub is_copy: bool,
+    pub has_announced_x: bool,
+    pub characteristics: CharacteristicsData,
+}
+impl std::ops::Deref for SpellData {
+    type Target = CharacteristicsData;
+    fn deref(&self) -> &Self::Target {
+        &self.characteristics
+    }
+}
+
+/// Borrowed identity and characteristics of a visible game object in any zone.
+#[derive(Clone, Copy)]
+pub struct ObjectData<'a> {
+    pub id: i32,
+    pub owner_id: i32,
+    pub registry_key: i32,
+    pub zone: ZoneType,
+    pub characteristics: &'a CharacteristicsData,
+}
+impl std::ops::Deref for ObjectData<'_> {
+    type Target = CharacteristicsData;
+    fn deref(&self) -> &Self::Target {
+        self.characteristics
+    }
+}
+
+#[cfg(test)]
+mod characteristics_tests {
+    use super::*;
+    use crate::{
+        agent::observation_encoder::{encode, ObservationEncoderConfig},
+        state::player::PlayerConfig,
+    };
+
+    fn game() -> Game {
+        Game::new(
+            vec![
+                PlayerConfig::new("a", [("United Front".into(), 20)].into()),
+                PlayerConfig::new("b", [("Forest".into(), 20)].into()),
+            ],
+            111,
+            false,
+        )
+        .expect("valid game setup")
+    }
+
+    #[test]
+    fn identical_tokens_keep_distinct_effective_characteristics_and_focus() {
+        let mut game = game();
+        let first = game
+            .create_token("token.spirit", PlayerId(0), false)
+            .unwrap();
+        let second = game
+            .create_token("token.spirit", PlayerId(0), false)
+            .unwrap();
+        game.state.permanents[first]
+            .as_mut()
+            .unwrap()
+            .change_counters(CounterKind::PlusOnePlusOne, 1);
+        let mut observation = Observation::for_player(&game, PlayerId(0));
+        let first_row = &observation.agent_permanents[0];
+        let second_row = &observation.agent_permanents[1];
+        assert!(first_row.is_token && second_row.is_token);
+        assert_eq!(
+            (
+                first_row.characteristics.power,
+                first_row.characteristics.toughness
+            ),
+            (2, 2)
+        );
+        assert_eq!(
+            (
+                second_row.characteristics.power,
+                second_row.characteristics.toughness
+            ),
+            (1, 1)
+        );
+        assert_eq!(first_row.registry_key, second_row.registry_key);
+        assert_ne!(first_row.id, second_row.id);
+        assert_ne!(first_row.object_id, second_row.object_id);
+        assert_eq!(
+            game.state.object_to_permanent[game.state.permanents[second]
+                .as_ref()
+                .unwrap()
+                .object
+                .slot()],
+            Some(second)
+        );
+        let identity = first_row.object_id.unwrap();
+        let action = ActionOption {
+            action_type: ActionType::SelectCard,
+            focus: vec![identity],
+            declared: None,
+            description: None,
+            mode_index: None,
+            name_definition: None,
+            name_index: None,
+            name_group: None,
+            ability_index: None,
+            continuation_index: None,
+        };
+        observation.action_space.actions = vec![action];
+        let config = ObservationEncoderConfig::default();
+        let encoded = encode(&observation, &config).unwrap();
+        assert_eq!(
+            encoded.action_focus[0],
+            (2 + 2 * config.max_cards_per_player) as i32
+        );
+        assert!(!observation.agent_cards.iter().any(|c| c.id == identity));
+        let parsed = crate::agent::observation_json::parse(&observation.to_json()).unwrap();
+        assert_eq!(parsed.to_json(), observation.to_json());
+    }
+
+    #[test]
+    fn copied_spells_keep_identity_and_x_without_becoming_cards() {
+        let mut game = game();
+        let source = game.state.zones.latest().next().unwrap();
+        let spell =
+            game.push_spell_to_stack(source, PlayerId(0), vec![], vec![], Default::default());
+        let target = Target::StackSpell(spell);
+        game.copy_stack_object(target, PlayerId(0)).unwrap();
+        for (index, object) in game.state.stack_objects.iter_mut().enumerate() {
+            if let StackObject::Spell(spell) = object {
+                spell.x = (index + 1) as u8;
+            }
+        }
+        let observation = Observation::for_player(&game, PlayerId(0));
+        let copy = observation.stack_objects[0].spell.as_ref().unwrap();
+        let original = observation.stack_objects[1].spell.as_ref().unwrap();
+        assert!(copy.is_copy && !original.is_copy);
+        assert!(copy.has_announced_x);
+        assert_eq!(observation.stack_objects[0].x, 2);
+        assert!(original.has_announced_x);
+        assert_eq!(observation.stack_objects[1].x, 1);
+        assert_ne!(copy.object_id, original.object_id);
+        assert_eq!(copy.registry_key, original.registry_key);
+        let json = observation.to_json();
+        let parsed = crate::agent::observation_json::parse(&json).unwrap();
+        assert_eq!(parsed.to_json(), json);
+        let mut historical = crate::agent::legacy_input::view(&observation);
+        for object in &mut historical.stack_objects {
+            object.spell = None;
+        }
+        assert!(crate::agent::observation_json::parse(&historical.to_json())
+            .unwrap_err()
+            .contains("ambiguous"));
     }
 }

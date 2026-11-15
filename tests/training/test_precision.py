@@ -11,6 +11,9 @@ from experiments import training_throughput_packing as packing
 from experiments.batched_baseline import batched_baseline
 import manabot.backends.torch as torch_backend
 from manabot.backends.torch import learner as torch_learner
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
@@ -34,7 +37,9 @@ from manabot.training.updates.damped_policy import update_damped_iteration
 
 def test_float32_regimes_keep_their_bytes() -> None:
     # The D1 packing regime omits the input version, so it resolves to v9.
-    d1 = TrainingJob.model_validate_json(packing.runs("HEAD", "d1")[0].job.config or "")
+    d1 = TrainingJob.model_validate_json(
+        packing.training_jobs("HEAD", "d1")[0].job.config or ""
+    )
     assert (
         canonical_sha256(d1.regime.model_dump(mode="json"))
         == "5684d15da200eef2c9169b75cce8b54dd643e22a0201a148be80bf2958505b84"
@@ -243,7 +248,7 @@ def test_bf16_wraps_exactly_the_policy_forwards_and_keeps_float32_outputs(
         return real(declared, device)
 
     for module in (
-        "manabot.training.rollout.collection",
+        "manabot.backends.torch.collection",
         "manabot.backends.torch.learner",
     ):
         monkeypatch.setattr(f"{module}.forward_precision", recorded)
@@ -255,7 +260,7 @@ def test_bf16_wraps_exactly_the_policy_forwards_and_keeps_float32_outputs(
         opponent_mode="self",
         learning_seats="both",
         recovery_max_microsteps=10_000,
-        precision="bf16",
+        numerics=TorchCollectionSession(device="cpu", seed=0, precision="bf16"),
     )
 
     batch = collector.collect(agent, 1)

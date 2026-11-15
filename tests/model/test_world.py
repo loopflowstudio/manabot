@@ -118,7 +118,9 @@ def test_same_shapes_do_not_admit_another_matchup():
 
 
 @pytest.mark.parametrize("consumer", ["policy", "puct", "rollout", "value", "play"])
-def test_loaded_consumers_reject_another_actual_setup(tmp_path, consumer):
+def test_loaded_consumers_reject_another_actual_setup(
+    tmp_path: Path, consumer: str
+) -> None:
     from manabot.env.env import Env
     from manabot.env.match import Reward
     from manabot.sim.rollout import BatchedSampler, PolicyRolloutMCPlayer
@@ -129,7 +131,7 @@ def test_loaded_consumers_reject_another_actual_setup(tmp_path, consumer):
     path = tmp_path / "policy.pt"
     torch.save(checkpoint(), path)
     if consumer == "play":
-        with pytest.raises(ValueError, match="setup differs"):
+        with pytest.raises(ValueError, match="was trained on ur_lessons vs gw_allies"):
             CheckpointVillain(str(path), player_configs=Match().to_rust())
         return
     agent, space = load_checkpoint(str(path))
@@ -172,7 +174,7 @@ def test_a_refused_checkpoint_names_its_revision_and_the_changed_buffer() -> Non
     with pytest.raises(ValueError) as refused:
         validate_checkpoint_world(payload, ObservationSpace())
     message = str(refused.value)
-    assert "agent_permanents 40x37 -> 40x38" in message
+    assert "agent_permanents 40x37 -> 40x51" in message
     assert (
         "written at revision 7c1e9a2, Etude run 3a1380d9; run it from there" in message
     )

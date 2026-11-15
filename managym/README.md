@@ -49,17 +49,26 @@ with the reason before anything opens.
 Bundled names take precedence over same-named files; use `./ur_lessons` to
 select a file named `ur_lessons`.
 
-The same choices are in the browser. Open **Choose decks**. Browse a bundled deck and
-select **Use for me** or **Use for opponent** to assign each seat, choose an
-opponent such as **Search 64**, then click **New Game**.
+The same choices are in the browser. Open **New game**, expand **Browse decks
+and cards**, and assign a bundled deck to each native seat. Choose an opponent
+such as **Search 64**, then click **New Game**.
 
 For your own lists, expand **Import decklist files** and check **Use imported
 decks for the next game**. Upload or paste both decks, one `count card name`
 per line, with optional `Main` and `Sideboard` headings. Click **Check decklists**,
 fix any reported issues, and select **New Game**. Imported decks use the
-development format and supported cards; choose a built-in opponent, since
-checkpoint opponents do not accept imported decks. See the
+development format and supported cards. Registered policies check the complete
+setup, including imported lists, against their own admission requirements. See the
 [play guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#play-a-game).
+
+For several games against a model, **Rematch**, **Swap sides** and **Change
+opponent** retain unrelated setup and group recordings in one session. See
+[playing a series](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#playing-a-series-against-a-model)
+for deal modes, results and recovery. **Edit next game** opens the session draft:
+**Save next setup** retains it, and **Start next game** starts a continuation.
+Global **New game** opens a separate session setup; **Cancel** discards edits.
+Changing both controllers to bots in the session editor offers **Start new
+watched game**, preserving the Play session.
 
 ### Watch a replay from an evaluation
 
@@ -79,8 +88,9 @@ artifact first if the evaluation ran remotely):
 uv run --no-project managym academy replay out/traces/<cell-id>.commands.jsonl.gz --game 3
 ```
 
-The browser opens in **Replay** on that game's first decision; use **Step
-decision**, **Previous decision** or **Play**. `--game` is the game's
+The browser opens in **Replay** at the first recorded choice or this tab's saved
+position; use **Next**, **Previous** or **Play** to follow choices, consequences
+and the result. `--game` is the game's
 position in the file, counted from 0, or the start of its trace digest; run
 the command without it to list the file's games. `managym academy replay
 <recording-id>` reopens a game from **Games**, with or without manabot, in the
@@ -363,8 +373,7 @@ immediate output decision. `Game::characteristics` derives battlefield grants;
 those granted mana abilities never become activated stack objects. Waterbend
 taps are cost payment, not tapping for mana. The view is the one reader of a
 battlefield permanent's characteristics, legendary and ward included: the
-legend rule reads its `is_legendary`, and every `CardData` field that states a
-characteristic reads it there (`tests/cards/observability.rs` classifies each
+legend rule reads its `is_legendary`, and every permanent observation characteristic reads it there (`tests/cards/observability.rs` classifies each
 field as layered or printed by definition).
 
 The cached raw layer board tracks discovered reads of mana pools and tapped

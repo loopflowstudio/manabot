@@ -8,6 +8,7 @@ import pytest
 import torch
 
 from experiments.ataraxos_move import ataraxos_move, ataraxos_move_scalar
+from manabot.backends import resolve
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.training.execution import execute_regime, validate_regime
 from manabot.training.regime import DampedPolicyLearning, TrainingRegime, TrainSelfPlay
@@ -59,7 +60,9 @@ def test_real_collection_update_export_reload(
         stage.learning.min_advantage = 0
         stage.learning.advantage_quantile = 0
     with VerifyStore(tmp_path / "store.sqlite") as store:
-        run = execute_regime(recipe, 601, tmp_path / "run", store)
+        run = execute_regime(
+            recipe, 601, tmp_path / "run", store, backend=resolve("torch")
+        )
     assert run.status == "completed"
     updates = stage_rows(run, read_updates(tmp_path, [run]))
     for iteration, stage in enumerate(run.stages, 1):
@@ -103,7 +106,12 @@ def test_sdk_retains_initialization_and_exact_update_milestones(tmp_path: Path) 
     stage.transitions = 4
     with VerifyStore(tmp_path / "store.sqlite") as store:
         run = execute_regime(
-            recipe, 602, tmp_path / "run", store, checkpoint_updates=(1, 2)
+            recipe,
+            602,
+            tmp_path / "run",
+            store,
+            checkpoint_updates=(1, 2),
+            backend=resolve("torch"),
         )
     assert run.status == "completed"
     tracked = read_all(tmp_path / "run" / stage.id / "etude")[0]

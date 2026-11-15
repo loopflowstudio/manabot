@@ -7,8 +7,12 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends import resolve
 import manabot.backends.torch as torch_backend
 from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import transition_gae
@@ -99,6 +103,7 @@ def _collector(
         learning_seats=seats,
         games_per_stream=games,
         recovery_max_microsteps=10_000 if second is None else None,
+        numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
     )
     if scripted:
         collector._env = ScriptedGames(collector._buffers)
@@ -238,6 +243,7 @@ def test_off_policy_opponents_cannot_train_both_seats(mode: str) -> None:
             opponent_mode=mode,
             opponent_agent=agent,
             learning_seats="both",
+            numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
         )
 
 
@@ -287,7 +293,9 @@ def test_regime_trains_and_exports_both_seats(
         schedule_clock="iteration_fraction",
     )
     with VerifyStore(tmp_path / "store.sqlite") as store:
-        run = execute_regime(regime, 17, tmp_path / "run", store)
+        run = execute_regime(
+            regime, 17, tmp_path / "run", store, backend=resolve("torch")
+        )
     assert run.status == "completed"
     record = run.stages[0]
     assert record.games == 4
@@ -356,6 +364,7 @@ def test_collector_defaults_follow_policy_ownership() -> None:
             num_envs=2,
             opponent_mode=mode,
             opponent_agent=_agent(),
+            numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
         )
         assert collector.learning_seats == seats
         collector.close()

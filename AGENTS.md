@@ -73,9 +73,14 @@ reconnect, replay/fork identity and accessibility. Cancellation or undo needs an
 explicit shared action and cannot erase committed costs or revealed information.
 Configured priority-stop automation must remain identifiable as automation,
 separate from deliberate human decisions.
+Play's retained `hero_*`/`villain_*` setup fields name human/opponent roles;
+`GameConfig.human_seat` orders them at the native boundary. Record and project
+actual native seats; Watch keeps its two-seat acting-view contract.
 Academy resume credentials and the started-launch marker live in browser
 `sessionStorage`. Keep them scoped together; a launch must not resume another
 tab's or another launch's game.
+Game-file imports send original JSON source spans: JavaScript numeric parsing and
+re-encoding can round u64 identities and invalidate retained digests.
 Watch history is the selected acting viewer's recorded track strictly before
 that decision's `presentation_cursor`; spectator reveal never supplies history
 labels. Event emphasis stays separate from choice focus and lane navigation.
@@ -146,8 +151,8 @@ checkpoints or experiment evidence.
   `manabot.backends.*`. Only composition roots choose one: `experiments/`,
   `scripts/`, recipe entry points, the CLI and child-process entry points, `manabot/sim/policy_provider.py` and the
   backends' tests, by import or `manabot.backends.resolve("torch")`.
-  `tests/test_package_boundaries.py` lists the remaining exceptions by name;
-  that list only shrinks ([who chooses a backend](manabot/backends/README.md#who-chooses-a-backend)).
+  `tests/test_package_boundaries.py` enforces roots and named entry-point scopes
+  in mixed CLI/library modules ([who chooses a backend](manabot/backends/README.md#who-chooses-a-backend)).
 - Generic backend learning helpers (`rl`, `learner`, `arrays`) keep role-specific
   types under `TYPE_CHECKING`; importing their annotations at runtime must not
   pull in checkpoint, player, observation or training-configuration modules.
@@ -181,16 +186,25 @@ checkpoints or experiment evidence.
   so a layout change refuses older checkpoints, naming that revision and the
   buffers that differ. Do not bump the input version for a layout change or add
   a loading path for an older layout.
-- Main carries policy input v9, the fresh default, and explicit v10
-  (`ObservationConfig.policy_input_version`); it is always serialized. V10 is
-  v9 plus the `player_turn_state` and `card_turn_state` buffers, whose
-  presence selects it natively; a v9 encoder refuses an observation that needs
-  them (`managym.input_v10_state`) before writing buffers. A checkpoint,
+- Main carries policy input v11, the fresh default
+  (`ObservationConfig.policy_input_version`, always serialized): one row per
+  game thing. Card rows hold cards outside the battlefield and stack;
+  permanents own one effective `CharacteristicsData` projection plus object
+  identity and token status; spells own a `SpellData` projection, and abilities
+  carry only source references. Old Python `.card` and flat characteristic
+  getters derive from those records (removed in 0.4.0); the `stack`
+  buffer holds every spell and ability. A battlefield object's or spell's card
+  id indexes its permanent or stack row, so focus, relations and history name
+  one row. V11 carries v10's `player_turn_state` and `card_turn_state`; a
+  turn-state-free encoder refuses an observation that needs them
+  (`managym.input_v10_state`) before writing buffers. Inputs v9 and v10 are a
+  deprecated fork for earlier checkpoints (`agent/legacy_input.rs`,
+  `manabot/env/legacy_input.py`, `InputLayout::Legacy`; removed in 0.4.0,
+  MTG-353 owns portability across worlds); never extend it. A checkpoint,
   replay or saved configuration bound to any other version, or omitting it,
   raises `UnsupportedPolicyInput`, which names the revision to run it from
-  (`ac601834d` is the last revision supporting v1-v8). The v10 turn-state
-  append is the only version branch in the encoders and the model; add no
-  others, and a new layout replaces these at a world freeze.
+  (`ac601834d` is the last revision supporting v1-v8). Add no other version
+  branch; a new layout replaces these at a world freeze.
 - Open-ended vocabularies (counter kinds, added subtypes, set names, used
   abilities, continuous-effect records, copy effects and their exceptions) are
   fact rows, never columns. Active effects are shared records: `effects`
@@ -292,6 +306,10 @@ from rules/deck PlayerConfig and world identity.
 Every game runner, benchmark and Academy session uses native trivial-decision
 skipping (`skip_trivial`, on by default); a decision with one legal action is
 never shown to a person or sent to a model or policy (Jack Heart, 2026-10-28).
+With trivial skipping, an ordinary Command returns at the next nontrivial
+decision, which can be in a later turn: its final declaration choice may also
+resolve forced combat damage.
+The returned game state is not a snapshot of the declaration boundary.
 Turning it off is for explicit debugging only. Outside tests, the only code
 that does is the constructed-position fixtures listed in
 `tests/env/test_skip_forced_decisions.py`; they play no game for a person,
@@ -326,6 +344,11 @@ admission. Admission-rejection fixtures must mark the config as submitted
   Replay compares these through
   `manabot.env.replay.matches_retained_error`, retaining original class names and
   full vector diagnostic payloads in evidence.
+  Capacity is the typed `AgentError::Capacity` payload (Python
+  `managym.CapacityError`, an `AgentError` subtype): preserve resource, limit and
+  visited counts through semantic/search/vector wrappers. Failed in-place
+  progression quarantines the stream until reset; it is no successful terminal
+  transition. Declaration candidates roll back by being discarded.
 - Frozen experiment scheduling/analysis tests use an explicit compatible-world
   fixture for synthetic outcomes, with separate real-runtime rejection tests.
   Pin declared input capacities rather than inheriting fresh defaults; never
@@ -528,7 +551,9 @@ across `&self` code that reads the board per source or per ability. Continuous-e
 live in `EffectRecords` (indexed by affected object and player); trigger
 sources are looked up per event kind through `TriggerIndex`
 (`flow/triggers.rs`), invalidated by trigger and layer dependencies; departed-object
-facts are an `ObjectLkiLog`. A cloned `Game` carries these caches.
+facts are an `ObjectLkiLog`. A cloned `Game` carries these caches. Search clones
+omit card/exposure capture; a transactional candidate for the live game must
+explicitly preserve that capture and publish it only on success.
 Layer rebuilds reuse immutable copiable source objects and static plans, bound to
 exact definition identity, appearance and timestamp; copy/transform definition
 changes invalidate that source. Intermediate layer objects detach on writes.
@@ -604,6 +629,9 @@ the stack, as the source's frame before the output choice (CR 605.3b).
 
 ### Etude training records
 
+Etude preserves a checkpoint's source suffix. Worker tests wait for a registered
+checkpoint through the SDK, rather than assuming the file ends in `.pt`.
+
 Training row tables belong under the metric run's `artifacts/`, named by their
 content digest, with `.partial` staging before atomic rename. Etude's tracker
 and launcher courier carry these immutable author artifacts before metric
@@ -652,3 +680,12 @@ and native imports. Load the evaluation projection only for evaluation inputs;
 keep its simulation dependencies off the LLM-only path. Check this boundary in a
 fresh process with those imports blocked, and exercise mixed reports through the
 actual builder CLI in the existing headless Perf proof.
+
+The repository pins Etude's merged migration build through `tool.uv.sources`;
+PyPI's 0.4.0 does not contain that API. Etude's shared records, storage and
+errors live in `etude.records`, `etude.storage` and `etude.errors`, and training
+uses `etude.train.tracking`. Experiment entry points are `training_jobs()` and
+`eval_jobs(state)`; discovery is in `etude.declarations`, state in `etude.jobs`.
+A resumed tracker uses `resume=True`; its first logged row sets the supersession
+coordinate, and an attempt that logs nothing supersedes nothing. Retained
+nested tracker declarations still decode through Etude's `RunRecord`.

@@ -12,9 +12,6 @@ import json
 from pathlib import Path
 import shutil
 
-import torch
-
-from manabot.backends.torch.checkpoint import load_checkpoint, load_metadata
 from manabot.env.match import Match
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.world import validate_agent_decks, validate_agent_setup
@@ -27,6 +24,7 @@ from manabot.training.regime import (
     TrainingRegime,
     TrainSelfPlay,
 )
+from manabot.training.state.backend import TrainingBackend
 
 
 @dataclass(frozen=True)
@@ -51,7 +49,7 @@ def copy_verified_artifact(
     return {"path": str(target), "sha256": source["sha256"], "bytes": source["bytes"]}
 
 
-def _admit_setups(agent: object, regime: TrainingRegime) -> None:
+def admit_setups(agent: object, regime: TrainingRegime) -> None:
     """Admit a policy for a regime's setups: its match, or its whole deck source.
 
     A deck run admits a checkpoint only if its world may play every deck the
@@ -71,6 +69,7 @@ def admit_policy(
     out: Path,
     *,
     name: str | None = None,
+    backend: TrainingBackend,
 ) -> AdmittedPolicy:
     """Validate a completed producer checkpoint, retaining its unmodified export.
 
@@ -141,13 +140,13 @@ def admit_policy(
     )
     # Ordinary admission owns architecture, state keys and native world meaning.
     # Fork RNG so validation never shifts downstream initialization streams.
-    with torch.random.fork_rng(devices=[]):
-        agent, space = load_checkpoint(admitted["path"])
+    with backend.state.preserve_rng():
+        agent, space = backend.load_policy(admitted["path"])
     if agent.config != regime.agent or space.encoder.config != regime.observation:
         raise ValueError("published checkpoint model/observation differs from regime")
     for setups in (source.regime, regime):
-        _admit_setups(agent, setups)
-    payload = load_metadata(admitted["path"])
+        admit_setups(agent, setups)
+    payload = backend.metadata(admitted["path"])
     metadata = payload.get("bc", {})
     for key, expected in {
         "run_id": source.id,

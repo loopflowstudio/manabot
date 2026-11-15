@@ -3,8 +3,8 @@
 from pathlib import Path
 from types import SimpleNamespace
 
+from etude.declarations import read_experiment
 from etude.eval.records import Code, Seating
-from etude.experiment import read_experiment
 from etude.jobs import evaluation_spec
 import pytest
 import torch
@@ -119,7 +119,8 @@ def test_discovered_studies_keep_the_evaluation_callback_importable(
     )
     experiment = read_experiment(learning_signal.ROOT / f"experiments/{name}.py")
     state = SimpleNamespace(runs=(None,))
-    (job,) = experiment.eval(state)  # type: ignore[arg-type]
+    (declared,) = experiment.eval(state)  # type: ignore[arg-type]
+    job = declared.plain()
     callback = evaluation_spec(job).play
     assert callback.module == "experiments.learning_signal"
     assert callback.load(job.repo) is learning_signal.play_deal

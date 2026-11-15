@@ -13,6 +13,7 @@ from managym.academy import server
 from managym.academy.opponent import opponent_catalog, set_policy_registry
 from managym.academy.watch import WatchRequest, create_watch, inspect_watch, step_watch
 from managym.policy import (
+    JSONValue,
     PolicyDecision,
     PolicyDescriptor,
     PolicyRegistry,
@@ -145,7 +146,7 @@ def test_failed_opponent_policy_preserves_commitment_until_explicit_retry(
             websocket.send_json({"type": "new_game", "config": config})
             payload = websocket.receive_json()
             for attempt in range(20):
-                if payload.get("search_retry"):
+                if payload.get("mirror_retry"):
                     break
                 frame = payload.get("frame") or payload["update"]["frame"]
                 command = {
@@ -165,7 +166,7 @@ def test_failed_opponent_policy_preserves_commitment_until_explicit_retry(
             receipt = payload["update"]["receipt"]
             assert receipt["command_id"] == command["command_id"]
             assert receipt["resulting_revision"] == command["expected_revision"] + 1
-            pending = payload["search_retry"]
+            pending = payload["mirror_retry"]
             assert pending["message"] == "Policy returned a stale decision binding."
             game = next(
                 record.game
@@ -186,19 +187,19 @@ def test_failed_opponent_policy_preserves_commitment_until_explicit_retry(
             calls = len(factory.sessions[0].seen)
             websocket.send_json({"type": "set_stops", "auto_pass": False})
             recovered = websocket.receive_json()
-            assert recovered["search_retry"]["code"] == "policy_failed"
+            assert recovered["mirror_retry"]["code"] == "policy_failed"
             assert game.env.state_digest() == digest
             assert len(factory.sessions[0].seen) == calls
             factory.sessions[0].stale = False
             websocket.send_json(
                 {
-                    "type": "retry_search",
+                    "type": "retry_mirror",
                     "match_id": game.match_id,
                     "expected_revision": game.revision,
                 }
             )
             retried = websocket.receive_json()
-            assert retried["search_retry"] is None
+            assert retried["mirror_retry"] is None
             assert len(game.trace.events) > events
             assert game.accepted_commands[command["command_id"]] == receipt
             assert len(factory.sessions) == 1
@@ -290,6 +291,21 @@ def test_factory_cannot_share_a_mutable_session_between_games(
         assert not factory.sessions[0].closed
     finally:
         first.close()
+
+
+def test_watch_load_failure_closes_previously_loaded_seats(
+    registry: PolicyRegistry,
+) -> None:
+    class FailingFactory(IndependentFactory):
+        def load(self, *, seat: int, seed: int) -> IndependentSession:
+            raise RuntimeError("model allocation failed")
+
+    first = IndependentFactory()
+    keys = [registry.register(first), registry.register(FailingFactory("Failed"))]
+    with pytest.raises(RuntimeError, match="model allocation failed"):
+        create_watch(WatchRequest(players=[f"policy:{key}" for key in keys]))
+    assert len(first.sessions) == 1
+    assert first.sessions[0].closed
 
 
 def test_completed_independent_game_replays_without_a_provider(
@@ -388,6 +404,34 @@ def test_presentation_does_not_change_execution_identity() -> None:
         ).id
         == original.id
     )
+
+
+def test_ambient_alias_collision_keeps_later_policies() -> None:
+    class AliasedFactory(IndependentFactory):
+        def describe(self) -> PolicyDescriptor:
+            return replace(super().describe(), alias="shared")
+
+    class Provider:
+        def policy(self, spec: PolicySpec) -> IndependentFactory:
+            raise NotImplementedError
+
+        def discover(
+            self, config: dict[str, JSONValue] | None
+        ) -> list[IndependentFactory]:
+            return [AliasedFactory("Collision"), IndependentFactory("Later")]
+
+    registry = PolicyRegistry(providers={"example": Provider()})
+    original = AliasedFactory("Original")
+    original_id = registry.register(original)
+    registry.discover()
+    assert registry.descriptor("shared").id == original_id
+    assert {d.name for d in registry.descriptors()} == {"Original", "Later"}
+    assert registry.discovery_errors == [
+        "example: Policy alias 'shared' is already registered."
+    ]
+    with pytest.raises(ValueError, match="already registered"):
+        registry.register(AliasedFactory("Explicit"))
+    assert {d.name for d in registry.descriptors()} == {"Original", "Later"}
 
 
 def test_historical_extension_selection_has_no_named_provider_preference(

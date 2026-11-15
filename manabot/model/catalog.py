@@ -170,15 +170,15 @@ def checkpoint_search_incompatibility(checkpoint: Mapping[str, object]) -> str |
     hypers = checkpoint.get("hypers")
     agent = hypers.get("agent_hypers") if isinstance(hypers, Mapping) else None
     if not isinstance(agent, Mapping):
-        return "Mirror search requires a declared policy configuration."
+        return "Search requires a declared policy configuration."
     metadata = checkpoint.get("bc")
     semantic = metadata.get("value_semantic") if isinstance(metadata, Mapping) else None
     if agent.get("value_kind") != "categorical_wdl" and semantic != "signed_outcome":
-        return "Mirror search requires a W/D/L value head or a scalar declared as signed_outcome."
+        return "Search requires a W/D/L value head or a scalar declared as signed_outcome."
     if agent.get("recent_events"):
-        return "Mirror search requires evaluation from the current view alone, without policy history."
+        return "Search requires evaluation from the current view alone, without policy history."
     if agent.get("belief_count_buckets"):
-        return "Mirror search requires evaluation without belief-model inputs."
+        return "Search requires evaluation without belief-model inputs."
     return None
 
 
