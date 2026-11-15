@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Literal
 if TYPE_CHECKING:
     from manabot.reports.study import ScientificStudy
 
-from etude.run.records import RunDeclaration, RunFile, SourceKey
+from etude.records import RunRecord
 from nbclient import NotebookClient
 import nbformat
 from pydantic import ValidationError
@@ -85,13 +85,10 @@ def test_tracker_declarations_are_sources_without_extra_trajectories(
     before = load_evidence(root)
     tracker = root / "tracking" / "run.json"
     tracker.parent.mkdir()
-    declaration = RunFile(
+    declaration = RunRecord(
+        id="report-fixture/fixture",
         experiment="report-fixture",
         namespace="manabot",
-        declaration=RunDeclaration(
-            source_key=SourceKey(namespace="manabot", kind="run", source_id="fixture"),
-            clocks=(),
-        ),
     )
     tracker.write_text(declaration.model_dump_json())
     after = load_evidence(root)

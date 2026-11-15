@@ -102,7 +102,8 @@ def test_job_freezes_recipe_without_submission(tmp_path: Path) -> None:
     assert "--default-toolchain 1.98.1" in job.setup
     assert "uv sync --locked --python 3.13\n" in job.setup
     assert "RUSTUP_TOOLCHAIN=1.98.1" in job.command
-    assert job.command.endswith("uv run --locked python -m manabot.experiment.job")
+    assert " -m etude.call " in job.command
+    assert "manabot.experiment.job:train" in job.command
     gated = TrainingJob(
         regime=spec.regime,
         experiment=spec.experiment,
@@ -110,7 +111,7 @@ def test_job_freezes_recipe_without_submission(tmp_path: Path) -> None:
         validate_numerics=True,
     ).job(repo=ROOT, revision="HEAD", max_hours=1)
     assert gated.setup is not None and "--extra dev" in gated.setup
-    assert "uv run --locked --extra dev python" in gated.command
+    assert "uv run --extra dev python" in gated.command
     assert not list(tmp_path.iterdir())
     with pytest.raises(ValueError, match="lifetime"):
         spec.job(repo=ROOT, revision="HEAD", max_hours=0.0001)
@@ -133,7 +134,9 @@ def test_worker_runs_real_learner_and_reports_admitted_policy(
             "--active",
             "python",
             "-m",
-            "manabot.experiment.job",
+            "etude.call",
+            "--function",
+            "manabot.experiment.job:train",
         ],
         cwd=ROOT,
         stdout=subprocess.PIPE,
@@ -198,7 +201,13 @@ def test_a_terminated_worker_records_its_end_and_keeps_its_exports(
         tmp_path, monkeypatch, spec.model_copy(update={"milestones": ()})
     )
     worker = subprocess.Popen(
-        [sys.executable, "-m", "manabot.experiment.job"],
+        [
+            sys.executable,
+            "-m",
+            "etude.call",
+            "--function",
+            "manabot.experiment.job:train",
+        ],
         cwd=ROOT,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,

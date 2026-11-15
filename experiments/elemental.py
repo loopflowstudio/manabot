@@ -30,8 +30,8 @@ from decimal import Decimal
 from pathlib import Path
 
 from etude.eval.records import Benchmark, Inference, Player, Seating
-from etude.experiment import Checkpoint, ExperimentState, TrainingRun
-from etude.jobs import evaluation
+from etude.experiment import Checkpoint, TrainingRun
+from etude.jobs import EvalJob, ExperimentState
 from etude.launch.records import Job, Run
 from etude.report import (
     Anchors,
@@ -85,7 +85,7 @@ INFERENCE = Inference(source=list(INFERENCE_CODE))
 # Training
 
 
-def runs(
+def training_jobs(
     revision: str,
     updates: int,
     hours: float,
@@ -172,7 +172,7 @@ def _pairs(
     ]
 
 
-def eval(state: ExperimentState) -> list[Job]:
+def eval_jobs(state: ExperimentState) -> list[Job]:
     """The heuristic grid of every rated checkpoint, and each run's pairing graph.
 
     A rated checkpoint on the full cadence (and the endpoint) plays all 5,000
@@ -189,17 +189,19 @@ def eval(state: ExperimentState) -> list[Job]:
         pairs += _pairs(run, rated, endpoint)
     # The full grid is every scheduled game; the subset is any subset update's.
     jobs = [
-        evaluation(
-            _grid(GRID, "full", schedule()),
+        EvalJob(
+            tournament=_grid(GRID, "full", schedule()),
             play=play,
             checkpoints=full,
+            extras=("evaluation",),
             workers=WORKERS,
             max_hours=EVAL_HOURS,
         ),
-        evaluation(
-            _grid(SUBSET, "subset", heuristic_games(CADENCE, None)[1]),
+        EvalJob(
+            tournament=_grid(SUBSET, "subset", heuristic_games(CADENCE, None)[1]),
             play=play,
             checkpoints=subset,
+            extras=("evaluation",),
             workers=WORKERS,
             max_hours=EVAL_HOURS,
         ),
@@ -209,7 +211,7 @@ def eval(state: ExperimentState) -> list[Job]:
             name=PAIRS, environment=eval_environment(), seatings=tuple(pairs)
         )
         jobs.append(
-            evaluation(ladder, play=play, workers=WORKERS, max_hours=EVAL_HOURS)
+            EvalJob(tournament=ladder, play=play, workers=WORKERS, max_hours=EVAL_HOURS)
         )
     return jobs
 

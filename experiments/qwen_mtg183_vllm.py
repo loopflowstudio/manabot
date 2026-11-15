@@ -19,6 +19,7 @@ import os
 from pathlib import Path
 import time
 
+from etude.jobs import TrainingJob
 from etude.launch.records import Job
 from pydantic import Field, TypeAdapter
 
@@ -435,7 +436,7 @@ def run(config: Campaign) -> None:
         )
 
 
-def runs(
+def training_jobs(
     native_artifact: str,
     native_source: str,
     attempt_usd: str = "9.40",
@@ -480,17 +481,22 @@ def runs(
         context_tokens=inference.context_tokens,
         seconds=seconds,
     )
-    job = original.runs(native_artifact, native_source)
+    job = original.training_jobs(native_artifact, native_source).plain()
     mtp = f"-mtp{speculative_tokens}" if speculative_tokens else ""
-    return job.model_copy(
-        update={
-            "name": f"bb4160-w13-qwen-vllm-{arm}-v-mtg183-u5950-g{games}-c{concurrency}{mtp}",
-            "command": "uv run python -m etude.call --function experiments.qwen_mtg183_vllm:run",
-            "config": config.model_dump_json(),
-            "setup": "sh scripts/qwen-mtg183-vllm-setup.sh",
-            "max_usd": ceiling,
-            "max_hours": hours,
-        }
+    return TrainingJob(
+        train=run,
+        config=config,
+        name=f"bb4160-w13-qwen-vllm-{arm}-v-mtg183-u5950-g{games}-c{concurrency}{mtp}",
+        setup="sh scripts/qwen-mtg183-vllm-setup.sh",
+        max_usd=ceiling,
+        max_hours=hours,
+        repo=job.repo,
+        revision=job.revision,
+        inputs=job.inputs,
+        environment=job.environment,
+        cleanup=job.cleanup,
+        cleanup_seconds=job.cleanup_seconds,
+        max_attempts=job.max_attempts,
     )
 
 

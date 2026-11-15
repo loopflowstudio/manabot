@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from etude.launch.job_file import read_job_file
+from etude.declarations import read_training_jobs
 import pytest
 from torch import nn
 
@@ -80,7 +80,7 @@ def test_w64_float32_keeps_the_control_bytes_and_precisions_differ_only_there() 
 
 
 def _launched(*arguments: str) -> list[sizes.Run]:
-    return read_job_file(
+    return read_training_jobs(
         ROOT / "experiments/training_throughput_sizes.py", list(arguments)
     )
 
@@ -111,7 +111,7 @@ def test_launch_file_declares_every_cell() -> None:
 
 def test_the_repeat_shares_regime_bytes_and_is_its_own_job() -> None:
     first, repeat = (
-        sizes.runs("HEAD", leg)[0]
+        sizes.training_jobs("HEAD", leg)[0]
         for leg in ("fast-w160l8-k1-float32", "fast-w160l8-k1-float32-repeat")
     )
 
@@ -136,7 +136,7 @@ def test_limits_follow_the_pace_and_cover_setup_at_the_ceiling() -> None:
     assert large.stall_seconds == 3 * 350
     assert large.max_usd >= (large.max_hours + 0.25) * 0.60
 
-    run = sizes.runs("HEAD", "l4-a384l8-k2-float32", pace="350")[0]
+    run = sizes.training_jobs("HEAD", "l4-a384l8-k2-float32", pace="350")[0]
     frozen = TrainingJob.model_validate_json(run.job.config or "")
     assert frozen.regime.wall_seconds == large.watchdog_seconds
     assert run.job.max_hours == large.max_hours
@@ -144,9 +144,9 @@ def test_limits_follow_the_pace_and_cover_setup_at_the_ceiling() -> None:
 
 def test_unknown_legs_and_seeds_are_refused() -> None:
     with pytest.raises(ValueError, match="unknown leg"):
-        sizes.runs("HEAD", "a4000-w64-k1-float32")
+        sizes.training_jobs("HEAD", "a4000-w64-k1-float32")
     with pytest.raises(ValueError, match="declares no seeds"):
-        sizes.runs("HEAD", "a4000-w128l4-k2-float32", seeds="26303")
+        sizes.training_jobs("HEAD", "a4000-w128l4-k2-float32", seeds="26303")
     with pytest.raises(ValueError, match="pace"):
         sizes.limits(sizes.LEGS["l4-w128l4-k1-float32"], 0)
 
