@@ -4,7 +4,7 @@
   import type { PolicyRuntimeIdentity } from '$lib/types';
   import { policyChoice, type PlayerChoice } from '$lib/game.svelte';
   import type { Decklists, TrainedOpponent } from '$lib/types';
-  import type { SearchConfig } from '$lib/watch';
+  import type { SearchConfig } from '$lib/search';
   import SearchControl from './SearchControl.svelte';
 
   interface Props {

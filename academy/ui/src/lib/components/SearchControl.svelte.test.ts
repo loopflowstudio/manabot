@@ -2,7 +2,7 @@ import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 import SearchControl from './SearchControl.svelte';
 import SearchThinking from './SearchThinking.svelte';
-import { parseSearchConfigs, type SearchConfig } from '$lib/watch';
+import { parseSearchConfigs, type SearchConfig } from '$lib/search';
 
 const spec: SearchConfig = { algorithm: 'local_update', belief: 'physical_deal',
   worlds: 4, depth: 2, alpha: 0.02, beta: 1, decision_seconds: 30 };

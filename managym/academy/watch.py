@@ -21,8 +21,7 @@ from .attempts import AttemptStore, RecordedPlayer, bot_player
 from .extensions import bot_extension
 from .launch import refuse_training_receipt
 from .opponent import policy_registry
-from .replay_index import DecisionAddressV2, load_canonical_replay
-from .trace import load_trace
+from .replay_index import DecisionAddressV2
 from .villain import NATIVE_WATCH_PLAYERS, build_villain_policy, player_fields
 
 
@@ -177,36 +176,27 @@ def step_watch(trace_id: str, token: str | None, expected_revision: int) -> Watc
 def inspect_watch(
     trace_id: str, ordinal: int, token: str | None, reveal: bool = False
 ) -> dict[str, Any]:
-    """Read a recorded decision; -1 restores the latest without advancing play."""
-    payload = load_trace(trace_id)
-    watched = payload["config"].get("watch_players")
-    finished = (
-        payload["end_reason"] == "game_over"
-        and payload["final_observation"]["game_over"]
+    access = AttemptStore(server.trace_store.TRACES_DIR / "play.sqlite").access(
+        trace_id, {server.participant_id(token)} if token else set()
     )
-    if not watched and not (finished and payload["config"].get("mirror") is not None):
+    if access is not None and not access["replay"]:
+        raise HTTPException(403, "participant_credential_required")
+    recording, metadata = server._recording_read(trace_id)
+    payload = recording.payload
+    finished = payload.get("end_reason") == "game_over" and bool(
+        payload["final_observation"].get("game_over")
+    )
+    if not recording.watch and not recording.completed_mirror:
         raise HTTPException(409, "not_a_bot_watch")
     record = None if finished else record_for_watch(trace_id, token)
-    identities = (
-        AttemptStore(server.trace_store.TRACES_DIR / "play.sqlite")
-        .metadata(trace_id)
-        .get("players", [])
-    )
-    mirror_by_seat = {
-        identity["seat"]: (identity.get("inference") or {})
-        .get("runtime", {})
-        .get("config", {})
-        .get("mirror")
-        for identity in identities
-    }
-    mirrors = [mirror_by_seat.get(seat) for seat in (0, 1)]
-    replay = load_canonical_replay(payload)
+    identities = metadata.get("players", [])
+    mirrors = server._recorded_mirrors(identities)
+    watched = payload["config"].get("watch_players")
+    replay = recording.replay
     if ordinal == -1:
-        ordinal = max(0, len(replay.decisions) - 1)
-    if ordinal < 0:
-        raise HTTPException(404, "decision_not_found")
-    if ordinal >= len(replay.decisions):
-        if record is not None and not replay.decisions:
+        ordinal = max(0, len(replay.decisions) - 1) if replay else 0
+    if replay is None or ordinal < 0 or ordinal >= len(replay.decisions):
+        if record is not None and (replay is None or not replay.decisions):
             pending = record.game.mirror_retry
             raise HTTPException(
                 409,
@@ -214,39 +204,27 @@ def inspect_watch(
                     "code": pending["code"] if pending else "watch_pending",
                     "message": pending["message"]
                     if pending
-                    else "No decision recorded yet. Step the pending bot decision explicitly.",
+                    else "No decision recorded yet. Continue the pending bot decision explicitly.",
                     "revision": record.game.revision,
                     "mirror": mirrors,
                 },
             )
         raise HTTPException(404, "decision_not_found")
-    row = replay.decisions[ordinal]
-    event = payload["events"][ordinal]
-    address = DecisionAddressV2.from_decision(replay, row).serialize()
-    observation = row.frame.projection.model_dump(mode="json")
-    if reveal:
-        observation = event["analysis_observation"]
-    # Only the acting viewer's committed prefix belongs to this decision.
-    # Keep the response bounded; unavailable older history is explicit in the UI.
-    track = next(
-        track for track in replay.presentation_tracks if track.viewer == row.viewer
+    key = DecisionAddressV2.from_decision(replay, replay.decisions[ordinal]).serialize()
+    position = recording.read(
+        key, reveal=reveal, history_limit=server.MAX_PRESENTATION_EVENTS
     )
-    presentation = track.events[
-        max(
-            0, row.presentation_cursor - server.MAX_PRESENTATION_EVENTS
-        ) : row.presentation_cursor
-    ]
     opponent = payload["config"].get("opponent") or {}
     return {
         "id": trace_id,
-        "decision": {**row.model_dump(mode="json"), "address": address},
-        "observation": observation,
-        "outputs": event.get("bot_decision"),
-        "presentation": [event.model_dump(mode="json") for event in presentation],
+        "decision": position["decision"],
+        "observation": position["observation"],
+        "outputs": position["outputs"],
+        "presentation": position["history"],
         "count": len(replay.decisions),
         "finished": finished,
         "revealed": reveal,
-        "revision": row.revision,
+        "revision": replay.decisions[ordinal].revision,
         "winner": payload.get("winner"),
         "players": watched or [identity["name"] for identity in identities],
         "mirror": mirrors,
@@ -256,7 +234,7 @@ def inspect_watch(
         else opponent.get(
             "source_kind", "evaluation" if opponent.get("kind") == "arena" else None
         ),
-        "identities": identities,
+        "identities": metadata.get("players", []),
     }
 
 

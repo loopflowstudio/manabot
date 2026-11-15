@@ -36,6 +36,7 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(page.getByRole('spinbutton', { name: 'Seat 1 search worlds', exact: true })).toHaveValue('1');
     await expect(page.getByRole('spinbutton', { name: 'Seat 1 search depth', exact: true })).toHaveValue('1');
     await page.getByRole('button', { name: 'Start watching' }).click();
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(page.getByRole('columnheader', { name: 'Raw policy', exact: true })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Updated policy', exact: true })).toBeVisible();
     await expect(page.getByText('Uniform belief (physical deal):', { exact: false })).toBeVisible();
@@ -46,10 +47,10 @@ for (const theme of ['light', 'dark'] as const) {
     await page.screenshot({ path: fileURLToPath(new URL(`../test-results/search/watch-${theme}.png`, import.meta.url)) });
 
     await page.goto(addresses.saved);
-    await page.getByRole('link', { name: 'Inspect bot search', exact: true }).click();
-    await expect(page.getByText(new RegExp(`^Decision ${addresses.saved_ordinal + 1} of`))).toBeVisible();
+    await page.getByRole('button', { name: 'Inspect bot search', exact: true }).click();
+    await expect(page.getByTestId('replay-perspective')).toContainText('Chooser: seat 2');
     await expect(page.getByRole('columnheader', { name: 'Updated policy', exact: true })).toBeVisible();
-    await expect(page.getByText('Recorded Play game', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'The Score · Recorded Play game', exact: true })).toBeVisible();
     await page.getByRole('columnheader', { name: 'Updated policy', exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: fileURLToPath(new URL(`../test-results/search/replay-${theme}.png`, import.meta.url)) });
     expect(errors).toEqual([]);
@@ -82,6 +83,7 @@ test('timeouts retain Play and initial Watch choices across reload and explicit 
   expect(frames.at(-1)!.revision).toBe(pending.revision);
   await page.goto(addresses.watch_timeout);
   await page.getByRole('button', { name: 'Start watching' }).click();
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Retry search', exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('button', { name: 'Retry search', exact: true })).toBeVisible();
@@ -89,38 +91,41 @@ test('timeouts retain Play and initial Watch choices across reload and explicit 
   await expect(page.getByRole('button', { name: 'Retry search', exact: true })).toBeEnabled();
 });
 
-test('Watch reload restores latest timeout and explicit retry while history stays navigable', async ({ page }) => {
+test('Watch reload retains timeout and exact position while history stays navigable', async ({ page }) => {
   const { pending_watch: watch } = JSON.parse(readFileSync(proof, 'utf8')) as Addresses;
-  await page.addInitScript(watch => localStorage.setItem(`etude.watch.${watch.id}`, watch.token), watch);
+  await page.addInitScript(watch => sessionStorage.setItem(`etude.watch.${watch.id}`, watch.token), watch);
   const steps: number[] = [];
   page.on('request', request => {
     if (request.url().endsWith(`/api/watch/${watch.id}/step`)) steps.push(request.postDataJSON().revision);
   });
   const url = `/replay?watch=1&trace=${watch.id}`;
-  await page.goto(url);
-  await expect(page.getByText(/^Decision 3 of 3/)).toBeVisible();
+  await page.goto(`${url}&position=latest`);
+  const counter = page.getByTestId('position-counter');
+  await expect(counter).toHaveText('Position 7 / 7');
   const retry = page.getByRole('button', { name: 'Retry search', exact: true });
   await expect(retry).toBeEnabled();
   await expect(page.getByRole('alert')).toContainText(/time|deadline/i);
   await page.reload();
-  await expect(page.getByText(/^Decision 3 of 3/)).toBeVisible();
+  await expect(counter).toHaveText('Position 7 / 7');
   await expect(retry).toBeEnabled();
   await expect(page.getByRole('alert')).toContainText(/time|deadline/i);
-  await page.getByRole('button', { name: 'Previous decision', exact: true }).click();
-  await expect(page.getByText(/^Decision 2 of 3/)).toBeVisible();
-  await page.getByRole('button', { name: 'Step decision', exact: true }).click();
-  await expect(page.getByText(/^Decision 3 of 3/)).toBeVisible();
-  await expect(retry).toBeEnabled();
-  // An explicit historical URL remains historical, even with a pending retry.
-  await page.goto(`${url}&decision=0`);
-  await expect(page.getByText(/^Decision 1 of 3/)).toBeVisible();
+  await page.getByRole('button', { name: 'Previous', exact: true }).click();
+  await expect(counter).toHaveText('Position 6 / 7');
   await page.reload();
-  await expect(page.getByText(/^Decision 1 of 3/)).toBeVisible();
+  await expect(counter).toHaveText('Position 6 / 7');
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(counter).toHaveText('Position 7 / 7');
+  await expect(retry).toBeEnabled();
+  // Reading the first choice never retries a pending search.
+  await page.getByRole('slider', { name: 'Replay position' }).fill('0');
+  await expect(counter).toHaveText('Position 1 / 7');
+  await page.reload();
+  await expect(counter).toHaveText('Position 1 / 7');
   expect(steps).toEqual([]);
-  await page.goto(url);
+  await page.goto(`${url}&position=latest`);
   await expect(retry).toBeEnabled();
   await retry.click();
-  await expect(page.getByText(/^Decision 4 of 4/)).toBeVisible();
+  await expect(counter).toHaveText('Position 7 / 9');
   expect(steps).toEqual([3]);
   await expect(retry).toHaveCount(0);
   await expect(page.getByRole('alert')).toHaveCount(0);

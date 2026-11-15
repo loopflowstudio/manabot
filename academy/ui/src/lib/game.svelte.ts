@@ -1,5 +1,5 @@
 import { playerToken } from './records';
-import type { SearchConfig, PendingSearch } from './watch';
+import type { SearchConfig, PendingSearch } from './search';
 import {
   loadStoredDeckSelection,
   saveStoredDeckSelection,

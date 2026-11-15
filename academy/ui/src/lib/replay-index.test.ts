@@ -164,7 +164,7 @@ describe('canonical replay viewer projection', () => {
       command: structuredClone(row.command),
       continuation: [],
     };
-    expect(() => assertRestoredReplayDecisionBinds(projection, restored)).not.toThrow();
+    expect(() => assertRestoredReplayDecisionBinds(projection, row, restored)).not.toThrow();
 
     const drifted = structuredClone(projection);
     drifted.decisions[0].address = projection.decisions[1].address;
@@ -173,7 +173,7 @@ describe('canonical replay viewer projection', () => {
     );
 
     restored.offer.label = 'Client-authored label';
-    expect(() => assertRestoredReplayDecisionBinds(projection, restored)).toThrow(
+    expect(() => assertRestoredReplayDecisionBinds(projection, row, restored)).toThrow(
       /identity drifted/,
     );
   });

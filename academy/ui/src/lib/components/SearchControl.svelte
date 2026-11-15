@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { SearchConfig } from '$lib/watch';
+  import type { SearchConfig } from '$lib/search';
 
   interface Props {
     value: SearchConfig | null;

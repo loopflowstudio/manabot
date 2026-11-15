@@ -1,6 +1,3 @@
-import type { AddressedReplayDecision } from './replay-index';
-import type { Observation, PresentationEvent, RecordedPlayer } from './types';
-
 export interface SearchConfig {
   algorithm: 'local_update';
   belief: 'physical_deal';
@@ -34,46 +31,4 @@ export function parseSearchConfigs(value: unknown): [SearchConfig | null, Search
     throw new Error('Invalid two-seat Search settings.');
   }
   return [value[0], value[1]];
-}
-
-export interface BotDecision {
-  action: number;
-  probabilities: number[];
-  value: number | null;
-  value_semantic: string | null;
-  search_scores: (number | null)[];
-  unavailable: string | null;
-  factors: {chosen: number; probabilities: number[]; value: number}[];
-  belief: {model: string; digest: string; condition_mass: number; sampled_worlds: number} | null;
-  mirror?: {
-    algorithm: string;
-    worlds: number;
-    depth: number;
-    alpha: number;
-    beta: number;
-    rollouts: number;
-    decision_seconds: number;
-    seconds: number;
-    seed: string;
-    prior: number[];
-    receipt_sha256: string;
-  } | null;
-}
-
-export interface WatchDecision {
-  mirror_retry?: PendingSearch | null;
-  mirror?: (SearchConfig | null)[] | null;
-  id: string;
-  players: string[];
-  source_kind?: string;
-  identities: RecordedPlayer[];
-  decision: AddressedReplayDecision;
-  observation: Observation;
-  outputs: BotDecision | null;
-  presentation?: PresentationEvent[];
-  count: number;
-  finished: boolean;
-  revealed: boolean;
-  revision: number;
-  winner: number | null;
 }

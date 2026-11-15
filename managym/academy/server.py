@@ -6,7 +6,7 @@ FastAPI server for interactive managym play over WebSocket.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Iterable
+from collections.abc import Awaitable, Iterable
 from contextlib import ExitStack, suppress
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field, replace
@@ -96,6 +96,7 @@ from .opponent import (
     policy_registry,
 )
 from .presentation import PresentationProjector
+from .recording import Recording, read_cache
 from .replay_index import (
     CANONICAL_REPLAY_VERSION,
     CanonicalReplayProjectionV1,
@@ -3301,20 +3302,32 @@ def _record_owners(tokens: str | None) -> set[str]:
 
 
 @app.middleware("http")
-async def authorize_record(request, call_next):
+async def authorize_record(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
     parts = request.url.path.split("/")
-    if len(parts) >= 4 and parts[1:3] == ["api", "traces"]:
+    if len(parts) >= 4 and parts[1:3] in (["api", "traces"], ["api", "watch"]):
         store = AttemptStore(trace_store.TRACES_DIR / "play.sqlite")
         access = store.access(
             parts[3],
-            _record_owners(request.headers.get("x-etude-participant-tokens")),
+            _record_owners(
+                ",".join(
+                    filter(
+                        None,
+                        [
+                            request.headers.get("x-etude-participant-tokens"),
+                            request.headers.get("x-etude-participant-token"),
+                        ],
+                    )
+                )
+            ),
             request.headers.get("x-etude-player-token"),
         )
         request.state.record_access = access
-        # Shared completed replay reads use the established seat-0 projection.
+        # Each reader applies the recording's permitted information projection.
         # Feedback and every mutation remain participant-only.
         public_read = request.method == "GET" and (
-            len(parts) == 4 or parts[4] == "decisions"
+            len(parts) == 4 or parts[4] in {"decisions", "recording", "positions"}
         )
         if access is not None and not (
             access["mine"] or (public_read and access["replay"])
@@ -3518,6 +3531,148 @@ def _rest_study_owner(
     if TableCapability.EXPLORE_STUDY not in ROLE_CAPABILITIES[matches[0].role]:
         raise HTTPException(status_code=403, detail="participant_forbidden")
     return matches[0].viewer_id
+
+
+def _recording_read(trace_id: str) -> tuple["Recording", dict[str, Any]]:
+    try:
+        path = trace_store._trace_path(trace_id, trace_store.TRACES_DIR)
+    except ValueError as exc:
+        raise HTTPException(400, "recording_id_invalid") from exc
+    store = AttemptStore(trace_store.TRACES_DIR / "play.sqlite")
+    metadata = store.metadata(trace_id)
+    stamp = (
+        metadata.get("revision"),
+        metadata.get("status"),
+        metadata.get("ending_reason"),
+    )
+    if not metadata:
+        try:
+            stamp = (path.stat().st_mtime_ns, path.stat().st_size)
+        except FileNotFoundError as exc:
+            raise HTTPException(404, "recording_not_found") from exc
+    try:
+        recording = read_cache.load(trace_store.TRACES_DIR, trace_id, stamp)
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(400, "recording_invalid") from exc
+    return recording, metadata
+
+
+def _recorded_mirrors(players: list[dict[str, Any]]) -> list[dict[str, Any] | None]:
+    """Read search settings from retained seat identities, without a provider."""
+    by_seat = {
+        player["seat"]: (player.get("inference") or {})
+        .get("runtime", {})
+        .get("config", {})
+        .get("mirror")
+        for player in players
+    }
+    return [by_seat.get(seat) for seat in (0, 1)]
+
+
+@app.get("/api/traces/{trace_id}/recording")
+def get_recording_index(
+    trace_id: str,
+    request: Request,
+    offset: int = 0,
+    limit: int = 200,
+    x_etude_participant_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    if offset < 0 or not 1 <= limit <= 200:
+        raise HTTPException(400, "invalid_page")
+    _cleanup_expired_sessions()
+    recording, metadata = _recording_read(trace_id)
+    payload = recording.payload
+    producer = next(
+        (
+            record
+            for record in SESSION_REGISTRY.values()
+            if record.game.trace_id == trace_id
+        ),
+        None,
+    )
+    finished = payload.get("end_reason") == "game_over" and bool(
+        payload["final_observation"].get("game_over")
+    )
+    study_available = False
+    if producer:
+        try:
+            _rest_study_owner(producer, x_etude_participant_token)
+            study_available = True
+        except HTTPException:
+            pass
+    available = bool(
+        study_available
+        and producer
+        and not finished
+        and producer.game.watch_mode
+        and producer.game.watch_policies is not None
+    )
+    opponent = payload["config"].get("opponent") or {}
+    # Seat 2's configured checkpoint identity and provenance, as the full trace
+    # read redacts them: the checkpoint path stays private.
+    provenance = payload["config"].get("opponent_checkpoint")
+    if isinstance(provenance, dict):
+        provenance = {k: v for k, v in provenance.items() if k != "checkpoint"}
+    players = deepcopy(metadata.get("players", []))
+    if payload["config"].get("decklists") == "closed":
+        for player in players:
+            if player["seat"] == 1:
+                player["deck"] = "closed"
+    return {
+        "id": trace_id,
+        "positions": [
+            recording.metadata(position)
+            for position in recording.positions[offset : offset + limit]
+        ],
+        "total": len(recording.positions),
+        "next_offset": offset + limit
+        if offset + limit < len(recording.positions)
+        else None,
+        "revision": metadata.get("revision"),
+        "status": "finished"
+        if finished
+        else "waiting"
+        if producer and payload.get("end_reason") == "active"
+        else "interrupted",
+        "can_produce": available,
+        "mirror": _recorded_mirrors(players),
+        "mirror_retry": producer.game.mirror_retry if available and producer else None,
+        "can_study": study_available,
+        "winner": payload.get("winner") if finished else None,
+        "players": players,
+        "source_kind": "play"
+        if recording.completed_mirror
+        else opponent.get("source_kind"),
+        "opponent": payload["config"].get("opponent"),
+        "opponent_checkpoint": provenance,
+        "watch": recording.watch,
+        "can_feedback": bool(
+            (getattr(request.state, "record_access", None) or {}).get("mine")
+        ),
+    }
+
+
+@app.get("/api/traces/{trace_id}/positions/{key}")
+def get_recording_position(
+    trace_id: str,
+    key: str,
+    reveal: bool = False,
+    study: bool = False,
+    before: int | None = None,
+    x_etude_participant_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    recording, _ = _recording_read(trace_id)
+    if key not in recording.by_key:
+        raise HTTPException(404, "position_unavailable")
+    if before is not None and before < 0:
+        raise HTTPException(400, "invalid_history_cursor")
+    try:
+        position = recording.read(key, reveal=reveal, before=before)
+        if study:
+            position["study_source"] = recording.study_source(key)
+        return position
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
 
 
 @app.get("/api/traces/{trace_id}/decisions")
