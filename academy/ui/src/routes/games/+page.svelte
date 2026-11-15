@@ -44,6 +44,10 @@
     const sequence = ++requestSequence;
     loading = true;
     error = '';
+    sessionResults = [];
+    sessionTotals = [];
+    nextResultOffset = null;
+    moreResultsPending = false;
     try {
       const params = new URLSearchParams(search);
       if (!params.has('scope')) params.set('scope', 'all');
@@ -73,15 +77,17 @@
   async function moreResults(): Promise<void> {
     const session = page.url.searchParams.get('session');
     if (!session || nextResultOffset === null || moreResultsPending) return;
+    const sequence = requestSequence;
     moreResultsPending = true;
     try {
       const response = await recordFetch(`/api/play-sessions/${encodeURIComponent(session)}?result_offset=${nextResultOffset}`);
       if (!response.ok) throw new Error('More result configurations could not be loaded. Try again.');
       const data = await response.json();
+      if (sequence !== requestSequence) return;
       sessionResults = [...sessionResults, ...data.results];
       nextResultOffset = data.next_result_offset;
-    } catch (e) { error = e instanceof Error ? e.message : 'More results could not be loaded.'; }
-    finally { moreResultsPending = false; }
+    } catch (e) { if (sequence === requestSequence) error = e instanceof Error ? e.message : 'More results could not be loaded.'; }
+    finally { if (sequence === requestSequence) moreResultsPending = false; }
   }
 
   function filterUrl(key: string, value: string | null): string {

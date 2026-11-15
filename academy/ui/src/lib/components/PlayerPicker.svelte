@@ -98,6 +98,7 @@
   <p id={`${uid}-details`} data-testid="opponent-details" class="type-caption min-w-0 w-full break-words text-ink-2">
     {#if selected}
       Policy ID: {selected.sha256} · {selected.producer}
+      {#if selected.group}{' · '}{selected.group}{/if}
       {#each selected.details as detail}{' · '}{detail.label}: {detail.value}{/each}
       {#if !selected.available}{' · '}{selected.reason}{/if}
       {#if !selected.supports_search}{' · '}Search unavailable: {selected.search_reason ?? 'this policy does not advertise compatible search evaluation.'}{/if}
