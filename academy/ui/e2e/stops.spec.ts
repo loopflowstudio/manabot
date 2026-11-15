@@ -65,6 +65,8 @@ async function playUntilGameOver(page: Page): Promise<number> {
     if (await gameOverOverlay.isVisible()) {
       return inputs;
     }
+    await expect(page.locator('[data-testid="action-option"]:enabled').first().or(gameOverOverlay)).toBeVisible();
+    if (await gameOverOverlay.isVisible()) return inputs;
 
     const seqBefore = await updateSeq(page);
     const labels = await actionButtons.allTextContents();

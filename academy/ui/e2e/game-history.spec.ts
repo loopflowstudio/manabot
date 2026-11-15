@@ -89,6 +89,7 @@ test('shared history identifies both players and preserves private prefixes and 
         await confirmCombat(alice);
         continue;
       }
+      await expect(actions.first()).toBeEnabled();
       const before = Number(await alice.locator('main').getAttribute('data-update-seq'));
       const labels = await actions.allTextContents();
       let pick = labels.findIndex((label) => /^Play |^Cast |^Attack with/.test(label));

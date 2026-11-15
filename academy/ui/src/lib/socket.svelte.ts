@@ -85,8 +85,13 @@ interface ResumeCredentials {
   identity?: typeof gameStore.interruptedIdentity;
 }
 
+// When storage is disabled, this page can still retain exact envelopes and
+// authority in memory. A reload loses them, as the visible warning explains.
+const volatileTabValues = new Map<string, string | null>();
+
 function tabValue(key: string): string | null {
   if (!browser) return null;
+  if (volatileTabValues.has(key)) return volatileTabValues.get(key) ?? null;
   try { return window.sessionStorage.getItem(key); }
   catch { gameStore.storageWarning = 'Session storage is unavailable. Reload continuity is unavailable; this game remains usable.'; return null; }
 }
@@ -96,7 +101,11 @@ function writeTabValue(key: string, value: string | null): void {
   try {
     if (value === null) window.sessionStorage.removeItem(key);
     else window.sessionStorage.setItem(key, value);
-  } catch { gameStore.storageWarning = 'Session storage is unavailable. Reload continuity is unavailable; this game remains usable.'; }
+    volatileTabValues.delete(key);
+  } catch {
+    volatileTabValues.set(key, value);
+    gameStore.storageWarning = 'Session storage is unavailable. Reload continuity is unavailable; this game remains usable.';
+  }
 }
 
 function loadResumeCredentials(): ResumeCredentials | null {
