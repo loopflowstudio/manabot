@@ -14,9 +14,7 @@
 // player's sources across the questions of a `PaymentScan`. Pool arithmetic
 // and spend-purpose restrictions belong to state/mana.rs.
 
-mod outcomes;
 mod tap_choice;
-pub(crate) use outcomes::PaymentShapeCapture;
 
 use std::num::NonZeroUsize;
 
@@ -41,36 +39,6 @@ use crate::{
         zone::ZoneType,
     },
 };
-
-/// Per-game diagnostics, outside rules state, hashes and policy observations.
-/// Every spend directly follows its own recorded payment and cannot start a
-/// nested one, so each offered spend decision belongs to the latest payment;
-/// upfront activation fees are payments of their own.
-#[derive(Clone, Debug, Default)]
-pub(crate) struct ManaPaymentStats {
-    /// MTG-347's comparison arm. With `smart_tap`, the only fields here that
-    /// change play: spend the first feasible pooled unit instead of offering
-    /// the choice.
-    pub automatic: bool,
-    /// `produce_mana` taps the fixed sources `PaymentModel::choose_taps`
-    /// names instead of the first witness's. On in every game; tests turn it
-    /// off to compare against the witness.
-    pub smart_tap: bool,
-    pub payments: usize,
-    pub over_tapped: usize,
-    pub spend_decisions_over_tapped: usize,
-    latest_over_tapped: bool,
-}
-
-impl ManaPaymentStats {
-    pub(crate) fn new(automatic: bool, smart_tap: bool) -> Self {
-        Self {
-            automatic,
-            smart_tap,
-            ..Self::default()
-        }
-    }
-}
 
 /// One finite resource transition model. A source is reserved before its
 /// upfront obligation, so filters cannot finance themselves or form seedless
@@ -2002,15 +1970,9 @@ impl Game {
         {
             return Ok(());
         }
-        if self.mana_payment_shapes.is_some() {
-            let cost = self.characteristics(permanent).activated_abilities[ability_index]
-                .mana_cost
-                .clone();
-            self.capture_payment_outcomes(player, &cost, &model, &path);
-        }
-        for step in &path {
+        for step in path {
             match step {
-                PaymentStep::Fixed(source) => self.tap_fixed_mana_source(player, *source),
+                PaymentStep::Fixed(source) => self.tap_fixed_mana_source(player, source),
                 PaymentStep::Spend => break,
                 _ => unreachable!("validated automatic prefix"),
             }
@@ -2018,7 +1980,6 @@ impl Game {
         let cost = self.characteristics(permanent).activated_abilities[ability_index]
             .mana_cost
             .clone();
-        self.record_mana_payment(player, &cost, &model, &path);
         let caller = self.state.suspended_decision_mut().take().unwrap();
         self.begin_mana_spend(
             player,
@@ -2286,56 +2247,29 @@ impl Game {
                 SourcePolicy::FixedOnly,
             )
             .ok_or_else(|| AgentError("not enough automatic mana".into()))?;
-        if self.mana_payment_stats.smart_tap {
-            #[cfg(feature = "benchmark")]
-            let started = std::time::Instant::now();
-            // The witness proved the cost payable; the choice only renames
-            // which fixed sources pay it. Only the payer's own hand and
-            // permanents are read.
-            let choice = model.choose_taps(
-                &self.pooled_mana(player),
-                cost,
-                &self.saved_obligations(player),
-                &path,
-                || self.source_reluctance(&model),
-                || self.payment_followups(player, cost, &model),
-            );
-            let chosen: Vec<PaymentStep> = choice
-                .taps
-                .iter()
-                .map(|index| PaymentStep::Fixed(model.sources[*index].permanent))
-                .chain([PaymentStep::Spend])
-                .collect();
-            #[cfg(feature = "benchmark")]
-            crate::benchmark_payments::record_smart_tap(|metrics| {
-                use tap_choice::Stage;
-                metrics.payments += 1;
-                *match choice.stage {
-                    Stage::Tail => &mut metrics.tail,
-                    Stage::NoReplacement => &mut metrics.no_replacement,
-                    Stage::NoFollowups => &mut metrics.no_followups,
-                    Stage::WitnessAtBound => &mut metrics.witness_at_bound,
-                    Stage::ClassSearch => &mut metrics.class_search,
-                } += 1;
-                metrics.exhausted += u64::from(choice.exhausted);
-                metrics.kind_preferred += u64::from(choice.preferred);
-                metrics.changed += u64::from(chosen != path);
-                metrics.followup_reads +=
-                    u64::from(!matches!(choice.stage, Stage::Tail | Stage::NoReplacement));
-                metrics.followups += choice.followups as u64;
-                metrics.checks += choice.checks as u64;
-                metrics.searches += choice.searches as u64;
-                metrics.total_ns += started.elapsed().as_nanos() as u64;
-            });
-            path = chosen;
-        }
-        self.capture_payment_outcomes(player, cost, &model, &path);
+        // The witness proved the cost payable; the choice only renames
+        // which fixed sources pay it. Only the payer's own hand and
+        // permanents are read.
+        let choice = model.choose_taps(
+            &self.pooled_mana(player),
+            cost,
+            &self.saved_obligations(player),
+            &path,
+            || self.source_reluctance(&model),
+            || self.payment_followups(player, cost, &model),
+        );
+        let chosen: Vec<PaymentStep> = choice
+            .taps
+            .iter()
+            .map(|index| PaymentStep::Fixed(model.sources[*index].permanent))
+            .chain([PaymentStep::Spend])
+            .collect();
+        path = chosen;
         for step in &path {
             if let PaymentStep::Fixed(source) = step {
                 self.tap_fixed_mana_source(player, *source);
             }
         }
-        self.record_mana_payment(player, cost, &model, &path);
 
         Ok(())
     }
@@ -2346,22 +2280,6 @@ impl Game {
             .into_iter()
             .skip(1)
             .collect()
-    }
-
-    fn capture_payment_outcomes(
-        &mut self,
-        player: PlayerId,
-        cost: &ManaCost,
-        model: &PaymentModel,
-        path: &[PaymentStep],
-    ) {
-        if let Some(capture) = &self.mana_payment_shapes {
-            let tail = self.saved_obligations(player);
-            let probe = self.payment_probe(player, cost, model, path);
-            let row =
-                model.probed_outcomes(self.pooled_mana(player), cost, capture.cap, &tail, probe);
-            self.mana_payment_shapes.as_mut().unwrap().rows.push(row);
-        }
     }
 
     /// How reluctantly the smart payer taps each of `model`'s sources, read
@@ -2403,8 +2321,8 @@ impl Game {
             .collect()
     }
 
-    /// What a payment's source choice is judged against, for the smart payer
-    /// and the offline capture alike. Hand cards come first: each other
+    /// Bounded mana-cost options for automatic source preference. Hand costs
+    /// are deduplicated; this is not a count of playable cards. Each other
     /// castable card in the payer's hand at its cost with default cast
     /// choices, less one copy of the spell being paid for, which is still in
     /// hand at this boundary. Then each non-mana battlefield ability of a
@@ -2416,19 +2334,20 @@ impl Game {
     /// source, which neither pays for the ability nor survives a payment
     /// that taps it. Timing within the turn, targets and the other costs
     /// (sacrifice, counted taps, crew, discard, waterbend taps) are not
-    /// checked, as for hand cards. The ability being paid for is dropped when
-    /// it cannot be activated again this turn.
+    /// checked, as for hand cards. Single-use abilities matching the paid
+    /// cost are excluded by cost equality, not activation identity; this
+    /// can also exclude another source with the same cost.
     fn payment_followups(
         &self,
         player: PlayerId,
         cost: &ManaCost,
         model: &PaymentModel,
-    ) -> outcomes::PaymentProbe {
+    ) -> tap_choice::PaymentProbe {
         let mut paying = match &cost.purpose {
             SpendingContext::Cast(spell) => Some(spell.clone()),
             _ => None,
         };
-        let mut probe = outcomes::PaymentProbe::default();
+        let mut probe = tap_choice::PaymentProbe::default();
         let mut instant = Vec::new();
         for card in self.state.zone_cards(ZoneType::Hand, player) {
             let object_id = self.state.object_of(card);
@@ -2436,7 +2355,8 @@ impl Game {
             if !object.types.is_castable() {
                 continue;
             }
-            let Some(followup) = self.effective_spell_cost(player, object_id, Default::default(), None)
+            let Some(followup) =
+                self.effective_spell_cost(player, object_id, Default::default(), None)
             else {
                 continue;
             };
@@ -2456,14 +2376,14 @@ impl Game {
                 }
             }
         }
-        probe.followups.truncate(outcomes::FOLLOWUPS);
+        probe.followups.truncate(tap_choice::FOLLOWUPS);
         probe.instant = instant
             .iter()
-            .take(outcomes::FOLLOWUPS)
+            .take(tap_choice::FOLLOWUPS)
             .enumerate()
             .fold(0, |set, (i, timing)| set | u64::from(*timing) << i);
         probe.hand = match probe.followups.len() {
-            outcomes::FOLLOWUPS => u64::MAX,
+            tap_choice::FOLLOWUPS => u64::MAX,
             cards => (1 << cards) - 1,
         };
         probe.tapping = vec![None; probe.followups.len()];
@@ -2486,7 +2406,7 @@ impl Game {
                 continue;
             }
             for (ability_index, ability) in view.activated_abilities.iter().enumerate() {
-                if probe.followups.len() == outcomes::FOLLOWUPS {
+                if probe.followups.len() == tap_choice::FOLLOWUPS {
                     return probe;
                 }
                 let single_use = ability.tap_source
@@ -2518,68 +2438,6 @@ impl Game {
             }
         }
         probe
-    }
-
-    /// `payment_followups` with the automatic source set, for the capture:
-    /// the fixed sources tapped before the first spend. An upfront fee's
-    /// witness goes on to pay the saved callers, whose taps are not this
-    /// payment's.
-    fn payment_probe(
-        &self,
-        player: PlayerId,
-        cost: &ManaCost,
-        model: &PaymentModel,
-        path: &[PaymentStep],
-    ) -> outcomes::PaymentProbe {
-        let mut probe = self.payment_followups(player, cost, model);
-        probe.automatic = Some(
-            path.iter()
-                .take_while(|step| !matches!(step, PaymentStep::Spend))
-                .filter_map(|step| match step {
-                    PaymentStep::Fixed(id) => model
-                        .sources
-                        .iter()
-                        .position(|source| source.permanent == *id),
-                    _ => None,
-                })
-                .collect(),
-        );
-        probe
-    }
-
-    /// Attribute this automatic prefix without changing it: over-tapped when
-    /// some tapped source `is_surplus`. No search runs for exact pools.
-    fn record_mana_payment(
-        &mut self,
-        player: PlayerId,
-        cost: &ManaCost,
-        model: &PaymentModel,
-        path: &[PaymentStep],
-    ) {
-        let pool = self.pooled_mana(player);
-        let over_tapped = pool.usable_total(cost) > u16::from(cost.mana_value) && {
-            let tail = self.saved_obligations(player);
-            // Only saved callers read the board, which is then the tapped one.
-            let after = (!tail.is_empty()).then(|| self.payment_model(player, None));
-            let board = after.as_ref().unwrap_or(model);
-            path.iter()
-                .take_while(|step| !matches!(step, PaymentStep::Spend))
-                .any(|step| {
-                    let PaymentStep::Fixed(id) = step else {
-                        return false;
-                    };
-                    let output = model
-                        .sources
-                        .iter()
-                        .find(|source| source.permanent == *id)
-                        .and_then(|source| source.fixed.as_ref())
-                        .expect("fixed witness source has an output");
-                    board.is_surplus(&pool, output, cost, &tail)
-                })
-        };
-        self.mana_payment_stats.payments += 1;
-        self.mana_payment_stats.over_tapped += usize::from(over_tapped);
-        self.mana_payment_stats.latest_over_tapped = over_tapped;
     }
 
     /// Commit precisely the selected unit, retaining its expiry identity.
@@ -2680,22 +2538,8 @@ impl Game {
                 let choices = self.mana_spend_choices(player, &cost);
                 let index = match selected.take() {
                     Some(index) => index,
-                    None if choices.len() == 1
-                        || (self.mana_payment_stats.automatic && !choices.is_empty()) =>
-                    {
-                        0
-                    }
-                    None if !choices.is_empty() => {
-                        // The player is offered this pip's units.
-                        if let Some(capture) = &mut self.mana_payment_shapes {
-                            if let Some(row) = capture.rows.last_mut() {
-                                row.spend_offers.push(choices.len());
-                            }
-                        }
-                        self.mana_payment_stats.spend_decisions_over_tapped +=
-                            usize::from(self.mana_payment_stats.latest_over_tapped);
-                        return Ok(());
-                    }
+                    None if choices.len() == 1 => 0,
+                    None if !choices.is_empty() => return Ok(()),
                     None => return Err(AgentError("no feasible mana spending choice".into())),
                 };
                 let choice = choices
@@ -2914,97 +2758,7 @@ mod tests {
     };
 
     #[test]
-    fn over_tap_diagnostics_keep_production_spending_and_forks() {
-        use crate::flow::{
-            decision::{EffectFrame, PaymentProgress, SpendCompletion},
-            game::Game,
-        };
-        use crate::state::{ability::PaymentCost, game_object::PlayerId, player::PlayerConfig};
-        use std::collections::BTreeMap;
-
-        for (lands, heartbeat, expected_over, expected_choices) in [
-            (vec!["Mountain", "Mountain", "Forest"], false, 1, 0),
-            (vec!["Mountain", "Island", "Forest"], false, 1, 1),
-            (vec!["Forest", "Mountain"], false, 0, 0),
-            (vec!["Forest", "Mountain"], true, 0, 1),
-        ] {
-            let deck = BTreeMap::from([
-                ("Mountain".into(), 8),
-                ("Island".into(), 8),
-                ("Forest".into(), 8),
-                ("Heartbeat of Spring".into(), 4),
-            ]);
-            let mut game = Game::new(
-                vec![
-                    PlayerConfig::new("p0", deck.clone()),
-                    PlayerConfig::new("p1", deck),
-                ],
-                347,
-                true,
-            );
-            let player = PlayerId(0);
-            for land in lands {
-                game.scenario_force_battlefield(player, land, true).unwrap();
-            }
-            if heartbeat {
-                game.scenario_force_battlefield(player, "Heartbeat of Spring", true)
-                    .unwrap();
-            }
-            // {1}{G} needs only one doubled Forest, leaving no surplus.
-            // {2}{G} needs both sources and leaves a genuine color choice.
-            let cost = ManaCost::parse(if heartbeat { "2G" } else { "1G" });
-            // The diagnostic describes the first witness; the chosen taps
-            // never include a surplus one.
-            game.mana_payment_stats.smart_tap = false;
-            game.produce_mana(player, &cost).unwrap();
-            assert_eq!(game.mana_payment_stats.payments, 1);
-            assert_eq!(game.mana_payment_stats.over_tapped, expected_over);
-            assert_eq!(
-                game.pooled_mana(player).usable_total(&cost),
-                if heartbeat {
-                    4
-                } else {
-                    2 + expected_over as u16
-                }
-            );
-            let completion = SpendCompletion::Resolution(PaymentProgress::new(
-                player,
-                PaymentCost::Mana(cost.clone()),
-                vec![],
-                vec![],
-            ));
-            game.begin_mana_spend(player, cost, completion, EffectFrame::new(player, vec![]))
-                .unwrap();
-            let offered = game.state.suspended_decision.is_some();
-            assert_eq!(usize::from(offered), expected_choices);
-            if offered {
-                let mut automatic = game.clone();
-                automatic.mana_payment_stats.automatic = true;
-                automatic.advance_mana_spend(None).unwrap();
-                assert!(!matches!(
-                    automatic
-                        .state
-                        .suspended_decision
-                        .as_ref()
-                        .map(|s| &s.decision),
-                    Some(super::Decision::ManaSpend { .. })
-                ));
-                let mut fork = game.clone();
-                fork.advance_mana_spend(Some(0)).unwrap();
-                assert!(game.state.suspended_decision.is_some());
-                game.advance_mana_spend(Some(0)).unwrap();
-            }
-            assert_eq!(
-                game.mana_payment_stats.spend_decisions_over_tapped,
-                expected_over * expected_choices
-            );
-        }
-    }
-
-    /// MTG-347's switch at the engine boundary: off taps today's witness,
-    /// on taps the sources that keep the payer's follow-ups affordable.
-    #[test]
-    fn smart_tap_switch_changes_only_which_fixed_sources_pay() {
+    fn smart_tap_prunes_surplus_and_preserves_mana_options() {
         use crate::flow::game::Game;
         use crate::state::{game_object::PlayerId, player::PlayerConfig};
         use std::collections::BTreeMap;
@@ -3040,10 +2794,9 @@ mod tests {
             }
             (game, lands)
         };
-        // The lands tapped by paying `cost`, by position, and the over-tap count.
-        let tapped = |game: &Game, lands: &[PermanentId], smart: bool, cost: &str| {
+        // The lands tapped by paying `cost`, by position.
+        let tapped = |game: &Game, lands: &[PermanentId], cost: &str| {
             let mut game = game.clone();
-            game.mana_payment_stats.smart_tap = smart;
             game.produce_mana(player, &ManaCost::parse(cost)).unwrap();
             let tapped: Vec<usize> = (0..lands.len())
                 .filter(|index| {
@@ -3053,10 +2806,10 @@ mod tests {
                         .tapped
                 })
                 .collect();
-            (tapped, game.mana_payment_stats.over_tapped)
+            tapped
         };
 
-        // Off is the first witness in source order, exactly.
+        // The first witness remains in source order.
         let (game, lands) = board(
             &["Forest", "Mountain", "Forest"],
             None,
@@ -3074,19 +2827,17 @@ mod tests {
                 PaymentStep::Spend
             ]
         );
-        assert_eq!(tapped(&game, &lands, false, "1G"), (vec![0, 1], 0));
-        // On keeps the Mountain for the Lightning Bolt in hand.
-        assert_eq!(tapped(&game, &lands, true, "1G"), (vec![0, 2], 0));
+        // The chosen payment keeps the Mountain for Lightning Bolt.
+        assert_eq!(tapped(&game, &lands, "1G"), vec![0, 2]);
         let probe = game.payment_followups(player, &ManaCost::parse("1G"), &model);
         assert_eq!(
             (probe.followups.len(), probe.hand, probe.instant),
             (1, 1, 1)
         );
 
-        // Mountain, Mountain, Forest for {1}{G}: three taps off, two on.
+        // Mountain, Mountain, Forest for {1}{G}: two taps instead of three.
         let (game, lands) = board(&["Mountain", "Mountain", "Forest"], None, None);
-        assert_eq!(tapped(&game, &lands, false, "1G"), (vec![0, 1, 2], 1));
-        assert_eq!(tapped(&game, &lands, true, "1G"), (vec![0, 2], 0));
+        assert_eq!(tapped(&game, &lands, "1G"), vec![0, 2]);
 
         // Shivan Dragon's {R} ability is a follow-up like a card in hand.
         let (game, lands) = board(
@@ -3098,8 +2849,7 @@ mod tests {
         let probe = game.payment_followups(player, &ManaCost::parse("1G"), &model);
         assert_eq!((probe.followups.len(), probe.hand), (1, 0));
         assert_eq!(probe.tapping, [None]);
-        assert_eq!(tapped(&game, &lands, false, "1G").0, [0, 1]);
-        assert_eq!(tapped(&game, &lands, true, "1G").0, [0, 2]);
+        assert_eq!(tapped(&game, &lands, "1G"), [0, 2]);
 
         // Reading follow-ups looks at abilities only where a permanent has
         // some: sixteen lands and three Elves read none; the Dragon adds one.
@@ -3123,8 +2873,7 @@ mod tests {
             Some("Shivan Dragon"),
             Some("Llanowar Elves"),
         );
-        assert_eq!(tapped(&game, &lands, false, "1").0, [0]);
-        assert_eq!(tapped(&game, &lands, true, "1").0, [1]);
+        assert_eq!(tapped(&game, &lands, "1"), [1]);
     }
 
     /// The kind of a source breaks ties among payments that keep the same
@@ -3167,9 +2916,8 @@ mod tests {
             (game, sources)
         };
         // The sources tapped by paying `cost`, by position.
-        let tapped = |game: &Game, sources: &[PermanentId], smart: bool, cost: &str| {
+        let tapped = |game: &Game, sources: &[PermanentId], cost: &str| {
             let mut game = game.clone();
-            game.mana_payment_stats.smart_tap = smart;
             game.produce_mana(player, &ManaCost::parse(cost)).unwrap();
             (0..sources.len())
                 .filter(|index| {
@@ -3202,12 +2950,11 @@ mod tests {
                 Reluctance::BasicLand,
             ]
         );
-        // Off taps in source order; on taps the Forest first, then the
+        // Tap the Forest first, then the
         // colorless Secret Tunnel ahead of the green Treetop Village.
-        assert_eq!(tapped(&game, &sources, false, "1"), [0]);
-        assert_eq!(tapped(&game, &sources, true, "1"), [4]);
-        assert_eq!(tapped(&game, &sources, true, "2"), [3, 4]);
-        assert_eq!(tapped(&game, &sources, true, "3"), [2, 3, 4]);
+        assert_eq!(tapped(&game, &sources, "1"), [4]);
+        assert_eq!(tapped(&game, &sources, "2"), [3, 4]);
+        assert_eq!(tapped(&game, &sources, "3"), [2, 3, 4]);
 
         // A generic pip with nothing in hand: the Mountain. With Lightning
         // Bolt in hand the Mountain stays for it and the other source pays.
@@ -3215,19 +2962,19 @@ mod tests {
             for order in [[other, "Mountain"], ["Mountain", other]] {
                 let mountain = usize::from(order[1] == "Mountain");
                 let (game, sources) = board(&order, None);
-                assert_eq!(tapped(&game, &sources, true, "1"), [mountain]);
+                assert_eq!(tapped(&game, &sources, "1"), [mountain]);
                 let (game, sources) = board(&order, Some("Lightning Bolt"));
-                assert_eq!(tapped(&game, &sources, true, "1"), [1 - mountain]);
+                assert_eq!(tapped(&game, &sources, "1"), [1 - mountain]);
             }
         }
 
         // Mana floating in the pool is spent before a source is tapped.
         let (mut game, sources) = board(&["Forest", "Forest", "Forest"], None);
         game.state.mana_pool_mut(player).add(&Mana::parse("G"));
-        assert_eq!(tapped(&game, &sources, true, "1G"), [0]);
-        assert_eq!(tapped(&game, &sources, true, "G"), Vec::<usize>::new());
+        assert_eq!(tapped(&game, &sources, "1G"), [0]);
+        assert_eq!(tapped(&game, &sources, "G"), Vec::<usize>::new());
         game.state.mana_pool_mut(player).add(&Mana::parse("G"));
-        assert_eq!(tapped(&game, &sources, true, "1G"), Vec::<usize>::new());
+        assert_eq!(tapped(&game, &sources, "1G"), Vec::<usize>::new());
     }
 
     thread_local! {
@@ -3275,7 +3022,7 @@ mod tests {
         }
     }
 
-    pub(in crate::flow::mana) fn forests(count: usize) -> PaymentModel {
+    fn forests(count: usize) -> PaymentModel {
         PaymentModel {
             sources: (0..count)
                 .map(|index| source(index, Some("G"), Vec::new()))

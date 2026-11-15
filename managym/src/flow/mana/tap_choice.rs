@@ -4,8 +4,8 @@
 //! need (`is_surplus`) and then, among the payments with no surplus tap,
 //! prefers in order:
 //! 1. the most follow-up costs kept affordable (`Game::payment_followups`),
-//! 2. the most hand cards among them,
-//! 3. the most instant-timing hand cards,
+//! 2. the most distinct hand costs among them,
+//! 3. the most instant-timing hand costs,
 //! 4. the least reluctant sources (`Reluctance`): the fewest taps of the
 //!    most reluctant kind, then of the next kind down, so a basic land pays
 //!    before a land with another ability, a mana rock or a creature,
@@ -24,8 +24,9 @@
 //! outputs still untapped pay it, which is the direct answer
 //! (`PaymentModel::direct`) to a `FixedOnly` question; debug builds assert
 //! the two agree. Mana abilities that must be activated are not counted
-//! towards a follow-up, so on a board with such sources the preference is a
-//! lower bound of the offline probe's, which asks `SourcePolicy::All`.
+//! towards a follow-up. Targets and nonmana costs are not fully checked.
+//! Options may be affordable under different spending remainders; the score does not promise
+//! they all survive the eventual unit choice or are playable.
 //!
 //! Work per payment is bounded, never a subset enumeration over sources:
 //! - Saved obligations (a non-empty tail): prune only. At most one
@@ -51,9 +52,36 @@
 use std::collections::HashSet;
 
 use super::{
-    outcomes::{PaymentProbe, FOLLOWUPS},
     Color, Mana, ManaCost, Obligation, PaymentModel, PaymentStep, SourcePolicy, SourceReservation,
 };
+
+/// The most follow-up costs one payment is judged against.
+pub(crate) const FOLLOWUPS: usize = 64;
+
+/// What a payment's source choice is judged against
+/// (`Game::payment_followups`): distinct hand costs with partial cast checks,
+/// then battlefield ability costs with source reservations, at most
+/// `FOLLOWUPS` together. Bit `i` of `hand` marks cost `i` as a hand cost and
+/// of `instant` as one castable at instant timing. `tapping[i]` is the index
+/// in the model's sources of the permanent an ability taps as its own cost:
+/// that source cannot pay for it, and a payment tapping it loses the ability.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct PaymentProbe {
+    pub followups: Vec<ManaCost>,
+    pub hand: u64,
+    pub instant: u64,
+    pub tapping: Vec<Option<usize>>,
+    /// Permanents whose activated abilities were read to build this list:
+    /// only those that have any.
+    pub ability_sources: usize,
+}
+
+impl PaymentProbe {
+    /// The source follow-up `index` taps for itself, if any.
+    pub(super) fn tapped_by(&self, index: usize) -> Option<usize> {
+        self.tapping.get(index).copied().flatten()
+    }
+}
 
 /// How reluctantly a fixed source is tapped, the least reluctant first
 /// (`Game::source_reluctance`). No fixed source carries a drawback: a fixed
@@ -273,8 +301,8 @@ impl Chooser<'_> {
 
     /// The pools paying the cost from `pooled` can leave, at most
     /// `LEFTOVERS` of them from `SPEND_STATES` spending states. The player
-    /// chooses the units, so a follow-up counts when any of them pays it, as
-    /// in the offline probe. Never empty: when the states run out first, the
+    /// chooses the units, so a follow-up counts when any of them pays it, across
+    /// the enumerated remainders. Never empty: when the states run out first, the
     /// empty pool is a lower bound of every remainder.
     fn leftovers(&self, pooled: &Mana, budget: &mut Budget) -> Vec<Mana> {
         if pooled.total() == u16::from(self.cost.mana_value) {
@@ -543,8 +571,6 @@ impl PaymentModel {
         reluctance: impl FnOnce() -> Vec<Reluctance>,
         followups: impl FnOnce() -> PaymentProbe,
     ) -> TapChoice {
-        #[cfg(feature = "benchmark")]
-        let mut clock = crate::benchmark_payments::SmartTapClock::start();
         let mut chooser = Chooser {
             model: self,
             pool,
@@ -594,8 +620,6 @@ impl PaymentModel {
             }
         }
         taps.sort_unstable();
-        #[cfg(feature = "benchmark")]
-        clock.lap(|metrics| &mut metrics.prune_ns);
         let choice = |taps: Vec<usize>, budget: Budget, followups: usize, stage: Stage| TapChoice {
             taps,
             checks: budget.used,
@@ -622,16 +646,12 @@ impl PaymentModel {
         chooser.reluctance = reluctance();
         debug_assert_eq!(chooser.reluctance.len(), self.sources.len());
         let preferred = chooser.preferred(&taps, &mut budget);
-        #[cfg(feature = "benchmark")]
-        clock.lap(|metrics| &mut metrics.kinds_ns);
         let choice = |taps, budget, followups, stage| TapChoice {
             preferred: preferred.is_some(),
             ..choice(taps, budget, followups, stage)
         };
         chooser.probe = followups();
         chooser.probe.followups.truncate(FOLLOWUPS);
-        #[cfg(feature = "benchmark")]
-        clock.lap(|metrics| &mut metrics.followups_ns);
         let read = chooser.probe.followups.len();
         if read == 0 {
             let taps = preferred.clone().unwrap_or(taps);
@@ -649,8 +669,6 @@ impl PaymentModel {
         let floor = chooser.kinds(preferred.as_deref().unwrap_or(&taps));
         let mut best = score(preferred.as_deref().unwrap_or(&taps), &mut budget);
         if best == bound {
-            #[cfg(feature = "benchmark")]
-            clock.lap(|metrics| &mut metrics.score_ns);
             let taps = preferred.clone().unwrap_or(taps);
             return choice(taps, budget, read, Stage::WitnessAtBound);
         }
@@ -662,8 +680,6 @@ impl PaymentModel {
                 taps.clone_from(preferred);
             }
         }
-        #[cfg(feature = "benchmark")]
-        clock.lap(|metrics| &mut metrics.score_ns);
 
         budget.limit = Some(budget.used + CHECKS);
         let classes = chooser.classes();
@@ -689,17 +705,14 @@ impl PaymentModel {
             chooser.pooled(&search.taps).can_pay(cost),
             "the chosen sources pay the cost"
         );
-        #[cfg(feature = "benchmark")]
-        clock.lap(|metrics| &mut metrics.search_ns);
         choice(search.taps, search.budget, read, Stage::ClassSearch)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Reluctance, Stage, TapChoice, CHECKS, LEFTOVERS, SPEND_STATES};
+    use super::{PaymentProbe, Reluctance, Stage, TapChoice, CHECKS, LEFTOVERS, SPEND_STATES};
     use crate::flow::mana::{
-        outcomes::PaymentProbe,
         tests::{source, tapping_ability, SEARCHED},
         ManaActivation, Obligation, PaymentModel, SourcePolicy,
     };

@@ -124,13 +124,6 @@ impl Game {
         }
 
         let mut game = Self {
-            mana_payment_shapes: None,
-            // The experiment job records automatic spending in its command;
-            // the switch is read here once and cloned with the game.
-            mana_payment_stats: crate::flow::mana::ManaPaymentStats::new(
-                std::env::var("MANAGYM_EXPERIMENT_AUTOSPEND").as_deref() == Ok("1"),
-                true,
-            ),
             derived: Default::default(),
             payment_sources: Default::default(),
             state: TrackedState::new(GameState {

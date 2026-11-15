@@ -11,6 +11,7 @@ from tempfile import TemporaryDirectory
 from typing import Any, Iterable, Mapping
 
 from fastapi.testclient import TestClient
+from starlette.testclient import WebSocketTestSession
 
 from conformance.authored_match_receipt import DEFAULT_RECEIPT_PATH
 import managym
@@ -462,6 +463,21 @@ class _FrozenVillainPolicy:
         return int(row["command"]["offer_id"])
 
 
+def _receive_outcome(websocket: WebSocketTestSession) -> dict[str, Any]:
+    """Progress messages do not advance the retained Command tape."""
+    while True:
+        message = websocket.receive_json()
+        if message["type"] == "work_status":
+            continue
+        if (
+            message["type"] == "command_outcome"
+            and message.get("status") == "accepted"
+            and (message.get("work") or {}).get("state") == "running"
+        ):
+            continue
+        return message
+
+
 def _run_live(
     decisions: list[dict[str, Any]],
 ) -> tuple[dict[str, Any], CanonicalReplayV1]:
@@ -492,7 +508,7 @@ def _run_live(
                             },
                         }
                     )
-                    payload = websocket.receive_json()
+                    payload = _receive_outcome(websocket)
                     hero_rows = iter(row for row in decisions if int(row["actor"]) == 0)
                     while payload["frame"]["status"] != "game_over":
                         row = next(hero_rows)
@@ -507,7 +523,7 @@ def _run_live(
                         websocket.send_json(
                             {"type": "command", "command": deepcopy(row["command"])}
                         )
-                        payload = websocket.receive_json()
+                        payload = _receive_outcome(websocket)
                         _equal(
                             "live",
                             int(row["from_revision"]),

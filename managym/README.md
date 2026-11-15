@@ -584,32 +584,20 @@ retired codes 5, 6 and 7 keep their historical meanings.
 observation projection and hidden-world sampling share that chain for caller
 ancestry and inspection permissions.
 
-### Offline payment-shape measurement
+### Automatic source preference
 
-After `Env.reset`, `capture_payment_shapes(cap)` enables an offline diagnostic
-outside policy inputs and rules state. Replay the game, then call
-`take_payment_shapes_json()` once to drain its rows. A reset disables capture.
-The cap (2–65,536) bounds source-subset and receipt traversal work per payment;
-`cap_hit` marks incomplete lower bounds. The diagnostic enumerates fixed-source
-payments using the existing payment model and native unit spending. It records
-untapped-source capabilities, floating pools, receipts, exact source identities
-and today's offered spend steps separately. It also counts capability and exact
-identity outcomes over non-redundant source sets: no selected source's whole
-output can be removed while keeping the current cost pooled and saved callers
-feasible on the post-tap board (the over-tap counter's criterion). Unavoidable
-surplus from an indivisible source remains. All counts share the same traversal
-and cap; a cap hit makes every count a lower bound, including non-redundant
-counts. Saved payment obligations must stay
-feasible. Activated mana abilities are counted as present but are not enumerated.
+Automatic payment removes unnecessary fixed-source taps and uses a bounded
+mana-cost heuristic to prefer the remaining sources (`flow/mana/tap_choice.rs`).
+It scores up to 64 distinct hand-cost and ability records, with hand costs then
+instant-timing hand costs breaking ties. Targets and other costs can still
+prevent a follow-up; alternatives can be affordable under different possible
+pool remainders. This is not a count of playable cards or a global optimum.
+Single-use abilities matching the paid cost are excluded by cost equality,
+which can also omit another source's equal-cost ability.
 
-`MANAGYM_EXPERIMENT_AUTOSPEND=1` is MTG-347's temporary comparison arm. It selects
-the first feasible pooled unit and preserves automatic source order, saved costs
-and receipts. The experiment's job command records the switch; replay and
-heuristic evaluation must use the same value. Ordinary runs leave it unset.
-This switch is experiment scaffolding, pending the report's design review.
-
-The automatic payer taps no fixed source the cost does not need and, among such
-payments, the sources that leave the most of the payer's other hand cards and
-battlefield abilities affordable; ties go to the least reluctant sources (basic
-lands, then other lands, lands with another ability, other permanents,
-creatures), then to colorless ones (`flow/mana/tap_choice.rs`).
+Further ties prefer basic lands, other lands, lands with activated abilities,
+other permanents, then creatures; within those tiers, colorless output is
+preferred. The class search stops after 1024 arithmetic checks and keeps a
+payable candidate. Payments with saved obligations only receive surplus
+pruning. Activated mana abilities remain deliberate actions, and native
+spending choices still determine the exact mana receipt.
