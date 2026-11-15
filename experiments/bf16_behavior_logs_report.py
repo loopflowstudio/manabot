@@ -15,7 +15,7 @@ from dataclasses import asdict, dataclass
 import json
 from pathlib import Path
 
-from etude.run.storage import storage_from_uri
+from etude.storage import storage_from_uri
 from etude.train.read import read
 import matplotlib
 

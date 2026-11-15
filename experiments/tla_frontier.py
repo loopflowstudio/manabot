@@ -48,7 +48,7 @@ from statistics import median
 from tempfile import TemporaryDirectory
 from typing import Any, Literal, TypedDict
 
-from etude.eval.match import Row, Tables
+from etude.eval.match import Tables
 from etude.eval.records import (
     Benchmark,
     Code,
@@ -58,12 +58,13 @@ from etude.eval.records import (
     Model,
     Seating,
 )
-from etude.experiment import Checkpoint, ExperimentState, TrainingRun
-from etude.jobs import evaluation
+from etude.eval.run import Row
+from etude.experiment import Checkpoint, TrainingRun
+from etude.jobs import EvalJob, ExperimentState
 from etude.launch import client
 from etude.launch.records import Job, Run
 from etude.report import Report, Score
-from etude.run.storage import Storage
+from etude.storage import Storage
 from etude.train.read import RunData
 from pydantic import Field
 import torch
@@ -73,7 +74,7 @@ from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND
 from manabot.eval.admission import register_checkpoint
 from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.models import EvaluationKey
-from manabot.experiment.job import TOOLCHAIN_ENV, TrainingJob, machine_setup
+from manabot.experiment.job import TrainingJob, machine_setup
 from manabot.infra.artifacts import local_checkpoint_file
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import StrictModel, canonical_sha256, file_sha256
@@ -356,7 +357,7 @@ def capped_runs(
     )
 
 
-def runs(revision: str) -> list[Run]:
+def training_jobs(revision: str) -> list[Run]:
     """One capped GPU allocation per size; no automatic retry or budget expansion."""
     regimes, protocol = frozen()
     return [
@@ -890,7 +891,7 @@ def comparison_schedule(
     return progress + schedule
 
 
-def eval(state: ExperimentState) -> list[Job]:
+def eval_jobs(state: ExperimentState) -> list[Job]:
     """Play the available comparisons; Etude owns already-delivered matches."""
     if state.experiment != EXPERIMENT:
         raise ValueError("frontier evaluation requires this experiment's runs")
@@ -947,11 +948,14 @@ def evaluation_jobs(
     """
     if not matchups:
         return []
-    job = evaluation(
-        Benchmark(name=pass_name(name), environment=env, seatings=tuple(matchups)),
+    job = EvalJob(
+        tournament=Benchmark(
+            name=pass_name(name), environment=env, seatings=tuple(matchups)
+        ),
         # Etude discovers this file with runpy; callbacks need an importable
         # module identity even when eval itself came from <run_path>.
         play=tla_frontier.play,
+        extras=("evaluation",),
         workers=EVALUATION_WORKERS,
         max_hours=EVALUATION_HOURS,
         # One pass's ceiling across its attempts; the operator keeps the
@@ -963,13 +967,7 @@ def evaluation_jobs(
         max_attempts=EVALUATION_ATTEMPTS,
         setup=machine_setup(" --extra evaluation"),
     )
-    # Etude's default command omits the extra holding its result writer (duckdb).
-    command = job.command.replace(
-        "uv run python",
-        f"{TOOLCHAIN_ENV}\nuv run --locked --extra evaluation python",
-        1,
-    )
-    return [job.model_copy(update={"command": command})]
+    return [job]
 
 
 # -- Evaluation callback ------------------------------------------------------

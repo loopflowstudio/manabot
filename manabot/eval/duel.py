@@ -21,7 +21,7 @@ from etude.eval.records import (
     Seating,
 )
 from etude.eval.tournament import hold
-from etude.run.records import ArtifactRef
+from etude.records import ArtifactRef
 import numpy as np
 from pydantic import BaseModel
 

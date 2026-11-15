@@ -15,11 +15,11 @@ import math
 from pathlib import Path
 import re
 from statistics import mean
-from typing import Literal
+from typing import Annotated, Literal
 
-from etude.run.records import RunFile as EtudeRunFile
+from etude.records import RunRecord as EtudeRunRecord
 from matplotlib.figure import Figure
-from pydantic import ConfigDict, JsonValue, TypeAdapter
+from pydantic import ConfigDict, Discriminator, JsonValue, Tag, TypeAdapter
 
 from manabot.eval.monitor import MonitorResult
 from manabot.experiment.execution import ExperimentRun
@@ -40,7 +40,25 @@ from manabot.training.update_metrics import (
     stage_rows,
 )
 
-_RUN_RECORD = TypeAdapter(RetainedRun | EtudeRunFile)
+
+def _record_kind(value: object) -> Literal["training", "etude"]:
+    # Historical SDK declarations are nested; current SDK records carry schema 2.
+    # A malformed training export must fail its own schema, not become an SDK run.
+    if isinstance(value, EtudeRunRecord) or (
+        isinstance(value, dict)
+        and ("declaration" in value or value.get("schema_version") == 2)
+    ):
+        return "etude"
+    return "training"
+
+
+_RUN_RECORD = TypeAdapter(
+    Annotated[
+        Annotated[RetainedRun, Tag("training")]
+        | Annotated[EtudeRunRecord, Tag("etude")],
+        Discriminator(_record_kind),
+    ]
+)
 
 
 class RetainedExecution(ExperimentRun):

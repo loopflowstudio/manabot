@@ -25,17 +25,17 @@ One experiment is one module beside its report:
 `experiments/<name>.py` and `experiments/<name>.md`. The module holds the
 recipes, built from [`manabot.recipes.builders`](../manabot/recipes/builders.py),
 and anything only this experiment needs to run and report; `manabot/` keeps the
-reusable instruments. A file defining `report()` or `eval(state)` is an
+reusable instruments. A file defining `report()` or `eval_jobs(state)` is an
 [Etude](https://github.com/loopflowstudio/etude) experiment, and its training
 runs track under its stem:
 
 ```sh
-uv run etude launch experiments/seat_comparison.py --revision COMMIT --cohort seats-1 --rent l4 --max-usd 60
+uv run etude launch experiments/seat_comparison.py --revision COMMIT --rent l4 --usd-per-run 7.27
 uv run etude eval experiments/elemental.py --source r2://manabot/jobs     # play what is new
 uv run etude report experiments/elemental.py --source r2://manabot/jobs --serve  # draw what it played
 ```
 
-`runs()` names the training runs, `eval(state)` returns the seatings still
+`training_jobs()` names the training runs, `eval_jobs(state)` returns the seatings still
 wanted so repeated passes play only new ones, and `report()` draws the figures.
 A seating is Etude's rule for who meets whom (`etude.eval.records.Seating`):
 its players in seat order, the conditions they play under and the tags a
@@ -43,26 +43,26 @@ report selects them by. A `Benchmark` holds `seatings`, and a checkpoint says
 where it stood on each clock in `Checkpoint.at`, as in
 `checkpoint.at["updates"]`.
 
-These commands need etude-sdk 0.3.2 or later, which the lock pins. Launch,
-status and eval commands keep their state in a launcher database named for its
-schema version: etude-sdk 0.3.2 uses `~/.etude/launcher-17.db`. A database an
-older client wrote, such as the unversioned `~/.etude/launcher.db` of 0.2.x,
-stays where it is and is never opened, so both clients work from one home:
+Install the locked Etude client before using the shared launcher:
 
 ```sh
-uv run etude status                                        # launcher-17.db
-uv run --with "etude-sdk[s3,eval]==0.2.15" etude status    # launcher.db
+uv sync --locked --extra artifacts --extra reports
+uv run etude database status
+uv run etude status
 ```
 
-There is no migration between them. A new database starts empty: `etude
-status` and `etude runs` list nothing, and launching needs its providers,
-storages and on-demand machines added again. A run stays with the client that
-launched it, so follow or stop it with that version, and keep the older file
-while its runs are still referenced, since it is the only record of how they
-ended. `etude report` and `etude launch --quote` rent nothing; a report reads
-the job store and needs no launcher database. To leave `~/.etude` untouched
-altogether, give a command its own home:
-`ETUDE_HOME=$(mktemp -d) uv run etude ...`.
+The lock pins the merged single-database client. All experiments and compatible
+branches use `~/.etude/launcher.sqlite`; ordinary reads validate its schema
+without migrating it. When status reports pending migrations, use
+`uv run etude database upgrade` explicitly. Upgrades retain recovery backups
+and never launch or stop a worker. Installing an SDK does not migrate data.
+This machine's historical files have already been consolidated. Keep older
+clients confined to isolated homes: they use different files and would split
+the live ledger again. To leave `~/.etude` untouched, give a fixture command
+its own home: `ETUDE_HOME=$(mktemp -d) uv run etude ...`.
+
+`etude report` and `etude launch --quote` rent nothing; a report reads the job
+store and needs no launcher database.
 Raw results live in the artifact store, not in git; `experiments/data.manifest.json`
 records each file's digest ([data](../experiments/README.md#data)).
 
@@ -312,7 +312,7 @@ For an experiment whose evaluations were played from the same revision,
 `uv run etude report <experiment file> --source r2://manabot/jobs --serve`
 draws it. A finished experiment's page is rebuilt from the revision that ran
 it, or from a file with its `report()` and no `eval` over its own run prefixes:
-`etude report` still calls `eval(state)`, and a seating derived from today's
+`etude report` still calls `eval_jobs(state)`, and a seating derived from today's
 source digest no longer agrees with the held runs. The page then draws the
 tournament as its eval runs recorded it and says so in a note at the top
 (`tournament_conflict`).
@@ -344,7 +344,7 @@ The learning schedule opens ML details.
 | `job_labels(jobs)` | A display name per job: the size word you give, then the model's width, and its attention layers when they differ from the first job's. Small (width 64), Large (width 160, 8 layers). Etude appends each job's seed count. |
 | `against_earlier_self(title, tags)` | Each checkpoint against an earlier checkpoint of its own job, a line per job. A point counts every such match its checkpoint sat in; a checkpoint that was also the earlier partner of a later one counts that role too, until Etude can score only the later side. |
 | `against_fixed(title, tags)` | Each checkpoint against one fixed player, such as the heuristic, a line per job. The tags select the seatings that hold that player. |
-| `head_to_head(title, seatings)` | Two jobs against each other, as one line: the first-seated job's score, drawn where its checkpoint stood. `seatings` are the names `eval(state)` gave the pairs, one per point, each played once. An empty sequence raises `ValueError`. |
+| `head_to_head(title, seatings)` | Two jobs against each other, as one line: the first-seated job's score, drawn where its checkpoint stood. `seatings` are the names `eval_jobs(state)` gave the pairs, one per point, each played once. An empty sequence raises `ValueError`. |
 | `learning_schedule(regimes)` | Two charts, the configured learning rate and policy damping of each job on the update clock through its damping horizon, with each run's latest update marked. These are plans, not measurements. |
 
 Every helper returns an ordinary Etude panel, so a report mixes them with its
@@ -358,7 +358,7 @@ pair's hours.
 one seat only when every part of it is `Matches(seating=NAME)`. A tag is
 always drawn per job, both seats, so a tagged head-to-head shows two lines
 mirrored about 0.5. The names must be the recorded ones, character for
-character, so the frontier formats them with the functions its `eval(state)`
+character, so the frontier formats them with the functions its `eval_jobs(state)`
 schedule uses.
 
 `report()` receives no state, so it cannot work out which pairs were played.
@@ -372,7 +372,7 @@ A Curve panel names seating 'w160l8 u1200 vs w64 u1200', which nothing holds.
 ```
 
 and the chart is missing that point: correct the name, or drop it if the pair
-was never played. Renaming a seating in `eval(state)` changes its tournament
+was never played. Renaming a seating in `eval_jobs(state)` changes its tournament
 definition and the name reports select; the match keys still depend on the
 players, groups, conditions and game count. For a finished experiment, correct
 the report selection and preserve the recorded seating names.

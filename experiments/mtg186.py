@@ -24,7 +24,7 @@ import json
 from pathlib import Path
 import subprocess
 
-from etude.launch.client import queue_cohort, quote
+from etude.launch.client import queue, quote
 from etude.launch.records import Run
 
 from experiments.elemental_grid import (
@@ -186,12 +186,14 @@ def main() -> None:
         parser.error("quote and launch need --revision")
     runs = list(train(_clean_revision(args.revision)))
     remaining = CAP_USD - sum(LAUNCHES.values())
-    priced = quote(runs, rent=RENT, cohort=LAUNCH, max_usd=remaining)
+    if remaining < JOB_USD * len(runs):
+        raise SystemExit("remaining campaign budget cannot cover these jobs")
+    priced = quote(runs, rent=RENT)
     print(priced.model_dump_json(indent=2))
     if priced.max_usd > JOB_USD:
         raise SystemExit(f"quote {priced.max_usd} exceeds the job's ${JOB_USD}")
     if args.command == "launch":
-        print(queue_cohort(LAUNCH, runs, rent=RENT, max_usd=remaining))
+        print(queue(runs, rent=RENT))
 
 
 if __name__ == "__main__":

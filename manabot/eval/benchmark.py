@@ -13,7 +13,7 @@ from functools import partial
 import os
 from pathlib import Path
 
-from etude.eval.match import Row, Tables
+from etude.eval.match import Tables
 from etude.eval.records import (
     Benchmark,
     CheckpointKey,
@@ -24,8 +24,9 @@ from etude.eval.records import (
     Match,
     Seating,
 )
+from etude.eval.run import Row
 from etude.eval.tournament import hold
-from etude.run.records import ArtifactRef
+from etude.records import ArtifactRef
 from pydantic import BaseModel
 
 from manabot.eval.endpoint import InferenceEndpoint, callback_allocation

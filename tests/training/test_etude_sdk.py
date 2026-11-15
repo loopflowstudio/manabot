@@ -10,7 +10,7 @@ from urllib.parse import unquote, urlparse
 
 from etude.train.read import read_all
 from etude.train.records import Step
-from etude.train.run import track
+from etude.train.tracking import track
 import pytest
 
 from manabot.backends import resolve
@@ -95,5 +95,5 @@ def test_run_context_obeys_launcher_identity_and_directory(
     assert len(data) == 1
     assert data[0].name == "fixture-launched-run"
     assert data[0].file is not None
-    assert "resolved-recipe" in (data[0].file.declaration.config_json or "")
+    assert "resolved-recipe" in (data[0].file.config_json or "")
     assert not (tmp_path / "local" / "launched-fixture" / "etude").exists()

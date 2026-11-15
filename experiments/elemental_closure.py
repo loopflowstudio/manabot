@@ -12,16 +12,16 @@ experiments/protocols/closure-lambda-elemental-v1.md. Recipe:
     uv run etude report experiments/elemental_closure.py --source r2://manabot/jobs --open
 """
 
-from etude.experiment import ExperimentState
+from etude.jobs import ExperimentState
 from etude.launch.records import Job, Run
 from etude.report import Report
 
 from experiments.elemental_variants import closure_comparison
 from experiments.learning_signal import (
     ELEMENTAL_PAIRS,
+    build_training_jobs,
     evaluation_jobs,
     learning_report,
-    training_runs,
 )
 from manabot.training.regime import BatchClosure
 
@@ -35,7 +35,7 @@ ARMS: tuple[BatchClosure, ...] = ("exact-quota", "complete-games")
 BASELINE = "elemental-closure-exact-quota-v1"
 
 
-def runs(
+def training_jobs(
     revision: str,
     updates: int = UPDATES,
     hours: float = HOURS,
@@ -45,7 +45,7 @@ def runs(
 ) -> list[Run]:
     """`arms` and `seeds` are comma-separated, so one arm launches all-or-nothing."""
     chosen = tuple(arm for arm in ARMS if arm in arms.split(","))
-    return training_runs(
+    return build_training_jobs(
         (closure_comparison(arm, updates) for arm in chosen),
         updates=updates,
         revision=revision,
@@ -56,7 +56,7 @@ def runs(
     )
 
 
-def eval(state: ExperimentState) -> list[Job]:
+def eval_jobs(state: ExperimentState) -> list[Job]:
     return evaluation_jobs(
         state, "elemental-closure-v1", ELEMENTAL_PAIRS, hours=1.0, usd=1.2
     )

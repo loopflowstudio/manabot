@@ -27,7 +27,7 @@ from typing import Literal
 import warnings
 
 from etude.eval.records import Seating
-from etude.experiment import ExperimentState
+from etude.jobs import ExperimentState
 from etude.launch.records import Job, Run
 from etude.report import Curve, Matches, Report, Score
 import numpy as np
@@ -40,8 +40,8 @@ from experiments.learning_signal import (
     FINALIZATION_SECONDS,
     SETUP_SECONDS,
     benchmark_jobs,
+    build_training_jobs,
     scheduled_matchups,
-    training_runs,
 )
 from manabot.backends.torch.arrays import on_device
 from manabot.backends.torch.policy import ActorCritic
@@ -97,7 +97,7 @@ def require_single_axis(baseline: TrainingRegime, candidate: TrainingRegime) -> 
         )
 
 
-def runs(
+def training_jobs(
     revision: str,
     hours: float = HOURS,
     usd_per_run: float = USD_PER_RUN,
@@ -113,7 +113,7 @@ def runs(
         raise ValueError(f"unknown arms {sorted(wanted - set(ARMS))}")
     reference, candidate = (arm(version) for version in ARMS)
     require_single_axis(reference, candidate)
-    return training_runs(
+    return build_training_jobs(
         tuple(
             regime
             for version, regime in zip(ARMS, (reference, candidate), strict=True)
@@ -131,7 +131,7 @@ def runs(
 # --------------------------------------------------------------------------- evaluation
 
 
-def eval(state: ExperimentState) -> list[Job]:
+def eval_jobs(state: ExperimentState) -> list[Job]:
     return benchmark_jobs(
         evaluation_matchups(state),
         EVALUATION,

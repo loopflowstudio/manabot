@@ -29,7 +29,7 @@ at its last export.
 
 A job's runs track under its `experiment`, the experiment file's stem
 (`experiments/elemental.py` is `elemental`), so `etude eval` and `etude report`
-find them. Etude's launcher does not yet hand the job file's name to its runs.
+find them. Etude preserves that experiment in the worker environment.
 """
 
 from datetime import datetime, timezone
@@ -42,12 +42,14 @@ import signal
 import time
 from types import FrameType
 
+from etude.jobs import TrainingJob as EtudeTrainingJob
 from etude.launch.records import Input, Job
-from etude.run.storage import SAFE_NAME
+from etude.storage import SAFE_NAME
 from pydantic import Field, model_validator
 
 from manabot.experiment.numerics import check_numerics
 from manabot.infra.source import SourceBundle, bind_etude_source, bundle_at
+from manabot.policy.protocol import Backend
 from manabot.training.execution import execute_regime, validate_regime
 from manabot.training.records import TrainingRun
 from manabot.training.regime import (
@@ -305,11 +307,12 @@ class TrainingJob(Strict):
             raise ValueError("job lifetime must cover regime and finalization reserve")
         # The numerics gate runs the frozen pytest suite from the job's own venv.
         extras = " --extra dev" if spec.validate_numerics else ""
-        return Job(
+        job = EtudeTrainingJob(
             name=spec.regime.id,
+            train=train,
+            config=spec,
             setup=machine_setup(extras),
-            command=f"{TOOLCHAIN_ENV}\nuv run --locked{extras} python -m manabot.experiment.job",
-            config=spec.model_dump_json(),
+            extras=("dev",) if spec.validate_numerics else (),
             repo=str(repo.resolve()),
             revision=revision,
             until=f"updates={spec.updates}",
@@ -328,12 +331,32 @@ class TrainingJob(Strict):
             else ()
             if spec.continuation is None
             else spec.continuation.inputs(),
-        )
+        ).plain()
+        return job.model_copy(update={"command": f"{TOOLCHAIN_ENV}\n{job.command}"})
+
+
+def train(config: TrainingJob) -> None:
+    """Run the frozen learner through Etude's typed Python call entry point."""
+    # Typed worker entry point selects the backend only when invoked.
+    from manabot.backends import resolve
+
+    signal.signal(signal.SIGTERM, _interrupt)
+    _run_worker(config, backend=resolve("torch"))
 
 
 def run_worker() -> TrainingRun:
-    """Consume SDK worker inputs, retaining failed runs without automatic retries."""
+    """Read a worker invocation from its command-line environment."""
+    # Command-line entry point selects the backend only when invoked.
     from manabot.backends import resolve
+
+    return _run_worker(
+        TrainingJob.model_validate_json(Path(os.environ["ETUDE_CONFIG"]).read_text()),
+        backend=resolve("torch"),
+    )
+
+
+def _run_worker(spec: TrainingJob, *, backend: Backend) -> TrainingRun:
+    """Consume SDK worker inputs, retaining failed runs without automatic retries."""
 
     environment = os.environ
     for key in ("ETUDE_RUN", "ETUDE_TRACK_DIR"):
@@ -343,9 +366,6 @@ def run_worker() -> TrainingRun:
     # restore collector/optimizer state; RunContext refuses a retry likewise.
     if environment.get("ETUDE_CONTINUES"):
         raise ValueError("policy artifacts cannot resume collector/optimizer state")
-    spec = TrainingJob.model_validate_json(
-        Path(environment["ETUDE_CONFIG"]).read_text()
-    )
     if (
         environment.get("ETUDE_UNTIL_CLOCK") != "updates"
         or float(environment["ETUDE_UNTIL_VALUE"]) != spec.updates
@@ -408,7 +428,7 @@ def run_worker() -> TrainingRun:
             stop_path=stop,
             stop_reserve_seconds=spec.stop_reserve,
             training_exposure=spec.training_exposure,
-            backend=resolve("torch"),
+            backend=backend,
         )
     finished = run.status == "completed" and run.updates_through() == spec.updates
     # A wall-bounded stop exported the complete learner state short of target.

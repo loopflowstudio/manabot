@@ -21,7 +21,7 @@ from pathlib import Path
 import re
 from typing import Protocol
 
-from etude.run.listing import runs
+from etude.run import runs
 from etude.train.manifest import StoredBlock
 from etude.train.read import RunData, read
 
@@ -195,10 +195,15 @@ def updates_from_run(data: RunData) -> Updates:
                     resumed = update
                 if values:
                     rows.setdefault(int(update), {}).update(_integral(values))
-        # A later attempt replaces history beyond its resume point, including
-        # when it has no rows. Within an attempt each metric's latest write wins.
+        # Current writers supersede from their first row, inclusive. Historical
+        # writers explicitly resumed after a coordinate. Silent retries keep history.
         if resumed is not None:
-            selected = {u: row for u, row in selected.items() if u <= resumed}
+            inclusive = attempt is None or attempt.first_row
+            selected = {
+                u: row
+                for u, row in selected.items()
+                if u < resumed or (u == resumed and not inclusive)
+            }
         selected.update(rows)
     if any(_RETIRED_OUTCOME_REFERENCE in row for row in selected.values()):
         raise ValueError(
