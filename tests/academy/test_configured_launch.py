@@ -26,6 +26,7 @@ from managym.academy.launch import (
 )
 from managym.academy.opponent import policy_registry
 from managym.search import SearchConfig
+from tests.academy.socket_messages import settled_message
 from tests.academy.test_policy_search_play import SearchFactory
 
 
@@ -239,7 +240,7 @@ def test_native_deck_diagnostics_and_unknown_launch(
     assert "2" in error.value.message
     with TestClient(server.app).websocket_connect("/ws/play") as ws:
         ws.send_json({"type": "new_game", "config": {"launch": "expired"}})
-        assert "launch_unknown" in ws.receive_json()["message"]
+        assert "launch_unknown" in settled_message(ws)["message"]
 
 
 def test_lifecycle_exclusive_and_releases_port(academy: Academy) -> None:

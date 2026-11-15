@@ -26,7 +26,7 @@
   import Feedback from '$lib/components/Feedback.svelte';
   import GameLog from '$lib/components/GameLog.svelte';
   import PresentationHistory from '$lib/components/PresentationHistory.svelte';
-  import SearchThinking from '$lib/components/SearchThinking.svelte';
+  import WorkStatus from '$lib/components/WorkStatus.svelte';
   import StopsPanel from '$lib/components/StopsPanel.svelte';
   import SharedTablePanel from '$lib/components/SharedTablePanel.svelte';
   import { policyChoice, gameStore, type GameStore } from '$lib/game.svelte';
@@ -204,10 +204,9 @@
 
   const gameActive = $derived(gameStore.observation !== null && !gameStore.gameOver && !gameStore.resumeFailed);
   const pilotCanAct = $derived(gameStore.hasCapability('submit_live_command'));
-  const thinkingSearch = $derived(gameStore.newGamePending ? gameStore.searchConfig : gameStore.activeSearchConfig);
   const participantStudying = $derived(gameStore.restoredDecision !== null);
   const tablePresentation = $derived(participantStudying ? studyPresentationPlayer : presentationPlayer);
-  const inputReady = $derived(!gameStore.commandPending && stopsPending === null && gameStore.connection === 'connected');
+  const inputReady = $derived(!gameStore.commandPending && gameStore.work?.state !== 'running' && stopsPending === null && gameStore.connection === 'connected');
   // Both table modes submit through the same live authority gate. Play only
   // adds selection and gestures; Study retains its separate retry capability.
   const canSubmitLive = $derived(gameActive && pilotCanAct && !participantStudying
@@ -334,9 +333,10 @@
     random: 'Random',
     passive: 'Passive',
   };
-  const opponentIdentity = $derived(gameStore.table?.opponent
-    ? checkpointIdentity(gameStore.table.opponent)
-    : playerIdentity({ name: gameStore.table?.opponent_label ?? OPPONENT_LABELS[gameStore.opponentChoice] ?? 'Opponent' }));
+  const tableIdentity = $derived(gameStore.table ?? gameStore.interruptedIdentity);
+  const opponentIdentity = $derived(tableIdentity?.opponent
+    ? checkpointIdentity(tableIdentity.opponent)
+    : playerIdentity({ name: tableIdentity?.opponent_label ?? OPPONENT_LABELS[gameStore.opponentChoice] ?? 'Opponent' }));
 
   function syncStopsToServer(): void {
     if (!gameStore.observation && editor.kind !== 'closed') {
@@ -457,12 +457,11 @@
   {/if}
   {#if gameStore.searchRetry}
     <section role="alert" class="mb-4 rounded border border-line bg-panel px-4 py-3">
-      <p>{gameStore.searchRetry.message}</p>
+      <p>{gameStore.submissionAccepted ? 'Your choice was accepted. ' : ''}{gameStore.searchRetry.message}</p>
       <button class="mt-2 rounded border border-line px-3 py-2" disabled={gameStore.commandPending || !pilotCanAct || gameStore.connection !== 'connected'} onclick={sendRetrySearch}>{(gameStore.searchRetry.code.startsWith('search_') || gameStore.searchRetry.code.startsWith('mirror_')) ? 'Retry search' : 'Retry bot decision'}</button>
     </section>
   {/if}
-  <SearchThinking active={(gameStore.commandPending || gameStore.newGamePending) && thinkingSearch !== null}
-    budget={thinkingSearch ? `Search ${thinkingSearch.worlds}×${thinkingSearch.depth}` : ''} />
+  <WorkStatus work={gameStore.work} connected={gameStore.connection === 'connected'} />
   {#if gameStore.observation && gameStore.activeSearchConfig}
     <p class="type-caption mb-2 text-ink-2">Opponent: Search {gameStore.activeSearchConfig.worlds}×{gameStore.activeSearchConfig.depth} · Uniform belief (physical deal)</p>
   {/if}

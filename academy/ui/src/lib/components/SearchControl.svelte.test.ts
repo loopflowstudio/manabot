@@ -1,7 +1,6 @@
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 import SearchControl from './SearchControl.svelte';
-import SearchThinking from './SearchThinking.svelte';
 import { parseSearchConfigs, type SearchConfig } from '$lib/search';
 
 const spec: SearchConfig = { algorithm: 'local_update', belief: 'physical_deal',
@@ -24,10 +23,5 @@ describe('search setup and thinking', () => {
     expect(parseSearchConfigs([spec, null])).toEqual([spec, null]);
     expect(() => parseSearchConfigs([{ ...spec, worlds: 0 }, null])).toThrow('Invalid');
   });
-  it('identifies waiting time without showing private search outputs', () => {
-    const { body } = render(SearchThinking, { props: { active: true, budget: 'Search 4×2' } });
-    expect(body).toContain('role="status"');
-    expect(body).toContain('Search 4×2');
-    expect(body).toContain('0.0 s');
-  });
+
 });

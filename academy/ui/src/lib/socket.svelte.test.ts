@@ -492,3 +492,20 @@ it('draft validation never completes an outstanding submission or changes the fr
   gameStore.applyFrame(frameAt(43));
   expect(gameStore.declarationValidation).toBeNull();
 });
+
+it('ignores work from another table, revision or earlier operation', () => {
+  gameStore.prepareForNewGame();
+  gameStore.applyFrame(frameAt(43), 'table-1', 'credential');
+  gameStore.newGamePending = false;
+  const controller = new GameSocketController();
+  const work = {operation_id: 'op-3', sequence: 3, kind: 'choose' as const, started_at: 1,
+    match_id: gameStore.protocolFrame!.match_id, revision: 43, chooser: 1, state: 'running' as const};
+  deliver(controller, {type: 'work_status', session_id: 'table-1', work});
+  expect(gameStore.work?.operation_id).toBe('op-3');
+  deliver(controller, {type: 'work_status', session_id: 'other-table', work: {...work, operation_id: 'foreign'}});
+  deliver(controller, {type: 'work_status', session_id: 'table-1', work: {...work, operation_id: 'old', sequence: 2}});
+  deliver(controller, {type: 'work_status', session_id: 'table-1', work: {...work, operation_id: 'old-frame', revision: 42}});
+  expect(gameStore.work?.operation_id).toBe('op-3');
+  expect(controller.sendAction(boltProtocolFixture.command.offer_id)).toBe(false);
+  gameStore.work = null;
+});

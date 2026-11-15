@@ -43,8 +43,21 @@ function applyLaunchSetup(setup: LaunchSetup): void {
 }
 
 const RESUME_STORAGE_KEY = 'etude.gui.resume';
+const INTERRUPTED_STORAGE_KEY = 'academy.interrupted';
+
+interface InterruptedSnapshot {
+  launch: string | null;
+  match_id: string;
+  frame: ExperienceFrame;
+  reason: string;
+  recording_id: string | null;
+  submission: 'unknown' | null;
+  identity: typeof gameStore.interruptedIdentity;
+}
+
 type PendingCommand = Extract<SharedTableRequest, { type: 'command' | 'declaration' }>;
 const VALID_SERVER_TYPES = new Set([
+  'work_status',
   'observation',
   'game_over',
   'command_outcome',
@@ -69,6 +82,7 @@ interface ResumeCredentials {
   pending_command?: PendingCommand;
   last_frame?: ExperienceFrame;
   recording_id?: string;
+  identity?: typeof gameStore.interruptedIdentity;
 }
 
 function tabValue(key: string): string | null {
@@ -110,6 +124,7 @@ function loadResumeCredentials(): ResumeCredentials | null {
     return {
       session_id: parsed.session_id,
       resume_token: parsed.resume_token,
+      ...(parsed.identity ? { identity: parsed.identity } : {}),
       ...(typeof parsed.recording_id === 'string' ? { recording_id: parsed.recording_id } : {}),
       ...(parsed.last_frame?.match_id && parsed.last_frame?.projection ? { last_frame: parsed.last_frame } : {}),
       ...(validPendingCommand(parsed.pending_command) ? { pending_command: parsed.pending_command } : {}),
@@ -190,6 +205,9 @@ export class GameSocketController {
     if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
       return;
     }
+
+    if (!this.outboundQueue.some(message => message.type === 'new_game')
+      && !window.location.hash && !loadResumeCredentials() && this.restoreInterrupted(this.launchId)) return;
 
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const url = `${protocol}://${window.location.host}/ws/play`;
@@ -279,6 +297,7 @@ export class GameSocketController {
   // Reload resumes this tab's own launched game; anything else deals the launch.
   launch(id: string): void {
     this.launchId = id;
+    if (this.restoreInterrupted(id)) return;
     const session = loadResumeCredentials()?.session_id;
     try {
       const started = JSON.parse(tabValue(LAUNCH_STORAGE_KEY) ?? 'null') as
@@ -297,6 +316,7 @@ export class GameSocketController {
 
   sendNewGame(config?: Record<string, unknown>): void {
     if (gameStore.newGamePending) return;
+    writeTabValue(INTERRUPTED_STORAGE_KEY, null);
     if (!config?.launch) {
       this.launchId = null;
       if (browser) {
@@ -336,7 +356,7 @@ export class GameSocketController {
   sendAction(offerId: number): boolean {
     const frame = gameStore.protocolFrame;
     const prompt = frame?.prompt;
-    if (!frame || !prompt || this.pendingCommand !== null || this.pendingResume || gameStore.resumeFailed) {
+    if (!frame || !prompt || this.pendingCommand !== null || this.pendingResume || gameStore.resumeFailed || gameStore.work?.state === 'running') {
       return false;
     }
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
@@ -387,7 +407,7 @@ export class GameSocketController {
 
   sendDeclaration(plan: DeclarationPlan): string | null {
     const frame = gameStore.protocolFrame;
-    if (!frame?.declaration || !frame.prompt || this.pendingCommand !== null || this.pendingResume || gameStore.resumeFailed) return null;
+    if (!frame?.declaration || !frame.prompt || this.pendingCommand !== null || this.pendingResume || gameStore.resumeFailed || gameStore.work?.state === 'running') return null;
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
       gameStore.setError('Connection changed. Recovering the latest game state.');
       this.connect();
@@ -551,6 +571,17 @@ export class GameSocketController {
       gameStore.setError('Received invalid server payload.');
       return;
     }
+    if (message.type === 'work_status') {
+      const work = message.work;
+      if (gameStore.resumeFailed || (gameStore.sessionId && message.session_id !== gameStore.sessionId)) return;
+      if (!gameStore.newGamePending && work.match_id && work.match_id !== gameStore.protocolFrame?.match_id) return;
+      if (!gameStore.newGamePending && work.revision !== null && work.revision < (gameStore.protocolFrame?.revision ?? 0)) return;
+      if (gameStore.work && work.sequence < gameStore.work.sequence) return;
+      if (gameStore.work?.operation_id === work.operation_id && gameStore.work.state !== 'running' && work.state === 'running') return;
+      gameStore.work = work;
+      return;
+    }
+    if ('work' in message) gameStore.work = message.work ?? null;
     if ('mirror_retry' in message) gameStore.searchRetry = message.mirror_retry ?? null;
     if ('mirror' in message) {
       const search = message.mirror ?? null;
@@ -579,11 +610,8 @@ export class GameSocketController {
 
     if (message.type === 'table_snapshot') {
       if ('session_interrupted' in message && message.session_interrupted) {
-        gameStore.tableUnavailable = true;
-        gameStore.observation = null;
-        gameStore.gameOver = true;
-        gameStore.newGamePending = false;
-        writeTabValue('academy.continuation', null);
+        this.interrupt('The previous live session is unavailable. Choose New game explicitly to play again.');
+        return;
       }
       this.pendingResume = false;
       gameStore.endCommand();
@@ -708,6 +736,7 @@ export class GameSocketController {
       this.clearPendingCommand();
       gameStore.endCommand();
       if (message.status === 'accepted') {
+        gameStore.submissionAccepted = true;
         this.applyUpdate(message.update);
       } else if (message.status === 'duplicate') {
         this.applyRecovery(message.recovery);
@@ -723,12 +752,7 @@ export class GameSocketController {
 
     if (this.pendingResume) {
       this.pendingResume = false;
-      clearResumeCredentials();
-      this.outboundQueue = [];
-      this.pendingCommand = null;
-      gameStore.newGamePending = false;
-      gameStore.markResumeFailed('The previous live session is unavailable. Choose New game explicitly to play again.');
-      this.disconnect();
+      this.interrupt('The previous live session is unavailable. Choose New game explicitly to play again.');
       return;
     }
 
@@ -738,14 +762,51 @@ export class GameSocketController {
     gameStore.newGamePending = false;
     if (message.session_ended) {
       // The server stopped this game; resuming or redealing its launch would hide why.
-      this.pendingCommand = null;
+      this.interrupt(message.message);
       this.launchId = null;
-      clearResumeCredentials();
-      if (browser) writeTabValue(LAUNCH_STORAGE_KEY, null);
-      gameStore.markResumeFailed(message.message);
       return;
     }
+    gameStore.work = null;
     gameStore.setError(message.message);
+  }
+
+  private interrupt(reason: string): void {
+    const credentials = loadResumeCredentials();
+    const frame = gameStore.protocolFrame ?? credentials?.last_frame;
+    const submission = this.pendingCommand || credentials?.pending_command ? 'unknown' : null;
+    if (frame) {
+      const snapshot: InterruptedSnapshot = {
+        launch: this.launchId, match_id: frame.match_id, frame, reason,
+        recording_id: gameStore.recordingId ?? credentials?.recording_id ?? null,
+        submission,
+        identity: gameStore.table?.opponent || gameStore.table?.opponent_label
+          ? {opponent: gameStore.table.opponent, opponent_label: gameStore.table.opponent_label}
+          : credentials?.identity ?? gameStore.interruptedIdentity,
+      };
+      writeTabValue(INTERRUPTED_STORAGE_KEY, JSON.stringify(snapshot));
+      gameStore.interruptedIdentity = snapshot.identity;
+      if (!gameStore.protocolFrame) gameStore.applyFrame(frame);
+    }
+    clearResumeCredentials();
+    this.pendingResume = false;
+    this.outboundQueue = [];
+    this.pendingCommand = null;
+    gameStore.markResumeFailed(reason + (submission ? ' The unresolved submission has an unknown outcome.' : ''));
+    this.disconnect();
+  }
+
+  private restoreInterrupted(launch: string | null): boolean {
+    try {
+      const snapshot = JSON.parse(tabValue(INTERRUPTED_STORAGE_KEY) ?? 'null') as InterruptedSnapshot | null;
+      if (!snapshot || snapshot.launch !== launch || snapshot.frame?.match_id !== snapshot.match_id
+        || !snapshot.frame.projection || typeof snapshot.reason !== 'string') return false;
+      gameStore.applyFrame(snapshot.frame);
+      gameStore.recordingId = snapshot.recording_id;
+      gameStore.interruptedIdentity = snapshot.identity ?? null;
+      gameStore.markResumeFailed(snapshot.reason + (snapshot.submission === 'unknown' ? ' The unresolved submission has an unknown outcome.' : ''));
+      gameStore.setConnection('disconnected');
+      return true;
+    } catch { return false; }
   }
 
   private clearPendingCommand(): void {
@@ -908,6 +969,7 @@ export class GameSocketController {
       ...(this.pendingCommand ? { pending_command: this.pendingCommand } : {}),
       ...(gameStore.protocolFrame ? { last_frame: gameStore.protocolFrame } : {}),
       ...(gameStore.recordingId ? { recording_id: gameStore.recordingId } : {}),
+      identity: gameStore.table ? {opponent: gameStore.table.opponent, opponent_label: gameStore.table.opponent_label} : existing?.identity ?? gameStore.interruptedIdentity,
       ...(this.presentationCursor === null
         ? {}
         : { presentation_cursor: this.presentationCursor }),

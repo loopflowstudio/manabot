@@ -1,4 +1,5 @@
 import { recordFetch } from './records';
+import type { WorkStatus } from './types';
 import type { RecordedPosition, RecordingIndex } from './recording';
 
 /** One read cursor for all recordings; producing is an explicit edge capability.
@@ -14,11 +15,14 @@ export class ReplayStore {
   busy = $state(false);
   producing = $state(false);
   error = $state('');
+  headUncertain = $state(false);
+  work = $state<WorkStatus | null>(null);
   reveal = $state(false);
   nearSeat = $state(0);
   private generation = 0;
   private id = '';
   private sourceGeneration = 0;
+  private productionGeneration = 0;
 
   request(path: string, init: RequestInit = {}): Promise<Response> {
     const token = sessionStorage.getItem(`etude.watch.${this.id}`);
@@ -54,7 +58,7 @@ export class ReplayStore {
   async open(id: string, key?: string): Promise<void> {
     const generation = ++this.generation;
     ++this.sourceGeneration;
-    this.id = id; this.playing = false; this.busy = true; this.current = null; this.index = null; this.producing = false; this.error = '';
+    this.id = id; this.playing = false; this.busy = true; this.current = null; this.index = null; this.producing = false; this.headUncertain = false; this.error = '';
     try {
       const index = await this.readIndex(id);
       if (generation !== this.generation) return;
@@ -90,15 +94,30 @@ export class ReplayStore {
     finally { if (generation === this.generation) this.busy = false; }
   }
 
-  async produce(): Promise<void> {
+  async produce(retry = false): Promise<void> {
     if (!this.index?.can_produce || this.producing || this.busy || this.selected !== this.index.positions.length - 1) return;
+    if (this.headUncertain || (this.index.mirror_retry && !retry)) { this.pause(); return; }
     this.producing = true; this.error = '';
     const oldLength = this.index.positions.length;
     const generation = this.generation;
     const sourceGeneration = this.sourceGeneration;
     const id = this.id;
+    const production = ++this.productionGeneration;
+    this.work = null;
+    let polling = false;
+    const poll = async (): Promise<void> => {
+      if (polling) return;
+      polling = true;
+      try {
+        const {work} = await this.api<{work: WorkStatus | null}>(`/api/watch/${encodeURIComponent(id)}/work`);
+        if (sourceGeneration === this.sourceGeneration && production === this.productionGeneration && this.producing && work?.match_id === id
+          && work.revision !== null && work.revision >= (this.index?.revision ?? 0)) this.work = work;
+      } catch { /* A status read grants no retry or authority. */ }
+      finally { polling = false; }
+    };
+    const timer = setInterval(() => void poll(), 1000);
     try {
-      await this.api(`/api/watch/${encodeURIComponent(this.id)}/step`, {revision: this.index.revision});
+      await this.api(`/api/watch/${encodeURIComponent(this.id)}/step`, {revision: this.index.revision, ...(retry ? {retry: true} : {})});
       const index = await this.readIndex(id);
       if (sourceGeneration !== this.sourceGeneration) return;
       this.index = index;
@@ -109,15 +128,34 @@ export class ReplayStore {
     } catch (reason) {
       if (sourceGeneration !== this.sourceGeneration) return;
       this.fail(reason);
+      this.headUncertain = true;
       // A lost reply may already have committed. Read the head, never retry here.
       try {
         const index = await this.readIndex(id);
-        if (sourceGeneration === this.sourceGeneration) this.index = index;
+        if (sourceGeneration === this.sourceGeneration) {
+          this.index = index;
+          this.headUncertain = false;
+        }
       }
       catch { /* Preserve the original failure and the retained board. */ }
       if (sourceGeneration !== this.sourceGeneration) return;
       this.error += ' Refresh the saved head before explicitly continuing.';
-    } finally { if (sourceGeneration === this.sourceGeneration) this.producing = false; }
+    } finally {
+      clearInterval(timer);
+      if (sourceGeneration === this.sourceGeneration) { this.producing = false; this.work = null; }
+    }
+  }
+
+  async refreshHead(): Promise<void> {
+    if (this.producing || this.busy) return;
+    const generation = this.sourceGeneration;
+    this.busy = true;
+    try {
+      const index = await this.readIndex(this.id);
+      if (generation !== this.sourceGeneration) return;
+      this.index = index; this.headUncertain = false; this.error = '';
+    } catch (reason) { if (generation === this.sourceGeneration) this.fail(reason); }
+    finally { if (generation === this.sourceGeneration) this.busy = false; }
   }
 
   async next(animate = false): Promise<void> {

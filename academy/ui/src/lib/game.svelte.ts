@@ -20,6 +20,7 @@ import type {
 } from './shared-table-protocol';
 import type {
   ActionOption,
+  WorkStatus,
   CommandRejection,
   ConnectionState,
   DeckNames,
@@ -159,6 +160,9 @@ export class GameStore {
   // fast-forwarding priority windows on our behalf.
   fastForwarding = $state(false);
   commandPending = $state(false);
+  work = $state<WorkStatus | null>(null);
+  interruptedIdentity = $state<Pick<TableSnapshot, 'opponent' | 'opponent_label'> | null>(null);
+  submissionAccepted = $state(false);
   newGamePending = $state(false);
   // Monotonic count of applied server updates (observation/game_over).
   // Surfaced in the DOM so tests can serialize on server responses.
@@ -169,6 +173,7 @@ export class GameStore {
     if (this.restoredDecision) return 'Study position — return to live to play.';
     if (this.gameOver) return 'Game over — no next decision.';
     if (this.connection !== 'connected') return 'Waiting for connection — play is unavailable.';
+    if (this.work?.state === 'running') return this.submissionAccepted ? 'Your choice was accepted. The table is working.' : 'The table is working.';
     if (this.commandPending || this.fastForwarding) return 'Waiting for the table — your action is being processed.';
     const prompt = this.protocolFrame?.prompt;
     if (!prompt) return 'Waiting for the next decision.';
@@ -311,6 +316,7 @@ export class GameStore {
 
   beginCommand(): void {
     this.lastCommandRejection = null;
+    this.submissionAccepted = false;
     this.commandPending = true;
   }
 
@@ -449,8 +455,11 @@ export class GameStore {
     this.commandPending = false;
     this.newGamePending = false;
     this.searchRetry = null;
+    this.work = null;
+    this.submissionAccepted = false;
     this.declarationValidation = null;
     this.lastCommandRejection = null;
+    if (this.table?.opponent || this.table?.opponent_label) this.interruptedIdentity = {opponent: this.table.opponent, opponent_label: this.table.opponent_label};
     this.table = null;
     this.restoredDecision = null;
     this.branchProjection = null;
@@ -511,7 +520,10 @@ export class GameStore {
   }
 
   private resetMatchState(): void {
+    this.interruptedIdentity = null;
     this.searchRetry = null;
+    this.work = null;
+    this.submissionAccepted = false;
     this.declarationValidation = null;
     this.lastCommandRejection = null;
     this.protocolFrame = null;

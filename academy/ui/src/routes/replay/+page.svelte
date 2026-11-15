@@ -5,7 +5,7 @@
   import { tick, untrack } from 'svelte';
   import { offerFocus } from '$lib/offer-map';
   import { recordFetch } from '$lib/records';
-  import SearchThinking from '$lib/components/SearchThinking.svelte';
+  import WorkStatus from '$lib/components/WorkStatus.svelte';
   import WatchSetup from '$lib/components/WatchSetup.svelte';
   import Feedback from '$lib/components/Feedback.svelte';
   import GameBoard from '$lib/components/GameBoard.svelte';
@@ -43,6 +43,7 @@
   const current = $derived(replayStore.current);
   const index = $derived(replayStore.index);
   const selectedKey = $derived(index?.positions[replayStore.selected]?.key ?? current?.key ?? '');
+  const retrySearch = $derived(!!index?.mirror_retry && (index.mirror_retry.code.startsWith('search_') || index.mirror_retry.code.startsWith('mirror_')));
   const atLiveEdge = $derived(replayStore.selected === (index?.positions.length ?? 0) - 1 && current?.key === selectedKey);
   const inStudy = $derived(studyStore.phase !== 'score');
   const informationBoard = $derived(studyStore.preview?.projection ?? studyStore.branchObservation ?? (inStudy ? studyStore.restored?.frame.projection : null) ?? current?.observation ?? null);
@@ -360,7 +361,7 @@
         {#each summaries as summary}<option value={summary.id}>{summary.timestamp ? new Date(summary.timestamp).toLocaleString() : summary.id}</option>{/each}
       </select></label>
     {/if}
-    <button class="btn btn-secondary" disabled={inStudy || studyStore.busy || replayStore.producing} onclick={() => { if (index) void replayStore.open(index.id, selectedKey); else void loadList(); }}>Refresh saved head</button>
+    <button class="btn btn-secondary" disabled={inStudy || studyStore.busy || replayStore.producing} onclick={() => { if (replayStore.headUncertain) void replayStore.refreshHead(); else if (index) void replayStore.open(index.id, selectedKey); else void loadList(); }}>Refresh saved head</button>
     {#if index}
       <div class="recording-heading flex flex-wrap items-baseline gap-x-3">
         <h2 class="type-title">The Score{index.source_kind ? ` · ${index.source_kind === 'play' ? 'Recorded Play game' : index.source_kind === 'training' ? 'Training game' : 'Evaluation game'}` : ''}</h2>
@@ -371,7 +372,7 @@
       <button class="btn btn-secondary" disabled={inStudy || studyStore.busy} onclick={() => seek(index!.positions.findIndex(position => position.kind === 'choice' && position.actor === 1))}>Inspect bot search</button>
     {/if}
     {#if listError}<p role="alert">{listError}</p>{/if}
-    <SearchThinking active={replayStore.producing && !!index?.mirror?.some(spec => spec !== null)} budget={index?.mirror?.map((spec, seat) => spec ? `Seat ${seat + 1} search ${spec.worlds}×${spec.depth}` : '').filter(Boolean).join(' · ') ?? ''} />
+    <WorkStatus work={atLiveEdge && current?.kind === 'state' ? replayStore.work : null} />
     {#if index?.mirror_retry && !replayStore.error}<p role="alert">{index.mirror_retry.message}</p>{/if}
     {#if replayStore.error}<p role="alert">{replayStore.error}</p>{/if}
     {#if studyStore.errorMessage}<p role="alert">{studyStore.errorMessage}</p>{/if}
@@ -431,8 +432,8 @@
 
         </aside>
         <section class="recording-viewer min-w-0" aria-label="Recording viewer">
-          <div class="replay-transport mb-2 border-b border-line bg-panel pb-2"><Timeline selected={replayStore.selected} total={index.positions.length} playing={replayStore.playing} speed={replayStore.speed} disabled={inStudy || studyStore.busy} producing={replayStore.producing} busy={replayStore.busy} canProduce={index.can_produce} retrySearch={index.mirror_retry?.code === 'mirror_deadline_exceeded'} retryBot={!!index.mirror_retry && index.mirror_retry.code !== 'mirror_deadline_exceeded'}
-            onPrevious={() => seek(Math.max(0, replayStore.selected - 1))} onNext={() => { replayStore.pause(); void replayStore.next(); }} onTogglePlaying={() => { if (replayStore.playing) replayStore.pause(); else replayStore.playing = true; }} onScrub={seek} onSpeedChange={speed => replayStore.speed = speed} /></div>
+          <div class="replay-transport mb-2 border-b border-line bg-panel pb-2"><Timeline selected={replayStore.selected} total={index.positions.length} playing={replayStore.playing} speed={replayStore.speed} disabled={inStudy || studyStore.busy} producing={replayStore.producing} busy={replayStore.busy} canProduce={index.can_produce && !replayStore.headUncertain} {retrySearch} retryBot={!!index.mirror_retry && !retrySearch}
+            onPrevious={() => seek(Math.max(0, replayStore.selected - 1))} onNext={() => { replayStore.pause(); if (atLiveEdge && index?.mirror_retry) void replayStore.produce(true); else void replayStore.next(); }} onTogglePlaying={() => { if (replayStore.playing) replayStore.pause(); else replayStore.playing = true; }} onScrub={seek} onSpeedChange={speed => replayStore.speed = speed} /></div>
           {#if current}
             {#if current.description}<p class="type-annotation mb-2">{current.description}</p>{/if}
             {#if board}<GameBoard onInspect={inStudy ? undefined : () => replayStore.pause()} workspace observation={board} {focusedIds} heroIdentity={identity(replayStore.nearSeat)} villainIdentity={identity(1 - replayStore.nearSeat)} winner={board.game_over ? index.winner : undefined} {presentationPlayer} />{/if}

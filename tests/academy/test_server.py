@@ -20,6 +20,7 @@ from managym import experience_projection
 from managym.academy import server, trace as trace_store
 from managym.academy.server import app
 from managym.experience import ProtocolV1ConformanceBundle
+from tests.academy.socket_messages import settled_message
 
 PROTOCOL_DIR = Path(__file__).parents[2] / "protocol"
 PROTOCOL_V1_BOLT_FIXTURE = json.loads(
@@ -87,7 +88,7 @@ def test_protocol_v1_bolt_and_pass_offers_round_trip(monkeypatch, tmp_path):
     with TestClient(app) as client:
         with client.websocket_connect("/ws/play") as websocket:
             websocket.send_json({"type": "new_game", "config": config})
-            initial = websocket.receive_json()
+            initial = settled_message(websocket)
             frame = initial["recovery"]["frame"]
             assert frame["protocol"] == 1
             assert _offer(frame, action_type="PRIORITY_PASS_PRIORITY")["verb"] == (
@@ -165,7 +166,7 @@ def test_protocol_v1_bolt_and_pass_offers_round_trip(monkeypatch, tmp_path):
                         == live_bundle
                     )
                 websocket.send_json({"type": "command", "command": command})
-                outcome = websocket.receive_json()
+                outcome = settled_message(websocket)
                 assert outcome["status"] == "accepted"
                 assert outcome["update"]["base_revision"] == frame["revision"]
                 frame = outcome["update"]["frame"]
@@ -216,7 +217,7 @@ def test_protocol_v1_rejects_stale_and_dedupes_retry(monkeypatch, tmp_path):
     with TestClient(app) as client:
         with client.websocket_connect("/ws/play") as websocket:
             websocket.send_json({"type": "new_game", "config": config})
-            old_frame = websocket.receive_json()["frame"]
+            old_frame = settled_message(websocket)["frame"]
             first_command = _command(
                 old_frame,
                 _offer(old_frame, action_type="PRIORITY_PASS_PRIORITY"),
@@ -229,13 +230,13 @@ def test_protocol_v1_rejects_stale_and_dedupes_retry(monkeypatch, tmp_path):
             )
 
             websocket.send_json({"type": "command", "command": first_command})
-            accepted = websocket.receive_json()
+            accepted = settled_message(websocket)
             assert accepted["status"] == "accepted"
             receipt = accepted["update"]["receipt"]
             current_frame = accepted["update"]["frame"]
 
             websocket.send_json({"type": "command", "command": first_command})
-            duplicate = websocket.receive_json()
+            duplicate = settled_message(websocket)
             assert duplicate["status"] == "duplicate"
             assert duplicate["receipt"] == receipt
             assert duplicate["recovery"]["reason"] == "duplicate_command"
@@ -250,7 +251,7 @@ def test_protocol_v1_rejects_stale_and_dedupes_retry(monkeypatch, tmp_path):
             )
             stale_prompt_command["prompt_id"] = old_frame["prompt"]["id"]
             websocket.send_json({"type": "command", "command": stale_prompt_command})
-            stale_prompt = websocket.receive_json()
+            stale_prompt = settled_message(websocket)
             assert stale_prompt["status"] == "rejected"
             assert stale_prompt["rejection"]["code"] == "stale_prompt"
             assert (
@@ -259,7 +260,7 @@ def test_protocol_v1_rejects_stale_and_dedupes_retry(monkeypatch, tmp_path):
             )
 
             websocket.send_json({"type": "command", "command": stale_command})
-            rejected = websocket.receive_json()
+            rejected = settled_message(websocket)
             assert rejected["status"] == "rejected"
             assert rejected["rejection"]["code"] == "stale_revision"
             assert rejected["recovery"]["reason"] == "stale_command"
@@ -286,7 +287,7 @@ def test_websocket_new_game_action_loop_and_trace_output(monkeypatch, tmp_path):
     with TestClient(app) as client:
         with client.websocket_connect("/ws/play") as websocket:
             websocket.send_json({"type": "new_game", "config": config})
-            payload = websocket.receive_json()
+            payload = settled_message(websocket)
             assert isinstance(payload.get("session_id"), str)
             assert isinstance(payload.get("resume_token"), str)
 
@@ -301,7 +302,7 @@ def test_websocket_new_game_action_loop_and_trace_output(monkeypatch, tmp_path):
 
                 action_index = _pick_action(payload["actions"])
                 websocket.send_json({"type": "action", "index": action_index})
-                payload = websocket.receive_json()
+                payload = settled_message(websocket)
 
                 max_steps -= 1
                 assert max_steps > 0, (
@@ -329,7 +330,7 @@ def test_websocket_rejects_action_without_active_game(monkeypatch, tmp_path):
     with TestClient(app) as client:
         with client.websocket_connect("/ws/play") as websocket:
             websocket.send_json({"type": "action", "index": 0})
-            payload = websocket.receive_json()
+            payload = settled_message(websocket)
             assert payload["type"] == "error"
             assert "No active game session" in payload["message"]
 
@@ -341,7 +342,7 @@ def test_websocket_can_resume_existing_session(monkeypatch, tmp_path):
     with TestClient(app) as client:
         with client.websocket_connect("/ws/play") as websocket:
             websocket.send_json({"type": "new_game", "config": {"seed": 5}})
-            payload = websocket.receive_json()
+            payload = settled_message(websocket)
             assert payload["type"] == "observation"
             session_id = payload["session_id"]
             resume_token = payload["resume_token"]
@@ -349,7 +350,7 @@ def test_websocket_can_resume_existing_session(monkeypatch, tmp_path):
 
             first_action = _pick_action(payload["actions"])
             websocket.send_json({"type": "action", "index": first_action})
-            payload = websocket.receive_json()
+            payload = settled_message(websocket)
             assert payload["type"] == "observation"
             frame_before_reconnect = payload["recovery"]["frame"]
 
@@ -362,7 +363,7 @@ def test_websocket_can_resume_existing_session(monkeypatch, tmp_path):
                     "presentation_cursor": presentation_cursor,
                 }
             )
-            resumed_payload = resumed.receive_json()
+            resumed_payload = settled_message(resumed)
             assert resumed_payload["type"] == "observation"
             assert resumed_payload["session_id"] == session_id
             assert resumed_payload["resume_token"] == resume_token
@@ -396,7 +397,7 @@ def test_disconnect_after_acceptance_recovers_without_replaying_command(
     with TestClient(app) as client:
         with client.websocket_connect("/ws/play") as websocket:
             websocket.send_json({"type": "new_game", "config": config})
-            initial = websocket.receive_json()
+            initial = settled_message(websocket)
             frame = initial["recovery"]["frame"]
             command = _command(
                 frame,
@@ -422,7 +423,7 @@ def test_disconnect_after_acceptance_recovers_without_replaying_command(
                     "presentation_cursor": cursor,
                 }
             )
-            recovery = resumed.receive_json()["recovery"]
+            recovery = settled_message(resumed)["recovery"]
             assert (
                 recovery["frame"]["frame_hash"]
                 == accepted["update"]["frame"]["frame_hash"]
@@ -430,7 +431,7 @@ def test_disconnect_after_acceptance_recovers_without_replaying_command(
             assert accepted_receipt in recovery["accepted_commands"]
 
             resumed.send_json({"type": "command", "command": command})
-            duplicate = resumed.receive_json()
+            duplicate = settled_message(resumed)
             assert duplicate["status"] == "duplicate"
             assert duplicate["receipt"] == accepted_receipt
 
@@ -438,21 +439,18 @@ def test_disconnect_after_acceptance_recovers_without_replaying_command(
         assert len(record.game.trace.events) == trace_length
 
 
-def test_reload_during_slow_command_resumes_after_commit(
+def test_reload_during_slow_command_reads_cached_frame_then_commit(
     monkeypatch: Any, tmp_path: Path
 ) -> None:
-    """A reload while a bot reply is computing keeps the game and its result.
-
-    The old socket's transport fails when its response is sent, as uvicorn's
-    does after the browser leaves; the new socket's resume must wait for the
-    commit rather than read a half-applied step.
-    """
+    """A reload reads a safe cached frame without waiting for a mutating worker."""
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
     server.SESSION_REGISTRY.clear()
     entered, release = threading.Event(), threading.Event()
     dispatch = server._dispatch_table_request
 
-    def slow_dispatch(record: Any, participant: Any, request: Any) -> Any:
+    def slow_dispatch(
+        record: Any, participant: Any, request: Any, committed: Any = None
+    ) -> Any:
         if request.type == "command":
             old_socket = participant.websocket
 
@@ -462,7 +460,7 @@ def test_reload_during_slow_command_resumes_after_commit(
             old_socket._send = lost_transport
             entered.set()
             assert release.wait(10)
-        return dispatch(record, participant, request)
+        return dispatch(record, participant, request, committed)
 
     monkeypatch.setattr(server, "_dispatch_table_request", slow_dispatch)
     config = {
@@ -475,7 +473,7 @@ def test_reload_during_slow_command_resumes_after_commit(
     with TestClient(app) as client:
         with client.websocket_connect("/ws/play") as websocket:
             websocket.send_json({"type": "new_game", "config": config})
-            initial = websocket.receive_json()
+            initial = settled_message(websocket)
             frame = initial["recovery"]["frame"]
             offer = _offer(frame, action_type="PRIORITY_PASS_PRIORITY")
             websocket.send_json(
@@ -490,12 +488,13 @@ def test_reload_during_slow_command_resumes_after_commit(
                         "resume_token": initial["resume_token"],
                     }
                 )
-                threading.Timer(0.3, release.set).start()
-                message = resumed.receive_json()
-                while message.get("recovery", {}).get("reason") != "reconnect":
-                    message = resumed.receive_json()
+                message = settled_message(resumed)
+                assert message["recovery"]["frame"]["revision"] == frame["revision"]
+                assert message["work"]["state"] == "running"
+                release.set()
+                committed = settled_message(resumed)
                 record = server.SESSION_REGISTRY[initial["session_id"]]
-                assert message["recovery"]["frame"]["revision"] == record.game.revision
+                assert committed["update"]["frame"]["revision"] == record.game.revision
                 assert record.game.revision > frame["revision"]
             websocket.close()
         assert initial["session_id"] in server.SESSION_REGISTRY
@@ -508,7 +507,7 @@ def test_websocket_rejects_invalid_presentation_cursor(monkeypatch, tmp_path):
     with TestClient(app) as client:
         with client.websocket_connect("/ws/play") as websocket:
             websocket.send_json({"type": "new_game"})
-            payload = websocket.receive_json()
+            payload = settled_message(websocket)
 
         for invalid_cursor in (-1, True, "0", 2**64):
             with client.websocket_connect("/ws/play") as resumed:
@@ -520,7 +519,7 @@ def test_websocket_rejects_invalid_presentation_cursor(monkeypatch, tmp_path):
                         "presentation_cursor": invalid_cursor,
                     }
                 )
-                error_payload = resumed.receive_json()
+                error_payload = settled_message(resumed)
                 assert error_payload["type"] == "error"
                 assert "unsigned 64-bit integer" in error_payload["message"]
 
@@ -532,7 +531,7 @@ def test_websocket_rejects_invalid_resume_credentials(monkeypatch, tmp_path):
     with TestClient(app) as client:
         with client.websocket_connect("/ws/play") as websocket:
             websocket.send_json({"type": "new_game"})
-            payload = websocket.receive_json()
+            payload = settled_message(websocket)
             session_id = payload["session_id"]
 
         with client.websocket_connect("/ws/play") as resumed:
@@ -543,7 +542,7 @@ def test_websocket_rejects_invalid_resume_credentials(monkeypatch, tmp_path):
                     "resume_token": "not-valid",
                 }
             )
-            error_payload = resumed.receive_json()
+            error_payload = settled_message(resumed)
             assert error_payload["type"] == "error"
             assert "Invalid resume credentials" in error_payload["message"]
 
@@ -556,7 +555,7 @@ def test_websocket_expired_session_requires_new_game(monkeypatch, tmp_path):
     with TestClient(app) as client:
         with client.websocket_connect("/ws/play") as websocket:
             websocket.send_json({"type": "new_game"})
-            payload = websocket.receive_json()
+            payload = settled_message(websocket)
             session_id = payload["session_id"]
             resume_token = payload["resume_token"]
 
@@ -568,7 +567,7 @@ def test_websocket_expired_session_requires_new_game(monkeypatch, tmp_path):
                     "resume_token": resume_token,
                 }
             )
-            error_payload = resumed.receive_json()
+            error_payload = settled_message(resumed)
             assert error_payload["type"] == "error"
             assert "expired" in error_payload["message"].lower()
 

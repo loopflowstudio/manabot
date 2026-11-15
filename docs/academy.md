@@ -667,7 +667,9 @@ Cast a spell, then follow its target and payment prompts. If the bot's next
 decision fails, your submitted choice stays committed and the board stays
 visible. Read the failure, then choose **Retry bot decision**, or **Retry search**
 for a search failure, when offered. Retrying asks the same bot to finish its
-pending decision; it does not cast your spell again.
+pending decision; it does not cast your spell again. Academy acknowledges your
+committed choice before starting the following bot work. Its receipt remains
+fixed while later bot actions advance the table.
 
 **Who chooses.** Read the chooser and requested input beside the current prompt.
 The player choosing can differ from the player whose turn it is. Target and
@@ -703,12 +705,18 @@ submission so an accepted choice is not applied twice. If the decision or your
 permission changed, Academy reports the stale or unknown outcome and refreshes
 the table. Going back or clearing a selection cannot cancel a submission.
 In live Watch, recovery checks the recorded position before another step;
-do not repeat a step just because its reply was lost.
+do not repeat a step just because its reply was lost. If that read fails,
+**Refresh saved head** must establish the frontier before production is available.
+After a bot failure, recorded navigation remains available, but playback stops
+at the live edge. Only **Retry bot decision** or **Retry search** retries it.
 
 **When recovery is impossible.** A server restart or an expired live session
 shows **Interrupted**, retaining the last known table and a recording link
 when available. Saved recordings preserve available evidence; they cannot
-restore the live game. Choose **New game** explicitly to return to setup.
+restore the live game. A read-only snapshot of the last published table,
+opponent identity and interruption reason survives further reloads in the same
+tab. It contains no resume credential and cannot submit actions. Choose
+**New game** explicitly to return to setup and retire that snapshot.
 Academy never silently deals a replacement or replays your submissions into
 a new game. Keep the original tab open for temporary connection failures:
 resume credentials and unresolved input belong to that tab's session storage.

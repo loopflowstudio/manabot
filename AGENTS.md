@@ -394,6 +394,10 @@ admission. Admission-rejection fixtures must mark the config as submitted
 - Give each Academy browser-proof subprocess its own proof/artifact directory,
   including checkpoints and traces. Policy registration freezes artifact identity;
   another process rewriting the same checkpoint makes a live selection stale.
+- Academy WebSocket tests that inspect settled results use
+  `tests.academy.socket_messages.settled_message`; runner status and the early
+  accepted receipt can precede the settled reply. Lifecycle proofs read the
+  socket directly so they verify receipt delivery before bot work completes.
 
 ### Card definitions
 

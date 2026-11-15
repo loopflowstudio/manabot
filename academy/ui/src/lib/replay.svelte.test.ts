@@ -222,3 +222,43 @@ it.each([false, true])('pause holds the reader while a pending producer saves (l
   expect(store.current?.key).toBe('new-choice');
   expect(commands).toBe(1);
 });
+
+it('stops playback at a failed frontier and produces only through explicit retry', async () => {
+  const calls = installApi(true);
+  const store = createReplayStore();
+  await store.open('trace-1', 'latest');
+  store.index = {...store.index!, mirror_retry: {code: 'policy_failed', message: 'Bot failed', match_id: 'trace-1', expected_revision: 91}};
+  store.playing = true;
+  await store.next(true);
+  expect(store.playing).toBe(false);
+  expect(calls.some(call => call.startsWith('POST'))).toBe(false);
+  await store.seek(0);
+  expect(store.current?.key).toBe('exact-choice');
+  await store.seek(2);
+  const bodies: unknown[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (input: string, init: RequestInit) => {
+    if (init.method === 'POST') bodies.push(JSON.parse(init.body as string));
+    return Response.json(input.includes('/positions/') ? current('latest') : index(true));
+  }));
+  await store.produce(true);
+  expect(bodies).toEqual([{revision: 91, retry: true}]);
+});
+
+it('keeps an uncertain Watch head blocked until an explicit read succeeds', async () => {
+  installApi(true);
+  const store = createReplayStore();
+  await store.open('trace-1', 'latest');
+  let posts = 0;
+  vi.stubGlobal('fetch', vi.fn(async (_input: string, init: RequestInit) => {
+    if (init.method === 'POST') posts++;
+    throw new Error('Connection unavailable');
+  }));
+  await store.produce();
+  expect(store.headUncertain).toBe(true);
+  await store.produce(true);
+  expect(posts).toBe(1);
+  vi.stubGlobal('fetch', vi.fn(async () => Response.json(index(true))));
+  await store.refreshHead();
+  expect(store.headUncertain).toBe(false);
+  expect(store.error).toBe('');
+});

@@ -26,6 +26,21 @@ The non-negotiable invariants are:
 5. recovery always has a complete viewer-safe frame;
 6. the client never receives or reconstructs hidden authoritative state.
 
+Academy's live transport publishes the committed human transition as an accepted
+outcome before subsequent bot work. Later updates may carry that same immutable
+receipt with later frames; they do not revise its resulting revision/hash or
+execute the Command again. Presentation batches remain contiguous and contain
+only the events since the preceding publication.
+
+Runner work is ephemeral transport metadata, outside canonical frames, world
+identity and replay evidence. `work_status` names an operation, sequence, kind,
+wall-clock start, optional match/revision/chooser and running/complete/failed
+state. It proves no submission outcome. A reconnect during mutable work receives
+only its participant's cached safe recovery envelope plus that status. It cannot
+inspect the Env or enable another submission until authority is confirmed and
+work finishes. Watch status reads do not produce decisions; a failed frontier
+requires an explicit revision-bound retry.
+
 ## Rust authority and wire types
 
 This is deliberately a narrow generated boundary, not a serialization of

@@ -20,6 +20,7 @@ from managym.policy import (
     PolicySpec,
     PolicyView,
 )
+from tests.academy.socket_messages import settled_message
 
 
 @dataclass
@@ -102,6 +103,25 @@ def test_independent_policies_watch_both_seats_and_cleanup(
         refused.value.detail["message"] == "Policy returned a stale decision binding."
     )
     assert game.revision == before
+    calls = sum(
+        len(session.seen) for factory in (first, second) for session in factory.sessions
+    )
+    with pytest.raises(HTTPException) as implicit:
+        step_watch(created["id"], created["token"], before)
+    assert implicit.value.detail["code"] == "explicit_retry_required"
+    assert (
+        sum(
+            len(session.seen)
+            for factory in (first, second)
+            for session in factory.sessions
+        )
+        == calls
+    )
+    first.sessions[0].stale = second.sessions[0].stale = False
+    assert (
+        step_watch(created["id"], created["token"], before, retry=True)["revision"]
+        == before + 1
+    )
     server._drop_session(created["id"], "test")
     assert all(factory.sessions[0].closed for factory in (first, second))
     # Replay needs neither registry nor a reconstructed policy.
@@ -110,7 +130,7 @@ def test_independent_policies_watch_both_seats_and_cleanup(
     from managym.academy.trace import load_trace
 
     replay = load_canonical_replay(load_trace(created["id"]))
-    assert len(replay.decisions) == 8
+    assert len(replay.decisions) == 9
 
 
 def test_policy_identity_rejects_runner_change(registry: PolicyRegistry) -> None:
@@ -144,7 +164,7 @@ def test_failed_opponent_policy_preserves_commitment_until_explicit_retry(
     with TestClient(server.app) as client:
         with client.websocket_connect("/ws/play") as websocket:
             websocket.send_json({"type": "new_game", "config": config})
-            payload = websocket.receive_json()
+            payload = settled_message(websocket)
             for attempt in range(20):
                 if payload.get("mirror_retry"):
                     break
@@ -158,7 +178,7 @@ def test_failed_opponent_policy_preserves_commitment_until_explicit_retry(
                     "answers": [],
                 }
                 websocket.send_json({"type": "command", "command": command})
-                payload = websocket.receive_json()
+                payload = settled_message(websocket)
             else:
                 pytest.fail("Never reached the failing bot")
             assert payload["type"] == "command_outcome"
@@ -177,7 +197,7 @@ def test_failed_opponent_policy_preserves_commitment_until_explicit_retry(
             digest = game.env.state_digest()
             events = len(game.trace.events)
             websocket.send_json({"type": "command", "command": command})
-            duplicate = websocket.receive_json()
+            duplicate = settled_message(websocket)
             assert duplicate["status"] == "duplicate"
             assert duplicate["receipt"] == receipt
             assert duplicate["recovery"]["frame"]["prompt"] is None
@@ -186,7 +206,7 @@ def test_failed_opponent_policy_preserves_commitment_until_explicit_retry(
             # Resume and settings do not call choose or clear the failure.
             calls = len(factory.sessions[0].seen)
             websocket.send_json({"type": "set_stops", "auto_pass": False})
-            recovered = websocket.receive_json()
+            recovered = settled_message(websocket)
             assert recovered["mirror_retry"]["code"] == "policy_failed"
             assert game.env.state_digest() == digest
             assert len(factory.sessions[0].seen) == calls
@@ -198,7 +218,7 @@ def test_failed_opponent_policy_preserves_commitment_until_explicit_retry(
                     "expected_revision": game.revision,
                 }
             )
-            retried = websocket.receive_json()
+            retried = settled_message(websocket)
             assert retried["mirror_retry"] is None
             assert len(game.trace.events) > events
             assert game.accepted_commands[command["command_id"]] == receipt
@@ -488,7 +508,7 @@ def test_refused_launch_retains_setup_and_exact_policy(
         with TestClient(server.app) as client:
             with client.websocket_connect("/ws/play") as ws:
                 ws.send_json({"type": "new_game", "config": {"launch": launch}})
-                refused = ws.receive_json()
+                refused = settled_message(ws)
         assert refused["type"] == "error"
         assert "restart Academy and explicitly reselect" in refused["message"]
         assert refused["launch_setup"] == {
@@ -529,3 +549,94 @@ def test_registered_aliases_distinguish_catalog_and_watch_identities(
         "Independent · uniform",
         "Independent · action-only",
     }
+
+
+def test_receipt_and_cached_resume_are_published_before_bot_finishes(
+    registry: PolicyRegistry,
+) -> None:
+    from threading import Event
+
+    entered, release = Event(), Event()
+
+    class WaitingSession(IndependentSession):
+        def choose(self, view: PolicyView) -> PolicyDecision:
+            entered.set()
+            if not release.wait(10):
+                raise RuntimeError("Test did not release the controlled bot")
+            raise ValueError("Controlled bot failure")
+
+    class WaitingFactory(IndependentFactory):
+        def load(self, *, seat: int, seed: int) -> IndependentSession:
+            session = WaitingSession(seat)
+            self.sessions.append(session)
+            return session
+
+    key = registry.register(WaitingFactory())
+    try:
+        with TestClient(server.app) as client:
+            with client.websocket_connect("/ws/play") as socket:
+                socket.send_json(
+                    {
+                        "type": "new_game",
+                        "config": {
+                            "villain_type": "policy",
+                            "opponent_sha256": key,
+                            "seed": 3,
+                            "auto_pass": False,
+                        },
+                    }
+                )
+                payload = settled_message(socket)
+                credentials = {k: payload[k] for k in ("session_id", "resume_token")}
+                receipt = None
+                for attempt in range(20):
+                    frame = payload.get("frame") or payload["update"]["frame"]
+                    command = {
+                        "command_id": f"controlled.{attempt}",
+                        "match_id": frame["match_id"],
+                        "expected_revision": frame["revision"],
+                        "prompt_id": frame["prompt"]["id"],
+                        "offer_id": frame["offers"][-1]["id"],
+                        "answers": [],
+                    }
+                    socket.send_json({"type": "command", "command": command})
+                    # Read the early acknowledgement itself, never a settled helper.
+                    while True:
+                        early = socket.receive_json()
+                        if early["type"] == "command_outcome":
+                            break
+                    receipt = early["update"]["receipt"]
+                    assert receipt["command_id"] == command["command_id"]
+                    assert early["work"]["state"] == "running"
+                    # Either a choose-stage follows, or this Command settles
+                    # without reaching the opponent yet.
+                    after = socket.receive_json()
+                    if (
+                        after["type"] == "work_status"
+                        and after["work"]["kind"] == "choose"
+                    ):
+                        assert entered.wait(5)
+                        with client.websocket_connect("/ws/play") as resumed:
+                            resumed.send_json({"type": "resume", **credentials})
+                            cached = resumed.receive_json()
+                            assert cached["work"]["kind"] == "choose"
+                            assert cached["work"]["state"] == "running"
+                            assert receipt in cached["recovery"]["accepted_commands"]
+                            assert (
+                                cached["recovery"]["frame"]["revision"]
+                                == receipt["resulting_revision"]
+                            )
+                            release.set()
+                            final = settled_message(resumed)
+                            assert (
+                                final["mirror_retry"]["message"]
+                                == "Controlled bot failure"
+                            )
+                            assert final["update"]["receipt"] == receipt
+                        break
+                    assert after["type"] == "command_outcome"
+                    payload = after
+                else:
+                    pytest.fail("Never reached the controlled bot")
+    finally:
+        release.set()

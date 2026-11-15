@@ -789,7 +789,20 @@ export interface StopsConfig {
   auto_pass: boolean;
 }
 
+export interface WorkStatus {
+  operation_id: string;
+  sequence: number;
+  kind: 'load' | 'choose' | 'search' | 'advance';
+  started_at: number;
+  match_id: string | null;
+  revision: number | null;
+  chooser: number | null;
+  state: 'running' | 'complete' | 'failed';
+}
+
 export type ServerMessage = (
+  | { type: 'work_status'; session_id: string; work: WorkStatus }
+
   | {
       type: 'observation';
       data: Observation;
@@ -834,6 +847,7 @@ export type ServerMessage = (
     ))
   | { type: 'error'; message: string; session_ended?: boolean }
 ) & {
+  work?: WorkStatus | null;
   mirror_retry?: import('./search').PendingSearch | null;
   mirror?: import('./search').SearchConfig | null;
   table?: import('./shared-table-protocol').TableSnapshot;

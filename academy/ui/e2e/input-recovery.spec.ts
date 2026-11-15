@@ -76,10 +76,18 @@ test('Watch recovers a committed step from its recording after a lost reply', as
   });
   await page.goto(watch);
   await page.getByRole('button', { name: 'Start watching' }).click();
-  await expect(page.getByText(/^Decision 1 of 1 ·/)).toBeVisible();
+  await page.getByRole('button', {name: 'Continue', exact: true}).click();
+  await expect(page.getByTestId('position-counter')).toHaveText('Position 1 / 3');
   expect(steps).toBe(1);
-  await page.getByRole('button', { name: 'Step decision', exact: true }).click();
-  await expect(page.getByText(/^Decision 2 of 2 ·/)).toBeVisible();
+  // The read after the lost reply found the new choice. Navigation reads it
+  // and its consequences before the frontier can deliberately produce again.
+  for (const position of [1, 2, 3]) {
+    await page.getByRole('button', {name: 'Next', exact: true}).click();
+    await expect(page.getByTestId('position-counter')).toHaveText(`Position ${position} / 3`);
+    expect(steps).toBe(1);
+  }
+  await page.getByRole('button', {name: 'Continue', exact: true}).click();
+  await expect(page.getByTestId('position-counter')).toHaveText('Position 3 / 5');
   expect(steps).toBe(2);
 });
 
@@ -90,6 +98,7 @@ async function childServer(port: number): Promise<ChildProcess> {
       ACADEMY_FRONTEND_BUILD: fileURLToPath(new URL('../build', import.meta.url)),
       ACADEMY_CARD_ART: 'off', ACADEMY_PLAY_RECORD_ORIGIN: 'automated_validation',
       OMP_NUM_THREADS: '1', MKL_NUM_THREADS: '1' },
+    detached: true,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   try {
@@ -117,10 +126,12 @@ async function childServer(port: number): Promise<ChildProcess> {
 
 async function stopChild(child: ChildProcess): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return;
+  // Abrupt loss exercises authority loss without a graceful recording flush.
+  // Kill the owned group so uv and its Python/server descendants are reaped.
   await new Promise<void>(resolve => {
-    const timer = setTimeout(() => child.kill('SIGKILL'), 10_000);
-    child.once('exit', () => { clearTimeout(timer); resolve(); });
-    child.kill('SIGINT');
+    child.once('exit', () => resolve());
+    try { process.kill(-child.pid!, 'SIGKILL'); }
+    catch { resolve(); }
   });
 }
 
@@ -137,6 +148,8 @@ for (const theme of ['light', 'dark'] as const) {
       await page.goto(play);
       await expect(page.getByTestId('action-option').first()).toBeEnabled();
       const frame = await retainedFrame(page);
+      const opponent = await page.locator('.player-status').first().textContent();
+      expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem('etude.gui.resume')!).identity?.opponent?.name)).toContain('Independent');
       await stopChild(child);
       child = await childServer(port);
       await page.reload();
@@ -145,12 +158,24 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(page.locator('main')).toHaveAttribute('data-frame-revision', String(frame!.revision));
       await expect(page.getByTestId('action-option').first()).toBeDisabled();
       expect(await page.evaluate(() => sessionStorage.getItem('academy.launch'))).toBeNull();
+      const snapshot = await page.evaluate(() => JSON.parse(sessionStorage.getItem('academy.interrupted')!));
+      expect(snapshot.match_id).toBe(frame!.match_id);
+      expect(snapshot.identity?.opponent?.name).toContain('Independent');
+      expect(snapshot).not.toHaveProperty('resume_token');
+      for (let reload = 0; reload < 2; reload++) {
+        await page.reload();
+        await expect(page.getByRole('alert')).toContainText('Interrupted');
+        await expect(page.locator('main')).toHaveAttribute('data-frame-revision', String(frame!.revision));
+        await expect(page.getByTestId('action-option').first()).toBeDisabled();
+        expect(await retainedFrame(page)).toBeNull();
+        expect(await page.locator('.player-status').first().textContent()).toBe(opponent);
+      }
       await page.screenshot({ path: fileURLToPath(new URL(`../test-results/policy/interrupted-${theme}.png`, import.meta.url)) });
-      await page.getByRole('button', { name: 'New Game', exact: true }).focus();
+      const setup = page.getByRole('banner').getByRole('link', {name: 'New game', exact: true});
+      await expect(setup).toBeVisible();
+      await setup.focus();
       await page.keyboard.press('Enter');
-      // The launch's setup opens first; a second deliberate click starts it.
-      const newGame = page.getByRole('button', { name: 'New Game', exact: true });
-      if (await page.getByTestId('action-option').first().isDisabled()) await newGame.click();
+      await page.getByRole('button', { name: 'New Game', exact: true }).click();
       await expect(page.getByTestId('action-option').first()).toBeEnabled();
       expect((await retainedFrame(page))!.match_id).not.toBe(frame!.match_id);
     } finally { await stopChild(child); }

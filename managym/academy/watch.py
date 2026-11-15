@@ -125,6 +125,7 @@ def create_watch(
             game.close("setup_failed")
             raise
         candidates.pop_all()
+    game.work.finish()
     server.SESSION_REGISTRY[game.match_id] = record
     return {"id": game.match_id, "token": token, "finished": False}
 
@@ -137,7 +138,9 @@ def record_for_watch(trace_id: str, token: str | None) -> server.SessionRecord:
     return record
 
 
-def step_watch(trace_id: str, token: str | None, expected_revision: int) -> WatchStep:
+def step_watch(
+    trace_id: str, token: str | None, expected_revision: int, retry: bool = False
+) -> WatchStep:
     record = record_for_watch(trace_id, token)
     game = record.game
     assert game.env is not None and game.obs is not None
@@ -145,6 +148,10 @@ def step_watch(trace_id: str, token: str | None, expected_revision: int) -> Watc
         raise HTTPException(409, "stale_watch_revision")
     if game.obs.game_over:
         return {"finished": True, "revision": game.revision}
+    if game.mirror_retry is not None and not retry:
+        raise HTTPException(
+            409, {**game.mirror_retry, "code": "explicit_retry_required"}
+        )
     seat = int(game.obs.agent.player_index)
     context = (
         game._publish_current_prompt()
