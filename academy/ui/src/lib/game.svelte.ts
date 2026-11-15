@@ -1,6 +1,6 @@
 import type { PlaySession } from './play-session';
 import { playerToken } from './records';
-import type { SearchConfig, PendingSearch } from './search';
+import { parseSearchConfigs, type SearchConfig, type PendingSearch } from './search';
 import {
   loadStoredDeckSelection,
   sanitizeDeckSelection,
@@ -10,7 +10,7 @@ import {
 } from './decks';
 import { deriveObservationNotes } from './log';
 export { DECISION_PROMPTS } from './prompt-instructions';
-import { defaultStops, loadStoredStops, saveStoredStops } from './stops';
+import { defaultStops, loadStoredStops, saveStoredStops, sanitizeStops } from './stops';
 import type { RestoredReplayDecision } from './replay-index';
 import type {
   BranchRetryPayload,
@@ -65,6 +65,18 @@ export function buildOpponentConfig(choice: PlayerChoice): OpponentConfig {
 }
 
 export class GameStore {
+  constructor(private readonly persistPreferences = true) {}
+
+  /** An isolated editor: nested source/search values must not mutate live setup. */
+  editableSetup(draft: Record<string, unknown> = this.newGameConfig()): GameStore {
+    const editor = new GameStore(false);
+    editor.applySetupDraft(JSON.parse(JSON.stringify(draft)));
+    editor.watchMode = this.watchMode;
+    editor.watchPlayerChoice = this.watchPlayerChoice;
+    editor.watchSearchConfig = this.watchSearchConfig ? {...this.watchSearchConfig} : null;
+    return editor;
+  }
+
   playSession = $state<PlaySession | null>(null);
   storageWarning = $state('');
   tableUnavailable = $state(false);
@@ -91,6 +103,9 @@ export class GameStore {
     const named = sanitizeDeckSelection({hero:draft.hero_deck, villain:draft.villain_deck});
     if (named) { this.setHeroDeck(named.hero); this.setVillainDeck(named.villain); }
     this.decklists = draft.decklists === 'closed' ? 'closed' : 'open';
+    this.searchConfig = parseSearchConfigs([draft.mirror ?? null, null])[0];
+    const stops = sanitizeStops({...((draft.stops ?? {}) as Record<string, unknown>), stop_on_stack:draft.stop_on_stack, auto_pass:draft.auto_pass});
+    if (stops) this.stops = stops;
     if (draft.villain_type === 'policy' && typeof draft.opponent_sha256 === 'string') this.opponentChoice = policyChoice(draft.opponent_sha256);
     else if (draft.villain_type === 'search') this.opponentChoice = `search-${draft.villain_sims ?? 64}` as PlayerChoice;
     else if (draft.villain_type === 'random' || draft.villain_type === 'passive') this.opponentChoice = draft.villain_type;
@@ -443,12 +458,12 @@ export class GameStore {
 
   private updateStops(next: StopsConfig): void {
     this.stops = next;
-    saveStoredStops(next);
+    if (this.persistPreferences) saveStoredStops(next);
   }
 
   private updateDecks(next: DeckSelection): void {
     this.decks = next;
-    saveStoredDeckSelection(next);
+    if (this.persistPreferences) saveStoredDeckSelection(next);
   }
 
   private applyDeckNames(deckNames: DeckNames | undefined): void {

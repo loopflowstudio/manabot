@@ -2102,9 +2102,12 @@ class GameSession:
         if self.obs is None:
             raise RuntimeError("No observation available.")
 
-        if self.mirror_retry is not None:
-            # The pending choice belongs to the bot. Publish the human's view
-            # without a human prompt or any of the bot's private legal offers.
+        if self.mirror_retry is not None or (
+            self.watch_mode and int(self.obs.agent.player_index) != self.human_seat
+        ):
+            # Startup/recovery keeps this viewer's projection. Watch may begin
+            # at the other seat after native forced-choice skipping; its offers
+            # belong only to that acting viewer and are published when stepped.
             self.published_prompt = None
             self._persist_attempt()
             return self._build_frame(

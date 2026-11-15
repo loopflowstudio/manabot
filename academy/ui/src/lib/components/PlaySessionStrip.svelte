@@ -1,7 +1,7 @@
 <script lang="ts">
   import { gameStore } from '$lib/game.svelte';
   import { sendContinuation } from '$lib/socket.svelte';
-  let { onChangeOpponent }: { onChangeOpponent: () => void } = $props();
+  let { onChangeOpponent, onEditNext }: { onChangeOpponent: () => void; onEditNext: () => void } = $props();
   const session = $derived(gameStore.playSession);
   function continueGame(intent: 'rematch' | 'swap_sides'): void {
     if (!gameStore.gameOver && !window.confirm('Stop the current game and start the next game in this session?')) return;
@@ -18,6 +18,7 @@
       {#if gameStore.hasCapability('configure_match')}
         <button class="btn btn-primary btn-sm" disabled={gameStore.newGamePending} onclick={() => continueGame('rematch')}>Rematch</button>
         <button class="btn btn-secondary btn-sm" disabled={gameStore.newGamePending} onclick={() => continueGame('swap_sides')}>Swap sides</button>
+        <button class="btn btn-secondary btn-sm" disabled={gameStore.newGamePending} onclick={onEditNext}>Edit next game</button>
         <button class="btn btn-secondary btn-sm" disabled={gameStore.newGamePending} onclick={onChangeOpponent}>Change opponent</button>
       {/if}
     </div>

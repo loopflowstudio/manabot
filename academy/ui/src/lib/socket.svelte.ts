@@ -1,4 +1,4 @@
-import { rememberCurrentGame } from './current-game.svelte';
+import { currentGame, rememberCurrentGame } from './current-game.svelte';
 import type { PlaySession } from './play-session';
 import { browser } from '$app/environment';
 
@@ -542,7 +542,7 @@ export class GameSocketController {
 
     if (message.type === 'observation' || message.type === 'game_over') {
       gameStore.tableUnavailable = false;
-      rememberCurrentGame('/');
+      if (!this.pendingResume || !currentGame.href) rememberCurrentGame('/');
       if (this.pendingResume) {
         try {
           const pending = JSON.parse(tabValue('academy.continuation') ?? 'null');

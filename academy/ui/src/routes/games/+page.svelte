@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { currentGame } from '$lib/current-game.svelte';
   import GameFileImport from '$lib/components/GameFileImport.svelte';
   import type { SessionResult } from '$lib/play-session';
   import { playerIdentity, recordedIdentity, shortHash } from '$lib/player-identity';
@@ -155,7 +156,7 @@
         </details>
       {/each}
       {#if nextResultOffset !== null}<button class="btn btn-secondary mt-2" disabled={moreResultsPending} onclick={moreResults}>More result configurations</button>{/if}
-      <a href="/" class="mt-2 inline-block underline">Return to current Play session</a>
+      {#if currentGame.href}<a href={currentGame.href} class="mt-2 inline-block underline">Return to current game</a>{/if}
     </section>
   {/if}
   <details class="mb-5 rounded border border-line bg-panel p-3">

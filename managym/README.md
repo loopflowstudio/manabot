@@ -49,9 +49,9 @@ with the reason before anything opens.
 Bundled names take precedence over same-named files; use `./ur_lessons` to
 select a file named `ur_lessons`.
 
-The same choices are in the browser. Open **Choose decks**. Browse a bundled deck and
-select **Use for me** or **Use for opponent** to assign each seat, choose an
-opponent such as **Search 64**, then click **New Game**.
+The same choices are in the browser. Open **New game**, expand **Browse decks
+and cards**, and assign a bundled deck to each native seat. Choose an opponent
+such as **Search 64**, then click **New Game**.
 
 For your own lists, expand **Import decklist files** and check **Use imported
 decks for the next game**. Upload or paste both decks, one `count card name`
@@ -64,7 +64,11 @@ setup, including imported lists, against their own admission requirements. See t
 For several games against a model, **Rematch**, **Swap sides** and **Change
 opponent** retain unrelated setup and group recordings in one session. See
 [playing a series](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#playing-a-series-against-a-model)
-for deal modes, results and recovery.
+for deal modes, results and recovery. **Edit next game** opens the session draft:
+**Save next setup** retains it, and **Start next game** starts a continuation.
+Global **New game** opens a separate session setup; **Cancel** discards edits.
+Changing both controllers to bots in the session editor offers **Start new
+watched game**, preserving the Play session.
 
 ### Watch a replay from an evaluation
 

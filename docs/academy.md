@@ -30,7 +30,9 @@ digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 this tab to its last table or watched game. Existing launch, replay and Watch
 links continue to open their intended games.
 
-New game shows two native seats. Choose each controller, deck and optional
+**New game** opens setup for a separate session, starting from retained choices.
+Edits here do not save into your current session; **Cancel** returns without
+committing them. Setup shows two native seats. Choose each controller, deck and optional
 **Search**. One controller can be you; choosing bots in both seats starts a
 watched game through the same setup. Seat 1 plays first; seat 2 draws first.
 Policies are chosen directly by name and execution identity. Their provider,
@@ -189,8 +191,8 @@ Missing or changed policy artifacts are refused with the provider's reason.
 
 Reloading the page returns to the same game and its pending decision; it does
 not deal again. To continue the series, use
-[Rematch or Swap sides](#playing-a-series-against-a-model). **New Game** returns
-to ordinary setup with the launched decks, opponent and decklist mode selected.
+[Rematch or Swap sides](#playing-a-series-against-a-model). **New game** opens a separate session setup with the launched decks, opponent
+and decklist mode selected.
 For imported matchups, setup shows
 both selected source files and their editable lists. Uncheck **Use imported
 decks for the next game** to choose bundled decks instead.
@@ -429,12 +431,12 @@ The table opens with UR Lessons (you) against GW Allies. Before starting:
   With manabot installed it also offers **Registered policy**, which adds a
   **Run** and a **Checkpoint** menu
   ([Play and watch a trained checkpoint](#play-and-watch-a-trained-checkpoint)).
-- **Choose decks** assigns a deck to each seat from the bundled packs.
+- **New game** assigns a deck to each seat from the bundled packs.
 - **New Game** starts a new session with the selected matchup. Replacing an
   active game requires confirmation that it will be stopped. To keep games
   together, use [Rematch, Swap sides or Change opponent](#playing-a-series-against-a-model).
 
-To use your own decks, open **Choose decks**, expand **Import decklist files**
+To use your own decks, open **New game**, expand **Import decklist files**
 and check **Use imported decks for the next game**. Upload a UTF-8 `.txt` or
 `.dek` file for both **Your deck** and **Opponent deck**, or paste each list
 into its source box. Write one `count card name` per line, with optional
@@ -457,7 +459,7 @@ pending decision.
 ### Playing a series against a model
 
 Choose **Registered policy**, select the intended policy, and import your decks
-through **Choose decks**. Check the matchup, decklist disclosure, priority stops
+through **New game**. Check the matchup, decklist disclosure, priority stops
 and deal mode, then select **New Game**. After the game finishes, select
 **Rematch** to play again with that setup. After the next game, select
 **Swap sides**: you keep your deck and move from playing first to drawing first,
@@ -483,12 +485,22 @@ its admitted decks, disclosure, actual seed and native seats.
 | **New Game** | Starts a separate session from setup |
 
 Your preferred **Play** or **Inspect** mode stays selected across games. To
-exchange decks, edit them explicitly in **Choose decks**. Changing setup affects
-the next game; it does not rewrite earlier recordings. **Save next setup**
-retains edits without starting a game; **Continue with setup** starts it in
-the same session. Stop edits during play
-also carry into the next game. Replacing an unfinished game warns that it will
-be stopped; inspecting setup or opening a recording does not stop it.
+exchange decks within the series, choose **Edit next game** in the session strip.
+**Change opponent** opens only the opponent settings. Both editors show that
+edits belong to this session's next game. **Save next setup** retains the draft
+without starting or admitting a game; **Start next game** admits it and starts
+one continuation in the same session. **Cancel** discards unsaved edits.
+Earlier recordings keep their original setup. Stop edits during play also carry
+into the next game.
+
+If both controllers become bots in **Edit next game**, choose **Start new
+watched game**. This creates a separate Watch game and preserves the Play
+session and current attempt. **Current game** then returns to that watched game;
+reading another session's history does not change that destination.
+Admission refusal keeps the editor, edits, current game and saved draft usable.
+Reload discards unsaved edits and restores committed setup and the actual
+pending game; it never silently starts another game. Replacing an unfinished
+game warns that it will be stopped; inspecting setup or opening a recording does not stop it.
 
 #### Choose the deal deliberately
 
@@ -1365,10 +1377,10 @@ Checkpoint records live in `.runs/elemental-play/checkpoints/`, attempts in
 `.runs/elemental-play/human-play/play.sqlite` marked `human_exploratory`.
 
 The printed **Elemental deck browser** link assigns either seat from the ten
-`elemental-world-v2` setups (mirrors allowed) with **Use for me** / **Use for
-opponent**. **Choose decks** prepares the next matchup; starting the next game
-replaces the current attempt. On a scripted seed-0 game (2026-10-26), stop and
-forced-step automation cut deliberate inputs from 289 to 73.
+`elemental-world-v2` setups (mirrors allowed) with a deck assignment for each
+native seat. **Edit next game** prepares the next matchup in the current session;
+starting it replaces the current attempt. **New game** starts a separate session.
+On a scripted seed-0 game (2026-10-26), stop and forced-step automation cut deliberate inputs from 289 to 73.
 
 ### Other checkpoints
 

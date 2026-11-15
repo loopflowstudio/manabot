@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { currentGame } from '$lib/current-game.svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import GameSetup from '$lib/components/GameSetup.svelte';
@@ -27,7 +28,7 @@
   import SearchThinking from '$lib/components/SearchThinking.svelte';
   import StopsPanel from '$lib/components/StopsPanel.svelte';
   import SharedTablePanel from '$lib/components/SharedTablePanel.svelte';
-  import { policyChoice, gameStore } from '$lib/game.svelte';
+  import { policyChoice, gameStore, type GameStore } from '$lib/game.svelte';
   import { sanitizeDeckSelection } from '$lib/decks';
   import { presentationPlayer, studyPresentationPlayer } from '$lib/presentation.svelte';
   import {
@@ -49,10 +50,11 @@
 
   let demoName = $state<string | null>(null);
   let learnDemo = $state(false);
-  let showSetup = $state(false);
-  let changingOpponent = $state(false);
+  type Editor = {kind:'closed'} | {kind:'new' | 'next'; setup:GameStore; opponentOnly:boolean; pendingAttempt?:string | null};
+  let editor = $state<Editor>({kind:'closed'});
+  let mounted = $state(false);
+  let awaitingRecovery = $state(false);
   let setupStatus = $state('');
-  let launchedSetup = $state(false);
 
   let tableMode = $state<TableMode>('inspect');
   let selection = $state<PlaySelection | null>(null);
@@ -78,7 +80,8 @@
     }
     learnDemo = demoName === 'learn';
     if (demoName) gameStore.setOpponentChoice(learnDemo ? 'random' : 'passive');
-    launchedSetup = params.has('launch');
+    try { awaitingRecovery = !gameStore.resumeToken && sessionStorage.getItem('etude.gui.resume') !== null; } catch { /* In-memory setup remains usable. */ }
+    mounted = true;
     connect(params.get('launch'));
 
     return () => {
@@ -110,68 +113,94 @@
     gameStore.clearFocus();
   }
 
+  function openEditor(kind: 'new' | 'next', opponentOnly = false): void {
+    const draft = kind === 'next' ? gameStore.playSession?.draft : undefined;
+    editor = {kind, opponentOnly, setup:gameStore.editableSetup(draft)};
+    setupStatus = '';
+    gameStore.setError(null);
+  }
+
+  function cancelEditor(): void {
+    const destination = editor.kind === 'new' ? currentGame.href ?? '/' : '/';
+    editor = {kind:'closed'};
+    setupStatus = '';
+    gameStore.setError(null);
+    if (page.url.searchParams.has('setup')) void goto(destination);
+  }
+
   function startNewGame(): void {
     if (gameStore.newGamePending) return;
-    if (gameStore.watchMode && !demoName) {
+    if (demoName) { sendNewGame({demo:demoName}); return; }
+    if (editor.kind === 'closed') { openEditor('new'); return; }
+    const setup = editor.setup;
+    if (setup.dealMode === 'repeat' && seedError(setup.seed)) { gameStore.setError(seedError(setup.seed)); return; }
+    if (setup.watchMode) {
       gameStore.newGamePending = true;
-      void startConfiguredWatch().then(id => goto(`/replay?trace=${encodeURIComponent(id)}`)).catch(error => gameStore.setError(error.message)).finally(() => gameStore.newGamePending = false);
+      gameStore.setError(null);
+      void startConfiguredWatch(setup).then(id => goto(`/replay?trace=${encodeURIComponent(id)}`))
+        .catch(error => gameStore.setError(error.message)).finally(() => gameStore.newGamePending = false);
       return;
     }
-    if (!gameStore.hasCapability('configure_match')) {
-      gameStore.setError('Only the acting pilot can start or reset the match.');
-      return;
-    }
-    if (demoName) {
-      sendNewGame({ demo: demoName });
-      return;
-    }
-    if (launchedSetup && gameStore.observation && !showSetup) {
-      launchedSetup = false;
-      showSetup = true;
-      return;
-    }
-    if (gameStore.dealMode === 'repeat' && seedError(gameStore.seed)) {
-      gameStore.setError(seedError(gameStore.seed)); return;
-    }
+    if (!gameStore.hasCapability('configure_match')) { gameStore.setError('Only the acting pilot can start or reset the match.'); return; }
     if (gameActive && !window.confirm('Stop the current game and start a new session?')) return;
-    launchedSetup = false;
-    sendNewGame(gameStore.newGameConfig());
-    showSetup = false;
-    if (page.url.searchParams.has('setup')) void goto('/');
+    editor.pendingAttempt = gameStore.table?.attempt_id ?? null;
+    sendNewGame(setup.newGameConfig());
+  }
+
+  function editorConfig(): Record<string, unknown> {
+    if (editor.kind === 'closed') return {};
+    const setup = editor.setup;
+    const config = editor.opponentOnly ? {...setup.opponentConfig(), mirror:setup.searchConfig} : setup.newGameConfig();
+    delete config.request_id;
+    return config;
   }
 
   async function saveNextSetup(): Promise<void> {
     const session = gameStore.playSession;
     const table = gameStore.table;
-    if (!session || !table || !gameStore.resumeToken) return;
-    if (gameStore.dealMode === 'repeat' && seedError(gameStore.seed)) { gameStore.setError(seedError(gameStore.seed)); return; }
+    if (editor.kind !== 'next' || editor.setup.watchMode || !session || !table || !gameStore.resumeToken) return;
+    if (editor.setup.dealMode === 'repeat' && seedError(editor.setup.seed)) { gameStore.setError(seedError(editor.setup.seed)); return; }
+    gameStore.setError(null);
     try {
-      const config = changingOpponent ? {...gameStore.opponentConfig(), mirror: gameStore.searchConfig} : gameStore.newGameConfig();
       const response = await recordFetch(`/api/play-sessions/${encodeURIComponent(session.id)}`, {
         method: 'PUT', headers: {'content-type':'application/json', 'x-etude-participant-token':gameStore.resumeToken},
-        body: JSON.stringify({table_id:table.table_id, grant_revision:table.access.grant_revision, revision:session.revision, config}),
+        body: JSON.stringify({table_id:table.table_id, grant_revision:table.access.grant_revision, revision:session.revision, config:editorConfig()}),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(typeof payload.detail === 'string' ? payload.detail : 'Setup could not be saved.');
       gameStore.applyPlaySession(payload as PlaySession);
-      setupStatus = 'Next-game setup saved. The current game is unchanged.';
+      setupStatus = 'Next-game setup saved. The current game is unchanged; admission is checked when starting.';
       gameStore.tableAnnouncement = setupStatus;
     } catch (error) { gameStore.setError(error instanceof Error ? error.message : 'Setup could not be saved.'); }
   }
 
   function continueWithSetup(): void {
+    if (editor.kind !== 'next' || editor.setup.watchMode || gameStore.newGamePending) return;
+    if (editor.setup.dealMode === 'repeat' && seedError(editor.setup.seed)) { gameStore.setError(seedError(editor.setup.seed)); return; }
     if (gameActive && !window.confirm('Stop the current game and start the next game in this session?')) return;
-    if (gameStore.dealMode === 'repeat' && seedError(gameStore.seed)) { gameStore.setError(seedError(gameStore.seed)); return; }
-    const config = changingOpponent
-      ? { ...gameStore.opponentConfig(), mirror: gameStore.searchConfig }
-      : gameStore.newGameConfig();
-    delete (config as Record<string, unknown>).request_id;
-    sendContinuation(changingOpponent ? 'change_opponent' : 'rematch', config);
-    changingOpponent = false;
-    showSetup = false;
+    editor.pendingAttempt = gameStore.table?.attempt_id ?? null;
+    sendContinuation(editor.opponentOnly ? 'change_opponent' : 'rematch', editorConfig());
   }
 
-  $effect(() => { if (page.url.searchParams.has('setup')) showSetup = true; });
+  $effect(() => {
+    if (awaitingRecovery && (gameStore.resumeToken || gameStore.resumeFailed || gameStore.tableUnavailable)) awaitingRecovery = false;
+    if (!mounted || awaitingRecovery || demoName || page.url.searchParams.has('launch')) return;
+    const wantsNew = page.url.searchParams.has('setup');
+    untrack(() => {
+      if (wantsNew) openEditor('new');
+      else if (!gameStore.observation && editor.kind === 'closed') openEditor('new');
+      else if (editor.kind === 'new') editor = {kind:'closed'};
+    });
+  });
+
+  // A refusal leaves intent and edits intact. Only a new authoritative attempt closes it.
+  $effect(() => {
+    if (editor.kind !== 'closed' && editor.pendingAttempt !== undefined && !gameStore.newGamePending) {
+      const attempt = gameStore.table?.attempt_id;
+      if (attempt && attempt !== editor.pendingAttempt) untrack(cancelEditor);
+      else editor.pendingAttempt = undefined;
+    }
+  });
 
   const gameActive = $derived(gameStore.observation !== null && !gameStore.gameOver);
   const pilotCanAct = $derived(gameStore.hasCapability('submit_live_command'));
@@ -374,13 +403,13 @@
 </script>
 
 <main
-  class:table-active={gameStore.observation !== null && !showSetup}
+  class:table-active={gameStore.observation !== null && editor.kind === 'closed'}
   class="play-page mx-auto w-full max-w-[1600px] px-4 py-4"
   data-update-seq={gameStore.updateSeq}
   data-frame-revision={gameStore.protocolFrame?.revision ?? -1}
   data-table-revision={gameStore.table?.table_revision ?? -1}
 >
-  <h1 class="sr-only">{!gameStore.observation || showSetup ? 'New game' : 'Current game'}</h1>
+  <h1 class="sr-only">{!gameStore.observation || editor.kind !== 'closed' ? 'New game' : 'Current game'}</h1>
 
   {#if gameStore.errorMessage}
     <section role="alert" aria-atomic="true" class="mb-4 rounded border border-mountain/50 bg-mountain/20 px-4 py-3 text-mountain-ink">
@@ -430,11 +459,6 @@
           <button class="btn btn-secondary btn-sm" aria-pressed={tableMode === 'play'} onclick={() => changeMode('play')}>Play</button>
           <button class="btn btn-secondary btn-sm" aria-pressed={tableMode === 'inspect'} onclick={() => changeMode('inspect')}>Inspect</button>
         </div>
-        {#if !demoName && gameStore.observation && gameStore.hasCapability('configure_match')}
-          <button class="btn" aria-expanded={showSetup} onclick={() => { changingOpponent = false; showSetup = !showSetup; }}>
-            {showSetup ? 'Return to game' : 'Choose decks'}
-          </button>
-        {/if}
         <div data-testid="connection-summary" class="flex items-center gap-1.5">
           <i
             aria-hidden="true"
@@ -465,17 +489,32 @@
 
   {#if gameStore.tableUnavailable}<p role="status" class="mt-2 text-sm">The previous table is no longer live. Its recording is retained; start the next game explicitly.</p>{/if}
   {#if gameStore.storageWarning}<p role="status" class="mt-2 text-sm">{gameStore.storageWarning}</p>{/if}
-  {#if !demoName}<PlaySessionStrip onChangeOpponent={() => { changingOpponent = true; showSetup = true; }} />{/if}
-  {#if showSetup && gameStore.playSession && !gameStore.watchMode}
-    {#if setupStatus}<p role="status" class="type-caption mt-2">{setupStatus}</p>{/if}
-    <button class="btn btn-secondary mt-3" disabled={gameStore.newGamePending} onclick={saveNextSetup}>Save next setup</button>
-    <button class="btn btn-primary mt-3" disabled={gameStore.newGamePending} onclick={continueWithSetup}>{changingOpponent ? 'Start with opponent' : 'Continue with setup'}</button>
-  {/if}
+  {#if !demoName}<PlaySessionStrip onEditNext={() => openEditor('next')} onChangeOpponent={() => openEditor('next', true)} />{/if}
   {#if !gameStore.observation}
     <p class="mt-3 text-sm text-ink-2">New games appear in shared <a href="/games" class="underline">Games history</a>, where you can set your player name. Completed replays are shared; feedback stays private.</p>
   {/if}
-  {#if !demoName && (!gameStore.observation || showSetup) && gameStore.hasCapability('configure_match')}
-    <GameSetup onStart={startNewGame} disabled={gameStore.newGamePending} opponentOnly={changingOpponent && gameStore.playSession !== null} />
+  {#if !demoName && editor.kind !== 'closed' && gameStore.hasCapability('configure_match')}
+    <section aria-label={editor.kind === 'new' ? 'New session setup' : 'Next game setup'} class="mt-4 border-b border-line pb-4">
+      <h2 class="type-title">{editor.kind === 'new' ? 'New session' : editor.opponentOnly ? 'Change opponent' : 'Edit next game'}</h2>
+      <p class="type-caption mt-2">{editor.kind === 'new'
+        ? 'Start a separate session. These edits do not change your current session draft.'
+        : 'Setup for the next game in this Play session. Earlier games keep their recorded configuration.'}</p>
+      {#key editor.setup}
+        <GameSetup setup={editor.setup} onStart={startNewGame} disabled={gameStore.newGamePending}
+          opponentOnly={editor.opponentOnly} showStart={editor.kind === 'new'} />
+      {/key}
+      {#if setupStatus}<p role="status" class="type-caption mt-2">{setupStatus}</p>{/if}
+      {#if editor.kind === 'next'}
+        {#if editor.setup.watchMode}
+          <p class="type-caption">Two bots start a separate watched game. Your Play session and its current game stay available in Games.</p>
+          <button class="btn btn-primary mt-3" disabled={gameStore.newGamePending} onclick={startNewGame}>Start new watched game</button>
+        {:else}
+          <button class="btn btn-secondary mt-3" disabled={gameStore.newGamePending} onclick={saveNextSetup}>Save next setup</button>
+          <button class="btn btn-primary mt-3" disabled={gameStore.newGamePending} onclick={continueWithSetup}>Start next game</button>
+        {/if}
+      {/if}
+      <button class="btn btn-secondary mt-3" disabled={gameStore.newGamePending} onclick={cancelEditor}>Cancel</button>
+    </section>
   {/if}
   {#if gameStore.observation && boardObservation}
     <div class="play-workspace" data-testid="play-workspace">
