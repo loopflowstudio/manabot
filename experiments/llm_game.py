@@ -5,14 +5,14 @@ import json
 from pathlib import Path
 import subprocess
 
-from etude.jobs import training
+from etude.jobs import TrainingJob
 from etude.launch.records import Input, Job, Variable
 
 from manabot.infra.artifacts import StoredArtifact, split_bucket_uri
 from manabot.verify.llm_game import GameConfig, run
 
 
-def runs(native_artifact: str, native_source: str) -> Job:
+def training_jobs(native_artifact: str, native_source: str) -> Job:
     """Receipts identify uploaded bytes and the CI commit that built the engine."""
     artifact = StoredArtifact.model_validate_json(Path(native_artifact).read_text())
     provenance = json.loads(Path(native_source).read_text())
@@ -40,8 +40,8 @@ def runs(native_artifact: str, native_source: str) -> Job:
         raise ValueError(
             "this launch recipe requires the configured manabot R2 storage"
         )
-    return training(
-        run,
+    return TrainingJob(
+        train=run,
         config=GameConfig(inference=Path("configs/llm/qwen3.5-9b-game.json")),
         repo=".",
         revision="HEAD",

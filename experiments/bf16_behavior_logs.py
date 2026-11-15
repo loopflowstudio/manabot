@@ -133,7 +133,7 @@ def probe(output: Path, *, smoke: bool = False) -> None:
     )
 
 
-def runs(revision: str) -> list[Run]:
+def training_jobs(revision: str) -> list[Run]:
     """One L4 proof, with the USD 5 ceiling on the job itself.
 
     The probe is its own process ahead of the unmodified training worker, so

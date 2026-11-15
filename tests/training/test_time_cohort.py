@@ -209,7 +209,7 @@ def test_etude_written_logs_are_selectable_without_invented_phases(
     tmp_path: Path,
 ) -> None:
     from etude.train.records import Step, Time
-    from etude.train.run import track
+    from etude.train.tracking import track
 
     for seed, seconds in [(1, 10.0), (2, 100.0)]:
         run = track(
@@ -329,7 +329,7 @@ def test_standalone_uses_cohort_page_and_escapes_untrusted_data(tmp_path: Path) 
 
 def test_etude_resume_keeps_sunk_time_but_not_duplicate_work(tmp_path: Path) -> None:
     from etude.train.records import Step, Time
-    from etude.train.run import track
+    from etude.train.tracking import track
 
     clocks = [
         Time("training_seconds", "active seconds"),
@@ -343,15 +343,18 @@ def test_etude_resume_keeps_sunk_time_but_not_duplicate_work(tmp_path: Path) -> 
         run="same",
         directory=tmp_path,
         clocks=clocks,
-        resumed_at={"training_seconds": 8},
+        resume=True,
     )
+    second.log(training_seconds=8, learner_transitions=80)
     second.log({"loss": 0.5}, training_seconds=12, learner_transitions=120)
     second.finish()
     run = load_time_sources([str(tmp_path)]).runs[0]
     assert len(run.members) == 2
     assert run.active_seconds == 14
     assert run.learner_transitions == 120
-    third = track(experiment="resume", run="same", directory=tmp_path, clocks=clocks)
+    third = track(
+        experiment="resume", run="same", directory=tmp_path, clocks=clocks, resume=True
+    )
     third.log({"loss": 0.4}, training_seconds=14, learner_transitions=140)
     third.finish()
     assert load_time_sources([str(tmp_path)]).runs[0].active_seconds is None
@@ -394,10 +397,10 @@ def test_cli_creates_report_from_saved_native_records(tmp_path: Path) -> None:
 def test_etude_continuation_adds_attempt_duration_and_uses_leaf_progress(
     tmp_path: Path,
 ) -> None:
-    from etude.run.records import Continuation
+    from etude.records import Continuation
     from etude.train.read import read_all
     from etude.train.records import Step, Time
-    from etude.train.run import track
+    from etude.train.tracking import track
 
     clocks = [
         Time("training_seconds", "active seconds"),
@@ -416,7 +419,7 @@ def test_etude_continuation_adds_attempt_duration_and_uses_leaf_progress(
         directory=tmp_path,
         clocks=clocks,
         continues=Continuation(
-            parent=declaration.declaration.source_key, clock="training_seconds", value=8
+            parent=declaration.source_key, clock="training_seconds", value=8
         ),
     )
     child.log({"loss": 0.5}, training_seconds=12, learner_transitions=120)
@@ -430,7 +433,7 @@ def test_etude_continuation_adds_attempt_duration_and_uses_leaf_progress(
 
 def test_mixed_record_schemas_and_phase_coverage(tmp_path: Path) -> None:
     from etude.train.records import Step
-    from etude.train.run import track
+    from etude.train.tracking import track
 
     native_dir = tmp_path / "native"
     native_dir.mkdir()

@@ -36,7 +36,7 @@ from typing import Any
 
 from etude.eval.query import statsdb
 from etude.eval.records import Code, digest
-from etude.run.storage import Storage, storage_from_uri
+from etude.storage import Storage, storage_from_uri
 import numpy as np
 from pydantic import BaseModel
 

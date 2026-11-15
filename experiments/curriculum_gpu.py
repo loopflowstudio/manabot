@@ -62,7 +62,7 @@ def benchmark(original: Benchmark) -> Benchmark:
             matchup.model_copy(
                 update={
                     "players": (inference, anchor),
-                    "conditions": conditions,
+                    "config": conditions,
                     "tags": tuple(
                         tag + "-gpu" if tag in {"development", "held-out"} else tag
                         for tag in matchup.tags

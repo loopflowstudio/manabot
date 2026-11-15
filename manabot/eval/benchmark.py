@@ -9,11 +9,10 @@ repeatedly inspected deals are development monitoring, not a held-out study.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from functools import partial
 import os
 from pathlib import Path
 
-from etude.eval.match import Row, Tables
+from etude.eval.match import Tables
 from etude.eval.records import (
     Benchmark,
     CheckpointKey,
@@ -24,8 +23,9 @@ from etude.eval.records import (
     Match,
     Seating,
 )
+from etude.eval.run import Row
 from etude.eval.tournament import hold
-from etude.run.records import ArtifactRef
+from etude.records import ArtifactRef
 from pydantic import BaseModel
 
 from manabot.eval.endpoint import InferenceEndpoint, callback_allocation
@@ -240,10 +240,14 @@ def evaluate(
             directory / "execution-manifest.json", manifest.model_dump(mode="json")
         )
     with callback_allocation(execution, directory / "allocation") as inference:
+
+        def play_match(match: Match) -> Tables:
+            return play(match, inference=inference)
+
         result = hold(
             benchmark(manifest),
             experiment=BENCHMARK,
-            play=partial(play, inference=inference) if inference else play,
+            play=play_match,
             # The training run's export, wherever its bytes are read from.
             checkpoint=CheckpointRef(
                 key=CheckpointKey(run=manifest.run_id, name=path.name),
