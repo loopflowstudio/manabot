@@ -906,6 +906,9 @@ pub struct ActionSpaceData {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Observation {
+    /// Absent in historical observations; never infer old explanations.
+    #[serde(default)]
+    pub unavailable_actions: Option<Vec<super::guidance::UnavailableAction>>,
     /// Absent only in historical captures; v7 must not invent missing provenance.
     #[serde(default)]
     pub shared_effects: Option<Vec<super::shared_effects::SharedEffectData>>,
@@ -1064,6 +1067,7 @@ impl Observation {
         let opponent = Self::player_data(game, opponent_player, agent_player);
 
         let mut obs = Self {
+            unavailable_actions: Some(Vec::new()),
             shared_effects: Some(super::shared_effects::project(game)),
             continuation: game.continuation_frames(agent_player),
             game_over,
@@ -1088,6 +1092,7 @@ impl Observation {
         obs.populate_cards(game, agent_player);
         obs.populate_permanents(game, agent_player);
         obs.populate_stack_objects(game);
+        obs.unavailable_actions = Some(super::guidance::project(game, &obs, expose_actions));
         obs
     }
 

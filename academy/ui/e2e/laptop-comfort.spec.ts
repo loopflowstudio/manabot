@@ -358,13 +358,15 @@ for (const [seed, viewport] of [
     const observed = new Map<number, PresentationEvent>();
     let matchId = '';
     let liveFrame: ExperienceFrame | null = null;
+    let working = false;
     const submitted: Command[] = [];
     let reloadedTarget = false;
     let selectedSources = 0;
     await page.routeWebSocket('**/ws/play', socket => {
       const server = socket.connectToServer();
       server.onMessage(raw => {
-        const message = JSON.parse(String(raw)) as { recovery?: RecoveryEnvelope; update?: FrameUpdate };
+        const message = JSON.parse(String(raw)) as { recovery?: RecoveryEnvelope; update?: FrameUpdate; work?: {state: string} | null };
+        if ('work' in message) working = message.work?.state === 'running';
         const frame = message.recovery?.frame ?? message.update?.frame;
         if (frame) { matchId = frame.match_id; liveFrame = frame; }
         for (const event of message.recovery?.presentation_tail ?? message.update?.presentation ?? []) observed.set(event.seq, event);
@@ -388,6 +390,10 @@ for (const [seed, viewport] of [
         const options = page.getByTestId('action-option');
         const result = page.getByTestId('game-result');
         await expect(page.locator('[data-testid="action-option"], [data-testid="learn-mode"]:not(:disabled), [data-testid="game-result"], [data-testid="combat-composer"]').first()).toBeVisible();
+        // An early immutable receipt can precede bot/automation frames. Bind
+        // inspection and the next input to the settled, enabled authority.
+        await expect.poll(() => !working).toBe(true);
+        await expect(page.locator('main')).toHaveAttribute('data-frame-revision', String(liveFrame!.revision));
         if (await result.isVisible()) {
           expect(selectedSources).toBeGreaterThan(0);
           expect(reloadedTarget).toBe(true);

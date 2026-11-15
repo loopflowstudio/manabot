@@ -36,7 +36,7 @@ from starlette.websockets import WebSocketState
 
 import managym
 from managym.academy.card_art import card_art
-from managym.bots import BotDecision, BotPolicy, choose_bot
+from managym.bots import BotDecision, BotPolicy, FlatSearchPolicy, choose_bot
 from managym.decision import (
     Command as SemanticCommand,
     SemanticTransition,
@@ -182,6 +182,7 @@ from .study_runtime import (
 )
 from .trace import GameConfig, Trace, TraceEvent
 from .villain import build_villain_policy
+from .work import Work, WorkStatus
 
 # Interactive remains a lightweight mirror of manabot.verify.util. Curated
 # manifests are checked against the compiled rules setup without importing torch.
@@ -317,6 +318,7 @@ class SessionRecord:
     shared_beliefs: dict[str, dict[str, Any]] = field(default_factory=dict)
     accepted_command_submitters: dict[str, str] = field(default_factory=dict)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    published: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.participants:
@@ -842,7 +844,7 @@ def close_policies(policies: Iterable[BotPolicy | None]) -> None:
                 resources.callback(policy.close)
 
 
-class PendingSearch(TypedDict):
+class PendingBotDecision(TypedDict):
     code: str
     message: str
     match_id: str
@@ -864,11 +866,12 @@ class GameSession:
     ) -> None:
         self.trace_dir = trace_dir or trace_store.TRACES_DIR
         self.watch_mode = watch_mode
+        self.work = Work()
         self.human_seat = 0
         self.interrupted_config: dict[str, Any] | None = None
         self.watch_policies: tuple[BotPolicy, BotPolicy] | None = None
         self._bot_decision: BotDecision | None = None
-        self.mirror_retry: PendingSearch | None = None
+        self.mirror_retry: PendingBotDecision | None = None
         self._id_factory = id_factory or (lambda _kind: secrets.token_urlsafe(16))
         self._clock = clock or trace_store.utc_now_iso
         self.attempt_owner = participant_id(secrets.token_urlsafe(32))
@@ -997,6 +1000,7 @@ class GameSession:
         config = _parse_game_config(raw_config)
         seed = config.seed if config.seed is not None else secrets.randbits(32)
         config.seed = seed
+        self.work.stage("load")
         try:
             policy = (
                 None
@@ -1277,7 +1281,9 @@ class GameSession:
         self._last_presentation_cursor = batch_cursor
         return self._wire_message()
 
-    def hero_command(self, raw: Any) -> dict[str, Any]:
+    def hero_command(
+        self, raw: Any, *, committed: Callable[[dict[str, Any]], None] | None = None
+    ) -> dict[str, Any]:
         """Validate and apply one revision-bound protocol-v1 command.
 
         Offer IDs are lowered through ``PublishedPrompt``. The client never
@@ -1334,35 +1340,49 @@ class GameSession:
         base_revision = context.revision
         batch_cursor = self.presentation.next_seq
         self._apply_bound_command(context, command, source="client")
-        self._advance()
-        self._last_presentation_cursor = batch_cursor
-        presentation = [
-            dict(event)
-            for event in self.presentation_events
-            if int(event["seq"]) >= batch_cursor
-        ]
-        frame = self._experience_frame()
-        transient = self._drain_surface_metadata()
+        # The receipt names the human transition, before any opponent proposal.
+        # A later failure must not make an accepted Command appear unexecuted.
+        committed_frame = self._experience_frame()
         receipt = {
             "command_id": command_id,
             "actor": self.human_seat,
             "accepted_at": base_revision,
             "resulting_revision": self.revision,
-            "resulting_frame_hash": frame["frame_hash"],
+            "resulting_frame_hash": committed_frame["frame_hash"],
         }
         self.accepted_commands[command_id] = receipt
         while len(self.accepted_commands) > MAX_ACCEPTED_COMMANDS:
             self.accepted_commands.pop(next(iter(self.accepted_commands)))
 
+        if committed is not None:
+            committed(self._accepted_outcome(base_revision, batch_cursor, receipt))
+            base_revision = self.revision
+            batch_cursor = self.presentation.next_seq
+        self._advance()
+        self._last_presentation_cursor = batch_cursor
+        return self._accepted_outcome(base_revision, batch_cursor, receipt)
+
+    def _accepted_outcome(
+        self, base_revision: int, cursor: int, receipt: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Publish events since the last boundary with the immutable receipt.
+
+        The same envelope serves early commitment and the settled response;
+        later frames never change the transition named by the receipt.
+        """
         return {
             "type": "command_outcome",
             "status": "accepted",
             "update": {
                 "base_revision": base_revision,
-                "frame": frame,
-                "presentation": presentation,
-                "receipt": receipt,
-                **transient,
+                "frame": self._experience_frame(),
+                "presentation": [
+                    dict(event)
+                    for event in self.presentation_events
+                    if int(event["seq"]) >= cursor
+                ],
+                "receipt": deepcopy(receipt),
+                **self._drain_surface_metadata(),
             },
         }
 
@@ -1474,7 +1494,12 @@ class GameSession:
         staged.authority_fallback_counters = dict(self.authority_fallback_counters)
         return staged
 
-    def hero_declaration(self, raw: dict[str, Any]) -> dict[str, Any]:
+    def hero_declaration(
+        self,
+        raw: dict[str, Any],
+        *,
+        committed: Callable[[dict[str, Any]], None] | None = None,
+    ) -> dict[str, Any]:
         """Commit a full plan under the table lock, then run opponent policies.
 
         The lock owns the source through candidate execution, recording and the
@@ -1486,7 +1511,7 @@ class GameSession:
         command_id = raw.get("command_id")
         if not isinstance(command_id, str) or not command_id:
             raise ValueError("command_id must be a non-empty string.")
-        if isinstance(command_id, str) and command_id in self.accepted_commands:
+        if command_id in self.accepted_commands:
             return {
                 "type": "command_outcome",
                 "status": "duplicate",
@@ -1628,6 +1653,18 @@ class GameSession:
         ):
             setattr(self, name, getattr(staged, name))
         self.env = live_env
+        if committed is not None:
+            committed(
+                self._accepted_outcome(
+                    command.expected_revision,
+                    batch_cursor,
+                    receipt.model_dump(mode="json"),
+                )
+            )
+            batch_cursor = self.presentation.next_seq
+        response_base = (
+            self.revision if committed is not None else command.expected_revision
+        )
         try:
             self._observe_policies()
             self._advance()
@@ -1635,22 +1672,9 @@ class GameSession:
             if self.obs is not None and self.obs.game_over:
                 self._close_policies()
         self._last_presentation_cursor = batch_cursor
-        frame = self._experience_frame()
-        return {
-            "type": "command_outcome",
-            "status": "accepted",
-            "update": {
-                "base_revision": command.expected_revision,
-                "frame": frame,
-                "presentation": [
-                    dict(event)
-                    for event in self.presentation_events
-                    if int(event["seq"]) >= batch_cursor
-                ],
-                "receipt": receipt.model_dump(mode="json"),
-                **self._drain_surface_metadata(),
-            },
-        }
+        return self._accepted_outcome(
+            response_base, batch_cursor, receipt.model_dump(mode="json")
+        )
 
     def retry_mirror(self, match_id: str, expected_revision: int) -> dict[str, Any]:
         """Retry only the bound, uncommitted bot decision after a deadline."""
@@ -2015,27 +2039,47 @@ class GameSession:
                 if next_obs.game_over:
                     self._close_policies()
 
-    def _choose_bot(self, policy: BotPolicy) -> BotDecision:
-        """Retain a proposal or its pending timeout at the current revision.
+    def _choose_bot(self, policy: BotPolicy) -> BotDecision | None:
+        """Retain failed proposals on the same native decision and policy session.
 
-        Play and Watch share this binding; their callers decide how to present
-        the failure and commit successful proposals through bound Commands.
+        Only proposal work belongs here. Native commitment, observer delivery and
+        recording failures must still interrupt: they may follow a mutation.
+        The mirror_retry wire name is retained for existing clients.
         """
         assert self.env is not None and self.obs is not None
         self._bot_decision = None
         self.mirror_retry = None
+        self.work.stage(
+            "search"
+            if isinstance(policy, FlatSearchPolicy)
+            or isinstance(policy, PolicyRunner)
+            and policy.search is not None
+            else "choose",
+            self.match_id,
+            self.revision,
+            int(self.obs.agent.player_index),
+        )
         try:
-            self._bot_decision = choose_bot(policy, self.env, self.obs)
-        except SearchError as exc:
-            if exc.reason == "mirror_deadline_exceeded":
-                self.mirror_retry = {
-                    "code": exc.reason,
-                    "message": str(exc),
-                    "match_id": self.match_id,
-                    "expected_revision": self.revision,
-                }
-            raise
-        return self._bot_decision
+            proposal = choose_bot(policy, self.env, self.obs)
+        except Exception as exc:
+            code = exc.reason if isinstance(exc, SearchError) else "policy_failed"
+            if isinstance(exc, (SearchError, ValueError)):
+                message = str(exc)
+            else:
+                logging.getLogger(__name__).exception("Bot proposal failed")
+                message = (
+                    f"Bot decision failed ({type(exc).__name__}); see the server log."
+                )
+            self.mirror_retry = {
+                "code": code,
+                "message": message,
+                "match_id": self.match_id,
+                "expected_revision": self.revision,
+            }
+            return None
+        self.work.stage("advance", self.match_id, self.revision)
+        self._bot_decision = proposal
+        return proposal
 
     def _auto_play_villain(self) -> None:
         if self.env is None or self.obs is None or self.trace is None:
@@ -2059,21 +2103,10 @@ class GameSession:
                     )
             else:
                 self.authority_fallback_counters["legacy_fixed_action"] += 1
-                try:
-                    action_index = self._choose_bot(self.villain_policy).action
-                except SearchError as exc:
-                    if exc.reason != "mirror_deadline_exceeded":
-                        raise
+                proposal = self._choose_bot(self.villain_policy)
+                if proposal is None:
                     return
-                except ValueError as exc:
-                    # Validation and provider refusals carry authored reasons.
-                    raise RuntimeError(
-                        f"The opponent could not continue this game: {exc}"
-                    ) from exc
-                except Exception as exc:
-                    raise RuntimeError(
-                        "The opponent could not continue this game."
-                    ) from exc
+                action_index = proposal.action
                 if action_index < 0 or action_index >= len(context.actions):
                     raise RuntimeError(
                         f"Villain policy selected invalid action index: {action_index}"
@@ -2416,12 +2449,9 @@ class GameSession:
         if self.obs is None:
             raise RuntimeError("No observation available.")
 
-        if self.mirror_retry is not None or (
-            self.watch_mode and int(self.obs.agent.player_index) != self.human_seat
-        ):
-            # Startup/recovery keeps this viewer's projection. Watch may begin
-            # at the other seat after native forced-choice skipping; its offers
-            # belong only to that acting viewer and are published when stepped.
+        if not self.obs.game_over and not _is_hero_turn(self.obs, self.human_seat):
+            # The pending choice belongs to the bot. Publish the human's view
+            # without a human prompt or any of the bot's private legal offers.
             self.published_prompt = None
             self._persist_attempt()
             return self._build_frame(
@@ -2984,7 +3014,7 @@ def _cleanup_expired_sessions() -> None:
     expired_ids = [
         session_id
         for session_id, record in SESSION_REGISTRY.items()
-        if record.expires_at <= now
+        if record.expires_at <= now and not record.lock.locked()
     ]
     for session_id in expired_ids:
         _drop_session(session_id, end_reason=SESSION_EXPIRED_END_REASON)
@@ -3196,6 +3226,7 @@ def _response_with_participant(
     watcher_invite: str | None = None,
 ) -> dict[str, Any]:
     payload = deepcopy(response)
+    payload["work"] = record.game.work.payload()
     payload["mirror_retry"] = record.game.mirror_retry
     payload["mirror"] = (
         asdict(record.game.trace.config).get("mirror") if record.game.trace else None
@@ -3405,6 +3436,7 @@ def _dispatch_table_request(
     record: SessionRecord,
     participant: ParticipantLease,
     request: Any,
+    committed: Callable[[dict[str, Any]], None] | None = None,
 ) -> tuple[dict[str, Any], bool]:
     """Authorize and execute one closed operation under the table lock."""
     if isinstance(request, (CommandMessage, DeclarationMessage)):
@@ -3452,7 +3484,9 @@ def _dispatch_table_request(
                 if isinstance(request, DeclarationMessage)
                 else record.game.hero_command
             )
-            response = apply(request.command.model_dump(mode="json"))
+            response = apply(
+                request.command.model_dump(mode="json"), committed=committed
+            )
         finally:
             # Keep retry ownership if policy/transport work failed after commit.
             if command_id not in record.game.accepted_commands:
@@ -3598,6 +3632,42 @@ def _request_error(request: object, message: str) -> dict[str, Any]:
     return error
 
 
+def _cache_table_recovery(record: SessionRecord) -> None:
+    # Project once at a safe worker boundary, then apply each viewer's access.
+    response: dict[str, Any]
+    if record.game.obs is None:
+        response = {"type": "table_snapshot"}
+    else:
+        recovery = record.game.current_recovery("reconnect")
+        frame = recovery["frame"]
+        response = {
+            "type": "game_over" if frame["projection"]["game_over"] else "observation",
+            "data": frame["projection"],
+            "actions": [],
+            "winner": frame["winner"],
+            "frame": frame,
+            "recovery": recovery,
+        }
+    for participant in list(record.participants.values()):
+        record.published[participant.viewer_id] = _response_with_participant(
+            response, record, participant
+        )
+
+
+async def _publish_work(record: SessionRecord, status: WorkStatus) -> None:
+    # Status has no projection path. Resume uses the last permitted publication.
+    for participant in list(record.participants.values()):
+        if participant.websocket is not None:
+            with suppress(Exception):
+                await participant.websocket.send_json(
+                    {
+                        "type": "work_status",
+                        "session_id": record.session_id,
+                        "work": asdict(status),
+                    }
+                )
+
+
 async def _send_table_response(
     record: SessionRecord,
     initiator: ParticipantLease,
@@ -3606,6 +3676,7 @@ async def _send_table_response(
     broadcast: bool,
     watcher_invite: str | None = None,
 ) -> None:
+    _cache_table_recovery(record)
     recipients = list(record.participants.values()) if broadcast else [initiator]
     for recipient in recipients:
         socket = recipient.websocket
@@ -3681,9 +3752,16 @@ async def play_socket(websocket: WebSocket) -> None:
                     await _attach_participant_websocket(record, participant, websocket)
                     attached_table_id = record.session_id
                     attached_viewer_id = participant.viewer_id
-                    # A Command from the previous socket may still be advancing
-                    # the game (a searched bot reply takes seconds); snapshot
-                    # only after it commits, never from a half-applied step.
+                    if record.lock.locked():
+                        cached = record.published.get(participant.viewer_id)
+                        if cached is not None:
+                            await websocket.send_json(
+                                {
+                                    **cached,
+                                    "work": record.game.work.payload(),
+                                }
+                            )
+                            continue
                     async with record.lock:
                         response = (
                             record.game.current_message(presentation_cursor)
@@ -3723,9 +3801,65 @@ async def play_socket(websocket: WebSocket) -> None:
                         raise ValueError("Session expired. Start a new game.")
 
                 async with record.lock:
-                    response, broadcast = await asyncio.to_thread(
-                        _dispatch_table_request, record, participant, parsed
-                    )
+                    loop = asyncio.get_running_loop()
+
+                    def committed(outcome: dict[str, Any]) -> None:
+                        # Projection and delivery finish at the safe committed
+                        # boundary before the worker may mutate the Env again.
+                        asyncio.run_coroutine_threadsafe(
+                            _send_table_response(
+                                record, participant, outcome, broadcast=True
+                            ),
+                            loop,
+                        ).result()
+
+                    def publish_work(status: WorkStatus) -> None:
+                        # Called while the worker is paused at a safe boundary.
+                        asyncio.run_coroutine_threadsafe(
+                            _publish_work(record, status), loop
+                        ).result()
+
+                    # Draft validation reads the same authority under this lock.
+                    # Marking it as advancement disables its caller and restarts
+                    # reactive validation before the reply can be applied.
+                    reports_work = not isinstance(parsed, ValidateDeclarationMessage)
+                    if reports_work:
+                        record.game.work.stage(
+                            "advance",
+                            record.game.match_id
+                            if record.game.obs is not None
+                            else None,
+                            record.game.revision
+                            if record.game.obs is not None
+                            else None,
+                        )
+                        status = record.game.work.read()
+                        assert status is not None
+                        _cache_table_recovery(record)
+                        await _publish_work(record, status)
+                        record.game.work.publish = publish_work
+                    failed = True
+                    dispatched = False
+                    try:
+                        response, broadcast = await asyncio.to_thread(
+                            _dispatch_table_request,
+                            record,
+                            participant,
+                            parsed,
+                            committed,
+                        )
+                        failed = record.game.mirror_retry is not None
+                        dispatched = True
+                    finally:
+                        if reports_work:
+                            record.game.work.publish = None
+                            record.game.work.finish(failed=failed)
+                            if not dispatched:
+                                # Request errors reply only to their sender. End
+                                # the broadcast wait for every other participant.
+                                status = record.game.work.read()
+                                assert status is not None
+                                await _publish_work(record, status)
                     record.touch()
                     await _send_table_response(
                         record,
@@ -4446,6 +4580,32 @@ def create_bot_watch(payload: dict[str, Any]) -> dict[str, Any]:
         raise HTTPException(400, str(exc)) from exc
 
 
+@app.post("/api/watch/setups/{handle}")
+def start_watch_setup(
+    handle: str,
+    payload: dict[str, Any],
+    x_etude_participant_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    from .watch import WatchRequest, start_setup
+
+    try:
+        return start_setup(
+            handle, WatchRequest.model_validate(payload), x_etude_participant_token
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.get("/api/watch/setups/{handle}")
+def read_watch_setup(
+    handle: str,
+    x_etude_participant_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    from .watch import setup_attempt
+
+    return setup_attempt(handle, x_etude_participant_token).payload()
+
+
 @app.post("/api/watch/{trace_id}/step")
 async def advance_bot_watch(
     trace_id: str,
@@ -4461,10 +4621,27 @@ async def advance_bot_watch(
     async with record.lock:
         try:
             return await asyncio.to_thread(
-                step_watch, trace_id, x_etude_participant_token, revision
+                step_watch,
+                trace_id,
+                x_etude_participant_token,
+                revision,
+                payload.get("retry") is True,
             )
         except SearchError as exc:
             raise HTTPException(409, {"code": exc.reason, "message": str(exc)}) from exc
+        finally:
+            record.game.work.finish(failed=record.game.mirror_retry is not None)
+
+
+@app.get("/api/watch/{trace_id}/work")
+def watch_work(
+    trace_id: str,
+    x_etude_participant_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    from .watch import record_for_watch
+
+    record = record_for_watch(trace_id, x_etude_participant_token)
+    return {"work": record.game.work.payload()}
 
 
 @app.get("/api/watch/{trace_id}/decisions/{ordinal}")

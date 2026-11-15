@@ -628,7 +628,16 @@ class ScheduleView(ProtocolModel):
     additional_combats: list[CombatView]
 
 
+class UnavailableActionView(ProtocolModel):
+    object: int
+    reason: str
+    message: str
+
+
 class LegacyHeroObservation(ProtocolModel):
+    unavailable_actions: list[UnavailableActionView] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     schedule: ScheduleView | None = Field(
         default=None, exclude_if=lambda value: value is None
     )

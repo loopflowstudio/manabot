@@ -283,23 +283,44 @@ impl Game {
     /// a creature that can tap, without defender unless an effect lets it
     /// attack as though it didn't have defender (Platypus-Bear).
     fn permanent_can_attack(&self, permanent_id: PermanentId) -> bool {
+        self.attacker_eligibility(permanent_id).is_ok()
+    }
+
+    pub(crate) fn attacker_eligibility(
+        &self,
+        permanent_id: PermanentId,
+    ) -> Result<(), crate::agent::guidance::UnavailableReason> {
+        use crate::agent::guidance::UnavailableReason as Reason;
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
-            return false;
+            return Err(Reason::NotCreature);
         };
         let view = self.characteristics(permanent_id);
+        if !view.is_creature() {
+            return Err(Reason::NotCreature);
+        }
+        if permanent.tapped {
+            return Err(Reason::Tapped);
+        }
+        if !self.permanent_can_tap(permanent_id) {
+            return Err(Reason::SummoningSick);
+        }
         let defender_applies = view.keywords.has(Keyword::Defender)
             && !view.static_abilities.iter().any(|ability| matches!(ability,
                 StaticAbility::AttacksDespiteDefender(condition) if self.check_static_condition(condition, permanent.controller)));
-        view.is_creature()
-            && self.permanent_can_tap(permanent_id)
-            && !defender_applies
-            && self.combat_condition_met(permanent_id)
-            && self
+        if defender_applies {
+            return Err(Reason::Defender);
+        }
+        if !self.combat_condition_met(permanent_id)
+            || !self
                 .state
                 .turn
                 .combat_attackers
                 .as_ref()
                 .is_none_or(|attackers| self.permanent_matches_predicate(permanent_id, attackers))
+        {
+            return Err(Reason::CombatRestriction);
+        }
+        Ok(())
     }
 
     pub(crate) fn eligible_blockers(&self, player: PlayerId) -> Vec<PermanentId> {

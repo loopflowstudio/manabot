@@ -1507,6 +1507,15 @@
         "turn": {
           "$ref": "#/$defs/LegacyTurnView"
         },
+        "unavailable_actions": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/UnavailableActionView"
+          }
+        },
         "won": {
           "type": "boolean"
         }
@@ -2722,6 +2731,27 @@
             "id"
           ]
         }
+      ]
+    },
+    "UnavailableActionView": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "object": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "object",
+        "reason",
+        "message"
       ]
     },
     "UncertaintyEvidence": {

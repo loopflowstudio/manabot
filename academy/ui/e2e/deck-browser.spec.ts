@@ -9,7 +9,7 @@ test('Watch uses the same browser to assign both bot seats', async ({ page }) =>
   await selectDeck(page, 'villain', 'elemental_ug');
   await expect(page.getByTestId('selected-deck-hero')).toHaveAttribute('data-deck-id', 'elemental_bg');
   await expect(page.getByTestId('selected-deck-villain')).toHaveAttribute('data-deck-id', 'elemental_ug');
-  const started = page.waitForRequest(request => request.url().endsWith('/api/watch') && request.method() === 'POST');
+  const started = page.waitForRequest(request => /\/api\/watch\/setups\/[^/]+$/.test(new URL(request.url()).pathname) && request.method() === 'POST');
   await page.getByRole('button', { name: 'Start watching', exact: true }).click();
   expect((await started).postDataJSON()).toMatchObject({ hero_deck: 'elemental_bg', villain_deck: 'elemental_ug' });
   await expect(page.getByTestId('game-board')).toBeVisible();

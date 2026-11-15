@@ -86,9 +86,17 @@ test('shared history identifies both players and preserves private prefixes and 
       await expect(actions.first().or(over).or(composer)).toBeVisible();
       if (await over.isVisible()) break;
       if (await composer.isVisible()) {
+        // Finish this history fixture by attacking rather than repeatedly
+        // declining combat until a library runs out.
+        const attackAll = composer.getByRole('button', { name: /^Select all eligible to attack/ });
+        if (await attackAll.count()) {
+          await alice.getByRole('group', { name: 'Table interaction mode' }).getByRole('button', { name: 'Play', exact: true }).click();
+          await attackAll.click();
+        }
         await confirmCombat(alice);
         continue;
       }
+      await expect(actions.first()).toBeEnabled();
       const before = Number(await alice.locator('main').getAttribute('data-update-seq'));
       const labels = await actions.allTextContents();
       let pick = labels.findIndex((label) => /^Play |^Cast |^Attack with/.test(label));

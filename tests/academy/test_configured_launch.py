@@ -26,6 +26,7 @@ from managym.academy.launch import (
 )
 from managym.academy.opponent import policy_registry
 from managym.search import SearchConfig
+from tests.academy.socket_messages import settled_message
 from tests.academy.test_policy_search_play import SearchFactory
 
 
@@ -56,8 +57,21 @@ def _play_socket(academy: Academy) -> ClientConnection:
 
 def _start_launch(ws: ClientConnection, launch_id: str) -> dict[str, Any]:
     ws.send(json.dumps({"type": "new_game", "config": {"launch": launch_id}}))
-    message: dict[str, Any] = json.loads(ws.recv(timeout=20))
-    return message
+    return _settled_reply(ws)
+
+
+def _settled_reply(ws: ClientConnection) -> dict[str, Any]:
+    while True:
+        message: dict[str, Any] = json.loads(ws.recv(timeout=20))
+        if message["type"] == "work_status":
+            continue
+        if (
+            message["type"] == "command_outcome"
+            and message.get("status") == "accepted"
+            and (message.get("work") or {}).get("state") == "running"
+        ):
+            continue
+        return message
 
 
 def test_game_launch_preserves_config_pending_decision_and_identity(
@@ -239,7 +253,7 @@ def test_native_deck_diagnostics_and_unknown_launch(
     assert "2" in error.value.message
     with TestClient(server.app).websocket_connect("/ws/play") as ws:
         ws.send_json({"type": "new_game", "config": {"launch": "expired"}})
-        assert "launch_unknown" in ws.receive_json()["message"]
+        assert "launch_unknown" in settled_message(ws)["message"]
 
 
 def test_lifecycle_exclusive_and_releases_port(academy: Academy) -> None:
@@ -473,7 +487,7 @@ def test_launch_setup_stays_with_initiator_and_shutdown_keeps_history(
                 }
             )
         )
-        watched = json.loads(watcher.recv(timeout=20))
+        watched = _settled_reply(watcher)
         assert "launch" not in watched and "launch_setup" not in watched
         second = _launch_id(
             academy.new_game(opponent="passive", seed=8, decklists="closed").url
@@ -487,7 +501,7 @@ def test_launch_setup_stays_with_initiator_and_shutdown_keeps_history(
                 }
             )
         )
-        changed = json.loads(watcher.recv(timeout=20))
+        changed = _settled_reply(watcher)
         assert changed["type"] == "observation", changed
         assert "launch" not in changed and "launch_setup" not in changed
         trace_id = changed["table"]["attempt_id"]

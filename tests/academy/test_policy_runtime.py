@@ -20,6 +20,7 @@ from managym.policy import (
     PolicySpec,
     PolicyView,
 )
+from tests.academy.socket_messages import settled_message
 
 
 @dataclass
@@ -97,10 +98,30 @@ def test_independent_policies_watch_both_seats_and_cleanup(
     with pytest.raises(HTTPException) as refused:
         step_watch(created["id"], created["token"], before)
     assert refused.value.status_code == 422
-    assert refused.value.detail == (
-        "Seat 1 policy could not choose: Policy returned a stale decision binding."
+    assert refused.value.detail["code"] == "policy_failed"
+    assert (
+        refused.value.detail["message"] == "Policy returned a stale decision binding."
     )
     assert game.revision == before
+    calls = sum(
+        len(session.seen) for factory in (first, second) for session in factory.sessions
+    )
+    with pytest.raises(HTTPException) as implicit:
+        step_watch(created["id"], created["token"], before)
+    assert implicit.value.detail["code"] == "explicit_retry_required"
+    assert (
+        sum(
+            len(session.seen)
+            for factory in (first, second)
+            for session in factory.sessions
+        )
+        == calls
+    )
+    first.sessions[0].stale = second.sessions[0].stale = False
+    assert (
+        step_watch(created["id"], created["token"], before, retry=True)["revision"]
+        == before + 1
+    )
     server._drop_session(created["id"], "test")
     assert all(factory.sessions[0].closed for factory in (first, second))
     # Replay needs neither registry nor a reconstructed policy.
@@ -109,7 +130,7 @@ def test_independent_policies_watch_both_seats_and_cleanup(
     from managym.academy.trace import load_trace
 
     replay = load_canonical_replay(load_trace(created["id"]))
-    assert len(replay.decisions) == 8
+    assert len(replay.decisions) == 9
 
 
 def test_policy_identity_rejects_runner_change(registry: PolicyRegistry) -> None:
@@ -122,10 +143,9 @@ def test_policy_identity_rejects_runner_change(registry: PolicyRegistry) -> None
     assert not factory.sessions
 
 
-def test_failed_opponent_policy_ends_play_with_its_reason(
+def test_failed_opponent_policy_preserves_commitment_until_explicit_retry(
     registry: PolicyRegistry,
 ) -> None:
-    # The browser must show why and neither resume nor redeal the game.
     @dataclass
     class StaleFactory(IndependentFactory):
         def load(self, *, seat: int, seed: int) -> IndependentSession:
@@ -133,25 +153,76 @@ def test_failed_opponent_policy_ends_play_with_its_reason(
             session.stale = True
             return session
 
-    key = registry.register(StaleFactory())
-    config = {"villain_type": "policy", "opponent_sha256": key, "seed": 3}
+    factory = StaleFactory()
+    key = registry.register(factory)
+    config = {
+        "villain_type": "policy",
+        "opponent_sha256": key,
+        "seed": 3,
+        "auto_pass": False,
+    }
     with TestClient(server.app) as client:
         with client.websocket_connect("/ws/play") as websocket:
             websocket.send_json({"type": "new_game", "config": config})
-            payload = websocket.receive_json()
-            for _ in range(20):
-                if payload["type"] == "error":
+            payload = settled_message(websocket)
+            for attempt in range(20):
+                if payload.get("mirror_retry"):
                     break
-                websocket.send_json(
-                    {"type": "action", "index": payload["actions"][-1]["index"]}
-                )
-                payload = websocket.receive_json()
-    assert payload == {
-        "type": "error",
-        "message": "The opponent could not continue this game: "
-        "Policy returned a stale decision binding.",
-        "session_ended": True,
-    }
+                frame = payload.get("frame") or payload["update"]["frame"]
+                command = {
+                    "command_id": f"human.{attempt}",
+                    "match_id": frame["match_id"],
+                    "expected_revision": frame["revision"],
+                    "prompt_id": frame["prompt"]["id"],
+                    "offer_id": frame["offers"][-1]["id"],
+                    "answers": [],
+                }
+                websocket.send_json({"type": "command", "command": command})
+                payload = settled_message(websocket)
+            else:
+                pytest.fail("Never reached the failing bot")
+            assert payload["type"] == "command_outcome"
+            assert payload["status"] == "accepted"
+            receipt = payload["update"]["receipt"]
+            assert receipt["command_id"] == command["command_id"]
+            assert receipt["resulting_revision"] == command["expected_revision"] + 1
+            pending = payload["mirror_retry"]
+            assert pending["message"] == "Policy returned a stale decision binding."
+            game = next(
+                record.game
+                for record in server.SESSION_REGISTRY.values()
+                if record.game.match_id == command["match_id"]
+            )
+            assert game.env is not None and game.trace is not None
+            digest = game.env.state_digest()
+            events = len(game.trace.events)
+            websocket.send_json({"type": "command", "command": command})
+            duplicate = settled_message(websocket)
+            assert duplicate["status"] == "duplicate"
+            assert duplicate["receipt"] == receipt
+            assert duplicate["recovery"]["frame"]["prompt"] is None
+            assert game.env.state_digest() == digest
+            assert len(game.trace.events) == events
+            # Resume and settings do not call choose or clear the failure.
+            calls = len(factory.sessions[0].seen)
+            websocket.send_json({"type": "set_stops", "auto_pass": False})
+            recovered = settled_message(websocket)
+            assert recovered["mirror_retry"]["code"] == "policy_failed"
+            assert game.env.state_digest() == digest
+            assert len(factory.sessions[0].seen) == calls
+            factory.sessions[0].stale = False
+            websocket.send_json(
+                {
+                    "type": "retry_mirror",
+                    "match_id": game.match_id,
+                    "expected_revision": game.revision,
+                }
+            )
+            retried = settled_message(websocket)
+            assert retried["mirror_retry"] is None
+            assert len(game.trace.events) > events
+            assert game.accepted_commands[command["command_id"]] == receipt
+            assert len(factory.sessions) == 1
 
 
 def test_class_entry_point_is_refused_with_its_fix() -> None:
@@ -437,7 +508,7 @@ def test_refused_launch_retains_setup_and_exact_policy(
         with TestClient(server.app) as client:
             with client.websocket_connect("/ws/play") as ws:
                 ws.send_json({"type": "new_game", "config": {"launch": launch}})
-                refused = ws.receive_json()
+                refused = settled_message(ws)
         assert refused["type"] == "error"
         assert "restart Academy and explicitly reselect" in refused["message"]
         assert refused["launch_setup"] == {
@@ -478,3 +549,190 @@ def test_registered_aliases_distinguish_catalog_and_watch_identities(
         "Independent · uniform",
         "Independent · action-only",
     }
+
+
+def test_receipt_and_cached_resume_are_published_before_bot_finishes(
+    registry: PolicyRegistry,
+) -> None:
+    from threading import Event
+
+    entered, release = Event(), Event()
+
+    class WaitingSession(IndependentSession):
+        def choose(self, view: PolicyView) -> PolicyDecision:
+            entered.set()
+            if not release.wait(10):
+                raise RuntimeError("Test did not release the controlled bot")
+            raise ValueError("Controlled bot failure")
+
+    class WaitingFactory(IndependentFactory):
+        def load(self, *, seat: int, seed: int) -> IndependentSession:
+            session = WaitingSession(seat)
+            self.sessions.append(session)
+            return session
+
+    key = registry.register(WaitingFactory())
+    try:
+        with TestClient(server.app) as client:
+            with client.websocket_connect("/ws/play") as socket:
+                socket.send_json(
+                    {
+                        "type": "new_game",
+                        "config": {
+                            "villain_type": "policy",
+                            "opponent_sha256": key,
+                            "seed": 3,
+                            "auto_pass": False,
+                        },
+                    }
+                )
+                payload = settled_message(socket)
+                credentials = {k: payload[k] for k in ("session_id", "resume_token")}
+                receipt = None
+                for attempt in range(20):
+                    frame = payload.get("frame") or payload["update"]["frame"]
+                    command = {
+                        "command_id": f"controlled.{attempt}",
+                        "match_id": frame["match_id"],
+                        "expected_revision": frame["revision"],
+                        "prompt_id": frame["prompt"]["id"],
+                        "offer_id": frame["offers"][-1]["id"],
+                        "answers": [],
+                    }
+                    socket.send_json({"type": "command", "command": command})
+                    # Read the early acknowledgement itself, never a settled helper.
+                    while True:
+                        early = socket.receive_json()
+                        if early["type"] == "command_outcome":
+                            break
+                    receipt = early["update"]["receipt"]
+                    assert receipt["command_id"] == command["command_id"]
+                    assert early["work"]["state"] == "running"
+                    # Either a choose-stage follows, or this Command settles
+                    # without reaching the opponent yet.
+                    after = socket.receive_json()
+                    if (
+                        after["type"] == "work_status"
+                        and after["work"]["kind"] == "choose"
+                    ):
+                        assert entered.wait(5)
+                        with client.websocket_connect("/ws/play") as resumed:
+                            resumed.send_json({"type": "resume", **credentials})
+                            cached = resumed.receive_json()
+                            assert cached["work"]["kind"] == "choose"
+                            assert cached["work"]["state"] == "running"
+                            assert receipt in cached["recovery"]["accepted_commands"]
+                            assert (
+                                cached["recovery"]["frame"]["revision"]
+                                == receipt["resulting_revision"]
+                            )
+                            release.set()
+                            final = settled_message(resumed)
+                            assert (
+                                final["mirror_retry"]["message"]
+                                == "Controlled bot failure"
+                            )
+                            assert final["update"]["receipt"] == receipt
+                        break
+                    assert after["type"] == "command_outcome"
+                    payload = after
+                else:
+                    pytest.fail("Never reached the controlled bot")
+    finally:
+        release.set()
+
+
+@pytest.mark.parametrize("loading_seat", [0, 1])
+def test_watch_setup_reconciles_one_load_through_lost_reply(
+    registry: PolicyRegistry, loading_seat: int
+) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+    from uuid import uuid4
+
+    from managym.academy.watch import setup_attempt, start_setup
+
+    entered, release = Event(), Event()
+
+    class BarrierFactory(IndependentFactory):
+        def load(self, *, seat: int, seed: int) -> IndependentSession:
+            if seat == loading_seat:
+                entered.set()
+                assert release.wait(10)
+            return super().load(seat=seat, seed=seed)
+
+    factory = BarrierFactory()
+    key = registry.register(factory)
+    request = WatchRequest(players=[f"policy:{key}"] * 2, seed=42)
+    handle = uuid4().hex
+    credential = uuid4().hex
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(start_setup, handle, request, credential)
+        try:
+            assert entered.wait(10)
+            snapshot = setup_attempt(handle, credential).payload()
+            assert snapshot["created"] is None
+            assert snapshot["work"]["scope"] == "setup"
+            assert snapshot["work"]["setup_id"] == handle
+            assert snapshot["work"]["loading_seat"] == loading_seat
+            assert snapshot["work"]["chooser"] is None
+            assert snapshot["work"]["match_id"] is None
+            # An unresolved POST and reads reconcile without loading again.
+            assert start_setup(handle, request, credential) == snapshot
+            with pytest.raises(HTTPException) as changed:
+                start_setup(handle, request.model_copy(update={"seed": 43}), credential)
+            assert changed.value.status_code == 409
+        finally:
+            release.set()
+        created = future.result(timeout=10)["created"]
+    assert setup_attempt(handle, credential).payload()["created"] == created
+    assert start_setup(handle, request, credential)["created"] == created
+    assert len(factory.sessions) == 2
+    client = TestClient(server.app)
+    recovered = client.get(
+        f"/api/watch/setups/{handle}", headers={"x-etude-participant-token": credential}
+    ).json()
+    assert client.get(f"/api/watch/setups/{handle}").status_code == 403
+    assert (
+        client.get(
+            f"/api/watch/setups/{handle}",
+            headers={"x-etude-participant-token": "wrong"},
+        ).status_code
+        == 403
+    )
+    assert recovered["created"] == created
+    assert recovered["work"]["state"] == "complete"
+    assert recovered["work"]["scope"] == "setup"
+
+
+def test_watch_setup_failure_closes_candidates_and_never_retries_a_read(
+    registry: PolicyRegistry,
+) -> None:
+    from uuid import uuid4
+
+    from managym.academy.watch import setup_attempt, start_setup
+
+    class FailingFactory(IndependentFactory):
+        def load(self, *, seat: int, seed: int) -> IndependentSession:
+            if seat == 1:
+                raise OSError("private/local/path")
+            return super().load(seat=seat, seed=seed)
+
+    factory = FailingFactory()
+    key = registry.register(factory)
+    request = WatchRequest(players=[f"policy:{key}"] * 2, seed=42)
+    handle = uuid4().hex
+    credential = uuid4().hex
+    result = start_setup(handle, request, credential)
+    assert result["created"] is None
+    assert result["work"]["state"] == "failed"
+    assert "Seat 2 bot loading failed" in result["error"]
+    assert "private/local/path" not in result["error"]
+    assert "Start again explicitly" in result["error"]
+    assert factory.sessions[0].closed
+    assert start_setup(handle, request, credential) == result
+    assert setup_attempt(handle, credential).payload() == result
+    assert len(factory.sessions) == 1
+    assert not server.SESSION_REGISTRY
+    client = TestClient(server.app)
+    assert client.get(f"/api/watch/setups/{uuid4().hex}").status_code == 404

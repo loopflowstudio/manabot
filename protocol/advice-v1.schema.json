@@ -2731,6 +2731,21 @@
         "turn": {
           "$ref": "#/$defs/LegacyTurnView"
         },
+        "unavailable_actions": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/UnavailableActionView"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unavailable Actions"
+        },
         "won": {
           "title": "Won",
           "type": "boolean"
@@ -4469,6 +4484,30 @@
       "title": "TableAudience",
       "type": "object"
     },
+    "UnavailableActionView": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "object": {
+          "title": "Object",
+          "type": "integer"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "object",
+        "reason",
+        "message"
+      ],
+      "title": "UnavailableActionView",
+      "type": "object"
+    },
     "UnavailableQuantity": {
       "additionalProperties": false,
       "properties": {
@@ -4525,8 +4564,11 @@
       "additionalProperties": false,
       "properties": {
         "rules_viewer": {
-          "const": 0,
           "default": 0,
+          "enum": [
+            0,
+            1
+          ],
           "title": "Rules Viewer",
           "type": "integer"
         },

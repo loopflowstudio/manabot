@@ -279,6 +279,10 @@
     <section aria-label="Inspected card" class="border-y border-line py-3">
       <h3 class="font-medium">{visibleCardLabel(observation, inspected.id) ?? inspected.name}</h3>
       <p class="type-caption whitespace-pre-line">{inspected.text_box}</p>
+      {#each observation.unavailable_actions?.filter(item => item.object === inspected?.id) ?? [] as refusal}
+        <p class="type-caption mt-2" data-testid="unavailable-action">{refusal.message}</p>
+      {/each}
+      {#if observation.unavailable_actions === undefined}<p class="type-caption text-ink-2">Unavailable-action explanations not recorded.</p>{/if}
       <p class="type-caption text-ink-2">Legal offers determine what this card can do now.</p>
       <button class="btn btn-secondary mt-2" onclick={() => inspected = null}>Close inspection</button>
     </section>
