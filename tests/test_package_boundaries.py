@@ -388,11 +388,11 @@ _TORCH_NOT_YET_MOVED = frozenset(
         "manabot/experiment/numerics.py",
         "manabot/infra/torch.py",
         "manabot/llm/transformers_runtime.py",
+        "manabot/sim/qwen_provider.py",
         "manabot/recipes/device.py",
         "manabot/reports/belief.py",
         "manabot/sim/native_game.py",
         "manabot/sim/serving.py",
-        "manabot/sim/table_bots.py",
         "manabot/training/mps.py",
         "manabot/verify/action_cases.py",
         "manabot/verify/choice_corpus.py",
@@ -536,6 +536,7 @@ def test_backend_resolver_selects_configured_backends_and_names_missing_extras(
 _BACKEND_ROOTS = frozenset(
     (
         "manabot/sim/table_bots.py",
+        "manabot/sim/policy_provider.py",
         "manabot/cli.py",
         "manabot/eval/cards.py",
         "manabot/eval/evaluate.py",

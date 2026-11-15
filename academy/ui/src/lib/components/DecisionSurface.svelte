@@ -12,6 +12,7 @@
     selectedTargetId?: number | null;
     disabled?: boolean;
     readOnly?: boolean;
+    interrupted?: boolean;
     chosenOffer?: number | null;
     fastForwarding?: boolean;
     canPassTurn?: boolean;
@@ -21,7 +22,7 @@
     onClearSelection?: () => void;
     onPassTurn?: () => void;
   }
-  let { frame, workspace = false, navigationKey = '', selectedTargetId = null, disabled = false, readOnly = false,
+  let { frame, workspace = false, navigationKey = '', selectedTargetId = null, disabled = false, readOnly = false, interrupted = false,
     chosenOffer = null, fastForwarding = false, canPassTurn = false,
     highlightedOfferIds = new Set<number>(), onHoverAction, onSelectAction,
     onClearSelection, onPassTurn }: Props = $props();
@@ -39,11 +40,11 @@
   <ActionPanel {offers} describeSubject={object => subjectLabel(frame.projection, object)} {previewNames} actionSpaceKind={frame.action_space}
     instruction={context?.instruction ?? frame.prompt?.instruction ?? ''}
     totalOffers={frame.offers.length} gameOver={frame.status === 'game_over'} {chosenOffer} {selectedTargetId}
-    {disabled} {readOnly} {fastForwarding} {canPassTurn} {highlightedOfferIds}
+    {disabled} {readOnly} {interrupted} {fastForwarding} {canPassTurn} {highlightedOfferIds}
     focusKey={`${frame.match_id}:${frame.revision}:${frame.prompt?.id}:${navigationKey}:${selectedTargetId ?? 'all'}`}
     {onHoverAction} {onSelectAction} {onClearSelection} {onPassTurn} />
   {#if !workspace}
-    <DecisionContext observation={frame.projection} actor={frame.prompt?.actor ?? null} />
+    <DecisionContext observation={frame.projection} actor={frame.prompt?.actor ?? null} {interrupted} />
   {/if}
 </section>
 

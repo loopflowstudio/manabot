@@ -9,20 +9,21 @@ test('Watch uses the same browser to assign both bot seats', async ({ page }) =>
   await selectDeck(page, 'villain', 'elemental_ug');
   await expect(page.getByTestId('selected-deck-hero')).toHaveAttribute('data-deck-id', 'elemental_bg');
   await expect(page.getByTestId('selected-deck-villain')).toHaveAttribute('data-deck-id', 'elemental_ug');
-  const started = page.waitForRequest(request => request.url().endsWith('/api/watch') && request.method() === 'POST');
+  const started = page.waitForRequest(request => /\/api\/watch\/setups\/[^/]+$/.test(new URL(request.url()).pathname) && request.method() === 'POST');
   await page.getByRole('button', { name: 'Start watching', exact: true }).click();
   expect((await started).postDataJSON()).toMatchObject({ hero_deck: 'elemental_bg', villain_deck: 'elemental_ug' });
   await expect(page.getByTestId('game-board')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Step decision', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeEnabled();
 });
 
 test('browse every exact deck and Lesson pool, choose both seats, and keep a running game intact', async ({ page }, testInfo) => {
   await page.goto('/');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
+  await page.getByText('Browse decks and cards',{exact:true}).click();
   const browser = page.getByTestId('deck-browser');
   const detail = page.getByTestId('deck-detail');
   await expect(page.getByTestId('deck-browser')).toHaveCount(1);
-  await expect(page.getByTestId('game-header').locator('select')).toHaveCount(1);
+  await expect(page.getByRole('combobox',{name:'Seat 1 controller',exact:true})).toHaveValue('human');
   for (const deck of manifest.roster) {
     await browser.getByTestId(`browse-${deck.deck_id}`).click();
     await expect(detail.getByRole('heading', { level: 3 })).toContainText(deck.display_name.replace('Elemental ', ''));
@@ -32,8 +33,8 @@ test('browse every exact deck and Lesson pool, choose both seats, and keep a run
     for (const name of Object.keys(deck.sideboard)) await expect(lessons).toContainText(name);
   }
   await browser.getByTestId('browse-elemental_ug').click();
-  await detail.getByRole('button', { name: 'Use for me', exact: true }).click();
-  await detail.getByRole('button', { name: 'Use for opponent', exact: true }).click();
+  await detail.getByRole('button', { name: 'Use for seat 1 deck', exact: true }).click();
+  await detail.getByRole('button', { name: 'Use for seat 2 deck', exact: true }).click();
   await expect(page.getByTestId('selected-deck-hero')).toHaveAttribute('data-deck-id', 'elemental_ug');
   await expect(page.getByTestId('selected-deck-villain')).toHaveAttribute('data-deck-id', 'elemental_ug');
   await page.screenshot({ path: testInfo.outputPath('deck-browser-desktop.png'), fullPage: true });
@@ -43,17 +44,24 @@ test('browse every exact deck and Lesson pool, choose both seats, and keep a run
   await page.screenshot({ path: testInfo.outputPath('deck-browser-mobile.png'), fullPage: true });
   await page.setViewportSize(viewport);
   await page.getByTestId('opponent-select').selectOption('passive');
-  await page.getByRole('button', { name: 'New Game', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
   await expect(page.getByTestId('action-option').first()).toBeVisible();
   const revision = await page.locator('main').getAttribute('data-frame-revision');
-  await page.getByRole('button', { name: 'Choose decks', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit next game', exact: true }).click();
+  await page.getByText('Browse decks and cards',{exact:true}).click();
   await browser.getByTestId('browse-elemental_bg').click();
-  await detail.getByRole('button', { name: 'Use for opponent', exact: true }).click();
+  await detail.getByRole('button', { name: 'Use for seat 2 deck', exact: true }).click();
   await expect(page.locator('main')).toHaveAttribute('data-frame-revision', revision!);
   await expect(page.getByTestId('deck-names')).toContainText('Temur Lessons');
-  await page.getByRole('button', { name: 'Return to game', exact: true }).click();
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(browser).not.toBeVisible();
-  await page.getByRole('button', { name: 'New Game', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Edit next game', exact: true }).click();
+  await page.getByText('Browse decks and cards',{exact:true}).click();
+  await expect(page.getByTestId('selected-deck-villain')).toHaveAttribute('data-deck-id','elemental_ug');
+  await browser.getByTestId('browse-elemental_bg').click();
+  await detail.getByRole('button', { name: 'Use for seat 2 deck', exact: true }).click();
+  page.on('dialog',dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Start next game', exact: true }).click();
   await expect(page.getByTestId('deck-names')).toContainText('Landfall and sacrifice');
 });
 
@@ -91,7 +99,7 @@ test('a pinned local model link selects the model and both Elemental decks', asy
   await page.setViewportSize({ width: 390, height: 844 });
   const bounds = await page.getByTestId('opponent-select').boundingBox();
   expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
-  await page.getByRole('button', { name: 'New Game', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
   await expect(page.getByTestId('action-option').first()).toBeVisible();
   await expect(page.getByTestId('deck-names')).toContainText('MTG-183');
   await page.reload();
@@ -114,7 +122,7 @@ test('priority automation advances into a real choice and remains visible in the
   });
   await page.goto('/?hero=elemental_ur&villain=elemental_gw');
   await page.getByTestId('opponent-select').selectOption('passive');
-  await page.getByRole('button', { name: 'New Game', exact: true }).click();
+  await page.getByRole('button', { name: 'Start game', exact: true }).click();
   await expect.poll(() => page.getByTestId('action-option').count()).toBeGreaterThan(1);
   await page.getByText('History and settings', { exact: true }).click();
   await page.getByText('Decision log', { exact: true }).click();

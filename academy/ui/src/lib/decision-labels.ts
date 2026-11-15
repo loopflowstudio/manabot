@@ -59,3 +59,16 @@ export function stageLabel(stage: string): string {
     order_library_top: 'Order the kept cards',
   } as Record<string, string>)[stage] ?? 'Pending decision';
 }
+
+// Notation, not enumeration: turn lines and seek markers write human notation;
+// raw engine identifiers stay in data attributes for Study surfaces.
+function titleWords(value: string): string {
+  return value.toLowerCase().split('_').filter(Boolean).map(word => word[0].toUpperCase() + word.slice(1)).join(' ');
+}
+
+/** "Combat · Combat Begin" from native phase/step names; one word when they agree. */
+export function turnStageLabel(phase: string, step: string): string {
+  const phaseText = titleWords(phase);
+  const stepText = titleWords(step.replace(/_STEP$/, ''));
+  return stepText === phaseText || !stepText ? phaseText : `${phaseText} · ${stepText}`;
+}

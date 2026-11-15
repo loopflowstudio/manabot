@@ -1,7 +1,8 @@
 """Configured launch reaches the existing game and replay authorities."""
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 import copy
+from dataclasses import asdict
 import gzip
 import json
 from pathlib import Path
@@ -15,7 +16,7 @@ from fastapi.testclient import TestClient
 import pytest
 from websockets.sync.client import ClientConnection, connect
 
-from managym.academy import extensions, server
+from managym.academy import cli, extensions, server
 from managym.academy.launch import (
     Academy,
     AcademyLaunchError,
@@ -23,6 +24,10 @@ from managym.academy.launch import (
     read_games,
     serve,
 )
+from managym.academy.opponent import policy_registry
+from managym.search import SearchConfig
+from tests.academy.socket_messages import settled_message
+from tests.academy.test_policy_search_play import SearchFactory
 
 
 @pytest.fixture
@@ -52,8 +57,21 @@ def _play_socket(academy: Academy) -> ClientConnection:
 
 def _start_launch(ws: ClientConnection, launch_id: str) -> dict[str, Any]:
     ws.send(json.dumps({"type": "new_game", "config": {"launch": launch_id}}))
-    message: dict[str, Any] = json.loads(ws.recv(timeout=20))
-    return message
+    return _settled_reply(ws)
+
+
+def _settled_reply(ws: ClientConnection) -> dict[str, Any]:
+    while True:
+        message: dict[str, Any] = json.loads(ws.recv(timeout=20))
+        if message["type"] == "work_status":
+            continue
+        if (
+            message["type"] == "command_outcome"
+            and message.get("status") == "accepted"
+            and (message.get("work") or {}).get("state") == "running"
+        ):
+            continue
+        return message
 
 
 def test_game_launch_preserves_config_pending_decision_and_identity(
@@ -235,7 +253,7 @@ def test_native_deck_diagnostics_and_unknown_launch(
     assert "2" in error.value.message
     with TestClient(server.app).websocket_connect("/ws/play") as ws:
         ws.send_json({"type": "new_game", "config": {"launch": "expired"}})
-        assert "launch_unknown" in ws.receive_json()["message"]
+        assert "launch_unknown" in settled_message(ws)["message"]
 
 
 def test_lifecycle_exclusive_and_releases_port(academy: Academy) -> None:
@@ -469,7 +487,7 @@ def test_launch_setup_stays_with_initiator_and_shutdown_keeps_history(
                 }
             )
         )
-        watched = json.loads(watcher.recv(timeout=20))
+        watched = _settled_reply(watcher)
         assert "launch" not in watched and "launch_setup" not in watched
         second = _launch_id(
             academy.new_game(opponent="passive", seed=8, decklists="closed").url
@@ -483,7 +501,7 @@ def test_launch_setup_stays_with_initiator_and_shutdown_keeps_history(
                 }
             )
         )
-        changed = json.loads(watcher.recv(timeout=20))
+        changed = _settled_reply(watcher)
         assert changed["type"] == "observation", changed
         assert "launch" not in changed and "launch_setup" not in changed
         trace_id = changed["table"]["attempt_id"]
@@ -543,3 +561,100 @@ def test_a_training_receipt_offered_as_a_game_names_the_export_step(
         rejected = client.post("/api/watch/import", json=receipt)
         assert rejected.status_code == 400
         assert "manabot export-game" in rejected.json()["detail"]
+
+
+def test_watch_launch_registers_policy_spec_without_starting(
+    academy: Academy, tmp_path: Path
+) -> None:
+    from managym.academy.opponent import policy_registry
+    from tests.academy.test_play_modes import _write_tiny_checkpoint
+
+    path = tmp_path / "model.pt"
+    _write_tiny_checkpoint(path)
+    spec = tmp_path / "challenger.json"
+    spec.write_text(json.dumps({"provider": "manabot", "artifact": str(path)}))
+    before = set(server.SESSION_REGISTRY)
+    launched = academy.watch(players=(spec, "random"))
+    query = parse_qs(urlparse(launched.url).query)
+    key = query["seat1"][0].removeprefix("policy:")
+    assert policy_registry().descriptor(key).artifacts["actor"]
+    assert query["seat2"] == ["random"]
+    assert set(server.SESSION_REGISTRY) == before
+    configured = server.LAUNCH_CONFIGS[_launch_id(academy.new_game(opponent=spec).url)]
+    assert configured["opponent_sha256"] == key
+    with pytest.raises(AcademyLaunchError):
+        academy.watch(players=(tmp_path / "missing.json", "random"))
+
+
+def test_launch_uses_the_same_explicit_search_spec_for_play_and_watch(
+    academy: Academy,
+) -> None:
+    key = policy_registry().register(SearchFactory(), name="search-launch")
+    search = SearchConfig(worlds=4, depth=2)
+    configured = server.LAUNCH_CONFIGS[
+        _launch_id(academy.new_game(opponent="search-launch", search=search).url)
+    ]
+    assert configured["opponent_sha256"] == key
+    assert configured["mirror"] == asdict(search)
+    query = parse_qs(
+        urlparse(
+            academy.watch(
+                players=("search-launch", "random"), search=(search, None)
+            ).url
+        ).query
+    )
+    assert json.loads(query["search"][0]) == [asdict(search), None]
+    assert query["seat1"] == [f"policy:{key}"]
+    with pytest.raises(AcademyLaunchError, match="open decklists"):
+        academy.new_game(opponent="search-launch", search=search, decklists="closed")
+    with pytest.raises(AcademyLaunchError, match="search-capable policy"):
+        academy.watch(players=("random", "random"), search=(search, None))
+
+
+@pytest.mark.parametrize("option", ["--search"])
+def test_cli_search_specs_reach_the_shared_python_launch_api(
+    academy: Academy,
+    monkeypatch: pytest.MonkeyPatch,
+    option: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    policy_registry().register(SearchFactory(), name="search-cli")
+    targets: list[str] = []
+
+    def run(shared: cli._Shared, prepare: Callable[[Academy], str]) -> None:
+        targets.append(prepare(academy))
+
+    monkeypatch.setattr(cli, "_run", run)
+    assert (
+        cli.main(
+            [
+                "academy",
+                "play",
+                "--opponent",
+                "search-cli",
+                option,
+                '{"worlds":4,"depth":2}',
+            ]
+        )
+        == 0
+    )
+    config = server.LAUNCH_CONFIGS[_launch_id(targets[-1])]
+    assert config["mirror"] == asdict(SearchConfig(worlds=4, depth=2))
+    assert (
+        cli.main(
+            [
+                "academy",
+                "watch",
+                "--player",
+                "search-cli",
+                "--player",
+                "random",
+                option,
+                '[{"worlds":4,"depth":2},null]',
+            ]
+        )
+        == 0
+    )
+    query = parse_qs(urlparse(targets[-1]).query)
+    assert json.loads(query["search"][0]) == [config["mirror"], None]
+    assert "removed in 0.4.0" not in capsys.readouterr().err

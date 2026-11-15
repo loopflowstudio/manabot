@@ -245,7 +245,7 @@ One continuous leaf. Regions are ruled, never boxed.
   matchup names the players — "You (UR Lessons) vs Search 64 (GW Allies)",
   serif with mana pips; configuration fields appear only while they matter
   (before a game, and again at game over) with small-caps labels set above
-  them; New Game is the one red action; and the connection is a register
+  them; Start game is the one red action; and the connection is a register
   dot and a whisper of mono beside it. Nothing on the masthead competes
   with the sheet below.
 - The turn is a **tempo marking**: small caps between flanking rules, in
