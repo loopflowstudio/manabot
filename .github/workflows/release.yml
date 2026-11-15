@@ -175,7 +175,9 @@ jobs:
         shell: bash
         run: |
           export PATH="$RUNNER_TEMP/no-rust:$PATH"
-          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --only-binary :all: --torch-backend cpu dist/managym-*.whl dist/manabot-*.whl 'torch==2.15.0' 'etude-sdk @ git+https://github.com/loopflowstudio/etude@d60236d015a4b2a01055b2c861856f06bb1852a2'
+          # Prepare the pure Python Git SDK before the binary-only engine check.
+          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" 'etude-sdk @ git+https://github.com/loopflowstudio/etude@d60236d015a4b2a01055b2c861856f06bb1852a2'
+          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --only-binary :all: --torch-backend cpu dist/managym-*.whl dist/manabot-*.whl 'torch==2.15.0'
           uv pip check --python "$RUNNER_TEMP/release-venv/bin/python"
           cp scripts/release/academy_replay_smoke.py "$RUNNER_TEMP/academy_replay_smoke.py"
           cp scripts/release/smoke.py "$RUNNER_TEMP/smoke.py"

@@ -241,6 +241,7 @@ def publish_dashboard(
             directory=directory,
             storages=[storage_from_uri(destination)] if destination else (),
             strict=True,
+            resume=True,
         )
         try:
             for index in range(len(recorded), len(rows)):
@@ -255,9 +256,11 @@ def publish_dashboard(
                 {
                     "projection/summary_json": json.dumps(
                         dashboard.summary, sort_keys=True
-                    )
+                    ),
                 },
-                observation=max(0, len(rows) - 1),
+                # The prefix boundary keeps summary-only retries from replacing
+                # its last immutable row under first-row supersession.
+                observation=len(rows),
             )
         except Exception:
             tracked.finish("failed")

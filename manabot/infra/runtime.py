@@ -82,14 +82,15 @@ class RunContext:
         seed_random(
             config.seed, backend=backend, torch_deterministic=config.torch_deterministic
         )
+        prior = (
+            RunRecord.model_validate_json((resume / "run.json").read_bytes())
+            if resume
+            else None
+        )
         self.run: TrainingRun = track(
             # A resumed run keeps the experiment it was declared under, which
             # names the stage that started it, not necessarily this one.
-            experiment=RunRecord.model_validate_json(
-                (resume / "run.json").read_bytes()
-            ).experiment
-            if resume
-            else experiment,
+            experiment=prior.experiment if prior is not None else experiment,
             # The launcher's identity wins; it owns continuation of its runs.
             run=os.environ.get("ETUDE_RUN") or (resume.name if resume else run),
             clocks=[
@@ -97,7 +98,11 @@ class RunContext:
                 Step("updates", "completed collect/update iterations"),
             ],
             seed=config.seed,
-            config={
+            # Recovery keeps the run's frozen declaration; execution receipts
+            # own changed output paths, allocation limits and attempt facts.
+            config=prior.config_json
+            if prior is not None
+            else {
                 "training": dict(resolved_config)
                 if resolved_config is not None
                 else None,
