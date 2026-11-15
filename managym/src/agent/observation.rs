@@ -2433,7 +2433,11 @@ mod characteristics_tests {
         assert_ne!(first_row.id, second_row.id);
         assert_ne!(first_row.object_id, second_row.object_id);
         assert_eq!(
-            game.state.object_to_permanent[game.state.permanents[second].as_ref().unwrap().object],
+            game.state.object_to_permanent[game.state.permanents[second]
+                .as_ref()
+                .unwrap()
+                .object
+                .slot()],
             Some(second)
         );
         let identity = first_row.object_id.unwrap();

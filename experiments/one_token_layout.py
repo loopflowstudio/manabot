@@ -43,11 +43,11 @@ from experiments.learning_signal import (
     scheduled_matchups,
     training_runs,
 )
+from manabot.backends.torch.arrays import on_device
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationEncoder, ObservationSpace
 from manabot.infra.config import MatchConfig, ObservationConfig
-from manabot.model.admission import admit_observation
 from manabot.training.panels import ML, PERF
 from manabot.training.regime import TrainingRegime
 import managym
@@ -260,14 +260,11 @@ def measure(output: Path, games: int = 40) -> list[LayoutCost]:
         space = ObservationSpace(config)
         torch.manual_seed(0)
         model = ActorCritic(space, arm(version).agent).eval()
-        batch = {
-            key: torch.from_numpy(np.stack([row[key] for row in rows]))
-            for key in rows[0]
-        }
+        batch = {key: np.stack([row[key] for row in rows]) for key in rows[0]}
         forward_ms: list[float] = []
         with torch.no_grad():
             for _ in range(12):
-                admitted = admit_observation(model, batch)
+                admitted = on_device(model.prepare(batch), model.device_type)
                 start = time.perf_counter()
                 model(admitted)
                 forward_ms.append((time.perf_counter() - start) * 1e3)

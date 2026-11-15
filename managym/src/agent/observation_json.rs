@@ -431,6 +431,7 @@ fn upgrade_historical(mut observation: Observation) -> Result<Observation, Strin
     if !observation.historical() {
         return Ok(observation);
     }
+    let original = observation.clone();
     for (cards, permanents) in [
         (
             &mut observation.agent_cards,
@@ -460,7 +461,10 @@ fn upgrade_historical(mut observation: Observation) -> Result<Observation, Strin
                 || permanent.toughness != card.toughness
                 || permanent.keywords != card.keywords
             {
-                return Err("historical permanent characteristics disagree".into());
+                // Older captures can record different card and permanent
+                // projections. Keep both for legacy encoding; v11 refuses
+                // historical observations whose identity is not normalized.
+                return Ok(original);
             }
             permanent.object_id = Some(card.id);
             permanent.owner_id = card.owner_id;

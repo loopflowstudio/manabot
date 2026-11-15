@@ -131,14 +131,15 @@ def expected_focus_indices(
     return out
 
 
-def test_observation_parity():
-    """Run 200 games, encode every observation both ways, and assert exact parity."""
-    rng = np.random.default_rng(42)
-    env = managym.Env(seed=42, skip_trivial=True)
+@pytest.mark.parametrize("seed", range(42, 62))
+def test_observation_parity(seed: int) -> None:
+    """Compare both encoders throughout 200 games across bounded batches."""
+    rng = np.random.default_rng(seed)
+    env = managym.Env(seed=seed, skip_trivial=True)
     config = ObservationConfig()
     encoder = ObservationEncoder(config)
 
-    for game_i in range(200):
+    for game_i in range(10):
         obs, _ = env.reset(make_player_configs())
 
         while True:

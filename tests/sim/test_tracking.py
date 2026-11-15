@@ -140,3 +140,74 @@ def test_simulation_encodes_with_the_models_policy_input() -> None:
     assert sim._shared_observation_config(RandomPlayer("r"), RandomPlayer("r")) is None
     with pytest.raises(ValueError, match="different observation ABIs"):
         sim._shared_observation_config(v10, model(11))
+
+
+@pytest.mark.parametrize("failure", ["policy", "environment"])
+def test_failed_game_aborts_evaluation_and_closes_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    class FailingEnv:
+        closed = False
+
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            self.last_raw_obs = SimpleNamespace(agent=SimpleNamespace(player_index=0))
+            instances.append(self)
+
+        def reset(self) -> tuple[dict[str, object], dict[str, object]]:
+            return {}, {}
+
+        def step(self, action: int) -> tuple[object, ...]:
+            raise RuntimeError("environment failed")
+
+        def close(self) -> None:
+            self.closed = True
+
+    class FailingPlayer:
+        name = "fixture"
+
+        def get_action(self, obs: object) -> int:
+            if failure == "policy":
+                raise RuntimeError("policy failed")
+            return 0
+
+    instances: list[FailingEnv] = []
+    monkeypatch.setattr(sim, "Env", FailingEnv)
+    monkeypatch.setattr(sim, "load_player", lambda *args, **kwargs: FailingPlayer())
+    monkeypatch.setenv("ETUDE_TRACK_DIR", str(tmp_path / "tracking"))
+    monkeypatch.setenv("ETUDE_RUN", "failed-evaluation")
+    with pytest.raises(RuntimeError, match=f"{failure} failed"):
+        sim.run_simulation(
+            SimulationConfig(
+                hero="random", villain="random", num_games=1, num_threads=1
+            ),
+            RuntimeConfig(name="simulation", runs_dir=tmp_path),
+        )
+    assert len(instances) == 1 and instances[0].closed
+    runs = read_all(tmp_path / "tracking")
+    assert len(runs) == 1
+    assert not list(runs[0].points("evaluation/hero_win_rate", "games").y)
+    assert runs[0].state is None or runs[0].state.state != "finished"
+
+
+def test_game_reaching_step_limit_records_timeout() -> None:
+    class LimitedEnv:
+        last_raw_obs = SimpleNamespace(agent=SimpleNamespace(player_index=0))
+
+        def reset(self) -> tuple[dict[str, object], dict[str, object]]:
+            return {}, {}
+
+        def step(
+            self, action: int
+        ) -> tuple[dict[str, object], int, bool, bool, dict[str, object]]:
+            return {}, 0, False, False, {}
+
+    class Player:
+        def get_action(self, obs: object) -> int:
+            return 0
+
+    player = cast(sim.Player, Player())
+    outcome, steps, _, _, _ = sim._simulate_game(
+        cast(sim.Env, LimitedEnv()), player, player, 1
+    )
+    assert outcome == sim.GameOutcome.TIMEOUT
+    assert steps == 1

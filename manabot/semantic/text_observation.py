@@ -462,15 +462,23 @@ class _Renderer:
             self.state.agent_cards + self.state.opponent_cards
         ):
             self._alias(f"C{index + 1} ({card.characteristics.name})", card.id)
+        historical_cards = [
+            card
+            for card in self.state.agent_cards + self.state.opponent_cards
+            if int(card.zone) == 2
+        ]
+        historical_index = 0
         for index, permanent in enumerate(
             self.state.agent_permanents + self.state.opponent_permanents
         ):
             card = permanent.characteristics
-            if permanent.object_id is None:
-                raise TextEncodingError("permanent without its object identity")
+            object_id = permanent.object_id
+            if object_id is None:
+                object_id = historical_cards[historical_index].id
+                historical_index += 1
             label = f"P{index + 1} ({card.name})"
             self.names[permanent.id] = label
-            self._alias(label, permanent.object_id, permanent.id)
+            self._alias(label, object_id, permanent.id)
         for index, item in enumerate(self.state.stack_objects):
             label = f"S{index + 1}" + (
                 f" ({item.characteristics.name})" if item.characteristics else ""
