@@ -349,6 +349,7 @@ def test_watch_latest_reconnect_preserves_timeout_history_and_explicit_retry(
         response = client.post(f"{url}/step", headers=headers, json={"revision": 3})
         assert response.status_code == 409
         assert response.json()["detail"]["code"] == "mirror_deadline_exceeded"
+        assert game._bot_decision is None
         for ordinal in (-1, 0, -1):
             recovered = client.get(f"{url}/decisions/{ordinal}", headers=headers)
             assert recovered.status_code == 200

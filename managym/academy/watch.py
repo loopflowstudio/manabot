@@ -12,7 +12,7 @@ from typing import Any, Literal, TypedDict
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
-from managym.bots import BotPolicy, choose_bot
+from managym.bots import BotPolicy
 from managym.mirror_search import MirrorSearch, MirrorSearchError
 from managym.policy import PolicyRunner
 
@@ -148,17 +148,9 @@ def step_watch(trace_id: str, token: str | None, expected_revision: int) -> Watc
     )
     assert context is not None
     assert game.watch_policies is not None
-    game.mirror_retry = None
     try:
-        game._bot_decision = choose_bot(game.watch_policies[seat], game.env, game.obs)
-    except MirrorSearchError as exc:
-        if exc.reason == "mirror_deadline_exceeded":
-            game.mirror_retry = {
-                "code": exc.reason,
-                "message": str(exc),
-                "match_id": game.match_id,
-                "expected_revision": game.revision,
-            }
+        decision = game._choose_bot(game.watch_policies[seat])
+    except MirrorSearchError:
         raise
     except ValueError as exc:
         # Nothing was committed; the pending decision stays for an explicit retry.
@@ -174,7 +166,7 @@ def step_watch(trace_id: str, token: str | None, expected_revision: int) -> Watc
     offer_id = next(
         key
         for key, index in context.action_by_offer.items()
-        if index == game._bot_decision.action
+        if index == decision.action
     )
     command = game._authority_command(context, offer_id, "policy")
     game._apply_bound_command(context, command, source="policy")

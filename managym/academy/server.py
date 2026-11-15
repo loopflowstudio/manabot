@@ -1578,6 +1578,28 @@ class GameSession:
             if next_obs.game_over:
                 self._close_policies()
 
+    def _choose_bot(self, policy: BotPolicy) -> BotDecision:
+        """Retain a proposal or its pending timeout at the current revision.
+
+        Play and Watch share this binding; their callers decide how to present
+        the failure and commit successful proposals through bound Commands.
+        """
+        assert self.env is not None and self.obs is not None
+        self._bot_decision = None
+        self.mirror_retry = None
+        try:
+            self._bot_decision = choose_bot(policy, self.env, self.obs)
+        except MirrorSearchError as exc:
+            if exc.reason == "mirror_deadline_exceeded":
+                self.mirror_retry = {
+                    "code": exc.reason,
+                    "message": str(exc),
+                    "match_id": self.match_id,
+                    "expected_revision": self.revision,
+                }
+            raise
+        return self._bot_decision
+
     def _auto_play_villain(self) -> None:
         if self.env is None or self.obs is None or self.trace is None:
             return
@@ -1601,19 +1623,10 @@ class GameSession:
             else:
                 self.authority_fallback_counters["legacy_fixed_action"] += 1
                 try:
-                    self._bot_decision = choose_bot(
-                        self.villain_policy, self.env, self.obs
-                    )
-                    action_index = self._bot_decision.action
+                    action_index = self._choose_bot(self.villain_policy).action
                 except MirrorSearchError as exc:
                     if exc.reason != "mirror_deadline_exceeded":
                         raise
-                    self.mirror_retry = {
-                        "code": exc.reason,
-                        "message": str(exc),
-                        "match_id": self.match_id,
-                        "expected_revision": self.revision,
-                    }
                     return
                 except ValueError as exc:
                     # Validation and provider refusals carry authored reasons.

@@ -336,7 +336,15 @@ publish, land or choose the next Graph step from here.
 - Ctrl-C a run: start it with `subprocess.Popen(..., start_new_session=True,
   preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))` and
   `os.killpg(pid, SIGINT)`. A job started with `&` from a non-interactive shell
-  ignores SIGINT, so `pkill -INT` appears to hang.
+  ignores SIGINT, so `pkill -INT` appears to hang. When the child is `uv run`,
+  `killpg` delivers SIGINT twice (uv forwards it) and the server prints an
+  ignored `KeyboardInterrupt` at exit; signal only the Python child for a
+  clean shutdown.
+- Scripted Play against a searched opponent: one human Command runs the whole
+  opponent turn, so a 2×2 Mirror reply took 49 s (ten searched decisions) and
+  the waiting badge reached 170 s+. Do not treat a long badge as a hang; set
+  stall detectors above a full opponent turn, and confirm with the trace's
+  `events[].bot_decision.mirror.seconds` in the attempts table.
 - Experiment reports and figures: arrive as a new reader with
   `MANABOT_DATA_CACHE` set to an empty directory, then `doppler run --project
   manabot --config prd -- uv run --extra artifacts python -m manabot.data fetch
