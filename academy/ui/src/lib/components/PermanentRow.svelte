@@ -14,6 +14,7 @@
     tablePermanents?: PermanentState[];
     cardWidth?: number;
     focusedIds?: Set<number>;
+    combatMarkers?: Map<number, string>;
     clickableTargets?: Map<number, number[]>;
     onSelectTarget?: (objectId: number) => void;
     onHoverTarget?: (objectId: number | null) => void;
@@ -25,7 +26,7 @@
     allPermanents = permanents,
     tablePermanents = allPermanents,
     cardWidth = undefined,
-    focusedIds = new Set<number>(),
+    focusedIds = new Set<number>(), combatMarkers = new Map<number, string>(),
     clickableTargets = undefined,
     onSelectTarget = undefined,
     onHoverTarget = undefined,
@@ -42,6 +43,7 @@
       power={permanent.power === 0 && permanent.toughness === 0 ? null : permanent.power}
       toughness={permanent.power === 0 && permanent.toughness === 0 ? null : permanent.toughness}
       focused={focusedIds.has(permanent.id)}
+      planMarker={combatMarkers.get(permanent.id)}
       clickable={onSelectTarget !== undefined}
       tapped={permanent.tapped}
       dimmed={permanent.summoning_sick}

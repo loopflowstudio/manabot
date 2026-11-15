@@ -38,7 +38,7 @@ fn every_pair_and_mirror_completes_on_the_catalog() {
                 semantic.player_config("right", &second.key).unwrap(),
             ];
             let seed = 16400 + (left * 10 + right) as u64;
-            let mut game = Game::new(configs, seed, true);
+            let mut game = Game::new(configs, seed, true).expect("valid game setup");
             let winner = game
                 .random_playout(30_000, None)
                 .unwrap_or_else(|e| panic!("{} vs {} seed {seed}: {e:?}", first.key, second.key));

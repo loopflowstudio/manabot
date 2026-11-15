@@ -229,6 +229,7 @@ mod tests {
             23,
             false,
         )
+        .expect("valid game setup")
     }
 
     #[test]

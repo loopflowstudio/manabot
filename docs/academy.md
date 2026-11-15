@@ -14,6 +14,7 @@ digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 - [Shared decision surface](#shared-decision-surface)
 - [Using the laptop table](#using-the-laptop-table)
 - [Play and Inspect modes](#play-and-inspect-modes)
+- [Planning and confirming combat](#planning-and-confirming-combat)
 - [Choosing priority stops](#choosing-priority-stops)
 - [Reading consequences and controlling narration](#reading-consequences-and-controlling-narration)
 - [Inspect a replay](#inspect-a-replay): timeline, live Watch, perspectives and recovery
@@ -423,7 +424,9 @@ the import option to return to bundled decks.
 
 The table reads **Who decides / What is happening / Your choices**. It starts in
 **Inspect** mode: clicking a card inspects it and sends nothing; choosing one of
-the listed legal actions commits it. **Play** adds card selection and a hand-drag
+the listed legal actions commits it. Combat controls add an editable
+plan and explicit **Confirm** step ([planning combat](#planning-and-confirming-combat)).
+**Play** adds card selection and a hand-drag
 shortcut ([controls below](#play-and-inspect-modes)). Decisions with a single
 legal action are taken for you and never shown. Reloading the page restores the
 pending decision.
@@ -498,16 +501,16 @@ several actions, choose an explicit alternative from the list. A card with no
 current action remains available for inspection.
 
 Hover or focus previews the card; **Inspect card** opens its details without
-committing. Player targets have explicit named controls. During combat, choose
-for the creature named by the current prompt: attack or decline, or select one
-of its legal blocks or decline. Each choice commits separately before the next
-creature's prompt. Mana-source choices likewise follow the offered decisions;
+committing. Player targets have explicit named controls. Combat
+controls let you edit an attack or block plan, then confirm the declaration
+([planning combat](#planning-and-confirming-combat)). Mana-source choices follow the offered decisions;
 dragging a spell does not configure manual tapping.
 
 Choose **Inspect** to examine the acting viewer's observation and every legal
 offer. Card selection narrows navigation; **Show all** restores the full list.
-Both modes retain the legal count and complete choices. Switching modes clears
-uncommitted selection, sends no game action and leaves priority automation at
+Both modes retain the legal count and complete choices. Switching modes preserves
+a combat draft for the same pending decision; other uncommitted card selections
+are cleared. It sends no game action and leaves priority automation at
 its configured setting. Inspect is the initial default; an explicit mode
 preference is remembered in this browser.
 
@@ -517,6 +520,82 @@ unavailable while disconnected, awaiting a submitted action or changing settings
 These live-play shortcuts do not submit moves in Watch, recorded Replay or Study;
 use their own decision controls. Cancellation only discards local selection:
 after commitment, costs and revealed information remain committed.
+
+### Planning and confirming combat
+
+At your attack declaration, choose **Play**, select an eligible creature on
+the board, then its named player destination. Repeat for another creature and
+read their assignments in **Your choices**. Each assignment names
+the exact creature and the opposing player it will attack. Remove one creature,
+inspect the other, then choose **Confirm**. Only the confirmed declaration makes
+the creature attack and taps it if required. Editing or inspecting the plan
+spends nothing and leaves the game at the same decision.
+
+The board stays in view while you plan. Drafted creatures carry a **Planned attack**
+or **Planned block** marker, also included in their accessible names. Clearing an
+assignment removes its marker; changing focus leaves the other markers in place.
+The summary lists selected creatures, their destinations, counts and current power
+totals. Power is the creatures'
+current power, not a prediction of damage or the opponent's remaining life.
+Copies with the same name remain separate selectable objects.
+
+- **Attack:** select a creature and its named attack destination using the
+  board controls or the labeled choices. The current game offers the opposing
+  player as the destination. Remove a selection to leave that creature out.
+  **Select all eligible** adds the eligible attackers to the draft; review the
+  result before confirming.
+- **Block:** select a blocker, then the attacker it should block. Use the same
+  controls to reassign it to another offered attacker or clear its assignment.
+  The summary keeps all blocker-to-attacker links visible together. Academy
+  does not choose blocker assignments for you.
+- **Clear:** removes the editable assignments so you can start again. It does
+  not submit an empty declaration. To attack or block with no creatures, clear
+  the plan and explicitly confirm it, if the rules permit that declaration.
+- **Inspect:** hover or focus a card for its preview, or open **Inspect card**
+  for details. Switching to **Inspect** lets you examine the acting viewer's
+  observation and complete legal choices without changing the draft. Return
+  to **Play** to continue editing the same pending declaration.
+- **Keyboard:** Tab to the labeled creature and destination or assignment
+  controls, then activate them with Enter or Space. The same controls support
+  pointer input; dragging is not required. Tab to **Confirm** when ready.
+
+The rules engine checks the whole declaration, including restrictions involving
+several creatures. For example, assigning only one blocker to an attacker with
+menace leaves an invalid draft visible with an explanation. Add another eligible
+blocker or change the plan before confirming. Invalid plans open the native combat
+requirements for review; these describe the board’s restrictions rather than
+claiming to identify which restriction the draft violated. Open **Rules response**
+to read the engine's rejection. A creature's presence among the available choices
+does not mean every combination is legal. Academy never drops
+an invalid assignment or substitutes another plan to make confirmation succeed.
+
+**Confirm** waits for validation of the current draft and checks it again when
+submitted. While validation or submission is pending, wait for its result.
+A correctable rules rejection keeps your draft for editing and commits none of
+it. If validation reports a capacity limit, it cannot establish legality;
+confirmation remains unavailable. Invalid and capacity results keep your draft
+editable; retrying an unchanged plan does not resolve those results. **Retry
+validation** is offered when a validation request could not be sent.
+A connection or submission failure is shown separately from a rules rejection. Recover the connection and read the current
+declaration before trying again; a lost confirmation reply does not mean the
+declaration was cancelled.
+
+If the game has advanced, Academy discards the outdated draft and shows the
+current decision. Reloading or reconnecting also discards unconfirmed local
+plans, with an explanation, and restores the game's actual pending and committed
+choices. If part of a declaration was already committed through individual
+decisions, those assignments remain visible and fixed; only the remaining part
+can be edited. **Clear** cannot remove committed assignments, untap creatures
+or undo costs and revealed information.
+
+A confirmed declaration is recorded as its exact individual game decisions.
+Replay can therefore show several decisions from one confirmation. Those are
+the choices that were committed, not additional selections made by the browser.
+Confirmation also lets forced consequences run normally. If no further choice
+is needed, the returned board may already show combat damage or a later phase;
+confirmation does not create another pause at the end of the declaration.
+Watch, recorded Replay and Study keep their own decision controls; the live
+combat plan does not submit actions there.
 
 ### Choosing priority stops
 

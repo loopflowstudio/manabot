@@ -3,7 +3,7 @@
 `managym/src/experience.rs` is the authority for the currently integrated v1
 adapter boundary. It generates `experience-v1.schema.json`, a Draft 2020-12
 schema for one `ProtocolV1ConformanceBundle`: a complete recovery envelope and
-the command selected from that exact frame. `manabot/managym/experience.py` is the
+the command selected from that exact frame. `managym/experience.py` is the
 explicit Pydantic representation shared by Academy and manabot; automated tests
 compare its fields, required/optional keys, tagged variants, and enums to the
 Rust-generated schema.
@@ -26,7 +26,7 @@ cargo run --manifest-path managym/Cargo.toml --example export_study_recorded_dec
 uv run --extra play python - <<'PY'
 import json
 from pathlib import Path
-from academy.advice import advice_schema
+from managym.academy.advice import advice_schema
 
 Path("protocol/advice-v1.schema.json").write_text(
     json.dumps(advice_schema(), indent=2, sort_keys=True) + "\n"
@@ -60,10 +60,13 @@ recovery-to-command seam, including the legacy hero-view projection and a
 non-empty six-kind presentation tail (`cast`, `targeted`, `resolved`, `damage`,
 `destroyed`, and `died`). The envelope cursor names the first event in that
 ordered tail, so Rust, Python, and TypeScript also certify exact event
-addressing. It does not yet certify command outcomes as fixtures,
-the future semantic table projection, or generated declarations. Those gaps
-should become new fixtures as their producers land rather than being
-represented here as already complete.
+addressing. `fixtures/combat-declaration.json` additionally certifies a native
+constructed combat projection, a complete plan and its accepted parent receipt
+in all three languages. `combat-declaration-children.json` is that constructed
+root's safe acting-viewer child projection; native/Python validators check parent
+linkage against ordinary ordered children. These constructed fixtures are not
+complete-game evidence or trusted rules snapshots. The complete-game smoke test
+separately replays every ordinary Command to the exact terminal native state.
 
 The Rust design uses `u64` revisions and sequence IDs while TypeScript currently
 represents them as `number`. The certified fixture is far below

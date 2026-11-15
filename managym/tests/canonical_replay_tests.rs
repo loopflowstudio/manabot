@@ -130,6 +130,7 @@ fn combined_authority_rejects_duplicate_and_missing_global_addresses() {
     decisions.extend(player_one.decisions.clone());
     decisions.sort_by_key(|row| row.ordinal);
     let replay = CanonicalReplayV1 {
+        command_receipts: vec![],
         version: player_zero.version,
         replay_id: player_zero.replay_id.clone(),
         match_id: player_zero.match_id.clone(),
@@ -184,4 +185,50 @@ fn checked_in_schema_is_generated_from_rust_projection_authority() {
     let mut generated = serde_json::to_string_pretty(&schema).expect("schema serializes");
     generated.push('\n');
     assert_eq!(CHECKED_IN_SCHEMA, generated);
+}
+
+#[test]
+fn combat_parent_links_exact_ordered_children_without_entering_viewer_projection() {
+    let projection: CanonicalReplayProjectionV1 = serde_json::from_str(include_str!(
+        "../../protocol/fixtures/combat-declaration-children.json"
+    ))
+    .unwrap();
+    let bundle: managym::experience::ProtocolV1ConformanceBundle = serde_json::from_str(
+        include_str!("../../protocol/fixtures/combat-declaration.json"),
+    )
+    .unwrap();
+    let replay = CanonicalReplayV1 {
+        command_receipts: vec![bundle.declaration_receipt.unwrap()],
+        version: projection.version,
+        replay_id: projection.replay_id.clone(),
+        match_id: projection.match_id.clone(),
+        content_hash: projection.content_hash.clone(),
+        asset_manifest_hash: projection.asset_manifest_hash.clone(),
+        decisions: projection.decisions.clone(),
+        presentation_tracks: vec![ViewerPresentationTrack {
+            viewer: projection.viewer,
+            head: projection.presentation_head,
+            events: projection.presentation.clone(),
+        }],
+    };
+    replay.validate().unwrap();
+    assert_eq!(
+        serde_json::to_value(replay.project(projection.viewer).unwrap()).unwrap(),
+        serde_json::to_value(&projection).unwrap()
+    );
+    let mut invalid = replay.clone();
+    invalid.command_receipts[0]
+        .declaration
+        .as_mut()
+        .unwrap()
+        .child_command_ids
+        .reverse();
+    assert!(invalid.validate().unwrap_err().contains("ordered commit"));
+    let mut invalid = replay;
+    invalid.command_receipts[0]
+        .declaration
+        .as_mut()
+        .unwrap()
+        .child_command_ids[0] = managym::experience::CommandId("missing".to_owned());
+    assert!(invalid.validate().unwrap_err().contains("absent"));
 }

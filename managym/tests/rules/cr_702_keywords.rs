@@ -439,7 +439,7 @@ fn cr_702_lifelink_negative_no_life_gain_without_lifelink() {
 
 /// CR 702.111 + 509.1b — Menace attacker can't be blocked by exactly one creature.
 #[test]
-fn cr_702_menace_single_block_is_removed() {
+fn cr_702_menace_single_block_is_never_offered() {
     let mut s = Scenario::new(
         deck_of("Mountain", "Boggart Brute"),
         deck(&[("Forest", 24), ("Llanowar Elves", 36)]),
@@ -452,7 +452,14 @@ fn cr_702_menace_single_block_is_removed() {
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     s.declare_attack();
     s.advance_to_active_step(0, StepKind::DeclareBlockers);
-    s.declare_block();
+    assert!(s.action_space().actions.iter().all(|action| !matches!(
+        action,
+        Action::DeclareBlocker {
+            attacker: Some(_),
+            ..
+        }
+    )));
+    s.decline_block();
 
     let combat = s.game().state.combat.as_ref().expect("combat should exist");
     let attacker = *combat.attackers.first().expect("attacker should exist");

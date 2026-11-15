@@ -924,6 +924,122 @@
         "villain"
       ]
     },
+    "DeclarationBinding": {
+      "description": "Engine address for one declaration, separate from transport revisions.",
+      "type": "object",
+      "properties": {
+        "fingerprint": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "revision",
+        "fingerprint"
+      ]
+    },
+    "DeclarationProjection": {
+      "type": "object",
+      "properties": {
+        "actor": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "binding": {
+          "$ref": "#/$defs/DeclarationBinding"
+        },
+        "constraints": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "destinations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DecisionObjectView"
+          }
+        },
+        "rules_player": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "stage": {
+          "$ref": "#/$defs/DeclarationStage"
+        },
+        "subjects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DeclarationSubject"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "binding",
+        "stage",
+        "actor",
+        "rules_player",
+        "subjects",
+        "destinations",
+        "constraints"
+      ]
+    },
+    "DeclarationStage": {
+      "type": "string",
+      "enum": [
+        "attackers",
+        "blockers"
+      ]
+    },
+    "DeclarationSubject": {
+      "description": "One visible creature and its complete pair/destination supports. Supports\ndescribe individual eligibility; the whole plan still needs native validation.",
+      "type": "object",
+      "properties": {
+        "assigned_to": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SubjectRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "destinations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SubjectRef"
+          }
+        },
+        "fixed": {
+          "type": "boolean"
+        },
+        "object": {
+          "$ref": "#/$defs/DecisionObjectView"
+        },
+        "power": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "object",
+        "power",
+        "destinations",
+        "fixed"
+      ]
+    },
     "EngineIdentity": {
       "type": "object",
       "properties": {
@@ -998,6 +1114,16 @@
           "anyOf": [
             {
               "$ref": "#/$defs/DeckNames"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "declaration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DeclarationProjection"
             },
             {
               "type": "null"

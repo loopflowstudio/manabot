@@ -91,6 +91,14 @@ publish, land or choose the next Graph step from here.
   (buttons are disabled while a Command is in flight, and `Pass Turn (F6)` in
   the panel is not an offer). Tapped lands show only in a `fullPage`
   screenshot, not in the board's text.
+  Combat declarations are not offers: they show `[data-testid=combat-composer]`
+  (whole plan, `data-testid=combat-validation` `data-status`, one Confirm), so
+  a game loop waiting only for `action-option` stalls at the first combat.
+  Specs use `confirmCombat` from `academy/ui/e2e/combat.ts`. Opponent select
+  values are `search-16`, `random`, `passive`, `policy` (not labels). For real
+  combat, import `16 Mountain\n10 Gray Ogre\n8 Boggart Brute\n6 Raging Goblin`
+  (menace via Boggart Brute) against Search 16. A `vite preview` server dies
+  when a later build replaces `.svelte-kit/output`; restart it after building.
 - Configured launch (`managym academy play|replay`, `managym.academy.launch.serve`):
   from a checkout first build the static SPA with
   `ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build`, then set
@@ -151,6 +159,12 @@ publish, land or choose the next Graph step from here.
   result deliberately receives focus and may scroll; assert document stability
   during active decisions. After Play Again, select the completed replay by its
   result label, since the newest entry is the unfinished next game.
+  A Node `net` forwarder in the Playwright script, listening in front of the
+  `npm run preview` port, works because preview proxies `/ws/play` to the API.
+  To test a lost reply, click Confirm and cut in the same tick. Then check the
+  trace for a single commit: `attempts.trace_json` in
+  `<ACADEMY_TRACES_DIR>/play.sqlite`, `events[].action_description` by turn.
+  Forced children (one legal action) are skipped and absent from `events`.
 - First-time clone: copy tracked plus untracked non-ignored files
   (`git ls-files -co --exclude-standard`) to an empty `/tmp` directory and run
   `ACADEMY_CLEAN_API_PORT=… ACADEMY_CLEAN_FRONTEND_PORT=… ./scripts/verify-clean-machine`

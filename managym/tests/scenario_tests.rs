@@ -43,7 +43,7 @@ fn make_env(seed: u64) -> Env {
 fn make_game(seed: u64) -> Game {
     let p0 = PlayerConfig::new("hero", hero_counter_deck());
     let p1 = PlayerConfig::new("villain", villain_bomb_deck());
-    Game::new(vec![p0, p1], seed, true)
+    Game::new(vec![p0, p1], seed, true).expect("valid game setup")
 }
 
 #[test]

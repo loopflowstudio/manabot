@@ -1838,7 +1838,7 @@ impl Game {
         ability_index: usize,
     ) -> Result<(), AgentError> {
         if !self.can_activate_mana_ability(player, permanent, ability_index) {
-            return Err(AgentError("illegal mana activation".into()));
+            return Err(AgentError::Rules("illegal mana activation".into()));
         }
         let ability = self.characteristics(permanent).activated_abilities[ability_index].clone();
         self.record_activation(permanent, ability_index, &ability);
@@ -1891,7 +1891,7 @@ impl Game {
             .mana_tap_cost_actions(player)
             .contains(&Action::SelectCard { player, object })
         {
-            return Err(AgentError("illegal mana tap cost selection".into()));
+            return Err(AgentError::Rules("illegal mana tap cost selection".into()));
         }
         let permanent = self.state.permanent_of(object).unwrap();
         self.tap_permanent(permanent, false);
@@ -2218,7 +2218,7 @@ impl Game {
                 }],
                 SourcePolicy::FixedOnly,
             )
-            .ok_or_else(|| AgentError("not enough automatic mana".into()))?;
+            .ok_or_else(|| AgentError::Rules("not enough automatic mana".into()))?;
         for step in path {
             if let PaymentStep::Fixed(source) = step {
                 self.tap_fixed_mana_source(player, source);
@@ -2328,11 +2328,13 @@ impl Game {
                     Some(index) => index,
                     None if choices.len() == 1 => 0,
                     None if !choices.is_empty() => return Ok(()),
-                    None => return Err(AgentError("no feasible mana spending choice".into())),
+                    None => {
+                        return Err(AgentError::Rules("no feasible mana spending choice".into()))
+                    }
                 };
                 let choice = choices
                     .get(index)
-                    .ok_or_else(|| AgentError("illegal mana spending choice".into()))?;
+                    .ok_or_else(|| AgentError::Rules("illegal mana spending choice".into()))?;
                 let receipt = self.spend_mana_unit(player, &choice.unit, &cost);
                 let suspended = self.state.suspended_decision_mut().as_mut().unwrap();
                 let Decision::ManaSpend { cost, spent, .. } = &mut suspended.decision else {
@@ -2816,8 +2818,9 @@ mod tests {
             ],
             339,
             true,
-        );
-        game.play();
+        )
+        .expect("valid game setup");
+        game.play().unwrap();
         let player = PlayerId(0);
         let kept = |game: &Game| game.payment_sources.borrow().sources[player.0].clone();
 
