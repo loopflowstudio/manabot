@@ -74,6 +74,15 @@
     ...matchingOffers.filter(action => action.action_type !== 'PAY_COST'),
   ]);
   let searchInput: HTMLInputElement | null = $state(null);
+  // Pointer previews follow movement, not entry: when a Command re-renders the
+  // list, the browser reports entry into whichever offer now lies under a
+  // resting pointer, which would replace the autofocused proposal unasked.
+  let pointed: InteractionOffer | null = null;
+  function pointTo(action: InteractionOffer | null): void {
+    if (action === pointed) return;
+    pointed = action;
+    onHoverAction?.(action);
+  }
 
   function setQuery(text: string): void {
     filter = { key: filterKey, text };
@@ -252,8 +261,8 @@
           aria-label={action.label}
           aria-describedby={[decisionPrompt ? 'decision-prompt' : '', action.subjects?.length ? `offer-subjects-${action.id}` : ''].filter(Boolean).join(' ') || undefined}
           class={`w-full rounded border px-3 py-2 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action ${highlightedOfferIds.has(action.id) ? 'border-plains-ink bg-panel' : 'border-line-strong bg-field hover:border-action hover:bg-panel'} ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
-          onmouseenter={() => onHoverAction?.(action)}
-          onmouseleave={() => onHoverAction?.(null)}
+          onpointermove={() => pointTo(action)}
+          onmouseleave={() => pointTo(null)}
           onfocus={() => onHoverAction?.(action)}
           onblur={() => onHoverAction?.(null)}
           onclick={() => onSelectAction?.(action)}

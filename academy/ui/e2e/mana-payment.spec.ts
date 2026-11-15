@@ -34,6 +34,14 @@ async function track(page: Page): Promise<void> {
     window.WebSocket = PaymentSocket;
   });
 }
+async function startPaymentGame(page: Page): Promise<void> {
+  await track(page);
+  await page.goto('/');
+  await expect(page.getByTestId('connection-badge')).toHaveText('connected');
+  await page.getByRole('button', { name: 'New Game', exact: true }).click();
+  await expect(page.getByTestId('decision-surface')).toBeVisible();
+  await finishBoardNarration(page);
+}
 async function choose(page: Page, id: number): Promise<void> {
   const before = await page.evaluate(() => window.__mana.frame!.revision);
   await page.locator(`[data-testid="action-option"][data-offer-id="${id}"]`).focus();
@@ -52,19 +60,13 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
   test(`native payment preview, deliberate sources and pending output recovery at ${width}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height });
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await track(page);
-    await page.goto('/');
-    await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-    await page.getByRole('button', { name: 'New Game', exact: true }).click();
-    await expect(page.getByTestId('decision-surface')).toBeVisible();
-    await finishBoardNarration(page);
+    await startPaymentGame(page);
     // Blur the automatically focused first choice so keyboard focus can ask
     // again; the query remains cached only within this current frame.
     const close = page.getByRole('button', { name: 'Close preview', exact: true });
     if (await close.isVisible()) await close.click();
     const cast = await offer(page, 'Cast Boomerang Basics');
     // An initial autofocus may already have populated the frame-local cache.
-    let preview: PreviewResponse | null = null;
     const credentials = await page.evaluate(() => JSON.parse(sessionStorage.getItem('etude.gui.resume')!));
     const current = await page.evaluate(() => window.__mana.frame!);
     const response = await page.request.post(`/api/sessions/${credentials.session_id}/payment-preview`, {
@@ -74,11 +76,11 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
       },
     });
     expect(response.ok()).toBe(true);
-    preview = await response.json();
+    const preview: PreviewResponse = await response.json();
     await page.locator(`[data-testid="action-option"][data-offer-id="${cast}"]`).focus();
     await expect(page.getByTestId('payment-preview')).toContainText('Exact automatic source plan');
-    expect(preview!.preview.sources.length).toBeGreaterThan(0);
-    const proposed = preview!.preview.sources.map(source => source.source.kind === 'object' ? source.source.id.entity : -1);
+    expect(preview.preview.sources.length).toBeGreaterThan(0);
+    const proposed = preview.preview.sources.map(source => source.source.kind === 'object' ? source.source.id.entity : -1);
     await expect(page.locator('[data-payment-source]')).toHaveCount(proposed.length);
     const sourceBounds = await page.locator('[data-payment-source]').first().boundingBox();
     const sourceRegion = await page.getByRole('region', { name: 'You battlefield and zones', exact: true }).boundingBox();
@@ -142,7 +144,6 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
 }
 
 test('a delayed preview response cannot restore source marks after a Command', async ({ page }) => {
-  await track(page);
   let release!: () => void;
   let captured = false;
   const delayed = new Promise<void>(done => release = done);
@@ -153,11 +154,7 @@ test('a delayed preview response cannot restore source marks after a Command', a
     await delayed;
     await route.fulfill({ response }).catch(() => {}); // The browser may have aborted the old request.
   });
-  await page.goto('/');
-  await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-  await page.getByRole('button', { name: 'New Game', exact: true }).click();
-  await expect(page.getByTestId('decision-surface')).toBeVisible();
-  await finishBoardNarration(page);
+  await startPaymentGame(page);
   await page.locator(`[data-testid="action-option"][data-offer-id="${await offer(page, 'Cast Boomerang Basics')}"]`).hover();
   await expect.poll(() => captured).toBe(true);
   await choose(page, await offer(page, 'Tap Island for'));
@@ -169,12 +166,7 @@ test('a delayed preview response cannot restore source marks after a Command', a
 
 test('activation fee preview stops before output and resumes the outer spell payment', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1280, height: 800 });
-  await track(page);
-  await page.goto('/');
-  await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-  await page.getByRole('button', { name: 'New Game', exact: true }).click();
-  await expect(page.getByTestId('decision-surface')).toBeVisible();
-  await finishBoardNarration(page);
+  await startPaymentGame(page);
   const preview = page.getByTestId('payment-preview');
   const prism = await offer(page, 'Activate ability: Prophetic Prism');
   await page.locator(`[data-testid="action-option"][data-offer-id="${prism}"]`).focus();
@@ -220,12 +212,7 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900
     test(`moving the pointer between offers never resizes the offer list ${viewport.width} ${colorScheme}`, async ({ page }, testInfo) => {
       await page.setViewportSize(viewport);
       await page.emulateMedia({ colorScheme });
-      await track(page);
-      await page.goto('/');
-      await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-      await page.getByRole('button', { name: 'New Game', exact: true }).click();
-      await expect(page.getByTestId('decision-surface')).toBeVisible();
-      await finishBoardNarration(page);
+      await startPaymentGame(page);
       const cast = page.locator(`[data-testid="action-option"][data-offer-id="${await offer(page, 'Cast Boomerang Basics')}"]`);
       const pass = page.locator(`[data-testid="action-option"][data-offer-id="${await offer(page, 'Pass priority')}"]`);
       // Layout, not viewport position: Playwright scrolls an offer into view to hover it.
@@ -261,12 +248,7 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900
     test(`payment is immediately reachable and previews on arrival ${viewport.width} ${colorScheme}`, async ({ page }, testInfo) => {
       await page.setViewportSize(viewport);
       await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
-      await track(page);
-      await page.goto('/');
-      await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-      await page.getByRole('button', { name: 'New Game', exact: true }).click();
-      await expect(page.getByTestId('decision-surface')).toBeVisible();
-      await finishBoardNarration(page);
+      await startPaymentGame(page);
       await choose(page, await offer(page, 'Cast Boomerang Basics'));
       await choose(page, (await page.evaluate(() => window.__mana.frame!)).offers[0].id);
       const frame = await page.evaluate(() => window.__mana.frame!);
@@ -310,3 +292,25 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900
     });
   }
 }
+
+test('a pointer resting after the target click keeps the arriving payment proposal', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await startPaymentGame(page);
+  await choose(page, await offer(page, 'Cast Boomerang Basics'));
+  // Click the target with a real pointer and leave it there: the payment
+  // decision re-renders a mana source beneath it without any pointer motion.
+  const before = await page.evaluate(() => window.__mana.frame!.revision);
+  const target = await page.locator('[data-testid="action-option"]').nth(1).boundingBox();
+  await page.mouse.click(target!.x + target!.width / 2, target!.y + target!.height - 3);
+  await expect.poll(() => page.evaluate(() => window.__mana.frame?.revision), { timeout: 20_000 }).toBeGreaterThan(before);
+  const payId = await offer(page, 'Pay the cost');
+  await expect(page.locator(`[data-testid="action-option"][data-offer-id="${payId}"]`)).toBeFocused();
+  const preview = page.getByTestId('payment-preview');
+  await expect(preview).toContainText('Pay the cost');
+  await expect(preview).toContainText('Exact automatic source plan');
+  // Moving the pointer is deliberate and still previews what it points to.
+  const source = page.locator('[data-testid="action-option"]').nth(1);
+  const label = await source.getAttribute('data-action-description');
+  await source.hover();
+  await expect(preview).toContainText(label!);
+});
