@@ -6,6 +6,7 @@ view. The mixed canonical record and retained roots remain server-private.
 
 from contextlib import ExitStack
 from dataclasses import asdict, replace
+import logging
 from typing import Any, Literal, TypedDict
 
 from fastapi import HTTPException
@@ -160,6 +161,17 @@ def step_watch(trace_id: str, token: str | None, expected_revision: int) -> Watc
                 "expected_revision": game.revision,
             }
         raise
+    except ValueError as exc:
+        # Nothing was committed; the pending decision stays for an explicit retry.
+        raise HTTPException(
+            422, f"Seat {seat + 1} policy could not choose: {exc}"
+        ) from exc
+    except Exception as exc:
+        logging.getLogger(__name__).exception("Watch policy failed")
+        raise HTTPException(
+            500,
+            f"Seat {seat + 1} policy failed ({type(exc).__name__}); see the server log.",
+        ) from exc
     offer_id = next(
         key
         for key, index in context.action_by_offer.items()

@@ -447,6 +447,8 @@ export class GameSocketController {
       }
     }
 
+    if ('launch_setup' in message && message.launch_setup) applyLaunchSetup(message.launch_setup);
+
     if ('table' in message && message.table) {
       gameStore.applyTable(message.table);
     }
@@ -505,7 +507,6 @@ export class GameSocketController {
       gameStore.newGamePending = false;
       if ('launch' in message && message.launch && message.launch_setup) {
         sessionStorage.setItem(LAUNCH_STORAGE_KEY, JSON.stringify({ id: message.launch, session_id: message.session_id, setup: message.launch_setup }));
-        applyLaunchSetup(message.launch_setup);
       }
       this.pendingResume = false;
       this.inFlightCommand = null;
@@ -582,6 +583,15 @@ export class GameSocketController {
     gameStore.endFastForward();
     gameStore.endCommand();
     gameStore.newGamePending = false;
+    if (message.session_ended) {
+      // The server stopped this game; resuming or redealing its launch would hide why.
+      this.inFlightCommand = null;
+      this.launchId = null;
+      clearResumeCredentials();
+      if (browser) sessionStorage.removeItem(LAUNCH_STORAGE_KEY);
+      gameStore.markResumeFailed(message.message);
+      return;
+    }
     gameStore.setError(message.message);
   }
 

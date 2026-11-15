@@ -452,6 +452,7 @@
           {catalogError}
           extension={botExtension}
           decklists={gameStore.decklists}
+          setup={{hero_deck: gameStore.decks.hero, villain_deck: gameStore.decks.villain, ...(gameStore.deckImport ? {deck_import: gameStore.deckImport} : {})}}
           onChange={(value) => gameStore.setOpponentChoice(value)}
           search={gameStore.mirrorSearch}
           onSearchChange={(value) => gameStore.mirrorSearch = value}

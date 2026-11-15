@@ -64,7 +64,7 @@
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
     if (!response.ok) {
-      const payload = await response.json();
+      const payload = await response.json().catch(() => ({}));
       if (payload.detail?.code === 'search_deadline_exceeded') retrySearch = true;
       if (typeof payload.detail?.revision === 'number') revision = payload.detail.revision;
       if (payload.detail?.search) activeSearches = parseMirrorSearches(payload.detail.search);
@@ -281,6 +281,7 @@
         <legend class="sr-only">Bot matchup</legend>
         {#each [0, 1] as seat}
           <PlayerPicker label={`Seat ${seat + 1}`} value={players[seat]} {trained} {extension} {catalogError}
+            setup={{hero_deck: hero, villain_deck: villain}}
             referencePlayers={choices} onChange={value => players[seat] = value}
             search={searches[seat]} onSearchChange={value => searches[seat] = value} />
         {/each}

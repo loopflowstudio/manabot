@@ -796,7 +796,7 @@ export type ServerMessage = (
           recovery?: RecoveryEnvelope;
         }
     ))
-  | { type: 'error'; message: string }
+  | { type: 'error'; message: string; session_ended?: boolean }
 ) & {
   search_retry?: import('./watch').PendingSearch | null;
   search?: (import('./watch').MirrorSearchSpec | null)[] | null;

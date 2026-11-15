@@ -40,7 +40,13 @@ class Opponent:
 
     @property
     def name(self) -> str:
-        return self.descriptor.name
+        aliases = sorted(
+            alias
+            for alias, key in policy_registry().aliases.items()
+            if key == self.descriptor.id
+            and alias.casefold() != self.descriptor.name.casefold()
+        )
+        return " · ".join((self.descriptor.name, *aliases))
 
     def identity(self, search: SearchSpec | None = None) -> dict[str, str]:
         descriptor = (
@@ -81,7 +87,7 @@ def opponent_catalog() -> dict[str, Any]:
             entries.append(
                 {
                     "sha256": descriptor.id,
-                    "name": descriptor.name,
+                    "name": Opponent(descriptor).name,
                     "producer": descriptor.provider,
                     "group": descriptor.group or descriptor.provider,
                     "details": descriptor.record()["details"],

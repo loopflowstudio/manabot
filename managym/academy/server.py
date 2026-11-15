@@ -1020,6 +1020,7 @@ class GameSession:
                 self.close(end_reason="new_game")
             self.record_players = players
             self._record_player_owner = self.attempt_owner
+            self._close_policies()
             self.env, self.obs, self.villain_policy = env, obs, policy
             self.search_retry = None
             prepared.pop_all()
@@ -1618,6 +1619,11 @@ class GameSession:
                         "expected_revision": self.revision,
                     }
                     return
+                except ValueError as exc:
+                    # Validation and provider refusals carry authored reasons.
+                    raise RuntimeError(
+                        f"The opponent could not continue this game: {exc}"
+                    ) from exc
                 except Exception as exc:
                     raise RuntimeError(
                         "The opponent could not continue this game."
@@ -3063,6 +3069,20 @@ def _dispatch_table_request(
     raise RuntimeError(f"closed dispatch missing handler for {request.type}")
 
 
+def _launch_metadata(launch_id: object) -> dict[str, Any]:
+    """Return setup to the requesting tab even when a known launch is refused."""
+    if not isinstance(launch_id, str) or launch_id not in LAUNCH_CONFIGS:
+        return {}
+    return {
+        "launch": launch_id,
+        "launch_setup": {
+            key: value
+            for key, value in LAUNCH_CONFIGS[launch_id].items()
+            if key != "seed"
+        },
+    }
+
+
 async def _send_table_response(
     record: SessionRecord,
     initiator: ParticipantLease,
@@ -3083,13 +3103,7 @@ async def _send_table_response(
             watcher_invite=(watcher_invite if recipient is initiator else None),
         )
         if recipient is initiator and response.get("launch") in LAUNCH_CONFIGS:
-            launch_id = response["launch"]
-            payload["launch"] = launch_id
-            payload["launch_setup"] = {
-                key: value
-                for key, value in LAUNCH_CONFIGS[launch_id].items()
-                if key != "seed"
-            }
+            payload.update(_launch_metadata(response["launch"]))
         try:
             await socket.send_json(payload)
         except Exception:
@@ -3109,6 +3123,7 @@ async def play_socket(websocket: WebSocket) -> None:
     await websocket.accept()
     attached_table_id: str | None = None
     attached_viewer_id: str | None = None
+    request: Any = None
 
     try:
         while True:
@@ -3212,7 +3227,16 @@ async def play_socket(websocket: WebSocket) -> None:
                 await websocket.send_json(_control_error(exc))
                 continue
             except ValueError as exc:
-                await websocket.send_json(_error_message(str(exc)))
+                error = _error_message(str(exc))
+                if (
+                    isinstance(request, dict)
+                    and request.get("type") == "new_game"
+                    and isinstance(request.get("config"), dict)
+                ):
+                    error.update(
+                        _launch_metadata(request.get("config", {}).get("launch"))
+                    )
+                await websocket.send_json(error)
                 continue
     except WebSocketDisconnect:
         return
@@ -3220,14 +3244,25 @@ async def play_socket(websocket: WebSocket) -> None:
         message = str(exc)
         if isinstance(exc, sqlite3.Error):
             message = "Game recording failed; this game may not have been saved."
+        error: dict[str, Any] = dict(_error_message(message))
+        if (
+            isinstance(request, dict)
+            and request.get("type") == "new_game"
+            and isinstance(request.get("config"), dict)
+        ):
+            error.update(_launch_metadata(request.get("config", {}).get("launch")))
         if attached_table_id is not None:
+            # The client must neither resume nor relaunch an ended game.
+            error["session_ended"] = True
             try:
                 _drop_session(attached_table_id, end_reason="error")
             except Exception:
                 logging.getLogger(__name__).exception("Failed to retain stopped game")
-                message = "Game recording failed; this game may not have been saved."
+                error["message"] = (
+                    "Game recording failed; this game may not have been saved."
+                )
         with suppress(Exception):
-            await websocket.send_json(_error_message(message))
+            await websocket.send_json(error)
         with suppress(Exception):
             await websocket.close()
 
@@ -3262,6 +3297,16 @@ def card_image(kind: Literal["art", "full"], slug: str) -> Response:
 @app.get("/api/opponents")
 async def get_opponents() -> dict[str, Any]:
     return await asyncio.to_thread(opponent_catalog)
+
+
+@app.post("/api/policies/check")
+def check_policy_setup(config: dict[str, Any]) -> dict[str, str | bool | None]:
+    """Preview admission without loading a session; Start repeats the same checks."""
+    try:
+        _parse_game_config(config)
+    except (ValueError, OSError, ImportError) as exc:
+        return {"compatible": False, "reason": str(exc)}
+    return {"compatible": True, "reason": None}
 
 
 def _record_owners(tokens: str | None) -> set[str]:
