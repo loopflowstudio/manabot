@@ -48,7 +48,14 @@
   import type { InteractionOffer, OpponentCatalog, StopSide, TrainedOpponent } from '$lib/types';
 
   let paymentState = $state<PreviewState | null>(null);
-  const payments = new PaymentPreviewController(fetchPaymentPreview, state => paymentState = state);
+  // The decision whose payment slot is open. Only a proposal that concerns a
+  // payment opens it; it then stays until the decision changes, so the offer
+  // list above keeps its layout while the pointer moves.
+  let paymentSlotDecision = $state<string | null>(null);
+  const payments = new PaymentPreviewController(fetchPaymentPreview, state => {
+    paymentState = state;
+    if (state && !state.loading && state.preview?.state !== 'not_applicable') paymentSlotDecision = decisionKey;
+  });
   setContext(PAYMENT_PREVIEW_CONTEXT, () => paymentState?.preview?.state === 'exact'
     ? paymentState.preview.sources.flatMap((source, index) => source.source.kind === 'object' ? [{ id: source.source.id.entity, order: index + 1 }] : []) : []);
 
@@ -161,6 +168,7 @@
   }
 
   const tableFrame = $derived(gameStore.restoredDecision?.frame ?? gameStore.protocolFrame);
+  const decisionKey = $derived(tableFrame ? `${tableFrame.match_id}:${tableFrame.revision}:${tableFrame.prompt?.id}` : null);
   const offers = $derived(tableFrame?.offers ?? []);
   const clickableTargets = $derived(offerTargets(offers));
   const highlightedOfferIds = $derived(new Set(hoveredTargetId === null ? [] : clickableTargets.get(hoveredTargetId) ?? []));
@@ -210,6 +218,7 @@
   // adds selection and gestures; Study retains its separate retry capability.
   const canSubmitLive = $derived(gameActive && pilotCanAct && !participantStudying
     && !gameStore.branchProjection && !gameStore.newGamePending && inputReady);
+  const paymentSlot = $derived(canSubmitLive && decisionKey !== null && paymentSlotDecision === decisionKey);
   const canPassTurn = $derived(canSubmitLive && offers.length > 0);
   const boardObservation = $derived(
     gameStore.branchProjection
@@ -582,7 +591,6 @@
           <DecisionContext observation={gameStore.branchProjection} actor={gameStore.branchProjection.decision_context?.actor ?? null} />
           <p class="type-caption">Alternate action played. Return to recorded decision to try another choice.</p>
         {:else if tableFrame}
-        {#if paymentState}<PaymentPreview state={paymentState} observation={tableFrame.projection} onClose={() => payments.clear()} onRetry={() => { if (tableFrame && paymentState) void payments.select(tableFrame, paymentState.offer, paymentState.label); }} />{/if}
         <DecisionSurface
           workspace
           frame={tableFrame}
@@ -597,6 +605,9 @@
           onPassTurn={handlePassTurn}
           onClearSelection={clearPlaySelection}
         />
+        <!-- Below the choices: the slot appears with the first proposal of a
+             decision and keeps its place until the next one. -->
+        {#if paymentSlot}<PaymentPreview state={paymentState} observation={tableFrame.projection} onClose={() => payments.clear()} onRetry={() => { if (tableFrame && paymentState) void payments.select(tableFrame, paymentState.offer, paymentState.label); }} />{/if}
         {/if}
 
         <p data-testid="automation-status" class="type-caption text-ink-2">Priority-stop automation: {gameStore.stops.auto_pass ? `on · your turn ${gameStore.stops.my.length} / opponent ${gameStore.stops.opponent.length} · stack ${gameStore.stops.stop_on_stack ? 'on' : 'off'}` : 'off · every priority choice'}{gameStore.fastForwarding ? ' · yielding this turn' : ''}{stopsPending !== null ? ' · updating…' : ''} <button class="underline" onclick={editStops}>Edit stops</button></p>

@@ -321,6 +321,7 @@ impl PaymentSearchState {
     }
 }
 
+#[derive(Clone)]
 struct PaymentModel {
     sources: Vec<ManaSource>,
     life: u32,
@@ -1641,7 +1642,7 @@ impl Game {
                 if obligations.is_empty() {
                     return Some(Action::TapForMana { player, permanent });
                 }
-                let mut remaining = self.payment_model(player, sacrifice);
+                let mut remaining = model.clone();
                 remaining.reserve(SourceReservation {
                     permanent,
                     tap: true,

@@ -462,6 +462,8 @@ board.
   controls, including labeled scrolling regions. Focus a region to scroll it
   with the keyboard; activate a listed action only when ready to commit it.
 
+The actor status names who chooses; the instruction appears once above the offers.
+The legal choice count also reports filtered results, beside a compact **Find an action** field for larger lists.
 The total legal choice count remains visible when narrowing a list. If a text
 filter finds nothing, use **Clear filter** or Escape; neither chooses an action.
 See [Choice navigation](#choice-navigation) for searching larger lists.
@@ -1052,8 +1054,8 @@ interaction with previews and Back; costs and other small choices stay direct.
 The eight-choice threshold and text filtering are reversible product
 hypotheses. Human usability acceptance (ETU-77) remains open.
 
-[managym/academy/fixtures/choice-navigation-w17-token-cards.json](../managym/academy/fixtures/choice-navigation-w17-token-cards.json)
-pins actual GameSession positions (UR Lessons versus GW Allies) for five
+[managym/academy/fixtures/choice-navigation-w17-mana-actions.json](../managym/academy/fixtures/choice-navigation-w17-mana-actions.json)
+pins actual GameSession positions from the configured named and authored decks for five
 families: `CHOOSE_TARGET`, `DISCARD`, `LEARN`, `DECLARE_BLOCKER` and
 `PAY_OR_NOT`. `tests/academy/test_choice_navigation.py` reconstructs each
 prefix and checks offers and stale rejection;
@@ -1208,6 +1210,11 @@ replays and feedback remain participant-only. Identity is a browser credential
 with no account recovery.
 
 ## Experience proof gate
+
+The laptop-comfort browser checks also complete seeded authored Mountain/Bolt
+games against Passive at 1440×900 and 1280×800. They explicitly choose targets,
+payments and passes, reload a pending target, and compare terminal history with
+the saved trace and Replay. These are workflow checks, not playing-strength evidence.
 
 The release proof drives ordinary UR Lessons versus GW Allies games at 1440×900
 and 1280×800, with Random and Search 64, normal and reduced motion. It records

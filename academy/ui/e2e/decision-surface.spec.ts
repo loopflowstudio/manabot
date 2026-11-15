@@ -2,7 +2,8 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import type { Command, ExperienceFrame } from '../src/lib/types';
 
-test.setTimeout(300_000);
+test.setTimeout(120_000);
+test.use({ actionTimeout: 15_000 });
 
 declare global {
   interface Window {
@@ -138,6 +139,11 @@ test('Precision exposes the shared four-mana alternative', async ({ page }) => {
   const alternative = await page.evaluate(() => window.__surface.frame!.offers.find(offer => offer.action_type === 'PAY_COST')!);
   expect(alternative.label).toContain('{4}');
   await choose(page, alternative.id);
+  // Selecting the four-mana alternative fixes the obligation; spare sources
+  // remain real alternatives at the subsequent payment decision.
+  const payment = await page.evaluate(() => window.__surface.frame!.offers.find(offer => offer.label === 'Pay the cost')!);
+  expect(payment).toBeDefined();
+  await choose(page, payment.id);
   await page.getByText('History and settings', { exact: true }).click();
   const context = page.getByRole('region', { name: 'Decision context', exact: true });
   await context.getByText('What happened · recent actions', { exact: true }).click();

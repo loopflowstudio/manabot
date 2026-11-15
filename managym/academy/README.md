@@ -343,3 +343,8 @@ undo a submitted choice.
 
 For editable file input and development construction rules, see
 [decklist import](../../docs/engine.md#decks).
+
+Current-world demo and choice-navigation captures use the `w17-mana-actions`
+fixtures. Their checked Command prefixes include deliberate passes and payments
+where source activations are also legal. Older captures retain their original
+offers and digests as historical evidence; never refresh them to the live runtime.

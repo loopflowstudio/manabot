@@ -117,7 +117,7 @@ export class GameStore {
     const actor = hero
       ? (this.hasCapability('submit_live_command') ? 'Your decision' : "Pilot's decision")
       : "Opponent's decision";
-    return `${actor} — ${prompt.instruction || prompt.title}`;
+    return actor;
   }
 
   private logSequence = 0;

@@ -28,14 +28,12 @@ function frameKey(frame: ExperienceFrame): string {
   return `${frame.match_id}:${frame.revision}:${frame.prompt?.id}:${frame.frame_hash}:${frame.prompt?.actor}`;
 }
 export class PaymentPreviewController {
-  private epoch = 0;
   private frame = '';
   private active: AbortController | null = null;
   private cache = new Map<number, PaymentPreview>();
   state: PreviewState | null = null;
   constructor(private fetcher: PreviewFetcher, private changed: (state: PreviewState | null) => void) {}
   clear(): void {
-    this.epoch++;
     this.active?.abort();
     this.active = null;
     this.state = null;
@@ -48,7 +46,6 @@ export class PaymentPreviewController {
     if (key !== this.frame) { this.invalidate(); this.frame = key; }
     if (this.state?.offer === offer && !this.state.error) return;
     this.clear();
-    const epoch = this.epoch;
     const cached = this.cache.get(offer);
     this.state = { offer, label, loading: !cached, error: false, preview: cached ?? null };
     this.changed(this.state);
@@ -60,13 +57,15 @@ export class PaymentPreviewController {
     this.active = controller;
     try {
       const response = await this.fetcher(address, controller.signal);
-      if (epoch !== this.epoch || key !== this.frame || controller.signal.aborted) return;
+      // Every selection change and authority invalidation aborts this signal,
+      // even when the fetcher has already received a response.
+      if (controller.signal.aborted) return;
       if (Object.entries(address).some(([name, value]) => response[name as keyof PreviewAddress] !== value)
         || response.viewer !== frame.prompt.actor) throw new Error('Preview authority changed');
       this.cache.set(offer, response.preview);
       this.state = { offer, label, loading: false, error: false, preview: response.preview };
     } catch {
-      if (epoch !== this.epoch || controller.signal.aborted) return;
+      if (controller.signal.aborted) return;
       this.state = { offer, label, loading: false, error: true, preview: null };
     }
     this.changed(this.state);

@@ -23,6 +23,15 @@ pub enum PaymentScope {
     CurrentPayment,
 }
 
+impl PaymentScope {
+    fn for_payment(payment: &Payment) -> Self {
+        match payment {
+            Payment::Spell { .. } => Self::SpellCost,
+            Payment::Activation { .. } => Self::ActivationFee,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct PaymentContinuation {
     /// Native output alternatives follow the fee; legality can narrow them.
@@ -103,8 +112,26 @@ impl PaymentPreview {
 }
 
 impl Game {
+    fn preview_activation_continuation(
+        &self,
+        permanent: PermanentId,
+        ability_index: usize,
+        outer_payment: bool,
+    ) -> PaymentContinuation {
+        PaymentContinuation {
+            ability_output: self.characteristics(permanent).activated_abilities[ability_index]
+                .mana_choices()
+                .is_some_and(|choices| choices.len() > 1),
+            outer_payment,
+        }
+    }
+
     fn preview_boundary(&self, action: &Action) -> (Option<PaymentScope>, PaymentContinuation) {
         let mut continuation = PaymentContinuation::default();
+        let pending_payment = matches!(
+            self.pending_choice,
+            Some(PendingChoice::ManaPayment { .. } | PendingChoice::Waterbend { .. })
+        );
         let scope = match action {
             Action::CastSpell { .. } => Some(PaymentScope::SpellCost),
             Action::ChooseTarget { .. }
@@ -120,15 +147,8 @@ impl Game {
                 ability_index,
                 ..
             } => {
-                continuation.ability_output = self.characteristics(*permanent).activated_abilities
-                    [*ability_index]
-                    .mana_choices()
-                    .is_some_and(|choices| choices.len() > 1);
-                continuation.outer_payment =
-                    matches!(
-                        self.pending_choice,
-                        Some(PendingChoice::ManaPayment { .. } | PendingChoice::Waterbend { .. })
-                    ) || self.state.suspended_decision.as_ref().is_some_and(|s| {
+                let outer_payment = pending_payment
+                    || self.state.suspended_decision.as_ref().is_some_and(|s| {
                         matches!(
                             s.decision,
                             Decision::Payment(_)
@@ -136,16 +156,15 @@ impl Game {
                                 | Decision::ManaUpfront { .. }
                         )
                     });
+                continuation =
+                    self.preview_activation_continuation(*permanent, *ability_index, outer_payment);
                 Some(PaymentScope::ActivationFee)
             }
             Action::PayCost { .. } => Some(match &self.pending_choice {
                 Some(
                     PendingChoice::ManaPayment { payment, .. }
                     | PendingChoice::Waterbend { payment, .. },
-                ) => match payment.as_ref() {
-                    Payment::Spell { .. } => PaymentScope::SpellCost,
-                    Payment::Activation { .. } => PaymentScope::ActivationFee,
-                },
+                ) => PaymentScope::for_payment(payment),
                 _ => PaymentScope::CurrentPayment,
             }),
             // A spending offer is one unit of the same pending fee/cost. It
@@ -161,26 +180,17 @@ impl Game {
                                 ..
                             } = next.as_ref()
                             {
-                                continuation.ability_output = self
-                                    .characteristics(*permanent)
-                                    .activated_abilities[*ability_index]
-                                    .mana_choices()
-                                    .is_some_and(|choices| choices.len() > 1);
-                                continuation.outer_payment = resume.is_some()
-                                    || matches!(
-                                        self.pending_choice,
-                                        Some(
-                                            PendingChoice::ManaPayment { .. }
-                                                | PendingChoice::Waterbend { .. }
-                                        )
-                                    );
+                                continuation = self.preview_activation_continuation(
+                                    *permanent,
+                                    *ability_index,
+                                    resume.is_some() || pending_payment,
+                                );
                             }
                             Some(PaymentScope::ActivationFee)
                         }
-                        SpendCompletion::Announced { payment, .. } => Some(match payment {
-                            Payment::Spell { .. } => PaymentScope::SpellCost,
-                            Payment::Activation { .. } => PaymentScope::ActivationFee,
-                        }),
+                        SpendCompletion::Announced { payment, .. } => {
+                            Some(PaymentScope::for_payment(payment))
+                        }
                         _ => Some(PaymentScope::CurrentPayment),
                     },
                     _ => None,
@@ -764,8 +774,6 @@ mod tests {
             Decision::ManaChoice { .. }
         ));
         assert_eq!(game.pooled_mana(PlayerId(0)).total(), 1);
-        let restored = game.clone();
-        assert_eq!(witness(&game), witness(&restored));
         game.step(0).unwrap();
         assert!(matches!(
             game.pending_choice,

@@ -354,7 +354,15 @@ publish, land or choose the next Graph step from here.
   `managym.academy.server:app` with `ACADEMY_TRACES_DIR` pointing into an ignored
   `.runs/` directory and `ACADEMY_PLAY_RECORD_ORIGIN=automated_validation`.
   Run `ACADEMY_API_PORT=<api> npm run preview -- --host 127.0.0.1 --port <ui>
-  --strictPort` from `academy/ui`. Browser frame probes must read accepted
+  --strictPort` from `academy/ui`. `npm run build` replaces the hashed assets
+  under a running `vite preview`, which then exits on the next request; stop
+  it first, by a pattern that names this checkout's path (other checkouts run
+  their own preview servers), rebuild, then restart it. Playwright `hover`
+  and `click` scroll an offer into view, so measure hover-driven layout
+  changes against the offer list's scroll container, not the viewport, and
+  sweep a real `page.mouse.move` path to catch offers moving under the
+  pointer. Release browser specs took over an hour at load averages near 170;
+  write their output to a file rather than piping through `grep`. Browser frame probes must read accepted
   Commands from `message.update.frame` as well as `message.recovery.frame`;
   otherwise a reload comparison uses a stale opening frame. For a short real
   target/recovery game, import `20 Mountain\n40 Lightning Bolt` against

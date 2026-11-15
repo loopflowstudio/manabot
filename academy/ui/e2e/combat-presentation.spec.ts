@@ -330,7 +330,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     const stage = page.getByTestId('presentation-stage');
     await expect(history.getByRole('listitem')).toHaveCount(6);
     await expect(history).toContainText('Otter-Penguin deals 2 damage to Badgermole Cub.');
-    await expect(page.getByTestId('current-decision')).toHaveText('Your decision — Choose a combat action');
+    await expect(page.getByTestId('current-decision')).toHaveText('Your decision');
     await page.getByRole('button', { name: 'Pause narration' }).click();
     await page.clock.runFor(5000);
     await expect(stage).toHaveAttribute('data-presentation-kind', 'damage');

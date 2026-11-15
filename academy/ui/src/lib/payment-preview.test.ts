@@ -24,6 +24,26 @@ describe('frame-scoped payment proposals', () => {
     await pending;
     expect(visible).toBeNull();
   });
+  it('keeps the newly selected offer when an older response arrives last', async () => {
+    const response = deferred();
+    const current = frame();
+    const [first, second] = current.offers;
+    let oldAddress!: PreviewAddress;
+    const controller = new PaymentPreviewController(async request => {
+      if (request.offer_id === first.id) {
+        oldAddress = request;
+        return response.promise;
+      }
+      return { ...request, viewer: current.prompt!.actor, preview: exact };
+    }, () => {});
+    const pending = controller.select(current, first.id, first.label);
+    await controller.select(current, second.id, second.label);
+    response.resolve({ ...oldAddress, viewer: current.prompt!.actor,
+      preview: { ...exact, state: 'unavailable', explanation: 'Old offer' } });
+    await pending;
+    expect(controller.state?.offer).toBe(second.id);
+    expect(controller.state?.preview?.state).toBe('exact');
+  });
   it('uses one request per action per frame and clears cached source identity at a new frame', async () => {
     let requests = 0;
     const controller = new PaymentPreviewController(async request => { requests++; return { ...request, viewer: current.prompt!.actor, preview: exact }; }, () => {});

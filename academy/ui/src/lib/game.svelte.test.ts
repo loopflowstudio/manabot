@@ -324,9 +324,9 @@ describe('current decision status', () => {
     prompt.actor = store.observation.agent.player_index;
     prompt.instruction = 'Choose a target.';
     store.observation.turn.active_player_id = store.observation.opponent.id;
-    expect(store.decisionStatus).toBe('Your decision — Choose a target.');
+    expect(store.decisionStatus).toBe('Your decision');
     prompt.actor = store.observation.opponent.player_index;
-    expect(store.decisionStatus).toBe("Opponent's decision — Choose a target.");
+    expect(store.decisionStatus).toBe("Opponent's decision");
   });
 
   it('does not invite a decision while waiting, disconnected, studying or finished', () => {

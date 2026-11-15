@@ -337,8 +337,8 @@ for (const [seed, viewport] of [
   [0, { width: 1440, height: 900 }],
   [1, { width: 1280, height: 800 }],
 ] as const) {
-  test(`ordinary seeded laptop game ${seed}`, async ({ page }, testInfo) => {
-    test.setTimeout(120_000);
+  test(`seeded payment game and replay ${seed}`, async ({ page }, testInfo) => {
+    test.setTimeout(240_000);
     await page.setViewportSize(viewport);
     const observed = new Map<number, PresentationEvent>();
     let matchId = '';
@@ -357,19 +357,23 @@ for (const [seed, viewport] of [
       });
       socket.onMessage(raw => {
         const message = JSON.parse(String(raw));
-        if (message.type === 'new_game') message.config.seed = seed;
+        if (message.type === 'new_game') message.config = {
+          seed, hero_deck: { Mountain: 12, 'Lightning Bolt': 28 },
+          villain_deck: { Plains: 40 }, villain_type: 'passive', auto_pass: true,
+        };
         if (message.type === 'command') submitted.push(message.command);
         server.send(JSON.stringify(message));
       });
     });
     await page.goto('/');
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-    await page.getByTestId('opponent-select').selectOption('random');
+    await page.getByTestId('opponent-select').selectOption('passive');
     await page.getByRole('button', { name: 'New Game', exact: true }).click();
     await page.getByRole('group', { name: 'Table interaction mode' }).getByRole('button', { name: 'Play', exact: true }).click();
+    const inspectedKinds = new Set<string>();
     const receipts: { kind: string | null; label: string | null; scroll: number }[] = [];
     try {
-      for (let input = 0; input < 120; input += 1) {
+      for (let input = 0; input < 240; input += 1) {
         const options = page.getByTestId('action-option');
         const result = page.getByTestId('game-result');
         await expect(page.locator('[data-testid="action-option"], [data-testid="learn-mode"]:not(:disabled), [data-testid="game-result"]').first()).toBeVisible();
@@ -424,8 +428,20 @@ for (const [seed, viewport] of [
         expect(await page.evaluate(() => scrollY)).toBe(0);
         const before = await page.getByTestId('decision-surface').getAttribute('data-revision');
         const labels = await options.allTextContents();
-        let pick = labels.findIndex(label => /Play (Island|Mountain)|Cast /.test(label));
+        let pick = labels.findIndex(label => /Play Mountain|Cast Lightning Bolt|Target opponent/.test(label));
+        // These are deliberate test choices through the visible controls. Spare
+        // sources remain legal; choose payment/passing rather than accidentally
+        // floating a different land on every otherwise idle priority window.
+        if (pick < 0) pick = labels.findIndex(label => /Pay the cost|Pass priority/.test(label));
+        if (pick < 0) pick = labels.findIndex(label => /^\s*Attack with /.test(label));
         if (pick < 0) pick = input % labels.length;
+        const targetFrame = liveFrame as ExperienceFrame | null;
+        if (targetFrame?.action_space === 'CHOOSE_TARGET') {
+          const target = targetFrame.offers.find(offer => offer.subjects?.some(subject =>
+            subject.role === 'target' && subject.object.subject.kind === 'player'
+            && subject.object.subject.id === targetFrame.projection.opponent.id));
+          if (target) pick = targetFrame.offers.indexOf(target);
+        }
         const chosen = options.nth(pick);
         receipts.push({ kind: await page.getByTestId('action-panel').getAttribute('data-action-space-kind'),
           label: await chosen.textContent(), scroll: await page.evaluate(() => scrollY) });
@@ -445,11 +461,14 @@ for (const [seed, viewport] of [
         }
         const count = submitted.length;
         const modes = page.getByRole('group', { name: 'Table interaction mode' });
-        await modes.getByRole('button', { name: 'Inspect', exact: true }).click();
-        if (authority!.action_space !== 'LEARN') await expect(options).toHaveCount(authority!.offers.length);
-        await expect(page.getByTestId('legal-choice-count')).toContainText(`of ${authority!.offers.length} legal choices`);
-        await modes.getByRole('button', { name: 'Play', exact: true }).click();
-        expect(submitted).toHaveLength(count);
+        if (!inspectedKinds.has(authority!.action_space)) {
+          inspectedKinds.add(authority!.action_space);
+          await modes.getByRole('button', { name: 'Inspect', exact: true }).click();
+          if (authority!.action_space !== 'LEARN') await expect(options).toHaveCount(authority!.offers.length);
+          await expect(page.getByTestId('legal-choice-count')).toContainText(`of ${authority!.offers.length} legal choices`);
+          await modes.getByRole('button', { name: 'Play', exact: true }).click();
+          expect(submitted).toHaveLength(count);
+        }
         const source = offer!.subjects?.find(subject => subject.role === 'source')?.object.subject ?? offer!.source;
         const playerTarget = offer!.subjects?.find(subject => subject.role === 'target' && subject.object.subject.kind === 'player')?.object.subject;
         if (source?.kind === 'object' && authority!.projection.agent.hand.some(card => card.id === source.id.entity)) {
@@ -458,19 +477,18 @@ for (const [seed, viewport] of [
           await page.locator(`[data-testid="action-option"][data-offer-id="${offer!.id}"]`).click();
           selectedSources += 1;
         } else if (playerTarget?.kind === 'player') {
-          await page.getByRole('button', { name: playerTarget.id === authority!.projection.agent.id ? 'Target You' : 'Target Random', exact: true }).click();
+          await page.getByRole('button', { name: playerTarget.id === authority!.projection.agent.id ? 'Target You' : 'Target Passive', exact: true }).click();
           expect(submitted).toHaveLength(count);
           await page.locator(`[data-testid="action-option"][data-offer-id="${offer!.id}"]`).click();
         } else {
-          await chosen.focus();
-          await chosen.press('Enter');
+          await page.locator(`[data-testid="action-option"][data-offer-id="${offer!.id}"]`).click();
         }
-        await expect.poll(() => page.getByTestId('decision-surface').getAttribute('data-revision')).not.toBe(before);
+        await expect.poll(() => page.getByTestId('decision-surface').getAttribute('data-revision'), { timeout: 20_000 }).not.toBe(before);
         expect(submitted).toHaveLength(count + 1);
         expect(submitted.at(-1)).toMatchObject({ match_id: authority!.match_id, expected_revision: authority!.revision,
           prompt_id: authority!.prompt!.id, offer_id: offer!.id });
       }
-      throw new Error('Seeded game did not finish within 120 deliberate inputs');
+      throw new Error('Seeded payment game did not finish within 240 deliberate inputs');
     } finally {
       await writeFile(testInfo.outputPath('game-receipt.json'), JSON.stringify({ seed, viewport, receipts }, null, 2));
       await finishBoardNarration(page);

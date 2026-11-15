@@ -9,22 +9,24 @@
     if (restricted.abilities?.length) parts.push(`abilities of ${restricted.abilities.join(' or ')} sources`);
     return parts.join(' or ');
   }
+  // Native `mana` holds unrestricted mana only; restricted mana is counted
+  // separately in `lesson_mana`, so the floating total is their sum.
+  const total = $derived(player.mana?.map((amount, color) => amount + (player.lesson_mana?.[color] ?? 0)));
 
 </script>
-  {#if player.mana}
-    <details class="type-caption" data-testid="mana-pool"><summary>{label} floating mana: {manaText(player.mana)}</summary><p>Class amounts below are included in the total, not additional mana. Regular mana expires at step end unless a retention effect applies.</p>
-      {#if player.pooled_mana_classes?.length}
-        {#each player.pooled_mana_classes as pooled, index}
-          {index ? '; ' : 'Including '}{manaText(pooled.mana)}{pooled.restriction ? ` only for ${pooled.restriction}` : ''}{pooled.effect ? ` that puts ${pooled.effect}` : ''}, normally expiring {pooled.combat ? 'at end of combat' : 'at step end'}
+  {#if player.mana && total}
+    <details class="type-caption" data-testid="mana-pool"><summary>{label} floating mana: {manaText(total)}</summary><p>Amounts below are part of that total, not additional mana. Regular mana expires at step end unless a retention effect applies.</p>
+      <!-- Restricted totals and effect/combat classes overlap; each is a subset. -->
+      {#if player.restricted_mana?.length}
+        {#each player.restricted_mana as restricted}
+          · {manaText(restricted.mana)} only for {spendingText(restricted)}
         {/each}
-      {:else}
-        {#if player.restricted_mana?.length}
-          {#each player.restricted_mana as restricted}
-            · {manaText(restricted.mana)} only for {spendingText(restricted)}
-          {/each}
-        {:else if player.lesson_mana?.some(Boolean)} · Restricted mana: {manaText(player.lesson_mana)}{/if}
-        {#if player.combat_mana} · {player.combat_mana} mana expires at end of combat{/if}
-      {/if}
+      {:else if player.lesson_mana?.some(Boolean)} · Restricted mana: {manaText(player.lesson_mana)}{/if}
+      {#if player.pooled_mana_classes?.length}
+        {#each player.pooled_mana_classes as pooled}
+          · {manaText(pooled.mana)}{pooled.restriction ? ` only for ${pooled.restriction}` : ''}{pooled.effect ? ` that puts ${pooled.effect}` : ''}, normally expiring {pooled.combat ? 'at end of combat' : 'at step end'}
+        {/each}
+      {:else if player.combat_mana} · {player.combat_mana} mana expires at end of combat{/if}
       {#if player.keeps_red_mana} · Keeps unspent red mana until end of turn{/if}
     </details>
   {:else}<p class="type-caption text-ink-2">Mana details not recorded.</p>{/if}

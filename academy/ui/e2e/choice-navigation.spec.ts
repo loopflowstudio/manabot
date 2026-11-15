@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import positionsJson from '../../../managym/academy/fixtures/choice-navigation-w17-token-cards.json' with { type: 'json' };
+import positionsJson from '../../../managym/academy/fixtures/choice-navigation-w17-mana-actions.json' with { type: 'json' };
 import boltJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type { Command, ExperienceFrame, RecoveryEnvelope } from '../src/lib/types';
 
@@ -94,10 +94,10 @@ for (const family of ['CHOOSE_TARGET', 'DISCARD'] as const) {
   });
 }
 
-test('small optional and combat decisions retain every direct choice', async ({ page }) => {
+test('optional and combat decisions retain every direct choice', async ({ page }) => {
   for (const family of ['PAY_OR_NOT', 'DECLARE_BLOCKER'] as const) {
     const commands = await installPosition(page, family);
-    await expect(page.getByRole('searchbox', { name: 'Find an action' })).toHaveCount(0);
+    await expect(page.getByRole('searchbox', { name: 'Find an action' })).toHaveCount(positions[family].frame.offers.length >= 8 ? 1 : 0);
     await expect(page.getByTestId('action-option')).toHaveCount(positions[family].frame.offers.length);
     expect(commands).toEqual([]);
     await page.unrouteAll();

@@ -117,7 +117,9 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
     await choose(page, await offer(page, 'Add {U}'));
     await page.getByTestId('mana-pool').last().locator('summary').click();
     await expect(page.getByTestId('mana-pool').last()).toContainText('Lesson');
-    await expect(page.getByTestId('mana-pool').last()).toContainText('included in the total');
+    // Native `mana` excludes restricted mana; the summary counts both.
+    await expect(page.getByTestId('mana-pool').last().locator('summary')).toHaveText('You floating mana: 3 {U}');
+    await expect(page.getByTestId('mana-pool').last()).toContainText('part of that total');
     await page.getByTestId('mana-pool').last().locator('summary').click();
     // Target-independent costs remain exact before a target is chosen.
     await choose(page, await offer(page, 'Cast Boomerang Basics'));
@@ -212,3 +214,44 @@ test('activation fee preview stops before output and resumes the outer spell pay
   await choose(page, pay);
   expect((await page.evaluate(() => window.__mana.frame!)).projection.agent.mana![1]).toBe(0);
 });
+
+for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900 }]) {
+  for (const colorScheme of ['light', 'dark'] as const) {
+    test(`moving the pointer between offers never resizes the offer list ${viewport.width} ${colorScheme}`, async ({ page }, testInfo) => {
+      await page.setViewportSize(viewport);
+      await page.emulateMedia({ colorScheme });
+      await track(page);
+      await page.goto('/');
+      await expect(page.getByTestId('connection-badge')).toHaveText('connected');
+      await page.getByRole('button', { name: 'New Game', exact: true }).click();
+      await expect(page.getByTestId('decision-surface')).toBeVisible();
+      await finishBoardNarration(page);
+      const cast = page.locator(`[data-testid="action-option"][data-offer-id="${await offer(page, 'Cast Boomerang Basics')}"]`);
+      const pass = page.locator(`[data-testid="action-option"][data-offer-id="${await offer(page, 'Pass priority')}"]`);
+      // Layout, not viewport position: Playwright scrolls an offer into view to hover it.
+      const layout = () => page.evaluate(() => {
+        const offer = document.querySelector<HTMLElement>('[data-testid="action-option"]')!;
+        let list: HTMLElement | null = offer.parentElement;
+        while (list && list.scrollHeight <= list.clientHeight) list = list.parentElement;
+        return { listHeight: list?.clientHeight, top: offer.getBoundingClientRect().top - (list?.getBoundingClientRect().top ?? 0) + (list?.scrollTop ?? 0) };
+      });
+      await cast.hover();
+      await expect(page.getByTestId('payment-preview')).toContainText('Cast Boomerang Basics');
+      const anchored = await layout();
+      // With the preview open, keep multiple complete ordinary offers in view.
+      // No source is collapsed or substituted to make this fit.
+      const firstRows = await page.getByTestId('action-option').evaluateAll(offers =>
+        offers.slice(0, 2).reduce((height, offer) => height + offer.getBoundingClientRect().height, 8));
+      expect(anchored.listHeight).toBeGreaterThanOrEqual(firstRows);
+      await page.screenshot({ path: testInfo.outputPath('payment-choices-density.png') });
+      // An action without a payment keeps the slot open rather than collapsing it,
+      // so the offer under the pointer cannot change by itself.
+      await pass.hover();
+      await expect(page.getByTestId('payment-preview')).toBeVisible();
+      expect(await layout()).toEqual(anchored);
+      await cast.hover();
+      expect(await layout()).toEqual(anchored);
+    });
+
+  }
+}

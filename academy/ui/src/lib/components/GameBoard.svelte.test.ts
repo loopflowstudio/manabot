@@ -156,3 +156,13 @@ it('renders pending extra combats in order with native restrictions and viewer l
   expect(combats).toContain('You. No additional attacker restriction.');
   expect(combats.indexOf('Only land creatures')).toBeLessThan(combats.indexOf('No additional attacker restriction'));
 });
+
+it('counts floating restricted mana in the pool total', () => {
+  const observation = structuredClone(fixture.recovery.frame.projection) as Observation;
+  observation.agent.mana = [0, 0, 0, 0, 0, 0];
+  observation.agent.lesson_mana = [0, 1, 0, 0, 0, 0];
+  observation.agent.restricted_mana = [{ mana: [0, 1, 0, 0, 0, 0], spells: ['Lesson', 'Shrine'] }];
+  const board = render(GameBoard, { props: { observation, heroIdentity: playerIdentity({ name: 'You' }) } }).body;
+  expect(board).toContain('You floating mana: 1 {U}');
+  expect(board).toContain('1 {U} only for Lesson or Shrine spells');
+});
