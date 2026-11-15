@@ -339,7 +339,10 @@
     : playerIdentity({ name: gameStore.table?.opponent_label ?? OPPONENT_LABELS[gameStore.opponentChoice] ?? 'Opponent' }));
 
   function syncStopsToServer(): void {
-    if (gameActive && gameStore.hasCapability('configure_match')) {
+    if (!gameStore.observation && editor.kind !== 'closed') {
+      editor.setup.applyServerStops({ ...gameStore.stops, my: [...gameStore.stops.my], opponent: [...gameStore.stops.opponent] });
+    }
+    if (gameStore.observation && gameStore.hasCapability('configure_match')) {
       clearPlaySelection();
       stopsPending = gameStore.updateSeq;
       sendSetStops();
@@ -486,7 +489,7 @@
     <div class="flex min-w-0 max-w-full flex-wrap items-end gap-x-5 gap-y-3">
       {#if learnDemo}<p class="type-caption">Learn demo · UR Lessons vs Random GW Allies. Automated checked setup; New Game repeats it.</p>
       {:else if demoName}<p class="type-caption" data-testid="demo-origin">Precision demo · custom stress decks · automated checked setup. Choose actions from the legal choices below. New Game repeats setup.</p>{/if}
-      {#if demoName}<button class="btn btn-primary" disabled={gameStore.newGamePending} onclick={startNewGame}>New Game</button>{/if}
+      {#if demoName}<button class="btn btn-primary" disabled={gameStore.newGamePending} onclick={startNewGame}>{gameStore.newGamePending ? 'Preparing game…' : 'New Game'}</button>{/if}
       <div class="flex items-center gap-4">
         <div role="group" aria-label="Table interaction mode" class="flex gap-1">
           <button class="btn btn-secondary btn-sm" aria-pressed={tableMode === 'play'} onclick={() => changeMode('play')}>Play</button>

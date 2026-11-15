@@ -32,7 +32,6 @@ def _session(
     assert session.env is not None
     session.obs = configure_combat(session.env, stage, human_seat=human_seat)
     session.published_prompt = None
-    session.presentation.reset()
     session._publish_current_prompt()
     return session
 
