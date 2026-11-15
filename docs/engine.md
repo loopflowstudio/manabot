@@ -136,6 +136,9 @@ Consumers read the encoded arrays by name; see
 
 ### Hidden-card knowledge
 
+**Proposed (Task f1a44c; not implemented).** The following contract describes
+the next implementation. Current native state retains public hand minima only.
+
 A seat that has seen a hidden card keeps what it learned for as long as the
 rules let it stay true. Suppose the opponent reveals a hand of A, B and C,
 draws three cards, puts two cards of their choice from hand on top of their
@@ -172,8 +175,8 @@ knowledge changes only where the game does:
 | Shuffle | Every library segment joins the rest. |
 | A card leaves a segment to where the viewer sees it | The segment shrinks and a bag that held that definition there loses a copy. |
 | A card moves from one hidden segment to another (a draw, hand to library top, foretell) | The viewer-authorized source shrinks, the destination grows, and every bag over the source also covers the destination. A private choice from several positions first merges that interval; the selected object's true position never identifies the public source. |
-| The viewer sees a card enter a hidden segment | A one-card bag on that segment. |
-| A hand is revealed or inspected | A bag over the hand. |
+| The viewer sees a card enter a hidden segment | Refine existing bags; add a one-card bag only for a newly accounted-for copy. |
+| A hand is revealed or inspected | Refine the hand multiset jointly with existing bags; repeated inspection never counts a copy twice. |
 | The owner looks at the top N and orders them | `own`: N exact positions, or one N-card bag when the order is random. `public`: merge the affected interval before any private selection, including intermediate Commands before the final reorder. |
 
 - **One state, three readers.** The observation, `Game::determinize` and the
@@ -188,11 +191,15 @@ knowledge changes only where the game does:
   scope with nothing seen, so a forgotten site loses knowledge and cannot leak
   it.
 - **Which view constrains whom.** A viewer reads the other player's `public`
-  view, and their own `own` view. `own` is never coarser than `public` on the
-  library: every public sighting also reaches `own`, and a merge at a cap in
-  `own` merges `public` too. A world sampled for a viewer honors exactly those
-  two views; the opponent's `own` library view in that world is reset to what
-  their `public` view implies, so it knows no order the viewer cannot know.
+  view, and their own `own` view. Both span all hidden segments, and `own`
+  implies complete `public`, including bags spanning hand and library. Every
+  public sighting also reaches `own`. Public updates and caps depend only on
+  public information. If private refinements cannot retain that implication
+  within the caps, discard them back to complete updated `public`.
+  A sampled unshared opponent's `own` becomes a clone of complete `public`;
+  their sampled visible hand and face-down cards jointly satisfy cross-zone
+  bags, with distinct witnesses within each view. A shared private view stays
+  available through `shares_information`. Ordinary clones retain both views.
 - **Player control.** A player controlling another reads that player's `own`
   view through `shares_information`, as it reads their hand.
 - **Choices are not deals.** Which cards a player chose to return is their

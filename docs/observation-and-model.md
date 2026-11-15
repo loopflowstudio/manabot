@@ -531,6 +531,9 @@ Magic's rules, and does not broaden deck admission.
 
 ### Hidden-card knowledge
 
+**Proposed (Task f1a44c; not implemented).** These buffers and backend reads
+are the intended next layout, pending native state and sampler implementation.
+
 The engine keeps what each seat knows about hidden cards as segments and bags
 ([the engine guide](engine.md#hidden-card-knowledge) has the rules and a worked
 example). The policy input carries it per seat, agent first: the agent's row

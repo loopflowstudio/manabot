@@ -266,8 +266,9 @@ the remembered references, expiry and frequency. Relation row kind 9 carries
 frequency (column 28: 1 once, 2 each match); column 48 keeps its expiry meaning.
 Missing historical frequency is unknown.
 
-What a seat knows about hidden cards is `Player.knowledge`: a `public` view (the
-opponent's) and an `own` view (the owner's knowledge of their library), each
+**Proposed (Task f1a44c; not implemented):** what a seat knows about hidden
+cards will be `Player.knowledge`: a `public` view (the
+opponent's) and an `own` view (the owner's constraints across all their hidden zones), each
 made of segments and bags of `CardDefId` counts, never revealed physical cards
 ([hidden-card knowledge](../docs/engine.md#hidden-card-knowledge)).
 `known_hand()` is the hand-only bag. It is the only knowledge record: the
@@ -277,7 +278,9 @@ or sampler keeps a second one. Every write to a hand or library goes through
 view in O(cap) from what its viewer saw of the move; a write that states no
 sighting takes the widest scope, losing knowledge rather than leaking it. A debug build checks the true zones against both views after
 each update, so a library write that bypasses them fails the debug suite.
-Coarsening at a cap is counted, never raised. Search forks by full clone: clone the
+Public caps depend only on public state. Private refinements that cannot retain
+complete public constraints within the caps fall back to complete public.
+Coarsening is counted, never raised. Search forks by full clone: clone the
 `Game` before a normal Command `apply` and compare `search_state::witness` to
 check that the source is unchanged. Exercise nested choices through Commands,
 not by direct calls to resolution helpers.

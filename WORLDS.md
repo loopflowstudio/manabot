@@ -380,7 +380,7 @@ authored-match receipt, both parity receipts and the Academy fixtures were
 re-recorded with their Commands, state digests and outcomes unchanged. A
 checkpoint keeps the manifest of the revision that wrote it.
 
-Task f1a44c (same open world) makes hidden-card knowledge one native state:
+**Proposed, not implemented:** Task f1a44c (same open world) makes hidden-card knowledge one native state:
 segments and bags per seat, read by observations, determinization and the
 possible-world space. Search worlds keep a library order its owner chose and
 cards a viewer saw return to a hidden zone. The policy input adds

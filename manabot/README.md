@@ -321,11 +321,12 @@ For the semantic card model, use `ModelConfig(world="world")`. The ordinary
 model joins
 viewer-safe `semantic_cards` transport IDs to complete checked catalog programs,
 including characteristics and referenced definitions; `known_hand` contains
-public definition minima, not hidden hand slots; `knowledge_segments`,
-`knowledge_bags` and `unknown_cards` carry what the seat knows beyond the hand
+public definition minima, not hidden hand slots. The `decklists` rows hold
+each known decklist's main, unseen, sideboard and remaining-sideboard counts.
+Task f1a44c proposes `knowledge_segments`, `knowledge_bags` and `unknown_cards`
+to carry what the seat knows beyond the hand
 ([hidden-card knowledge](../docs/observation-and-model.md#hidden-card-knowledge));
-and `decklists` rows hold
-each known decklist's main, unseen, sideboard and remaining-sideboard counts. Selected compiled checkpoints
+these additions are not implemented. Selected compiled checkpoints
 without that semantic input fail admission. Generic uncompiled training keeps
 its existing bounded feature model. These models do not certify strength or
 semantic transfer; no previous checkpoint is relabeled compatible.

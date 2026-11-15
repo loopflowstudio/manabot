@@ -179,11 +179,12 @@ aggregated at the root, with no claim to information-set consistency.
 
 **Hidden information has one domain.** `managym/src/possible_worlds.rs` owns
 the hidden-hand domain, the five-variant `WorldQuery`, compatible-deal weights
-and materialization; `manabot.belief` owns probability over that domain. What a
-seat has learned about hidden cards (a revealed hand, cards returned to a
-library, its own ordered top cards) is one native state that the observation,
-determinization and this domain all read, so no sampled world contradicts an
-observation ([hidden-card knowledge](docs/engine.md#hidden-card-knowledge)). A
+and materialization; `manabot.belief` owns probability over that domain.
+Task f1a44c proposes one native state for what a seat has learned about hidden
+cards: revealed hands, cards returned to a library and its own ordered top
+cards. The observation, determinization and this domain will all read it, so
+no sampled world contradicts an observation. This is
+[proposed behavior](docs/engine.md#hidden-card-knowledge), not yet implemented. A
 query never reveals whether the actual hidden hand satisfies it, and empty
 support is an explicit result.
 
