@@ -8,10 +8,7 @@ from tempfile import TemporaryDirectory
 from typing import Any
 
 import numpy as np
-import torch
 
-from manabot.backends.torch.checkpoint import save_checkpoint
-from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.agent import AgentStep
 from manabot.belief.encoding import (
     HAND_ZONE_ID,
@@ -24,14 +21,16 @@ from manabot.belief.runtime import ManabotPlayer, viewer_decision_from_engine
 from manabot.belief.state import EmptyBeliefSupport, condition_belief, query_mass
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.policy.protocol import BackendPolicy
 from manabot.sim.search.flat_mc import make_player
+from manabot.training.state.backend import TrainingBackend
 from manabot.verify.games import INTERACTIVE_DECK
 from managym.possible_worlds import PossibleWorldSpace, WorldQuery
 
 
-def _runtime_env() -> tuple[Env, dict[str, np.ndarray]]:
+def runtime_env() -> tuple[Env, dict[str, np.ndarray]]:
     observation_space = ObservationSpace()
     match = Match(
         MatchConfig(
@@ -54,8 +53,8 @@ def _runtime_env() -> tuple[Env, dict[str, np.ndarray]]:
 
 
 def _schema_and_agent(
-    engine: Any, viewer: int
-) -> tuple[BeliefEncodingSchema, ActorCritic]:
+    engine: Any, viewer: int, *, backend: TrainingBackend
+) -> tuple[BeliefEncodingSchema, BackendPolicy]:
     space = PossibleWorldSpace.from_engine(engine, viewer)
     count_buckets = max(2, max(count for _, count in space.pool) + 1)
     schema = belief_schema_from_engine(
@@ -64,8 +63,8 @@ def _schema_and_agent(
         count_buckets=count_buckets,
     )
     card_vocab_size = 1 + max(row.card_def_id for row in schema.rows)
-    torch.manual_seed(19)
-    policy_value = ActorCritic(
+    backend.seed(19)
+    policy_value = backend.runtime.create_policy(
         ObservationSpace(),
         ModelConfig(
             hidden_dim=8,
@@ -79,9 +78,9 @@ def _schema_and_agent(
 
 def _run_swapped_world(
     engine: Any,
-    observation: dict[str, np.ndarray],
+    observation: ObservationBuffers,
     viewer: int,
-    policy_value: ActorCritic,
+    policy_value: BackendPolicy,
     schema: BeliefEncodingSchema,
 ) -> AgentStep:
     player = ManabotPlayer(policy_value, belief_schema=schema)
@@ -92,15 +91,15 @@ def _run_swapped_world(
     return player.last_step
 
 
-def run_demo() -> dict[str, Any]:
+def run_demo(*, backend: TrainingBackend) -> dict[str, Any]:
     """Run the keystone checks through one real managym decision."""
 
-    env, observation = _runtime_env()
+    env, observation = runtime_env()
     viewer = int(env.last_raw_obs.agent.player_index)
-    schema, policy_value = _schema_and_agent(env._engine, viewer)
+    schema, policy_value = _schema_and_agent(env._engine, viewer, backend=backend)
     with TemporaryDirectory(prefix="manabot-belief-demo-") as tmp_dir:
-        checkpoint_path = Path(tmp_dir) / "belief.pt"
-        save_checkpoint(
+        checkpoint_path = Path(tmp_dir) / "belief.safetensors"
+        backend.save_policy(
             policy_value,
             policy_value.observation_space,
             checkpoint_path,
@@ -108,7 +107,9 @@ def run_demo() -> dict[str, Any]:
             player_configs=env.match.to_rust(),
         )
         player, _ = make_player(
-            {"kind": "checkpoint", "path": str(checkpoint_path)}, seed=19
+            {"kind": "checkpoint", "path": str(checkpoint_path)},
+            seed=19,
+            backend=backend,
         )
     if not isinstance(player, ManabotPlayer):
         raise RuntimeError("belief checkpoint did not load as a ManabotPlayer")
@@ -211,7 +212,9 @@ def run_demo() -> dict[str, Any]:
 
 
 def main() -> None:
-    print(json.dumps(run_demo(), indent=2, sort_keys=True))
+    from manabot.backends import resolve
+
+    print(json.dumps(run_demo(backend=resolve("torch")), indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":

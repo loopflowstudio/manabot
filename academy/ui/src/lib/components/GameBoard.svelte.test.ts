@@ -2,6 +2,7 @@ import { render } from 'svelte/server';
 import { expect, it } from 'vitest';
 import type { Observation } from '$lib/types';
 import fixture from '../../../../../protocol/fixtures/bolt-target.json';
+import { playerIdentity } from '$lib/player-identity';
 import GameBoard from './GameBoard.svelte';
 import DecisionContext from './DecisionContext.svelte';
 
@@ -27,27 +28,27 @@ it.each([0, 1])('keeps viewer seat %i in place across delegated search, own resp
   };
   for (const whole_turn of [false, true]) {
     observation.player_controls = [{ player: other, controller: viewer, whole_turn, active: true, effective: true }];
-    const board = render(GameBoard, { props: { observation, heroLabel: 'You' } }).body;
+    const board = render(GameBoard, { props: { observation, heroIdentity: playerIdentity({ name: 'You' }) } }).body;
     const context = render(DecisionContext, { props: { observation } }).body;
     expect(context).toContain('Search cards');
     expect(context).not.toContain('Search your library');
     expect(context).toContain(instruction);
     expect(context).toContain(whole_turn ? 'for this turn' : 'for this combat phase');
     expect(board).toContain("Island · opponent's library · private inspection");
-    expect(board).toContain('You mana: 3 {U}');
-    expect(board).toContain('Opponent mana: 1 {U}');
-    expect(board.indexOf('Opponent mana')).toBeLessThan(board.indexOf('You mana'));
+    expect(board).toContain('You floating mana: 3 {U}');
+    expect(board).toContain('Opponent floating mana: 1 {U}');
+    expect(board.indexOf('Opponent floating mana')).toBeLessThan(board.indexOf('You floating mana'));
   }
   // A control record can remain active while its chooser makes their own choice.
   observation.decision_context.stage = 'priority';
   observation.decision_context.instruction = 'Choose an explicit legal offer to commit one decision.';
   expect(render(DecisionContext, { props: { observation } }).body).not.toContain('chooses for');
-  expect(render(GameBoard, { props: { observation, heroLabel: 'You' } }).body).toContain('You mana: 3 {U}');
+  expect(render(GameBoard, { props: { observation, heroIdentity: playerIdentity({ name: 'You' }) } }).body).toContain('You floating mana: 3 {U}');
   observation.player_controls = [];
   observation.agent.inspected = [];
-  const expired = render(GameBoard, { props: { observation, heroLabel: 'You' } }).body;
+  const expired = render(GameBoard, { props: { observation, heroIdentity: playerIdentity({ name: 'You' }) } }).body;
   expect(expired).not.toContain('aria-label="Private inspection"');
-  expect(expired).toContain('Opponent mana: 1 {U}');
+  expect(expired).toContain('Opponent floating mana: 1 {U}');
   expect(render(DecisionContext, { props: { observation } }).body).not.toContain('aria-label="Player control"');
 });
 
@@ -149,7 +150,7 @@ it('renders pending extra combats in order with native restrictions and viewer l
     { player_index: 1, attackers: 'land creatures' },
     { player_index: 1 },
   ] };
-  const body = render(GameBoard, { props: { observation, heroLabel: 'You' } }).body;
+  const body = render(GameBoard, { props: { observation, heroIdentity: playerIdentity({ name: 'You' }) } }).body;
   const combats = body.split('aria-label="Scheduled extra combats"')[1].split('</ol>')[0];
   expect(combats).toContain('You. Only land creatures can attack.');
   expect(combats).toContain('You. No additional attacker restriction.');

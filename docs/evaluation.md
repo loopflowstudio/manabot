@@ -96,9 +96,18 @@ for _ in range(replicates):
 
 ## Anchors and ratings
 
-Working anchors are the rule-based `heuristic` player
-([`manabot/sim/heuristic.py`](../manabot/sim/heuristic.py)) and frozen
-checkpoints. The code anchors `scripted_greedy` and `random`
+Working anchors are the rule-based `heuristic` player and frozen checkpoints.
+Select `--opponent heuristic` for local evaluation or
+`MonitorProtocol(opponent="heuristic")` for checkpoint monitoring. The scalar
+adapter and batched opponent share the
+[native heuristic rules](engine.md#built-in-heuristic).
+New arena registrations use `version="native-v2"` and bind the native rule
+sources and adapter as their source identity. The `managym` wheel includes engine
+sources at their original package paths, so installed registration and validation hash
+the same paths and bytes as a checkout. Results recorded against the Python
+heuristic retain their original identity.
+A changed anchor identity needs a new version, never a relabeling of old games.
+The code anchors `scripted_greedy` and `random`
 (`manabot.sim.anchors`, frozen v1 sources) remain admissible for compatibility
 and diagnostics, not as working anchors; `fit_population` still places
 `random-v1` at the origin by default. Head-to-head
@@ -152,11 +161,12 @@ Allies/Lessons setup:
 
 ```sh
 uv run python -m manabot.eval.local \
-  --checkpoint .runs/small/policy.pt --opponent heuristic \
+  --checkpoint .runs/small/policy.safetensors --opponent heuristic \
   --deal-seed 101 --out .runs/local-check --seconds 300 --workers 2
 ```
 
-- `--opponent` also accepts another local `.pt`, `scripted_greedy` or `random`.
+- `--opponent` also accepts another local policy file, `scripted_greedy` or
+  `random`. Policy files are `.safetensors`, or `.pt` from an earlier revision.
 - Repeat `--deal-seed` for more blocks; `--include-mirrors` plays all eight legs;
   `--matchup` takes an `AuthoredMatchup` JSON for another admitted roster. The
   checkpoint must already admit that setup; nothing is converted.
@@ -173,7 +183,8 @@ queue or starts a callback endpoint. Exit 0 means a complete replayed cohort;
 `admission-failure.json`. Results are labelled `local-check-not-admission`:
 a quick check, not promotion or held-out evidence.
 
-Typed callers use `manabot.eval.local.checkpoint_request` and
+Typed callers pass a `Backend` to
+`manabot.eval.local.checkpoint_request(..., backend=backend)` and use
 `manabot.eval.evaluation.evaluate_local(request, limits=..., out_dir=...)`.
 An unknown training seed stays `None`, never inferred from deals.
 
@@ -274,7 +285,8 @@ CPU-specific engine work waits for a calibration showing it saturated.
 **Checkpoint identity.** A checkpoint registration's observation and action
 ABI hashes describe the checkpoint's own `ObservationSpace`, not the fresh
 defaults for its matchup. Build registrations with
-`manabot.eval.admission.register_checkpoint`, which loads the bytes once and
+`manabot.eval.admission.register_checkpoint(..., backend=backend)`, which loads
+the bytes once through the supplied backend and
 takes the world and both hashes from that space. Scalar play never compares
 these hashes; the serving child does when it first loads a checkpoint, and
 refuses a disagreeing registration's matches before play with an

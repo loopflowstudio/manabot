@@ -3,15 +3,15 @@
 import numpy as np
 import pytest
 
+from manabot.backends import resolve
 from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.agent import AgentMemory
-from manabot.belief.demo import _runtime_env, run_demo
+from manabot.belief.demo import run_demo, runtime_env
 from manabot.belief.encoding import belief_schema_from_engine, encode_belief
 from manabot.belief.range import BeliefError
 from manabot.belief.state import CompatibleDealBeliefModel, ViewerHistory
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model.admission import admit_observation
 from managym.decision import Observation
 from managym.possible_worlds import PossibleWorldSpace
 from tests.belief.support import (
@@ -20,6 +20,7 @@ from tests.belief.support import (
     fixture_manabot,
     fixture_space,
 )
+from tests.model.prepared_routes import device_input
 
 
 def test_autonomous_and_exact_override_share_policy_value_bytes() -> None:
@@ -48,7 +49,7 @@ def test_belief_enabled_agent_has_no_silent_fallback() -> None:
     )
 
     with pytest.raises(ValueError, match="missing inputs"):
-        admit_observation(agent, dict(decision.observation))
+        device_input(agent, dict(decision.observation))
 
 
 def test_world_space_mismatch_fails_before_inference() -> None:
@@ -85,7 +86,7 @@ def test_world_space_mismatch_fails_before_inference() -> None:
 
 
 def test_keystone_demo_changes_belief_tokens_and_hides_actual_truth() -> None:
-    evidence = run_demo()
+    evidence = run_demo(backend=resolve("torch"))
 
     assert evidence["checkpoint_schema_bound"] is True
     assert evidence["generated_override_byte_identical"] is True
@@ -110,7 +111,7 @@ def test_keystone_demo_changes_belief_tokens_and_hides_actual_truth() -> None:
 
 
 def test_real_engine_manifest_rows_preserve_normalized_zero_counts() -> None:
-    env, _ = _runtime_env()
+    env, _ = runtime_env()
     viewer = int(env.last_raw_obs.agent.player_index)
     space = PossibleWorldSpace.from_engine(env._engine, viewer)
     history = ViewerHistory.from_observation(

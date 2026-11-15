@@ -24,6 +24,7 @@ from pydantic import Field, model_validator
 import torch
 
 from experiments.elemental_grid import DECKS, PACK
+from manabot.backends import resolve
 from manabot.env.failures import runtime_identities
 from manabot.infra.artifacts import verify_file
 from manabot.infra.config import MatchConfig
@@ -417,6 +418,7 @@ def run(protocol: Protocol, out: Path) -> Report:
             protocol.checkpoint.path,
             protocol.checkpoint.sha256,
             protocol.checkpoint.bytes,
+            backend=resolve("torch"),
         )
 
     def player(
@@ -426,7 +428,13 @@ def run(protocol: Protocol, out: Path) -> Report:
         with OpenRouterSession(
             protocol.inference, budget=ledger, budget_owner=game.name
         ) as session:
-            return play(game.config, directory, session, opponent=opponent)
+            return play(
+                game.config,
+                directory,
+                session,
+                opponent=opponent,
+                backend=resolve("torch"),
+            )
 
     return execute(protocol, out, player, admit=admit)
 

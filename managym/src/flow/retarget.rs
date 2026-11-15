@@ -11,7 +11,7 @@ use crate::{
     flow::{decision::Decision, game::Game},
     state::{
         ability::{effect_target_requirements, TargetRequirement},
-        game_object::{ObjectId, ObjectKind, PlayerId, Target},
+        game_object::{PlayerId, Target},
         stack_object::StackObject,
     },
 };
@@ -35,7 +35,7 @@ impl Game {
         match &self.state.stack_objects[index] {
             StackObject::Spell(spell) => {
                 let requirements =
-                    self.state.objects[spell.object].target_requirements_for_mode(spell.mode);
+                    self.state[spell.object].target_requirements_for_mode(spell.mode);
                 requirements
                     .get(*spell.target_req_indices.get(slot)?)
                     .cloned()
@@ -50,7 +50,7 @@ impl Game {
                         let object = triggered
                             .source_lki
                             .as_ref()
-                            .map_or(triggered.source_object, |lki| lki.object);
+                            .map_or(triggered.source_object(), |lki| lki.object);
                         self.source_face(object, triggered.source_definition_id)?
                             .abilities
                             .get(triggered.ability_index)?
@@ -115,7 +115,7 @@ impl Game {
             .filter(|target| {
                 !requirement.another
                     || !matches!((target, source), (Target::Permanent(id), Some(source))
-                        if self.permanent_object_ref(*id) == Some(source))
+                        if self.permanent_object(*id) == Some(source))
             })
             .filter(|target| {
                 self.within_source_bound(*target, &requirement.spec, source_object, source)
@@ -170,17 +170,12 @@ impl Game {
         let id = self.state.id_gen_mut().next_id();
         let copy = match self.state.stack_objects[index].clone() {
             StackObject::Spell(mut spell) => {
-                let mut copy = self.state.objects[spell.object]
-                    .clone()
-                    .with_kind(ObjectKind::SpellCopy);
-                copy.id = id;
-                copy.owner = controller;
-                let copied = ObjectId(self.state.objects.len());
-                self.state.objects.push(copy);
-                self.state.object_to_permanent.push(None);
-                self.state
-                    .object_incarnations
-                    .push(crate::state::game_object::Incarnation::INITIAL);
+                let copy = crate::state::game_object::Object::spell_copy(
+                    self.state[spell.object].clone(),
+                    id,
+                    controller,
+                );
+                let copied = self.add_object(copy);
                 self.state
                     .place_object(copied, controller, crate::state::zone::ZoneType::Stack);
                 spell.id = id;

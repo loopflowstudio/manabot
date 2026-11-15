@@ -1,6 +1,7 @@
 import { render } from 'svelte/server';
 import { expect, it } from 'vitest';
 import type { PlayerState } from '$lib/types';
+import { playerIdentity } from '$lib/player-identity';
 import PlayerArea from './PlayerArea.svelte';
 
 function player(overrides: Partial<PlayerState>): PlayerState {
@@ -26,7 +27,7 @@ const names = { '4': 'Island', '9': 'Accumulate Wisdom' };
 it('shows pooled amounts before qualifiers without repeating combat expiry', () => {
   const { body } = render(PlayerArea, {
     props: {
-      label: 'You',
+      identity: playerIdentity({ name: 'You' }),
       tablePermanents: [],
       player: player({
         mana: [0, 0, 0, 2, 1, 0],
@@ -41,8 +42,8 @@ it('shows pooled amounts before qualifiers without repeating combat expiry', () 
       }),
     },
   });
-  expect(body).toContain('— including 2 {R}, expiring at end of combat');
-  expect(body).toContain('; 1 {G} only for creature spells that puts a +1/+1 counter on a non-Human creature spell it casts, expiring at step end');
+  expect(body).toContain('2 {R}, normally expires at end of combat');
+  expect(body).toContain('1 {G} only for creature spells that puts a +1/+1 counter on a non-Human creature spell it casts, normally expires at step end');
   expect(body.match(/at end of combat/g)).toHaveLength(1);
   expect(body).not.toContain('undefined');
 });
@@ -50,7 +51,7 @@ it('shows pooled amounts before qualifiers without repeating combat expiry', () 
 it.each([undefined, []])('falls back to aggregate combat expiry without class rows (%s)', (classes) => {
   const { body } = render(PlayerArea, {
     props: {
-      label: 'You', tablePermanents: [],
+      identity: playerIdentity({ name: 'You' }), tablePermanents: [],
       player: player({ mana: [0, 0, 0, 2, 0, 0], combat_mana: 2, pooled_mana_classes: classes }),
     },
   });
@@ -60,7 +61,7 @@ it.each([undefined, []])('falls back to aggregate combat expiry without class ro
 it("shows an open opponent's decklist with unseen counts", () => {
   const { body } = render(PlayerArea, {
     props: {
-      label: 'Opponent',
+      identity: playerIdentity({ name: 'Opponent' }),
       opponent: true,
       definitionNames: names,
       tablePermanents: [],
@@ -80,9 +81,31 @@ it("shows an open opponent's decklist with unseen counts", () => {
 
 it("says a closed opponent's decklist is closed and lists nothing", () => {
   const { body } = render(PlayerArea, {
-    props: { label: 'Opponent', opponent: true, definitionNames: names, tablePermanents: [], player: player({}) },
+    props: { identity: playerIdentity({ name: 'Opponent' }), opponent: true, definitionNames: names, tablePermanents: [], player: player({}) },
   });
   expect(body).toContain('Decklist closed');
   expect(body).not.toContain('sideboard-summary');
   expect(body).not.toContain('Island');
+});
+
+it('shows recorded model provenance without inventing missing fields', () => {
+  const identity = playerIdentity({ name: 'run/checkpoints/model', kind: 'bot', digest: 'a'.repeat(64),
+    producer: 'manabot', provenance: { world: 'w6', step: 0, model: null } });
+  const { body } = render(PlayerArea, { props: { identity, tablePermanents: [], player: player({}) } });
+  expect(body).toContain('run/…/model');
+  expect(body).toContain('SHA-256: ' + 'a'.repeat(64));
+  expect(body).toContain('Producer: manabot');
+  expect(body).toContain('world: w6');
+  expect(body).toContain('step: 0');
+  expect(body).not.toContain('model:');
+});
+
+it('labels runtime identity as Policy ID and retains artifact roles', () => {
+  const runtime = { id: 'a'.repeat(64), provider: 'example', runner: 'runner-v2',
+    artifacts: { actor: 'b'.repeat(64) }, config: {}, supports_search: false };
+  const identity = playerIdentity({ name: 'Independent', kind: 'bot', digest: runtime.id, runtime });
+  const { body } = render(PlayerArea, { props: { identity, tablePermanents: [], player: player({}) } });
+  expect(body).toContain('Policy ID: ' + runtime.id);
+  expect(body).toContain('actor: ' + 'b'.repeat(64));
+  expect(body).not.toContain('SHA-256:');
 });

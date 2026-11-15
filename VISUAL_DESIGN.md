@@ -234,11 +234,18 @@ between them belongs to the sheet.
 
 One continuous leaf. Regions are ruled, never boxed.
 
+- At laptop widths, the sheet is a viewport-bounded workspace: a flexible
+  board beside a choices margin, with the hero hand, turn, pending prompt and
+  essential controls in reach. Long choices and hands scroll in labeled,
+  keyboard-reachable regions; dense battlefields page with counts and reveal
+  the focused subject. Decision focus stays inside its region without moving
+  the document. Narrow layouts stack board and choices with explicit jump
+  links. Fit through composition, never smaller text or browser zoom.
 - The game header is the sheet's **masthead**, in conscious levels: the
   matchup names the players — "You (UR Lessons) vs Search 64 (GW Allies)",
   serif with mana pips; configuration fields appear only while they matter
   (before a game, and again at game over) with small-caps labels set above
-  them; New Game is the one red action; and the connection is a register
+  them; Start game is the one red action; and the connection is a register
   dot and a whisper of mono beside it. Nothing on the masthead competes
   with the sheet below.
 - The turn is a **tempo marking**: small caps between flanking rules, in
@@ -249,19 +256,24 @@ One continuous leaf. Regions are ruled, never boxed.
   italics, the deck's color identity as a thin **pie rule** beneath it,
   life as bare numerals. Zones are **staves** — hand, battlefield,
   graveyard — named by small-caps **rubrics** in a margin column, divided
-  by hairlines. The opponent reads hand-first; the hero battlefield-first.
+  by hairlines. Both players read battlefield-first; secondary zones follow.
+  Occupied lanes use the available space, with pagers beside their headings;
+  empty groups share a compact count line.
 - **The stack is the one thing on the sheet allowed to burn red**: a hot
   rubric and red-framed spell lines between the two regions.
 - The **margin column** holds the apparatus behind a single vertical rule:
   the prompt as a red-ruled italic annotation, action options as field
   buttons, "Your move" in red small caps, stops, and the log as ruled
-  lines with actor rubrics.
+  lines with actor rubrics. Consequence history and narration stay in this
+  secondary apparatus; event emphasis never covers the board or moves choice focus.
 - The log records **game vocabulary only** — actor and action; key hints
   and control labels never enter the record.
 - **Hidden information is counted, not drawn**: hidden cards are the
-  violet-framed back with its blind lozenge, unlabeled. **Empty states are
-  silent**: one italic serif aside in `ink-2` with a staff's worth of
-  breathing room — no borders, no chips.
+  violet-framed back with its blind lozenge, unlabeled. **Empty zones are
+  compact**: a rubric and count, with an optional italic serif aside in
+  `ink-2`, rather than an empty card lane. Secondary zone contents open through
+  explicit inspection controls. Inspection must leave the pending choice
+  reachable in either color scheme.
 - Modals sit on the **scrim** (`color-mix(in srgb, var(--text) 45%,
   transparent)`, z 190); page content is never dimmed by its own opacity.
 
@@ -294,14 +306,14 @@ Badges state facts or do not exist: an effective 0/0 permanent (a land)
 shows no oval. Every visual state is also stated in the card's accessible
 name.
 
-**Card art is versioned content, not runtime fetches.**
-`academy/ui/scripts/fetch-card-art.mjs` pulls each curated-pack identity's
-art crop from Scryfall exactly once per machine (identified User-Agent,
-150ms pacing, cache-first, never at runtime) into `src/lib/card-art/` (bundler-known, so a missing file is a lookup miss, never a request);
-CardImage layers it over the procedural treatment, which remains the
-automatic fallback for anything missing. Images stay untracked; rights sit
-in `src/lib/card-art/NOTICE.md` under the WotC Fan Content Policy, as do
-the mana symbols in `static/mana/`.
+**Card art loads by default.** Academy fetches art for names the viewer can
+already see, caches it by Scryfall printing id and serves it same-origin.
+CardImage layers a loaded image over its procedural treatment; unavailable
+images keep that treatment. Full previews and the Deckmaster back use the same
+cache. The footer credits the artists for images displayed in this browser.
+Artwork is © Wizards of the Coast LLC, used as unofficial Fan Content under
+the Wizards of the Coast Fan Content Policy, without endorsement. The package
+contains no artwork. See [card art](docs/academy.md#card-art) for cache settings.
 
 ## The Score — Replay and Study
 
@@ -351,7 +363,7 @@ tooltip 400.
 
 **Elevation** — depth has one mechanism per layer: the sheet rests on the
 desk with `shadow-sheet`; only what floats above the sheet (dialogs, the
-hover preview, presentation beats) casts `shadow-raised`. The one
+hover preview) casts `shadow-raised`. The one
 exemption is physical: tipped-in plates sit in slight relief (a contact
 shadow, which flattens when tapped), and print objects on them carry
 their own micro-shadows. Nothing else has a shadow, and shadows are umber
@@ -389,7 +401,7 @@ Before merging UI changes:
 - [ ] `npm run check` and `npm test` pass; the e2e suites pass
 - [ ] Overlays on card art use literal colors, not adaptive tokens
 - [ ] New colored elements are assigned by register, not by taste
-- [ ] Dense boards hold: `DENSE_BOARD=1 npx playwright test e2e/dense-board.spec.ts` and read the captures
+- [ ] Dense boards hold: `npm --prefix academy/ui run test:e2e:release -- laptop-comfort.spec.ts` and read the captures
 - [ ] Both modes checked by eye — parchment and lamplight
 
 ---
@@ -404,8 +416,10 @@ Acknowledged debts, distinct from Reserved features:
   its log.
 - The contrast validator does not yet lint the voice laws (leading
   multiples, no inline font sizes) — they are greppable but unenforced.
-- The experience-proof baseline and release visual references still pin the
-  pre-redesign board and need regeneration on Linux CI.
+- The historical experience timing baseline remains frozen with its original
+  DOM-response definitions. The current release proof records matching-revision
+  rendering opportunities separately; release visual references still need
+  regeneration on Linux CI.
 
 ---
 

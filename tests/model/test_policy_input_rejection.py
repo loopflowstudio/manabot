@@ -10,9 +10,12 @@ from typing import Any
 
 from pydantic import ValidationError
 import pytest
-import torch
 
-from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.checkpoint import (
+    BACKEND as TORCH_BACKEND,
+    load_checkpoint,
+    save_checkpoint,
+)
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
@@ -27,6 +30,7 @@ from manabot.infra.config import (
 from manabot.model.catalog import checkpoint_incompatibility, inspect_checkpoint
 from manabot.sim.replay import replay_environment
 from manabot.sim.table_bots import CheckpointVillain
+from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
 SETUP = "ur-lessons-vs-gw-allies"
 
@@ -42,14 +46,14 @@ def _saved(path: Path, version: int | None) -> dict[str, Any]:
         space, ModelConfig(hidden_dim=8, num_attention_heads=2, world=SETUP)
     )
     save_checkpoint(agent, space, path, player_configs=_match().to_rust())
-    payload = torch.load(path, map_location="cpu", weights_only=False)
+    payload = read_checkpoint(path, map_location="cpu", weights_only=False)
     saved = payload["hypers"]["observation_hypers"]
     assert saved["policy_input_version"] == POLICY_INPUT_VERSION
     if version is None:
         del saved["policy_input_version"]
     else:
         saved["policy_input_version"] = version
-    torch.save(payload, path)
+    write_checkpoint(payload, path)
     return payload
 
 
@@ -62,18 +66,23 @@ def _assert_names_the_recording_revision(message: str, version: int) -> None:
     )
 
 
-def test_v9_is_the_fresh_default_and_both_inputs_are_serialized() -> None:
+def test_v11_is_the_fresh_default_and_every_input_is_serialized() -> None:
     config = ObservationConfig()
-    assert config.policy_input_version == POLICY_INPUT_VERSION == 9
+    assert config.policy_input_version == POLICY_INPUT_VERSION == 11
     dumped = config.model_dump()
-    assert dumped["policy_input_version"] == 9 and dumped["max_facts"] == 512
+    assert dumped["policy_input_version"] == 11 and dumped["max_facts"] == 512
     assert ObservationConfig.from_checkpoint(dumped) == config
-    v10 = ObservationConfig(policy_input_version=10)
-    assert v10.model_dump()["policy_input_version"] == 10
-    assert ObservationConfig.from_checkpoint(v10.model_dump()) == v10
+    for version in (9, 10):
+        # The deprecated v9/v10 rows still load, and warn.
+        with pytest.warns(DeprecationWarning, match="removed in 0.4.0") as caught:
+            legacy = ObservationConfig(policy_input_version=version)
+        assert caught[0].filename == __file__  # The caller, not pydantic.
+        assert legacy.model_dump()["policy_input_version"] == version
+        with pytest.warns(DeprecationWarning):
+            assert ObservationConfig.from_checkpoint(legacy.model_dump()) == legacy
 
 
-@pytest.mark.parametrize("version", [1, 5, 6, 7, 8, 11])
+@pytest.mark.parametrize("version", [1, 5, 6, 7, 8, 12])
 def test_saved_configuration_of_another_input_is_rejected(version: int) -> None:
     payload = {**ObservationConfig().model_dump(), "policy_input_version": version}
     with pytest.raises(UnsupportedPolicyInput) as raised:
@@ -110,7 +119,7 @@ def test_checkpoint_of_another_input_is_rejected_before_loading(
     reason = checkpoint_incompatibility(payload)
     assert reason is not None
     _assert_names_the_recording_revision(reason, recorded)
-    summary = inspect_checkpoint(path)
+    summary = inspect_checkpoint(path, backend=TORCH_BACKEND)
     assert not summary.compatible and summary.incompatibility == reason
     with pytest.raises(UnsupportedPolicyInput):
         CheckpointVillain(str(path), player_configs=_match().to_rust())

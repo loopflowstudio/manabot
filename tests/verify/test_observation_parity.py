@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 import json
 
 import numpy as np
 import pytest
+
+from manabot.env.match import Match
 
 # Local imports
 from manabot.env.observation import (
@@ -32,7 +35,7 @@ from manabot.env.observation import (
     ObservationConfig,
     ObservationEncoder,
 )
-from manabot.infra.config import UnsupportedPolicyInput
+from manabot.infra.config import MatchConfig, UnsupportedPolicyInput
 from manabot.managym.enums import ActionEnum
 from manabot.semantic.text_observation import capture_text_decision, submit_response
 from manabot.verify.text_observation import priority_root
@@ -128,14 +131,15 @@ def expected_focus_indices(
     return out
 
 
-def test_observation_parity():
-    """Run 200 games, encode every observation both ways, and assert exact parity."""
-    rng = np.random.default_rng(42)
-    env = managym.Env(seed=42, skip_trivial=True)
+@pytest.mark.parametrize("seed", range(42, 62))
+def test_observation_parity(seed: int) -> None:
+    """Compare both encoders throughout 200 games across bounded batches."""
+    rng = np.random.default_rng(seed)
+    env = managym.Env(seed=seed, skip_trivial=True)
     config = ObservationConfig()
     encoder = ObservationEncoder(config)
 
-    for game_i in range(200):
+    for game_i in range(10):
         obs, _ = env.reset(make_player_configs())
 
         while True:
@@ -217,13 +221,13 @@ def test_vector_env_buffer_hot_path_matches_compatibility_step_path() -> None:
         num_envs=num_envs,
         seed=123,
         skip_trivial=True,
-        opponent_policy="random",
+        player_policies=("agent", "random"),
     )
     hot = managym.VectorEnv(
         num_envs=num_envs,
         seed=123,
         skip_trivial=True,
-        opponent_policy="random",
+        player_policies=("agent", "random"),
     )
     buffers = allocate_vector_buffers(num_envs, config)
     hot.set_buffers(buffers)
@@ -274,7 +278,7 @@ def test_vector_env_set_buffers_validates_contract() -> None:
         num_envs=num_envs,
         seed=999,
         skip_trivial=True,
-        opponent_policy="none",
+        player_policies=("agent", "agent"),
     )
     good = allocate_vector_buffers(num_envs, config)
 
@@ -308,7 +312,7 @@ def test_vector_env_set_buffers_validates_contract() -> None:
         num_envs=num_envs,
         seed=1000,
         skip_trivial=True,
-        opponent_policy="none",
+        player_policies=("agent", "agent"),
     )
     with pytest.raises(RuntimeError):
         unconfigured.reset_all_into_buffers(player_configs)
@@ -483,8 +487,9 @@ def test_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
     # firebending, attachment join, granted land, blocking join, lost
     # abilities, timestamp rank, dealt damage this turn, validity.
     np.testing.assert_allclose(
-        row[27:PERMANENT_DIM], [1, 0, 0, 0.4, host + 1, 1, host + 1, 1, 1, 1, 1]
+        row[27:37], [1, 0, 0, 0.4, host + 1, 1, host + 1, 1, 1, 1]
     )
+    assert row[PERMANENT_DIM - 1] == 1
     # Fact rows, in order: counters, added subtypes, set name and creature
     # type, used abilities, copy and its exceptions (one row per keyword).
     facts = actual["facts"]
@@ -728,7 +733,10 @@ def test_merchant_tap_count_native_reference_and_text_parity() -> None:
         for _ in range(16):
             obs = env.observation_for_player(owner)
             if (
-                sum(card.name == "Food" for card in obs.agent_cards) == food_count
+                sum(
+                    perm.characteristics.name == "Food" for perm in obs.agent_permanents
+                )
+                == food_count
                 and not obs.stack_objects
             ):
                 break
@@ -826,3 +834,44 @@ def test_scout_s_warning_record_and_minus_counters_native_reference_and_text_par
     for key, value in reference.items():
         np.testing.assert_array_equal(native[key], value, err_msg=key)
         np.testing.assert_array_equal(buffers[key], value, err_msg=key)
+
+
+@pytest.mark.parametrize("version", [9, 10, 11])
+@pytest.mark.parametrize("history", [0, 1])
+def test_every_input_layout_agrees_natively_on_elemental_games(
+    version: int, history: int
+) -> None:
+    """Python and native agree for the deprecated v9/v10 rows and input
+    v11's one-token rows, with and without public history, over Elemental
+    games whose stacks hold spells and abilities."""
+    with pytest.warns(DeprecationWarning) if version < 11 else nullcontext():
+        config = ObservationConfig(
+            policy_input_version=version,
+            policy_history_version=history,
+            max_cards_per_player=128,
+        )
+    encoder = ObservationEncoder(config)
+    rng = np.random.default_rng(version * 10 + history)
+    env = managym.Env(seed=7, skip_trivial=True)
+    stack_rows = 0
+    for left, right in (("ug", "bg"), ("bg", "ug")):
+        match = Match(
+            MatchConfig.authored(
+                "elemental-world-v2", "elemental_" + left, "elemental_" + right
+            )
+        )
+        obs, _ = env.reset(match.to_rust())
+        for _ in range(400):
+            expected = encoder.encode(obs)
+            buffers = encoder.allocate()
+            env.encode_observation_into(obs, buffers)
+            for key, value in expected.items():
+                np.testing.assert_array_equal(buffers[key], value, err_msg=key)
+            assert ("stack" in buffers) == (version == 11)
+            if version == 11:
+                stack_rows += int(buffers["stack_valid"].sum())
+            if obs.game_over:
+                break
+            obs, *_ = env.step(random_valid_action(obs, rng))
+    if version == 11:
+        assert stack_rows > 0

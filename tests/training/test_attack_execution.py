@@ -7,6 +7,7 @@ import signal
 import pytest
 import torch
 
+from manabot.backends import resolve
 from manabot.backends.torch.checkpoint import save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
@@ -76,7 +77,7 @@ def _plan(tmp_path: Path) -> AttackPlan:
 
 def test_selected_world_attack_cohort_replays_all_rungs(tmp_path: Path) -> None:
     plan = _plan(tmp_path)
-    result = execute_attack_plan(plan, tmp_path / "attack")
+    result = execute_attack_plan(plan, tmp_path / "attack", backend=resolve("torch"))
     assert result.status == "completed"
     assert len(result.runs) == 2
     assert len(result.points) == 6
@@ -101,7 +102,7 @@ def test_failed_training_is_retained_and_deadline_is_restored(
 
     monkeypatch.setattr(attack_execution, "execute_regime", failed_training)
     with pytest.raises(RuntimeError, match="injected"):
-        execute_attack_plan(plan, tmp_path / "failed")
+        execute_attack_plan(plan, tmp_path / "failed", backend=resolve("torch"))
     result = json.loads((tmp_path / "failed/result.json").read_text())
     assert result["status"] == "failed"
     assert len(result["run_paths"]) == 1

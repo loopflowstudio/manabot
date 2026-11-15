@@ -14,9 +14,12 @@ from pathlib import Path
 import re
 from typing import Any, Literal
 
+from pydantic import TypeAdapter
+
 import managym
 from managym.bots import BotDecision
 from managym.experience_projection import redact_observation
+from managym.search import SearchConfig
 
 TRACE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
 TRACES_DIR = Path(os.getenv("ACADEMY_TRACES_DIR", "academy/traces"))
@@ -29,6 +32,8 @@ class GameConfig:
     villain_type: str
     seed: int | None = None
     seed_was_requested: bool = False
+    # Hero/villain are setup roles; native seats are independent.
+    human_seat: Literal[0, 1] = 0
     # Named-deck identifiers ("interactive" / "ur_lessons" / "gw_allies" /
     # "custom") — recorded so every trace is attributable to an exact matchup.
     hero_deck_name: str = "custom"
@@ -42,9 +47,9 @@ class GameConfig:
     villain_checkpoint: str | None = None  # checkpoint: path to .pt file
     villain_deterministic: bool = False  # checkpoint: argmax instead of sampling
     opponent: dict[str, str] | None = None
-    # Exact trained-opponent identity: digest, source, world, model shape,
-    # training step, checkpoint path and inference setting.
-    opponent_checkpoint: dict[str, str | int | bool | None] | None = None
+    # Historical checkpoint provenance, or a managym-policy-1 descriptor with
+    # complete provider/runner/config/artifact identity. Read without a loader.
+    opponent_checkpoint: dict[str, Any] | None = None
     # Priority-stop configuration at game start (MTGO-style auto-pass).
     # ``stops`` maps "my"/"opponent" to the stop step names that surface;
     # None means the server defaults. set_stops updates the live session,
@@ -55,6 +60,8 @@ class GameConfig:
     hero_sideboard: dict[str, int] = field(default_factory=dict)
     villain_sideboard: dict[str, int] = field(default_factory=dict)
     watch_players: list[str] | None = None
+    # One bot composition; Watch records each bot through its descriptor.
+    mirror: SearchConfig | None = None
     # "open": each player knows the other's main deck and sideboard;
     # "closed": neither. Traces that predate the option were open.
     decklists: Literal["open", "closed"] = "open"
@@ -63,7 +70,21 @@ class GameConfig:
     hero_source: dict[str, Any] | None = None
     villain_source: dict[str, Any] | None = None
 
+    def __post_init__(self) -> None:
+        if type(self.human_seat) is not int or self.human_seat not in (0, 1):
+            raise ValueError("human_seat must be 0 or 1.")
+        self.mirror = TypeAdapter(SearchConfig | None).validate_python(self.mirror)
+        if self.decklists == "closed" and self.mirror is not None:
+            raise ValueError("Search requires open decklists.")
+
     def to_rust(self) -> list[managym.PlayerConfig]:
+        """Order human/opponent setup roles by their recorded native seats."""
+        configs = self._role_configs()
+        for config in configs:
+            config.disclosure = self.decklists
+        return configs if self.human_seat == 0 else list(reversed(configs))
+
+    def _role_configs(self) -> list[managym.PlayerConfig]:
         """Rebuild the recorded root with its explicit outside-game copies."""
         from .curated_pack import curated_pack_for_matchup
 
@@ -116,18 +137,14 @@ class GameConfig:
                     raise ValueError(
                         f"Recorded setup for {name!r} differs from compiled deck/sideboard setup"
                     )
-                expected.disclosure = self.decklists
                 configs.append(expected)
             return configs
         return [
-            managym.PlayerConfig(
-                "Hero", self.hero_deck, self.hero_sideboard, disclosure=self.decklists
-            ),
+            managym.PlayerConfig("Hero", self.hero_deck, self.hero_sideboard),
             managym.PlayerConfig(
                 "Villain",
                 self.villain_deck,
                 self.villain_sideboard,
-                disclosure=self.decklists,
             ),
         ]
 
@@ -253,8 +270,10 @@ def list_trace_summaries(trace_dir: Path | None = None) -> list[dict[str, Any]]:
     return summaries
 
 
-def normalize_observation_to_hero(observation: dict[str, Any]) -> None:
-    """Present an observation from the hero's (player 0) perspective.
+def normalize_observation_to_hero(
+    observation: dict[str, Any], human_seat: int = 0
+) -> None:
+    """Present an observation from the recorded human's native perspective.
 
     Trace events record the raw engine observation, whose perspective is the
     player to act — villain events are villain-perspective. The replay viewer
@@ -268,7 +287,10 @@ def normalize_observation_to_hero(observation: dict[str, Any]) -> None:
     opponent = observation.get("opponent")
     if not isinstance(agent, dict) or not isinstance(opponent, dict):
         return
-    if agent.get("player_index") == 1 and opponent.get("player_index") == 0:
+    if (
+        agent.get("player_index") == 1 - human_seat
+        and opponent.get("player_index") == human_seat
+    ):
         observation["agent"], observation["opponent"] = opponent, agent
         if observation.get("game_over") and "won" in observation:
             observation["won"] = not bool(observation["won"])
@@ -287,6 +309,9 @@ def prepare_trace_payload(
         event.pop("analysis_observation", None)
     config = prepared.get("config", {})
     config.pop("villain_checkpoint", None)
+    checkpoint = config.get("opponent_checkpoint")
+    if isinstance(checkpoint, dict):
+        checkpoint.pop("checkpoint", None)
     config.pop("seed", None)
     sources = [config.pop(key, None) for key in ("hero_source", "villain_source")]
     if any(source is not None for source in sources):
@@ -319,7 +344,7 @@ def prepare_trace_payload(
                 event.pop("bot_decision", None)
 
     for observation in observations:
-        normalize_observation_to_hero(observation)
+        normalize_observation_to_hero(observation, config.get("human_seat", 0))
         if not reveal_hidden:
             redact_observation(observation)
 

@@ -7,30 +7,24 @@ output types. Heavy model imports happen only when a capability is requested.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from pathlib import Path
-from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
+import warnings
 
 import managym
 from managym.bots import (
     BeliefSummary,
     BotArtifactError,
     BotDecision,
-    BotPolicy,
     VerifiedArena,
 )
+from managym.policy import PolicyRunner, PolicySpec
 
 if TYPE_CHECKING:
-    from manabot.model.catalog import CheckpointSummary, UnavailableEntry
     from manabot.sim.search.runtime import RetainedCheckpointRegistration
 
 
 class CheckpointVillain:
-    """A trained ActorCritic loaded from a training checkpoint (.pt).
-
-    Torch and the model stack are imported lazily so that search/random games
-    never pay the import cost.
-    """
+    """Retained checkpoint loader, delegating execution to an independent provider session."""
 
     def __init__(
         self,
@@ -39,94 +33,50 @@ class CheckpointVillain:
         deterministic: bool = False,
         player_configs: Sequence[managym.PlayerConfig] | None = None,
     ) -> None:
-        from manabot.backends.torch.checkpoint import load_checkpoint
         from manabot.model.world import validate_agent_setup
+        from manabot.sim.policy_provider import BaselineSession, provider
 
-        self.agent, self.obs_space = load_checkpoint(path)
-        if player_configs is not None:
-            validate_agent_setup(self.agent, player_configs)
+        warnings.warn(
+            "CheckpointVillain is deprecated; use PolicySpec and PolicyRegistry (removed in 0.4.0)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        spec = PolicySpec("manabot", path, {"deterministic": deterministic})
+        # The retained loader permits omitted setup; Academy itself admits every
+        # explicit setup through PolicyRegistry before constructing a runner.
+        session = BaselineSession(spec, seed=0)
+        try:
+            descriptor = provider.policy(spec).describe()
+        except BaseException:
+            session.close()
+            raise
+        self._runner = PolicyRunner(session, descriptor, seat=1)
+        assert session.agent is not None and session.space is not None
+        self.agent = session.agent
+        self.obs_space = session.space
         self.deterministic = deterministic
-        self.last_decision: BotDecision | None = None
+        try:
+            if player_configs is not None:
+                validate_agent_setup(self.agent, player_configs)
+        except BaseException:
+            self._runner.close()
+            raise
+
+    @property
+    def last_decision(self) -> BotDecision | None:
+        return self._runner.last_decision
 
     def __call__(self, env: managym.Env, obs: managym.Observation) -> int:
-        del env
-        self.last_decision = None
-        # Policy weights score each action independently of the padded action
-        # count. At inference preserve the entire rules offer list, including
-        # decisions wider than the training batch's storage capacity.
-        space = self.obs_space
-        if len(obs.action_space.actions) > space.encoder.max_actions:
-            from manabot.env.observation import ObservationSpace
+        return self._runner(env, obs)
 
-            space = ObservationSpace(
-                space.encoder.config.model_copy(
-                    update={
-                        "max_actions": len(obs.action_space.actions),
-                    }
-                )
-            )
-        encoded = space.encode(obs)
-        import torch
-
-        from manabot.verify.util import _tensor_observation
-
-        with torch.no_grad():
-            logits, value = self.agent(_tensor_observation(self.agent, encoded))
-            distribution = torch.distributions.Categorical(logits=logits)
-            action = int(
-                (
-                    logits.argmax(dim=-1)
-                    if self.deterministic
-                    else distribution.sample()
-                ).item()
-            )
-            self.last_decision = BotDecision(
-                action=action,
-                probabilities=distribution.probs[
-                    0, : len(obs.action_space.actions)
-                ].tolist(),
-                value=float(value.item()),
-                value_semantic=self.agent.value_semantic or "undeclared critic units",
-            )
-        return action
+    def close(self) -> None:
+        self._runner.close()
 
 
 class TrainingBots:
+    """Optional historical replay/advice capabilities, independent of players."""
+
     name = "manabot"
-    watch_players = ("greedy", "heuristic")
-
-    def discover(
-        self, paths: list[Path], runs_dir: Path
-    ) -> tuple[list[CheckpointSummary], list[UnavailableEntry]]:
-        from manabot.model.catalog import discover_checkpoints
-
-        return discover_checkpoints(paths, runs_dir=runs_dir)
-
-    def checkpoint_policy(
-        self,
-        path: str,
-        *,
-        deterministic: bool,
-        player_configs: Sequence[managym.PlayerConfig],
-    ) -> BotPolicy:
-        return CheckpointVillain(
-            path, deterministic=deterministic, player_configs=player_configs
-        )
-
-    def watch_policy(self, kind: str) -> BotPolicy:
-        if kind not in self.watch_players:
-            raise ValueError(f"Unsupported watch player: {kind}")
-
-        from manabot.env.env import Env
-        from manabot.sim.anchors import ScriptedGreedyPlayer
-        from manabot.sim.heuristic import HeuristicPlayer
-
-        player = HeuristicPlayer() if kind == "heuristic" else ScriptedGreedyPlayer()
-
-        def anchor(env: managym.Env, obs: managym.Observation) -> int:
-            return player.act(cast(Env, SimpleNamespace(last_raw_obs=obs)), {})
-
-        return anchor
 
     def checkpoint_registration(self, seed: int) -> RetainedCheckpointRegistration:
         from manabot.sim.search.runtime import (
@@ -144,18 +94,34 @@ class TrainingBots:
 
     def verify_arena(self, record: dict[str, Any]) -> VerifiedArena:
         from manabot.sim.replay import replay_environment, replay_games
-        from manabot.sim.search.local_update import LocalUpdateReceipt
+        from manabot.sim.search.local_update_receipt import LocalUpdateReceipt
 
         receipt = replay_games([record])
-        if not receipt.passed or record.get("failure") is not None:
-            raise ValueError("Arena replay verification failed; import rejected")
+        if receipt.trace_mismatches:
+            raise ValueError(
+                "Game trace digest mismatches: the file was edited after recording."
+            )
+        if record.get("failure") is not None:
+            raise ValueError(
+                "This evaluation game retained a failure; import rejected."
+            )
+        if not receipt.passed:
+            mismatches = ", ".join(
+                f"{name}={value}"
+                for name, value in receipt.to_dict().items()
+                if name not in {"games", "decisions", "passed"} and value
+            )
+            raise ValueError(
+                f"Replay verification failed: {mismatches}. "
+                "This revision may deal or build a different game; open the trace with the revision that wrote it."
+            )
         arena, _ = replay_environment(record)
         decisions = []
         for expected in record["decisions"]:
             index = int(expected["command"]["offer_id"])
             decision = BotDecision(
                 index,
-                unavailable="Policy, value and search outputs were not retained in this arena recording.",
+                unavailable="Policy, value and search outputs were not retained in this recorded game.",
             )
             if expected.get("local_update_receipt") is not None:
                 retained = LocalUpdateReceipt.from_json(

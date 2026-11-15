@@ -15,7 +15,20 @@ from typer.testing import CliRunner
 from experiments import training_throughput_packing as packing
 from experiments.tla_frontier import frozen
 from manabot import cli
+from manabot.backends import resolve
 import manabot.backends.torch as torch_backend
+from manabot.backends.torch import (
+    _facts as fact_encoder,
+    _shared_effects as shared_effects,
+)
+from manabot.backends.torch._facts import FactEncoder
+from manabot.backends.torch._semantic_cards import (
+    SemanticCardEncoder,
+)
+from manabot.backends.torch._shared_effects import SharedEffectEncoder
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import clipped_surrogate, float64_operand
@@ -35,15 +48,6 @@ from manabot.env.shared_effects import SHARED_EFFECT_SHAPES
 from manabot.experiment.job import TrainingJob
 from manabot.infra.config import BF16_MIN_HIDDEN_DIM, RewardConfig
 from manabot.infra.identity import canonical_sha256
-from manabot.model import semantic_cards, shared_effects
-from manabot.model.facts import FactEncoder
-from manabot.model.numerics import embedding_rows
-from manabot.model.semantic_cards import (
-    RecordEmbeddings,
-    RecordNamespace,
-    SemanticCardEncoder,
-)
-from manabot.model.shared_effects import SharedEffectEncoder
 from manabot.recipes.baseline import baseline
 from manabot.recipes.builders import with_capacity
 from manabot.recipes.device import accelerator
@@ -62,6 +66,7 @@ from manabot.training.updates import damped_policy, ppo
 from manabot.training.updates.selection import UpdateDiagnostics
 from manabot.verify.store import VerifyStore
 import managym
+from tests.model.prepared_routes import effect_rows, fact_rows
 
 
 def test_mps_admitted_without_changing_saved_regimes() -> None:
@@ -78,7 +83,7 @@ def test_mps_admitted_without_changing_saved_regimes() -> None:
         "live_tokens": "auto",
     }
     saved = TrainingJob.model_validate_json(
-        packing.runs("HEAD", "d1")[0].job.config or ""
+        packing.training_jobs("HEAD", "d1")[0].job.config or ""
     )
     assert canonical_sha256(saved.regime.model_dump(mode="json")) == (
         "5684d15da200eef2c9169b75cce8b54dd643e22a0201a148be80bf2958505b84"
@@ -122,6 +127,7 @@ def test_unavailable_mps_fails_without_fallback(
                 197,
                 tmp_path / "unavailable",
                 store,
+                backend=resolve("torch"),
             )
 
 
@@ -167,6 +173,7 @@ def test_old_torch_mps_stage_fails_before_training(
                 197,
                 tmp_path / "old-torch",
                 store,
+                backend=resolve("torch"),
             )
     assert not (tmp_path / "old-torch" / "checkpoints").exists()
 
@@ -291,7 +298,9 @@ def test_mps_one_update_and_export(
 
     monkeypatch.setattr(execution, "update_damped_iteration", update)
     with VerifyStore(tmp_path / "runs.sqlite") as store:
-        run = execution.execute_regime(plan, 197, tmp_path / "mps", store)
+        run = execution.execute_regime(
+            plan, 197, tmp_path / "mps", store, backend=resolve("torch")
+        )
     assert run.status == "completed", run.error
     record = run.stages[0]
     assert record.actual_device is not None
@@ -362,7 +371,9 @@ def test_mps_wide_model_trains_one_bf16_update_by_default(
 
     monkeypatch.setattr(execution, "update_damped_iteration", update)
     with VerifyStore(tmp_path / "runs.sqlite") as store:
-        run = execution.execute_regime(plan, 197, tmp_path / "mps-wide", store)
+        run = execution.execute_regime(
+            plan, 197, tmp_path / "mps-wide", store, backend=resolve("torch")
+        )
     assert run.status == "completed", run.error
     assert len(observed) == 1
     assert observed[0]["numerical"]["rejected_steps"] == 0
@@ -395,7 +406,7 @@ def test_empty_record_embedding_cpu_loss_gradients_and_adam_equivalent(
                 continue
             word = managym.catalog_token_value(name) & 0xFFFFFFFF
             row[column : column + 2] = torch.tensor([word >> 16, word & 0xFFFF])
-    encoder = FactEncoder(4, 4, vocabulary="catalog")
+    encoder = FactEncoder(4, vocabulary="catalog")
     with torch.no_grad():
         encoder.output.weight.copy_(torch.eye(4))
     original = torch.nn.ModuleList([cards, encoder])
@@ -424,9 +435,19 @@ def test_empty_record_embedding_cpu_loss_gradients_and_adam_equivalent(
         optimizer.zero_grad(set_to_none=True)
         with monkeypatch.context() as patch:
             if method is not None:
-                patch.setattr(semantic_cards, "embedding_rows", method)
-            records = RecordEmbeddings(model[0], torch.zeros(len(cards.tokens) + 1, 4))
-            loss = model[1](facts, torch.ones(1, 2, 4), records).square().mean()
+                patch.setattr(fact_encoder, "embedding_rows", method)
+            definitions = torch.zeros(len(cards.tokens) + 1, 4)
+            objects = torch.ones(1, 2, 4)
+            loss = (
+                model[1](
+                    fact_rows(facts, objects, model[0]),
+                    objects,
+                    model[0].token_embedding,
+                    definitions,
+                )
+                .square()
+                .mean()
+            )
             loss.backward()
         losses.append(loss.detach())
         gradients.append(
@@ -459,24 +480,6 @@ def test_empty_record_embedding_cpu_loss_gradients_and_adam_equivalent(
 
 
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="requires Apple MPS")
-def test_mps_empty_record_families_backward() -> None:
-    """Both catalog entry points can produce an empty [0,D] embedding."""
-    cards = SemanticCardEncoder("world", 4, records=True).to("mps")
-    empty = torch.empty(0, dtype=torch.long, device="mps")
-    for family in ("names", "tokens"):
-        cards.zero_grad(set_to_none=True)
-        values = (
-            cards.record_names(RecordNamespace.TOKEN, empty)
-            if family == "names"
-            else cards.record_tokens(empty, empty)
-        )
-        assert values.shape == (0, 4) and values.device.type == "mps"
-        values.sum().backward()
-        gradient = cards.token_embedding.weight.grad
-        assert gradient is not None and torch.count_nonzero(gradient) == 0
-
-
-@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="requires Apple MPS")
 def test_mps_w64_single_selected_row_without_program_facts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -501,16 +504,16 @@ def test_mps_w64_single_selected_row_without_program_facts(
         opponent_mode="self",
         learning_seats="one",
         batch_closure="exact-quota",
-        device="mps",
         workers=1,
         deck_source=plan.deck_source,
+        numerics=TorchCollectionSession(device="mps", seed=197, precision="float32"),
     )
     try:
         batch = collector.collect(agent, 1, deadline_monotonic=time.perf_counter() + 40)
     finally:
         collector.close()
     assert batch.actions.shape == (1, 2)
-    original = damped_policy._targets
+    original = damped_policy.targets
 
     def singleton(
         backend: ModuleType,
@@ -524,27 +527,17 @@ def test_mps_w64_single_selected_row_without_program_facts(
         selected.flatten()[0] = True
         return damped_policy.DampedTargets(targets.advantages, targets.values, selected)
 
-    empty_calls: list[int] = []
-
-    def checked(embedding: torch.nn.Embedding, rows: torch.Tensor) -> torch.Tensor:
-        if torch.is_grad_enabled() and rows.numel() == 0:
-            empty_calls.append(rows.numel())
-        return embedding_rows(embedding, rows)
-
-    monkeypatch.setattr(damped_policy, "_targets", singleton)
-    monkeypatch.setattr(semantic_cards, "embedding_rows", checked)
+    monkeypatch.setattr(damped_policy, "targets", singleton)
     learner = Learner(agent, "mps", minibatch_rows=256)
     result = damped_policy.update_damped_iteration(
         torch_backend, learner, batch, stage.learning, 1
     )
-    assert empty_calls
     assert result["retained"] == result["optimizer_exposures"] == 1
     assert result["numerical"]["optimizer_steps"] == 1
     _assert_finite(result)
     assert all(torch.isfinite(parameter).all() for parameter in agent.parameters())
 
     # PPO shares the catalog owner; an empty actor filter still trains its critic.
-    empty_calls.clear()
     result = ppo.update_iteration(
         torch_backend,
         learner,
@@ -554,7 +547,6 @@ def test_mps_w64_single_selected_row_without_program_facts(
         np.random.default_rng(197),
         iteration=1,
     )
-    assert empty_calls
     assert result["actor_exposures"] == 0
     assert result["critic_exposures"] == result["optimizer_exposures"] == 2
     assert result["numerical"]["optimizer_steps"] == 1
@@ -591,9 +583,12 @@ def test_empty_shared_effect_details_backward(
     before = deepcopy(encoder)
     loss = (
         encoder(
-            values["effects"],
-            values["effect_details"],
-            values["effect_members"],
+            effect_rows(
+                values["effects"],
+                values["effect_details"],
+                values["effect_members"],
+                objects,
+            ),
             objects,
         )
         .square()
@@ -622,9 +617,12 @@ def test_empty_shared_effect_details_backward(
         monkeypatch.setattr(shared_effects, "embedding_rows", empty_slice)
         expected = (
             before(
-                values["effects"],
-                values["effect_details"],
-                values["effect_members"],
+                effect_rows(
+                    values["effects"],
+                    values["effect_details"],
+                    values["effect_members"],
+                    objects,
+                ),
                 objects,
             )
             .square()

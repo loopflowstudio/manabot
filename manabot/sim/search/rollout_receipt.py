@@ -6,7 +6,7 @@ legacy compound-policy fields retained for historical readers.
 
 from dataclasses import dataclass
 
-from manabot.sim.search.sampling import HandSample
+from manabot.sim.search.sampling_receipt import HandSample
 
 
 @dataclass(frozen=True)

@@ -42,11 +42,12 @@ from typing import Literal
 
 from etude.eval.query import statsdb
 from etude.eval.records import Seating
-from etude.experiment import ExperimentState, TrainingRun
+from etude.experiment import TrainingRun
+from etude.jobs import ExperimentState
 from etude.launch import client
 from etude.launch.records import Job, Run
-from etude.run.listing import as_storage
-from etude.run.storage import Storage, storage_from_uri
+from etude.run import as_storage
+from etude.storage import Storage, storage_from_uri
 from etude.train.read import RunData, read_all
 
 from experiments.tla_frontier import (
@@ -172,7 +173,7 @@ def calibration_regime(regime: TrainingRegime, pod: Pod) -> TrainingRegime:
     )
 
 
-def runs(revision: str) -> list[Run]:
+def training_jobs(revision: str) -> list[Run]:
     """One capped allocation per pod; a pod that fails is itself the reading."""
     regimes, protocol = frozen()
     pods: list[tuple[Pod, TrainingRegime]] = [
@@ -244,7 +245,7 @@ def rehearsal_matchups(
     )
 
 
-def eval(state: ExperimentState) -> list[Job]:
+def eval_jobs(state: ExperimentState) -> list[Job]:
     """The rehearsal, once no calibration run can still save a later checkpoint."""
     if state.experiment != EXPERIMENT:
         raise ValueError("rehearsal requires calibration's runs")
@@ -279,7 +280,7 @@ def _calibration(data: RunData, pod: PodReading, wall_seconds: float) -> Calibra
     rows = data.points("rows", "updates")
     return Calibration(
         run=data.name,
-        job=data.file.declaration.job_name if data.file else None,
+        job=data.file.job_name if data.file else None,
         state=data.state.state if data.state else "running",
         updates=int(rows.x[-1]) if len(rows) else 0,
         seconds_per_update=cost,
@@ -303,7 +304,7 @@ def read_calibration(source: Storage | Path | str) -> list[Calibration]:
         _calibration(data, pod_reading(data, storage), wall_seconds)
         for data in read_all(storage)
         if data.experiment == EXPERIMENT
-        and (data.file is None or data.file.declaration.kind != "evaluation")
+        and (data.file is None or data.file.kind != "evaluation")
     ]
 
 

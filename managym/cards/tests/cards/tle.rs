@@ -1,4 +1,6 @@
 //! TLE card behavior through ordinary choices and exact Command forks.
+use crate::support::game::move_card;
+use crate::support::inspect::{now, permanent_of, zone_of};
 use crate::support::{
     game::{
         clear_summoning_sickness, enter_battlefield, five_color_setup, five_color_unfunded_setup,
@@ -39,7 +41,7 @@ fn tle_baseline_vanilla_creatures_cast_and_deal_printed_combat_damage() {
         let mut s = five_color_setup(&[name]);
         let object = cast_owned(&mut s, name);
         settle(&mut s);
-        let permanent = s.game().state.object_to_permanent[object].unwrap();
+        let permanent = permanent_of(&s, object).unwrap();
         let view = s.game().characteristics(permanent);
         assert_eq!((view.power, view.toughness), (power, toughness), "{name}");
         assert!(!tapped(&s, permanent), "{name}");
@@ -116,7 +118,7 @@ fn tle_baseline_wolf_cove_villager_enters_tapped_and_untaps_normally() {
     let mut s = five_color_setup(&["Wolf Cove Villager"]);
     let object = cast_owned(&mut s, "Wolf Cove Villager");
     settle(&mut s);
-    let permanent = s.game().state.object_to_permanent[object].unwrap();
+    let permanent = permanent_of(&s, object).unwrap();
     assert!(tapped(&s, permanent));
     s.advance_to_active_step(1, StepKind::Main);
     assert!(tapped(&s, permanent));
@@ -147,7 +149,7 @@ fn tle_baseline_keyword_creatures_have_printed_body_and_keyword() {
         let mut s = five_color_setup(&[name]);
         let object = cast_owned(&mut s, name);
         settle(&mut s);
-        let permanent = s.game().state.object_to_permanent[object].unwrap();
+        let permanent = permanent_of(&s, object).unwrap();
         let view = s.game().characteristics(permanent);
         assert_eq!((view.power, view.toughness), (power, toughness), "{name}");
         assert!(view.keywords.has(keyword), "{name}");
@@ -159,7 +161,7 @@ fn tle_baseline_dragon_moose_attacks_the_turn_it_enters() {
     let mut s = five_color_setup(&["Dragon Moose"]);
     let object = cast_owned(&mut s, "Dragon Moose");
     settle(&mut s);
-    let moose = s.game().state.object_to_permanent[object].unwrap();
+    let moose = permanent_of(&s, object).unwrap();
     pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
     attack_with(&mut s, moose);
     s.advance_to_step(StepKind::EndOfCombat);
@@ -246,7 +248,7 @@ fn tle_baseline_katara_heroic_healer_counters_each_other_creature_you_control() 
     s.game_mut().scenario_refresh_priority().unwrap();
     let object = cast_owned(&mut s, "Katara, Heroic Healer");
     settle(&mut s);
-    let katara = s.game().state.object_to_permanent[object].unwrap();
+    let katara = permanent_of(&s, object).unwrap();
     assert_eq!(counters(&s, ogre), 1);
     assert_eq!(counters(&s, katara), 0);
     assert_eq!(counters(&s, foe), 0);
@@ -549,7 +551,7 @@ fn spell_spent(s: &Scenario, object: managym::state::game_object::ObjectId) -> M
         .stack_objects
         .iter()
         .find_map(|stack| match stack {
-            StackObject::Spell(spell) if spell.object == object => Some(spell.spent),
+            StackObject::Spell(spell) if spell.object == now(s, object) => Some(spell.spent),
             _ => None,
         })
         .expect("spell on the stack")
@@ -603,7 +605,7 @@ fn toph_put_onto_the_battlefield_earthbends_zero() {
         ZoneType::Battlefield,
     );
     s.game_mut().scenario_refresh_priority().unwrap();
-    let permanent = s.game().state.object_to_permanent[toph].unwrap();
+    let permanent = permanent_of(&s, toph).unwrap();
     assert!(s.game().state.permanents[permanent]
         .as_ref()
         .unwrap()
@@ -651,14 +653,10 @@ fn uncles_musings_counts_the_colors_of_mana_spent_and_exiles_itself() {
         assert_eq!(returned, colors as usize, "{mana}");
         let in_hand = permanents
             .iter()
-            .filter(|card| s.game().state.zones.zone_of(**card) == Some(ZoneType::Hand))
+            .filter(|card| zone_of(&s, **card) == Some(ZoneType::Hand))
             .count();
         assert_eq!(in_hand, colors as usize, "{mana}");
-        assert_eq!(
-            s.game().state.zones.zone_of(musings),
-            Some(ZoneType::Exile),
-            "{mana}"
-        );
+        assert_eq!(zone_of(&s, musings), Some(ZoneType::Exile), "{mana}");
     }
 }
 
@@ -700,7 +698,7 @@ fn animal_attendant_mana_adds_a_counter_to_a_non_human_creature_spell() {
         assert_eq!(spent.entry_counters, attendants as u8);
         assert_eq!(spent.total(), 3);
         settle(&mut s);
-        let permanent = s.game().state.object_to_permanent[sheep].unwrap();
+        let permanent = permanent_of(&s, sheep).unwrap();
         assert_eq!(counters(&s, permanent), attendants as i32);
         assert!(s.game().state.players[0].mana_pool.classes().is_empty());
     }
@@ -713,10 +711,10 @@ fn animal_attendant_mana_needs_no_attendant_and_skips_humans_and_noncreatures() 
     let mut s = five_color_unfunded_setup(&["Animal Attendant", "Koala-Sheep"]);
     let attendant = attendant_mana(&mut s, "1W", 1)[0];
     let card = card_of(&s, attendant);
-    s.game_mut().move_object(card, ZoneType::Graveyard);
+    move_card(&mut s, card, ZoneType::Graveyard);
     let sheep = cast_owned(&mut s, "Koala-Sheep");
     settle(&mut s);
-    let permanent = s.game().state.object_to_permanent[sheep].unwrap();
+    let permanent = permanent_of(&s, sheep).unwrap();
     assert_eq!(counters(&s, permanent), 1);
 
     let mut s = five_color_unfunded_setup(&["Animal Attendant", "Capital Guard"]);
@@ -724,7 +722,7 @@ fn animal_attendant_mana_needs_no_attendant_and_skips_humans_and_noncreatures() 
     let guard = cast_owned(&mut s, "Capital Guard");
     assert_eq!(spell_spent(&s, guard).entry_counters, 0);
     settle(&mut s);
-    let permanent = s.game().state.object_to_permanent[guard].unwrap();
+    let permanent = permanent_of(&s, guard).unwrap();
     assert_eq!(counters(&s, permanent), 0);
 
     let mut s = five_color_unfunded_setup(&["Animal Attendant", "Explosive Shot", "Craw Wurm"]);
@@ -757,12 +755,12 @@ fn animal_attendant_counter_does_not_follow_the_card_to_a_later_entry() {
     attendant_mana(&mut s, "1W", 1);
     let sheep = cast_owned(&mut s, "Koala-Sheep");
     settle(&mut s);
-    let permanent = s.game().state.object_to_permanent[sheep].unwrap();
+    let permanent = permanent_of(&s, sheep).unwrap();
     assert_eq!(counters(&s, permanent), 1);
 
-    s.game_mut().move_object(sheep, ZoneType::Graveyard);
-    s.game_mut().move_object(sheep, ZoneType::Battlefield);
-    let returned = s.game().state.object_to_permanent[sheep].unwrap();
+    let sheep = move_card(&mut s, sheep, ZoneType::Graveyard);
+    let sheep = move_card(&mut s, sheep, ZoneType::Battlefield);
+    let returned = permanent_of(&s, sheep).unwrap();
     assert_eq!(counters(&s, returned), 0);
     assert!(s.game().state.permanents[returned]
         .as_ref()
@@ -834,7 +832,7 @@ fn animal_attendant_spending_can_keep_or_use_the_rider_for_the_same_creature() {
             u8::from(!use_rider)
         );
         settle(&mut s);
-        let permanent = s.game().state.object_to_permanent[sheep].unwrap();
+        let permanent = permanent_of(&s, sheep).unwrap();
         assert_eq!(counters(&s, permanent), i32::from(use_rider));
     }
 }
@@ -881,7 +879,7 @@ fn toph_cast_receipt_includes_additional_mana_costs() {
     let card = move_to_hand(&mut s, "Toph, Greatest Earthbender");
     // A controlled cost fixture exercises the same receipt with a required
     // additional cost. Toph's printed definition is unchanged.
-    s.game_mut().state.objects[card]
+    s.game_mut().state[card]
         .additional_costs
         .push(AdditionalCost::RequiredWaterbend(ManaCost::parse("2")));
     s.game_mut().scenario_refresh_priority().unwrap();
@@ -910,14 +908,11 @@ fn animal_attendant_and_toph_countered_then_reanimated_keep_no_cast_receipt() {
         s.force_card_in_hand(1, "Counterspell");
         s.pass_priority();
         choose(&mut s, |a| matches!(a, Action::CastSpell { .. }));
-        assert!(s.choose_target(Target::StackSpell(card)));
+        assert!(s.choose_target(Target::StackSpell(now(&s, card))));
         settle(&mut s);
-        assert_eq!(
-            s.game().state.zones.zone_of(card),
-            Some(ZoneType::Graveyard)
-        );
-        s.game_mut().move_object(card, ZoneType::Battlefield);
-        let permanent = s.game().state.object_to_permanent[card].unwrap();
+        assert_eq!(zone_of(&s, card), Some(ZoneType::Graveyard));
+        let card = move_card(&mut s, card, ZoneType::Battlefield);
+        let permanent = permanent_of(&s, card).unwrap();
         assert_eq!(counters(&s, permanent), 0);
         assert!(s.game().state.permanents[permanent]
             .as_ref()

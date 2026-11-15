@@ -10,17 +10,21 @@ import pytest
 import torch
 
 from experiments.ataraxos_move import ataraxos_move_scalar
+from manabot.backends import resolve
 from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
-from manabot.model.inference import PolicyInference
 from manabot.model.world import checkpoint_world, validate_agent_setup
 from manabot.training.execution import execute_regime, validate_regime
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.training.rollout.matchups import elemental_roster
+from manabot.training.rollout.numerics import CollectionScope
 from manabot.training.state.game_errors import (
     GameAttempt,
     GameErrorLedger,
@@ -55,6 +59,7 @@ def _collector(
         matchup_curriculum="elemental-uniform",
         recovery_max_microsteps=200000 if recovery == "exact" else None,
         recovery_max_game_microsteps=200000 if recovery == "current" else None,
+        numerics=TorchCollectionSession(device="cpu", seed=17402, precision="float32"),
     )
 
 
@@ -175,6 +180,9 @@ def test_uniform_draws_agree_across_producer_counts(workers: int) -> None:
             learning_seats="both",
             matchup_curriculum="elemental-uniform",
             workers=count,
+            numerics=TorchCollectionSession(
+                device="cpu", seed=17402, precision="float32"
+            ),
         )
         for count in (1, workers)
     ]
@@ -227,8 +235,11 @@ def test_uniform_256_stream_roots_and_full_roster_admission() -> None:
                 matchup_curriculum="elemental-uniform",
                 opponent_mode=mode,
                 root=root,
+                numerics=TorchCollectionSession(
+                    device="cpu", seed=0, precision="float32"
+                ),
             )
-    native = managym.VectorEnv(num_envs=1, seed=174, opponent_policy="none")
+    native = managym.VectorEnv(num_envs=1, seed=174, player_policies=("agent", "agent"))
     with pytest.raises(RuntimeError, match="every exact Elemental"):
         native.set_uniform_roster(roster[:-1])
     with pytest.raises(RuntimeError, match="every exact Elemental"):
@@ -272,7 +283,9 @@ def test_uniform_real_cpu_update_and_checkpoint_reload(tmp_path: Path) -> None:
             workers
         )
     with VerifyStore(tmp_path / "store.sqlite") as store:
-        run = execute_regime(recipe, 17402, tmp_path / "run", store)
+        run = execute_regime(
+            recipe, 17402, tmp_path / "run", store, backend=resolve("torch")
+        )
     assert run.status == "completed"
     result = run.stages[0]
     assert result.learner_transitions == 4 * 64 * 2
@@ -323,18 +336,18 @@ def test_uniform_crash_refill_retains_sampled_setups(
         matchup_curriculum="elemental-uniform",
         game_errors=policy,
         record_attempt=lambda row: ledger.record(row, {}),
+        numerics=TorchCollectionSession(device="cpu", seed=17402, precision="float32"),
     )
     original = collector._sample_learning_rows
     calls = 0
 
     def sample(
-        agent: ActorCritic,
         rows: np.ndarray,
         acting: np.ndarray,
-        inference: PolicyInference,
+        inference: CollectionScope,
     ) -> np.ndarray:
         nonlocal calls
-        actions = original(agent, rows, acting, inference)
+        actions = original(rows, acting, inference)
         calls += 1
         if calls == 4:
             actions[0] = -1

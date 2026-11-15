@@ -8,14 +8,13 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.belief import likelihood as likelihood_module
 from manabot.belief.likelihood import FrozenPolicyLikelihood, _matching_offer_indexes
 from manabot.belief.range import BeliefState
-from manabot.model.admission import admit_observation
 import managym
 from managym.decision import SEMANTIC_DECISION_VERSION, DecisionFrame
 from managym.possible_worlds import PossibleWorld, PossibleWorldSpace
 from tests.belief.fresh_env import fresh_env
+from tests.model.prepared_routes import device_input
 
 
 def test_prepared_python_handle_preserves_scalar_parity_and_live_root() -> None:
@@ -173,25 +172,17 @@ class _FakeObservationSpace:
 
 
 class _FakeAgent:
-    def forward(
-        self, tensors: dict[str, torch.Tensor]
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        row = tensors["row"].squeeze(-1)
+    def prepare(
+        self, obs: dict[str, np.ndarray], *, inference: bool = False
+    ) -> dict[str, np.ndarray]:
+        return obs
+
+    def evaluate_probabilities(
+        self, batch: dict[str, np.ndarray]
+    ) -> tuple[np.ndarray, np.ndarray]:
+        row = torch.from_numpy(batch["row"]).squeeze(-1)
         logits = torch.stack((torch.zeros_like(row), row + 1.0), dim=-1)
-        return logits, torch.zeros_like(row)
-
-
-@pytest.fixture(autouse=True)
-def _stub_admission(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The fake agent reads a synthetic row column, not a policy input."""
-    admit = likelihood_module.admit_on_device
-
-    def fake_admission(
-        agent: object, tensors: dict[str, torch.Tensor]
-    ) -> dict[str, torch.Tensor]:
-        return tensors if isinstance(agent, _FakeAgent) else admit(agent, tensors)
-
-    monkeypatch.setattr(likelihood_module, "admit_on_device", fake_admission)
+        return torch.softmax(logits, dim=-1).numpy(), torch.zeros_like(row).numpy()
 
 
 def test_frozen_likelihood_uses_one_prepared_handle_and_releases_each_batch() -> None:
@@ -319,7 +310,7 @@ def test_real_prepared_likelihood_matches_scalar_reference(monkeypatch) -> None:
         tensors = {key: torch.from_numpy(value[None]) for key, value in encoded.items()}
         with torch.inference_mode():
             logits, _ = likelihood.agent.forward(
-                admit_observation(likelihood.agent, tensors)
+                device_input(likelihood.agent, tensors)
             )
             expected.append(float(torch.softmax(logits, dim=-1)[0, indexes].sum()))
         legal.append(count)

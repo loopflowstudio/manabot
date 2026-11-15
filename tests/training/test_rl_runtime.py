@@ -7,12 +7,14 @@ import pytest
 import torch
 
 from experiments.direct_self_play import direct_self_play
+from manabot.backends import resolve
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.training.execution import execute_regime
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.training.update_metrics import read_updates, stage_rows
 from manabot.verify.store import VerifyStore
 import managym
+from tests.model.checkpoint_fixture import read_checkpoint
 
 
 def bounded_regime() -> TrainingRegime:
@@ -50,7 +52,9 @@ def test_self_play_records_costs_and_reloads_distinct_raw_ema(
     if empty_second:
         recipe.stages[1].learning.min_advantage = 100
     with VerifyStore(tmp_path / "runs.sqlite") as store:
-        run = execute_regime(recipe, 197, tmp_path / "run", store)
+        run = execute_regime(
+            recipe, 197, tmp_path / "run", store, backend=resolve("torch")
+        )
         assert store.training_run(run.id).status == "completed"
     assert run.status == "completed"
     assert sum(stage.games for stage in run.stages) > 0
@@ -103,7 +107,7 @@ def test_self_play_records_costs_and_reloads_distinct_raw_ema(
     for averaged, raw in zip(ema1.buffers(), raw1.buffers(), strict=True):
         torch.testing.assert_close(averaged, raw, rtol=0, atol=0)
     for index, stage in enumerate(run.stages, start=1):
-        checkpoint = torch.load(stage.artifacts["ema"]["path"], weights_only=False)
+        checkpoint = read_checkpoint(stage.artifacts["ema"]["path"], weights_only=False)
         assert checkpoint["bc"]["averaging"] == {
             "clock": "collect-update-iteration",
             "iteration": index,

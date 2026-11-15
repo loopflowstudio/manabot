@@ -1,14 +1,18 @@
+import { currentGame, rememberCurrentGame } from './current-game.svelte';
+import type { PlaySession } from './play-session';
 import { browser } from '$app/environment';
 
-import { rememberRecordCredential } from './records';
-import { gameStore } from './game.svelte';
+import { sanitizeDeckSelection } from './decks';
+import { playerToken, rememberRecordCredential } from './records';
+import { policyChoice, gameStore } from './game.svelte';
 import {
   mergePresentationLabels,
   presentationLabelsFromFrame,
+  presentationLabelsFromObservation,
   validatePresentationTail,
   validatePresentationUpdate,
 } from './presentation';
-import { presentationPlayer } from './presentation.svelte';
+import { presentationPlayer, studyPresentationPlayer } from './presentation.svelte';
 import type { RestoredReplayDecision } from './replay-index';
 import type {
   BranchRetryPayload,
@@ -18,12 +22,41 @@ import type {
 import type {
   ClientMessage,
   FrameUpdate,
+  LaunchSetup,
   RecoveryEnvelope,
+  ExperienceFrame,
   ServerMessage,
 } from './types';
 
+const LAUNCH_STORAGE_KEY = 'academy.launch';
+
+function applyLaunchSetup(setup: LaunchSetup): void {
+  gameStore.searchConfig = setup.mirror ?? null;
+  const decks = sanitizeDeckSelection({ hero: setup.hero_deck, villain: setup.villain_deck });
+  if (decks) { gameStore.setHeroDeck(decks.hero); gameStore.setVillainDeck(decks.villain); }
+  gameStore.deckImport = setup.deck_import ?? null;
+  gameStore.setDecklists(setup.decklists);
+  if (setup.villain_type === 'policy' && setup.opponent_sha256) gameStore.setOpponentChoice(policyChoice(setup.opponent_sha256));
+  else if (setup.villain_type === 'search') gameStore.setOpponentChoice(`search-${setup.villain_sims ?? 64}`);
+  else if (setup.villain_type === 'random' || setup.villain_type === 'passive') gameStore.setOpponentChoice(setup.villain_type);
+}
+
 const RESUME_STORAGE_KEY = 'etude.gui.resume';
+const INTERRUPTED_STORAGE_KEY = 'academy.interrupted';
+
+interface InterruptedSnapshot {
+  launch: string | null;
+  match_id: string;
+  frame: ExperienceFrame;
+  reason: string;
+  recording_id: string | null;
+  submission: 'unknown' | null;
+  identity: typeof gameStore.interruptedIdentity;
+}
+
+type PendingCommand = Extract<SharedTableRequest, { type: 'command' }>;
 const VALID_SERVER_TYPES = new Set([
+  'work_status',
   'observation',
   'game_over',
   'command_outcome',
@@ -37,12 +70,40 @@ const VALID_SERVER_TYPES = new Set([
   'control_error',
 ]);
 
-type TableServerMessage = ServerMessage | SharedTableControlEvent;
+type TableServerMessage = (ServerMessage | SharedTableControlEvent) & Pick<ServerMessage, 'mirror_retry' | 'mirror'>;
 
 interface ResumeCredentials {
   session_id: string;
   resume_token: string;
+  play_session_id?: string;
   presentation_cursor?: number;
+  pending_command?: PendingCommand;
+  last_frame?: ExperienceFrame;
+  recording_id?: string;
+  identity?: typeof gameStore.interruptedIdentity;
+}
+
+// When storage is disabled, this page can still retain exact envelopes and
+// authority in memory. A reload loses them, as the visible warning explains.
+const volatileTabValues = new Map<string, string | null>();
+
+function tabValue(key: string): string | null {
+  if (!browser) return null;
+  if (volatileTabValues.has(key)) return volatileTabValues.get(key) ?? null;
+  try { return window.sessionStorage.getItem(key); }
+  catch { gameStore.storageWarning = 'Session storage is unavailable. Reload continuity is unavailable; this game remains usable.'; return null; }
+}
+
+function writeTabValue(key: string, value: string | null): void {
+  if (!browser) return;
+  try {
+    if (value === null) window.sessionStorage.removeItem(key);
+    else window.sessionStorage.setItem(key, value);
+    volatileTabValues.delete(key);
+  } catch {
+    volatileTabValues.set(key, value);
+    gameStore.storageWarning = 'Session storage is unavailable. Reload continuity is unavailable; this game remains usable.';
+  }
 }
 
 function loadResumeCredentials(): ResumeCredentials | null {
@@ -50,7 +111,7 @@ function loadResumeCredentials(): ResumeCredentials | null {
     return null;
   }
 
-  const raw = window.sessionStorage.getItem(RESUME_STORAGE_KEY);
+  const raw = tabValue(RESUME_STORAGE_KEY);
   if (!raw) {
     return null;
   }
@@ -70,6 +131,11 @@ function loadResumeCredentials(): ResumeCredentials | null {
     return {
       session_id: parsed.session_id,
       resume_token: parsed.resume_token,
+      ...(parsed.identity ? { identity: parsed.identity } : {}),
+      ...(typeof parsed.recording_id === 'string' ? { recording_id: parsed.recording_id } : {}),
+      ...(parsed.last_frame?.match_id && parsed.last_frame?.projection ? { last_frame: parsed.last_frame } : {}),
+      ...(validPendingCommand(parsed.pending_command) ? { pending_command: parsed.pending_command } : {}),
+      ...(typeof parsed.play_session_id === 'string' ? {play_session_id: parsed.play_session_id} : {}),
       ...(presentationCursor === undefined
         ? {}
         : { presentation_cursor: presentationCursor }),
@@ -79,11 +145,22 @@ function loadResumeCredentials(): ResumeCredentials | null {
   }
 }
 
+function validPendingCommand(value: unknown): value is PendingCommand {
+  if (!value || typeof value !== 'object') return false;
+  const request = value as Partial<PendingCommand>;
+  const command = request.command;
+  return request.type === 'command' && !!command
+    && typeof command.command_id === 'string' && typeof command.match_id === 'string'
+    && Number.isSafeInteger(command.expected_revision) && Number.isSafeInteger(command.prompt_id)
+    && Number.isSafeInteger(command.offer_id) && Array.isArray(command.answers) && command.answers.length === 0
+    && (request.grant_revision === undefined || Number.isSafeInteger(request.grant_revision));
+}
+
 function saveResumeCredentials(credentials: ResumeCredentials): void {
   if (!browser) {
     return;
   }
-  window.sessionStorage.setItem(RESUME_STORAGE_KEY, JSON.stringify(credentials));
+  writeTabValue(RESUME_STORAGE_KEY, JSON.stringify({...credentials, ...(gameStore.playSession ? {play_session_id: gameStore.playSession.id} : {})}));
   rememberRecordCredential(credentials.resume_token);
 }
 
@@ -91,7 +168,9 @@ function clearResumeCredentials(): void {
   if (!browser) {
     return;
   }
-  window.sessionStorage.removeItem(RESUME_STORAGE_KEY);
+  writeTabValue(RESUME_STORAGE_KEY, null);
+  writeTabValue('academy.continuation', null);
+  writeTabValue(LAUNCH_STORAGE_KEY, null);
 }
 
 export function parseServerMessage(raw: string): TableServerMessage | null {
@@ -113,13 +192,15 @@ export function parseServerMessage(raw: string): TableServerMessage | null {
 
 export class GameSocketController {
   private socket: WebSocket | null = null;
+  private launchId: string | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempts = 0;
   private intentionallyClosed = false;
   private pendingResume = false;
   private outboundQueue: SharedTableRequest[] = [];
-  private inFlightCommand: string | null = null;
+  private pendingCommand: PendingCommand | null = null;
   private presentationCursor: number | null = null;
+  private loadingHistory = false;
 
   connect(): void {
     if (!browser) {
@@ -129,6 +210,9 @@ export class GameSocketController {
     if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
       return;
     }
+
+    if (!this.outboundQueue.some(message => message.type === 'new_game')
+      && !window.location.hash && !loadResumeCredentials() && this.restoreInterrupted(this.launchId)) return;
 
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const url = `${protocol}://${window.location.host}/ws/play`;
@@ -157,9 +241,22 @@ export class GameSocketController {
       if (!this.outboundQueue.some((message) => message.type === 'new_game')) {
         const credentials = loadResumeCredentials();
         if (credentials) {
-          this.presentationCursor = credentials.presentation_cursor ?? null;
+          if (!gameStore.protocolFrame && credentials.last_frame) gameStore.applyFrame(credentials.last_frame);
+          gameStore.recordingId = credentials.recording_id ?? gameStore.recordingId;
+          this.pendingCommand = credentials.pending_command ?? this.pendingCommand;
+          gameStore.beginCommand();
+          this.loadingHistory = this.presentationCursor === null;
           this.pendingResume = true;
-          this.send({ type: 'resume', ...credentials });
+          // A persisted cursor outlives the in-memory history. Only request a
+          // delta while this controller still owns that history; reloads need
+          // the server's bounded tail as well as the authoritative frame.
+          this.send({
+            type: 'resume',
+            session_id: credentials.session_id,
+            resume_token: credentials.resume_token,
+            ...(credentials.play_session_id ? {play_session_id: credentials.play_session_id} : {}),
+            ...(this.presentationCursor === null ? {} : { presentation_cursor: this.presentationCursor }),
+          });
           return;
         }
       }
@@ -167,7 +264,7 @@ export class GameSocketController {
     };
 
     socket.onmessage = (event: MessageEvent<string>) => {
-      this.handleRawMessage(event.data);
+      if (this.socket === socket) this.handleRawMessage(event.data);
     };
 
     socket.onerror = () => {
@@ -175,6 +272,7 @@ export class GameSocketController {
     };
 
     socket.onclose = () => {
+      if (this.socket !== socket) return;
       this.socket = null;
       if (this.intentionallyClosed) {
         gameStore.setConnection('disconnected');
@@ -201,8 +299,40 @@ export class GameSocketController {
     gameStore.setConnection('disconnected');
   }
 
+  // Reload resumes this tab's own launched game; anything else deals the launch.
+  launch(id: string): void {
+    this.launchId = id;
+    if (this.restoreInterrupted(id)) return;
+    const session = loadResumeCredentials()?.session_id;
+    try {
+      const started = JSON.parse(tabValue(LAUNCH_STORAGE_KEY) ?? 'null') as
+        | { id: string; session_id: string; setup: LaunchSetup }
+        | null;
+      if (session && started?.id === id && started.session_id === session) {
+        applyLaunchSetup(started.setup);
+        this.connect();
+        return;
+      }
+    } catch {
+      writeTabValue(LAUNCH_STORAGE_KEY, null);
+    }
+    this.sendNewGame({ launch: id });
+  }
+
   sendNewGame(config?: Record<string, unknown>): void {
     if (gameStore.newGamePending) return;
+    writeTabValue(INTERRUPTED_STORAGE_KEY, null);
+    if (!config?.launch) {
+      this.launchId = null;
+      if (browser) {
+        writeTabValue(LAUNCH_STORAGE_KEY, null);
+        const url = new URL(window.location.href);
+        if (url.searchParams.has('launch')) {
+          url.searchParams.delete('launch');
+          window.history.replaceState(window.history.state, '', url);
+        }
+      }
+    }
     gameStore.newGamePending = true;
     gameStore.setError(null);
     const grantRevision = gameStore.table?.access.grant_revision;
@@ -213,36 +343,68 @@ export class GameSocketController {
     });
   }
 
+  sendContinuation(intent: 'rematch' | 'swap_sides' | 'change_opponent', config: Record<string, unknown> = {}): void {
+    const session = gameStore.playSession;
+    const table = gameStore.table;
+    if (!session || !table?.attempt_id || gameStore.newGamePending || gameStore.resumeFailed) return;
+    const request: SharedTableRequest = {
+      type: 'rematch', intent, config: {...config, player_token: playerToken()}, request_id: crypto.randomUUID(),
+      attempt_id: table.attempt_id, setup_revision: session.revision,
+      grant_revision: table.access.grant_revision,
+    };
+    writeTabValue('academy.continuation', JSON.stringify({table: table.table_id, request}));
+    gameStore.newGamePending = true;
+    gameStore.setError(null);
+    this.send(request);
+  }
+
   sendAction(offerId: number): boolean {
     const frame = gameStore.protocolFrame;
     const prompt = frame?.prompt;
-    if (!frame || !prompt || this.inFlightCommand !== null) {
-      return false;
-    }
+    if (!frame || !prompt) return false;
+    return this.submitCommand({
+      type: 'command',
+      command: {
+        command_id: crypto.randomUUID(), match_id: frame.match_id,
+        expected_revision: frame.revision, prompt_id: prompt.id,
+        offer_id: offerId, answers: [],
+      },
+    });
+  }
+
+  private submitCommand(request: PendingCommand): boolean {
+    if (this.pendingCommand || this.pendingResume || gameStore.resumeFailed || gameStore.work?.state === 'running') return false;
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
       gameStore.setError('Connection changed. Recovering the latest game state.');
       this.connect();
       return false;
     }
-
-    const commandId = crypto.randomUUID();
-    this.inFlightCommand = commandId;
+    if (browser && !loadResumeCredentials()) {
+      gameStore.setError('This tab has no resume authority. Recover the table before choosing again.');
+      return false;
+    }
+    if (gameStore.table) request = {...request, grant_revision: gameStore.table.access.grant_revision};
+    // Every deliberate submission must retain its exact envelope before send.
+    // Recovery resends this envelope; it never creates another choice or ID.
+    this.pendingCommand = request;
+    try { this.persistResumeState(); } catch {
+      this.pendingCommand = null;
+      gameStore.setError('Could not retain your submission in this tab. Free browser storage before trying again.');
+      return false;
+    }
     gameStore.beginCommand();
-    this.socket.send(JSON.stringify({
-      type: 'command',
-      ...(gameStore.table
-        ? { grant_revision: gameStore.table.access.grant_revision }
-        : {}),
-      command: {
-        command_id: commandId,
-        match_id: frame.match_id,
-        expected_revision: frame.revision,
-        prompt_id: prompt.id,
-        offer_id: offerId,
-        answers: [],
-      },
-    } satisfies ClientMessage));
+    this.socket.send(JSON.stringify(request));
     return true;
+  }
+
+  sendRetrySearch(): void {
+    const pending = gameStore.searchRetry;
+    if (!pending || gameStore.commandPending) return;
+    gameStore.beginCommand();
+    this.send({ type: 'retry_mirror', match_id: pending.match_id,
+      expected_revision: pending.expected_revision,
+      ...(gameStore.table ? { grant_revision: gameStore.table.access.grant_revision } : {}),
+    });
   }
 
   sendSetStops(): void {
@@ -259,6 +421,7 @@ export class GameSocketController {
   }
 
   sendPassTurn(): boolean {
+    if (this.pendingResume || gameStore.resumeFailed || this.pendingCommand) return false;
     gameStore.beginFastForward();
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
       gameStore.endFastForward();
@@ -283,18 +446,6 @@ export class GameSocketController {
       grant_revision: grantRevision,
       target_viewer_id: targetViewerId,
     });
-  }
-
-  sendAuthorBelief(scenarioId: string): void {
-    const grantRevision = gameStore.table?.access.grant_revision;
-    if (grantRevision === undefined) return;
-    this.send({ type: 'author_belief', grant_revision: grantRevision, scenario_id: scenarioId });
-  }
-
-  sendShareBelief(beliefId: string): void {
-    const grantRevision = gameStore.table?.access.grant_revision;
-    if (grantRevision === undefined) return;
-    this.send({ type: 'share_belief', grant_revision: grantRevision, belief_id: beliefId });
   }
 
   sendRestoreDecision(address: string): void {
@@ -372,14 +523,59 @@ export class GameSocketController {
       gameStore.setError('Received invalid server payload.');
       return;
     }
+    if (message.type === 'work_status') {
+      const work = message.work;
+      if (gameStore.resumeFailed || (gameStore.sessionId && message.session_id !== gameStore.sessionId)) return;
+      if (gameStore.work && work.sequence < gameStore.work.sequence) return;
+      // A failed new-game load can finish in setup scope while other viewers
+      // still show its initial match-scoped advance. End that table-wide wait
+      // without treating terminal work as a new frame or submission receipt.
+      if (work.state !== 'running') {
+        gameStore.work = work;
+        return;
+      }
+      if (work.scope === 'setup' && !gameStore.newGamePending) return;
+      if (!gameStore.newGamePending && work.match_id && work.match_id !== gameStore.protocolFrame?.match_id) return;
+      if (!gameStore.newGamePending && work.revision !== null && work.revision < (gameStore.protocolFrame?.revision ?? 0)) return;
+      if (gameStore.work?.operation_id === work.operation_id && gameStore.work.state !== 'running' && work.state === 'running') return;
+      gameStore.work = work;
+      return;
+    }
+    if ('work' in message) gameStore.work = message.work ?? null;
+    if ('mirror_retry' in message) gameStore.searchRetry = message.mirror_retry ?? null;
+    if ('mirror' in message) {
+      const search = message.mirror ?? null;
+      gameStore.activeSearchConfig = search;
+      if (!gameStore.observation || this.pendingResume || message.table?.attempt_id !== gameStore.table?.attempt_id) {
+        gameStore.searchConfig = search;
+      }
+    }
+
+    if ('play_session' in message && message.play_session) {
+      gameStore.applyPlaySession(message.play_session as PlaySession);
+    }
+
+    if ('launch_setup' in message && message.launch_setup) applyLaunchSetup(message.launch_setup);
 
     if ('table' in message && message.table) {
+      const matchChanged = message.table.table_id !== gameStore.table?.table_id || message.table.attempt_id !== gameStore.table?.attempt_id;
+      if (matchChanged && !('play_session' in message && message.play_session)) gameStore.playSession = null;
       gameStore.applyTable(message.table);
     }
 
     if (message.type === 'table_snapshot') {
+      if ('session_interrupted' in message && message.session_interrupted) {
+        this.interrupt('The previous live session is unavailable. Choose New game explicitly to play again.');
+        return;
+      }
       this.pendingResume = false;
+      gameStore.endCommand();
       this.persistControlCredentials(message);
+      if (this.pendingCommand) {
+        this.clearPendingCommand();
+        gameStore.endCommand();
+        gameStore.setError('The unresolved submission has an unknown outcome; this table has no live decision.');
+      }
       return;
     }
 
@@ -397,33 +593,57 @@ export class GameSocketController {
 
     if (message.type === 'decision_restored') {
       gameStore.restoreDecision(message.restored);
+      this.restoreStudyHistory(message.restored);
       return;
     }
 
     if (message.type === 'branch_updated') {
       if (message.phase === 'retry') {
-        gameStore.applyBranchRetry(message.payload as BranchRetryPayload);
+        const payload = message.payload as BranchRetryPayload;
+        gameStore.applyBranchRetry(payload);
+        studyPresentationPlayer.loadEvents(payload.retry.presentation, mergePresentationLabels(
+          ...(gameStore.restoredDecision ? [presentationLabelsFromFrame(gameStore.restoredDecision.frame)] : []),
+          presentationLabelsFromObservation(payload.retry.projection),
+        ), `study:${payload.attempt_id}`);
       }
       return;
     }
 
     if (message.type === 'branch_returned') {
-      gameStore.returnBranch(message.restored as RestoredReplayDecision);
+      const restored = message.restored as RestoredReplayDecision;
+      gameStore.returnBranch(restored);
+      this.restoreStudyHistory(restored);
       return;
     }
 
     if (message.type === 'control_error') {
+      writeTabValue('academy.continuation', null);
       gameStore.newGamePending = false;
       gameStore.endFastForward();
+      this.clearPendingCommand();
+      gameStore.endCommand();
       gameStore.setError(message.message);
       return;
     }
 
     if (message.type === 'observation' || message.type === 'game_over') {
+      gameStore.tableUnavailable = false;
+      if (!this.pendingResume || !currentGame.href) rememberCurrentGame('/');
+      if (this.pendingResume) {
+        try {
+          const pending = JSON.parse(tabValue('academy.continuation') ?? 'null');
+          if (pending?.table === message.table?.table_id && pending.request.attempt_id === message.table?.attempt_id) this.send(pending.request);
+          else writeTabValue('academy.continuation', null);
+        } catch { /* No durable continuation to retry. */ }
+      } else {
+        writeTabValue('academy.continuation', null);
+      }
       gameStore.newGamePending = false;
+      if ('launch' in message && message.launch && message.launch_setup) {
+        writeTabValue(LAUNCH_STORAGE_KEY, JSON.stringify({ id: message.launch, session_id: message.session_id, setup: message.launch_setup }));
+      }
       this.pendingResume = false;
-      this.inFlightCommand = null;
-      gameStore.endCommand();
+      if (!this.pendingCommand) gameStore.endCommand();
       if (message.recovery) {
         const sessionId = message.type === 'observation' ? message.session_id : undefined;
         const resumeToken = message.type === 'observation' ? message.resume_token : undefined;
@@ -434,6 +654,7 @@ export class GameSocketController {
           message.log ?? [],
           message.auto_passed ?? 0,
         );
+        this.reconcileCommand(message.recovery);
       } else if (message.type === 'observation') {
         gameStore.applyObservation(
           message.data,
@@ -459,14 +680,22 @@ export class GameSocketController {
       if (message.session_id && message.resume_token) {
         this.persistResumeState(message.session_id, message.resume_token);
       }
+      // A first/replacement recovery resets match state. Its runner metadata
+      // belongs to the recovered frame and must survive that reset.
+      if ('work' in message) gameStore.work = message.work ?? null;
+      if ('mirror_retry' in message) gameStore.searchRetry = message.mirror_retry ?? null;
       this.flushQueue();
       return;
     }
 
     if (message.type === 'command_outcome') {
-      this.inFlightCommand = null;
+      const outcomeId = message.status === 'accepted' ? message.update.receipt?.command_id
+        : message.status === 'duplicate' ? message.receipt.command_id : message.rejection.command_id;
+      if (this.pendingCommand && outcomeId !== this.pendingCommand.command.command_id) return;
+      this.clearPendingCommand();
       gameStore.endCommand();
       if (message.status === 'accepted') {
+        gameStore.submissionAccepted = true;
         this.applyUpdate(message.update);
       } else if (message.status === 'duplicate') {
         this.applyRecovery(message.recovery);
@@ -474,6 +703,7 @@ export class GameSocketController {
         if (message.recovery) {
           this.applyRecovery(message.recovery);
         }
+        gameStore.lastCommandRejection = message.rejection;
         gameStore.setError(message.rejection.message);
       }
       return;
@@ -481,18 +711,100 @@ export class GameSocketController {
 
     if (this.pendingResume) {
       this.pendingResume = false;
-      clearResumeCredentials();
-      this.outboundQueue = [];
-      presentationPlayer.clear();
-      gameStore.markResumeFailed('Previous session expired or invalid. Start a new game.');
-      this.disconnect();
+      this.interrupt('The previous live session is unavailable. Choose New game explicitly to play again.');
       return;
     }
 
+    writeTabValue('academy.continuation', null);
     gameStore.endFastForward();
     gameStore.endCommand();
     gameStore.newGamePending = false;
+    if (message.session_ended) {
+      // The server stopped this game; resuming or redealing its launch would hide why.
+      this.interrupt(message.message);
+      this.launchId = null;
+      return;
+    }
+    gameStore.work = null;
     gameStore.setError(message.message);
+  }
+
+  private interrupt(reason: string): void {
+    const credentials = loadResumeCredentials();
+    const frame = gameStore.protocolFrame ?? credentials?.last_frame;
+    const submission = this.pendingCommand || credentials?.pending_command ? 'unknown' : null;
+    if (frame) {
+      const snapshot: InterruptedSnapshot = {
+        launch: this.launchId, match_id: frame.match_id, frame, reason,
+        recording_id: gameStore.recordingId ?? credentials?.recording_id ?? null,
+        submission,
+        identity: gameStore.table?.opponent || gameStore.table?.opponent_label
+          ? {opponent: gameStore.table.opponent, opponent_label: gameStore.table.opponent_label}
+          : credentials?.identity ?? gameStore.interruptedIdentity,
+      };
+      writeTabValue(INTERRUPTED_STORAGE_KEY, JSON.stringify(snapshot));
+      gameStore.interruptedIdentity = snapshot.identity;
+      if (!gameStore.protocolFrame) gameStore.applyFrame(frame);
+    }
+    clearResumeCredentials();
+    this.pendingResume = false;
+    this.outboundQueue = [];
+    this.pendingCommand = null;
+    gameStore.markResumeFailed(reason + (submission ? ' The unresolved submission has an unknown outcome.' : ''));
+    this.disconnect();
+  }
+
+  private restoreInterrupted(launch: string | null): boolean {
+    try {
+      const snapshot = JSON.parse(tabValue(INTERRUPTED_STORAGE_KEY) ?? 'null') as InterruptedSnapshot | null;
+      if (!snapshot || snapshot.launch !== launch || snapshot.frame?.match_id !== snapshot.match_id
+        || !snapshot.frame.projection || typeof snapshot.reason !== 'string') return false;
+      gameStore.applyFrame(snapshot.frame);
+      gameStore.recordingId = snapshot.recording_id;
+      gameStore.interruptedIdentity = snapshot.identity ?? null;
+      gameStore.markResumeFailed(snapshot.reason + (snapshot.submission === 'unknown' ? ' The unresolved submission has an unknown outcome.' : ''));
+      gameStore.setConnection('disconnected');
+      return true;
+    } catch { return false; }
+  }
+
+  private clearPendingCommand(): void {
+    this.pendingCommand = null;
+    this.persistResumeState();
+  }
+
+  private reconcileCommand(recovery: RecoveryEnvelope): void {
+    const request = this.pendingCommand;
+    if (!request) return;
+    const command = request.command;
+    if (recovery.frame.match_id === command.match_id
+      && recovery.accepted_commands.some(receipt => receipt.command_id === command.command_id)) {
+      this.clearPendingCommand();
+      gameStore.endCommand();
+      return;
+    }
+    const frame = recovery.frame;
+    const sameGrant = request.grant_revision === gameStore.table?.access.grant_revision;
+    if (frame.match_id === command.match_id && frame.revision === command.expected_revision
+      && frame.prompt?.id === command.prompt_id && sameGrant
+      && gameStore.hasCapability('submit_live_command')) {
+      // No replacement ID or choice: the server deduplicates this exact envelope.
+      gameStore.beginCommand();
+      this.socket?.send(JSON.stringify(request));
+      return;
+    }
+    this.clearPendingCommand();
+    gameStore.endCommand();
+    gameStore.setError('The unresolved submission has a stale or unknown outcome. Review the recovered decision before choosing again.');
+  }
+
+  private restoreStudyHistory(restored: RestoredReplayDecision): void {
+    presentationPlayer.finishSequence();
+    studyPresentationPlayer.loadPrefix(presentationPlayer.events.flatMap((event, index) =>
+      event.to_revision <= restored.frame.revision
+        ? [{ events: [event], labels: presentationPlayer.labelsAt(index) }]
+        : [],
+    ), `study:${restored.frame.match_id}:${restored.address}`, false);
   }
 
   private applyUpdate(update: FrameUpdate): void {
@@ -510,9 +822,10 @@ export class GameSocketController {
     }
     // Canonical truth lands first. Presentation is optional theater over the
     // committed frame and cannot delay or roll back authority.
+    if (current?.match_id !== update.frame.match_id) this.presentationCursor = null;
+    presentationPlayer.setScope(`live:${update.frame.match_id}`);
     const labels = mergePresentationLabels(
-      presentationPlayer.labels,
-      ...(current ? [presentationLabelsFromFrame(current)] : []),
+      ...(current?.match_id === update.frame.match_id ? [presentationLabelsFromFrame(current)] : []),
       presentationLabelsFromFrame(update.frame),
     );
     gameStore.applyFrame({
@@ -539,7 +852,7 @@ export class GameSocketController {
       );
       this.persistResumeState();
     } catch (error) {
-      presentationPlayer.clear();
+      presentationPlayer.reject();
       this.rejectPresentation('Presentation stream rejected', error);
     }
   }
@@ -567,8 +880,9 @@ export class GameSocketController {
     }
     // Recovery always cancels any in-flight theater before resuming its
     // viewer-safe tail. The complete frame remains authoritative either way.
+    presentationPlayer.setScope(`live:${next.match_id}`);
     const presentationLabels = mergePresentationLabels(
-      ...(current ? [presentationLabelsFromFrame(current)] : []),
+      ...(current?.match_id === next.match_id ? [presentationLabelsFromFrame(current)] : []),
       presentationLabelsFromFrame(next),
     );
     gameStore.applyFrame(
@@ -588,10 +902,15 @@ export class GameSocketController {
       presentationPlayer.recover(
         recovery.presentation_tail,
         presentationLabels,
+        recovery.presentation_cursor,
       );
+      // Initial recovery loads recorded history, not live motion from before
+      // this page opened. Same-page reconnects animate only newly seen facts.
+      if (this.loadingHistory) presentationPlayer.finishSequence();
+      this.loadingHistory = false;
       this.persistResumeState(sessionId, resumeToken);
     } catch (error) {
-      presentationPlayer.clear();
+      presentationPlayer.reject();
       this.rejectPresentation('Recovery presentation rejected', error);
     }
   }
@@ -606,6 +925,10 @@ export class GameSocketController {
     saveResumeCredentials({
       session_id: resolvedSessionId,
       resume_token: resolvedResumeToken,
+      ...(this.pendingCommand ? { pending_command: this.pendingCommand } : {}),
+      ...(gameStore.protocolFrame ? { last_frame: gameStore.protocolFrame } : {}),
+      ...(gameStore.recordingId ? { recording_id: gameStore.recordingId } : {}),
+      identity: gameStore.table ? {opponent: gameStore.table.opponent, opponent_label: gameStore.table.opponent_label} : existing?.identity ?? gameStore.interruptedIdentity,
       ...(this.presentationCursor === null
         ? {}
         : { presentation_cursor: this.presentationCursor }),
@@ -661,8 +984,9 @@ export class GameSocketController {
 
 const controller = new GameSocketController();
 
-export function connect(): void {
-  controller.connect();
+export function connect(launchId?: string | null): void {
+  if (launchId) controller.launch(launchId);
+  else controller.connect();
 }
 
 export function disconnect(): void {
@@ -677,6 +1001,7 @@ export function sendAction(offerId: number): boolean {
   return controller.sendAction(offerId);
 }
 
+
 export function sendSetStops(): void {
   controller.sendSetStops();
 }
@@ -685,16 +1010,12 @@ export function sendPassTurn(): boolean {
   return controller.sendPassTurn();
 }
 
+export function sendRetrySearch(): void {
+  controller.sendRetrySearch();
+}
+
 export function sendTransferPilot(targetViewerId: string): void {
   controller.sendTransferPilot(targetViewerId);
-}
-
-export function sendAuthorBelief(scenarioId: string): void {
-  controller.sendAuthorBelief(scenarioId);
-}
-
-export function sendShareBelief(beliefId: string): void {
-  controller.sendShareBelief(beliefId);
 }
 
 export function sendRestoreDecision(address: string): void {
@@ -712,3 +1033,5 @@ export function sendReturnFromBranch(): void {
 export function sendReturnToLive(): void {
   controller.sendReturnToLive();
 }
+
+export function sendContinuation(intent: 'rematch' | 'swap_sides' | 'change_opponent', config: Record<string, unknown> = {}): void { controller.sendContinuation(intent, config); }

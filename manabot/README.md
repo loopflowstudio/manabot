@@ -17,6 +17,7 @@ uv run manabot train --recipe baseline  # ordinary self-play + evaluation
 uv run manabot train --regime-name batched_baseline --out .runs/batched/run  # batched GPU baseline
 uv run manabot train --learning-seats one  # explicit one-seat control
 uv run manabot sim --preset sim --set sim.hero=random --set sim.villain=default
+uv run manabot export-game runs/jace/games --game 0 --out jace.game.jsonl.gz  # one recorded training game, for Academy
 uv run manabot belief-demo        # engine-derived belief/intervention proof
 uv run manabot belief-learn-demo  # held-out frozen-population belief proof
 ```
@@ -133,7 +134,7 @@ from pathlib import Path
 from manabot.infra.identity import file_sha256
 from manabot.sim.search.flat_mc import make_player
 
-checkpoint = Path(".runs/policy.pt")  # Your existing compatible checkpoint.
+checkpoint = Path(".runs/policy.safetensors")  # Your existing compatible checkpoint.
 player, observation_space = make_player(
     {
         "kind": "local_update",
@@ -151,6 +152,15 @@ starts viewer history and advances it after each transition. The checkpoint
 must match the match's world, use observation-only inputs, and supply either a
 categorical win/draw/loss value or a scalar declared as `signed_outcome`.
 Search requires open decklists.
+
+Academy can compose the baseline provider with its own framework-free
+[Search](../docs/academy.md#search) in `managym.search`, in Play and either
+Watch seat. Academy starts with one world at depth one and a 30-second
+ceiling; its controls accept larger explicit budgets. Other providers with
+compatible probabilities, signed values and isolated current-view forks can use
+it too. Qwen v1 remains search-disabled. Arena's samplers, receipts and
+numerical update stay here, unchanged; Academy Search carries an equal copy of
+the update, and a test holds the two to identical results.
 
 At each decision, search samples 16 worlds and rolls out every root action with
 positive base-policy probability in each world, for up to 20 policy choices
@@ -336,7 +346,8 @@ challenger workflow records the native world identity and current rules,
 content, Lesson-pool and tensor identities with each run. Historical Learn
 certification limits remain in the [Learn record](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/learn-lesson.md).
 
-`manabot sim` accepts `random`, `default`, a local policy `.pt` path, or an
+`manabot sim` accepts `random`, `default`, a local policy file (`.safetensors`,
+or a `.pt` saved by an earlier revision), or an
 Etude checkpoint-record `.json` path for each player. Checkpoint records resolve
 exact digest-bound local/S3 artifacts before normal world and architecture
 admission. Simulation results are recorded locally through Etude.
@@ -399,6 +410,37 @@ its recipes and anything only it needs to run and report; `manabot/` keeps
 the reusable instruments. The experiment discipline and ledger are in
 [experiments/README.md](../experiments/README.md).
 
+### Watch a game the loop played
+
+```python
+from pathlib import Path
+
+from manabot.sim.recording import record_games
+from manabot.training.loops.minimal import train
+
+with record_games(Path("runs/jace/games"), players=("jace", "jace")) as games:
+    train(8)
+path = games.sample(seed=0).export(Path("jace.game.jsonl.gz"))
+```
+
+```bash
+uv run --no-project managym academy replay jace.game.jsonl.gz
+```
+
+`record_games` keeps a receipt of every game the collectors inside the block
+play (seed, decks, chosen actions) without changing the loop. `sample` picks
+one complete game; `export` replays its actions through the engine, checks
+each decision's option count against the receipt and writes one Command game
+bound to the current world, labelled a training game with the player names you
+gave. Academy steps through it with no policy or checkpoint. `uv run manabot
+export-game <directory> --out <path>` lists a recorded directory's games and exports one,
+including a `training/exposure` directory downloaded from a run. Games cut off
+when the loop stopped are counted and not exported. A fresh game between
+current policies is an evaluation game, not a training game; evaluation writes
+those. The
+[Academy guide](../docs/academy.md#watch-a-game-from-your-training-loop) covers
+selection, naming the seats and failures.
+
 The reference league's TrainingJob enables private exposure capture through the
 ordinary native vector collector. Digest-bound game receipts preserve actual
 sampled decks, seed/action replay inputs, per-seat nontrivial options and choices,
@@ -414,16 +456,16 @@ in Git history. Their archived inputs and receipts are indexed in
 [repository archive](../docs/development.md#retained-evidence-and-archived-corpora). Shared target inspection
 now belongs to `sim/action/targeting.py`.
 
-`heuristic` (`manabot/sim/heuristic.py`) is a
-separately versioned candidate anchor of rules of thumb: highest-mana-value casts,
-removal held for a kill, counters held for an opponent's spell, effect polarity
-derived from the semantic card source, attacks unless a blocker kills and
-survives, and value blocks. Prompts without a rule match `scripted_greedy`, which
-stays frozen with its registered source identity. Select it for checkpoint monitoring
-with `MonitorProtocol(opponent="heuristic")`. One exploratory check (MTG-152,
-GPU seed 12261 at 25k, 200 paired games per anchor) scored the checkpoint
-0.57 against `heuristic` and 0.795 against `scripted_greedy`, lower in every
-cell; it is not yet a frozen anchor comparison.
+Select `MonitorProtocol(opponent="heuristic")` for checkpoint monitoring, or
+`VectorEnv(..., player_policies=("agent", "heuristic"))` for a native batched opponent.
+The scalar `HeuristicPlayer` adapter and arena anchor call the same engine
+implementation. `heuristic` is a separately versioned anchor with rules of thumb
+for mana, timing, targets, card choices and combat; see
+[selection, rules and information limits](../docs/engine.md#built-in-heuristic).
+Historical results keep the heuristic version they evaluated. One exploratory
+check (MTG-152, GPU seed 12261 at 25k, 200 paired games per anchor) scored the
+checkpoint 0.57 against `heuristic` and 0.795 against `scripted_greedy`, lower
+in every cell; it is not yet a frozen anchor comparison.
 
 For versioned S1–S5 tactical diagnostics through ordinary checkpoint players,
 see [checkpoint scenario scoring](../docs/evaluation.md#checkpoint-scenarios). Each retained
@@ -453,10 +495,11 @@ their gradients, including duplicate memberships. An unused continuation module
 keeps absent gradients so Adam does not update its momentum spuriously.
 
 The input version is explicit in saved observation and configuration
-identities, and main loads only v9; see
+identities. Main defaults to v11 and loads deprecated v9/v10 checkpoints
+until 0.4.0; see
 [policy inputs](../docs/observation-and-model.md#policy-inputs) for the layout
 and the saved-checkpoint and world admission requirements. Text representation
-`manabot-text-6` renders each native payload once with exact public source and
+`manabot-text-7` renders each native payload once with exact public source and
 member labels and timestamp ranks. Its within-observation token reducer is not
 persistent game memory.
 
@@ -633,20 +676,25 @@ training, experiment scheduling or reports, even when loading a frozen model.
 The package-boundary tests import every simulation module and play a checkpoint
 with those packages blocked.
 
-- `policy/`: the framework-free policy contract: host preparation, bucket
-  selection, the safetensors checkpoint container and the backend Protocols.
+- `policy/`: the framework-free policy contract: observation admission, bucket
+  trimming, host preparation of the `Prepared` batch every backend's forward
+  reads, the safetensors checkpoint container and the backend Protocols.
   It imports no array framework ([policy contract](policy/README.md)).
-- `backends/<framework>/`: one folder per array framework with the same files
+- `backends/<framework>/`: one folder per array framework with the same core files
   (`policy.py`, `rl.py`, `learner.py`, `rollout.py`, `arrays.py`,
   `checkpoint.py`);
+  Optional collection, belief, state and diagnostic capabilities live beside
+  those files and load on access.
   `backends/torch/` is the reference and `backends/parity.py` checks the others
   against it ([backends](backends/README.md)).
   `backends.torch.checkpoint.save_checkpoint` and `load_checkpoint` own policy
-  files: `save_checkpoint` writes a `.pt` file, whose serialized historical
-  keys remain unchanged, and `load_checkpoint` reads either that or the shared
-  container.
-- `model/`: the torch model's components, observation admission and
-  inference preparation, architecture receipts and world binding.
+  files: `save_checkpoint` writes the shared container (`.safetensors`), and
+  `load_checkpoint` reads that or a `.pt` file saved by an earlier revision,
+  whose serialized keys keep their meaning.
+  Library code receives a backend and never imports one; experiments,
+  scripts, recipe entry points and the CLI choose it
+  ([who chooses a backend](backends/README.md#who-chooses-a-backend)).
+- `model/`: architecture receipts, the checkpoint catalog and world binding.
 - `sim/`: registered players, bounded game execution, replay, native card evidence,
   search and batched games.
 - `training/`: regime execution, seat-routed collection, learning rules,
@@ -658,8 +706,8 @@ with those packages blocked.
 - `training/updates/`: an update learns from one collected batch. The damped
   policy update (`damped_policy.py`, the default), the PPO control (`ppo.py`)
   and their host-side pieces: numerical health and selection diagnostics.
-  Each takes a backend module as its first argument and does its array math
-  through it; recipes pass `manabot.backends.torch`
+  Each takes a backend object or module as its first argument and does its array math
+  through it; recipe entry points select and pass a backend
   ([training loops](../docs/training-loop.md#the-updates-we-maintain)).
 - `training/loops/`: a loop keeps playing and updating until it is done; a
   one-page example (`minimal.py`).
@@ -710,7 +758,7 @@ coordinates. See [shared evaluation inference](../docs/evaluation.md) for
 admission, real Perf receipts and the predeclared local calibration command.
 
 A quick local checkpoint comparison needs no TrainingRun or cloud setup:
-`uv run python -m manabot.eval.local --checkpoint policy.pt --opponent heuristic --deal-seed 101 --out .runs/local-check --seconds 300`.
+`uv run python -m manabot.eval.local --checkpoint policy.safetensors --opponent heuristic --deal-seed 101 --out .runs/local-check --seconds 300`.
 The [local evaluation API and CLI](../docs/evaluation.md)
 share arena admission, bounded inference, Commands, replay and Perf receipts with
 monitoring and managed comparisons. Pass another local checkpoint as `--opponent`

@@ -1,7 +1,13 @@
 // Implements the `testing-house-v1` wire schema (frozen identifier).
 import type { RestoredReplayDecision } from './replay-index';
-import type { AdviceRequestIdentity } from './advice';
 import type { Command, Observation, PresentationEvent } from './types';
+
+interface AdviceRequestIdentity {
+  source_replay_id: string;
+  match_id: string;
+  advisor_id: string;
+  compute_id: string;
+}
 
 export const SHARED_TABLE_VERSION = 'testing-house-v1' as const;
 
@@ -13,6 +19,7 @@ export const SHARED_TABLE_REQUEST_TYPES = [
   'command',
   'action',
   'pass_turn',
+  'retry_mirror',
   'set_stops',
   'transfer_pilot',
   'author_belief',
@@ -40,7 +47,7 @@ export type TableCapability =
 export interface ViewerIdentity {
   viewer_id: string;
   table_id: string;
-  rules_viewer: 0;
+  rules_viewer: 0 | 1;
 }
 
 export interface ViewerAccess {
@@ -90,7 +97,7 @@ export interface TableSnapshot {
   beliefs: BeliefScenario[];
   decisions: TableDecisionSummary[];
   opponent_label: string | null;
-  opponent?: { bot_id?: string | null; name: string; producer: string; sha256: string } | null;
+  opponent?: { bot_id?: string | null; name: string; producer: string; sha256: string; base_sha256?: string | null } | null;
   attempt_id?: string | null;
   watcher_invite: string | null;
 }
@@ -108,15 +115,17 @@ export type SharedTableRequest =
     }
   | {
       type: 'resume';
+      play_session_id?: string;
       session_id: string;
       resume_token: string;
       presentation_cursor?: number | null;
     }
   | ({ type: 'new_game'; grant_revision?: number | null; config?: Record<string, unknown> })
-  | (GrantedRequest & { type: 'rematch'; config?: Record<string, unknown> })
+  | (GrantedRequest & { type: 'rematch'; request_id: string; attempt_id: string; setup_revision: number; intent: 'rematch' | 'swap_sides' | 'change_opponent'; config?: Record<string, unknown> })
   | ({ type: 'command'; grant_revision?: number | null; command: Command })
   | ({ type: 'action'; grant_revision?: number | null; index: number })
   | ({ type: 'pass_turn'; grant_revision?: number | null })
+  | ({ type: 'retry_mirror'; grant_revision?: number | null; match_id: string; expected_revision: number })
   | ({
       type: 'set_stops';
       grant_revision?: number | null;

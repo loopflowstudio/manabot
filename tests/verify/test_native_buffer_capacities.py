@@ -79,6 +79,7 @@ def test_retained_airship_growth_preserves_every_permanent(capacity: int) -> Non
     evidence = read_failure(
         Path(__file__).parents[1] / "fixtures/tla-pilot-permanent-capacity.jsonl"
     )
+    assert evidence.opponent_policy == "none"
     (game,) = evidence.games
     assert game.stream == 43 and game.seed == 32624 and len(game.actions) == 371
     players = [player.native() for player in game.players]
@@ -88,7 +89,7 @@ def test_retained_airship_growth_preserves_every_permanent(capacity: int) -> Non
         seed=game.seed,
         seed_stride=evidence.seed_stride,
         skip_trivial=evidence.skip_trivial,
-        opponent_policy=evidence.opponent_policy,
+        player_policies=("agent", "agent"),
     )
     encoder = ObservationEncoder(
         ObservationConfig(
@@ -137,6 +138,7 @@ def test_retained_airship_overflow_isolates_only_its_stream(workers: int) -> Non
     evidence = read_failure(
         Path(__file__).parents[1] / "fixtures/tla-pilot-permanent-capacity.jsonl"
     )
+    assert evidence.opponent_policy == "none"
     (game,) = evidence.games
     encoder = ObservationEncoder(
         ObservationConfig(
@@ -249,6 +251,7 @@ def test_repaired_retained_prefix_has_scalar_vector_python_parity(
     evidence = read_failure(
         Path(__file__).parents[1] / "fixtures/tla-pilot-action-capacity.jsonl"
     )
+    assert evidence.opponent_policy == "none"
     (game,) = evidence.games
     assert game.stream == 103 and len(game.actions) == 76
     players = [player.native() for player in game.players]
@@ -258,7 +261,7 @@ def test_repaired_retained_prefix_has_scalar_vector_python_parity(
         seed=game.seed,
         seed_stride=evidence.seed_stride,
         skip_trivial=evidence.skip_trivial,
-        opponent_policy=evidence.opponent_policy,
+        player_policies=("agent", "agent"),
     )
     scalar.reset(players)
     vector.reset_all(players)
@@ -514,9 +517,8 @@ def test_first_64_legal_actions_preserve_membership_mapping_and_masks() -> None:
     }
     _, after, *_ = scalar.step_semantic_command(json.dumps(command))
     assert any(
-        card.id in selected.focus
-        and int(card.zone) == int(managym.ZoneEnum.BATTLEFIELD)
-        for card in after.agent_cards + after.opponent_cards
+        permanent.object_id in selected.focus
+        for permanent in after.agent_permanents + after.opponent_permanents
     )
 
 

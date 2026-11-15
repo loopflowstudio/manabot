@@ -21,12 +21,11 @@ import random
 from typing import Literal
 
 import numpy as np
-import torch
 
-from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.model.admission import admit_observation
+from manabot.policy.protocol import BackendPolicy
+from manabot.training.state.backend import TrainingBackend
 import managym
 
 _BASICS = ("Plains", "Island", "Swamp", "Mountain", "Forest")
@@ -90,13 +89,17 @@ def _player(name: str, spells: list[str]) -> managym.PlayerConfig:
 
 
 def coverage_sweep(
-    games: int, seed: int = 0, *, decks: Literal["world", "elemental"] = "world"
+    games: int,
+    seed: int = 0,
+    *,
+    backend: TrainingBackend,
+    decks: Literal["world", "elemental"] = "world",
 ) -> CoverageReport:
     """Play `games` seeded random games and embed every decision through a
     catalog policy; raises `ValueError` naming the game on an unknown id."""
-    torch.manual_seed(seed)
+    backend.seed(seed)
     space = ObservationSpace(ObservationConfig(policy_input_version=10))
-    model = ActorCritic(
+    model = backend.runtime.create_policy(
         space,
         ModelConfig(hidden_dim=8, num_attention_heads=2, world=managym.WORLD_SETUP),
     ).eval()
@@ -167,16 +170,15 @@ def coverage_sweep(
 
 
 def _embed(
-    model: ActorCritic,
+    model: BackendPolicy,
     rows: list[dict[str, np.ndarray]],
     game: int,
     first: list[str],
     second: list[str],
 ) -> None:
-    batch = {key: torch.from_numpy(np.stack([r[key] for r in rows])) for key in rows[0]}
+    batch = {key: np.stack([r[key] for r in rows]) for key in rows[0]}
     try:
-        with torch.no_grad():
-            model(admit_observation(model, batch))
+        model.evaluate(model.prepare(batch, inference=True))
     except ValueError as error:
         raise ValueError(
             f"game {game} (decks {first} / {second}) emitted an id outside the "
@@ -185,13 +187,16 @@ def _embed(
 
 
 def main() -> None:
+    from manabot.backends import resolve
+
+    backend = resolve("torch")
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--games", type=int, default=200)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--decks", choices=("world", "elemental"), default="world")
     args = parser.parse_args()
-    torch.set_num_threads(1)
-    report = coverage_sweep(args.games, args.seed, decks=args.decks)
+    backend.runtime.configure(1, "float32", "cpu")
+    report = coverage_sweep(args.games, args.seed, decks=args.decks, backend=backend)
     print(
         f"{report.games} games, {report.decisions} decisions "
         f"({report.fact_rows} fact rows, {report.effect_rows} effect rows; "

@@ -9,7 +9,7 @@ use managym::{
     state::{
         card::Keywords,
         effect::Modification,
-        game_object::{ObjectId, PermanentId, PlayerId},
+        game_object::{Object, ObjectId, PermanentId, PlayerId},
         permanent::{CounterKind, Permanent},
         stack_object::StackObject,
         target::Target,
@@ -68,11 +68,11 @@ impl Scenario {
             .zone_objects(ZoneType::Battlefield, PlayerId(player))
             .iter()
             .filter_map(|object_id| {
-                let object = &self.game.state.objects[*object_id];
+                let object = &self.game.state[*object_id];
                 if object.name != card_name {
                     return None;
                 }
-                self.game.state.object_to_permanent[*object_id]
+                self.game.state.permanent_of(*object_id)
             })
             .collect()
     }
@@ -136,30 +136,24 @@ impl Scenario {
 
 /// The first copy owned by `player` in any zone, in card-id order.
 pub fn owned_card(s: &Scenario, player: usize, name: &str) -> ObjectId {
-    let Some(index) = s
-        .game()
+    s.game()
         .state
-        .objects
-        .iter()
-        .position(|object| object.owner == PlayerId(player) && object.name == name)
-    else {
-        panic!("card {name} not found for player {player}");
-    };
-    ObjectId(index)
+        .latest_objects()
+        .find(|(_, object)| object.owner == PlayerId(player) && object.name == name)
+        .unwrap_or_else(|| panic!("card {name} not found for player {player}"))
+        .0
 }
 
 /// The first library copy owned by `player`, in card-id order.
 pub fn library_card(s: &Scenario, player: usize, name: &str) -> ObjectId {
     s.game()
         .state
-        .objects
-        .iter()
-        .enumerate()
+        .latest_objects()
         .find_map(|(i, c)| {
             (c.name == name
                 && c.owner == PlayerId(player)
-                && s.game().state.zones.zone_of(ObjectId(i)) == Some(ZoneType::Library))
-            .then_some(ObjectId(i))
+                && s.game().state.zones.zone_of(i) == Some(ZoneType::Library))
+            .then_some(i)
         })
         .unwrap_or_else(|| panic!("no {name}"))
 }
@@ -168,17 +162,15 @@ pub fn library_card(s: &Scenario, player: usize, name: &str) -> ObjectId {
 pub fn find_owned_card(s: &Scenario, player: usize, card_name: &str) -> ObjectId {
     s.game()
         .state
-        .objects
-        .iter()
-        .enumerate()
+        .latest_objects()
         .find_map(|(index, object)| {
             (object.owner == PlayerId(player)
                 && object.name == card_name
                 && matches!(
-                    s.game().state.zones.zone_of(ObjectId(index)),
+                    s.game().state.zones.zone_of(index),
                     Some(ZoneType::Hand) | Some(ZoneType::Library)
                 ))
-            .then_some(ObjectId(index))
+            .then_some(index)
         })
         .unwrap_or_else(|| panic!("card {card_name} not found for player {player}"))
 }
@@ -186,11 +178,11 @@ pub fn find_owned_card(s: &Scenario, player: usize, card_name: &str) -> ObjectId
 /// The first copy owned by `player` in any zone but the battlefield.
 pub fn find_owned_card_off_battlefield(s: &Scenario, player: usize, name: &str) -> ObjectId {
     let game = s.game();
-    for (index, object) in game.state.objects.iter().enumerate() {
+    for (index, object) in game.state.latest_objects() {
         if object.owner != PlayerId(player) || object.name != name {
             continue;
         }
-        let object_id = ObjectId(index);
+        let object_id = index;
         if game.state.zones.zone_of(object_id) != Some(ZoneType::Battlefield) {
             return object_id;
         }
@@ -227,7 +219,7 @@ pub fn stack_spell_card(s: &Scenario, name: &str) -> ObjectId {
         .stack_objects
         .iter()
         .find_map(|object| match object {
-            StackObject::Spell(spell) if s.game().state.objects[spell.object].name == name => {
+            StackObject::Spell(spell) if s.game().state[spell.object].name == name => {
                 Some(spell.object)
             }
             _ => None,
@@ -290,7 +282,9 @@ pub fn has_action(s: &Scenario, predicate: impl Fn(&Action) -> bool) -> bool {
     s.action_space().actions.iter().any(predicate)
 }
 
+/// Whether the card behind `id` is offered as a spell to cast.
 pub fn can_cast(s: &Scenario, id: ObjectId) -> bool {
+    let id = now(s, id);
     s.action_space()
         .actions
         .iter()
@@ -307,6 +301,7 @@ pub fn can_activate(s: &Scenario, source: PermanentId) -> bool {
 /// Whether an ability of `source` that functions from its hand or graveyard
 /// is offered.
 pub fn can_activate_card(s: &Scenario, source: ObjectId) -> bool {
+    let source = now(s, source);
     s.action_space()
         .actions
         .iter()
@@ -335,8 +330,33 @@ pub fn offered_cards(s: &Scenario) -> Vec<ObjectId> {
         .collect()
 }
 
+/// The object the card behind `object` is now. A zone change makes a new
+/// object (CR 400.7), so a test that follows one card across zones asks
+/// again here; a token or copy has no card and stays the object it was.
+pub fn now(s: &Scenario, object: ObjectId) -> ObjectId {
+    let state = &s.game().state;
+    state
+        .card_id(object)
+        .map_or(object, |card| state.object_of(card))
+}
+
+/// Read the current appearance of the card behind `object`. Tokens and
+/// copies keep their exact identity and must still be present.
+pub fn current_object(s: &Scenario, object: ObjectId) -> &Object {
+    s.game()
+        .state
+        .object(now(s, object))
+        .expect("scenario object must be present")
+}
+
+/// The zone holding the card behind `object`, wherever it has moved since.
 pub fn zone_of(s: &Scenario, object: ObjectId) -> Option<ZoneType> {
-    s.game().state.zones.zone_of(object)
+    s.game().state.zones.zone_of(now(s, object))
+}
+
+/// The permanent the card behind `object` is now, if it is on the battlefield.
+pub fn permanent_of(s: &Scenario, object: ObjectId) -> Option<PermanentId> {
+    s.game().state.permanent_of(now(s, object))
 }
 
 /// Exercise every offered atomic continuation through the real Command
@@ -373,4 +393,13 @@ pub fn assert_choice_contract(s: &Scenario) {
         }
     }
     assert_eq!(witness(s.game()), root);
+}
+
+/// An allocator-produced appearance that has never belonged to this game.
+pub fn missing_object(s: &Scenario) -> ObjectId {
+    let mut zones = managym::state::zone::ZoneManager::default();
+    for _ in 0..s.game().state.objects.len() {
+        zones.allocate();
+    }
+    zones.allocate()
 }

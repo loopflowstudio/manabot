@@ -7,6 +7,7 @@ import socket
 import pytest
 import torch
 
+from manabot.backends import resolve
 from manabot.eval.monitor import MonitorProtocol
 from manabot.experiment.config import Baseline, Experiment
 from manabot.experiment.evaluation_queue import CheckpointQueue, MonitoringBudget
@@ -38,7 +39,9 @@ def test_safe_pause_restores_current_games_and_exact_learning(
     stage.updates = 12
     pause = tmp_path / "pause.request"
     with VerifyStore(tmp_path / "training.sqlite") as store:
-        whole = execution.execute_regime(value, 197, tmp_path / "whole", store)
+        whole = execution.execute_regime(
+            value, 197, tmp_path / "whole", store, backend=resolve("torch")
+        )
         export = execution.export_training_run
 
         def request_pause(
@@ -58,21 +61,34 @@ def test_safe_pause_restores_current_games_and_exact_learning(
             patch.setattr(execution, "watchdog_seconds", lambda: 1e20)
             with pytest.raises(TrainingPaused):
                 execution.execute_regime(
-                    value, 197, tmp_path / "paused", store, pause_path=pause
+                    value,
+                    197,
+                    tmp_path / "paused",
+                    store,
+                    pause_path=pause,
+                    backend=resolve("torch"),
                 )
         stopped = TrainingRun.model_validate_json(
             (tmp_path / "paused/run.json").read_text()
         )
         assert stopped.status == "interrupted" and stopped.updates_through() == 3
-        assert load_update(stopped).iteration == 3
+        assert load_update(stopped, backend=resolve("torch").state).iteration == 3
         pause.unlink()
         child = execution.execute_regime(
-            value, 197, tmp_path / "resumed", store, resume_from=stopped.id
+            value,
+            197,
+            tmp_path / "resumed",
+            store,
+            resume_from=stopped.id,
+            backend=resolve("torch"),
         )
         assert child.status == "completed" and child.updates_through() == 12
         assert child.prior_seconds == stopped.seconds
         assert child.prior_watchdog_seconds == stopped.watchdog_seconds
-        a, b = load_update(whole), load_update(child)
+        a, b = (
+            load_update(whole, backend=resolve("torch").state),
+            load_update(child, backend=resolve("torch").state),
+        )
         for name in (
             "learner",
             "optimizer",
@@ -190,12 +206,14 @@ def test_shared_experiment_pauses_and_resumes_without_resetting_allocation(
 
     with monkeypatch.context() as patch:
         patch.setattr(CheckpointQueue, "tick", request_pause)
-        paused = run_experiment(experiment, placement, root)
+        paused = run_experiment(experiment, placement, root, backend=resolve("torch"))
     assert paused.paused and paused.status == "incomplete"
     assert paused.attempts[0].status == "interrupted"
     parent = Path(paused.attempts[0].path) / "run.json"
     before = parent.read_bytes()
-    resumed = run_experiment(experiment, placement, root, resume=True, recover=(0,))
+    resumed = run_experiment(
+        experiment, placement, root, resume=True, recover=(0,), backend=resolve("torch")
+    )
     assert resumed.status == "completed" and not resumed.paused
     assert len(resumed.attempts) == 2
     assert parent.read_bytes() == before

@@ -1,5 +1,6 @@
 //! Tests for cards filed in `src/ulg.rs`, in card order.
 
+use crate::support::inspect::permanent_of;
 use crate::support::{
     game::five_color_setup,
     inspect::tapped,
@@ -14,7 +15,7 @@ use managym::{
 fn treetop_village_enters_tapped_and_becomes_a_3_3_green_ape_until_end_of_turn() {
     let mut s = five_color_setup(&["Treetop Village"]);
     let object = enter_and_settle(&mut s, "Treetop Village");
-    let village = s.game().state.object_to_permanent[object].unwrap();
+    let village = permanent_of(&s, object).unwrap();
     assert!(tapped(&s, village));
     activate(&mut s, village, 0);
     settle(&mut s);

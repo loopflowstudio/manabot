@@ -16,13 +16,7 @@ import uuid
 
 import numpy as np
 import psutil
-import torch
 
-import manabot.backends.torch as torch_backend
-from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
-from manabot.backends.torch.learner import Learner, apply_matmul_precision, update_ema
-from manabot.backends.torch.policy import ActorCritic
-from manabot.backends.torch.rl import NumericalError
 from manabot.belief.checkpoint import load_belief_sampler
 from manabot.belief.sampling_data import (
     collect_frozen_policy,
@@ -43,8 +37,8 @@ from manabot.infra.runtime import RunContext
 from manabot.infra.source import source_commit
 from manabot.model.architecture import architecture_identity
 from manabot.model.world import validate_agent_setup
+from manabot.policy.protocol import BackendPolicy
 from manabot.reports.selection import analyze_selection, write_selection_report
-from manabot.training.mps import mps_torch_error
 from manabot.training.records import (
     MonitoringCheckpoint,
     NumericalFailure,
@@ -71,6 +65,7 @@ from manabot.training.rollout.selection_data import (
     replay_selection_game,
 )
 from manabot.training.state.admission import admit_policy
+from manabot.training.state.backend import TrainingBackend
 from manabot.training.state.game_errors import (
     GameAttempt,
     GameErrorLedger,
@@ -78,7 +73,7 @@ from manabot.training.state.game_errors import (
     GameErrorState,
 )
 from manabot.training.state.incidents import save_incident
-from manabot.training.state.learning_state import admit_learning_state, validate_adam
+from manabot.training.state.learning_state import admit_learning_state
 from manabot.training.state.recovery import (
     TrainingPaused,
     UpdateSnapshot,
@@ -119,30 +114,6 @@ def _phase_timings(profiler: Profiler, root: str) -> dict[str, PhaseTiming]:
         )
         for path, stats in profiler.get_stats().items()
         if path.startswith(f"{root}/")
-    }
-
-
-def cuda_peak_metrics(device: str) -> dict[str, int]:
-    """This process's CUDA high-water marks so far; absent off CUDA.
-
-    Reserved bytes include the allocator's cache, so they are what a card must
-    hold; allocated bytes are what the tensors themselves needed.
-    """
-    if device != "cuda":
-        return {}
-    return {
-        "memory/peak_allocated_cuda_bytes": torch.cuda.max_memory_allocated(),
-        "memory/peak_reserved_cuda_bytes": torch.cuda.max_memory_reserved(),
-    }
-
-
-def mps_memory_metrics(device: str) -> dict[str, int]:
-    """Current MPS tensor/driver bytes, not peaks or additive memory totals."""
-    if device != "mps":
-        return {}
-    return {
-        "memory/allocated_mps_bytes": torch.mps.current_allocated_memory(),
-        "memory/driver_allocated_mps_bytes": torch.mps.driver_allocated_memory(),
     }
 
 
@@ -233,7 +204,7 @@ def _checkpoint_setups(regime: TrainingRegime) -> list[managym.PlayerConfig] | N
 
 
 def _runtime_identities(
-    seed: int, regime: TrainingRegime, space: ObservationSpace
+    seed: int, regime: TrainingRegime, space: ObservationSpace, backend: TrainingBackend
 ) -> dict[str, object]:
     identities = runtime_fingerprints(
         seed, match_config=regime.root_match, observation_space=space
@@ -254,27 +225,12 @@ def _runtime_identities(
         training_source_sha256=source_bundle_sha256(
             sorted(Path(__file__).resolve().parents[1].rglob("*.py"))
         ),
-        torch=torch.__version__,
         policy_numerics="masked-log-softmax-v1",
         source_commit=source_commit(),
     )
-    if any(stage.execution.device == "cuda" for stage in regime.stages):
-        if not torch.cuda.is_available():
-            raise ValueError(
-                "CUDA requested but unavailable; CPU fallback is forbidden"
-            )
-        gpu = torch.cuda.get_device_properties(0)
-        identities["cuda"] = {
-            "device": gpu.name,
-            "memory_bytes": gpu.total_memory,
-            "capability": list(torch.cuda.get_device_capability(0)),
-            "runtime": torch.version.cuda,
-        }
-    if any(stage.execution.device == "mps" for stage in regime.stages):
-        if not torch.backends.mps.is_available():
-            raise ValueError("MPS requested but unavailable; CPU fallback is forbidden")
-        if (error := mps_torch_error()) is not None:
-            raise ValueError(error)
+    identities.update(
+        backend.runtime.identities([stage.execution.device for stage in regime.stages])
+    )
     return identities
 
 
@@ -284,6 +240,7 @@ def execute_regime(
     out: str | Path,
     store: "VerifyStore",
     *,
+    backend: TrainingBackend,
     resume_from: str | None = None,
     source_repair_reason: str | None = None,
     checkpoint_seconds: float | None = None,
@@ -307,6 +264,7 @@ def execute_regime(
     experiment named for the stage when it is None.
     """
     regime = validate_regime(regime)
+    backend.runtime.require_execution()
     game_error_recovery = any(
         isinstance(stage, TrainSelfPlay) and stage.game_errors is not None
         for stage in regime.stages
@@ -386,10 +344,12 @@ def execute_regime(
                 parent.monitoring_checkpoint_milestones,
             ):
                 raise ValueError("recovery checkpoint cadence differs from parent")
-            snapshot = load_update(parent)
+            snapshot = load_update(parent, backend=backend.state)
             admit_recovery_identities(
                 parent.identities,
-                _runtime_identities(seed, regime, ObservationSpace(regime.observation)),
+                _runtime_identities(
+                    seed, regime, ObservationSpace(regime.observation), backend
+                ),
                 source_repair_reason,
             )
             # Game-error recovery cannot renew its original allowance, and nothing
@@ -420,6 +380,7 @@ def execute_regime(
             seed,
             destination,
             store,
+            backend=backend,
             parent=parent,
             snapshot=snapshot,
             source_repair_reason=source_repair_reason,
@@ -441,6 +402,7 @@ def _execute_regime(
     out: str | Path,
     store: "VerifyStore",
     *,
+    backend: TrainingBackend,
     parent: TrainingRun | None,
     snapshot: UpdateSnapshot | None,
     source_repair_reason: str | None = None,
@@ -551,7 +513,7 @@ def _execute_regime(
         store.claim_training_recovery(parent.id, run)
     self_play_session = None
     resources = ExitStack()
-    resources.callback(apply_matmul_precision, "float32")
+    resources.callback(backend.learner.apply_matmul_precision, "float32")
     producers = resources.enter_context(ExitStack())
     game_index = 0
     last_monitor_seconds = 0.0
@@ -642,7 +604,7 @@ def _execute_regime(
         }
 
     def monitor_checkpoint(
-        model: ActorCritic, experiment: RunContext | None = None
+        model: BackendPolicy, experiment: RunContext | None = None
     ) -> None:
         nonlocal last_monitor_seconds
         active_endpoint = (
@@ -691,9 +653,9 @@ def _execute_regime(
         )
         run.monitoring_checkpoints.append(receipt)
         tick = time.perf_counter()
-        target = out / f"monitor-{receipt.ordinal:08d}.pt"
+        target = out / f"monitor-{receipt.ordinal:08d}.safetensors"
         try:
-            save_checkpoint(
+            backend.save_policy(
                 model,
                 space,
                 target.with_suffix(".tmp"),
@@ -709,12 +671,8 @@ def _execute_regime(
             os.replace(target.with_suffix(".tmp"), target)
             # Admission constructs a fresh model. Its initialization must not
             # consume the learner's action-sampling RNG stream.
-            export_device = next(model.parameters()).device.type
-            with torch.random.fork_rng(
-                devices=[0] if export_device in {"cuda", "mps"} else [],
-                device_type="mps" if export_device == "mps" else "cuda",
-            ):
-                load_checkpoint(str(target))
+            with backend.runtime.preserve_policy_rng(model):
+                backend.load_policy(str(target))
             receipt.artifact = artifact(target)
             if experiment is not None:
                 experiment.checkpoint(
@@ -729,7 +687,7 @@ def _execute_regime(
 
     try:
         space = ObservationSpace(regime.observation)
-        identities = _runtime_identities(seed, regime, space)
+        identities = _runtime_identities(seed, regime, space, backend)
         run.identities = identities
         run.host = host_facts()
         if snapshot is not None:
@@ -815,28 +773,18 @@ def _execute_regime(
             )
             incident_learner = None
             batch = None
-            torch.set_num_threads(stage.execution.threads)
-            apply_matmul_precision(stage.execution.resolved_precision)
-            cuda = stage.execution.device == "cuda"
-            mps = stage.execution.device == "mps"
-            if cuda and not torch.cuda.is_available():
-                raise ValueError(
-                    "CUDA requested but unavailable; CPU fallback is forbidden"
-                )
-            if mps and not torch.backends.mps.is_available():
-                raise ValueError(
-                    "MPS requested but unavailable; CPU fallback is forbidden"
-                )
+            backend.runtime.configure(
+                stage.execution.threads,
+                stage.execution.resolved_precision,
+                stage.execution.device,
+            )
 
             def synchronize() -> None:
-                if cuda:
-                    torch.cuda.synchronize()
-                elif mps:
-                    torch.mps.synchronize()
+                backend.runtime.synchronize(stage.execution.device)
 
             synchronize()
             if not restoring_completed:
-                record.actual_threads = torch.get_num_threads()
+                record.actual_threads = backend.runtime.threads()
 
             last_memory_sample = float("-inf")
 
@@ -901,7 +849,7 @@ def _execute_regime(
                     "checkpoint": dict(stage.checkpoint),
                 }
                 persist()
-                admitted = admit_policy(stage, regime, out)
+                admitted = admit_policy(stage, regime, out, backend=backend)
                 record.artifacts[stage.weights] = admitted.checkpoint
                 record.artifacts["source_run"] = admitted.source_run
                 record.producer_cost = admitted.producer_cost
@@ -927,7 +875,7 @@ def _execute_regime(
                 persist()
                 if file_sha256(frozen["path"]) != frozen["sha256"]:
                     raise ValueError("selection policy artifact changed")
-                agent, policy_space = load_checkpoint(frozen["path"])
+                agent, policy_space = backend.load_policy(frozen["path"])
                 if (
                     agent.config != regime.agent
                     or policy_space.encoder.config != regime.observation
@@ -954,6 +902,9 @@ def _execute_regime(
                         spec,
                         target,
                         reference=stage.learning.reference,
+                        predictor=backend.collection.SelectionPredictor(
+                            agent, spec.action_seed
+                        ),
                         max_steps=stage.max_steps,
                         check=check,
                     )
@@ -1002,6 +953,7 @@ def _execute_regime(
                 source = next(item for item in run.stages if item.id == stage.policy)
                 policy_artifact = source.artifacts[stage.weights]
                 dataset = collect_frozen_policy(
+                    backend=backend,
                     checkpoint=Path(policy_artifact["path"]),
                     match_config=regime.root_match,
                     games=stage.games,
@@ -1034,13 +986,16 @@ def _execute_regime(
                     evaluation_samples=stage.evaluation_samples,
                     seed=seeds["belief_initialization"],
                     check=check,
+                    backend=backend.belief_fit,
                 )
                 record.learning_seconds = time.perf_counter() - tick
                 record.optimizer_exposures = result.optimizer_exposures
                 record.diagnostics = [asdict(result.metrics)]
                 tick = time.perf_counter()
                 target = out / f"{stage.id}-sampler.pt"
-                checkpoint_identity = save_belief_sampler(target, result, dataset)
+                checkpoint_identity = save_belief_sampler(
+                    target, result, dataset, codec=backend.belief_fit
+                )
                 candidate = artifact(target)
                 try:
                     load_belief_sampler(
@@ -1050,6 +1005,7 @@ def _execute_regime(
                         expected_schema_identity=dataset.schema.identity,
                         expected_world_identity=dataset.world_identity,
                         expected_checkpoint_identity=checkpoint_identity,
+                        codec=backend.belief,
                     )
                 except Exception:
                     record.rejected_artifacts["sampler"] = candidate
@@ -1069,7 +1025,7 @@ def _execute_regime(
                     )
                     persist()
                     tick = time.perf_counter()
-                    imported = admit_learning_state(stage, regime, out)
+                    imported = admit_learning_state(stage, regime, out, backend=backend)
                     if imported.seed != seed:
                         raise ValueError(
                             "learning-state continuation must retain training seed"
@@ -1096,19 +1052,19 @@ def _execute_regime(
                     persist()
                     tick = time.perf_counter()
                     admitted = admit_policy(
-                        stage.pretrained, regime, out, name=f"{stage.id}-pretrained"
+                        stage.pretrained,
+                        regime,
+                        out,
+                        name=f"{stage.id}-pretrained",
+                        backend=backend,
                     )
                     record.artifacts["pretrained"] = admitted.checkpoint
                     record.artifacts["pretrained_run"] = admitted.source_run
                     record.producer_cost = admitted.producer_cost
                     # Fork RNG so loading never shifts this run's own streams.
-                    with torch.random.fork_rng(devices=[]):
-                        pretrained, _ = load_checkpoint(admitted.checkpoint["path"])
-                    if any(
-                        not torch.isfinite(value).all()
-                        for value in pretrained.state_dict().values()
-                    ):
-                        raise ValueError("pretrained policy contains nonfinite tensors")
+                    with backend.state.preserve_rng():
+                        pretrained, _ = backend.load_policy(admitted.checkpoint["path"])
+                    backend.state.validate_policy(pretrained, label="pretrained")
                     record.export_seconds += time.perf_counter() - tick
                     persist()
                 opponent_agent = None
@@ -1120,7 +1076,7 @@ def _execute_regime(
                         raise ValueError("frozen opponent checkpoint digest differs")
                     record.inputs["frozen_opponent"] = artifact(opponent_path)
                     if not stage.initial or snapshot is not None:
-                        opponent_agent, opponent_space = load_checkpoint(
+                        opponent_agent, opponent_space = backend.load_policy(
                             str(opponent_path),
                             bucketed_shapes=stage.execution.resolved_bucketed_shapes,
                             live_tokens=stage.execution.resolved_live_tokens,
@@ -1134,13 +1090,13 @@ def _execute_regime(
                             raise ValueError(
                                 "frozen collector does not supply belief inputs"
                             )
-                        opponent_agent.requires_grad_(False)
+                        backend.runtime.freeze(opponent_agent)
                 if stage.initial and snapshot is None:
                     # Validation permits only the latest live collector to continue.
                     learner, ema, iteration = self_play_session
                 else:
-                    torch.manual_seed(seeds["initialization"])
-                    agent = ActorCritic(
+                    backend.seed(seeds["initialization"])
+                    agent = backend.runtime.create_policy(
                         space,
                         regime.agent,
                         bucketed_shapes=stage.execution.resolved_bucketed_shapes,
@@ -1163,9 +1119,7 @@ def _execute_regime(
                             raise ValueError(
                                 "retained initialization checkpoint differs"
                             )
-                        payload = torch.load(
-                            copied, map_location="cpu", weights_only=False
-                        )
+                        payload = backend.metadata(copied)
                         if not isinstance(payload, dict):
                             raise ValueError(
                                 "initial weights require a checkpoint mapping"
@@ -1179,8 +1133,8 @@ def _execute_regime(
                             raise ValueError(
                                 "initial weights require a retained update-zero initialization"
                             )
-                        with torch.random.fork_rng(devices=[]):
-                            initialization, initial_space = load_checkpoint(copied)
+                        with backend.state.preserve_rng():
+                            initialization, initial_space = backend.load_policy(copied)
                         if (
                             initialization.config != regime.agent
                             or initial_space.encoder.config != space.encoder.config
@@ -1191,22 +1145,28 @@ def _execute_regime(
                         validate_agent_setup(
                             initialization, Match(regime.match).to_rust()
                         )
-                        agent.load_state_dict(initialization.state_dict())
+                        backend.state.restore_policy(
+                            agent, backend.state.policy_state(initialization)
+                        )
                         record.inputs["initial_weights"] = dict(reference)
                         record.artifacts["initialization_source"] = artifact(copied)
                     if imported is not None:
-                        agent.load_state_dict(imported.raw.state_dict())
+                        backend.state.restore_policy(
+                            agent, backend.state.policy_state(imported.raw)
+                        )
                     if pretrained is not None:
                         # Only weights are inherited: Adam, the EMA average and
                         # the schedule iteration below all start fresh.
-                        agent.load_state_dict(pretrained.state_dict())
+                        backend.state.restore_policy(
+                            agent, backend.state.policy_state(pretrained)
+                        )
                         pretrained = None
                     if snapshot is None:
                         phase = "export_seconds"
                         tick = time.perf_counter()
-                        target = out / f"{stage.id}-initial-raw.pt"
+                        target = out / f"{stage.id}-initial-raw.safetensors"
                         temporary = target.with_suffix(".tmp")
-                        save_checkpoint(
+                        backend.save_policy(
                             agent,
                             space,
                             temporary,
@@ -1223,14 +1183,10 @@ def _execute_regime(
                         # New self-play monitoring must preserve initialization and
                         # action-sampling streams compared with monitoring disabled.
                         if stage.opponent is None:
-                            export_device = next(agent.parameters()).device.type
-                            with torch.random.fork_rng(
-                                devices=[0] if export_device in {"cuda", "mps"} else [],
-                                device_type="mps" if export_device == "mps" else "cuda",
-                            ):
-                                load_checkpoint(str(target))
+                            with backend.runtime.preserve_policy_rng(agent):
+                                backend.load_policy(str(target))
                         else:
-                            load_checkpoint(str(target))
+                            backend.load_policy(str(target))
                         record.artifacts["initial_raw"] = artifact(target)
                         record.export_seconds += time.perf_counter() - tick
                         persist()
@@ -1285,10 +1241,13 @@ def _execute_regime(
                         root=stage.root,
                         matchup_curriculum=stage.matchup_curriculum,
                         deck_source=regime.deck_source,
-                        device=stage.execution.device,
                         workers=stage.execution.workers,
                         adaptive=stage.adaptive,
-                        precision=stage.execution.resolved_precision,
+                        numerics=backend.collection.CollectionSession(
+                            device=stage.execution.device,
+                            seed=seeds["collection"],
+                            precision=stage.execution.resolved_precision,
+                        ),
                     )
                     producers.callback(collector.close)
                     experiment = RunContext(
@@ -1306,17 +1265,12 @@ def _execute_regime(
                         run=run.id,
                         # A recovery attempt continues its parent's metrics.
                         resume=Path(run.metrics_run) if run.metrics_run else None,
-                        resumed_at={
-                            clock: float(coordinates()[clock])
-                            for clock in ("updates", "learner_transitions")
-                        }
-                        if run.metrics_run
-                        else None,
                         resolved_config={
                             "regime": regime.model_dump(mode="json"),
                             "run_id": run.id,
                             "identities": run.identities,
                         },
+                        backend=backend,
                     )
                     run.metrics_run = str(experiment.run.files.root)
                     resources.callback(
@@ -1341,25 +1295,31 @@ def _execute_regime(
                             transitions=int(point["learner_transitions"]),
                         )
                         record.export_seconds += time.perf_counter() - tick
-                    learner = Learner(
+                    learner = backend.learner.Learner(
                         agent,
                         experiment.device,
                         minibatch_rows=stage.streams,
                         precision=stage.execution.resolved_precision,
                     )
-                    ema = deepcopy(agent) if stage.learning.ema is not None else None
+                    ema = (
+                        backend.state.clone_policy(agent)
+                        if stage.learning.ema is not None
+                        else None
+                    )
                     iteration = 0
                     if imported is not None:
                         # A raw-only import declared a fresh Adam.
                         if imported.optimizer is not None:
-                            learner.optimizer.load_state_dict(imported.optimizer)
-                            validate_adam(learner.optimizer)
+                            backend.state.restore_optimizer(learner, imported.optimizer)
+                            backend.state.validate_optimizer(learner)
                         assert ema is not None
-                        ema.load_state_dict(imported.ema.state_dict())
+                        backend.state.restore_policy(
+                            ema, backend.state.policy_state(imported.ema)
+                        )
                         iteration = imported.origin.iteration
                         imported = None
                 if not restoring_completed:
-                    record.actual_device = str(next(learner.agent.parameters()).device)
+                    record.actual_device = backend.runtime.policy_device(learner.agent)
                 # Phase timers are always on: each ends at an existing device
                 # wait, so they add no synchronization (~1 µs per phase).
                 collector.profiler = Profiler()
@@ -1372,7 +1332,9 @@ def _execute_regime(
                     tick = time.perf_counter()
                     try:
                         collector.restore(snapshot.collector, check)
-                        restore_learning(snapshot, learner, ema, rng)
+                        restore_learning(
+                            snapshot, learner, ema, rng, backend=backend.state
+                        )
                     finally:
                         run.recovery_seconds += time.perf_counter() - tick
                     iteration = snapshot.iteration
@@ -1412,6 +1374,7 @@ def _execute_regime(
                         record,
                         run,
                         before,
+                        backend=backend.state,
                     )
                     run.recovery_artifact = artifact(target)
                     record.export_seconds += time.perf_counter() - tick
@@ -1468,7 +1431,7 @@ def _execute_regime(
                                     }
                                 elif isinstance(stage.learning, DampedPolicyLearning):
                                     diagnostic = update_damped_iteration(
-                                        torch_backend,
+                                        backend,
                                         learner,
                                         batch,
                                         stage.learning,
@@ -1477,7 +1440,7 @@ def _execute_regime(
                                     )
                                 else:
                                     diagnostic = update_iteration(
-                                        torch_backend,
+                                        backend,
                                         learner,
                                         batch,
                                         stage.learning,
@@ -1516,7 +1479,7 @@ def _execute_regime(
                                 diagnostic["iteration"] = iteration
                                 if ema is not None:
                                     with learner.profiler.track("EMA update"):
-                                        update_ema(
+                                        backend.learner.update_ema(
                                             ema, learner.agent, stage.learning.ema
                                         )
                             finally:
@@ -1548,8 +1511,8 @@ def _execute_regime(
                     experiment.log_update(
                         metric_row(diagnostic)
                         | time_since(timed, spent)
-                        | cuda_peak_metrics(stage.execution.device)
-                        | mps_memory_metrics(stage.execution.device),
+                        | backend.runtime.cuda_peak_metrics(stage.execution.device)
+                        | backend.runtime.mps_memory_metrics(stage.execution.device),
                         updates=int(diagnostic["coordinates"]["updates"]),
                         transitions=int(
                             diagnostic["coordinates"]["learner_transitions"]
@@ -1614,16 +1577,16 @@ def _execute_regime(
                     )
                 self_play_session = (learner, ema, iteration)
                 agent = learner.agent
-                optimizer_state = learner.optimizer.state_dict()
+                optimizer_state = backend.state.optimizer_state(learner)
             if isinstance(stage, TrainSelfPlay):
                 tick = time.perf_counter()
                 variants = {"raw": agent}
                 if ema is not None:
                     variants["ema"] = ema
                 for name, model in variants.items():
-                    target = out / f"{stage.id}-{name}.pt"
+                    target = out / f"{stage.id}-{name}.safetensors"
                     temporary = target.with_suffix(".tmp")
-                    save_checkpoint(
+                    backend.save_policy(
                         model,
                         space,
                         temporary,
@@ -1646,7 +1609,7 @@ def _execute_regime(
                     os.replace(temporary, target)
                     candidate = artifact(target)
                     try:
-                        load_checkpoint(str(target))
+                        backend.load_policy(str(target))
                     except Exception:
                         record.rejected_artifacts[name] = candidate
                         raise
@@ -1659,10 +1622,8 @@ def _execute_regime(
                             transitions=int(coordinates()["learner_transitions"]),
                         )
                 optimizer_path = out / f"{stage.id}-optimizer.pt"
-                torch.save(
-                    optimizer_state,
-                    optimizer_path.with_suffix(".tmp"),
-                )
+                with optimizer_path.with_suffix(".tmp").open("wb") as output:
+                    backend.state.save(optimizer_state, output)
                 os.replace(optimizer_path.with_suffix(".tmp"), optimizer_path)
                 record.artifacts["optimizer"] = artifact(optimizer_path)
                 record.export_seconds += time.perf_counter() - tick
@@ -1738,7 +1699,10 @@ def _execute_regime(
             # Unmeasured setup, persistence and waits are never active training.
             # Self-play operation timers settle in finally, including failed work.
             record.diagnostic_seconds += unaccounted
-            if isinstance(error, NumericalError) and incident_learner is not None:
+            if (
+                isinstance(error, backend.rl.NumericalError)
+                and incident_learner is not None
+            ):
                 record.numerical_failure = NumericalFailure(
                     invariant=error.invariant,
                     iteration=iteration + 1,
@@ -1762,6 +1726,7 @@ def _execute_regime(
                         iteration + 1,
                         ema,
                         rng,
+                        backend=backend.state,
                     )
                     for path in paths:
                         record.rejected_artifacts[f"numerical/{path.name}"] = artifact(

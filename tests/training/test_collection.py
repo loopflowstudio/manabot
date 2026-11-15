@@ -4,17 +4,20 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
-from manabot.model.admission import admit_observation
 from manabot.training.rollout.collection import (
     RolloutBatch,
     SeatRoutedCollector,
     _ObservationRows,
 )
 from manabot.verify.games import INTERACTIVE_DECK
+from tests.model.prepared_routes import device_input
 
 
 def _make_collector(
@@ -45,6 +48,7 @@ def _make_collector(
         batch_closure="exact-quota",
         opponent_agent=opponent_agent,
         recovery_max_game_microsteps=recovery_max_game_microsteps,
+        numerics=TorchCollectionSession(device="cpu", seed=seed, precision="float32"),
     )
 
 
@@ -175,7 +179,7 @@ def test_collection_logs_and_bootstrap_survive_weight_change() -> None:
         for k, v in rows.observation.items()
     }
     with torch.no_grad():
-        logits, values = agent(admit_observation(agent, flat))
+        logits, values = agent(device_input(agent, flat))
     np.testing.assert_allclose(
         second.values.flatten(), values.numpy().flatten(), atol=1e-5
     )

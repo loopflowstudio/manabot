@@ -42,7 +42,7 @@ import random
 from typing import Literal
 
 from etude.launch.records import Job
-from etude.run.storage import Storage, storage_from_uri
+from etude.storage import Storage, storage_from_uri
 
 from experiments.elemental_grid import DECKS, Game, schedule
 from manabot.experiment.job import LearnerContinuation, StagedExport, TrainingJob
@@ -69,8 +69,8 @@ CADENCE = 50
 # A parent export directory holds the stage's files under these names.
 _PARENT_FILES = {
     "source_run": "run.json",
-    "raw": f"{STAGE}-raw.pt",
-    "ema": f"{STAGE}-ema.pt",
+    "raw": f"{STAGE}-raw.safetensors",
+    "ema": f"{STAGE}-ema.safetensors",
     "optimizer": f"{STAGE}-optimizer.pt",
 }
 

@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 
 import numpy as np
 from pydantic import Field
-import torch
 
 from manabot.config.load import deep_merge
 from manabot.env.env import Env
-from manabot.env.observation import ActionEnum
+from manabot.env.observation import ActionEnum, ObservationBuffers
 from manabot.infra.config import (
     BaseConfig,
     MatchConfig,
@@ -19,11 +17,8 @@ from manabot.infra.config import (
     ObservationConfig,
     RewardConfig,
 )
-from manabot.model.admission import AdmittedObservation
-from manabot.model.inference import admit_on_device
-
-if TYPE_CHECKING:
-    from manabot.backends.torch.policy import ActorCritic
+from manabot.policy.prepare import Prepared
+from manabot.policy.protocol import BackendPolicy
 
 
 class VerificationConfig(BaseConfig):
@@ -46,27 +41,22 @@ def build_verification_config(**overrides: object) -> VerificationConfig:
     return VerificationConfig.model_validate(merged)
 
 
-def _tensor_observation(
-    agent: ActorCritic, obs: dict[str, np.ndarray]
-) -> AdmittedObservation:
-    """One encoded decision, admitted for `agent` on its device."""
-    return admit_on_device(
-        agent,
-        {
-            key: torch.as_tensor(value, dtype=torch.float32).unsqueeze(0)
-            for key, value in obs.items()
-        },
+def prepare_observation(
+    agent: BackendPolicy, obs: ObservationBuffers
+) -> Prepared[np.ndarray]:
+    """One encoded decision, admitted once with the inference input layout."""
+    return agent.prepare(
+        {key: np.asarray(value, dtype=np.float32)[None] for key, value in obs.items()},
+        inference=True,
     )
 
 
-def _select_agent_action(
-    agent: ActorCritic, obs: dict[str, np.ndarray], deterministic: bool
+def select_agent_action(
+    agent: BackendPolicy, obs: ObservationBuffers, deterministic: bool
 ) -> int:
-    action, _, _, _ = agent.get_action_and_value(
-        _tensor_observation(agent, obs),
-        deterministic=deterministic,
+    return int(
+        agent.sample(prepare_observation(agent, obs), deterministic=deterministic)[0]
     )
-    return int(action.item())
 
 
 def _pass_priority_fallback(env: Env) -> int | None:

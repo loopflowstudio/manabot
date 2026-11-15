@@ -13,10 +13,16 @@ from manabot.eval.admission import register_anchor, register_checkpoint
 from manabot.eval.evaluation import evaluate
 from manabot.eval.execution import bind_execution, resolve_execution
 from manabot.eval.models import EvaluationKey
-from manabot.eval.monitor import MonitorProtocol, MonitorResult, _request, _summarize
+from manabot.eval.monitor import (
+    MonitorProtocol,
+    MonitorResult,
+    evaluation_request,
+    summarize,
+)
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
 from manabot.infra.provenance import authored_matchup_sha256, source_bundle_sha256
+from manabot.policy.protocol import Backend
 from manabot.sim import players
 from manabot.sim.execution import EvalExecution
 from manabot.sim.matchup import SELECTED_SUITE, selected_match
@@ -89,6 +95,7 @@ def checkpoint_manifest(
     coordinates: TrainingCoordinates,
     protocol: MonitorProtocol,
     *,
+    backend: Backend,
     execution: EvalExecution | None = None,
 ) -> MonitorResult:
     """Admit exact checkpoint bytes and runtime identities before playing games."""
@@ -102,6 +109,7 @@ def checkpoint_manifest(
         raise ValueError("monitoring requires its exact declared authored setup")
     admission = register_checkpoint(
         path,
+        backend=backend,
         match=run.regime.root_match,
         content_suite=suite,
         player_id="monitor-checkpoint",
@@ -181,6 +189,7 @@ def evaluate_checkpoint(
     *,
     protocol: MonitorProtocol | None = None,
     concurrent_activity: str = "unknown; host load is not contention attribution",
+    backend: Backend,
     execution: EvalExecution | None = None,
     inference: InferenceRuntime | None = None,
 ) -> MonitorResult:
@@ -198,6 +207,7 @@ def evaluate_checkpoint(
             artifact,
             coordinates,
             protocol,
+            backend=backend,
             execution=execution,
         )
     except Exception as exc:
@@ -228,7 +238,7 @@ def evaluate_checkpoint(
             directory = output_dir / f"deal-{block:03d}"
             # The arena persists command traces after every attempted game.
             panel = evaluate(
-                _request(result, tuple(seeds)),
+                evaluation_request(result, tuple(seeds)),
                 out_dir=directory,
                 execution=execution,
                 inference=inference,
@@ -256,7 +266,7 @@ def evaluate_checkpoint(
         result.coordinator_rss_after_bytes = process.memory_info().rss
         result.host_load_after = os.getloadavg()
         try:
-            _summarize(result)
+            summarize(result)
         except ValueError as error:
             result.error = f"{type(error).__name__}: {error}"
             result.status = "incomplete"

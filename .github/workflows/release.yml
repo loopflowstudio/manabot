@@ -26,6 +26,9 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+env:
+  ACADEMY_CARD_ART: "off"
+
 jobs:
   preflight:
     runs-on: ubuntu-latest
@@ -172,13 +175,17 @@ jobs:
         shell: bash
         run: |
           export PATH="$RUNNER_TEMP/no-rust:$PATH"
-          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --only-binary :all: --torch-backend cpu dist/managym-*.whl dist/manabot-*.whl 'torch==2.15.0' 'etude-sdk==0.3.2'
+          # Prepare the pure Python Git SDK before the binary-only engine check.
+          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" 'etude-sdk @ git+https://github.com/loopflowstudio/etude@d60236d015a4b2a01055b2c861856f06bb1852a2'
+          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --only-binary :all: --torch-backend cpu dist/managym-*.whl dist/manabot-*.whl 'torch==2.15.0'
           uv pip check --python "$RUNNER_TEMP/release-venv/bin/python"
+          cp scripts/release/academy_replay_smoke.py "$RUNNER_TEMP/academy_replay_smoke.py"
           cp scripts/release/smoke.py "$RUNNER_TEMP/smoke.py"
           cd "$RUNNER_TEMP"
           export PATH="$RUNNER_TEMP/release-venv/bin:$PATH"
           unset PYTHONPATH
           uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" smoke.py
+          uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" academy_replay_smoke.py
       - name: Verify optional API and report dependencies
         shell: bash
         run: |
@@ -191,10 +198,10 @@ jobs:
           uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" python -m manabot.sim.replay --help
           uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" python -m manabot.experiment.monitor_worker --help
           uv pip check --python "$RUNNER_TEMP/release-venv/bin/python"
-      - name: Exercise latest compatible Torch and Etude in the consumer environment
+      - name: Exercise latest compatible Torch with the pinned Etude client
         shell: bash
         run: |
-          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --upgrade --torch-backend cpu 'torch>=2.15.0' 'etude-sdk[eval,s3]>=0.3.2'
+          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --upgrade --torch-backend cpu 'torch>=2.15.0' 'etude-sdk[eval,s3] @ git+https://github.com/loopflowstudio/etude@d60236d015a4b2a01055b2c861856f06bb1852a2'
           uv pip check --python "$RUNNER_TEMP/release-venv/bin/python"
           cd "$RUNNER_TEMP"
           rm -rf release-smoke

@@ -10,6 +10,7 @@ import httpx
 import pytest
 import torch
 
+from manabot.backends import resolve
 from manabot.backends.torch.checkpoint import save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
@@ -316,7 +317,12 @@ def test_hosted_game_replays_and_accounts_for_every_attempt(tmp_path: Path) -> N
     with OpenRouterSession(
         OpenRouterConfig(model_id="test/model"), transport=httpx.MockTransport(handler)
     ) as session:
-        summary = play(GameConfig(max_decisions=8), tmp_path / "game", session)
+        summary = play(
+            GameConfig(max_decisions=8),
+            tmp_path / "game",
+            session,
+            backend=resolve("torch"),
+        )
     assert summary.replay_matches and summary.decisions == 8
     assert summary.model_decisions > 0
     assert summary.reported_cost_usd == pytest.approx(0.001 * summary.model_decisions)
@@ -345,8 +351,12 @@ def test_preloaded_campaign_opponent_keeps_timing_and_model_seat_control(
             managym.PlayerConfig(str(seat), config.deck) for seat in (0, 1)
         ],
     )
-    opponent = CheckpointOpponent(path, file_sha256(path), path.stat().st_size)
-    summary = play(config, tmp_path / "game", None, opponent=opponent)
+    opponent = CheckpointOpponent(
+        path, file_sha256(path), path.stat().st_size, backend=resolve("torch")
+    )
+    summary = play(
+        config, tmp_path / "game", None, opponent=opponent, backend=resolve("torch")
+    )
     assert summary.replay_matches and summary.decisions == 8
     assert summary.mode == "random-v-checkpoint-control"
     assert summary.opponent_sha256 == file_sha256(path)
@@ -375,12 +385,12 @@ def test_checkpoint_opponent_records_its_inputs_and_replays(
             managym.PlayerConfig(str(seat), config.deck) for seat in (0, 1)
         ],
     )
-    summary = play(config, tmp_path / "game", None)
+    summary = play(config, tmp_path / "game", None, backend=resolve("torch"))
     assert summary.replay_matches and summary.decisions == 8
     assert summary.mode == "random-v-checkpoint-control"
     assert summary.origins["checkpoint-opponent"] > 0
     identity = json.loads((tmp_path / "game/opponent.json").read_text())
-    assert identity["policy_input_version"] == 9
+    assert identity["policy_input_version"] == 11
     assert identity["policy_history_version"] == 0
     assert identity["sha256"]
 
@@ -399,7 +409,10 @@ def test_game_stops_before_next_hosted_decision_at_spend_threshold(
         OpenRouterConfig(model_id="test/model"), transport=httpx.MockTransport(handler)
     ) as session:
         summary = play(
-            GameConfig(max_reported_cost_usd=0.0005), tmp_path / "game", session
+            GameConfig(max_reported_cost_usd=0.0005),
+            tmp_path / "game",
+            session,
+            backend=resolve("torch"),
         )
     assert calls == 1
     assert summary.failure == "RuntimeError: reported spend threshold reached"
@@ -420,7 +433,12 @@ def test_game_stops_on_missing_cost_before_another_request(tmp_path: Path) -> No
     with OpenRouterSession(
         OpenRouterConfig(model_id="test/model"), transport=httpx.MockTransport(handler)
     ) as session:
-        summary = play(GameConfig(max_reported_cost_usd=2), tmp_path / "game", session)
+        summary = play(
+            GameConfig(max_reported_cost_usd=2),
+            tmp_path / "game",
+            session,
+            backend=resolve("torch"),
+        )
     assert calls == 1 and summary.unpriced_attempts == 1
     assert "missing costs" in summary.failure
     assert summary.replay_matches
@@ -428,7 +446,12 @@ def test_game_stops_on_missing_cost_before_another_request(tmp_path: Path) -> No
 
 def test_checkpoint_admission_failure_retains_a_summary(tmp_path: Path) -> None:
     out = tmp_path / "game"
-    summary = play(GameConfig(opponent_checkpoint=tmp_path / "missing.pt"), out, None)
+    summary = play(
+        GameConfig(opponent_checkpoint=tmp_path / "missing.pt"),
+        out,
+        None,
+        backend=resolve("torch"),
+    )
     assert not summary.completed and summary.decisions == 0
     assert "FileNotFoundError" in summary.failure
     assert summary.final_digest is None
@@ -562,7 +585,12 @@ def test_decisions_native_game_usage_and_replay(tmp_path: Path) -> None:
     with OpenRouterSession(
         typed_config(), transport=httpx.MockTransport(handler)
     ) as session:
-        summary = play(GameConfig(max_decisions=8), tmp_path / "game", session)
+        summary = play(
+            GameConfig(max_decisions=8),
+            tmp_path / "game",
+            session,
+            backend=resolve("torch"),
+        )
     assert summary.replay_matches and summary.decisions == 8
     assert summary.mode == "openrouter-decisions-v-random"
     assert summary.prompt_tokens == 400 * summary.model_decisions

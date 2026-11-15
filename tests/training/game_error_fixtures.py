@@ -19,6 +19,7 @@ import time
 from typing import Any
 
 from manabot.infra.config import MatchConfig
+from manabot.policy.protocol import Backend
 from manabot.sim import native_game
 from manabot.sim.registration import PlayerRegistration
 import managym
@@ -69,11 +70,8 @@ class PaymentMismatchEnv:
             and offer["verb"] == "cast"
         ):
             raw = self.native.observation_for_player(frame["actor"])
-            mountains = {
-                card.registry_key for card in raw.agent_cards if card.name == "Mountain"
-            }
             red = sum(raw.agent.mana) + sum(
-                not permanent.tapped and permanent.registry_key in mountains
+                not permanent.tapped and permanent.characteristics.name == "Mountain"
                 for permanent in raw.agent_permanents
             )
             assert _repaired_payment(red), (
@@ -126,7 +124,19 @@ def _lost_payment_worker(
                 time.sleep(60)
             os._exit(7)
 
-    native_game.execute_game(game, registrations, checkpoint_paths, max_commands, send)
+    def backend_factory() -> Backend:
+        from manabot.backends.torch.checkpoint import BACKEND
+
+        return BACKEND
+
+    native_game.execute_game(
+        game,
+        registrations,
+        checkpoint_paths,
+        max_commands,
+        send,
+        backend_factory=backend_factory,
+    )
 
 
 def _bounded_fixture_replay(

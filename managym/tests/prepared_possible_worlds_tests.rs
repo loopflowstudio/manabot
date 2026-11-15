@@ -160,7 +160,7 @@ fn prepared_rejects_invalid_construction_and_changed_hidden_pool() {
         .state
         .zones
         .zone_objects(ZoneType::Library, PlayerId(1))[0];
-    changed.state.objects[object].name = "changed hidden pool".into();
+    changed.state[object].name = "changed hidden pool".into();
     // The viewer cannot see this change; only the additional pool check catches it.
     assert_eq!(
         serde_json::to_value(changed.semantic_observation(PlayerId(0)).unwrap()).unwrap(),

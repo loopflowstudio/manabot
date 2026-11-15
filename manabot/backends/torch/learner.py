@@ -21,13 +21,14 @@ import numpy as np
 import torch
 from torch import Tensor, nn
 
-from manabot.backends.torch.rl import NumericalError, require
+from manabot.backends.torch.rl import NumericalError, float64_operand, require
 from manabot.infra.profiler import Profiler
 
 if TYPE_CHECKING:
     # Annotations only: the update step and EMA serve any model, so importing
     # them loads neither the player's network nor the training configuration.
     from manabot.backends.torch.policy import ActorCritic
+    from manabot.policy.checkpoint import ParameterArrays
     from manabot.training.regime import Precision
 
 # -- Update step ---------------------------------------------------------------
@@ -273,7 +274,7 @@ class Learner:
             loss, self.agent, self.optimizer, max_grad_norm, recorder=recorder
         )
 
-    def gradients(self, loss: Tensor) -> dict[str, np.ndarray]:
+    def gradients(self, loss: Tensor) -> "ParameterArrays":
         """Unclipped gradients of `loss` by parameter name, without stepping
         (zero where none flowed)."""
         self.optimizer.zero_grad(set_to_none=True)
@@ -289,9 +290,102 @@ class Learner:
         self.optimizer.zero_grad(set_to_none=True)
         return gradients
 
-    def parameters(self) -> dict[str, np.ndarray]:
+    def parameters(self) -> "ParameterArrays":
         """A host copy of every parameter by name."""
         return {
             name: parameter.detach().cpu().numpy().copy()
             for name, parameter in self.agent.named_parameters()
         }
+
+
+# ActorCritic parameter prefixes that only the critic output reads, in every
+# value aggregation.
+_CRITIC_READOUT = ("value_head.", "value_readout.")
+# The value token is an unmasked key in object attention, so actor logits read
+# it too: its gradient mixes policy and value loss and is reported on its own.
+_VALUE_TOKEN = "value_token"
+
+
+def _norm(tensors: list[Tensor]) -> float:
+    if not tensors:
+        return 0.0
+    return float(
+        torch.stack(
+            [float64_operand(t.detach()).double().square().sum() for t in tensors]
+        )
+        .sum()
+        .sqrt()
+    )
+
+
+def critic_gradient_norms(model: nn.Module) -> tuple[float, float | None]:
+    """Pre-clip norms of the critic-only readout and, if present, the value token."""
+    named = dict(model.named_parameters())
+    critic = _norm(
+        [
+            p.grad
+            for name, p in named.items()
+            if p.grad is not None and name.startswith(_CRITIC_READOUT)
+        ]
+    )
+    token = named.get(_VALUE_TOKEN)
+    if token is None:
+        return critic, None
+    return critic, _norm([] if token.grad is None else [token.grad])
+
+
+def gradient_health(
+    model: nn.Module, norm_before: Tensor, critic_norms: tuple[float, float | None]
+) -> dict[str, float | int]:
+    """A sampled clipped step's gradients, without changing them."""
+    health: dict[str, float | int] = {}
+    if critic_norms is None:
+        raise RuntimeError("record_gradients requires before_clip first")
+    critic_norm, token_norm = critic_norms
+    parameters = list(model.parameters())
+    grads = [p.grad for p in parameters if p.grad is not None]
+    health.update(
+        sampled_steps=1,
+        gradient_norm_before=float(norm_before),
+        gradient_norm_after=_norm(grads),
+        gradient_norm_critic_readout=critic_norm,
+        gradient_missing_tensors=sum(
+            p.requires_grad and p.grad is None for p in parameters
+        ),
+        gradient_zero_tensors=sum(not bool(g.any()) for g in grads),
+        gradient_nonzero_tensors=sum(bool(g.any()) for g in grads),
+        frozen_parameter_tensors=sum(not p.requires_grad for p in parameters),
+    )
+    if token_norm is not None:
+        health["gradient_norm_value_token"] = token_norm
+
+    return health
+
+
+def parameter_health(
+    parameters: list[nn.Parameter], before: list[Tensor]
+) -> dict[str, float]:
+    """Parameter displacement of a sampled step, with established float64 arithmetic."""
+    health: dict[str, float] = {}
+    delta = (
+        torch.stack(
+            [
+                (float64_operand(p.detach()).double() - float64_operand(b).double())
+                .square()
+                .sum()
+                for p, b in zip(parameters, before, strict=True)
+            ]
+        )
+        .sum()
+        .sqrt()
+    )
+    scale = (
+        torch.stack([float64_operand(b).double().square().sum() for b in before])
+        .sum()
+        .sqrt()
+    )
+    health["parameter_delta_l2"] = float(delta)
+    health["parameter_relative_delta"] = (
+        float(delta / scale) if scale > 0 else float(delta)
+    )
+    return health

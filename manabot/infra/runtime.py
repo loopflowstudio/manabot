@@ -14,18 +14,20 @@ import random
 from types import TracebackType
 from typing import Literal, Self
 
-from etude.run.records import ArtifactRef, RunFile
+from etude.records import ArtifactRef, RunRecord
 from etude.train.records import Step
-from etude.train.run import Run, track
+from etude.train.tracking import TrainingRun, track
 import numpy as np
-import torch
 
 import manabot.infra.log
+from manabot.policy.protocol import Backend
 
 from .config import RuntimeConfig
 
 
-def seed_random(seed: int, *, torch_deterministic: bool = True) -> None:
+def seed_random(
+    seed: int, *, backend: Backend | None, torch_deterministic: bool = True
+) -> None:
     """Reset training RNGs without constructing a tracking run.
 
     Call at the declared sampling boundary: evaluation and checkpoint admission
@@ -33,8 +35,8 @@ def seed_random(seed: int, *, torch_deterministic: bool = True) -> None:
     """
     random.seed(seed)
     np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.backends.cudnn.deterministic = torch_deterministic
+    if backend is not None:
+        backend.seed_training(seed, torch_deterministic=torch_deterministic)
 
 
 def regime_tag(regime: str) -> str:
@@ -53,9 +55,8 @@ class RunContext:
 
     A standalone invocation writes below runs_dir, or continues the existing
     run folder `resume` (a recovery attempt resumes its parent's metrics and
-    seals rows the parent left unsealed). `resumed_at` is where this process
-    stands in that run, a restored snapshot or a stage boundary, which need not
-    be the run's latest Etude checkpoint; earlier rows after it are superseded. Under the SDK launcher the run
+    seals rows the parent left unsealed). The first logged row establishes
+    where restored work supersedes earlier rows. Under the SDK launcher the run
     identity and tracking directory come from ETUDE_RUN/ETUDE_TRACK_DIR. A
     new run tracks under `experiment`, an experiment file's stem. Given a
     `regime`, every checkpoint carries its `regime_tag`.
@@ -67,10 +68,10 @@ class RunContext:
         config: RuntimeConfig,
         *,
         experiment: str,
+        backend: Backend,
         regime: str | None = None,
         run: str | None = None,
         resume: Path | None = None,
-        resumed_at: Mapping[str, float] | None = None,
         resolved_config: Mapping[str, object] | None = None,
     ) -> None:
         self.device = config.device
@@ -78,15 +79,18 @@ class RunContext:
         self.runs_dir.mkdir(parents=True, exist_ok=True)
         level = getattr(logging, config.log_level.upper(), logging.INFO)
         manabot.infra.log.setGlobalLogLevel(level)
-        seed_random(config.seed, torch_deterministic=config.torch_deterministic)
-        self.run: Run = track(
+        seed_random(
+            config.seed, backend=backend, torch_deterministic=config.torch_deterministic
+        )
+        prior = (
+            RunRecord.model_validate_json((resume / "run.json").read_bytes())
+            if resume
+            else None
+        )
+        self.run: TrainingRun = track(
             # A resumed run keeps the experiment it was declared under, which
             # names the stage that started it, not necessarily this one.
-            experiment=RunFile.model_validate_json(
-                (resume / "run.json").read_bytes()
-            ).experiment
-            if resume
-            else experiment,
+            experiment=prior.experiment if prior is not None else experiment,
             # The launcher's identity wins; it owns continuation of its runs.
             run=os.environ.get("ETUDE_RUN") or (resume.name if resume else run),
             clocks=[
@@ -94,7 +98,11 @@ class RunContext:
                 Step("updates", "completed collect/update iterations"),
             ],
             seed=config.seed,
-            config={
+            # Recovery keeps the run's frozen declaration; execution receipts
+            # own changed output paths, allocation limits and attempt facts.
+            config=prior.config_json
+            if prior is not None
+            else {
                 "training": dict(resolved_config)
                 if resolved_config is not None
                 else None,
@@ -106,7 +114,7 @@ class RunContext:
             if resume
             else self.runs_dir / "etude",
             strict=True,
-            resumed_at=resumed_at,
+            resume=resume is not None,
         )
         # A launcher retry restores the run's checkpoints and expects the job
         # to resume from the latest, but a policy export cannot restore

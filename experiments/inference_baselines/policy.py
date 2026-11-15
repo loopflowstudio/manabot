@@ -10,6 +10,7 @@ import numpy as np
 from pydantic import JsonValue
 import torch
 
+from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND
 from manabot.env.observation import ObservationSpace
 from manabot.eval.evaluation import EvaluationRequest
 from manabot.eval.match import play_cell
@@ -17,7 +18,7 @@ from manabot.infra.config import MatchConfig
 from manabot.sim.execution import EvalAllocation, EvalExecution
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.replay import read_trace, replay_prefix
-from manabot.sim.serving import PolicyStore, _infer
+from manabot.sim.serving import PolicyStore, infer_requests
 from manabot.sim.serving_protocol import DecisionRequest, PolicyAdmission, PolicyKey
 
 if TYPE_CHECKING:
@@ -140,7 +141,7 @@ def _retained(
             "insufficient retained candidate roots; no synthetic enlargement"
         )
     perf = EvalPerformance("retained-inputs", execution.instrumentation)
-    store = PolicyStore(execution, perf)
+    store = PolicyStore(execution, perf, backend=TORCH_BACKEND)
     request = request.bind(execution)
     player = request.candidate
     references: list[np.ndarray] = []
@@ -204,13 +205,13 @@ def _retained(
                 ]
 
                 def witness(
-                    logits: torch.Tensor, masks: torch.Tensor, actions: list[int]
+                    logits: np.ndarray, masks: np.ndarray, actions: list[int]
                 ) -> None:
-                    values = logits.numpy()
+                    values = logits
                     np.savez(
                         out / f"pass-{pass_index}-batch-{batch_index}.npz",
                         logits=values,
-                        masks=masks.numpy(),
+                        masks=masks,
                         actions=np.asarray(actions),
                         seeds=np.asarray(seeds[start:stop], dtype=np.uint64),
                     )
@@ -225,7 +226,9 @@ def _retained(
                             "same-device retained-input outputs changed between passes"
                         )
 
-                _infer(store, requests, f"{pass_index}-{batch_index}", witness=witness)
+                infer_requests(
+                    store, requests, f"{pass_index}-{batch_index}", witness=witness
+                )
             _write(
                 out / f"pass-{pass_index}.json",
                 {

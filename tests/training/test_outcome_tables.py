@@ -3,15 +3,15 @@
 from pathlib import Path
 import shutil
 
-from etude.run.delivery import StorageDestination, ship
-from etude.run.storage import DirectoryStorage
+from etude.run import StorageDestination, ship
+from etude.storage import DirectoryStorage
 from etude.train.read import read
 from etude.train.records import Step
-from etude.train.run import track
+from etude.train.tracking import track
 import pytest
 
 from manabot.training.rollout.self_play import SelfPlayCounter, SelfPlayOutcome
-from manabot.training.update_metrics import OUTCOME_TABLE, _updates, metric_row
+from manabot.training.update_metrics import OUTCOME_TABLE, metric_row, updates_from_run
 
 
 def _outcomes(pairs: int = 2) -> list[SelfPlayOutcome]:
@@ -41,7 +41,7 @@ def test_outcome_tables_ship_and_read_from_relocated_run(tmp_path: Path) -> None
         run.log_table(OUTCOME_TABLE, outcomes, updates=1)
     finally:
         run.finish()
-    assert any(key.startswith("artifacts/") for key in run.files.deliverable())
+    assert any((run.files.root / "artifacts").iterdir())
     assert (
         ship(run.files, run.name, StorageDestination(DirectoryStorage(destination)))
         is None
@@ -50,7 +50,7 @@ def test_outcome_tables_ship_and_read_from_relocated_run(tmp_path: Path) -> None
 
     data = read(destination, "outcome-tables", run.name)
     assert data.metrics() == ["loss"]
-    assert _updates(data) == {1: {"loss": 0.25, **_projected(outcomes)}}
+    assert updates_from_run(data) == {1: {"loss": 0.25, **_projected(outcomes)}}
 
 
 @pytest.mark.parametrize("missing_original_attempt", [False, True])
@@ -62,7 +62,11 @@ def test_update_selection_matches_sdk_with_clock_only_and_rewound_attempts(
         for update in (1, 2, 4):
             original.log({"loss": update}, updates=update)
     with track(
-        experiment="selection", run=original.name, directory=tmp_path, clocks=clocks
+        experiment="selection",
+        run=original.name,
+        directory=tmp_path,
+        clocks=clocks,
+        resume=True,
     ) as resumed:
         resumed.log(updates=2)
         resumed.log({"loss": 30}, updates=3)
@@ -73,21 +77,21 @@ def test_update_selection_matches_sdk_with_clock_only_and_rewound_attempts(
         if missing_original_attempt:
             # Retained blocks can outlive their attempt metadata. Their wall
             # clock still orders them before later recorded attempts.
-            data = data.model_copy(update={"attempts": data.attempts[1:]})
-        rows = {update: row["loss"] for update, row in _updates(data).items()}
+            data = data.model_copy(update={"writers": data.writers[1:]})
+        rows = {update: row["loss"] for update, row in updates_from_run(data).items()}
         points = data.points("loss", "updates")
         assert rows == dict(zip(points.x, points.y, strict=True))
         return rows
 
-    assert selected() == {1: 1, 2: 2, 3: 31}
+    assert selected() == {1: 1, 3: 31}
     with track(
         experiment="selection",
         run=original.name,
         directory=tmp_path,
         clocks=clocks,
-        resumed_at={"updates": 2},
-    ):
-        pass
+        resume=True,
+    ) as resumed:
+        resumed.log({"loss": 2}, updates=2)
     assert selected() == {1: 1, 2: 2}
 
 
@@ -107,10 +111,12 @@ def test_resume_selects_tables_and_preserves_historical_rows(tmp_path: Path) -> 
         run=run.name,
         directory=tmp_path,
         clocks=clocks,
-        resumed_at={"updates": 1},
-    ):
-        pass
-    assert _updates(read(tmp_path, "outcome-resume", run.name)) == {1: historical}
+        resume=True,
+    ) as resumed:
+        resumed.log(updates=2)
+    assert updates_from_run(read(tmp_path, "outcome-resume", run.name)) == {
+        1: historical,
+    }
 
     outcomes = _outcomes(3)
     with track(
@@ -118,13 +124,13 @@ def test_resume_selects_tables_and_preserves_historical_rows(tmp_path: Path) -> 
         run=run.name,
         directory=tmp_path,
         clocks=clocks,
-        resumed_at={"updates": 1},
+        resume=True,
     ) as resumed:
         resumed.log_table(OUTCOME_TABLE, _outcomes(4), updates=2)
         resumed.log({"loss": 2.0}, updates=2)
         resumed.log_table(OUTCOME_TABLE, outcomes, updates=2)
         resumed.log_table(OUTCOME_TABLE, [], updates=3)
-    assert _updates(read(tmp_path, "outcome-resume", run.name)) == {
+    assert updates_from_run(read(tmp_path, "outcome-resume", run.name)) == {
         1: historical,
         2: {"loss": 2.0, **_projected(outcomes)},
         3: {},
@@ -141,4 +147,4 @@ def test_retired_outcome_references_name_the_revision_that_reads_them(
     ) as run:
         run.log({"self_play_outcomes/table": "0" * 64, "loss": 0.5}, updates=1)
     with pytest.raises(ValueError, match="bf4e280f7"):
-        _updates(read(tmp_path, "outcome-retired", run.name))
+        updates_from_run(read(tmp_path, "outcome-retired", run.name))

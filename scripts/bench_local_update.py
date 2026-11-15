@@ -54,6 +54,7 @@ from numpy.typing import NDArray
 from pydantic import TypeAdapter
 import torch
 
+from manabot.backends import resolve
 from manabot.backends.torch.checkpoint import save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.state import ViewerHistory
@@ -62,10 +63,10 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.infra.identity import file_sha256
 from manabot.model.world import validate_agent_setup
-from manabot.sim.search.local_update import (
+from manabot.sim.search.local_update import LocalUpdateTeacher
+from manabot.sim.search.local_update_receipt import (
     LocalSearchConfig,
     LocalUpdateReceipt,
-    LocalUpdateTeacher,
 )
 import managym
 from managym.decision import Observation
@@ -454,7 +455,7 @@ def compare_arms(
     with TemporaryDirectory(prefix="local-update-arms-") as temporary:
         if checkpoint is None:
             checkpoint = _initialized_checkpoint(
-                Path(temporary) / "initialized.pt", match
+                Path(temporary) / "initialized.safetensors", match
             )
         digest = file_sha256(checkpoint)
         arms = [_DEFAULT_ARM] + [
@@ -471,6 +472,7 @@ def compare_arms(
                     depth=20, decision_seconds=120, rollout_evidence=mode
                 ),
                 native_encoder=encoder == "on",
+                backend=resolve("torch"),
             )
             for mode, encoder in arms
         }
@@ -625,14 +627,16 @@ def main() -> None:
     reference_model = reference_module(
         args.reference, "manabot/backends/torch/policy.py"
     )
-    reference_facts = reference_module(args.reference, "manabot/model/facts.py")
+    reference_facts = reference_module(
+        args.reference, "manabot/backends/torch/_facts.py"
+    )
     reference_model.FactEncoder = reference_facts.FactEncoder
     match = _bench_match()
     with TemporaryDirectory(prefix="local-update-bench-") as temporary:
         checkpoint = args.checkpoint
         if checkpoint is None:
             checkpoint = _initialized_checkpoint(
-                Path(temporary) / "initialized.pt", match
+                Path(temporary) / "initialized.safetensors", match
             )
         digest = file_sha256(checkpoint)
         # References predating the evidence mode only know full evidence.
@@ -650,7 +654,9 @@ def main() -> None:
             before = reference(checkpoint, digest, _reference_config(config))
         teachers = {
             "before": before,
-            "after": LocalUpdateTeacher(checkpoint, digest, config),
+            "after": LocalUpdateTeacher(
+                checkpoint, digest, config, backend=resolve("torch")
+            ),
         }
         for teacher in teachers.values():
             validate_agent_setup(teacher.agent, match.to_rust())

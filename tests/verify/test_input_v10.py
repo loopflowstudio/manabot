@@ -27,10 +27,11 @@ from manabot.infra.config import (
     RewardConfig,
     UnsupportedPolicyInput,
 )
+from tests.model.prepared_routes import device_input
 from manabot.verify.text_observation import priority_root
 import managym
 
-V9 = ObservationConfig()
+V9 = ObservationConfig(policy_input_version=9)
 V10 = ObservationConfig(policy_input_version=10)
 
 
@@ -101,7 +102,7 @@ def v10_observation() -> Iterator[tuple[ObservationSpace, dict[str, torch.Tensor
         observation_space=space,
         reward=Reward(RewardConfig(trivial=True)),
         device="cpu",
-        opponent_policy="random",
+        player_policies=("agent", "random"),
     )
     obs, _ = env.reset()
     yield space, obs
@@ -117,5 +118,5 @@ def test_v10_vector_buffers_reach_the_model(
     torch.manual_seed(0)
     agent = ActorCritic(space, ModelConfig(hidden_dim=4, num_attention_heads=2))
     with torch.no_grad():
-        _, _, _, value = agent.get_action_and_value(obs)
+        _, _, _, value = agent.get_action_and_value(device_input(agent, obs))
     assert value.shape == (2,)

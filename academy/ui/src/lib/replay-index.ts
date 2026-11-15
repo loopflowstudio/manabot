@@ -208,7 +208,7 @@ export function parseReplayDecisionAddress(value: string): DecisionAddress {
 
 export function assertAddressBindsReplayDecision(
   address: DecisionAddress,
-  projection: CanonicalReplayProjectionV1,
+  projection: Pick<CanonicalReplayProjectionV1, 'replay_id' | 'match_id'>,
   row: ReplayDecision,
 ): void {
   if (
@@ -311,12 +311,12 @@ export function assertViewerSafeReplayProjectionResponse(
 }
 
 export function assertRestoredReplayDecisionBinds(
-  projection: CanonicalReplayProjectionResponseV1,
+  projection: Pick<CanonicalReplayProjectionV1, 'replay_id' | 'match_id'>,
+  row: AddressedReplayDecision,
   restored: RestoredReplayDecision,
 ): void {
-  const row = projection.decisions.find(({ address }) => address === restored.address);
   if (
-    row === undefined
+    restored.address !== row.address
     || restored.ordinal !== row.ordinal
     || restored.viewer !== row.viewer
     || restored.revision !== row.revision

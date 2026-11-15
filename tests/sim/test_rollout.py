@@ -6,8 +6,10 @@ the batched sampler (valid-action guarantees), the K-stream vector driver
 """
 
 import numpy as np
+import pytest
 import torch
 
+from manabot.backends.torch.arrays import on_device
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
@@ -19,7 +21,7 @@ from manabot.sim.rollout import (
     BatchedSampler,
     PolicyRolloutMCPlayer,
     RandomBatchController,
-    _allocate_buffers,
+    allocate_buffers,
     run_vector_games,
 )
 from manabot.sim.search.flat_mc import aggregate_records
@@ -50,7 +52,7 @@ class TestRolloutPool:
         assert pool.num_slots == 2 * 3 * num_actions
 
         obs_space = ObservationSpace()
-        buffers = _allocate_buffers(obs_space, pool.num_slots)
+        buffers = allocate_buffers(obs_space, pool.num_slots)
         pool.set_buffers(buffers, pool.num_slots)
 
         rng = np.random.default_rng(0)
@@ -77,7 +79,7 @@ class TestRolloutPool:
         env, _ = make_env(seed=5)
         pool = env._engine.rollout_pool(1, 1, 7, 2000)
         capacity = pool.num_slots + 8
-        buffers = _allocate_buffers(ObservationSpace(), capacity)
+        buffers = allocate_buffers(ObservationSpace(), capacity)
         pool.set_buffers(buffers, capacity)
         assert pool.encode_active() is not None
 
@@ -85,7 +87,7 @@ class TestRolloutPool:
         env, _ = make_env(seed=9)
         before = env._engine.action_count()
         pool = env._engine.rollout_pool(2, 2, 11, 2000)
-        buffers = _allocate_buffers(ObservationSpace(), pool.num_slots)
+        buffers = allocate_buffers(ObservationSpace(), pool.num_slots)
         pool.set_buffers(buffers, pool.num_slots)
         active = pool.encode_active()
         guard = 0
@@ -100,7 +102,7 @@ class TestRolloutPool:
 class TestBatchedSampler:
     def _obs_batch(self, batch: int = 8) -> dict[str, np.ndarray]:
         """Real opening observations from distinct seeds, one per row."""
-        buffers = _allocate_buffers(ObservationSpace(), batch)
+        buffers = allocate_buffers(ObservationSpace(), batch)
         for row in range(batch):
             _, obs = make_env(seed=20 + row)
             for key, value in obs.items():
@@ -124,6 +126,43 @@ class TestBatchedSampler:
             assert actions.shape == (8,)
             chosen_valid = buffers["actions_valid"][rows, actions]
             assert (chosen_valid > 0).all(), f"invalid action for {kwargs}"
+
+    @pytest.mark.parametrize(
+        "temperature,deterministic", [(1.0, False), (0.3, False), (1.0, True)]
+    )
+    def test_backend_sampling_preserves_actions_and_rng(
+        self, temperature: float, deterministic: bool
+    ) -> None:
+        torch.set_num_threads(1)
+        torch.manual_seed(17)
+        agent = ActorCritic(ObservationSpace(), ModelConfig(hidden_dim=8))
+        sampler = BatchedSampler(
+            agent, temperature=temperature, deterministic=deterministic
+        )
+        buffers = self._obs_batch(3)
+        rows = np.arange(3)
+        prepared = on_device(
+            agent.prepare(
+                {key: buffers[key] for key in agent.observation_space.shapes},
+                inference=True,
+            ),
+            "cpu",
+        )
+        state = torch.random.get_rng_state()
+        with torch.inference_mode():
+            logits, _ = agent(prepared)
+            expected = (
+                logits.argmax(-1)
+                if deterministic
+                else torch.multinomial(
+                    torch.softmax(logits / temperature, dim=-1), 1
+                ).squeeze(-1)
+            )
+        expected_state = torch.random.get_rng_state()
+        torch.random.set_rng_state(state)
+        actual = sampler.select(buffers, rows)
+        np.testing.assert_array_equal(actual, expected.numpy())
+        assert torch.equal(torch.random.get_rng_state(), expected_state)
 
     def test_random_controller_valid(self):
         buffers = self._obs_batch()

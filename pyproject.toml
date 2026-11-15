@@ -21,7 +21,7 @@ dependencies = [
     "pydantic>=2.12.0",
     "typer>=0.12.5",
     "psutil>=5.9.0",
-    "etude-sdk>=0.3.2",
+    "etude-sdk>=0.4.0,<0.5",
 ]
 
 [project.scripts]
@@ -34,7 +34,7 @@ llm = [
     "transformers[chat-template]==5.3.0",
 ]
 reports = [
-    "etude-sdk[s3]>=0.3.2",
+    "etude-sdk[s3]>=0.4.0,<0.5",
     "matplotlib>=3.9",
 ]
 artifacts = [
@@ -42,7 +42,7 @@ artifacts = [
 ]
 academy = ["managym[academy]==0.2.3"]
 evaluation = [
-    "etude-sdk[eval]>=0.3.2",
+    "etude-sdk[eval]>=0.4.0,<0.5",
     "matplotlib>=3.9",
 ]
 # Apple Silicon only: the MLX backend (manabot/backends/mlx.md).
@@ -82,7 +82,7 @@ play-runtime = [
     "psutil>=5.9.0",
     "torch==2.15.0",
     "uvicorn[standard]>=0.34.0",
-    "etude-sdk==0.3.2",
+    "etude-sdk==0.4.0",
 ]
 
 [tool.uv]
@@ -113,12 +113,17 @@ explicit = true
 members = ["managym"]
 
 [tool.uv.sources]
+etude-sdk = { git = "https://github.com/loopflowstudio/etude", rev = "d60236d015a4b2a01055b2c861856f06bb1852a2" }
 managym = { workspace = true }
 torch = [
     { index = "pytorch-cpu", group = "play-runtime" },
     { index = "pytorch-cuda", group = "training-runtime", marker = "sys_platform == 'linux'" },
     { index = "pytorch-training", group = "training-runtime", marker = "sys_platform != 'linux'" },
 ]
+
+[project.entry-points."managym.bots"]
+manabot = "manabot.sim.policy_provider:provider"
+qwen = "manabot.sim.qwen_provider:provider"
 
 [project.entry-points."managym.academy.bots"]
 manabot = "manabot.sim.table_bots:extension"

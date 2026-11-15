@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 import sys
 import textwrap
+from typing import cast
 
 import numpy as np
 import pytest
@@ -12,25 +13,28 @@ import torch
 import typer
 
 from experiments.direct_self_play import direct_self_play
+from manabot.backends import resolve
 import manabot.backends.torch as torch_backend
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import selected_rows
+import manabot.backends.torch.rollout as torch_rollout
 from manabot.cli import named_regime, regime_names
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model.admission import admit_observation
 from manabot.policy.prepare import reference_distribution
 from manabot.training.execution import execute_regime, validate_regime
 from manabot.training.records import StageRecord, TrainingRun
 from manabot.training.regime import DampedPolicyLearning, TrainingRegime, TrainSelfPlay
 from manabot.training.rollout.actions import ACTION_FIELDS, PackedActions
 from manabot.training.rollout.collection import RecordedObservations, RolloutBatch
+from manabot.training.state.backend import TrainingBackend
 from manabot.training.update_metrics import read_updates, stage_rows
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
 from manabot.verify.store import VerifyStore
 from managym import WORLD_VERSION
+from tests.model.prepared_routes import device_input
 from tests.training.test_monitoring import _recipe
 from tests.training.test_recovery import tracked_updates
 
@@ -115,7 +119,9 @@ def test_deadline_retains_failed_attempt(tmp_path):
     value.wall_seconds = 1e-9
     with VerifyStore(tmp_path / "store.sqlite") as store:
         with pytest.raises(TimeoutError):
-            execute_regime(value, 197, tmp_path / "run", store)
+            execute_regime(
+                value, 197, tmp_path / "run", store, backend=resolve("torch")
+            )
         result = json.loads((tmp_path / "run/run.json").read_text())
         assert result["status"] == "interrupted"
         assert result["stages"][0]["status"] == "interrupted"
@@ -135,7 +141,7 @@ def test_named_treatments_execute_real_optimizer_batches() -> None:
     obs["actions"][:, 1, 1] = 1
     with torch.no_grad():
         logits, values = agent(
-            admit_observation(agent, {k: torch.as_tensor(v) for k, v in obs.items()})
+            device_input(agent, {k: torch.as_tensor(v) for k, v in obs.items()})
         )
         probs = logits.softmax(-1).numpy()
     batch = RolloutBatch(
@@ -154,6 +160,7 @@ def test_named_treatments_execute_real_optimizer_batches() -> None:
             logits.masked_fill(torch.as_tensor(obs["actions_valid"]) == 0, -torch.inf)
             .log_softmax(-1)
             .numpy(),
+            validator=torch_rollout,
         ),
     )
 
@@ -188,7 +195,9 @@ def test_runtime_failure_is_a_retained_run(tmp_path, monkeypatch):
     monkeypatch.setattr(execution, "runtime_fingerprints", unavailable)
     with VerifyStore(tmp_path / "store.sqlite") as store:
         with pytest.raises(RuntimeError, match="fingerprint"):
-            execute_regime(recipe(), 197, tmp_path / "run", store)
+            execute_regime(
+                recipe(), 197, tmp_path / "run", store, backend=resolve("torch")
+            )
         saved = json.loads((tmp_path / "run/run.json").read_text())
         assert saved["status"] == "failed"
         assert "fingerprint unavailable" in saved["error"]
@@ -205,7 +214,9 @@ def test_manifest_export_failure_is_retained_in_canonical_store(tmp_path, monkey
     monkeypatch.setattr(execution, "export_training_run", no_space)
     with VerifyStore(tmp_path / "store.sqlite") as store:
         with pytest.raises(OSError, match="disk full"):
-            execute_regime(recipe(), 197, tmp_path / "run", store)
+            execute_regime(
+                recipe(), 197, tmp_path / "run", store, backend=resolve("torch")
+            )
         row = store.con.execute("SELECT id FROM training_runs").fetchone()
         saved = store.training_run(row[0])
         assert saved.status == "failed"
@@ -252,22 +263,24 @@ def test_failed_stage_keeps_artifacts_and_exported_config(tmp_path, monkeypatch)
     value.stages[0].updates = 1
     value.stages[0].learning.epochs = 1
 
-    load = execution.load_checkpoint
+    load = resolve("torch").load_policy
 
     def reject_checkpoint(path: str) -> object:
-        if Path(path).name == "policy-0-raw.pt":
+        if Path(path).name == "policy-0-raw.safetensors":
             raise ValueError("checkpoint admission failed")
         return load(path)
 
-    monkeypatch.setattr(execution, "load_checkpoint", reject_checkpoint)
+    monkeypatch.setattr(resolve("torch"), "load_policy", reject_checkpoint)
     with VerifyStore(tmp_path / "store.sqlite") as store:
         with pytest.raises(ValueError, match="admission"):
-            execute_regime(value, 197, tmp_path / "run", store)
+            execute_regime(
+                value, 197, tmp_path / "run", store, backend=resolve("torch")
+            )
         saved = json.loads((tmp_path / "run/run.json").read_text())
         assert saved["stages"][0]["status"] == "failed"
         assert saved["stages"][0]["seconds"] > 0
         assert saved["regime"]["agent"]["hidden_dim"] == 8
-        assert (tmp_path / "run/policy-0-raw.pt").exists()
+        assert (tmp_path / "run/policy-0-raw.safetensors").exists()
         # Rejected bytes remain on disk, never advertised as an admitted artifact.
         assert "raw" not in saved["stages"][0]["artifacts"]
         assert saved["stages"][0]["rejected_artifacts"]["raw"]["sha256"]
@@ -296,7 +309,9 @@ def test_continuation_rejects_mutated_artifact_bytes(tmp_path, monkeypatch):
     monkeypatch.setattr(execution, "export_training_run", corrupt_completed_input)
     with VerifyStore(tmp_path / "store.sqlite") as store:
         with pytest.raises(ValueError, match="input artifact changed"):
-            execute_regime(value, 197, tmp_path / "run", store)
+            execute_regime(
+                value, 197, tmp_path / "run", store, backend=resolve("torch")
+            )
         saved = json.loads((tmp_path / "run/run.json").read_text())
         assert saved["stages"][0]["status"] == "completed"
         assert saved["stages"][1]["status"] == "failed"
@@ -333,7 +348,9 @@ def test_self_play_continuation_keeps_adam_and_exports_each_stage(
         stage.updates = 1
         stage.learning.epochs = 1
     with VerifyStore(tmp_path / "store.sqlite") as store:
-        run = execute_regime(value, 197, tmp_path / "run", store)
+        run = execute_regime(
+            value, 197, tmp_path / "run", store, backend=resolve("torch")
+        )
         assert run.status == "completed"
         assert run.selected_artifact == run.stages[-1].artifacts["raw"]
         steps = []
@@ -365,7 +382,7 @@ def test_run_record_does_not_grow_with_updates(tmp_path: Path) -> None:
         stage.updates = updates
         out = tmp_path / f"updates-{updates}"
         with VerifyStore(tmp_path / f"{updates}.sqlite") as store:
-            run = execute_regime(value, 197, out, store)
+            run = execute_regime(value, 197, out, store, backend=resolve("torch"))
             stored = store.con.execute(
                 "SELECT SUM(LENGTH(payload)) FROM training_stages WHERE run_id=?",
                 (run.id,),
@@ -443,3 +460,25 @@ def test_frozen_regimes_read_their_pack_selectors_as_world() -> None:
     assert regime.match is not None
     assert regime.match.world == regime.agent.world == "elemental-world-v2"
     assert regime.match.model_dump(mode="json")["world"] == "elemental-world-v2"
+
+
+def test_unsupported_backend_refuses_before_creating_an_attempt(tmp_path: Path) -> None:
+    class RefusingRuntime:
+        def require_execution(self) -> None:
+            raise NotImplementedError("fixture backend has no regime executor")
+
+    class UnsupportedBackend:
+        runtime = RefusingRuntime()
+
+    destination = tmp_path / "unsupported"
+    with VerifyStore(tmp_path / "training.sqlite") as store:
+        with pytest.raises(NotImplementedError, match="no regime executor"):
+            # The injected refusal needs no numerical framework or native streams.
+            execute_regime(
+                recipe(),
+                17,
+                destination,
+                store,
+                backend=cast(TrainingBackend, UnsupportedBackend()),
+            )
+    assert not destination.exists()

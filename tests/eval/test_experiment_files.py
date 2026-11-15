@@ -10,14 +10,14 @@ from dataclasses import replace
 from pathlib import Path
 import sys
 
+from etude.declarations import read_training_jobs
+from etude.errors import EtudeError
 from etude.eval.records import Match
-from etude.experiment import Checkpoint, Checkpoints, ExperimentState, TrainingRun
-from etude.jobs import evaluation_spec
-from etude.launch.job_file import read_job_file
+from etude.experiment import Checkpoint, TrainingRun
+from etude.jobs import Checkpoints, ExperimentState, evaluation_spec
 from etude.page import build, experiment_files
+from etude.records import ArtifactRef
 from etude.report import Counters, Series
-from etude.run.errors import EtudeError
-from etude.run.records import ArtifactRef
 import pytest
 
 from experiments import elemental, tla_frontier
@@ -26,6 +26,7 @@ from experiments.elemental_long_eval import (
     EvalState,
     units,
 )
+from manabot.backends import resolve
 from manabot.experiment.job import TrainingJob
 from manabot.infra.config import MatchConfig
 from manabot.training.execution import execute_regime
@@ -62,6 +63,14 @@ def keep_imported_modules() -> Iterator[None]:
 def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
     found = {path.stem for path in experiment_files(EXPERIMENTS)}
     assert found == {
+        "elemental_closure_calibration",
+        "llm_game",
+        "policy_inference_gpu",
+        "qwen_mtg183",
+        "qwen_mtg183_vllm",
+        "training_throughput",
+        "training_throughput_packing",
+        "training_throughput_sizes",
         "batch_closure",
         "bf16_behavior_logs",
         "elemental",
@@ -72,6 +81,7 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
         "mana_spending",
         "mps_retest",
         "mtg183-elemental-eval",
+        "one_token_layout",
         "precision_ladder",
         "seat_comparison",
         "tla_frontier",
@@ -106,7 +116,12 @@ def test_a_tracked_self_play_run_draws_every_named_metric(
     )
     with VerifyStore(tmp_path / "store.sqlite") as store:
         run = execute_regime(
-            regime, 17, tmp_path / "run", store, experiment="seat_comparison"
+            regime,
+            17,
+            tmp_path / "run",
+            store,
+            experiment="seat_comparison",
+            backend=resolve("torch"),
         )
     record = run.stages[0]
 
@@ -129,7 +144,9 @@ def test_a_tracked_self_play_run_draws_every_named_metric(
 
 
 def test_launched_runs_track_under_the_file_stem(tmp_path: Path) -> None:
-    runs = read_job_file(EXPERIMENTS / "seat_comparison.py", ["--revision", "HEAD"])
+    runs = read_training_jobs(
+        EXPERIMENTS / "seat_comparison.py", ["--revision", "HEAD"]
+    )
     jobs = [TrainingJob.model_validate_json(run.job.config or "") for run in runs]
     assert {job.experiment for job in jobs} == {"seat_comparison"}
     assert sorted({run.job.name for run in runs}) == [
@@ -179,7 +196,7 @@ def _design(matches: list[Match]) -> set[tuple[str, ...]]:
 
 def test_elemental_eval_asks_for_the_followers_design(tmp_path: Path) -> None:
     run = _finished_run(tmp_path, range(0, 501, 50))
-    jobs = elemental.eval(ExperimentState(experiment="elemental", runs=(run,)))
+    jobs = elemental.eval_jobs(ExperimentState(experiment="elemental", runs=(run,)))
     specs = {evaluation_spec(job).tournament.name: evaluation_spec(job) for job in jobs}
     assert set(specs) == {elemental.GRID, elemental.SUBSET, elemental.PAIRS}
 

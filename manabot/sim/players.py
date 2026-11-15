@@ -10,9 +10,8 @@ from __future__ import annotations
 
 from typing import Any
 
-import numpy as np
-
 from manabot.env.env import Env
+from manabot.env.observation import ObservationBuffers
 from manabot.sim.anchors import RandomMatchupPlayer, ScriptedGreedyPlayer
 from manabot.sim.heuristic import HeuristicPlayer
 from manabot.sim.registration import PlayerRegistration
@@ -32,7 +31,7 @@ class DemoSearchPlayer:
             seed=seed,
         )
 
-    def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
+    def act(self, env: Env, obs: ObservationBuffers) -> int:
         return self.policy(env._engine, env.last_raw_obs)
 
 

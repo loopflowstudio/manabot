@@ -10,11 +10,11 @@ from typing import Any, Callable, Mapping
 
 import numpy as np
 from numpy.typing import NDArray
-import torch
 
 from manabot.belief.range import BeliefState
+from manabot.env.observation import ObservationBuffers
 from manabot.infra.identity import file_sha256
-from manabot.model.inference import admit_on_device
+from manabot.policy.protocol import Backend
 from managym.decision import DecisionFrame, PublicCommitment, SemanticContractError
 
 
@@ -86,6 +86,7 @@ class FrozenPolicyLikelihood:
         checkpoint: str | Path,
         *,
         expected_sha256: str,
+        backend: Backend,
         batch_size: int = 256,
         device: str = "cpu",
         counterfactual_seed: int = 0,
@@ -105,12 +106,10 @@ class FrozenPolicyLikelihood:
         self.checkpoint = path
         self.checkpoint_sha256 = actual_sha256
         self.batch_size = batch_size
-        self.device = torch.device(device)
+        self.device = device
         self.counterfactual_seed = counterfactual_seed
         self.batch_observer = batch_observer
-        from manabot.backends.torch.checkpoint import load_checkpoint
-
-        self.agent, self.obs_space = load_checkpoint(str(path))
+        self.agent, self.obs_space = backend.load_policy(str(path))
         self.agent.to(self.device)
         self.agent.eval()
 
@@ -143,7 +142,7 @@ class FrozenPolicyLikelihood:
         matching_counts = np.zeros(belief.support_size, dtype=np.int64)
 
         def infer_batch(
-            encoded_batch: list[dict[str, np.ndarray]],
+            encoded_batch: list[ObservationBuffers],
             matching_batch: list[list[int]],
             legal_batch: list[int],
             row_batch: list[int],
@@ -152,13 +151,8 @@ class FrozenPolicyLikelihood:
                 key: np.stack([encoded[key] for encoded in encoded_batch])
                 for key in encoded_batch[0]
             }
-            tensors = admit_on_device(
-                self.agent,
-                {key: torch.from_numpy(value) for key, value in buffers.items()},
-            )
-            with torch.inference_mode():
-                logits, _ = self.agent.forward(tensors)
-                probabilities = torch.softmax(logits, dim=-1).cpu().numpy()
+            prepared_batch = self.agent.prepare(buffers, inference=True)
+            probabilities, _ = self.agent.evaluate_probabilities(prepared_batch)
             for local, row in enumerate(row_batch):
                 matching = matching_batch[local]
                 legal_counts[row] = legal_batch[local]

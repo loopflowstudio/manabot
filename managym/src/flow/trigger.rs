@@ -6,7 +6,7 @@ use crate::state::binding::ObjectBinding;
 
 use crate::state::{
     ability::{DelayedExpiry, DelayedFrequency, Effect},
-    game_object::{ObjectId, ObjectLki, ObjectRef, PlayerId, Target},
+    game_object::{ObjectId, ObjectLki, PlayerId, Target},
     predicate::CardPredicate,
 };
 
@@ -48,22 +48,16 @@ impl TriggerPlacement {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PendingTrigger {
     /// An inline program granted by a continuous effect, without catalog identity.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub program: bool,
     /// Exact subjects captured at delayed-trigger creation, independent of event context.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub remembered: Vec<ObjectBinding>,
-    #[serde(rename = "source_card")]
-    pub source_object: ObjectId,
+    pub source_identity: crate::state::game_object::AbilitySource,
     pub targets: Vec<Target>,
     pub target_req_indices: Vec<usize>,
     pub requirement_index: usize,
-    /// Exact source object captured when the ability triggered. Synthetic
-    /// test/delayed triggers may have no battlefield source.
-    pub source_ref: Option<ObjectRef>,
     /// Definition/controller/presentation facts for that exact source.
     pub source_lki: Option<ObjectLki>,
     pub ability_index: usize,
@@ -75,21 +69,16 @@ pub struct PendingTrigger {
     pub context: Option<Target>,
     /// The player the triggering event names ("they": the caster of the
     /// triggering spell), separate from its context object.
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub player: Option<PlayerId>,
     /// The ability's X: for an entering permanent's own trigger, the X of
     /// the spell that became it (CR 107.3m); otherwise 0.
-    #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub x: u8,
     /// For an entering permanent's own trigger, the mana spent to cast the
     /// spell that became it; otherwise empty.
-    #[serde(skip_serializing_if = "crate::state::mana::ManaSpent::is_empty")]
     pub spent: crate::state::mana::ManaSpent,
     /// The attacking creature whose attack triggered its own ability.
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub attacker: Option<crate::state::game_object::PermanentId>,
     /// The modes of a "choose up to" ability chosen so far.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub chosen_modes: Vec<usize>,
     /// Delayed triggers carry their effects inline instead of referencing
     /// `Object::abilities` (`ability_index` is unused when set).
@@ -106,9 +95,8 @@ pub struct DelayedTrigger {
     pub remembered: Vec<ObjectBinding>,
     pub event: DelayedTriggerEvent,
     pub controller: PlayerId,
-    #[serde(rename = "source_card")]
-    pub source_object: ObjectId,
-    pub source_ref: Option<ObjectRef>,
+    #[serde(flatten)]
+    pub source_identity: crate::state::game_object::AbilitySource,
     pub effects: Vec<Effect>,
     pub frequency: DelayedFrequency,
     pub expiry: DelayedExpiry,
@@ -120,7 +108,11 @@ pub enum DelayedTriggerEvent {
     /// The exact object dies (or, `or_exiled`, is exiled: earthbend's "when
     /// it dies or is exiled"). Removed once it leaves the battlefield any
     /// way; the departed permanent is the trigger's context.
-    Leaves { watched: ObjectRef, or_exiled: bool },
+    Leaves {
+        #[serde(serialize_with = "crate::state::game_object::exact")]
+        watched: ObjectId,
+        or_exiled: bool,
+    },
     /// "Whenever a creature dies".
     CreatureDies,
     /// "At the beginning of the end step", optionally only the controller's.
@@ -142,7 +134,11 @@ pub enum DelayedTriggerEvent {
 /// card is not the source.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ExileLink {
-    pub source: ObjectRef,
+    #[serde(serialize_with = "crate::state::game_object::exact")]
+    pub source: ObjectId,
+    /// The appearance found by the exiling effect (CR 400.7j), not any
+    /// later appearance of the same physical card.
+    /// V16 recorded a row here, so its bytes keep the slot alone.
     #[serde(rename = "exiled_card")]
     pub exiled_object: ObjectId,
     /// The card returns as the source leaves the battlefield.
@@ -152,4 +148,74 @@ pub struct ExileLink {
 
 fn is_true(value: &bool) -> bool {
     *value
+}
+
+impl PendingTrigger {
+    pub fn source_object(&self) -> ObjectId {
+        self.source_identity.object()
+    }
+    pub fn source_ref(&self) -> Option<ObjectId> {
+        self.source_identity.reference()
+    }
+}
+
+impl DelayedTrigger {
+    pub fn source_object(&self) -> ObjectId {
+        self.source_identity.object()
+    }
+    pub fn source_ref(&self) -> Option<ObjectId> {
+        self.source_identity.reference()
+    }
+}
+
+// The pending record historically separated its two source projections with
+// target progress. Preserve that field order in v16's streamed state bytes.
+struct ExactReference(Option<ObjectId>);
+impl serde::Serialize for ExactReference {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        crate::state::game_object::exact(&self.0, serializer)
+    }
+}
+impl serde::Serialize for PendingTrigger {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(None)?;
+        if self.program {
+            map.serialize_entry("program", &self.program)?;
+        }
+        if !self.remembered.is_empty() {
+            map.serialize_entry("remembered", &self.remembered)?;
+        }
+        map.serialize_entry("source_card", &self.source_identity.object())?;
+        map.serialize_entry("targets", &self.targets)?;
+        map.serialize_entry("target_req_indices", &self.target_req_indices)?;
+        map.serialize_entry("requirement_index", &self.requirement_index)?;
+        map.serialize_entry(
+            "source_ref",
+            &ExactReference(self.source_identity.reference()),
+        )?;
+        map.serialize_entry("source_lki", &self.source_lki)?;
+        map.serialize_entry("ability_index", &self.ability_index)?;
+        map.serialize_entry("controller", &self.controller)?;
+        map.serialize_entry("id", &self.id)?;
+        map.serialize_entry("ordering_class", &self.ordering_class)?;
+        map.serialize_entry("context", &self.context)?;
+        if self.player.is_some() {
+            map.serialize_entry("player", &self.player)?;
+        }
+        if self.x != 0 {
+            map.serialize_entry("x", &self.x)?;
+        }
+        if !self.spent.is_empty() {
+            map.serialize_entry("spent", &self.spent)?;
+        }
+        if self.attacker.is_some() {
+            map.serialize_entry("attacker", &self.attacker)?;
+        }
+        if !self.chosen_modes.is_empty() {
+            map.serialize_entry("chosen_modes", &self.chosen_modes)?;
+        }
+        map.serialize_entry("inline_effects", &self.inline_effects)?;
+        map.end()
+    }
 }

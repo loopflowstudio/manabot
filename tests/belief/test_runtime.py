@@ -5,7 +5,11 @@ import json
 import pytest
 import torch
 
-from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.checkpoint import (
+    BACKEND as TORCH_BACKEND,
+    load_checkpoint,
+    save_checkpoint,
+)
 from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.encoding import belief_schema_from_engine
 from manabot.belief.range import BeliefError
@@ -17,7 +21,8 @@ from manabot.model.world import checkpoint_world
 from manabot.sim.search.flat_mc import make_player
 from managym.decision import SEMANTIC_DECISION_VERSION
 from managym.possible_worlds import POSSIBLE_WORLD_SPACE_VERSION, PossibleWorldSpace
-from tests.belief.support import fixture_torch_observation
+from tests.belief.support import fixture_observation
+from tests.model.checkpoint_fixture import read_checkpoint
 
 
 class NativeContractEngine:
@@ -132,7 +137,7 @@ def test_manabot_player_generates_belief_before_ordinary_action() -> None:
     player = ManabotPlayer(_belief_agent())
 
     player.start_game(engine, 0)
-    action = player.act(engine, fixture_torch_observation())
+    action = player.act(engine, fixture_observation())
 
     assert action in {0, 1, 2}
     assert player.last_step is not None
@@ -159,13 +164,15 @@ def test_serialized_belief_checkpoint_binds_exact_runtime_schema(tmp_path) -> No
         player_configs=Match().to_rust(),
     )
 
-    payload = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    payload = read_checkpoint(checkpoint_path, map_location="cpu", weights_only=False)
     assert payload["belief_schema_identity"] == schema.identity
     assert (
         payload["belief_content_manifest_identity"] == schema.content_manifest_identity
     )
     player, _ = make_player(
-        {"kind": "checkpoint", "path": str(checkpoint_path)}, seed=1
+        {"kind": "checkpoint", "path": str(checkpoint_path)},
+        seed=1,
+        backend=TORCH_BACKEND,
     )
     assert isinstance(player, ManabotPlayer)
     player.start_game(engine, 0)
@@ -177,7 +184,7 @@ def test_serialized_belief_checkpoint_binds_exact_runtime_schema(tmp_path) -> No
     assert player.viewer is None
     assert player.history is None
     with pytest.raises(RuntimeError, match="start_game"):
-        player.act(engine, fixture_torch_observation())
+        player.act(engine, fixture_observation())
 
 
 def test_belief_checkpoint_loader_requires_serialized_binding(tmp_path) -> None:

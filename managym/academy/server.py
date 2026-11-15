@@ -6,17 +6,20 @@ FastAPI server for interactive managym play over WebSocket.
 from __future__ import annotations
 
 import asyncio
-from contextlib import suppress
+from collections.abc import Awaitable, Iterable
+from contextlib import ExitStack, suppress
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import logging
+import os
 from pathlib import Path
 import secrets
 import sqlite3
-from typing import Any, Callable
+from typing import Any, Callable, Literal, TypedDict
+import warnings
 
 from fastapi import (
     FastAPI,
@@ -27,11 +30,13 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
-from fastapi.responses import JSONResponse, Response
-from pydantic import ValidationError
+from fastapi.responses import FileResponse, JSONResponse, Response
+from pydantic import TypeAdapter, ValidationError
+from starlette.websockets import WebSocketState
 
 import managym
-from managym.bots import BotDecision, BotPolicy, choose_bot
+from managym.academy.card_art import card_art
+from managym.bots import BotDecision, BotPolicy, FlatSearchPolicy, choose_bot
 from managym.decision import (
     Command as SemanticCommand,
     SemanticTransition,
@@ -41,7 +46,6 @@ from managym.enums import (
     ActionSpaceEnum,
     EventTypeEnum,
     StepEnum,
-    ZoneEnum,
 )
 from managym.experience import (
     PROTOCOL_VERSION,
@@ -55,9 +59,18 @@ from managym.experience_projection import (
     decision_surface_view,
     describe_actions,
     enum_name,
+    object_records,
+    observation_definition_id,
+    observation_object_id,
     offer_verb,
     redact_observation,
     serialize_observation,
+)
+from managym.policy import PolicyRunner
+from managym.search import (
+    SearchConfig,
+    SearchError,
+    descriptor_search_unavailable,
 )
 
 from . import trace as trace_store, villain as villain_module
@@ -68,7 +81,13 @@ from .advice import (
     request_advice,
     request_versioned_fixture_advice,
 )
-from .attempts import AttemptStore, decode_cursor, page_cursor, participant_id
+from .attempts import (
+    AttemptStore,
+    RecordedPlayer,
+    decode_cursor,
+    page_cursor,
+    participant_id,
+)
 from .curated_pack import (
     CURATED_PACK,
     CURATED_PACK_CATALOG,
@@ -81,8 +100,17 @@ from .opponent import (
     Opponent,
     catalog_opponent,
     opponent_catalog,
+    policy_registry,
+)
+from .play_session import (
+    SessionSetupUpdate,
+    SessionStart,
+    continuation_config,
+    request_fingerprint,
+    setup_draft,
 )
 from .presentation import PresentationProjector
+from .recording import Recording, read_cache
 from .replay_index import (
     CANONICAL_REPLAY_VERSION,
     CanonicalReplayProjectionV1,
@@ -118,6 +146,7 @@ from .shared_table_protocol import (
     RestoreDecisionMessage,
     ResumeMessage,
     RetryDecisionMessage,
+    RetryMirrorMessage,
     ReturnFromBranchMessage,
     ReturnToLiveMessage,
     SetStopsMessage,
@@ -144,6 +173,7 @@ from .study_runtime import (
 )
 from .trace import GameConfig, Trace, TraceEvent
 from .villain import build_villain_policy
+from .work import Work, WorkStatus
 
 # Interactive remains a lightweight mirror of manabot.verify.util. Curated
 # manifests are checked against the compiled rules setup without importing torch.
@@ -195,7 +225,7 @@ CLOSED_DECK_NAME = "Closed decklist"
 DEFAULT_DECK = INTERACTIVE_DECK
 
 MAX_AUTOPLAY_STEPS = 1024
-VILLAIN_TYPES = {"passive", "random", "search", "checkpoint"}
+VILLAIN_TYPES = {"passive", "random", "search", "policy"}
 MAX_ACCEPTED_COMMANDS = 64
 MAX_PRESENTATION_EVENTS = 256
 MAX_UINT64 = 2**64 - 1
@@ -279,6 +309,7 @@ class SessionRecord:
     shared_beliefs: dict[str, dict[str, Any]] = field(default_factory=dict)
     accepted_command_submitters: dict[str, str] = field(default_factory=dict)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    published: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.participants:
@@ -303,6 +334,8 @@ class SessionRecord:
 
 
 SESSION_REGISTRY: dict[str, SessionRecord] = {}
+# Private, process-local configurations. Never included in viewer frames.
+LAUNCH_CONFIGS: dict[str, dict[str, Any]] = {}
 
 
 @dataclass(frozen=True)
@@ -384,19 +417,13 @@ class StudyAttempt:
 def _definition_ids_by_object(obs: managym.Observation) -> dict[int, int]:
     """Resolve live card, permanent, and stack identities to typed definitions."""
 
-    result: dict[int, int] = {}
-    for cards, permanents in (
-        (obs.agent_cards, obs.agent_permanents),
-        (obs.opponent_cards, obs.opponent_permanents),
-    ):
-        for card in cards:
-            result[int(card.id)] = int(card.registry_key)
-        battlefield_cards = [
-            card for card in cards if enum_name(ZoneEnum, card.zone) == "BATTLEFIELD"
-        ]
-        for index, permanent in enumerate(permanents):
-            if index < len(battlefield_cards):
-                result[int(permanent.id)] = int(battlefield_cards[index].registry_key)
+    result = {
+        observation_object_id(card): observation_definition_id(card)
+        for card in object_records(obs)
+    }
+    for permanent in (*obs.agent_permanents, *obs.opponent_permanents):
+        if permanent.object_id is not None:
+            result[int(permanent.id)] = int(permanent.registry_key)
     for stack_object in obs.stack_objects:
         result[int(stack_object.stack_object_id)] = int(
             stack_object.source_card_registry_key
@@ -473,21 +500,15 @@ def _encountered_definition_ids(
     before_taps: dict[int, tuple[int, bool]] = {}
     after_taps: dict[int, tuple[int, bool]] = {}
     for observation, target in ((before, before_taps), (after, after_taps)):
-        for cards, permanents in (
-            (observation.agent_cards, observation.agent_permanents),
-            (observation.opponent_cards, observation.opponent_permanents),
+        for permanent in (
+            *observation.agent_permanents,
+            *observation.opponent_permanents,
         ):
-            battlefield_cards = [
-                card
-                for card in cards
-                if enum_name(ZoneEnum, card.zone) == "BATTLEFIELD"
-            ]
-            for index, permanent in enumerate(permanents):
-                if index < len(battlefield_cards):
-                    target[int(permanent.id)] = (
-                        int(battlefield_cards[index].registry_key),
-                        bool(permanent.tapped),
-                    )
+            if permanent.object_id is not None:
+                target[int(permanent.id)] = (
+                    int(permanent.registry_key),
+                    bool(permanent.tapped),
+                )
     for identity, (definition_id, was_tapped) in before_taps.items():
         current = after_taps.get(identity)
         if current is not None and not was_tapped and current[1]:
@@ -519,33 +540,21 @@ def hero_view(obs: managym.Observation) -> dict[str, Any]:
     return viewer_view(obs, HERO_PLAYER_INDEX)
 
 
-def _winner_for_hero(obs: managym.Observation) -> int | None:
-    if not obs.game_over:
-        return None
-
-    agent_is_hero = int(obs.agent.player_index) == HERO_PLAYER_INDEX
-    if bool(obs.won):
-        return 0 if agent_is_hero else 1
-    return 1 if agent_is_hero else 0
-
-
-def _is_hero_turn(obs: managym.Observation) -> bool:
-    return int(obs.agent.player_index) == HERO_PLAYER_INDEX
+def _is_hero_turn(obs: managym.Observation, human_seat: int = 0) -> bool:
+    return int(obs.agent.player_index) == human_seat
 
 
 def _is_priority_space(obs: managym.Observation) -> bool:
     return obs.action_space.action_space_type == managym.ActionSpaceEnum.PRIORITY
 
 
-def _hero_is_active_player(obs: managym.Observation) -> bool:
+def _hero_is_active_player(obs: managym.Observation, human_seat: int = 0) -> bool:
     """Whether the hero is the active player (it is 'my' turn).
 
     Perspective-independent: finds the hero side by player_index rather than
     assuming ``obs.agent`` is the hero.
     """
-    hero = (
-        obs.agent if int(obs.agent.player_index) == HERO_PLAYER_INDEX else obs.opponent
-    )
+    hero = obs.agent if int(obs.agent.player_index) == human_seat else obs.opponent
     return int(obs.turn.active_player_id) == int(hero.id)
 
 
@@ -641,46 +650,11 @@ def _select_opponent(sha256: Any) -> Opponent:
     """
 
     if not isinstance(sha256, str):
-        raise ValueError("opponent_sha256 must name a trained checkpoint digest.")
+        raise ValueError("opponent_sha256 must name a registered policy identity.")
     opponent = catalog_opponent(sha256)
     if opponent is None:
         raise ValueError("The selected opponent is no longer available.")
     return opponent
-
-
-def _deck_label(setup: dict) -> str:
-    for name, deck in NAMED_DECKS.items():
-        if deck == setup.get("deck"):
-            return DECK_DISPLAY_NAMES.get(name, name)
-    return "a custom deck"
-
-
-def _check_opponent_decks(opponent: Opponent, setups: list[dict]) -> None:
-    """Refuse a matchup outside the decks a catalog checkpoint was bound to.
-
-    Seats may swap: the binding is the sorted pair of deck/sideboard setups,
-    so the bot plays either of its decks from either seat.
-    """
-
-    if not opponent.setups:
-        return
-
-    def key(setup: dict) -> str:
-        return json.dumps(setup, sort_keys=True)
-
-    admitted = set(map(key, opponent.setups))
-    roster_match = (
-        len(opponent.setups) > 2
-        and len(setups) == 2
-        and all(key(setup) in admitted for setup in setups)
-    )
-    if not roster_match and sorted(map(key, setups)) != sorted(
-        map(key, opponent.setups)
-    ):
-        trained = " vs ".join(_deck_label(setup) for setup in opponent.setups)
-        raise ValueError(
-            f"{opponent.name} was trained on {trained}; choose those decks to play it."
-        )
 
 
 def _parse_game_config(config: Any) -> GameConfig:
@@ -689,6 +663,13 @@ def _parse_game_config(config: Any) -> GameConfig:
         raise ValueError("new_game.config must be an object.")
 
     villain_type = data.get("villain_type", "search")
+    if villain_type == "checkpoint":
+        warnings.warn(
+            "checkpoint player names are deprecated; use registered policies (removed in 0.4.0)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        villain_type = "policy"
     if villain_type not in VILLAIN_TYPES:
         raise ValueError(
             "villain_type must be one of: " + ", ".join(sorted(VILLAIN_TYPES)) + "."
@@ -698,6 +679,12 @@ def _parse_game_config(config: Any) -> GameConfig:
     if seed_value is None:
         seed: int | None = None
     else:
+        if type(seed_value) is not int and not (
+            isinstance(seed_value, str)
+            and seed_value.isascii()
+            and seed_value.isdecimal()
+        ):
+            raise ValueError("seed must be an unsigned 64-bit integer.")
         try:
             seed = int(seed_value)
         except Exception as exc:
@@ -728,7 +715,7 @@ def _parse_game_config(config: Any) -> GameConfig:
 
     # Private import provenance (see `GameConfig.hero_source`); empty for named decks.
     provenance: dict[str, Any] = {}
-    if "deck_import" in data:
+    if data.get("deck_import") is not None:
         deck_import = DeckImportInput.model_validate(data["deck_import"])
         hero_import, villain_import = deck_import.admit()
         provenance = {
@@ -789,22 +776,19 @@ def _parse_game_config(config: Any) -> GameConfig:
                 raise ValueError(f"{seat}_sideboard must match the named deck setup")
             sideboards[seat] = sideboard
 
-    villain_checkpoint: str | None = None
-    villain_deterministic = False
     opponent: Opponent | None = None
-    if villain_type == "checkpoint":
+    if villain_type == "policy":
         opponent = _select_opponent(data.get("opponent_sha256"))
-        _check_opponent_decks(
-            opponent,
-            [
-                {"deck": hero_deck, "sideboard": sideboards["hero"]},
-                {"deck": villain_deck, "sideboard": sideboards["villain"]},
-            ],
-        )
-        villain_checkpoint = str(opponent.checkpoint)
-        villain_deterministic = opponent.deterministic
 
-    return GameConfig(
+    mirror = TypeAdapter(SearchConfig | None).validate_python(data.get("mirror"))
+    if mirror is not None:
+        if opponent is not None:
+            reason = descriptor_search_unavailable(opponent.descriptor)
+            if reason:
+                raise ValueError(reason)
+        else:
+            raise ValueError("Search requires a registered search-capable policy.")
+    parsed = GameConfig(
         **provenance,
         hero_deck=hero_deck,
         villain_deck=villain_deck,
@@ -814,18 +798,63 @@ def _parse_game_config(config: Any) -> GameConfig:
         villain_deck_name=villain_deck_name,
         asset_pack=selected_pack.reference if selected_pack is not None else None,
         villain_type=villain_type,
+        human_seat=data.get("human_seat", 0),
         seed=seed,
         seed_was_requested=seed_value is not None,
         villain_sims=villain_sims,
-        villain_checkpoint=villain_checkpoint,
-        villain_deterministic=villain_deterministic,
-        opponent=opponent.identity() if opponent is not None else None,
-        opponent_checkpoint=opponent.record() if opponent is not None else None,
+        opponent=opponent.identity(mirror) if opponent is not None else None,
+        opponent_checkpoint=opponent.record(mirror) if opponent is not None else None,
         stops=_parse_stops(data.get("stops")),
         stop_on_stack=_parse_flag(data, "stop_on_stack", True),
         auto_pass=_parse_flag(data, "auto_pass", True),
         decklists=decklists,
+        mirror=mirror,
     )
+    if opponent is not None:
+        policy_registry().admit(opponent.descriptor.id, parsed.to_rust())
+    return parsed
+
+
+def _academy_actions(obs: managym.Observation, human_seat: int) -> list[dict[str, Any]]:
+    """Relabel player targets by role without changing card names or native offers."""
+    actions = describe_actions(obs)
+    labels = {
+        int(player.id): "Hero" if int(player.player_index) == human_seat else "Villain"
+        for player in (obs.agent, obs.opponent)
+    }
+    for row in actions:
+        focus = row["focus"]
+        if row["type"] == "CHOOSE_TARGET" and len(focus) == 1 and focus[0] in labels:
+            if row["description"] in {"Target Hero", "Target Villain"}:
+                row["description"] = f"Target {labels[focus[0]]}"
+    return actions
+
+
+def observe_policies(
+    policies: Iterable[BotPolicy | None], env: managym.Env, obs: managym.Observation
+) -> None:
+    """Show each registered policy its own seat's view of the current state."""
+    for policy in policies:
+        if isinstance(policy, PolicyRunner):
+            policy.observe(
+                obs
+                if int(obs.agent.player_index) == policy.seat
+                else env.observation_for_player(policy.seat)
+            )
+
+
+def close_policies(policies: Iterable[BotPolicy | None]) -> None:
+    with ExitStack() as resources:
+        for policy in policies:
+            if isinstance(policy, PolicyRunner):
+                resources.callback(policy.close)
+
+
+class PendingBotDecision(TypedDict):
+    code: str
+    message: str
+    match_id: str
+    expected_revision: int
 
 
 class GameSession:
@@ -843,12 +872,16 @@ class GameSession:
     ) -> None:
         self.trace_dir = trace_dir or trace_store.TRACES_DIR
         self.watch_mode = watch_mode
+        self.work = Work()
+        self.human_seat = 0
+        self.interrupted_config: dict[str, Any] | None = None
         self.watch_policies: tuple[BotPolicy, BotPolicy] | None = None
         self._bot_decision: BotDecision | None = None
+        self.mirror_retry: PendingBotDecision | None = None
         self._id_factory = id_factory or (lambda _kind: secrets.token_urlsafe(16))
         self._clock = clock or trace_store.utc_now_iso
         self.attempt_owner = participant_id(secrets.token_urlsafe(32))
-        self._new_game_requests: set[str] = set()
+        self._session_start: SessionStart | None = None
         self._preparing_demo = False
         self.attempt_store = AttemptStore(self.trace_dir / "play.sqlite")
         self.record_players = None
@@ -898,7 +931,7 @@ class GameSession:
         # Durable replay truth is unbounded by the live reconnect ledger.
         self.canonical_decisions: list[ReplayDecision] = []
         self.canonical_presentation: dict[int, list[dict[str, Any]]] = {
-            HERO_PLAYER_INDEX: [],
+            0: [],
             1: [],
         }
         self._authority_command_seq = 0
@@ -917,7 +950,20 @@ class GameSession:
         self._study_attempts: dict[str, StudyAttempt] = {}
         self._study_attempt_seq = 0
 
-    def new_game(self, raw_config: Any) -> dict[str, Any]:
+    def new_game(
+        self, raw_config: Any, *, continuation_fingerprint: str | None = None
+    ) -> dict[str, Any]:
+        launch_id = raw_config.get("launch") if isinstance(raw_config, dict) else None
+        if launch_id is not None:
+            if not isinstance(launch_id, str) or launch_id not in LAUNCH_CONFIGS:
+                raise ValueError(
+                    "launch_unknown: This launch is unknown; run the launch command again or choose a new game."
+                )
+            raw_config = {
+                **raw_config,
+                **LAUNCH_CONFIGS[launch_id],
+                "request_id": f"launch.{launch_id}",
+            }
         request_id = (
             raw_config.get("request_id") if isinstance(raw_config, dict) else None
         )
@@ -925,8 +971,28 @@ class GameSession:
             not isinstance(request_id, str) or len(request_id) > 128
         ):
             raise ValueError("Invalid new-game request id.")
-        if request_id in self._new_game_requests:
-            return self._wire_message()
+        request_id = request_id or secrets.token_urlsafe(16)
+        fingerprint = continuation_fingerprint or request_fingerprint(raw_config or {})
+        if not self.watch_mode:
+            previous_attempt = self.attempt_store.continuation_receipt(
+                self.attempt_owner, request_id, fingerprint
+            )
+            if previous_attempt is not None:
+                if previous_attempt == self.match_id and self.obs is not None:
+                    return self.current_message()
+                raise ValueError(
+                    f"Request already started recording {previous_attempt}; it cannot be redealt. Open its recording or explicitly start another game."
+                )
+
+        if (
+            isinstance(raw_config, dict)
+            and raw_config.get("play_session_id") is not None
+        ):
+            retained_session = self.attempt_store.session(
+                raw_config["play_session_id"], {self.attempt_owner}
+            )
+            if retained_session["revision"] != raw_config.get("setup_revision"):
+                raise ValueError("Session setup changed; recover before continuing.")
 
         from .play_demo import load_play_demo, replay_checked_prefix
 
@@ -939,55 +1005,80 @@ class GameSession:
         config = _parse_game_config(raw_config)
         seed = config.seed if config.seed is not None else secrets.randbits(32)
         config.seed = seed
+        self.work.stage("load")
         try:
-            policy = build_villain_policy(config)
+            policy = (
+                None
+                if self.watch_mode
+                else build_villain_policy(config, seat=1 - config.human_seat)
+            )
+        except SearchError as exc:
+            raise ValueError(f"{exc.reason}: {exc}") from exc
         except ValueError:
             raise
         except Exception as exc:
             raise ValueError("Failed to load the selected opponent.") from exc
 
-        try:
-            # Native skipping resolves sole legal actions, as in every runner;
-            # priority-stop automation still records its Commands here.
-            env = managym.Env(seed=seed)
-            obs, _ = env.reset(config.to_rust())
-        except BaseException as exc:
-            # PyO3's PanicException derives directly from BaseException and has
-            # no importable Python class. A failed disposable replacement must
-            # not close the existing authority; process interrupts still escape.
-            if isinstance(exc, (KeyboardInterrupt, SystemExit, GeneratorExit)):
-                raise
-            raise ValueError(
-                "Could not prepare the requested game. The current game is unchanged."
-            ) from exc
-        manifest = env.content_pack_manifest()
-        selected_pack = curated_pack_for_matchup(
-            config.hero_deck_name,
-            config.villain_deck_name,
-        )
-        player_config = raw_config if isinstance(raw_config, dict) else {}
-        players = self.attempt_store.players_for_game(
-            self.attempt_owner,
-            asdict(config),
-            player_config.get("player_token"),
-            player_config.get("player_name"),
-        )
-        if self.watch_mode and self.record_players is not None:
-            players = self.record_players
-        if (
-            not player_config.get("player_token")
-            and self.record_players
-            and self._record_player_owner == self.attempt_owner
-        ):
-            players[0] = replace(self.record_players[0], deck=config.hero_deck_name)
-        if self.trace is not None:
-            self.close(end_reason="new_game")
-        self.record_players = players
-        self._record_player_owner = self.attempt_owner
-        self.env, self.obs, self.villain_policy = env, obs, policy
+        with ExitStack() as prepared:
+            if isinstance(policy, PolicyRunner):
+                prepared.callback(policy.close)
+            try:
+                # Native skipping resolves sole legal actions, as in every runner;
+                # priority-stop automation still records its Commands here.
+                env = managym.Env(seed=seed)
+                obs, _ = env.reset(config.to_rust())
+                observe_policies((policy,), env, obs)
+            except BaseException as exc:
+                # PyO3's PanicException derives directly from BaseException and has
+                # no importable Python class. A failed disposable replacement must
+                # not close the existing authority; process interrupts still escape.
+                if isinstance(exc, (KeyboardInterrupt, SystemExit, GeneratorExit)):
+                    raise
+                raise ValueError(
+                    "Could not prepare the requested game. The current game is unchanged."
+                ) from exc
+            manifest = env.content_pack_manifest()
+            selected_pack = curated_pack_for_matchup(
+                config.hero_deck_name,
+                config.villain_deck_name,
+            )
+            player_config = raw_config if isinstance(raw_config, dict) else {}
+            players = self.attempt_store.players_for_game(
+                self.attempt_owner,
+                asdict(config),
+                player_config.get("player_token"),
+                player_config.get("player_name"),
+            )
+            if self.watch_mode and self.record_players is not None:
+                players = self.record_players
+            if (
+                not self.watch_mode
+                and not player_config.get("player_token")
+                and self.record_players
+                and self._record_player_owner == self.attempt_owner
+            ):
+                players[0] = replace(
+                    next(
+                        player
+                        for player in self.record_players
+                        if player.kind == "human"
+                    ),
+                    deck=config.hero_deck_name,
+                    seat=config.human_seat,
+                )
+            if self.trace is not None:
+                self.close(end_reason="new_game")
+            self.record_players = players
+            self._record_player_owner = self.attempt_owner
+            self._close_policies()
+            self.env, self.obs, self.villain_policy = env, obs, policy
+            self.mirror_retry = None
+            prepared.pop_all()
         self._demo_name = demo_name
         # A pack identifies both decks, so closed games use the generic identity.
         # Cards still resolve their treatments by name from their public zones.
+        self.interrupted_config = None
+        self.human_seat = config.human_seat
         self.decklists_closed = config.decklists == "closed"
         if selected_pack is not None and not self.decklists_closed:
             self.asset_manifest_hash = selected_pack.manifest_sha256
@@ -1036,7 +1127,7 @@ class GameSession:
         self.presentation_events = []
         self._last_presentation_cursor = 0
         self.canonical_decisions = []
-        self.canonical_presentation = {HERO_PLAYER_INDEX: [], 1: []}
+        self.canonical_presentation = {0: [], 1: []}
         self._authority_command_seq = 0
         self._study_roots = {}
         self._pending_decision = None
@@ -1062,6 +1153,17 @@ class GameSession:
             caused_by=None,
         )
         self.trace_id = self.match_id
+        if not self.watch_mode:
+            session_id = player_config.get("play_session_id")
+            session_revision = player_config.get("setup_revision", 0)
+            self._session_start = SessionStart(
+                session_id=session_id or secrets.token_urlsafe(16),
+                owner=self.attempt_owner,
+                request_id=request_id,
+                fingerprint=fingerprint,
+                revision=session_revision,
+                draft=setup_draft(config),
+            )
         self._persist_attempt()
         # A checked demo prefix is setup, not a sequence of surfaced human
         # decisions. Retain every Command and Study root in memory, then persist
@@ -1078,16 +1180,79 @@ class GameSession:
             self._preparing_demo = False
         if demo is not None:
             update = self._wire_message(reason="initial_connect")
-        if request_id is not None:
-            self._new_game_requests.add(request_id)
+        if launch_id is not None:
+            update["launch"] = launch_id
         return update
+
+    def continue_game(self, request: RematchMessage, owner: str) -> dict[str, Any]:
+        """Resolve one revision-bound next game from the owner-private draft."""
+        if self.trace is None and self.interrupted_config is None:
+            raise ValueError("No game to continue.")
+        membership = self.attempt_store.session_for_attempt(self.match_id)
+        if membership is None:
+            raise ValueError("This recording has no play session.")
+        session = self.attempt_store.session(membership["session_id"], {owner})
+        # Legacy callers may omit continuation bindings. New clients always pin
+        # all three; generate a single-use binding for the legacy operation.
+        request = request.model_copy(
+            update={
+                "request_id": request.request_id or secrets.token_urlsafe(16),
+                "attempt_id": request.attempt_id or self.match_id,
+                "setup_revision": request.setup_revision
+                if request.setup_revision is not None
+                else session["revision"],
+            }
+        )
+        assert request.request_id is not None
+        receipt_config = {
+            "request_id": request.request_id,
+            "intent": request.intent,
+            "attempt_id": request.attempt_id,
+            "setup_revision": request.setup_revision,
+            "overrides": request.config,
+        }
+        fingerprint = request_fingerprint(receipt_config)
+        receipt = self.attempt_store.continuation_receipt(
+            owner, request.request_id, fingerprint
+        )
+        if receipt is not None:
+            if receipt == self.match_id:
+                return self.current_message()
+            raise ValueError(
+                f"Continuation already started recording {receipt}; recover that recording."
+            )
+        if (
+            request.attempt_id != self.match_id
+            or request.setup_revision != session["revision"]
+        ):
+            raise ValueError("The game or setup changed. Recover before continuing.")
+        overrides = dict(request.config)
+        forbidden = {
+            "play_session_id",
+            "setup_revision",
+            "request_id",
+            "launch",
+            "demo",
+        }
+        if forbidden.intersection(overrides):
+            raise ValueError("Continuation setup contains reserved fields.")
+        config = continuation_config(session["draft"], overrides, request.intent)
+        config.update(
+            play_session_id=membership["session_id"],
+            setup_revision=session["revision"],
+            request_id=request.request_id,
+        )
+        # new_game checks the exact receipt again. Retain the request envelope's
+        # fingerprint so a retry can be checked before resolving against new setup.
+        self.attempt_owner = owner
+        return self.new_game(config, continuation_fingerprint=fingerprint)
 
     def hero_action(self, raw_index: Any) -> dict[str, Any]:
         if self.env is None or self.obs is None or self.trace is None:
             raise ValueError("No active game session. Send new_game first.")
         if self.obs.game_over:
             raise ValueError("Game is already over. Start a new game.")
-        if not _is_hero_turn(self.obs):
+        if not _is_hero_turn(self.obs, self.human_seat):
             raise ValueError("Cannot accept hero action: waiting on villain auto-play.")
 
         try:
@@ -1120,7 +1285,9 @@ class GameSession:
         self._last_presentation_cursor = batch_cursor
         return self._wire_message()
 
-    def hero_command(self, raw: Any) -> dict[str, Any]:
+    def hero_command(
+        self, raw: Any, *, committed: Callable[[dict[str, Any]], None] | None = None
+    ) -> dict[str, Any]:
         """Validate and apply one revision-bound protocol-v1 command.
 
         Offer IDs are lowered through ``PublishedPrompt``. The client never
@@ -1134,7 +1301,7 @@ class GameSession:
         command_id = raw.get("command_id")
         if not isinstance(command_id, str) or not command_id:
             raise ValueError("command_id must be a non-empty string.")
-        if command_id.startswith("authority."):
+        if command_id.startswith(("authority.", "compound-")):
             return self._reject_command(raw, "reserved_command_id", recover=False)
 
         # Check retries before any revision/match validation. A response may
@@ -1144,7 +1311,7 @@ class GameSession:
             return {
                 "type": "command_outcome",
                 "status": "duplicate",
-                "receipt": dict(receipt),
+                "receipt": deepcopy(receipt),
                 "recovery": self.current_recovery("duplicate_command"),
             }
 
@@ -1166,7 +1333,7 @@ class GameSession:
             return self._reject_command(raw, "invalid_selection", recover=False)
         if self.obs.game_over:
             return self._reject_command(raw, "authority_busy", recover=True)
-        if not _is_hero_turn(self.obs):
+        if not _is_hero_turn(self.obs, self.human_seat):
             return self._reject_command(raw, "not_actor", recover=False)
 
         try:
@@ -1177,37 +1344,64 @@ class GameSession:
         base_revision = context.revision
         batch_cursor = self.presentation.next_seq
         self._apply_bound_command(context, command, source="client")
-        self._advance()
-        self._last_presentation_cursor = batch_cursor
-        presentation = [
-            dict(event)
-            for event in self.presentation_events
-            if int(event["seq"]) >= batch_cursor
-        ]
-        frame = self._experience_frame()
-        transient = self._drain_surface_metadata()
+        # The receipt names the human transition, before any opponent proposal.
+        # A later failure must not make an accepted Command appear unexecuted.
+        committed_frame = self._experience_frame()
         receipt = {
             "command_id": command_id,
-            "actor": HERO_PLAYER_INDEX,
+            "actor": self.human_seat,
             "accepted_at": base_revision,
             "resulting_revision": self.revision,
-            "resulting_frame_hash": frame["frame_hash"],
+            "resulting_frame_hash": committed_frame["frame_hash"],
         }
         self.accepted_commands[command_id] = receipt
         while len(self.accepted_commands) > MAX_ACCEPTED_COMMANDS:
             self.accepted_commands.pop(next(iter(self.accepted_commands)))
 
+        if committed is not None:
+            committed(self._accepted_outcome(base_revision, batch_cursor, receipt))
+            base_revision = self.revision
+            batch_cursor = self.presentation.next_seq
+        self._advance()
+        self._last_presentation_cursor = batch_cursor
+        return self._accepted_outcome(base_revision, batch_cursor, receipt)
+
+    def _accepted_outcome(
+        self, base_revision: int, cursor: int, receipt: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Publish events since the last boundary with the immutable receipt.
+
+        The same envelope serves early commitment and the settled response;
+        later frames never change the transition named by the receipt.
+        """
         return {
             "type": "command_outcome",
             "status": "accepted",
             "update": {
                 "base_revision": base_revision,
-                "frame": frame,
-                "presentation": presentation,
-                "receipt": receipt,
-                **transient,
+                "frame": self._experience_frame(),
+                "presentation": [
+                    dict(event)
+                    for event in self.presentation_events
+                    if int(event["seq"]) >= cursor
+                ],
+                "receipt": deepcopy(receipt),
+                **self._drain_surface_metadata(),
             },
         }
+
+    def retry_mirror(self, match_id: str, expected_revision: int) -> dict[str, Any]:
+        """Retry only the bound, uncommitted bot decision after a deadline."""
+        if (
+            self.watch_mode
+            or self.mirror_retry is None
+            or self.match_id != match_id
+            or self.revision != expected_revision
+        ):
+            raise ValueError("The pending search changed. Recover the current table.")
+        self.mirror_retry = None
+        self._advance()
+        return self._wire_message()
 
     def set_stops(
         self,
@@ -1232,6 +1426,21 @@ class GameSession:
                 raise ValueError("auto_pass must be a boolean.")
             self.auto_pass = raw_auto_pass
 
+        membership = self.attempt_store.session_for_attempt(self.match_id)
+        if membership is not None:
+            session = self.attempt_store.session(
+                membership["session_id"], {self.attempt_owner}
+            )
+            draft = {
+                **session["draft"],
+                "stops": self.stops,
+                "stop_on_stack": self.stop_on_stack,
+                "auto_pass": self.auto_pass,
+            }
+            self.attempt_store.update_session(
+                membership["session_id"], self.attempt_owner, session["revision"], draft
+            )
+
         # Stop configuration is versioned authority state even though it is not
         # a player decision and therefore never receives a replay ordinal.
         self._advance_protocol_revision()
@@ -1248,7 +1457,7 @@ class GameSession:
         if self.obs.game_over:
             raise ValueError("Game is already over. Start a new game.")
 
-        if _is_hero_turn(self.obs) and _is_priority_space(self.obs):
+        if _is_hero_turn(self.obs, self.human_seat) and _is_priority_space(self.obs):
             batch_cursor = self.presentation.next_seq
             self._f6_turn = int(self.obs.turn.turn_number)
             self._advance()
@@ -1305,7 +1514,7 @@ class GameSession:
         ]
         if action_index is None or len(matching_offers) != 1:
             raise RuntimeError("Bound command does not lower through one exact offer.")
-        actor = "hero" if context.viewer == HERO_PLAYER_INDEX else "villain"
+        actor = "hero" if context.viewer == self.human_seat else "villain"
         self._step_and_record(
             actor=actor,
             action_index=action_index,
@@ -1342,7 +1551,7 @@ class GameSession:
         state_before = (
             self.env.state_digest() if self._capture_authority_evidence else None
         )
-        actor_index = HERO_PLAYER_INDEX if actor == "hero" else 1
+        actor_index = self.human_seat if actor == "hero" else 1 - self.human_seat
         selected_offer: dict[str, Any] | None = None
         if auto:
             if context is None:
@@ -1392,7 +1601,7 @@ class GameSession:
                 }
             )
             retained_root = self.env.clone_env()
-            if actor_index == HERO_PLAYER_INDEX:
+            if actor_index == self.human_seat:
                 pending = self._pending_decision
                 if pending is None:
                     raise RuntimeError(
@@ -1438,6 +1647,11 @@ class GameSession:
         semantic_transition = SemanticTransition.from_json(transition_json)
         if semantic_transition.receipt.command_id != str(command["command_id"]):
             raise RuntimeError("Semantic receipt command identity drifted.")
+        if (
+            semantic_transition.receipt.before_revision
+            != semantic_command.expected_revision
+        ):
+            raise RuntimeError("Semantic receipt source revision drifted.")
         state_after: str | None = None
         semantic_events: list[dict[str, Any]] = []
         encountered_definition_ids: list[int] = []
@@ -1522,6 +1736,54 @@ class GameSession:
                 )
             )
 
+        try:
+            self._observe_policies()
+        finally:
+            if next_obs.game_over:
+                self._close_policies()
+
+    def _choose_bot(self, policy: BotPolicy) -> BotDecision | None:
+        """Retain failed proposals on the same native decision and policy session.
+
+        Only proposal work belongs here. Native commitment, observer delivery and
+        recording failures must still interrupt: they may follow a mutation.
+        The mirror_retry wire name is retained for existing clients.
+        """
+        assert self.env is not None and self.obs is not None
+        self._bot_decision = None
+        self.mirror_retry = None
+        self.work.stage(
+            "search"
+            if isinstance(policy, FlatSearchPolicy)
+            or isinstance(policy, PolicyRunner)
+            and policy.search is not None
+            else "choose",
+            self.match_id,
+            self.revision,
+            int(self.obs.agent.player_index),
+        )
+        try:
+            proposal = choose_bot(policy, self.env, self.obs)
+        except Exception as exc:
+            code = exc.reason if isinstance(exc, SearchError) else "policy_failed"
+            if isinstance(exc, (SearchError, ValueError)):
+                message = str(exc)
+            else:
+                logging.getLogger(__name__).exception("Bot proposal failed")
+                message = (
+                    f"Bot decision failed ({type(exc).__name__}); see the server log."
+                )
+            self.mirror_retry = {
+                "code": code,
+                "message": message,
+                "match_id": self.match_id,
+                "expected_revision": self.revision,
+            }
+            return None
+        self.work.stage("advance", self.match_id, self.revision)
+        self._bot_decision = proposal
+        return proposal
+
     def _auto_play_villain(self) -> None:
         if self.env is None or self.obs is None or self.trace is None:
             return
@@ -1529,12 +1791,12 @@ class GameSession:
             raise RuntimeError("Villain policy not initialized.")
 
         steps = 0
-        while not self.obs.game_over and not _is_hero_turn(self.obs):
+        while not self.obs.game_over and not _is_hero_turn(self.obs, self.human_seat):
             if steps >= MAX_AUTOPLAY_STEPS:
                 raise RuntimeError("Villain auto-play exceeded safety step limit.")
             steps += 1
 
-            context = self._build_decision_context(self.obs, viewer=1)
+            context = self._build_decision_context(self.obs, viewer=1 - self.human_seat)
             if self._villain_offer_policy is not None:
                 offer_id = int(self._villain_offer_policy(context))
                 action_index = context.action_by_offer.get(offer_id)
@@ -1544,15 +1806,10 @@ class GameSession:
                     )
             else:
                 self.authority_fallback_counters["legacy_fixed_action"] += 1
-                try:
-                    self._bot_decision = choose_bot(
-                        self.villain_policy, self.env, self.obs
-                    )
-                    action_index = self._bot_decision.action
-                except Exception as exc:
-                    raise RuntimeError(
-                        "The opponent could not continue this game."
-                    ) from exc
+                proposal = self._choose_bot(self.villain_policy)
+                if proposal is None:
+                    return
+                action_index = proposal.action
                 if action_index < 0 or action_index >= len(context.actions):
                     raise RuntimeError(
                         f"Villain policy selected invalid action index: {action_index}"
@@ -1582,6 +1839,8 @@ class GameSession:
         the same recorded authority path as a click.
         Bounded so a stuck engine cannot spin the server forever.
         """
+        if self.mirror_retry is not None:
+            return
         if (
             self.watch_mode
             or self.env is None
@@ -1593,6 +1852,8 @@ class GameSession:
         hero_steps = 0
         while True:
             self._auto_play_villain()
+            if self.mirror_retry is not None:
+                return
             if self.obs.game_over:
                 self._f6_turn = None
                 return
@@ -1606,7 +1867,7 @@ class GameSession:
                 raise RuntimeError("Hero automatic play exceeded safety step limit.")
             hero_steps += 1
 
-            actions = describe_actions(self.obs)
+            actions = _academy_actions(self.obs, self.human_seat)
             action_index = _pass_priority_index(actions)
             if action_index is None:
                 return
@@ -1651,7 +1912,7 @@ class GameSession:
         if stop_step is None:
             # Untap/cleanup/end-of-combat: no stop exists for these steps.
             return False
-        side = "my" if _hero_is_active_player(obs) else "opponent"
+        side = "my" if _hero_is_active_player(obs, self.human_seat) else "opponent"
         return stop_step in self.stops.get(side, [])
 
     def _stops_payload(self) -> dict[str, Any]:
@@ -1681,6 +1942,8 @@ class GameSession:
 
     def _advance_protocol_revision(self) -> None:
         self.revision += 1
+        if self.mirror_retry is not None:
+            self.mirror_retry["expected_revision"] = self.revision
         self.published_prompt = None
         self._pending_decision = None
 
@@ -1698,7 +1961,7 @@ class GameSession:
             caused_by=caused_by,
         )
         viewer_events: dict[int, list[dict[str, Any]]] = {}
-        for viewer in (HERO_PLAYER_INDEX, 1):
+        for viewer in (0, 1):
             projected: list[dict[str, Any]] = []
             for event in authority_events:
                 copy = deepcopy(event)
@@ -1708,7 +1971,7 @@ class GameSession:
             self.canonical_presentation[viewer].extend(projected)
             viewer_events[viewer] = projected
 
-        live_events = viewer_events[HERO_PLAYER_INDEX]
+        live_events = viewer_events[self.human_seat]
         self.presentation_events.extend(live_events)
         if len(self.presentation_events) > MAX_PRESENTATION_EVENTS:
             self.presentation_events = self.presentation_events[
@@ -1731,16 +1994,16 @@ class GameSession:
 
         self.published_prompt = self._build_decision_context(
             self.obs,
-            viewer=HERO_PLAYER_INDEX,
+            viewer=self.human_seat,
         )
         frame = ExperienceFrame.model_validate(self.published_prompt.frame)
         address = DecisionAddressV2.from_frame(
             replay_id=f"replay.{self.match_id}",
             match_id=self.match_id,
             ordinal=len(self.canonical_decisions),
-            viewer=HERO_PLAYER_INDEX,
+            viewer=self.human_seat,
             frame=frame,
-            presentation_cursor=len(self.canonical_presentation[HERO_PLAYER_INDEX]),
+            presentation_cursor=len(self.canonical_presentation[self.human_seat]),
         )
         self._pending_decision = PendingCanonicalDecision(
             address=address,
@@ -1748,7 +2011,7 @@ class GameSession:
             root=self.env.clone_env(),
             source_sha256=decision_source_sha256(address, frame),
             rules_revision=int(
-                json.loads(self.env.semantic_observation_json(HERO_PLAYER_INDEX))[
+                json.loads(self.env.semantic_observation_json(self.human_seat))[
                     "identity"
                 ]["revision"]
             ),
@@ -1762,7 +2025,7 @@ class GameSession:
         viewer: int,
     ) -> DecisionContext:
         """Build one exact actor-safe frame and raw-action lowering map."""
-        actions = describe_actions(obs)
+        actions = _academy_actions(obs, self.human_seat)
         action_space = enum_name(
             ActionSpaceEnum, int(obs.action_space.action_space_type)
         )
@@ -1831,9 +2094,7 @@ class GameSession:
             return None
         names = dict(self.deck_names)
         if self.decklists_closed:
-            names["villain" if viewer == HERO_PLAYER_INDEX else "hero"] = (
-                CLOSED_DECK_NAME
-            )
+            names["villain" if viewer == self.human_seat else "hero"] = CLOSED_DECK_NAME
         return names
 
     def _build_frame(
@@ -1859,11 +2120,13 @@ class GameSession:
             "revision": self.revision,
             "content_hash": self.content_hash,
             "asset_manifest_hash": self.asset_manifest_hash,
-            "status": "game_over" if obs.game_over else "ready",
+            "status": "game_over"
+            if obs.game_over
+            else ("ready" if prompt else "thinking"),
             "prompt": prompt,
             "projection": projection,
             "offers": offers,
-            "winner": _winner_for_hero(obs) if viewer == HERO_PLAYER_INDEX else None,
+            "winner": self.env.winner_index() if obs.game_over else None,
             "action_space": action_space,
             "stops": self._stops_payload(),
             "deck_names": self._deck_names_for(viewer),
@@ -1886,11 +2149,35 @@ class GameSession:
         if self.obs is None:
             raise RuntimeError("No observation available.")
 
+        if not self.obs.game_over and not _is_hero_turn(self.obs, self.human_seat):
+            # The pending choice belongs to the bot. Publish the human's view
+            # without a human prompt or any of the bot's private legal offers.
+            self.published_prompt = None
+            self._persist_attempt()
+            return self._build_frame(
+                self.obs,
+                viewer=self.human_seat,
+                prompt=None,
+                offers=[],
+                action_space="",
+            )
+
         if self.obs.game_over:
             self._persist_attempt(end_reason="game_over")
             return self._build_frame(
                 self.obs,
-                viewer=HERO_PLAYER_INDEX,
+                viewer=self.human_seat,
+                prompt=None,
+                offers=[],
+                action_space="",
+            )
+        if not _is_hero_turn(self.obs, self.human_seat):
+            # A policy failure can leave a committed command awaiting another
+            # seat. Recovery must never publish that seat's private offers.
+            self._persist_attempt()
+            return self._build_frame(
+                self.obs,
+                viewer=self.human_seat,
                 prompt=None,
                 offers=[],
                 action_space="",
@@ -1944,7 +2231,7 @@ class GameSession:
             "frame": frame,
             "presentation_cursor": cursor,
             "presentation_tail": presentation_tail,
-            "accepted_commands": list(self.accepted_commands.values()),
+            "accepted_commands": deepcopy(list(self.accepted_commands.values())),
             "replay_cursor": len(self.trace.events) if self.trace else 0,
             "checkpoint": None,
         }
@@ -1985,6 +2272,7 @@ class GameSession:
         if "asset_pack" in frame:
             payload["asset_pack"] = frame["asset_pack"]
         payload.update(transient)
+        payload["mirror_retry"] = self.mirror_retry
         return payload
 
     def _reject_command(
@@ -2024,8 +2312,8 @@ class GameSession:
         )
         retained = replace(
             self.trace,
-            final_observation=decision_surface_view(self.env, HERO_PLAYER_INDEX),
-            winner=_winner_for_hero(self.obs),
+            final_observation=decision_surface_view(self.env, self.human_seat),
+            winner=self.env.winner_index() if self.obs.game_over else None,
             end_reason=end_reason if finished else self.trace.end_reason,
             canonical_replay=canonical.model_dump(mode="json"),
         )
@@ -2043,14 +2331,16 @@ class GameSession:
             retained.to_record(),
             finished=finished,
             players=self.record_players,
+            session_start=self._session_start,
             origin=(
-                "bot_evaluation"
+                (os.getenv("ACADEMY_PLAY_RECORD_ORIGIN") or "bot_evaluation")
                 if self.watch_mode
                 else "automated_validation"
                 if self._demo_name
                 else None
             ),
         )
+        self._session_start = None
         if finished:
             self._study_provider = study_provider
             self._trace_saved = True
@@ -2102,7 +2392,7 @@ class GameSession:
         viewer = (
             int(parse_decision_address(raw_address).viewer)
             if self.watch_mode
-            else HERO_PLAYER_INDEX
+            else self.human_seat
         )
         return self.study_fork_provider().fork(raw_address, viewer)
 
@@ -2129,7 +2419,7 @@ class GameSession:
         viewer = (
             int(parse_decision_address(raw_address).viewer)
             if self.watch_mode
-            else HERO_PLAYER_INDEX
+            else self.human_seat
         )
         projection = project_replay(replay, viewer)
         restored = restore_decision(replay, raw_address, viewer)
@@ -2341,14 +2631,29 @@ class GameSession:
                 attempt.branch.return_to_recorded()
         self._study_attempts = {}
 
-    def close(self, end_reason: str) -> None:
-        self._close_study_attempts()
-        self._persist_attempt(end_reason=end_reason)
+    def _observe_policies(self) -> None:
+        if self.env is not None and self.obs is not None:
+            observe_policies(
+                self.watch_policies or (self.villain_policy,), self.env, self.obs
+            )
 
-        self.env = None
-        self.obs = None
-        self.villain_policy = None
-        self.watch_policies = None
+    def _close_policies(self) -> None:
+        close_policies((self.villain_policy, *(self.watch_policies or ())))
+
+    def close(self, end_reason: str) -> None:
+        try:
+            self._close_study_attempts()
+            self._persist_attempt(end_reason=end_reason)
+        finally:
+            try:
+                self._close_policies()
+            finally:
+                self.env = None
+                self.obs = None
+                self.villain_policy = None
+                self.watch_policies = None
+                self._bot_decision = None
+                self.mirror_retry = None
 
 
 def _error_message(message: str) -> dict[str, str]:
@@ -2408,7 +2713,7 @@ def _cleanup_expired_sessions() -> None:
     expired_ids = [
         session_id
         for session_id, record in SESSION_REGISTRY.items()
-        if record.expires_at <= now
+        if record.expires_at <= now and not record.lock.locked()
     ]
     for session_id in expired_ids:
         _drop_session(session_id, end_reason=SESSION_EXPIRED_END_REASON)
@@ -2417,6 +2722,7 @@ def _cleanup_expired_sessions() -> None:
 def _participant_from_resume(
     raw_session_id: Any,
     raw_resume_token: Any,
+    play_session_id: str | None = None,
 ) -> tuple[SessionRecord, ParticipantLease]:
     if not isinstance(raw_session_id, str) or not raw_session_id:
         raise ValueError("resume messages require a non-empty 'session_id'.")
@@ -2425,7 +2731,32 @@ def _participant_from_resume(
 
     record = SESSION_REGISTRY.get(raw_session_id)
     if record is None:
-        raise ValueError("Session not found or expired. Start a new game.")
+        if play_session_id is None:
+            raise ValueError("Session not found or expired. Start a new game.")
+        game = _new_game_session()
+        owner = participant_id(raw_resume_token)
+        game.attempt_store.session(play_session_id, {owner})
+        attempt = game.attempt_store.latest_session_attempt(play_session_id)
+        retained = game.attempt_store.load(attempt)
+        if retained is None or retained["end_reason"] == "active":
+            raise ValueError(
+                "Original table is unavailable; an active attempt cannot be recreated."
+            )
+        # Recover only private setup and recorded identity. No Env, prompt or
+        # live Command authority can survive a process restart.
+        game.attempt_owner = owner
+        game.match_id = game.trace_id = attempt
+        game.record_players = [
+            RecordedPlayer(**player)
+            for player in game.attempt_store.metadata(attempt)["players"]
+        ]
+        game._record_player_owner = owner
+        game.interrupted_config = retained["config"]
+        game.human_seat = retained["config"].get("human_seat", 0)
+        record = SessionRecord(
+            session_id=raw_session_id, resume_token=raw_resume_token, game=game
+        )
+        SESSION_REGISTRY[raw_session_id] = record
     participants = [
         participant
         for participant in record.participants.values()
@@ -2507,7 +2838,7 @@ def _live_decision_summaries(record: SessionRecord) -> list[dict[str, Any]]:
             "offer_id": decision.offer_id,
         }
         for decision in record.game.canonical_decisions
-        if decision.viewer == HERO_PLAYER_INDEX
+        if decision.viewer == record.game.human_seat
     ]
     pending = record.game._pending_decision
     if pending is None:
@@ -2556,6 +2887,7 @@ def _table_snapshot(
             identity=ViewerIdentity(
                 viewer_id=participant.viewer_id,
                 table_id=record.session_id,
+                rules_viewer=record.game.human_seat,
             ),
             role=participant.role,
             capabilities=capabilities,
@@ -2593,6 +2925,33 @@ def _response_with_participant(
     watcher_invite: str | None = None,
 ) -> dict[str, Any]:
     payload = deepcopy(response)
+    payload["work"] = record.game.work.payload()
+    payload["mirror_retry"] = record.game.mirror_retry
+    payload["mirror"] = (
+        asdict(record.game.trace.config).get("mirror") if record.game.trace else None
+    )
+    # Launch metadata belongs only to the browser that submitted the setup.
+    payload.pop("launch", None)
+    payload.pop("play_session", None)
+    membership = record.game.attempt_store.session_for_attempt(record.game.match_id)
+    if membership is not None:
+        try:
+            session = record.game.attempt_store.session(
+                membership["session_id"], {participant_id(participant.resume_token)}
+            )
+            payload["play_session"] = {
+                **session,
+                **membership,
+                "config": asdict(record.game.trace.config)
+                if record.game.trace
+                else dict(record.game.interrupted_config or {}),
+            }
+            payload["play_session"]["config"]["seed"] = str(
+                payload["play_session"]["config"].get("seed")
+            )
+        except ValueError:
+            pass
+    payload["session_interrupted"] = record.game.interrupted_config is not None
     payload["table"] = _table_snapshot(
         record, participant, watcher_invite=watcher_invite
     )
@@ -2663,6 +3022,7 @@ DISPATCH_CAPABILITIES: dict[str, TableCapability] = {
     "command": TableCapability.SUBMIT_LIVE_COMMAND,
     "action": TableCapability.SUBMIT_LIVE_COMMAND,
     "pass_turn": TableCapability.SUBMIT_LIVE_COMMAND,
+    "retry_mirror": TableCapability.SUBMIT_LIVE_COMMAND,
     "set_stops": TableCapability.CONFIGURE_MATCH,
     "transfer_pilot": TableCapability.TRANSFER_PILOT,
     "author_belief": TableCapability.AUTHOR_BELIEF,
@@ -2773,6 +3133,7 @@ def _dispatch_table_request(
     record: SessionRecord,
     participant: ParticipantLease,
     request: Any,
+    committed: Callable[[dict[str, Any]], None] | None = None,
 ) -> tuple[dict[str, Any], bool]:
     """Authorize and execute one closed operation under the table lock."""
     if isinstance(request, CommandMessage):
@@ -2793,34 +3154,17 @@ def _dispatch_table_request(
     _authorize_table_request(record, participant, request)
 
     if isinstance(request, (NewGameMessage, RematchMessage)):
-        config = dict(request.config)
-        if isinstance(request, RematchMessage) and record.game.trace is not None:
-            previous = record.game.trace.config
-            config = {
-                "villain_type": previous.villain_type,
-                "villain_sims": previous.villain_sims,
-                "hero_deck": previous.hero_deck_name,
-                "villain_deck": previous.villain_deck_name,
-                "decklists": previous.decklists,
-                "stops": record.game.stops,
-                "auto_pass": record.game.auto_pass,
-                "stop_on_stack": record.game.stop_on_stack,
-                **({"seed": previous.seed} if previous.seed_was_requested else {}),
-                **config,
-            }
-            if previous.hero_source is not None and previous.villain_source is not None:
-                # New game re-admits the retained sources against the installed world.
-                config["deck_import"] = {
-                    seat: {"source": source["source"], "filename": source["filename"]}
-                    for seat, source in (
-                        ("hero", previous.hero_source),
-                        ("villain", previous.villain_source),
-                    )
-                }
-            if previous.opponent is not None:
-                config["opponent_sha256"] = previous.opponent["sha256"]
-        record.game.attempt_owner = participant_id(participant.resume_token)
-        response = record.game.new_game(config)
+        owner = participant_id(participant.resume_token)
+        previous_match = record.game.match_id
+        if isinstance(request, RematchMessage):
+            response = record.game.continue_game(request, owner)
+        else:
+            if {"play_session_id", "setup_revision"}.intersection(request.config):
+                raise ValueError("Use continuation to join a session.")
+            record.game.attempt_owner = owner
+            response = record.game.new_game(dict(request.config))
+        if record.game.match_id == previous_match:
+            return response, False
         record.accepted_command_submitters.clear()
         record.shared_beliefs.clear()
         for candidate in record.participants.values():
@@ -2829,16 +3173,25 @@ def _dispatch_table_request(
         record.table_revision += 1
         return response, True
     if isinstance(request, CommandMessage):
-        response = record.game.hero_command(request.command.model_dump(mode="json"))
-        if response.get("status") == "accepted":
-            record.accepted_command_submitters[request.command.command_id] = (
-                participant.viewer_id
+        command_id = request.command.command_id
+        record.accepted_command_submitters[command_id] = participant.viewer_id
+        try:
+            response = record.game.hero_command(
+                request.command.model_dump(mode="json"), committed=committed
             )
+        finally:
+            # Keep retry ownership if policy/transport work failed after commit.
+            if command_id not in record.game.accepted_commands:
+                record.accepted_command_submitters.pop(command_id, None)
         return response, True
     if isinstance(request, ActionMessage):
         return record.game.hero_action(request.index), True
     if isinstance(request, PassTurnMessage):
         return record.game.pass_turn(), True
+    if isinstance(request, RetryMirrorMessage):
+        return record.game.retry_mirror(
+            request.match_id, request.expected_revision
+        ), True
     if isinstance(request, SetStopsMessage):
         return (
             record.game.set_stops(
@@ -2871,7 +3224,7 @@ def _dispatch_table_request(
     if isinstance(request, RestoreDecisionMessage):
         replay = record.game.canonical_replay()
         try:
-            restored = restore_decision(replay, request.address, HERO_PLAYER_INDEX)
+            restored = restore_decision(replay, request.address, record.game.human_seat)
         except (InvalidAddressError, DecisionNotFoundError) as exc:
             raise TableDispatchError("not_found", "Decision not found.") from exc
         return {
@@ -2943,6 +3296,66 @@ def _dispatch_table_request(
     raise RuntimeError(f"closed dispatch missing handler for {request.type}")
 
 
+def _launch_metadata(launch_id: object) -> dict[str, Any]:
+    """Return setup to the requesting tab even when a known launch is refused."""
+    if not isinstance(launch_id, str) or launch_id not in LAUNCH_CONFIGS:
+        return {}
+    return {
+        "launch": launch_id,
+        "launch_setup": {
+            key: value
+            for key, value in LAUNCH_CONFIGS[launch_id].items()
+            if key != "seed"
+        },
+    }
+
+
+def _request_error(request: object, message: str) -> dict[str, Any]:
+    """An error reply; a refused new game keeps its launch setup for a retry."""
+    error: dict[str, Any] = dict(_error_message(message))
+    if isinstance(request, dict) and request.get("type") == "new_game":
+        config = request.get("config")
+        if isinstance(config, dict):
+            error.update(_launch_metadata(config.get("launch")))
+    return error
+
+
+def _cache_table_recovery(record: SessionRecord) -> None:
+    # Project once at a safe worker boundary, then apply each viewer's access.
+    response: dict[str, Any]
+    if record.game.obs is None:
+        response = {"type": "table_snapshot"}
+    else:
+        recovery = record.game.current_recovery("reconnect")
+        frame = recovery["frame"]
+        response = {
+            "type": "game_over" if frame["projection"]["game_over"] else "observation",
+            "data": frame["projection"],
+            "actions": [],
+            "winner": frame["winner"],
+            "frame": frame,
+            "recovery": recovery,
+        }
+    for participant in list(record.participants.values()):
+        record.published[participant.viewer_id] = _response_with_participant(
+            response, record, participant
+        )
+
+
+async def _publish_work(record: SessionRecord, status: WorkStatus) -> None:
+    # Status has no projection path. Resume uses the last permitted publication.
+    for participant in list(record.participants.values()):
+        if participant.websocket is not None:
+            with suppress(Exception):
+                await participant.websocket.send_json(
+                    {
+                        "type": "work_status",
+                        "session_id": record.session_id,
+                        "work": asdict(status),
+                    }
+                )
+
+
 async def _send_table_response(
     record: SessionRecord,
     initiator: ParticipantLease,
@@ -2951,6 +3364,7 @@ async def _send_table_response(
     broadcast: bool,
     watcher_invite: str | None = None,
 ) -> None:
+    _cache_table_recovery(record)
     recipients = list(record.participants.values()) if broadcast else [initiator]
     for recipient in recipients:
         socket = recipient.websocket
@@ -2962,17 +3376,13 @@ async def _send_table_response(
             recipient,
             watcher_invite=(watcher_invite if recipient is initiator else None),
         )
+        if recipient is initiator and response.get("launch") in LAUNCH_CONFIGS:
+            payload.update(_launch_metadata(response["launch"]))
         try:
             await socket.send_json(payload)
         except Exception:
             if recipient.websocket is socket:
                 recipient.websocket = None
-
-
-def _current_table_response(record: SessionRecord) -> dict[str, Any]:
-    if record.game.obs is None:
-        return {"type": "table_snapshot"}
-    return record.game.current_message()
 
 
 @app.websocket("/ws/play")
@@ -2981,10 +3391,16 @@ async def play_socket(websocket: WebSocket) -> None:
     await websocket.accept()
     attached_table_id: str | None = None
     attached_viewer_id: str | None = None
+    request: Any = None
 
     try:
         while True:
             try:
+                # A failed send (the client left during a long Command, such as
+                # a searched bot reply) closes the application side; that is a
+                # disconnect, not a game error.
+                if websocket.application_state is not WebSocketState.CONNECTED:
+                    raise WebSocketDisconnect(code=1006)
                 request = await websocket.receive_json()
             except WebSocketDisconnect:
                 if attached_table_id is not None and attached_viewer_id is not None:
@@ -3001,43 +3417,42 @@ async def play_socket(websocket: WebSocket) -> None:
                 }:
                     _parse_presentation_cursor(request.get("presentation_cursor"))
                 parsed = _parse_table_request(request)
-                if isinstance(parsed, JoinTableMessage):
+                if isinstance(parsed, (JoinTableMessage, ResumeMessage)):
                     presentation_cursor = _parse_presentation_cursor(
                         parsed.presentation_cursor
                     )
-                    record, participant = _participant_from_invite(
-                        parsed.table_id, parsed.invite_token
-                    )
+                    if isinstance(parsed, JoinTableMessage):
+                        record, participant = _participant_from_invite(
+                            parsed.table_id, parsed.invite_token
+                        )
+                    else:
+                        record, participant = _participant_from_resume(
+                            parsed.session_id,
+                            parsed.resume_token,
+                            parsed.play_session_id,
+                        )
                     await _attach_participant_websocket(record, participant, websocket)
                     attached_table_id = record.session_id
                     attached_viewer_id = participant.viewer_id
-                    response = (
-                        record.game.current_message(presentation_cursor)
-                        if record.game.obs is not None
-                        else {"type": "table_snapshot"}
-                    )
-                    await _send_table_response(
-                        record, participant, response, broadcast=True
-                    )
-                    continue
-                if isinstance(parsed, ResumeMessage):
-                    presentation_cursor = _parse_presentation_cursor(
-                        parsed.presentation_cursor
-                    )
-                    record, participant = _participant_from_resume(
-                        parsed.session_id, parsed.resume_token
-                    )
-                    await _attach_participant_websocket(record, participant, websocket)
-                    attached_table_id = record.session_id
-                    attached_viewer_id = participant.viewer_id
-                    response = (
-                        record.game.current_message(presentation_cursor)
-                        if record.game.obs is not None
-                        else {"type": "table_snapshot"}
-                    )
-                    await _send_table_response(
-                        record, participant, response, broadcast=True
-                    )
+                    if record.lock.locked():
+                        cached = record.published.get(participant.viewer_id)
+                        if cached is not None:
+                            await websocket.send_json(
+                                {
+                                    **cached,
+                                    "work": record.game.work.payload(),
+                                }
+                            )
+                            continue
+                    async with record.lock:
+                        response = (
+                            record.game.current_message(presentation_cursor)
+                            if record.game.obs is not None
+                            else {"type": "table_snapshot"}
+                        )
+                        await _send_table_response(
+                            record, participant, response, broadcast=True
+                        )
                     continue
 
                 invite_token: str | None = None
@@ -3068,9 +3483,55 @@ async def play_socket(websocket: WebSocket) -> None:
                         raise ValueError("Session expired. Start a new game.")
 
                 async with record.lock:
-                    response, broadcast = _dispatch_table_request(
-                        record, participant, parsed
+                    loop = asyncio.get_running_loop()
+
+                    def committed(outcome: dict[str, Any]) -> None:
+                        # Projection and delivery finish at the safe committed
+                        # boundary before the worker may mutate the Env again.
+                        asyncio.run_coroutine_threadsafe(
+                            _send_table_response(
+                                record, participant, outcome, broadcast=True
+                            ),
+                            loop,
+                        ).result()
+
+                    def publish_work(status: WorkStatus) -> None:
+                        # Called while the worker is paused at a safe boundary.
+                        asyncio.run_coroutine_threadsafe(
+                            _publish_work(record, status), loop
+                        ).result()
+
+                    record.game.work.stage(
+                        "advance",
+                        record.game.match_id if record.game.obs is not None else None,
+                        record.game.revision if record.game.obs is not None else None,
                     )
+                    status = record.game.work.read()
+                    assert status is not None
+                    _cache_table_recovery(record)
+                    await _publish_work(record, status)
+                    record.game.work.publish = publish_work
+                    failed = True
+                    dispatched = False
+                    try:
+                        response, broadcast = await asyncio.to_thread(
+                            _dispatch_table_request,
+                            record,
+                            participant,
+                            parsed,
+                            committed,
+                        )
+                        failed = record.game.mirror_retry is not None
+                        dispatched = True
+                    finally:
+                        record.game.work.publish = None
+                        record.game.work.finish(failed=failed)
+                        if not dispatched:
+                            # Request errors reply only to their sender. End
+                            # the broadcast wait for every other participant.
+                            status = record.game.work.read()
+                            assert status is not None
+                            await _publish_work(record, status)
                     record.touch()
                     await _send_table_response(
                         record,
@@ -3084,7 +3545,7 @@ async def play_socket(websocket: WebSocket) -> None:
                 await websocket.send_json(_control_error(exc))
                 continue
             except ValueError as exc:
-                await websocket.send_json(_error_message(str(exc)))
+                await websocket.send_json(_request_error(request, str(exc)))
                 continue
     except WebSocketDisconnect:
         return
@@ -3092,25 +3553,63 @@ async def play_socket(websocket: WebSocket) -> None:
         message = str(exc)
         if isinstance(exc, sqlite3.Error):
             message = "Game recording failed; this game may not have been saved."
+        error = _request_error(request, message)
         if attached_table_id is not None:
+            # The client must neither resume nor relaunch an ended game.
+            error["session_ended"] = True
             try:
                 _drop_session(attached_table_id, end_reason="error")
             except Exception:
                 logging.getLogger(__name__).exception("Failed to retain stopped game")
-                message = "Game recording failed; this game may not have been saved."
+                error["message"] = (
+                    "Game recording failed; this game may not have been saved."
+                )
         with suppress(Exception):
-            await websocket.send_json(_error_message(message))
+            await websocket.send_json(error)
         with suppress(Exception):
             await websocket.close()
 
 
+@app.get("/api/card-art/credits")
+def card_art_credits(names: list[str] = Query(default=[])) -> Response:
+    return JSONResponse(
+        card_art().credits(names[:1024]), headers={"Cache-Control": "no-store"}
+    )
+
+
+def _art_response(path: Path | None) -> Response:
+    if path is None:
+        return Response(status_code=204, headers={"Cache-Control": "no-store"})
+    return FileResponse(
+        path,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
+
+
+@app.get("/api/card-art/back.jpg")
+def card_back() -> Response:
+    return _art_response(card_art().back())
+
+
+@app.get("/api/card-art/{kind}/{slug}.jpg")
+def card_image(kind: Literal["art", "full"], slug: str) -> Response:
+    return _art_response(card_art().image(slug, kind))
+
+
 @app.get("/api/opponents")
 async def get_opponents() -> dict[str, Any]:
-    # Reading checkpoints touches the filesystem and Torch; keep the loop free.
-    catalog = await asyncio.to_thread(opponent_catalog)
-    for entry in catalog["opponents"]:
-        entry["decks"] = [_deck_label(setup) for setup in entry.pop("setups")]
-    return catalog
+    return await asyncio.to_thread(opponent_catalog)
+
+
+@app.post("/api/policies/check")
+def check_policy_setup(config: dict[str, Any]) -> dict[str, str | bool | None]:
+    """Preview admission without loading a session; Start repeats the same checks."""
+    try:
+        _parse_game_config(config)
+    except (ValueError, OSError, ImportError) as exc:
+        return {"compatible": False, "reason": str(exc)}
+    return {"compatible": True, "reason": None}
 
 
 def _record_owners(tokens: str | None) -> set[str]:
@@ -3118,20 +3617,32 @@ def _record_owners(tokens: str | None) -> set[str]:
 
 
 @app.middleware("http")
-async def authorize_record(request, call_next):
+async def authorize_record(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
     parts = request.url.path.split("/")
-    if len(parts) >= 4 and parts[1:3] == ["api", "traces"]:
+    if len(parts) >= 4 and parts[1:3] in (["api", "traces"], ["api", "watch"]):
         store = AttemptStore(trace_store.TRACES_DIR / "play.sqlite")
         access = store.access(
             parts[3],
-            _record_owners(request.headers.get("x-etude-participant-tokens")),
+            _record_owners(
+                ",".join(
+                    filter(
+                        None,
+                        [
+                            request.headers.get("x-etude-participant-tokens"),
+                            request.headers.get("x-etude-participant-token"),
+                        ],
+                    )
+                )
+            ),
             request.headers.get("x-etude-player-token"),
         )
         request.state.record_access = access
-        # Shared completed replay reads use the established seat-0 projection.
+        # Each reader applies the recording's permitted information projection.
         # Feedback and every mutation remain participant-only.
         public_read = request.method == "GET" and (
-            len(parts) == 4 or parts[4] == "decisions"
+            len(parts) == 4 or parts[4] in {"decisions", "recording", "positions"}
         )
         if access is not None and not (
             access["mine"] or (public_read and access["replay"])
@@ -3181,7 +3692,11 @@ async def record_feedback(
         if address is not None:
             if not isinstance(address, str):
                 raise ValueError("Invalid decision address.")
-            restore_decision(_load_trace_replay(trace_id), address, HERO_PLAYER_INDEX)
+            restore_decision(
+                _load_trace_replay(trace_id),
+                address,
+                trace_store.load_trace(trace_id)["config"].get("human_seat", 0),
+            )
         author = (
             store.profile(x_etude_player_token)["id"] if x_etude_player_token else None
         )
@@ -3193,11 +3708,71 @@ async def record_feedback(
     return {"saved": True}
 
 
+@app.put("/api/play-sessions/{session_id}")
+async def update_play_session(
+    session_id: str,
+    update: SessionSetupUpdate,
+    x_etude_participant_token: str = Header(),
+) -> dict[str, Any]:
+    try:
+        record, participant = _participant_from_resume(
+            update.table_id, x_etude_participant_token
+        )
+        async with record.lock:
+            _authorize_table_request(
+                record,
+                participant,
+                NewGameMessage(type="new_game", grant_revision=update.grant_revision),
+            )
+            owner = participant_id(participant.resume_token)
+            session = record.game.attempt_store.session(session_id, {owner})
+            membership = record.game.attempt_store.session_for_attempt(
+                record.game.match_id
+            )
+            if membership is None or membership["session_id"] != session_id:
+                raise ValueError("Setup belongs to another table.")
+            if update.revision != session["revision"]:
+                raise ValueError("Session setup changed; recover before editing.")
+            parsed = _parse_game_config(
+                continuation_config(session["draft"], update.config, "rematch")
+            )
+            record.game.attempt_store.update_session(
+                session_id, owner, update.revision, setup_draft(parsed)
+            )
+            response = _response_with_participant(
+                {"type": "table_snapshot"}, record, participant
+            )
+            return response["play_session"]
+    except (ValueError, TableDispatchError) as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@app.get("/api/play-sessions/{session_id}")
+def get_play_session(
+    session_id: str,
+    result_offset: int = Query(default=0, ge=0),
+    x_etude_participant_tokens: str | None = Header(default=None),
+) -> dict[str, Any]:
+    store = AttemptStore(trace_store.TRACES_DIR / "play.sqlite")
+    owners = _record_owners(x_etude_participant_tokens)
+    try:
+        rows = store.session_results(session_id, owners, offset=result_offset)
+        return {
+            **store.session(session_id, owners),
+            "results": rows[:100],
+            "next_result_offset": result_offset + 100 if len(rows) > 100 else None,
+            "totals": store.session_totals(session_id, owners),
+        }
+    except ValueError as exc:
+        raise HTTPException(403, str(exc)) from exc
+
+
 @app.get("/api/traces")
 async def list_traces(
     response: Response,
     x_etude_participant_tokens: str | None = Header(default=None),
     x_etude_player_token: str | None = Header(default=None),
+    session: str | None = None,
     scope: str = "all",
     q: str = "",
     player: str | None = None,
@@ -3219,6 +3794,7 @@ async def list_traces(
             _record_owners(x_etude_participant_tokens),
             token=x_etude_player_token,
             scope=scope,
+            session=session,
             q=q,
             player=player,
             other=other,
@@ -3237,7 +3813,11 @@ async def list_traces(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     # Frozen JSON history has no player identity. Keep it readable and label
     # missing provenance honestly; identity filters cannot match it.
-    if scope == "all" and not any((player, other, pairing, version, deck, result)):
+    if (
+        scope == "all"
+        and not session
+        and not any((player, other, pairing, version, deck, result))
+    ):
         for row in trace_store.list_trace_summaries():
             timestamp = row["timestamp"] or ""
             legacy_status = (
@@ -3337,10 +3917,164 @@ def _rest_study_owner(
     return matches[0].viewer_id
 
 
+def _recording_read(trace_id: str) -> tuple["Recording", dict[str, Any]]:
+    try:
+        path = trace_store._trace_path(trace_id, trace_store.TRACES_DIR)
+    except ValueError as exc:
+        raise HTTPException(400, "recording_id_invalid") from exc
+    store = AttemptStore(trace_store.TRACES_DIR / "play.sqlite")
+    metadata = store.metadata(trace_id)
+    stamp = (
+        metadata.get("revision"),
+        metadata.get("status"),
+        metadata.get("ending_reason"),
+    )
+    if not metadata:
+        try:
+            stamp = (path.stat().st_mtime_ns, path.stat().st_size)
+        except FileNotFoundError as exc:
+            raise HTTPException(404, "recording_not_found") from exc
+    try:
+        recording = read_cache.load(trace_store.TRACES_DIR, trace_id, stamp)
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(400, "recording_invalid") from exc
+    return recording, metadata
+
+
+def _recorded_mirrors(players: list[dict[str, Any]]) -> list[dict[str, Any] | None]:
+    """Read search settings from retained seat identities, without a provider."""
+    by_seat = {
+        player["seat"]: (player.get("inference") or {})
+        .get("runtime", {})
+        .get("config", {})
+        .get("mirror")
+        for player in players
+    }
+    return [by_seat.get(seat) for seat in (0, 1)]
+
+
+@app.get("/api/traces/{trace_id}/recording")
+def get_recording_index(
+    trace_id: str,
+    request: Request,
+    offset: int = 0,
+    limit: int = 200,
+    x_etude_participant_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    if offset < 0 or not 1 <= limit <= 200:
+        raise HTTPException(400, "invalid_page")
+    _cleanup_expired_sessions()
+    recording, metadata = _recording_read(trace_id)
+    payload = recording.payload
+    producer = next(
+        (
+            record
+            for record in SESSION_REGISTRY.values()
+            if record.game.trace_id == trace_id
+        ),
+        None,
+    )
+    finished = payload.get("end_reason") == "game_over" and bool(
+        payload["final_observation"].get("game_over")
+    )
+    study_available = False
+    if producer:
+        try:
+            _rest_study_owner(producer, x_etude_participant_token)
+            study_available = True
+        except HTTPException:
+            pass
+    available = bool(
+        study_available
+        and producer
+        and not finished
+        and producer.game.watch_mode
+        and producer.game.watch_policies is not None
+    )
+    opponent = payload["config"].get("opponent") or {}
+    # Seat 2's configured checkpoint identity and provenance, as the full trace
+    # read redacts them: the checkpoint path stays private.
+    provenance = payload["config"].get("opponent_checkpoint")
+    if isinstance(provenance, dict):
+        provenance = {k: v for k, v in provenance.items() if k != "checkpoint"}
+    players = deepcopy(metadata.get("players", []))
+    if payload["config"].get("decklists") == "closed":
+        for player in players:
+            if player["seat"] == 1 - payload["config"].get("human_seat", 0):
+                player["deck"] = "closed"
+    return {
+        "id": trace_id,
+        "positions": [
+            recording.metadata(position)
+            for position in recording.positions[offset : offset + limit]
+        ],
+        "total": len(recording.positions),
+        "next_offset": offset + limit
+        if offset + limit < len(recording.positions)
+        else None,
+        "revision": metadata.get("revision"),
+        "status": "finished"
+        if finished
+        else "waiting"
+        if producer and payload.get("end_reason") == "active"
+        else "interrupted",
+        "can_produce": available,
+        "mirror": _recorded_mirrors(players),
+        "mirror_retry": producer.game.mirror_retry if available and producer else None,
+        "can_study": study_available,
+        "winner": payload.get("winner") if finished else None,
+        "players": players,
+        "source_kind": "play"
+        if recording.completed_mirror
+        else opponent.get("source_kind"),
+        "opponent": payload["config"].get("opponent"),
+        "opponent_checkpoint": provenance,
+        "watch": recording.watch,
+        "private_setup": {
+            **setup_draft(GameConfig(**payload["config"])),
+            "watch_players": payload["config"].get("watch_players"),
+            "watch_mirrors": _recorded_mirrors(players),
+        }
+        if recording.watch
+        and (getattr(request.state, "record_access", None) or {}).get("mine")
+        else None,
+        "can_feedback": bool(
+            (getattr(request.state, "record_access", None) or {}).get("mine")
+        ),
+    }
+
+
+@app.get("/api/traces/{trace_id}/positions/{key}")
+def get_recording_position(
+    trace_id: str,
+    key: str,
+    reveal: bool = False,
+    study: bool = False,
+    before: int | None = None,
+    x_etude_participant_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    recording, _ = _recording_read(trace_id)
+    if key not in recording.by_key:
+        raise HTTPException(404, "position_unavailable")
+    if before is not None and before < 0:
+        raise HTTPException(400, "invalid_history_cursor")
+    try:
+        position = recording.read(key, reveal=reveal, before=before)
+        if study:
+            position["study_source"] = recording.study_source(key)
+        return position
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
 @app.get("/api/traces/{trace_id}/decisions")
 async def get_trace_decisions(trace_id: str) -> dict[str, Any]:
     replay = _load_trace_replay(trace_id)
-    return projection_with_addresses(project_replay(replay, HERO_PLAYER_INDEX))
+    return projection_with_addresses(
+        project_replay(
+            replay, trace_store.load_trace(trace_id)["config"].get("human_seat", 0)
+        )
+    )
 
 
 @app.get("/api/traces/{trace_id}/decisions/{address}")
@@ -3361,7 +4095,7 @@ async def get_trace_decision(
         viewer = (
             int(parse_decision_address(address).viewer)
             if watch_mode
-            else HERO_PLAYER_INDEX
+            else payload["config"].get("human_seat", 0)
         )
         restored = restore_decision(replay, address, viewer)
     except InvalidAddressError as exc:
@@ -3518,6 +4252,32 @@ def create_bot_watch(payload: dict[str, Any]) -> dict[str, Any]:
         raise HTTPException(400, str(exc)) from exc
 
 
+@app.post("/api/watch/setups/{handle}")
+def start_watch_setup(
+    handle: str,
+    payload: dict[str, Any],
+    x_etude_participant_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    from .watch import WatchRequest, start_setup
+
+    try:
+        return start_setup(
+            handle, WatchRequest.model_validate(payload), x_etude_participant_token
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.get("/api/watch/setups/{handle}")
+def read_watch_setup(
+    handle: str,
+    x_etude_participant_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    from .watch import setup_attempt
+
+    return setup_attempt(handle, x_etude_participant_token).payload()
+
+
 @app.post("/api/watch/{trace_id}/step")
 async def advance_bot_watch(
     trace_id: str,
@@ -3531,9 +4291,29 @@ async def advance_bot_watch(
         raise HTTPException(400, "revision_required")
     record = record_for_watch(trace_id, x_etude_participant_token)
     async with record.lock:
-        return await asyncio.to_thread(
-            step_watch, trace_id, x_etude_participant_token, revision
-        )
+        try:
+            return await asyncio.to_thread(
+                step_watch,
+                trace_id,
+                x_etude_participant_token,
+                revision,
+                payload.get("retry") is True,
+            )
+        except SearchError as exc:
+            raise HTTPException(409, {"code": exc.reason, "message": str(exc)}) from exc
+        finally:
+            record.game.work.finish(failed=record.game.mirror_retry is not None)
+
+
+@app.get("/api/watch/{trace_id}/work")
+def watch_work(
+    trace_id: str,
+    x_etude_participant_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    from .watch import record_for_watch
+
+    record = record_for_watch(trace_id, x_etude_participant_token)
+    return {"work": record.game.work.payload()}
 
 
 @app.get("/api/watch/{trace_id}/decisions/{ordinal}")
@@ -3545,7 +4325,7 @@ def inspect_bot_watch(
 ) -> dict[str, Any]:
     from .watch import inspect_watch
 
-    if ordinal < 0:
+    if ordinal < -1:
         raise HTTPException(400, "invalid_ordinal")
     try:
         return inspect_watch(trace_id, ordinal, x_etude_participant_token, reveal)
@@ -3561,8 +4341,10 @@ def import_arena_watch(payload: dict[str, Any]) -> dict[str, Any]:
 
     try:
         return import_arena(payload)
-    except (ValueError, KeyError, TypeError) as exc:
-        raise HTTPException(400, "arena_import_invalid") from exc
+    except ValueError as exc:
+        raise HTTPException(400, f"Game file rejected: {exc}") from exc
+    except (KeyError, TypeError) as exc:
+        raise HTTPException(400, "Game file rejected: invalid game fields.") from exc
 
 
 @app.post("/api/decklists/validate")

@@ -7,12 +7,15 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends import resolve
 import manabot.backends.torch as torch_backend
 from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import transition_gae
-from manabot.backends.torch.rollout import observation_tensors
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
@@ -20,7 +23,6 @@ from manabot.infra.config import (
     ModelConfig,
     RewardConfig,
 )
-from manabot.model.admission import admit_observation
 from manabot.training.execution import execute_regime
 from manabot.training.regime import (
     DampedPolicyLearning,
@@ -32,6 +34,7 @@ from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollecto
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.verify.store import VerifyStore
 import managym
+from tests.model.prepared_routes import device_input
 from tests.training.test_recovery import tracked_updates
 
 
@@ -100,6 +103,7 @@ def _collector(
         learning_seats=seats,
         games_per_stream=games,
         recovery_max_microsteps=10_000 if second is None else None,
+        numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
     )
     if scripted:
         collector._env = ScriptedGames(collector._buffers)
@@ -108,23 +112,19 @@ def _collector(
 
 def _behavior_matches(batch: RolloutBatch, agent: ActorCritic) -> None:
     rows = batch.observations()
-    obs = admit_observation(
+    obs = device_input(
         agent,
-        observation_tensors(
-            {
-                key: value.reshape((-1,) + value.shape[2:])
-                for key, value in rows.observation.items()
-            }
-        ),
+        {
+            key: value.reshape((-1,) + value.shape[2:])
+            for key, value in rows.observation.items()
+        },
     )
     with torch.no_grad():
         logits, values = agent(obs)
     np.testing.assert_allclose(batch.values.ravel(), values.numpy().ravel(), atol=1e-6)
     np.testing.assert_allclose(
         rows.log_probabilities.reshape(logits.shape),
-        logits.masked_fill(obs["actions_valid"] == 0, -torch.inf)
-        .log_softmax(-1)
-        .numpy(),
+        logits.masked_fill(~obs.legal, -torch.inf).log_softmax(-1).numpy(),
         atol=1e-6,
     )
     selected = np.take_along_axis(rows.log_probabilities, batch.actions[..., None], -1)
@@ -243,6 +243,7 @@ def test_off_policy_opponents_cannot_train_both_seats(mode: str) -> None:
             opponent_mode=mode,
             opponent_agent=agent,
             learning_seats="both",
+            numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
         )
 
 
@@ -292,7 +293,9 @@ def test_regime_trains_and_exports_both_seats(
         schedule_clock="iteration_fraction",
     )
     with VerifyStore(tmp_path / "store.sqlite") as store:
-        run = execute_regime(regime, 17, tmp_path / "run", store)
+        run = execute_regime(
+            regime, 17, tmp_path / "run", store, backend=resolve("torch")
+        )
     assert run.status == "completed"
     record = run.stages[0]
     assert record.games == 4
@@ -361,6 +364,7 @@ def test_collector_defaults_follow_policy_ownership() -> None:
             num_envs=2,
             opponent_mode=mode,
             opponent_agent=_agent(),
+            numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
         )
         assert collector.learning_seats == seats
         collector.close()

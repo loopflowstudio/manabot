@@ -1,26 +1,26 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-
   import type { PresentationPlayer } from '$lib/presentation.svelte';
 
   interface Props {
     player: PresentationPlayer;
+    externallyDriven?: boolean;
   }
 
-  let { player }: Props = $props();
+  let { player, externallyDriven = false }: Props = $props();
   const beat = $derived(player.currentBeat);
   const event = $derived(player.currentEvent);
 
-  onMount(() => {
+  $effect(() => {
+    const activePlayer = player;
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const applyPreference = (): void => player.setReducedMotion(media.matches);
+    const applyPreference = (): void => activePlayer.setReducedMotion(media.matches);
     applyPreference();
     media.addEventListener('change', applyPreference);
     return () => media.removeEventListener('change', applyPreference);
   });
 
   $effect(() => {
-    if (!player.playing || !event) {
+    if (externallyDriven || !player.playing || !event) {
       return;
     }
     const timer = window.setTimeout(() => player.advance(), player.effectiveDurationMs);
@@ -34,26 +34,26 @@
     data-presentation-seq={beat.seq}
     data-presentation-kind={event.kind.kind}
     data-reduced-motion={player.reducedMotion}
-    class={`pointer-events-none absolute inset-x-4 top-16 z-10 flex justify-center ${player.reducedMotion ? '' : 'motion-move'}`}
+    class="border-b border-line pb-3"
   >
     <div
-      class={`pointer-events-auto w-full max-w-xl rounded-xl border px-4 py-3 shadow-raised backdrop-blur ${
+      class={`w-full border-l-2 pl-3 ${
         beat.importance === 'critical'
-          ? 'border-mountain/80 bg-panel/95'
+          ? 'border-mountain'
           : beat.importance === 'emphasized'
-            ? 'border-plains/60 bg-panel/95'
-            : 'border-island/40 bg-panel/95'
+            ? 'border-plains'
+            : 'border-island'
       }`}
     >
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div role="status" aria-live="polite" aria-atomic="true">
           <p class="type-rubric text-ink-2">
-            Beat {player.currentIndex + 1} of {player.events.length}
+            Narration · {player.remaining} remaining
           </p>
-          <h2 class="type-title mt-1 text-ink">{beat.heading}</h2>
+          <h2 class="type-label mt-1 text-ink">{beat.heading}</h2>
           <p class="mt-1 text-ink">{beat.detail}</p>
         </div>
-        <div class="flex flex-wrap gap-2">
+        {#if !externallyDriven}<div class="flex flex-wrap gap-2">
           <button
             type="button"
             class="btn btn-secondary btn-sm"
@@ -84,7 +84,7 @@
           >
             Finish
           </button>
-        </div>
+        </div>{/if}
       </div>
     </div>
   </aside>

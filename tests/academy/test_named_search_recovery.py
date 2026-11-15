@@ -17,11 +17,12 @@ import torch
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.model.admission import admit_observation
 import managym
 from managym.academy import server, trace as trace_store
 from managym.experience import ExperienceFrame, InteractionOffer
 from managym.experience_projection import decision_surface_view
+from tests.academy.socket_messages import settled_message
+from tests.model.prepared_routes import device_input
 
 
 def _command(
@@ -68,7 +69,7 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
     with TestClient(server.app) as client:
         with client.websocket_connect("/ws/play") as socket:
             socket.send_json({"type": "new_game", "config": config})
-            initial = socket.receive_json()
+            initial = settled_message(socket)
             frame = ExperienceFrame.model_validate(initial["recovery"]["frame"])
             cast = False
             # Reach chapter II using ordinary Commands, without injecting state.
@@ -95,7 +96,7 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
                         "command": _command(frame, offer, f"search-prefix.{ordinal}"),
                     }
                 )
-                result = socket.receive_json()
+                result = settled_message(socket)
                 assert result["status"] == "accepted"
                 frame = ExperienceFrame.model_validate(result["update"]["frame"])
             else:
@@ -168,12 +169,12 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
                 optimizer = torch.optim.SGD(model.parameters(), lr=0.5)
                 model.zero_grad()
                 torch.nn.functional.cross_entropy(
-                    model(admit_observation(model, obs))[0], torch.tensor([wanted])
+                    model(device_input(model, obs))[0], torch.tensor([wanted])
                 ).backward()
                 optimizer.step()
                 selected = int(
                     model.get_action_and_value(
-                        admit_observation(model, obs), deterministic=True
+                        device_input(model, obs), deterministic=True
                     )[0]
                 )
                 if selected == wanted:
@@ -194,7 +195,7 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
                     }
                 )
                 recovered_name = ExperienceFrame.model_validate(
-                    socket.receive_json()["recovery"]["frame"]
+                    settled_message(socket)["recovery"]["frame"]
                 )
                 assert recovered_name == frame
                 game = server.SESSION_REGISTRY[initial["session_id"]].game
@@ -212,7 +213,7 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
                     frame, name_offer, f"name-card.{len(selections)}"
                 )
                 socket.send_json({"type": "command", "command": name_command})
-                named = socket.receive_json()
+                named = settled_message(socket)
                 assert named["status"] == "accepted"
                 frame = ExperienceFrame.model_validate(named["update"]["frame"])
                 socket.send_json(
@@ -221,7 +222,7 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
                         "command": name_command | {"command_id": "name-stale"},
                     }
                 )
-                stale_name = socket.receive_json()
+                stale_name = settled_message(socket)
                 assert stale_name["status"] == "rejected"
                 assert stale_name["rejection"]["code"] == "stale_revision"
                 if name_offer.label.startswith("Name "):
@@ -237,7 +238,7 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
             )
             assert (
                 ExperienceFrame.model_validate(
-                    socket.receive_json()["recovery"]["frame"]
+                    settled_message(socket)["recovery"]["frame"]
                 )
                 == frame
             )
@@ -271,7 +272,7 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
             chosen = choices[0]
             command = _command(frame, chosen, "search-first")
             socket.send_json({"type": "command", "command": command})
-            result = socket.receive_json()
+            result = settled_message(socket)
             assert result["status"] == "accepted"
             pending = ExperienceFrame.model_validate(result["update"]["frame"])
             assert pending.action_space == "LOOK_AND_SELECT"
@@ -298,7 +299,7 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
                     "resume_token": initial["resume_token"],
                 }
             )
-            recovery = socket.receive_json()["recovery"]
+            recovery = settled_message(socket)["recovery"]
             recovered = ExperienceFrame.model_validate(recovery["frame"])
             assert recovered == pending
             assert game.env.state_digest() == digest
@@ -306,14 +307,14 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
             assert not decision_surface_view(game.env, 1)["agent"].get("inspected")
 
             socket.send_json({"type": "command", "command": command})
-            assert socket.receive_json()["status"] == "duplicate"
+            assert settled_message(socket)["status"] == "duplicate"
             socket.send_json(
                 {
                     "type": "command",
                     "command": command | {"command_id": "search-stale"},
                 }
             )
-            rejected = socket.receive_json()
+            rejected = settled_message(socket)
             assert rejected["status"] == "rejected"
             assert rejected["rejection"]["code"] == "stale_revision"
             assert game.env.state_digest() == digest
@@ -325,7 +326,7 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
             socket.send_json(
                 {"type": "command", "command": _command(recovered, stop, "search-stop")}
             )
-            assert socket.receive_json()["status"] == "accepted"
+            assert settled_message(socket)["status"] == "accepted"
             finished = decision_surface_view(game.env, 0)
             assert not finished["agent"].get("inspected")
             assert chosen.focus[0] in {c["id"] for c in finished["opponent"]["exile"]}

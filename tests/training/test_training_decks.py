@@ -13,7 +13,14 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.checkpoint import (
+    BACKEND as TORCH_BACKEND,
+    load_checkpoint,
+    save_checkpoint,
+)
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.failures import CaptureScope, FailureEvidence, capture_scope
 from manabot.env.match import Match, Reward
@@ -22,13 +29,13 @@ from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.infra.provenance import authored_matchup_sha256, runtime_fingerprints
 from manabot.model.catalog import checkpoint_incompatibility, inspect_checkpoint
-from manabot.model.inference import PolicyInference
 from manabot.model.world import checkpoint_world, validate_agent_setup
 from manabot.training.decks import UniformDecks, pair_match
 from manabot.training.execution import _runtime_identities, validate_regime
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.training.rollout.collection import SeatRoutedCollector
-from manabot.training.state.admission import _admit_setups
+from manabot.training.rollout.numerics import CollectionScope
+from manabot.training.state.admission import admit_setups
 from manabot.training.state.game_errors import (
     GameAttempt,
     GameErrorLedger,
@@ -38,6 +45,7 @@ from manabot.training.state.game_errors import (
 from manabot.training.state.recovery import admit_recovery_identities
 import managym
 from managym import MAX_DECKLIST_BYTES, Deck, DeckImportError, Decklist
+from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
 WORLD = managym.WORLD_SETUP
 ROSTER_PACK = "elemental-world-v2"
@@ -80,6 +88,7 @@ def _collector(
         deck_source=decks,
         recovery_max_microsteps=1000 if recovery == "exact" else None,
         recovery_max_game_microsteps=1000 if recovery == "current" else None,
+        numerics=TorchCollectionSession(device="cpu", seed=17402, precision="float32"),
     )
 
 
@@ -242,6 +251,9 @@ def test_sampled_decks_agree_across_producer_counts(
             games_per_stream=2,
             deck_source=decks,
             workers=count,
+            numerics=TorchCollectionSession(
+                device="cpu", seed=17402, precision="float32"
+            ),
         )
         for count in (1, workers)
     ]
@@ -285,7 +297,7 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
     target = tmp_path / "policy.pt"
     save_checkpoint(_agent(), ObservationSpace(), target, player_configs=None)
     # Nothing about training travels with the model.
-    raw = torch.load(target, map_location="cpu", weights_only=True)
+    raw = read_checkpoint(target, map_location="cpu", weights_only=True)
     binding = raw["world_binding"]
     assert "setups" not in binding and "content_manifest" not in binding
     assert set(binding) == {
@@ -300,7 +312,7 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
         "naming_vocabulary",
     }
     assert binding["world"] == managym.WORLD_VERSION
-    assert inspect_checkpoint(target).compatible
+    assert inspect_checkpoint(target, backend=TORCH_BACKEND).compatible
     policy, _ = load_checkpoint(str(target))
 
     unseen = Deck({"Swamp": 10, "Forest": 4, "Accumulate Wisdom": 1}).player()
@@ -324,15 +336,15 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
             changed["world_binding"][key] = {**binding[key], **change}
         assert checkpoint_incompatibility(changed) is not None
         path = tmp_path / f"changed-{key}.pt"
-        torch.save(changed, path)
+        write_checkpoint(changed, path)
         with pytest.raises(ValueError, match="binding"):
             load_checkpoint(str(path))
 
     # Producer admission for a deck run checks the world, not one pair.
     regime = _regime(decks)
-    _admit_setups(policy, regime)
+    admit_setups(policy, regime)
     with pytest.raises(ValueError, match="bound to a world"):
-        _admit_setups(_agent(), regime)
+        admit_setups(_agent(), regime)
     # A setup-bound checkpoint plays only its roster, under the shared rule.
     authored = deepcopy(policy)
     authored.world_binding = checkpoint_world(
@@ -343,7 +355,7 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
         ObservationSpace(),
     )
     with pytest.raises(ValueError, match="outside checkpoint's exact setup roster"):
-        _admit_setups(authored, regime)
+        admit_setups(authored, regime)
 
     # The same model collects from a later supply it never trained on.
     later = _uniform("Swamp", "Forest")
@@ -404,18 +416,18 @@ def test_failure_records_actual_sampled_decks(
         deck_source=decks,
         game_errors=policy,
         record_attempt=lambda row: ledger.record(row, {}),
+        numerics=TorchCollectionSession(device="cpu", seed=17402, precision="float32"),
     )
     original = collector._sample_learning_rows
     calls = 0
 
     def sample(
-        agent: ActorCritic,
         rows: np.ndarray,
         acting: np.ndarray,
-        inference: PolicyInference,
+        inference: CollectionScope,
     ) -> np.ndarray:
         nonlocal calls
-        actions = original(agent, rows, acting, inference)
+        actions = original(rows, acting, inference)
         calls += 1
         if calls == 2:
             actions[0] = -1
@@ -456,7 +468,7 @@ def test_deck_run_identities_name_the_source_not_a_pair(
 ) -> None:
     space = ObservationSpace()
     regime = _regime(decks)
-    identities = _runtime_identities(7, regime, space)
+    identities = _runtime_identities(7, regime, space, TORCH_BACKEND)
     assert "matchup" not in identities and "matchup_sha256" not in identities
     assert identities["deck_source_sha256"] == decks.digest
     assert "content_pool" not in identities
@@ -471,7 +483,7 @@ def test_deck_run_identities_name_the_source_not_a_pair(
     changed = _regime(_uniform("Plains", "Swamp"))
     with pytest.raises(ValueError, match="recovery runtime/source identity mismatch"):
         admit_recovery_identities(
-            identities, _runtime_identities(7, changed, space), None
+            identities, _runtime_identities(7, changed, space, TORCH_BACKEND), None
         )
 
     authored = TrainingRegime.model_validate(
@@ -480,7 +492,7 @@ def test_deck_run_identities_name_the_source_not_a_pair(
             "match": decks.match_config().model_dump(),
         }
     )
-    recorded = _runtime_identities(7, authored, space)
+    recorded = _runtime_identities(7, authored, space, TORCH_BACKEND)
     fingerprints = runtime_fingerprints(
         7, match_config=authored.match, observation_space=space
     )

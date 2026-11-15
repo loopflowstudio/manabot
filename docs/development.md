@@ -41,28 +41,34 @@ atomically.
   `--no-frontend`, `--demo learn`.
 - `uv run manabot train --out .runs/<name>` runs a training smoke.
 
-The `manabot` public dependency requirements are `etude-sdk>=0.3.2` (also for
-its `eval` and `s3` extras) and `torch>=2.15.0`. All extras, including `llm`, inherit the core
-requirements. A downstream project resolves those with its own dependencies. The repository's
-`uv.lock` records exact versions, and its dedicated training and play runtime
-groups retain exact Torch/backend choices. Those development pins are not
-constraints exported to consumers.
+The `manabot` public dependency requirements are `etude-sdk>=0.4.0,<0.5` (also
+for its `eval` and `s3` extras) and `torch>=2.15.0`. The repository and release
+checks pin Etude's merged migration build at
+`d60236d015a4b2a01055b2c861856f06bb1852a2` through a Git source. PyPI's
+0.4.0 predates this migration API; the version requirement alone does not
+select it. Keep the Git pin until a registry release contains these migrations,
+and raise the public minimum to that release before publishing Manabot.
+A downstream project must use the same source override in the meantime.
+The repository's `uv.lock` records the exact source, and its dedicated training
+and play runtime groups retain exact Torch/backend choices.
 
-To update the locked Etude version without raising the public minimum:
+To install the pinned client:
 
 ```bash
-uv lock --upgrade-package etude-sdk
 uv sync --locked --python 3.13 --extra dev --extra artifacts
+uv run etude database status
 ```
 
-Commit the lock change before preparing a new experiment. When raising a public
-minimum, update every requirement for that dependency, including consumer
-install commands in `.github/workflows/release.yml`, and commit the metadata
-with the lock. An Etude release that changes the launcher schema starts a new,
-empty `~/.etude/launcher-<schema>.db` beside the older file and leaves that
-file alone; runs launched by an older client stay with it. See
-[experiments](experiments.md#what-an-experiment-is) before launching from a
-shared home.
+When changing the Etude source, update `[tool.uv.sources]`, run `uv lock`, and
+commit both metadata and lock before preparing an experiment. Keep consumer
+install commands in `.github/workflows/release.yml` on the same source.
+Etude uses one `~/.etude/launcher.sqlite` across experiments and compatible
+branches. Installing a client does not upgrade the database: inspect it with
+`etude database status` and explicitly apply forward migrations with
+`etude database upgrade`. Ordinary reads never select a different database.
+Recovery snapshots are not operational databases. This machine's older files
+have already been consolidated; never reinstall an old launcher against its
+shared home. See [experiments](experiments.md#what-an-experiment-is).
 Training setup uses `uv sync --locked`; it never resolves a fresh branch head.
 Retained experiments keep their original source and lock, including the v7
 representation study's historical Git source pin. Never downgrade the current
@@ -140,7 +146,12 @@ closure treats the transition quota as a minimum.
 Run the existing encoder tests alongside cutoff/parity fixtures so callers of
 changed private helpers are checked too. Action overflow is checked at the
 public encoder boundary, before the retained action list reaches row encoding.
-Changes to retained execution or its record vocabulary also require
+Changes to effects or runtime token registration require the
+[effect vocabulary checks](../managym/cards/tests/cards/README.md#effect-vocabulary-checks):
+the exhaustive debug Rust witness guard and the rebuilt-extension Python
+admission checks. These check token membership independently of which effects
+a game happens to reach. Changes to retained execution or its record vocabulary
+also require
 `uv run --extra dev pytest tests/model/test_record_coverage.py -q` after rebuilding
 the native extension. This bounded sweep checks that emitted execution tokens
 have catalog rows, including decisions reached through changed game paths.
@@ -210,7 +221,7 @@ Check changed Python modules and type stubs with
 compatibility stub is part of the public package surface.
 
 **Policy backends.** Shared damped-update or backend changes need
-`uv run --extra dev pytest tests/training/test_update_backend_protocols.py tests/training/test_update_backends.py tests/model/test_torch_backend_protocol.py tests/model/test_torch_container_load.py tests/model/test_mlx_backend.py tests/test_package_boundaries.py -q`.
+`uv run --extra dev pytest tests/training/test_update_backend_protocols.py tests/training/test_update_backends.py tests/model/test_torch_backend_protocol.py tests/model/test_torch_container_load.py tests/model/test_prepare_rows.py tests/model/test_mlx_backend.py tests/test_package_boundaries.py -q`.
 The installed-backend tests run the real update, force gradient clipping,
 compare every post-Adam weight and reject malformed raw rollout rows. MLX
 cases skip where it is unavailable; run them on Apple Silicon with the `mlx`
@@ -749,7 +760,7 @@ The platform-specific `managym` wheels contain the compiled engine; its sdist
 needs Rust and a C linker (`--only-binary :all:` refuses source builds).
 `manabot` is a pure-Python wheel and gets the engine through its exact dependency.
 The engine's runtime requirements are NumPy and Pydantic. `manabot` retains its
-training requirements, including `torch>=2.15.0` and `etude-sdk>=0.3.2`.
+training requirements, including `torch>=2.15.0` and `etude-sdk>=0.4.0,<0.5`.
 These minimums allow newer versions to resolve; they do not certify every future
 dependency release. Keep your project's lockfile for reproducibility. If
 resolution fails, check for an incompatible Python version, an older exact
@@ -844,7 +855,8 @@ uv run --no-project --python /tmp/manabot-release-venv/bin/python manabot-releas
 
 The training smoke checks one shared engine behind both import paths, catalog
 binding, gradients, a CPU update on the native lethal-target fixture, and the
-installed Academy bot entry point and checkpoint catalog. This bounded fixture
+installed historical Academy extension, policy provider registration and compatible
+discovery of the checkpoint just trained. This bounded fixture
 does not certify the default training recipe's completion time. Repeat in a separate environment with
 3.12 and its wheel. `release.yml` covers both interpreters on Linux and macOS,
 then installs and imports the optional extras. Consumer checks run outside the

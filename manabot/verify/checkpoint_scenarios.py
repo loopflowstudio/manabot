@@ -14,29 +14,29 @@ from pathlib import Path
 import time
 from typing import Any, Literal
 
-from managym.experience import UNVERSIONED_CONTENT_HASH
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
-import torch
 
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import RECORDED_ASSET_MANIFEST_HASH
 from manabot.model.world import checkpoint_world, validate_agent_setup
-from manabot.sim.frames import build_command, build_viewer_frame
+from manabot.sim.frames import build_viewer_frame, decision_row
 from manabot.sim.replay import read_trace, replay_games, write_trace
 from manabot.sim.search.flat_mc import AgentMatchupPlayer, make_player
+from manabot.training.state.backend import TrainingBackend
 from manabot.verify.scenario_validation import (
-    _outcome,
     scenario_identity,
+    scenario_outcome,
     validate_scenarios,
 )
 from manabot.verify.scenarios import (
     SCENARIOS,
     ScriptedVillain,
     action_casts,
-    battlefield_pairs,
+    battlefield_permanents,
     build_scenario_env,
     hero_view,
 )
+from managym.experience import UNVERSIONED_CONTENT_HASH
 
 
 class ScenarioScore(BaseModel):
@@ -58,7 +58,12 @@ class ScenarioScore(BaseModel):
 
 
 def score_checkpoint(
-    scenario_name: str, checkpoint: Path, *, seed: int = 2, max_steps: int = 1000
+    scenario_name: str,
+    checkpoint: Path,
+    *,
+    backend: TrainingBackend,
+    seed: int = 2,
+    max_steps: int = 1000,
 ) -> tuple[ScenarioScore, dict[str, Any] | None]:
     """Run deterministic ordinary policy decisions with a fixed scripted opponent.
 
@@ -77,6 +82,7 @@ def score_checkpoint(
         player, space = make_player(
             {"kind": "checkpoint", "path": str(checkpoint), "deterministic": True},
             seed=seed,
+            backend=backend,
         )
         if not isinstance(player, AgentMatchupPlayer):
             score.status = "unsupported"
@@ -110,8 +116,8 @@ def score_checkpoint(
         for revision in range(max_steps + 1):
             raw = env.last_raw_obs
             tracker.observe_state(raw)
-            resolution = _outcome(scenario, raw, True, cast, creatures_at_cast)
-            contrast = _outcome(scenario, raw, False, cast, creatures_at_cast)
+            resolution = scenario_outcome(scenario, raw, True, cast, creatures_at_cast)
+            contrast = scenario_outcome(scenario, raw, False, cast, creatures_at_cast)
             if resolution is not None or contrast is not None:
                 score.correct = resolution[0] if resolution is not None else False
                 score.outcome = (resolution or contrast)[1]
@@ -150,24 +156,14 @@ def score_checkpoint(
                     cast = spell
                     _, side = hero_view(raw)
                     creatures_at_cast = sum(
-                        bool(card.card_types.is_creature)
-                        for card, _ in battlefield_pairs(raw, side)
+                        bool(perm.characteristics.card_types.is_creature)
+                        for perm in battlefield_permanents(raw, side)
                     )
-            command = build_command(frame, action)
+            row = decision_row(env, frame, action)
+            row["player_id"] = game["seat_players"][actor]
             observation, _, terminated, truncated, _ = env.step(action)
-            game["decisions"].append(
-                {
-                    "actor": actor,
-                    "player_id": game["seat_players"][actor],
-                    "action_space_kind": frame["action_space"],
-                    "frame_sha256": canonical_sha256(frame),
-                    "command": command,
-                    "command_sha256": canonical_sha256(command),
-                    "chosen_offer": offers[action],
-                    "pre_state_digest": pre,
-                    "post_state_digest": env._engine.state_digest(),
-                }
-            )
+            row["post_state_digest"] = env._engine.state_digest()
+            game["decisions"].append(row)
             game["terminated"] = bool(terminated)
             game["truncated"] = bool(truncated)
             game["winner"] = env._engine.winner_index() if terminated else None
@@ -270,6 +266,9 @@ def write_report(directory: Path) -> None:
 
 
 def main() -> None:
+    from manabot.backends import resolve
+
+    backend = resolve("torch")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--checkpoints",
@@ -281,7 +280,7 @@ def main() -> None:
     parser.add_argument("--max-steps", type=int, default=1000)
     parser.add_argument("--report-only", action="store_true")
     args = parser.parse_args()
-    torch.set_num_threads(1)
+    backend.runtime.configure(1, "float32", "cpu")
     if args.report_only:
         write_report(args.out)
         return
@@ -322,6 +321,7 @@ def main() -> None:
                 Path(assignments[record.scenario]),
                 seed=args.seed,
                 max_steps=args.max_steps,
+                backend=backend,
             )
             if game is not None:
                 games.append(game)

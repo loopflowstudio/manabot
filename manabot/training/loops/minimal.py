@@ -1,67 +1,73 @@
 """A self-play PPO loop written from the pieces alone, with no recipe or executor."""
 
-from copy import deepcopy
-
 import numpy as np
-import torch
 
-from manabot.backends.torch import learner, rl
-from manabot.backends.torch.policy import ActorCritic
-from manabot.backends.torch.rollout import AdmittedRollout
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, RewardConfig
+from manabot.policy.protocol import BackendPolicy
 from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.state.backend import TrainingBackend
 
 
 def train(
     iterations: int,
     *,
+    backend: TrainingBackend,
     streams: int = 4,
     decisions: int = 64,
     seed: int = 0,
     model: ModelConfig | None = None,
-) -> ActorCritic:
+) -> BackendPolicy:
     """Return the EMA of a policy trained `iterations` collect/update rounds."""
-    torch.manual_seed(seed)
+    backend.runtime.require_execution()
+    backend.seed(seed)
+    rl = backend.rl
+    array = backend.arrays.from_numpy
     rng = np.random.default_rng(seed)
-    agent = ActorCritic(ObservationSpace(), model or ModelConfig(hidden_dim=64))
-    averaged = deepcopy(agent)
-    optimizer = torch.optim.Adam(agent.parameters(), lr=2.5e-4, eps=1e-5)
+    agent = backend.runtime.create_policy(
+        ObservationSpace(), model or ModelConfig(hidden_dim=64)
+    )
+    averaged = backend.state.clone_policy(agent)
+    learner = backend.learner.Learner(agent, "cpu", minibatch_rows=256)
     collector = SeatRoutedCollector(
         agent.observation_space,
         Match(),
         Reward(RewardConfig()),
         num_envs=streams,
         seed=seed,
-        opponent_mode="self",  # one model plays and learns from both seats
+        opponent_mode="self",
+        numerics=backend.collection.CollectionSession(
+            device="cpu", seed=seed, precision="float32"
+        ),  # one model plays and learns from both seats
     )
     try:
         for _ in range(iterations):
             # Whole games, at least `decisions` learner rows per stream.
             batch = collector.collect(agent, decisions)
-            ends = torch.as_tensor(batch.dones)
-            values = torch.as_tensor(batch.values)
+            ends = array(batch.dones)
+            values = array(batch.values)
             # Complete games end every trajectory, so the tail value is never read.
-            tail = torch.zeros(ends.shape[1])
+            tail = array(np.zeros(ends.shape[1], dtype=np.float32))
             advantages, returns = rl.transition_gae(
-                torch.as_tensor(batch.rewards), values, ends, tail, gamma=1.0, lam=0.95
+                array(batch.rewards), values, ends, tail, gamma=1.0, lam=0.95
             )
             # Time-major [T,E] rows, the order `batch.observations` indexes.
             advantages, returns = advantages.flatten(), returns.flatten()
             advantages = rl.standardized_advantages(advantages)
-            actions = torch.as_tensor(batch.actions).flatten()
-            behavior = torch.as_tensor(batch.logprobs).flatten()
+            actions = array(batch.actions).flatten()
+            behavior = array(batch.logprobs).flatten()
 
             # Admission checks each row's policy input once, before any epoch.
-            admitted = AdmittedRollout(agent, batch)
+            admitted = backend.rollout.AdmittedRollout(agent, batch)
             admitted.admit_rows(np.arange(len(actions)), 256)
-            agent.train()
             for _epoch in range(2):
-                order = torch.as_tensor(rng.permutation(len(actions)))
-                for rows in order.split(256):
-                    obs, _ = admitted.rows(rows.numpy(), torch.device("cpu"))
-                    valid = rl.legal_mask(obs["actions_valid"])
+                order = rng.permutation(len(actions))
+                for start in range(0, len(order), 256):
+                    indexes = order[start : start + 256]
+                    rows = array(indexes)
+                    obs, _ = admitted.rows(indexes, learner.device)
+                    valid = admitted.legal(obs)
                     logits, value = agent(obs)
                     logs = rl.policy_logs(logits, valid)
                     chosen = rl.action_logs(logs, actions[rows])
@@ -72,8 +78,8 @@ def train(
                         + 0.5 * rl.squared_value_loss(value, returns[rows]).mean()
                         - 0.01 * rl.entropy(logs, valid).mean()
                     )
-                    learner.gradient_step(loss, agent, optimizer, max_grad_norm=0.5)
-            learner.update_ema(averaged, agent, rate=0.99)
+                    learner.step(loss, max_grad_norm=0.5)
+            backend.learner.update_ema(averaged, agent, rate=0.99)
     finally:
         collector.close()
     return averaged

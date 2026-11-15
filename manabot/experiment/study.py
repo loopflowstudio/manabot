@@ -27,9 +27,7 @@ import time
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-import torch
 
-from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.env.observation import ObservationSpace
 from manabot.eval.match import play_cell
 from manabot.eval.models import EvaluationKey
@@ -47,6 +45,7 @@ from manabot.sim.search.branch import SELECTED_BRANCH_DRIVER_ID
 from manabot.training.execution import execute_regime
 from manabot.training.records import StageRecord, TrainingRun
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
+from manabot.training.state.backend import TrainingBackend
 from manabot.verify.store import VerifyStore
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -408,7 +407,7 @@ def scientific_plan(calibration: Path | str, prior_seconds: float) -> ResolvedSt
         owner = next((root for root in factors if path.is_relative_to(root)), None)
         if owner and path.suffix == ".npz":
             category, factor = "shards", factors[owner][1]
-        elif owner and path.suffix == ".pt":
+        elif owner and path.suffix in {".pt", ".safetensors"}:
             category, factor = "checkpoints", 3 * checkpoints / 2
         elif owner or path.suffix == ".sqlite":
             category, factor = "training_records", max(v[0] for v in factors.values())
@@ -462,10 +461,14 @@ def scientific_plan(calibration: Path | str, prior_seconds: float) -> ResolvedSt
 
 
 def registration(
-    run: TrainingRun, stage: StageRecord, variant: str = "raw"
+    run: TrainingRun,
+    stage: StageRecord,
+    variant: str = "raw",
+    *,
+    backend: TrainingBackend,
 ) -> PlayerRegistration:
     artifact = stage.artifacts[variant]
-    agent, _ = load_checkpoint(artifact["path"])
+    agent, _ = backend.load_policy(artifact["path"])
     identity = run.identities
     return PlayerRegistration(
         # Arena names are separate from immutable training recipe identities.
@@ -488,7 +491,7 @@ def registration(
         matchup_sha256=authored_matchup_sha256(identity, "study arena"),
         checkpoint_sha256=artifact["sha256"],
         checkpoint_bytes=artifact["bytes"],
-        parameter_count=sum(p.numel() for p in agent.parameters()),
+        parameter_count=agent.parameter_count,
         training_seed=run.seed,
         artifact_id=f"{run.id}/{stage.id}/{variant}",
         player_seed_derivation_id="arena-pair-deal-player-v1",
@@ -503,6 +506,7 @@ def run_study(
     resume: bool = False,
     *,
     render_report: bool = True,
+    backend: TrainingBackend,
 ) -> None:
     """Train every arm per seed, play the frozen arena cohort and retain it all.
 
@@ -641,7 +645,11 @@ def run_study(
                     result["runs"].append(entry)
                     save()
                     run = execute_regime(
-                        recipe, seed, out / f"{recipe.id}-seed-{seed}", store
+                        recipe,
+                        seed,
+                        out / f"{recipe.id}-seed-{seed}",
+                        store,
+                        backend=backend,
                     )
                     runs.append(run)
                     entry.update(
@@ -763,8 +771,12 @@ def run_study(
                 for c in result["comparisons"]
             ):
                 return
-            a = registration(a_run, a_stage, variant)
-            b = registration(b_run, b_stage, variant) if b_run else baseline
+            a = registration(a_run, a_stage, variant, backend=backend)
+            b = (
+                registration(b_run, b_stage, variant, backend=backend)
+                if b_run
+                else baseline
+            )
             deals = (
                 (protocol.paired_deals if b_run else protocol.anchor_deals)
                 if phase == "development"
@@ -969,6 +981,10 @@ def run_study(
 
 def main(study: Study, arms: Sequence[Arm], argv: Sequence[str] | None = None) -> None:
     """Command line for one study: smoke by default, or a frozen plan's profile."""
+    from manabot.backends import resolve
+
+    backend = resolve("torch")
+
     parser = argparse.ArgumentParser(description=f"Run or report the {study} study.")
     parser.add_argument(
         "--profile", choices=["smoke", "calibration", "scientific"], default="smoke"
@@ -1029,5 +1045,7 @@ def main(study: Study, arms: Sequence[Arm], argv: Sequence[str] | None = None) -
             parser.error("profile/study differs from frozen plan")
     elif args.plan is not None:
         parser.error("smoke resolves its own recipes; --plan needs a profile")
-    torch.set_num_threads(1)
-    run_study(study, arms, args.out.resolve(), plan, resume=args.resume)
+    backend.runtime.configure(1, "float32", "cpu")
+    run_study(
+        study, arms, args.out.resolve(), plan, resume=args.resume, backend=backend
+    )

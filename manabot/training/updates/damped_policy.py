@@ -8,7 +8,7 @@ see docs/learning.md#fidelity-to-the-sources for the fidelity boundary and unres
 
 The update is written once over a backend module (`manabot.backends.torch`,
 `manabot.backends.mlx`; the surface it calls is
-`manabot.training.updates.backend.Backend`): array math goes through
+`manabot.training.updates.backend.UpdateBackend`): array math goes through
 `backend.rl`, `backend.learner` and `backend.arrays`, observations are
 admitted by `backend.rollout`, and row bookkeeping and diagnostics (which rows train,
 minibatch indexes, selection groups, value scale) are NumPy. The minibatch
@@ -31,9 +31,9 @@ from manabot.training.updates.backend import (
     RL,
     AdmittedRollout,
     Array,
-    Backend,
     Learner,
     Policy,
+    UpdateBackend,
     categorical_rl,
 )
 from manabot.training.updates.health import (
@@ -108,13 +108,14 @@ def minibatch_objective(
     return policy_loss + rl.float64_operand(value_loss), policy_loss, value_loss
 
 
-def _targets(
-    backend: Backend,
+def compute_targets(
+    backend: UpdateBackend,
     learner: Learner,
     admitted: AdmittedRollout,
     learning: DampedPolicyLearning,
     bootstrap_agent: Policy | None = None,
 ) -> DampedTargets:
+    """Build detached learning targets and selection from an admitted rollout."""
     rl, device = backend.rl, learner.device
     batch = admitted.batch
     with backend.learner.no_grad():
@@ -169,7 +170,7 @@ def _targets(
 
 
 def update_damped_iteration(
-    backend: Backend,
+    backend: UpdateBackend,
     learner: Learner,
     batch: RolloutBatch,
     learning: DampedPolicyLearning,
@@ -193,11 +194,15 @@ def update_damped_iteration(
     categorical = learner.agent.config.value_kind == "categorical_wdl"
     track = learner.profiler.track
     with track("Batch transfer and behavior checks"):
-        batch.action_data.check(batch.actions, batch.logprobs)
+        batch.action_data.check(
+            batch.actions,
+            batch.logprobs,
+            validator=backend.rollout,
+        )
         admitted = backend.rollout.AdmittedRollout(learner.agent, batch)
         actions = to_device(batch.actions, device)
     with track("Targets"):
-        targets = _targets(backend, learner, admitted, learning, bootstrap_agent)
+        targets = compute_targets(backend, learner, admitted, learning, bootstrap_agent)
         advantage_abs_mean = float(targets.advantages.abs().mean())
     # Which rows the actor trains on, [T,E] on the host.
     actor_rows = to_host(targets.selected)

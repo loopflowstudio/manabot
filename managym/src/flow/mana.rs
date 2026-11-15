@@ -36,7 +36,7 @@ use crate::{
             ActivatedAbilityDefinition, ActivationZone, ReplacementEffect, TriggeredManaAbility,
             TriggeredManaOutput,
         },
-        game_object::{ObjectId, ObjectRef, PermanentId, PlayerId},
+        game_object::{ObjectId, PermanentId, PlayerId},
         mana::{Color, Mana, ManaCost, ManaSpendChoice, ManaSpent, SpellSnapshot, SpendingContext},
         zone::ZoneType,
     },
@@ -1953,7 +1953,7 @@ impl Game {
         {
             return Err(AgentError("illegal mana tap cost selection".into()));
         }
-        let permanent = self.state.object_to_permanent[object].unwrap();
+        let permanent = self.state.permanent_of(object).unwrap();
         self.tap_permanent(permanent, false);
         if let Some(SuspendedResolution {
             decision: Decision::ManaUpfront { tap_remaining, .. },
@@ -2057,7 +2057,7 @@ impl Game {
         // Retain the output and original payment frame before any cost
         // effect can suspend. Resumption must not spend mana, tap or pay life
         // again, nor expose this output before sacrifice/zone work finishes.
-        let source_ref = self.permanent_object_ref(permanent);
+        let source_ref = self.permanent_object(permanent);
         caller.decision = Decision::ManaChoice {
             player,
             choices: ability.mana_choices().unwrap(),
@@ -2078,8 +2078,10 @@ impl Game {
         effects.extend_from_slice(ability.mana_suffix());
         if !effects.is_empty() {
             let mut child = EffectFrame::new(player, effects);
-            child.source = self.state.permanents[permanent].as_ref().map(|p| p.object);
-            child.source_ref = source_ref;
+            child.bind_source(
+                self.state.permanents[permanent].as_ref().map(|p| p.object),
+                source_ref,
+            );
             self.run_before_decision(child, caller);
         } else {
             *self.state.suspended_decision_mut() = Some(caller);
@@ -2096,7 +2098,7 @@ impl Game {
         let tapped = self.tapped_for_mana(permanent);
         let bonuses = self.production_bonuses(player, &tapped);
         let source = self
-            .permanent_object_ref(permanent)
+            .permanent_object(permanent)
             .expect("a tapped fixed source is on the battlefield");
         let resolved = self.resolve_mana_bonuses(player, source, &produced, bonuses, None);
         assert!(
@@ -2193,7 +2195,7 @@ impl Game {
             })
             .filter_map(|trigger| {
                 Some(PendingManaBonus {
-                    source: self.permanent_object_ref(trigger.source)?,
+                    source: self.permanent_object(trigger.source)?,
                     output: trigger.ability.output,
                 })
             })
@@ -2208,7 +2210,7 @@ impl Game {
     pub(crate) fn resolve_mana_bonuses(
         &mut self,
         player: PlayerId,
-        tapped: ObjectRef,
+        tapped: ObjectId,
         produced: &Mana,
         bonuses: Vec<PendingManaBonus>,
         resume: Option<Box<Decision>>,
@@ -2377,7 +2379,7 @@ impl Game {
             .map(|((id, view), source)| {
                 debug_assert_eq!(id, source.permanent);
                 let basic = || {
-                    self.state.objects[source.object]
+                    self.state[source.object]
                         .supertypes
                         .iter()
                         .any(|supertype| supertype.eq_ignore_ascii_case("basic"))
@@ -2429,11 +2431,12 @@ impl Game {
         let mut probe = outcomes::PaymentProbe::default();
         let mut instant = Vec::new();
         for card in self.state.zone_cards(ZoneType::Hand, player) {
-            let object = &self.state.objects[card];
+            let object_id = self.state.object_of(card);
+            let object = &self.state[object_id];
             if !object.types.is_castable() {
                 continue;
             }
-            let Some(followup) = self.effective_spell_cost(player, card, Default::default(), None)
+            let Some(followup) = self.effective_spell_cost(player, object_id, Default::default(), None)
             else {
                 continue;
             };
@@ -2444,7 +2447,7 @@ impl Game {
             if followup.mana_value == 0 {
                 continue;
             }
-            let timing = self.has_instant_timing(player, card);
+            let timing = self.has_instant_timing(player, object_id);
             match probe.followups.iter().position(|known| *known == followup) {
                 Some(index) => instant[index] |= timing,
                 None => {
@@ -2812,7 +2815,7 @@ impl Game {
     fn unspent_mana_becomes_red(&self, player: PlayerId) -> bool {
         self.iter_battlefield_permanents(player).any(|id| {
             self.state.permanents[id].as_ref().is_some_and(|permanent| {
-                self.state.objects[permanent.object]
+                self.state[permanent.object]
                     .replacement_effects
                     .contains(&ReplacementEffect::UnspentManaBecomesRed)
             }) && !self.characteristics(id).abilities_lost
@@ -3248,6 +3251,15 @@ mod tests {
         }
     }
 
+    // Payment models take distinct appearances from the ordinary allocator.
+    fn payment_object(index: usize) -> ObjectId {
+        static OBJECTS: std::sync::LazyLock<Vec<ObjectId>> = std::sync::LazyLock::new(|| {
+            let mut zones = crate::state::zone::ZoneManager::default();
+            (0..128).map(|_| zones.allocate()).collect()
+        });
+        OBJECTS[index]
+    }
+
     pub(in crate::flow::mana) fn source(
         index: usize,
         fixed: Option<&str>,
@@ -3255,7 +3267,7 @@ mod tests {
     ) -> ManaSource {
         ManaSource {
             permanent: PermanentId(index),
-            object: ObjectId(index),
+            object: payment_object(index),
             untapped: true,
             fixed: fixed.map(Mana::parse),
             abilities,
@@ -3375,7 +3387,7 @@ mod tests {
                         let untapped = rng.gen_bool(0.85);
                         ManaSource {
                             permanent: PermanentId(index),
-                            object: ObjectId(index),
+                            object: payment_object(index),
                             untapped,
                             fixed: outputs.choose(&mut rng).unwrap().clone(),
                             abilities: Vec::new(),
@@ -3609,7 +3621,7 @@ mod tests {
             // One Herbalist-shaped source: any color, or two restricted mana.
             model.sources.push(ManaSource {
                 permanent: PermanentId(count),
-                object: ObjectId(count),
+                object: payment_object(count),
                 untapped: true,
                 fixed: None,
                 waterbend: true,
@@ -3800,7 +3812,7 @@ mod tests {
         let sources = (0..4)
             .map(|index| ManaSource {
                 permanent: PermanentId(index),
-                object: ObjectId(index),
+                object: payment_object(index),
                 untapped: true,
                 fixed: Some(Mana::parse("G")),
                 abilities: vec![
@@ -3863,7 +3875,7 @@ mod tests {
         let model = PaymentModel {
             sources: vec![ManaSource {
                 permanent: PermanentId(0),
-                object: ObjectId(0),
+                object: payment_object(0),
                 untapped: true,
                 fixed: Some(Mana::parse("G")),
                 abilities: vec![sacrifice],
