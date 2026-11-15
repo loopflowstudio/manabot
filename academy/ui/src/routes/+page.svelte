@@ -20,6 +20,7 @@
   import GameLog from '$lib/components/GameLog.svelte';
   import PresentationHistory from '$lib/components/PresentationHistory.svelte';
   import PlayerPicker from '$lib/components/PlayerPicker.svelte';
+  import SearchThinking from '$lib/components/SearchThinking.svelte';
   import DecklistsSelector from '$lib/components/DecklistsSelector.svelte';
   import StopsPanel from '$lib/components/StopsPanel.svelte';
   import SharedTablePanel from '$lib/components/SharedTablePanel.svelte';
@@ -34,6 +35,7 @@
     sendAuthorBelief,
     sendNewGame,
     sendPassTurn,
+    sendRetrySearch,
     sendRestoreDecision,
     sendRetryDecision,
     sendReturnFromBranch,
@@ -194,6 +196,7 @@
 
   const gameActive = $derived(gameStore.observation !== null && !gameStore.gameOver);
   const pilotCanAct = $derived(gameStore.hasCapability('submit_live_command'));
+  const thinkingSearch = $derived(gameStore.newGamePending ? gameStore.mirrorSearch : gameStore.activeMirrorSearch);
   const participantStudying = $derived(gameStore.restoredDecision !== null);
   const tablePresentation = $derived(participantStudying ? studyPresentationPlayer : presentationPlayer);
   const inputReady = $derived(!gameStore.commandPending && stopsPending === null && gameStore.connection === 'connected');
@@ -405,6 +408,17 @@
       {gameStore.errorMessage}
     </section>
   {/if}
+  {#if gameStore.searchRetry}
+    <section role="alert" class="mb-4 rounded border border-line bg-panel px-4 py-3">
+      <p>{gameStore.searchRetry.message}</p>
+      <button class="mt-2 rounded border border-line px-3 py-2" disabled={gameStore.commandPending || !pilotCanAct} onclick={sendRetrySearch}>Retry search</button>
+    </section>
+  {/if}
+  <SearchThinking active={(gameStore.commandPending || gameStore.newGamePending) && thinkingSearch !== null}
+    budget={thinkingSearch ? `Mirror search ${thinkingSearch.worlds}×${thinkingSearch.depth}` : ''} />
+  {#if gameStore.observation && gameStore.activeMirrorSearch}
+    <p class="type-caption mb-2 text-ink-2">Opponent: Mirror search {gameStore.activeMirrorSearch.worlds}×{gameStore.activeMirrorSearch.depth} · Uniform belief (physical deal)</p>
+  {/if}
 
   <!-- The sheet: one continuous leaf. Regions are ruled, never boxed. -->
   <div class="play-sheet overflow-hidden rounded-sm border border-line bg-panel shadow-sheet">
@@ -439,6 +453,8 @@
           extension={botExtension}
           decklists={gameStore.decklists}
           onChange={(value) => gameStore.setOpponentChoice(value)}
+          search={gameStore.mirrorSearch}
+          onSearchChange={(value) => gameStore.mirrorSearch = value}
         />
       {/if}
       <div class="flex items-center gap-4">

@@ -629,6 +629,7 @@ export type VillainType = 'passive' | 'random' | 'search' | 'policy';
 // One entry of GET /api/opponents: a checkpoint the server found. `reason` names why an unavailable entry cannot play.
 export interface TrainedOpponent {
   supports_search?: boolean;
+  search_reason?: string | null;
   policy?: PolicyRuntimeIdentity;
   sha256: string;
   name: string;
@@ -676,6 +677,7 @@ export interface TraceConfig {
   opponent?: { name: string; sha256: string; producer?: string } | null;
   opponent_checkpoint?: CheckpointProvenance | null;
   watch_players?: string[] | null;
+  search?: (import('./watch').MirrorSearchSpec | null)[] | null;
   hero_deck: Record<string, number>;
   villain_deck: Record<string, number>;
   villain_type: string;
@@ -805,6 +807,8 @@ export type ServerMessage = (
     ))
   | { type: 'error'; message: string }
 ) & {
+  search_retry?: import('./watch').PendingSearch | null;
+  search?: (import('./watch').MirrorSearchSpec | null)[] | null;
   table?: import('./shared-table-protocol').TableSnapshot;
   session_id?: string;
   resume_token?: string;
@@ -814,6 +818,7 @@ export type ServerMessage = (
 };
 
 export interface LaunchSetup {
+  search?: (import('./watch').MirrorSearchSpec | null)[] | null;
   hero_deck?: string;
   villain_deck?: string;
   villain_type: string;

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 import hashlib
 from importlib.metadata import entry_points
 import json
@@ -21,6 +21,14 @@ import uuid
 
 import managym
 from managym.bots import BotDecision
+from managym.mirror_search import (
+    SearchError,
+    SearchSpec,
+    mirror_decision,
+    search_source_identity,
+    search_unavailable,
+    searched_descriptor,
+)
 
 JSONValue: TypeAlias = (
     None | bool | int | float | str | list["JSONValue"] | dict[str, "JSONValue"]
@@ -226,7 +234,13 @@ class PolicyRegistry:
         return descriptor
 
     def load(
-        self, key: str, setup: Sequence[managym.PlayerConfig], *, seat: int, seed: int
+        self,
+        key: str,
+        setup: Sequence[managym.PlayerConfig],
+        *,
+        seat: int,
+        seed: int,
+        search: SearchSpec | None = None,
     ) -> PolicyRunner:
         descriptor = self.admit(key, setup)
         factory = self._factories[descriptor.id]
@@ -244,12 +258,18 @@ class PolicyRegistry:
             session.close()
             raise
         self._active_sessions.add(id(session))
-        return PolicyRunner(
+        runner = PolicyRunner(
             session,
             descriptor,
             seat,
             release=lambda: self._active_sessions.discard(id(session)),
         )
+        try:
+            runner.configure_search(search, seed=seed)
+        except BaseException:
+            runner.close()
+            raise
+        return runner
 
 
 class PolicyRunner:
@@ -265,12 +285,37 @@ class PolicyRunner:
     ) -> None:
         self.session = session
         self.descriptor = descriptor
+        self.base_descriptor = descriptor
         self.seat = seat
         self.last_decision: BotDecision | None = None
         self._closed = False
         self._release = release
+        self.search: SearchSpec | None = None
+        self.search_runtime: str | None = None
+        self._search_seed = 0
+        self._search_calls = 0
+        self._started = False
+
+    def configure_search(self, search: SearchSpec | None, *, seed: int) -> None:
+        """Configure before play; preserve the base runner as a distinct identity."""
+        if self._started:
+            raise ValueError("Search cannot change after a decision.")
+        if search is not None:
+            reason = search_unavailable(self)
+            if reason:
+                raise SearchError("search_unavailable", reason)
+            self.search_runtime = search_source_identity()
+            self.descriptor = searched_descriptor(
+                self.base_descriptor, search, source=self.search_runtime
+            )
+        else:
+            self.descriptor = self.base_descriptor
+            self.search_runtime = None
+        self.search = search
+        self._search_seed = seed
 
     def observe(self, observation: managym.Observation) -> None:
+        self._started = True
         self.session.observe(self.view(observation))
 
     def view(self, observation: managym.Observation) -> PolicyView:
@@ -285,9 +330,16 @@ class PolicyRunner:
         if self._closed:
             raise ValueError("Policy session is closed.")
         self.last_decision = None
+        self._started = True
         if int(obs.agent.player_index) != self.seat:
             raise ValueError("Policy received another chooser’s observation.")
-        from dataclasses import replace
+        if self.search is not None:
+            # Retry the same uncommitted decision with the same random streams.
+            # Increment only once a complete searched proposal exists.
+            seed = (self._search_seed * 1_000_003 + self._search_calls + 1) % 2**63
+            self.last_decision = mirror_decision(self, env, obs, self.search, seed=seed)
+            self._search_calls += 1
+            return self.last_decision.action
 
         view = replace(
             self.view(obs), capture_json=env.capture_decision(self.seat, 0).to_json()

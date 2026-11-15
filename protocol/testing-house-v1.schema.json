@@ -1041,6 +1041,19 @@
     "OpponentIdentity": {
       "additionalProperties": false,
       "properties": {
+        "base_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Base Sha256"
+        },
         "bot_id": {
           "anyOf": [
             {
@@ -1361,6 +1374,47 @@
         "command"
       ],
       "title": "RetryDecisionMessage",
+      "type": "object"
+    },
+    "RetrySearchMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "expected_revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Expected Revision",
+          "type": "integer"
+        },
+        "grant_revision": {
+          "anyOf": [
+            {
+              "maximum": 18446744073709551615,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Grant Revision"
+        },
+        "match_id": {
+          "title": "Match Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "retry_search",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "match_id",
+        "expected_revision"
+      ],
+      "title": "RetrySearchMessage",
       "type": "object"
     },
     "ReturnFromBranchMessage": {
@@ -1898,6 +1952,7 @@
             "restore_decision": "#/$defs/RestoreDecisionMessage",
             "resume": "#/$defs/ResumeMessage",
             "retry_decision": "#/$defs/RetryDecisionMessage",
+            "retry_search": "#/$defs/RetrySearchMessage",
             "return_from_branch": "#/$defs/ReturnFromBranchMessage",
             "return_to_live": "#/$defs/ReturnToLiveMessage",
             "set_stops": "#/$defs/SetStopsMessage",
@@ -1927,6 +1982,9 @@
           },
           {
             "$ref": "#/$defs/PassTurnMessage"
+          },
+          {
+            "$ref": "#/$defs/RetrySearchMessage"
           },
           {
             "$ref": "#/$defs/SetStopsMessage"

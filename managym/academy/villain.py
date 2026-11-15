@@ -25,6 +25,9 @@ def build_villain_policy(config: "GameConfig") -> BotPolicy:
     """Build a bot policy from a parsed GameConfig."""
     seed = config.seed if config.seed is not None else 0
     villain_type = config.villain_type
+    search = config.search[1] if config.search else None
+    if search is not None and villain_type != "policy":
+        raise ValueError("Mirror search requires a registered search-capable policy.")
 
     if villain_type == "passive":
         return passive_policy
@@ -37,6 +40,10 @@ def build_villain_policy(config: "GameConfig") -> BotPolicy:
         if config.opponent is None:
             raise ValueError("Policy opponent requires a registered identity.")
         return policy_registry().load(
-            config.opponent["sha256"], config.to_rust(), seat=1, seed=seed
+            config.opponent.get("base_sha256", config.opponent["sha256"]),
+            config.to_rust(),
+            seat=1,
+            seed=seed,
+            search=search,
         )
     raise ValueError(f"Unsupported villain_type: {villain_type}")

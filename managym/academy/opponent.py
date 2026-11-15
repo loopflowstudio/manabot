@@ -9,6 +9,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from managym.mirror_search import (
+    SearchSpec,
+    descriptor_search_unavailable,
+    searched_descriptor,
+)
 from managym.policy import PolicyDescriptor, PolicyRegistry
 
 from . import advice
@@ -49,19 +54,30 @@ class Opponent:
     def name(self) -> str:
         return self.descriptor.name
 
-    def identity(self) -> dict[str, str]:
+    def identity(self, search: SearchSpec | None = None) -> dict[str, str]:
+        descriptor = (
+            self.descriptor
+            if search is None
+            else searched_descriptor(self.descriptor, search)
+        )
         return {
-            "name": self.name,
-            "producer": self.descriptor.provider,
-            "sha256": self.descriptor.id,
-            "bot_id": f"policy:{self.descriptor.id}",
+            "name": descriptor.name,
+            "producer": descriptor.provider,
+            "sha256": descriptor.id,
+            "bot_id": f"policy:{descriptor.id}",
+            **({"base_sha256": self.descriptor.id} if search is not None else {}),
         }
 
-    def record(self) -> dict[str, Any]:
+    def record(self, search: SearchSpec | None = None) -> dict[str, Any]:
+        descriptor = (
+            self.descriptor
+            if search is None
+            else searched_descriptor(self.descriptor, search)
+        )
         return {
-            **self.identity(),
+            **self.identity(search),
             "schema": "managym-policy-1",
-            "policy": self.descriptor.record(),
+            "policy": descriptor.record(),
         }
 
 
@@ -99,7 +115,9 @@ def opponent_catalog() -> dict[str, Any]:
                     "setups": metadata.get("setups", []),
                     "available": descriptor.incompatibility is None,
                     "reason": descriptor.incompatibility,
-                    "supports_search": descriptor.supports_search,
+                    "supports_search": descriptor_search_unavailable(descriptor)
+                    is None,
+                    "search_reason": descriptor_search_unavailable(descriptor),
                     "policy": descriptor.record(),
                 }
             )

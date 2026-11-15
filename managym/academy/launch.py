@@ -9,7 +9,7 @@ operation chooses a game action.
 from __future__ import annotations
 
 from collections.abc import Collection, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 import errno
 import gzip
 import json
@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import urlencode
 import webbrowser
 
+from managym.mirror_search import SearchError, SearchSpec, searched_descriptor
 from managym.policy import PolicyFactory, PolicySource, PolicySpec
 
 if TYPE_CHECKING:
@@ -273,6 +274,7 @@ class Academy:
         sims: int = 64,
         seed: int | None = None,
         decklists: Literal["open", "closed"] = "open",
+        search: SearchSpec | None = None,
     ) -> Launched:
         self._require_open()
         import managym
@@ -304,6 +306,7 @@ class Academy:
             else sims,
             "seed": seed,
             "decklists": decklists,
+            "search": [None, asdict(search) if search is not None else None],
         }
         if checkpoint:
             config["opponent_sha256"] = opponent.removeprefix("policy:")
@@ -317,7 +320,7 @@ class Academy:
             server._parse_game_config(config)
         except managym.DeckImportError as exc:
             raise AcademyLaunchError("deck.rejected", str(exc)) from exc
-        except ValueError as exc:
+        except (ValueError, SearchError) as exc:
             code = (
                 "opponent.unavailable"
                 if checkpoint and "opponent" in str(exc).lower()
@@ -353,13 +356,37 @@ class Academy:
         except (OSError, ValueError, ImportError) as error:
             raise AcademyLaunchError(code, str(error)) from error
 
-    def watch(self, *, players: tuple[str | Path, str | Path]) -> Launched:
+    def watch(
+        self,
+        *,
+        players: tuple[str | Path, str | Path],
+        search: tuple[SearchSpec | None, SearchSpec | None] = (None, None),
+    ) -> Launched:
         """Open Watch setup with exact seats selected, without starting a game."""
         self._require_open()
         seats = [self._player(player, "player.unavailable") for player in players]
-        return Launched(
-            f"{self.url}/replay?{urlencode({'watch': '1', 'seat1': seats[0], 'seat2': seats[1]})}"
-        )
+        from managym.academy.opponent import policy_registry
+
+        for player, spec in zip(seats, search, strict=True):
+            if spec is not None:
+                if not player.startswith("policy:"):
+                    raise AcademyLaunchError(
+                        "setup.invalid",
+                        "Mirror search requires a registered search-capable policy.",
+                    )
+                try:
+                    searched_descriptor(
+                        policy_registry().descriptor(player.removeprefix("policy:")),
+                        spec,
+                    )
+                except SearchError as exc:
+                    raise AcademyLaunchError("setup.invalid", str(exc)) from exc
+        query = {"watch": "1", "seat1": seats[0], "seat2": seats[1]}
+        if any(search):
+            query["search"] = json.dumps(
+                [asdict(spec) if spec else None for spec in search]
+            )
+        return Launched(f"{self.url}/replay?{urlencode(query)}")
 
     def replay(self, source: str | Path, game: int | str | None = None) -> Launched:
         self._require_open()

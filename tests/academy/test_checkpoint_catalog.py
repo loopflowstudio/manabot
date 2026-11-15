@@ -58,6 +58,8 @@ def test_catalog_lists_admissible_and_refused_checkpoints(runs: Path) -> None:
     entries = {entry["name"]: entry for entry in catalog["opponents"]}
     current = entries["self-play/step_0"]
     assert current["available"] and current["reason"] is None
+    assert not current["supports_search"]
+    assert "W/D/L value head" in current["search_reason"]
     assert current["sha256"] == _id(runs / "self-play" / "step_0.pt")
     assert current["world"] == WORLD
     assert current["source"] == "runs"

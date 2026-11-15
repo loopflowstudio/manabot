@@ -51,7 +51,6 @@ from manabot.sim.search.local_update_receipt import (
     LocalUpdateReceipt,
     SamplerArtifact,
     _validate_rollout_audit,
-    regularized_update,
 )
 from manabot.sim.search.rollout import Rollout
 from manabot.sim.search.rollout_receipt import RolloutReceipt
@@ -64,6 +63,7 @@ from manabot.sim.search.sampling_receipt import validate_hand
 import managym
 import managym._managym as native
 from managym.decision import DecisionFrame, Observation, SemanticTransition
+from managym.mirror import regularized_update
 from managym.possible_worlds import WorldQuery
 
 
@@ -72,6 +72,7 @@ def local_search_source_sha256() -> str:
     root = Path(__file__).resolve().parents[3]
     paths = (
         "manabot/sim/search/local_update.py",
+        "managym/mirror.py",
         "manabot/sim/search/local_update_receipt.py",
         "manabot/sim/search/sampling_receipt.py",
         "manabot/belief/sampling_types.py",

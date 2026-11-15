@@ -116,6 +116,8 @@
   });
 
   const currentFrame = $derived(replayStore.frames[replayStore.currentFrameIndex] ?? null);
+  const firstSearchDecision = $derived(replayStore.trace?.config.search?.[1]
+    ? replayStore.trace.events.findIndex(event => event.actor === 'villain') : -1);
   const logEntries = $derived(replayStore.trace ? replayLogEntries(replayStore.trace) : []);
   const activeLogEntryId = $derived(
     replayStore.currentFrameIndex > 0
@@ -510,6 +512,9 @@
           {/if}
         </div>
         <div class="flex flex-wrap items-center gap-2">
+          {#if replayStore.trace?.id && replayStore.trace.end_reason === 'game_over' && firstSearchDecision >= 0}
+            <a class="btn btn-secondary" href={`/replay?watch=1&trace=${encodeURIComponent(replayStore.trace.id ?? '')}&decision=${firstSearchDecision}`}>Inspect bot search</a>
+          {/if}
           {#if replayStore.summaries.length > 0}
             <label class="type-label flex items-center gap-2 text-ink-2">
               Trace

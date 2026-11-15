@@ -49,6 +49,12 @@
       "grant_revision": 1
     },
     {
+      "type": "retry_search",
+      "grant_revision": 1,
+      "match_id": "table-match",
+      "expected_revision": 0
+    },
+    {
       "type": "set_stops",
       "grant_revision": 1,
       "stops": {

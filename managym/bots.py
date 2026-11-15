@@ -36,6 +36,21 @@ class BeliefSummary:
 
 
 @dataclass(frozen=True)
+class SearchSummary:
+    algorithm: str
+    worlds: int
+    depth: int
+    alpha: float
+    beta: float
+    rollouts: int
+    decision_seconds: float
+    seconds: float
+    seed: str  # Hexadecimal so browser JSON preserves all 64 bits.
+    prior: list[float]
+    receipt_sha256: str
+
+
+@dataclass(frozen=True)
 class BotDecision:
     action: int
     probabilities: list[float] = field(default_factory=list)
@@ -45,6 +60,7 @@ class BotDecision:
     unavailable: str | None = None
     factors: list[PolicyFactor] = field(default_factory=list)
     belief: BeliefSummary | None = None
+    search: SearchSummary | None = None
 
 
 class FlatSearchPolicy:

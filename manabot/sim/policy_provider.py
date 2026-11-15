@@ -82,6 +82,7 @@ class BaselineFactory:
         metadata["setups"] = [
             {"deck": deck.main, "sideboard": deck.sideboard} for deck in summary.setups
         ]
+        metadata["search_reason"] = summary.search_reason
         # Search admission belongs to the shared composition, not a bare flag.
         return PolicyDescriptor(
             (self.summary or summary).label,

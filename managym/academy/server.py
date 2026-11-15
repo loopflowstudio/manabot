@@ -6,7 +6,7 @@ FastAPI server for interactive managym play over WebSocket.
 from __future__ import annotations
 
 import asyncio
-from contextlib import suppress
+from contextlib import ExitStack, suppress
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timedelta, timezone
@@ -16,7 +16,7 @@ import logging
 from pathlib import Path
 import secrets
 import sqlite3
-from typing import Any, Callable, Literal
+from typing import Any, Callable, Literal, TypedDict
 
 from fastapi import (
     FastAPI,
@@ -60,6 +60,12 @@ from managym.experience_projection import (
     redact_observation,
     serialize_observation,
 )
+from managym.mirror_search import (
+    SearchError,
+    descriptor_search_unavailable,
+    parse_search_seats,
+)
+from managym.policy import PolicyRunner
 
 from . import trace as trace_store, villain as villain_module
 from .advice import (
@@ -119,6 +125,7 @@ from .shared_table_protocol import (
     RestoreDecisionMessage,
     ResumeMessage,
     RetryDecisionMessage,
+    RetrySearchMessage,
     ReturnFromBranchMessage,
     ReturnToLiveMessage,
     SetStopsMessage,
@@ -779,6 +786,17 @@ def _parse_game_config(config: Any) -> GameConfig:
     if villain_type == "policy":
         opponent = _select_opponent(data.get("opponent_sha256"))
 
+    search = parse_search_seats(data.get("search"))
+    opponent_search = search[1] if search else None
+    if opponent_search is not None:
+        if opponent is not None:
+            reason = descriptor_search_unavailable(opponent.descriptor)
+            if reason:
+                raise ValueError(reason)
+        elif villain_type != "random":
+            raise ValueError(
+                "Mirror search requires a registered search-capable policy."
+            )
     parsed = GameConfig(
         **provenance,
         hero_deck=hero_deck,
@@ -794,18 +812,28 @@ def _parse_game_config(config: Any) -> GameConfig:
         villain_sims=villain_sims,
         villain_checkpoint=villain_checkpoint,
         villain_deterministic=villain_deterministic,
-        opponent=opponent.identity() if opponent is not None else None,
-        opponent_checkpoint=opponent.record() if opponent is not None else None,
+        opponent=opponent.identity(opponent_search) if opponent is not None else None,
+        opponent_checkpoint=opponent.record(opponent_search)
+        if opponent is not None
+        else None,
         stops=_parse_stops(data.get("stops")),
         stop_on_stack=_parse_flag(data, "stop_on_stack", True),
         auto_pass=_parse_flag(data, "auto_pass", True),
         decklists=decklists,
+        search=search,
     )
     if opponent is not None:
         from .opponent import policy_registry
 
         policy_registry().admit(opponent.descriptor.id, parsed.to_rust())
     return parsed
+
+
+class PendingSearch(TypedDict):
+    code: str
+    message: str
+    match_id: str
+    expected_revision: int
 
 
 class GameSession:
@@ -825,6 +853,7 @@ class GameSession:
         self.watch_mode = watch_mode
         self.watch_policies: tuple[BotPolicy, BotPolicy] | None = None
         self._bot_decision: BotDecision | None = None
+        self.search_retry: PendingSearch | None = None
         self._id_factory = id_factory or (lambda _kind: secrets.token_urlsafe(16))
         self._clock = clock or trace_store.utc_now_iso
         self.attempt_owner = participant_id(secrets.token_urlsafe(32))
@@ -928,67 +957,69 @@ class GameSession:
             raw_config = {**raw_config, **demo.config}
 
         config = _parse_game_config(raw_config)
+        if not self.watch_mode and config.search and config.search[0] is not None:
+            raise ValueError("The human Play seat cannot use bot search.")
         seed = config.seed if config.seed is not None else secrets.randbits(32)
         config.seed = seed
         try:
-            policy = build_villain_policy(config)
+            policy = None if self.watch_mode else build_villain_policy(config)
+        except SearchError as exc:
+            raise ValueError(f"{exc.reason}: {exc}") from exc
         except ValueError:
             raise
         except Exception as exc:
             raise ValueError("Failed to load the selected opponent.") from exc
 
-        try:
-            # Native skipping resolves sole legal actions, as in every runner;
-            # priority-stop automation still records its Commands here.
-            env = managym.Env(seed=seed)
-            obs, _ = env.reset(config.to_rust())
-            from managym.policy import PolicyRunner
-
+        with ExitStack() as prepared:
             if isinstance(policy, PolicyRunner):
-                policy.observe(
-                    obs
-                    if int(obs.agent.player_index) == policy.seat
-                    else env.observation_for_player(policy.seat)
-                )
-        except BaseException as exc:
-            from managym.policy import PolicyRunner
-
-            if isinstance(policy, PolicyRunner):
-                policy.close()
-            # PyO3's PanicException derives directly from BaseException and has
-            # no importable Python class. A failed disposable replacement must
-            # not close the existing authority; process interrupts still escape.
-            if isinstance(exc, (KeyboardInterrupt, SystemExit, GeneratorExit)):
-                raise
-            raise ValueError(
-                "Could not prepare the requested game. The current game is unchanged."
-            ) from exc
-        manifest = env.content_pack_manifest()
-        selected_pack = curated_pack_for_matchup(
-            config.hero_deck_name,
-            config.villain_deck_name,
-        )
-        player_config = raw_config if isinstance(raw_config, dict) else {}
-        players = self.attempt_store.players_for_game(
-            self.attempt_owner,
-            asdict(config),
-            player_config.get("player_token"),
-            player_config.get("player_name"),
-        )
-        if self.watch_mode and self.record_players is not None:
-            players = self.record_players
-        if (
-            not player_config.get("player_token")
-            and self.record_players
-            and self._record_player_owner == self.attempt_owner
-        ):
-            players[0] = replace(self.record_players[0], deck=config.hero_deck_name)
-        if self.trace is not None:
-            self.close(end_reason="new_game")
-        self.record_players = players
-        self._record_player_owner = self.attempt_owner
-        self._close_policies()
-        self.env, self.obs, self.villain_policy = env, obs, policy
+                prepared.callback(policy.close)
+            try:
+                # Native skipping resolves sole legal actions, as in every runner;
+                # priority-stop automation still records its Commands here.
+                env = managym.Env(seed=seed)
+                obs, _ = env.reset(config.to_rust())
+                if isinstance(policy, PolicyRunner):
+                    policy.observe(
+                        obs
+                        if int(obs.agent.player_index) == policy.seat
+                        else env.observation_for_player(policy.seat)
+                    )
+            except BaseException as exc:
+                # PyO3's PanicException derives directly from BaseException and has
+                # no importable Python class. A failed disposable replacement must
+                # not close the existing authority; process interrupts still escape.
+                if isinstance(exc, (KeyboardInterrupt, SystemExit, GeneratorExit)):
+                    raise
+                raise ValueError(
+                    "Could not prepare the requested game. The current game is unchanged."
+                ) from exc
+            manifest = env.content_pack_manifest()
+            selected_pack = curated_pack_for_matchup(
+                config.hero_deck_name,
+                config.villain_deck_name,
+            )
+            player_config = raw_config if isinstance(raw_config, dict) else {}
+            players = self.attempt_store.players_for_game(
+                self.attempt_owner,
+                asdict(config),
+                player_config.get("player_token"),
+                player_config.get("player_name"),
+            )
+            if self.watch_mode and self.record_players is not None:
+                players = self.record_players
+            if (
+                not player_config.get("player_token")
+                and self.record_players
+                and self._record_player_owner == self.attempt_owner
+            ):
+                players[0] = replace(self.record_players[0], deck=config.hero_deck_name)
+            if self.trace is not None:
+                self.close(end_reason="new_game")
+            self.record_players = players
+            self._record_player_owner = self.attempt_owner
+            self.env, self.obs, self.villain_policy = env, obs, policy
+            self.search_retry = None
+            prepared.pop_all()
         self._demo_name = demo_name
         # A pack identifies both decks, so closed games use the generic identity.
         # Cards still resolve their treatments by name from their public zones.
@@ -1214,6 +1245,19 @@ class GameSession:
                 **transient,
             },
         }
+
+    def retry_search(self, match_id: str, expected_revision: int) -> dict[str, Any]:
+        """Retry only the bound, uncommitted bot decision after a deadline."""
+        if (
+            self.watch_mode
+            or self.search_retry is None
+            or self.match_id != match_id
+            or self.revision != expected_revision
+        ):
+            raise ValueError("The pending search changed. Recover the current table.")
+        self.search_retry = None
+        self._advance()
+        return self._wire_message()
 
     def set_stops(
         self,
@@ -1561,6 +1605,16 @@ class GameSession:
                         self.villain_policy, self.env, self.obs
                     )
                     action_index = self._bot_decision.action
+                except SearchError as exc:
+                    if exc.reason != "search_deadline_exceeded":
+                        raise
+                    self.search_retry = {
+                        "code": exc.reason,
+                        "message": str(exc),
+                        "match_id": self.match_id,
+                        "expected_revision": self.revision,
+                    }
+                    return
                 except Exception as exc:
                     raise RuntimeError(
                         "The opponent could not continue this game."
@@ -1594,6 +1648,8 @@ class GameSession:
         the same recorded authority path as a click.
         Bounded so a stuck engine cannot spin the server forever.
         """
+        if self.search_retry is not None:
+            return
         if (
             self.watch_mode
             or self.env is None
@@ -1605,6 +1661,8 @@ class GameSession:
         hero_steps = 0
         while True:
             self._auto_play_villain()
+            if self.search_retry is not None:
+                return
             if self.obs.game_over:
                 self._f6_turn = None
                 return
@@ -1693,6 +1751,8 @@ class GameSession:
 
     def _advance_protocol_revision(self) -> None:
         self.revision += 1
+        if self.search_retry is not None:
+            self.search_retry["expected_revision"] = self.revision
         self.published_prompt = None
         self._pending_decision = None
 
@@ -1871,7 +1931,9 @@ class GameSession:
             "revision": self.revision,
             "content_hash": self.content_hash,
             "asset_manifest_hash": self.asset_manifest_hash,
-            "status": "game_over" if obs.game_over else "ready",
+            "status": "game_over"
+            if obs.game_over
+            else ("ready" if prompt else "thinking"),
             "prompt": prompt,
             "projection": projection,
             "offers": offers,
@@ -1897,6 +1959,19 @@ class GameSession:
     def _experience_frame(self) -> dict[str, Any]:
         if self.obs is None:
             raise RuntimeError("No observation available.")
+
+        if self.search_retry is not None:
+            # The pending choice belongs to the bot. Publish the human's view
+            # without a human prompt or any of the bot's private legal offers.
+            self.published_prompt = None
+            self._persist_attempt()
+            return self._build_frame(
+                self.obs,
+                viewer=HERO_PLAYER_INDEX,
+                prompt=None,
+                offers=[],
+                action_space="",
+            )
 
         if self.obs.game_over:
             self._persist_attempt(end_reason="game_over")
@@ -1997,6 +2072,7 @@ class GameSession:
         if "asset_pack" in frame:
             payload["asset_pack"] = frame["asset_pack"]
         payload.update(transient)
+        payload["search_retry"] = self.search_retry
         return payload
 
     def _reject_command(
@@ -2354,8 +2430,6 @@ class GameSession:
         self._study_attempts = {}
 
     def _observe_policies(self) -> None:
-        from managym.policy import PolicyRunner
-
         if self.env is None or self.obs is None:
             return
         policies = self.watch_policies or (self.villain_policy,)
@@ -2369,21 +2443,25 @@ class GameSession:
                 policy.observe(observation)
 
     def _close_policies(self) -> None:
-        from managym.policy import PolicyRunner
-
-        for policy in (self.villain_policy, *(self.watch_policies or ())):
-            if isinstance(policy, PolicyRunner):
-                policy.close()
+        with ExitStack() as resources:
+            for policy in (self.villain_policy, *(self.watch_policies or ())):
+                if isinstance(policy, PolicyRunner):
+                    resources.callback(policy.close)
 
     def close(self, end_reason: str) -> None:
-        self._close_policies()
-        self._close_study_attempts()
-        self._persist_attempt(end_reason=end_reason)
-
-        self.env = None
-        self.obs = None
-        self.villain_policy = None
-        self.watch_policies = None
+        try:
+            self._close_study_attempts()
+            self._persist_attempt(end_reason=end_reason)
+        finally:
+            try:
+                self._close_policies()
+            finally:
+                self.env = None
+                self.obs = None
+                self.villain_policy = None
+                self.watch_policies = None
+                self._bot_decision = None
+                self.search_retry = None
 
 
 def _error_message(message: str) -> dict[str, str]:
@@ -2628,6 +2706,10 @@ def _response_with_participant(
     watcher_invite: str | None = None,
 ) -> dict[str, Any]:
     payload = deepcopy(response)
+    payload["search_retry"] = record.game.search_retry
+    payload["search"] = (
+        asdict(record.game.trace.config).get("search") if record.game.trace else None
+    )
     # Launch metadata belongs only to the browser that submitted the setup.
     payload.pop("launch", None)
     payload["table"] = _table_snapshot(
@@ -2700,6 +2782,7 @@ DISPATCH_CAPABILITIES: dict[str, TableCapability] = {
     "command": TableCapability.SUBMIT_LIVE_COMMAND,
     "action": TableCapability.SUBMIT_LIVE_COMMAND,
     "pass_turn": TableCapability.SUBMIT_LIVE_COMMAND,
+    "retry_search": TableCapability.SUBMIT_LIVE_COMMAND,
     "set_stops": TableCapability.CONFIGURE_MATCH,
     "transfer_pilot": TableCapability.TRANSFER_PILOT,
     "author_belief": TableCapability.AUTHOR_BELIEF,
@@ -2839,6 +2922,7 @@ def _dispatch_table_request(
                 "hero_deck": previous.hero_deck_name,
                 "villain_deck": previous.villain_deck_name,
                 "decklists": previous.decklists,
+                "search": asdict(previous).get("search"),
                 "stops": record.game.stops,
                 "auto_pass": record.game.auto_pass,
                 "stop_on_stack": record.game.stop_on_stack,
@@ -2855,7 +2939,9 @@ def _dispatch_table_request(
                     )
                 }
             if previous.opponent is not None:
-                config["opponent_sha256"] = previous.opponent["sha256"]
+                config["opponent_sha256"] = previous.opponent.get(
+                    "base_sha256", previous.opponent["sha256"]
+                )
         record.game.attempt_owner = participant_id(participant.resume_token)
         response = record.game.new_game(config)
         record.accepted_command_submitters.clear()
@@ -2876,6 +2962,10 @@ def _dispatch_table_request(
         return record.game.hero_action(request.index), True
     if isinstance(request, PassTurnMessage):
         return record.game.pass_turn(), True
+    if isinstance(request, RetrySearchMessage):
+        return record.game.retry_search(
+            request.match_id, request.expected_revision
+        ), True
     if isinstance(request, SetStopsMessage):
         return (
             record.game.set_stops(
@@ -3113,8 +3203,8 @@ async def play_socket(websocket: WebSocket) -> None:
                         raise ValueError("Session expired. Start a new game.")
 
                 async with record.lock:
-                    response, broadcast = _dispatch_table_request(
-                        record, participant, parsed
+                    response, broadcast = await asyncio.to_thread(
+                        _dispatch_table_request, record, participant, parsed
                     )
                     record.touch()
                     await _send_table_response(
@@ -3603,9 +3693,12 @@ async def advance_bot_watch(
         raise HTTPException(400, "revision_required")
     record = record_for_watch(trace_id, x_etude_participant_token)
     async with record.lock:
-        return await asyncio.to_thread(
-            step_watch, trace_id, x_etude_participant_token, revision
-        )
+        try:
+            return await asyncio.to_thread(
+                step_watch, trace_id, x_etude_participant_token, revision
+            )
+        except SearchError as exc:
+            raise HTTPException(409, {"code": exc.reason, "message": str(exc)}) from exc
 
 
 @app.get("/api/watch/{trace_id}/decisions/{ordinal}")

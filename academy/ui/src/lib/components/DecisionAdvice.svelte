@@ -95,21 +95,31 @@
 
   <div class="space-y-4 pt-3">
     {#if mode === 'watch'}
-      <p class="type-caption">Recorded at the acting bot's decision. Chosen offers are marked ✓.</p>
+      <p class="type-caption">Recorded at this decision. Chosen offers are marked ✓.</p>
       <p>Value: {recorded?.value?.toFixed(4) ?? 'Unavailable'} {recorded?.value_semantic ?? ''}</p>
       {#if recorded?.unavailable}<p class="type-caption text-ink-2">{recorded.unavailable}</p>{/if}
       <table class="w-full text-left type-caption">
-        <thead><tr><th>Legal action</th><th>Policy</th><th>Search score</th></tr></thead>
+        <thead><tr><th>Legal action</th>{#if recorded?.search}<th>Raw policy</th><th>Search values</th><th>Updated policy</th>{:else}<th>Policy</th><th>Search score</th>{/if}</tr></thead>
         <tbody>{#each offers as offer, index}
           <tr class:bg-panel-muted={offer.id === chosenOffer}>
             <td class="py-2">{offer.id === chosenOffer ? '✓ ' : ''}{offer.label}</td>
-            <td>{recorded?.probabilities[index] === undefined ? 'Unavailable' : `${(recorded.probabilities[index] * 100).toFixed(2)}%`}</td>
+            {#if recorded?.search}<td>{recorded.search.prior[index] === undefined ? 'Unavailable' : `${(recorded.search.prior[index] * 100).toFixed(2)}%`}</td>{/if}
+            {#if !recorded?.search}<td>{recorded?.probabilities[index] === undefined ? 'Unavailable' : `${(recorded.probabilities[index] * 100).toFixed(2)}%`}</td>{/if}
             <td>{recorded?.search_scores[index]?.toFixed(4) ?? 'Unavailable'}</td>
+            {#if recorded?.search}<td>{recorded.probabilities[index] === undefined ? 'Unavailable' : `${(recorded.probabilities[index] * 100).toFixed(2)}%`}</td>{/if}
           </tr>
         {/each}</tbody>
       </table>
       {#if recorded?.belief}
         <p class="type-caption">Belief: {recorded.belief.model} · {recorded.belief.sampled_worlds} sampled worlds · condition mass {recorded.belief.condition_mass.toFixed(4)}</p>
+      {/if}
+      {#if recorded?.search}
+        <p class="type-caption">Mirror search: {recorded.search.worlds} worlds × depth {recorded.search.depth} · {recorded.search.rollouts} rollouts · {recorded.search.seconds.toFixed(3)} s of {recorded.search.decision_seconds} s · α {recorded.search.alpha}, β {recorded.search.beta}</p>
+        <p class="type-caption">Uniform belief (physical deal): hidden cards are sampled with copy counts and public knowledge.</p>
+        <details class="type-caption"><summary>Search identity</summary>
+          <p>Seed: {recorded.search.seed}</p>
+          <p class="break-all">Receipt SHA-256: {recorded.search.receipt_sha256}</p>
+        </details>
       {/if}
       {#if recorded?.factors?.length}
         <details><summary>Recorded compound sequence factors</summary>

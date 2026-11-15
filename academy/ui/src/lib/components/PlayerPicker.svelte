@@ -1,6 +1,8 @@
 <script lang="ts">
   import { policyChoice, type PlayerChoice } from '$lib/game.svelte';
   import type { Decklists, TrainedOpponent } from '$lib/types';
+  import type { MirrorSearchSpec } from '$lib/watch';
+  import SearchControl from './SearchControl.svelte';
 
   interface Props {
     value?: PlayerChoice;
@@ -12,10 +14,12 @@
     label?: string;
     referencePlayers?: string[];
     onChange?: (value: PlayerChoice) => void;
+    search?: MirrorSearchSpec | null;
+    onSearchChange?: (value: MirrorSearchSpec | null) => void;
   }
   let { value = 'search-64', trained = [], extension = undefined, catalogError = null,
     decklists = 'open', disabled = false, label = 'Opponent', referencePlayers,
-    onChange }: Props = $props();
+    onChange, search = null, onSearchChange }: Props = $props();
   const uid = $props.id();
   const selected = $derived(trained.find(entry => policyChoice(entry.sha256) === value));
   const custom = $derived(value.startsWith('policy:'));
@@ -81,7 +85,7 @@
       {#if selected.parameters != null} · {number(selected.parameters)} parameters{/if}
       {#if selected.decks.length} · {selected.decks.join(' vs ')}{/if}
       {#if !selected.available} · {selected.reason}{/if}
-      {#if !selected.supports_search} · Mirror search unavailable: this policy does not advertise compatible search evaluation.{/if}
+      {#if !selected.supports_search} · Mirror search unavailable: {selected.search_reason ?? 'this policy does not advertise compatible search evaluation.'}{/if}
 
     {:else if custom && value !== 'policy:'}The selected policy is no longer available.
     {:else if catalogError}{catalogError}
@@ -95,3 +99,8 @@
     </details>
   {/if}
 </div>
+{#if onSearchChange && (custom || search !== null)}
+  <SearchControl value={search} supported={selected?.supports_search === true && decklists === 'open'}
+    reason={decklists === 'closed' ? 'Mirror search requires open decklists.' : selected?.search_reason}
+    label={`${label} search`} {disabled} onChange={value => onSearchChange?.(value)} />
+{/if}

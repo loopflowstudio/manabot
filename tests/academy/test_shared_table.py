@@ -152,8 +152,8 @@ def _open_table(client: TestClient):
 
 
 def test_closed_dispatch_denies_every_watcher_live_mutation_without_state_change(
-    monkeypatch, tmp_path
-):
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
     server.SESSION_REGISTRY.clear()
     with TestClient(app) as client:
@@ -171,6 +171,7 @@ def test_closed_dispatch_denies_every_watcher_live_mutation_without_state_change
                 "hero_command",
                 "hero_action",
                 "pass_turn",
+                "retry_search",
                 "set_stops",
                 "new_game",
             ):
@@ -193,6 +194,12 @@ def test_closed_dispatch_denies_every_watcher_live_mutation_without_state_change
                     "index": 0,
                 },
                 {"type": "pass_turn", "grant_revision": watcher_grant},
+                {
+                    "type": "retry_search",
+                    "grant_revision": watcher_grant,
+                    "match_id": frame["match_id"],
+                    "expected_revision": frame["revision"],
+                },
                 {
                     "type": "set_stops",
                     "grant_revision": watcher_grant,
