@@ -1,4 +1,5 @@
 import { selectDeck } from './deck-selection';
+import { confirmCombat } from './combat';
 import { expect, test, type Page } from '@playwright/test';
 
 test('shared history identifies both players and preserves private prefixes and notes', async ({ browser }) => {
@@ -41,9 +42,14 @@ test('shared history identifies both players and preserves private prefixes and 
     await start(alice, aliceName);
     const over = alice.getByText('Game Over', { exact: true });
     const actions = alice.getByTestId('action-option');
+    const composer = alice.getByTestId('combat-composer');
     for (let step = 0; step < 600 && !(await over.isVisible()); step++) {
-      await expect(actions.first().or(over)).toBeVisible();
+      await expect(actions.first().or(over).or(composer)).toBeVisible();
       if (await over.isVisible()) break;
+      if (await composer.isVisible()) {
+        await confirmCombat(alice);
+        continue;
+      }
       const before = Number(await alice.locator('main').getAttribute('data-update-seq'));
       const labels = await actions.allTextContents();
       let pick = labels.findIndex((label) => /^Play |^Cast |^Attack with/.test(label));

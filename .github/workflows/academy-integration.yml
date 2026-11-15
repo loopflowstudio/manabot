@@ -47,6 +47,12 @@ jobs:
       - name: Checkpoint world bindings
         run: uv run pytest tests/model/test_world.py
 
+      - name: Combat declaration authority and recording
+        run: |
+          uv run pytest -q \
+            tests/academy/test_combat_declarations.py \
+            tests/academy/test_combat_smoke_replay.py
+
       - name: Elemental roster admission
         run: uv run pytest tests/semantic/test_elemental_world.py tests/semantic/test_decklist_import.py tests/academy/test_decklist_setup.py -q
 

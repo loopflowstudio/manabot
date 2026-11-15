@@ -1,7 +1,7 @@
 <script lang="ts">
   import { stageLabel, subjectLabel } from '$lib/decision-labels';
-  import type { Observation } from '$lib/types';
-  let { observation, actor = null }: { observation: Observation; actor?: number | null } = $props();
+  import type { DeclarationProjection, Observation } from '$lib/types';
+  let { observation, actor = null, declaration = null }: { observation: Observation; actor?: number | null; declaration?: DeclarationProjection | null } = $props();
   const context = $derived(observation.decision_context);
 </script>
 
@@ -11,7 +11,11 @@
     <h3 class="font-medium">What is happening</h3>
     {#if context}
       <p class="type-caption capitalize">{stageLabel(context.stage)}</p>
-      <p class="type-caption">{context.instruction}</p>
+      {#if declaration}
+        <p class="type-caption">Plan the remaining {declaration.stage}, then confirm once. Draft edits are uncommitted; already committed assignments stay fixed.</p>
+      {:else}
+        <p class="type-caption">{context.instruction}</p>
+      {/if}
       {#if context.source}<p>Source: {subjectLabel(observation, context.source)}</p>{/if}
       {#if context.chosen_mode !== null}<p>Chosen mode: {context.chosen_mode + 1}</p>{/if}
       {#each context.targets as target}<p>Selected target {target.clause + 1}: {subjectLabel(observation, target.object)}</p>{/each}

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
+import type { SharedTableControlEvent } from './shared-table-protocol';
 import { gameStore } from './game.svelte';
 import { LIGHTNING_BOLT_PRESENTATION } from './presentation-fixtures';
 import { presentationPlayer } from './presentation.svelte';
@@ -32,7 +33,7 @@ function frameAt(revision: number): ExperienceFrame {
   };
 }
 
-function deliver(controller: GameSocketController, message: ServerMessage): void {
+function deliver(controller: GameSocketController, message: ServerMessage | SharedTableControlEvent): void {
   const testController = controller as unknown as {
     handleRawMessage(raw: string): void;
   };
@@ -404,4 +405,20 @@ describe('GameSocketController presentation seam', () => {
       (refreshed as unknown as { presentationCursor: number }).presentationCursor,
     ).toBe(firstCursor);
   });
+});
+
+it('draft validation never completes an outstanding submission or changes the frame', () => {
+  gameStore.prepareForNewGame();
+  gameStore.applyFrame(frameAt(42));
+  gameStore.beginCommand();
+  const controller = new GameSocketController();
+  deliver(controller, { type: 'declaration_validation', request_id: 'draft.1',
+    match_id: frameAt(42).match_id, revision: 42, prompt_id: frameAt(42).prompt!.id,
+    status: 'capacity', message: 'Rules capacity reached.',
+    capacity: { resource: 'combat_solver', limit: 1, visited: 2 }, table: null });
+  expect(gameStore.commandPending).toBe(true);
+  expect(gameStore.protocolFrame?.revision).toBe(42);
+  expect(gameStore.declarationValidation?.capacity?.visited).toBe(2);
+  gameStore.applyFrame(frameAt(43));
+  expect(gameStore.declarationValidation).toBeNull();
 });
