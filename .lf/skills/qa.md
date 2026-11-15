@@ -91,17 +91,6 @@ publish, land or choose the next Graph step from here.
   (buttons are disabled while a Command is in flight, and `Pass Turn (F6)` in
   the panel is not an offer). Tapped lands show only in a `fullPage`
   screenshot, not in the board's text.
-  Combat declarations are not offers: they show `[data-testid=combat-composer]`
-  (whole plan, `data-testid=combat-validation` `data-status`, one Confirm), so
-  a game loop waiting only for `action-option` stalls at the first combat.
-  Specs use `confirmCombat` from `academy/ui/e2e/combat.ts`. Opponent select
-  values are `search-16`, `random`, `passive`, `policy` (not labels). For real
-  combat, import `16 Mountain\n10 Gray Ogre\n8 Boggart Brute\n6 Raging Goblin`
-  (menace via Boggart Brute) against Search 16. A `vite preview` server dies
-  when a later build replaces `.svelte-kit/output`; restart it after building.
-  Setup/navigation changes also run `npm --prefix academy/ui run test:e2e:policy`
-  and `npm --prefix academy/ui run test:e2e:search`; the release browser config
-  does not include those policy refusal, reload and Search journeys.
 - Configured launch (`managym academy play|replay`, `managym.academy.launch.serve`):
   from a checkout first build the static SPA with
   `ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build`, then set
@@ -150,13 +139,6 @@ publish, land or choose the next Graph step from here.
   buttons, or every click times out while the bot plays on. Hover a card name
   to read `[data-testid=card-rules-text]`. Search 64 with a fast creature deck
   usually wins before a slow card is used; give the opponent a light deck.
-- Behind `vite preview` (`ACADEMY_API_PORT` → forwarder), a cut during a Watch
-  step reaches the page as the proxy's HTTP 500, not a network error, so Watch
-  asks for **Refresh saved head** instead of reading the lost reply itself;
-  same-origin CLI serving gives the network-error path. Setup pickers are
-  `getByTestId('opponent-select')` (seat 1 set to Bot gives two). Filter offers
-  with an unanchored regex such as `/Play (Mountain|Island)/`; `^Play` misses
-  because the button's text starts with whitespace.
 - Live network recovery: browser offline emulation may leave an existing
   WebSocket connected. To prove recovery, put a local TCP forwarder between the
   browser and the real server, destroy its active socket pairs, stop listening
@@ -169,21 +151,6 @@ publish, land or choose the next Graph step from here.
   result deliberately receives focus and may scroll; assert document stability
   during active decisions. After Play Again, select the completed replay by its
   result label, since the newest entry is the unfinished next game.
-  A Node `net` forwarder in the Playwright script, listening in front of the
-  `npm run preview` port, works because preview proxies `/ws/play` to the API.
-  To test a lost reply, click Confirm and cut in the same tick. Then check the
-  trace for a single commit: `attempts.trace_json` in
-  `<ACADEMY_TRACES_DIR>/play.sqlite`, `events[].action_description` by turn.
-  Forced children (one legal action) are skipped and absent from `events`.
-- Interruption and Watch checks: Rematch and Swap sides during a live game
-  open `window.confirm`, which Playwright dismisses unless a `dialog` handler
-  accepts it; a dismissed confirm looks like a dead button. For a backend
-  restart, SIGKILL the uvicorn listener (`lsof -ti tcp:<api> -sTCP:LISTEN`)
-  and its `uv` parent, start it again, and expect "Interrupted" with only New
-  game and the saved recording as paths forward. `vite preview` keeps serving
-  the old chunk names after a rebuild; restart it. Watch's frontier status is
-  the `Live frontier work` region (`getByRole('region', ...)`); Search 16
-  decisions finish too quickly to see it, Search 256 shows seconds elapsed.
 - First-time clone: copy tracked plus untracked non-ignored files
   (`git ls-files -co --exclude-standard`) to an empty `/tmp` directory and run
   `ACADEMY_CLEAN_API_PORT=… ACADEMY_CLEAN_FRONTEND_PORT=… ./scripts/verify-clean-machine`
@@ -213,15 +180,6 @@ publish, land or choose the next Graph step from here.
   match and checkpoint; with equal player and reset seeds, every evidence and
   encoder arm must pick identical Commands for a whole game (two 93-decision
   games per arm at 4 worlds × depth 20 took about 90 s).
-- Trained-policy Play/Watch/Search: train a checkpoint at this checkout
-  (`uv run manabot train --recipe local --device cpu --out .runs/<x>`, about
-  30 s) and register `{"provider": "manabot", "artifact": "<abs path>/self-play-raw.safetensors", "config": {}}`
-  with `managym academy --policy <file>.json play|watch`. A checkpoint trained
-  before syncing main can pass the picker yet fail Start with "Failed to load
-  the selected opponent." (catalog vocabulary grew); retrain rather than debug
-  it. Watch resume tokens live in that tab's storage, so reopen a live Watch
-  trace in the same browser context. A completed Play game's evidence opens
-  from `/replay?trace=<id>` (ids from `/api/traces`) via "Inspect bot search".
 - Model or training-path changes: `uv run manabot train --recipe local --device
   cpu --out .runs/<name>` writes `run.json` with per-phase
   seconds (`learning_seconds`, collection and forward splits) for an A/B. The
@@ -415,15 +373,7 @@ publish, land or choose the next Graph step from here.
 - Ctrl-C a run: start it with `subprocess.Popen(..., start_new_session=True,
   preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))` and
   `os.killpg(pid, SIGINT)`. A job started with `&` from a non-interactive shell
-  ignores SIGINT, so `pkill -INT` appears to hang. When the child is `uv run`,
-  `killpg` delivers SIGINT twice (uv forwards it) and the server prints an
-  ignored `KeyboardInterrupt` at exit; signal only the Python child for a
-  clean shutdown.
-- Scripted Play against a searched opponent: one human Command runs the whole
-  opponent turn, so a 2×2 Mirror reply took 49 s (ten searched decisions) and
-  the waiting badge reached 170 s+. Do not treat a long badge as a hang; set
-  stall detectors above a full opponent turn, and confirm with the trace's
-  `events[].bot_decision.mirror.seconds` in the attempts table.
+  ignores SIGINT, so `pkill -INT` appears to hang.
 - Experiment reports and figures: arrive as a new reader with
   `MANABOT_DATA_CACHE` set to an empty directory, then `doppler run --project
   manabot --config prd -- uv run --extra artifacts python -m manabot.data fetch
@@ -437,27 +387,6 @@ publish, land or choose the next Graph step from here.
   experiments/l4_step_profile.py job --smoke`. For `live` it took about 6
   minutes and 2.2 GB and runs every stage as a real child process.
 
-- Search (search-capable policy in Play/Watch): `uv run manabot train
-  --recipe local --device cpu --out .runs/<x>` gives a compatible
-  `self-play-raw.safetensors` in about 90 s; save `{"provider": "manabot",
-  "artifact": "<abs path>", "config": {}}` as `<alias>.json` and launch `uv run managym
-  academy --policy <alias>.json play --opponent <alias> --search
-  '{"worlds":1,"depth":1}' --seed 7` (or `watch --player <alias> --player
-  random --search '[{...},null]'`, then press Start watching). Seed 7 puts the
-  bot on the play. The initial budget is 1×1 with a 30 s ceiling. With the
-  provider's cached card catalog, full games at 1×1 (Watch, both seats) and
-  4×2 (Play) completed with median decisions near 0.5 s and 1 s at load ~150;
-  16×20 still exceeded 30 s. If one evaluation takes seconds, profile it:
-  re-encoding the card catalog per forward (`_encode_programs`, `torch.gru`)
-  means the session is not using `inference_scope()`. To time decisions
-  without a browser, drive `create_watch`/`step_watch` in-process as
-  `tests/academy/test_search_baseline.py` does. Retained evidence is in
-  the attempts table's `trace_json`
-  (`events[].bot_decision.mirror`). To probe reconnect, click an offer that hands
-  priority to the bot and reload about 1.5 s later while the table shows
-  `Search W×D· N s`; the game must stay `active` and resume at the
-  committed state. A reload before the first response has no resume
-  credentials and launches a new game by design.
 - Live Academy QA without fixtures: build first, then start the ordinary
   `managym.academy.server:app` with `ACADEMY_TRACES_DIR` pointing into an ignored
   `.runs/` directory and `ACADEMY_PLAY_RECORD_ORIGIN=automated_validation`.
@@ -467,34 +396,10 @@ publish, land or choose the next Graph step from here.
   otherwise a reload comparison uses a stale opening frame. For a short real
   target/recovery game, import `20 Mountain\n40 Lightning Bolt` against
   `40 Plains`, select Passive, play Mountains and cast Bolts at Villain.
-  The ordinary server also lists manabot's Heuristic and Greedy as Registered
-  policies; after a restart `/api/opponents` can stay empty for a while, so
-  poll it before selecting one. Repeated sessions: after **Swap sides** the
-  human sits at native seat 1, so check whose life a "Target …" offer lowers
-  and confirm the session's swapped game is a win, not just completed.
   Replay's newest entry can be an unfinished Play Again attempt: select the
   completed result explicitly before checking Next frame. Playwright offline
   mode did not close an existing localhost WebSocket in the MTG-355 run; it
   alone does not prove disconnect/reconnect behavior.
-- Replay/Watch (one viewer for every recording): `/replay?watch=1`, pick seats
-  with the `Seat 1`/`Seat 2` comboboxes and `Deal seed`, press **Start
-  watching**, then drive the transport (`Play`/`Pause`/`Previous`/`Next`,
-  slider "Replay position", "Jump to turn and phase", Speed 16×). Random vs
-  Random at 16× reaches a result in about four minutes under load. Seed 7 on
-  the default decks fails Watch start with HTTP 500 (Task e2fbba). Use another
-  seed until that is fixed. For an imported evaluation, write a multi-game
-  trace with `play_cell(..., deal_seeds=(777, 778), legs=(0, 1))` into
-  `.runs/` (about 10 s) and pass its `.commands.jsonl.gz` to "Open a game
-  file". Then choose "Recorded game" and "Open selected game"; only
-  `/api/watch/import` may be POSTed. A Watch still producing is private to its
-  tab: a new browser context cannot open it. Measure fit at 1280×800 from
-  `.recording-viewer` scroll and `.hand-cards` bounds, not the page.
-  `PresentationStage` also carries `data-presentation-seq`, so count history
-  rows inside the "Recorded game events" list. The release Playwright config
-  serves the last static build through `vite preview`: rebuild with
-  `ACADEMY_STATIC_BUILD=1` after every UI edit before rerunning it. A release
-  spec can save a legacy JSON record into `test-results/release/traces/` to
-  read it through the real server instead of mocking endpoints.
 - For a genuine local connection interruption, put a TCP forwarder between the
   browser and the ordinary same-origin Academy CLI server. Stop its listener and
   destroy both sockets of every forwarded pair; observe disconnected/reconnecting
@@ -513,13 +418,6 @@ publish, land or choose the next Graph step from here.
   Check the hand ends above history. Recorded terminal results have no next-game
   action and must leave keyboard navigation available; the live Play Again
   dialog retains its focus behavior.
-- Repeated sessions and Watch setup: the Play session strip (`region` "Play session")
-  offers Rematch, Swap sides, Edit next game and Change opponent; editors end in
-  Save next setup / Start next game / Cancel, and Cancel must leave the next
-  draft unchanged. Session results load after their region appears; wait for a
-  row before reading counts. The standalone bot-matchup setup is
-  `/replay?watch=1` (`region` "Game setup for watching"); plain `/replay` shows
-  none. Its "Continue to play" after switching a seat to You lands on `/?setup=1`.
 - Play/Inspect QA: fresh storage starts in Inspect. In Play, activate the exact
   hand `[data-object-id]` by pointer or Enter, then commit its labeled
   `[data-offer-id]`; selection, Inspect card, mode switches and Escape send no

@@ -119,14 +119,14 @@ is displayed while a card or text filter narrows navigation; **Show all** and
 **Clear filter** restore the full set. In live play at laptop widths and heights,
 the board sits beside independently scrolling offers; instruction, legal count
 and filter navigation stay available. Long instructions have their own scroll
-area. **History and settings** opens decision details, consequences and
+area. **History and settings** opens decision details, consequences, advice and
 stop configuration while the pending decision stays available. **Edit stops**
 beside the choices opens **Your turn** / **Opponent turn** settings; changing
 them may immediately advance priority. See
 [priority stops](../../docs/academy.md#choosing-priority-stops) for defaults,
 stack responses and F6. Narrow or short windows stack
-the board above choices, with links between them. History and table tools remain contextual. Recorded policy/search evidence is
-attached to the decision it describes; the live table has no example Advice panel. Native card
+the board above choices, with links between them. History, advice and table
+tools can be opened separately; **Compare advice** opens and focuses Advice. Native card
 types group creatures, lands, other
 permanents and artifact tokens into bounded battlefield lanes; dense lanes
 compact their cards, then offer explicit paging beside their headings. Occupied
@@ -211,21 +211,6 @@ The browser renders provider-authored groups and detail lines and precise unavai
 missing training counts remain "not recorded". Optional advice/import capabilities
 are separate from policy loading.
 
-An optional `SearchConfig` per bot composes an admitted policy with the
-framework-free `managym.search` owner in Play, Watch and launch APIs
-([Search](../../docs/academy.md#search)). Its initial budget is one
-world at depth one, with a 30-second ceiling; explicit larger budgets are retained.
-Native physical-deal sampling and bound Commands remain authoritative; the two-KL numerical update
-has one implementation in `managym.mirror`. Full legal probabilities, compatible
-signed values and isolated current-view forks are mandatory. Deadline failure
-retains the live decision for an explicit, match/revision-bound pilot retry.
-Budget checks bracket synchronous provider calls; an in-flight call returns
-before its overdue result is rejected, and no overdue action is accepted.
-`BotDecision.mirror` retains prior probabilities, budget, timing, hexadecimal seed
-and receipt digest; model outputs stay out of an opponent's live/viewer export.
-Completed Play games expose retained actor-view evidence through Replay's
-**Inspect bot search** link without loading a provider.
-
 Replacement admission must keep the old GameSession authority intact until the
 new environment resets successfully. Invalid native deck setup can raise
 PyO3's `PanicException` (a direct `BaseException`, with no importable Python
@@ -249,24 +234,10 @@ Open **Watch** (`/replay?watch=1`) to select both seats, decks and a deal seed;
 `managym academy watch --player X --player Y` opens it with the seats selected
 (`&seat1=…&seat2=…`) and leaves Start to the person. Trained checkpoints, in
 one seat or both, and the random, greedy, heuristic and search anchors use
-GameSession's normal Command authority. Live production is separate from
-recorded playback. The shared replay viewer walks choices, recorded
-consequences and result/latest-state positions for
-human games, Watch and imported games. At a live Watch's latest position,
-Continue requests one decision and Play can continue production. Browsing
-earlier positions reads saved data without rerunning a policy. Completed games
-open from Games in the same viewer. See the
-[replay guide](../../docs/academy.md#inspect-a-replay) for navigation, speed,
-perspective, reload and recovery. Watch credentials stay in the tab's
-`sessionStorage`; saved position URLs carry no credentials.
-
-Opening card details or reading earlier history pauses replay. Close the details
-when ready, then press **Play** to resume. Returning to **Latest** does not start
-playback. A live decision already being produced may finish saving while you read;
-your selected board stays put. A pending mirror-search timeout is
-retained across reload and shown with its message. At the live edge, **Retry
-search** explicitly retries that decision; browsing saved positions never retries
-it. The exact selected position remains selected after reload.
+GameSession's normal Command authority. Step advances one native decision;
+Play/Pause and speed control that same operation. Previous decisions read saved
+outputs without rerunning the policy. Completed watched games open from Games
+in this same table. Reloading retains the watch credential in the browser.
 
 `watch.py` admits controllers and verified exported training games or evaluation
 traces through **Open a game file**; choose a game when a trace contains several.
@@ -288,16 +259,10 @@ conditional root-sequence factors and values; these remain labeled separately
 from native microchoice marginals. Anchors without critics have no value estimate. Watch's acting-view
 inspection endpoint never returns the full mixed canonical replay. The separate
 private analysis observation supplies **Show both hands**, available explicitly
-for authorized bot spectators, including during active watches. Every read,
-including completed inspection, follows the recording's participant/shared
-access rules; finishing does not make a private recording public. Active Watch
-inspection also requires its watch credential. Choices default to the acting
-bot's view, independently of the stable seat-0 table orientation. Consequence
-and result boards use the authorized recorded seat-0 view where actor-private
-post-action snapshots are absent, with the perspective explicitly labeled.
-Unavailable views stay unavailable. Ordinary trace reads always strip the
-analysis snapshot, and bot inputs, decision evidence and acting-view history
-retain their acting-view scope.
+for bot spectators, including during active watches. Active inspection requires
+the watch credential; completed inspection remains shared. The default
+is the acting bot's view. Ordinary trace reads always strip the analysis
+snapshot, and bot inputs and decision evidence retain their acting-view scope.
 
 **Try another line** uses retained Study roots from either acting seat, executes
 one exact semantic Command on an isolated branch, and returns to the recorded
@@ -351,9 +316,6 @@ a separate `ACADEMY_TRACES_DIR`, and
 `ACADEMY_PLAY_RECORD_ORIGIN=automated_validation`. Keep existing human-play
 stores and sibling servers untouched. Shared-history proofs use separate
 browser identities and cover private unfinished replays and participant feedback.
-For release-config proofs, set an absolute `ACADEMY_RELEASE_PROOF_DIR` per
-subprocess; both browser artifacts and its trace store live below that directory.
-Finish frontend generation and builds before starting the proof servers.
 
 Changes to persistence or Study addresses require presentation, Study runtime,
 and protocol checks as well as attempt-store checks. SQLite is the trace

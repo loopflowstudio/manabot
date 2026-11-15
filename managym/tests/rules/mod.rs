@@ -1,4 +1,3 @@
-pub mod combat_declarations;
 pub mod cr_103_game_start;
 pub mod cr_106_mana;
 pub mod cr_117_priority;
@@ -23,5 +22,3 @@ pub mod event_observations;
 pub mod presentation_events;
 pub mod structured_attacker_offers;
 pub mod structured_offers;
-
-pub mod decision_guidance;

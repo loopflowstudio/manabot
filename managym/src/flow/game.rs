@@ -727,10 +727,6 @@ pub struct Game {
     /// Derived public suffix, updated only by emit; excluded from rules-state
     /// hashing like other projections. Ordinary observation reads share it.
     pub(crate) policy_history: crate::agent::policy_history::HistoryWindow,
-    /// Deterministic node budget shared by every combat authority path.
-    pub(crate) combat_solver_limit: usize,
-    /// Failed in-place progression cannot be retried as a playable decision.
-    pub(crate) progression_error: Option<Box<crate::agent::action::AgentError>>,
     pub skip_trivial: bool,
     pub current_action_space: Option<ActionSpace>,
     /// Monotonic identity for the currently published external decision.
@@ -756,8 +752,6 @@ impl Clone for Game {
             derived: RefCell::new(self.derived.borrow().clone()),
             payment_sources: Default::default(),
             policy_history: self.policy_history.clone(),
-            combat_solver_limit: self.combat_solver_limit,
-            progression_error: self.progression_error.clone(),
             skip_trivial: self.skip_trivial,
             current_action_space: self.current_action_space.clone(),
             decision_epoch: self.decision_epoch,
@@ -771,15 +765,6 @@ impl Clone for Game {
 }
 
 impl Game {
-    /// Live transaction candidates and recording roots retain author captures;
-    /// ordinary search clones deliberately omit them.
-    pub(crate) fn clone_with_card_capture(&self) -> Self {
-        Self {
-            card_capture: self.card_capture.clone(),
-            ..self.clone()
-        }
-    }
-
     pub fn take_observation_events(&mut self) -> Vec<GameEvent> {
         std::mem::take(self.state.observation_events_mut())
     }

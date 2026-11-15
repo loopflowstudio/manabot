@@ -22,14 +22,10 @@ from pydantic import Field, model_validator
 
 from managym.experience import (
     Command,
-    CommandReceipt,
-    DeclarationSubject,
     ExperienceFrame,
     InteractionOffer,
-    ObjectSubject,
     PresentationEvent,
     ProtocolModel,
-    SubjectRef,
     UInt8,
     UInt64,
 )
@@ -183,9 +179,6 @@ class ViewerPresentationTrack(ProtocolModel):
 
 
 class CanonicalReplayV1(ProtocolModel):
-    command_receipts: list[CommandReceipt] = Field(
-        default_factory=list, exclude_if=lambda value: not value
-    )
     version: Literal[1]
     replay_id: str
     match_id: str
@@ -231,96 +224,6 @@ class CanonicalReplayV1(ProtocolModel):
             cursors = [row.presentation_cursor for row in rows]
             if cursors != sorted(cursors):
                 raise ValueError(f"viewer {viewer} decision cursors move backwards")
-        rows_by_command = {row.command_id: row for row in self.decisions}
-        parents: set[str] = set()
-        grouped: set[str] = set()
-        for receipt in self.command_receipts:
-            declaration = receipt.declaration
-            if declaration is None or not declaration.child_command_ids:
-                raise ValueError("canonical parent receipt has no declaration children")
-            command = declaration.command
-            if (
-                receipt.command_id in parents
-                or receipt.command_id in rows_by_command
-                or receipt.command_id != command.command_id
-                or command.match_id != self.match_id
-                or command.expected_revision != receipt.accepted_at
-            ):
-                raise ValueError("canonical parent command identity drifted")
-            parents.add(receipt.command_id)
-            children: list[ReplayDecision] = []
-            for child_id in declaration.child_command_ids:
-                child = rows_by_command.get(child_id)
-                if (
-                    child is None
-                    or child_id in grouped
-                    or child.viewer != receipt.actor
-                ):
-                    raise ValueError(
-                        "canonical declaration child is absent, repeated or has another viewer"
-                    )
-                grouped.add(child_id)
-                children.append(child)
-            first, last = children[0], children[-1]
-            if (
-                first.revision != receipt.accepted_at
-                or first.prompt_id != command.prompt_id
-                or last.revision + 1 != receipt.resulting_revision
-                or [row.ordinal for row in children]
-                != list(range(first.ordinal, last.ordinal + 1))
-            ):
-                raise ValueError(
-                    "canonical declaration children are not one ordered commit"
-                )
-            projection = first.frame.declaration
-            completion = declaration.completion
-            if (
-                projection is None
-                or projection.binding != command.plan.binding
-                or projection.actor != receipt.actor
-                or projection.stage != completion.stage
-                or projection.rules_player != completion.rules_player
-            ):
-                raise ValueError("canonical declaration binding or stage drifted")
-            expected: dict[tuple[int, int], SubjectRef | None] = {}
-            pending: dict[tuple[int, int], DeclarationSubject] = {}
-            for subject in projection.subjects:
-                if not isinstance(subject.object.subject, ObjectSubject):
-                    raise ValueError("declaration subject is not a creature")
-                identity = subject.object.subject.id
-                key = (identity.entity, identity.incarnation)
-                if key in expected:
-                    raise ValueError("canonical declaration domain repeats a creature")
-                expected[key] = subject.assigned_to
-                if not subject.fixed:
-                    pending[key] = subject
-            answered: set[tuple[int, int]] = set()
-            for answer in command.plan.assignments:
-                key = (answer.subject.entity, answer.subject.incarnation)
-                subject = pending.get(key)
-                if (
-                    subject is None
-                    or key in answered
-                    or answer.destination is not None
-                    and answer.destination not in subject.destinations
-                ):
-                    raise ValueError(
-                        "canonical declaration plan differs from its pending domain"
-                    )
-                answered.add(key)
-                expected[key] = answer.destination
-            actual = {
-                (answer.subject.entity, answer.subject.incarnation): answer.destination
-                for answer in completion.assignments
-            }
-            if (
-                answered != set(pending)
-                or len(actual) != len(completion.assignments)
-                or actual != expected
-            ):
-                raise ValueError(
-                    "canonical declaration completion differs from its plan or fixed prefix"
-                )
         return self
 
     def metadata(self) -> list[dict[str, Any]]:

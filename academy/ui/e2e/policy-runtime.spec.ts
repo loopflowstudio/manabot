@@ -6,7 +6,7 @@ const proof = new URL('../test-results/policy/addresses.json', import.meta.url);
 for (const theme of ['light', 'dark'] as const) {
   test(`independent policy Play, reload, and both Watch seats (${theme})`, async ({ page }) => {
     const addresses = JSON.parse(readFileSync(proof, 'utf8')) as {
-      refused: string; play: string; watch: string; guidance: string; ids: { independent: string; baseline: string; "refused-config": string }
+      refused: string; play: string; watch: string; ids: { independent: string; baseline: string; "refused-config": string }
     };
     const errors: string[] = [];
     page.on('pageerror', error => errors.push(error.message));
@@ -15,15 +15,13 @@ for (const theme of ['light', 'dark'] as const) {
     const frames: { match_id: string; revision: number }[] = [];
     page.on('websocket', socket => socket.on('framereceived', event => {
       const message = JSON.parse(String(event.payload));
-      const frame = message.update?.frame ?? message.recovery?.frame ?? message.frame;
+      const frame = message.recovery?.frame ?? message.frame;
       if (frame) frames.push(frame);
     }));
     await page.goto(addresses.refused);
-    await expect(page.getByText(/restore the pinned artifact and runner/).first()).toBeVisible();
-    await page.getByRole('banner').getByRole('link', { name: 'New game', exact: true }).click();
     await expect(page.getByTestId('checkpoint-select')).toHaveValue(`policy:${addresses.ids['refused-config']}`);
-    await page.getByRole('button', { name: 'New Game', exact: true }).click();
     await expect(page.getByText(/restore the pinned artifact and runner/).first()).toBeVisible();
+    await page.getByRole('button', { name: 'New Game', exact: true }).click();
     await expect(page.getByTestId('checkpoint-select')).toHaveValue(`policy:${addresses.ids['refused-config']}`);
     await expect(page.getByTestId('action-option')).toHaveCount(0);
     const preview = new URL(addresses.play);
@@ -31,15 +29,6 @@ for (const theme of ['light', 'dark'] as const) {
     await page.goto(preview.href);
     await expect(page.getByTestId('policy-compatibility')).toContainText('was trained on');
     await page.screenshot({ path: fileURLToPath(new URL(`../test-results/policy/play-incompatible-${theme}.png`, import.meta.url)) });
-    await page.goto(addresses.guidance);
-    await expect(page.getByTestId('action-option').first()).toBeEnabled();
-    const unavailable = page.getByText('Why unavailable?', {exact: true});
-    await expect(unavailable).toBeVisible();
-    await unavailable.focus();
-    await page.keyboard.press('Enter');
-    await expect(page.getByText(/complete casting cost cannot be paid/).first()).toBeVisible();
-    await page.screenshot({ path: fileURLToPath(new URL(`../test-results/policy/native-guidance-${theme}.png`, import.meta.url)) });
-    await page.keyboard.press('Enter');
     await page.goto(addresses.play);
     await expect(page.getByTestId('action-option').first()).toBeEnabled();
     const before = frames.at(-1)!;
@@ -72,8 +61,7 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(selections).toHaveCount(2);
     await expect(selections.nth(0)).toHaveValue(`policy:${addresses.ids.independent}`);
     await expect(selections.nth(1)).toHaveValue(`policy:${addresses.ids.baseline}`);
-    await expect(selections.nth(0)).toContainText('Independent');
-    await page.getByText('Browse decks and cards', {exact:true}).click();
+    await expect(selections.nth(0)).toContainText('independent');
     await page.getByText('Other decks', { exact: true }).click();
     await page.getByTestId('browse-interactive').click();
     await page.getByTestId('assign-deck-villain').click();
@@ -84,17 +72,14 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(page.getByTestId('policy-compatibility')).toHaveCount(0);
     await selections.nth(0).focus();
     await page.keyboard.press('Tab');
-    await expect(page.getByText(/Search unavailable/).first()).toBeVisible();
+    await expect(page.getByText(/Mirror search unavailable/).first()).toBeVisible();
     await page.screenshot({ path: fileURLToPath(new URL(`../test-results/policy/watch-setup-${theme}.png`, import.meta.url)) });
     await page.getByRole('button', { name: 'Start watching' }).click();
-    await page.getByRole('button', {name: 'Continue', exact: true}).click();
-    await expect(page.getByTestId('position-counter')).toHaveText('Position 1 / 3');
-    await page.getByRole('button', {name: 'Next', exact: true}).click();
-    await expect(page.getByTestId('position-counter')).toHaveText('Position 2 / 3');
+    await expect(page.getByText(/^Decision 1 of 1 ·/)).toBeVisible();
+    await page.getByRole('button', { name: 'Step decision', exact: true }).click();
+    await expect(page.getByText(/^Decision 2 of 2 ·/)).toBeVisible();
     await page.reload();
-    await expect(page.getByTestId('position-counter')).toHaveText('Position 2 / 3');
-    await page.getByRole('button', { name: 'Previous', exact: true }).click();
-    await expect(page.getByTestId('position-counter')).toHaveText('Position 1 / 3');
+    await expect(page.getByText(/^Decision 1 of 2 ·/)).toBeVisible();
     await page.screenshot({ path: fileURLToPath(new URL(`../test-results/policy/watch-${theme}.png`, import.meta.url)) });
     const status = page.locator('details.player-status').first();
     await status.locator('summary').click();

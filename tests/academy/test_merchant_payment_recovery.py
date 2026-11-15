@@ -14,7 +14,6 @@ from manabot.semantic.text_observation import capture_text_decision
 import managym
 from managym.academy import server, trace as trace_store
 from managym.experience import ExperienceFrame, InteractionOffer
-from tests.academy.socket_messages import settled_message
 
 
 def _command(
@@ -51,7 +50,7 @@ def test_merchant_payment_reconnect_vector_and_fork(
     with TestClient(server.app) as client:
         with client.websocket_connect("/ws/play") as socket:
             socket.send_json({"type": "new_game", "config": config})
-            initial = settled_message(socket)
+            initial = socket.receive_json()
             game = server.SESSION_REGISTRY[initial["session_id"]].game
             frame = ExperienceFrame.model_validate(initial["recovery"]["frame"])
             merchant_cast = False
@@ -102,7 +101,7 @@ def test_merchant_payment_reconnect_vector_and_fork(
                         "command": _command(frame, offer, f"prefix.{ordinal}"),
                     }
                 )
-                result = settled_message(socket)
+                result = socket.receive_json()
                 assert result["status"] == "accepted"
                 frame = ExperienceFrame.model_validate(result["update"]["frame"])
             else:
@@ -113,7 +112,7 @@ def test_merchant_payment_reconnect_vector_and_fork(
                     "command": _command(frame, activation, "activate"),
                 }
             )
-            result = settled_message(socket)
+            result = socket.receive_json()
             assert result["status"] == "accepted"
             frame = ExperienceFrame.model_validate(result["update"]["frame"])
 
@@ -145,7 +144,7 @@ def test_merchant_payment_reconnect_vector_and_fork(
                     }
                 )
                 recovered = ExperienceFrame.model_validate(
-                    settled_message(socket)["recovery"]["frame"]
+                    socket.receive_json()["recovery"]["frame"]
                 )
                 assert recovered == frame
                 assert game.env.state_digest() == digest == fork.state_digest()
@@ -178,7 +177,7 @@ def test_merchant_payment_reconnect_vector_and_fork(
                 )
                 assert game.env.state_digest() == digest
                 socket.send_json({"type": "command", "command": command})
-                result = settled_message(socket)
+                result = socket.receive_json()
                 assert result["status"] == "accepted"
                 frame = ExperienceFrame.model_validate(result["update"]["frame"])
                 assert game.env.state_digest() == fork.state_digest()
@@ -187,14 +186,14 @@ def test_merchant_payment_reconnect_vector_and_fork(
                 committed = game.env.state_digest()
                 events = len(game.trace.events)
                 socket.send_json({"type": "command", "command": command})
-                assert settled_message(socket)["status"] == "duplicate"
+                assert socket.receive_json()["status"] == "duplicate"
                 socket.send_json(
                     {
                         "type": "command",
                         "command": command | {"command_id": f"stale.{remaining}"},
                     }
                 )
-                rejected = settled_message(socket)
+                rejected = socket.receive_json()
                 assert rejected["status"] == "rejected"
                 assert rejected["rejection"]["code"] == "stale_revision"
                 assert game.env.state_digest() == committed

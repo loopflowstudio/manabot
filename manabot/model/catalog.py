@@ -71,7 +71,6 @@ class CheckpointSummary:
     transitions: int | None = None
     supports_search: bool = False
     policy_input_version: int | None = None
-    search_reason: str | None = None
 
     @property
     def compatible(self) -> bool:
@@ -138,7 +137,6 @@ def _inspect_cached(
     binding = checkpoint.get("world_binding")
     world = binding.get("world") if isinstance(binding, Mapping) else None
     step = checkpoint.get("global_step")
-    search_reason = checkpoint_search_incompatibility(checkpoint)
     return CheckpointSummary(
         path=Path(path),
         sha256=hashlib.sha256(data).hexdigest(),
@@ -160,26 +158,15 @@ def _inspect_cached(
         policy_input_version=config.get("observation_hypers", {}).get(
             "policy_input_version", 1
         ),
-        supports_search=search_reason is None,
-        search_reason=search_reason,
+        supports_search=(
+            (
+                checkpoint.get("bc", {}).get("value_semantic") == "signed_outcome"
+                or config.get("agent_hypers", {}).get("value_kind") == "categorical_wdl"
+            )
+            and not config.get("agent_hypers", {}).get("recent_events", False)
+            and not config.get("agent_hypers", {}).get("belief_count_buckets", 0)
+        ),
     )
-
-
-def checkpoint_search_incompatibility(checkpoint: Mapping[str, object]) -> str | None:
-    """Explain baseline search admission from the same declared capabilities."""
-    hypers = checkpoint.get("hypers")
-    agent = hypers.get("agent_hypers") if isinstance(hypers, Mapping) else None
-    if not isinstance(agent, Mapping):
-        return "Search requires a declared policy configuration."
-    metadata = checkpoint.get("bc")
-    semantic = metadata.get("value_semantic") if isinstance(metadata, Mapping) else None
-    if agent.get("value_kind") != "categorical_wdl" and semantic != "signed_outcome":
-        return "Search requires a W/D/L value head or a scalar declared as signed_outcome."
-    if agent.get("recent_events"):
-        return "Search requires evaluation from the current view alone, without policy history."
-    if agent.get("belief_count_buckets"):
-        return "Search requires evaluation without belief-model inputs."
-    return None
 
 
 def checkpoint_incompatibility(checkpoint: Mapping[str, Any]) -> str | None:

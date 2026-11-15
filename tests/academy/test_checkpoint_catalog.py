@@ -15,7 +15,6 @@ from managym.academy import server, trace as trace_store
 from managym.academy.opponent import Opponent, opponent_catalog, policy_registry
 from managym.academy.server import app
 from managym.policy import PolicyRegistry, PolicySpec
-from tests.academy.socket_messages import settled_message
 from tests.academy.test_play_modes import _recorded_traces, _write_tiny_checkpoint
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
@@ -49,7 +48,7 @@ def _id(path: Path) -> str:
 def _new_game_error(client: TestClient, config: dict) -> str:
     with client.websocket_connect("/ws/play") as websocket:
         websocket.send_json({"type": "new_game", "config": config})
-        payload = settled_message(websocket)
+        payload = websocket.receive_json()
     assert payload["type"] == "error", payload
     return payload["message"]
 
@@ -62,8 +61,6 @@ def test_catalog_lists_admissible_and_refused_checkpoints(runs: Path) -> None:
     entries = {entry["name"]: entry for entry in catalog["opponents"]}
     current = entries["self-play/step_0"]
     assert current["available"] and current["reason"] is None
-    assert not current["supports_search"]
-    assert "W/D/L value head" in current["search_reason"]
     assert current["sha256"] == _id(runs / "self-play" / "step_0.pt")
     details = {line["label"]: line["value"] for line in current["details"]}
     assert details["World"] == WORLD
@@ -149,7 +146,7 @@ def test_chosen_checkpoint_plays_either_deck_and_is_recorded(
                     },
                 }
             )
-            payload = settled_message(websocket)
+            payload = websocket.receive_json()
             # Enough hero decisions for the bot to act from its own seat.
             for _ in range(40):
                 if payload["type"] == "game_over":
@@ -158,7 +155,7 @@ def test_chosen_checkpoint_plays_either_deck_and_is_recorded(
                 actions = payload["actions"]
                 choice = actions[rng.randrange(len(actions))]
                 websocket.send_json({"type": "action", "index": choice["index"]})
-                payload = settled_message(websocket)
+                payload = websocket.receive_json()
     assert payload["table"]["opponent"]["sha256"] == sha256
 
     [(_, trace)] = _recorded_traces(trace_store.TRACES_DIR)
@@ -227,7 +224,7 @@ def test_imported_decks_play_world_checkpoints_and_refuse_setup_bindings(
                     },
                 }
             )
-            payload = settled_message(websocket)
+            payload = websocket.receive_json()
             for _ in range(40):
                 if payload["type"] == "game_over":
                     break
@@ -235,7 +232,7 @@ def test_imported_decks_play_world_checkpoints_and_refuse_setup_bindings(
                 actions = payload["actions"]
                 choice = actions[rng.randrange(len(actions))]
                 websocket.send_json({"type": "action", "index": choice["index"]})
-                payload = settled_message(websocket)
+                payload = websocket.receive_json()
     [(_, trace)] = _recorded_traces(trace_store.TRACES_DIR)
     assert trace["config"]["opponent"]["sha256"] == _id(world)
     villain_turns = [

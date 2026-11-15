@@ -46,11 +46,13 @@ From `Game::tick` in [`managym/src/flow/tick.rs`](../managym/src/flow/tick.rs):
 if let Some(space) = action_space {
     if !self.skip_trivial || space.actions.len() > 1 {
         self.publish_action_space(space);
-        return Ok(false);
+        return false;
     }
     self.skip_trivial_count += 1;
     if let Some(action) = space.actions.first() {
-        self.execute_action(action)?;
+        if self.execute_action(action).is_err() {
+            return true;
+        }
     }
     continue;
 }
@@ -134,7 +136,7 @@ Consumers read the encoded arrays by name; see
 
 Whatever chose the action, the engine checks it again before anything changes.
 
-From the shared step executor in [`managym/src/flow/tick.rs`](../managym/src/flow/tick.rs):
+From `Game::step` in [`managym/src/flow/tick.rs`](../managym/src/flow/tick.rs):
 
 ```rust
 let selected_action = action_space.actions[action].clone();
@@ -143,72 +145,18 @@ if let Err(error) = self.execute_action(&selected_action) {
     return Err(error);
 }
 
+Ok(self.finish_action_step())
 ```
 
-- An action is an index into the published decision. An out-of-range index
-  leaves that decision unchanged. A failure during subsequent forced
-  progression returns an error and quarantines the partially advanced game.
+- An action is an index into the published decision. Out of range is an error,
+  and a failed execution restores the decision rather than leaving the game
+  half-stepped.
 - `finish_action_step` runs state-based actions and advances to the next real
   decision. Structured Commands, which carry targets and payments in one step,
   share this same boundary.
 - The transition is `(revision N, decision N) + Command(expected=N) →
   committed events + revision N+1`. A Command against another revision fails
   closed ([contracts](../README.md#contracts-the-code-enforces)).
-
-### Declaration completion and progression failures
-
-A native declaration transaction executes ordinary choices on a private candidate.
-It checks the exact assignments against completion evidence captured before
-attack/block triggers and damage. The final child still advances normally: its
-returned state can already be after combat, or waiting for a trigger's strategic
-choice. Completion evidence adds no stop or decision epoch. A rejected transaction
-publishes neither its gameplay nor its capture, events or child receipts.
-
-`Env.declaration_projection_json(viewer)` exposes only the acting viewer's
-combat declaration: exact public object appearances, current power, individual
-destinations, native constraints and the fixed committed prefix. It returns JSON
-`null` outside that viewer's declaration. `DeclarationPlan` in
-`managym.experience` answers every editable creature once, including declines,
-using that projection's native binding. `validate_declaration_plan_json` checks
-legality without running consequences. `prepare_declaration_plan_json` executes
-the complete plan privately and returns a `PreparedDeclaration`.
-
-The prepared result's `root(index)` and `result(index)` expose the actual ordinary
-child roots and results for recording and exact forks; they do not replay the
-choices. After staging those records, `publish()` commits once to the originating
-Env if its exact root is still current. It preserves that Env's capture origin.
-Discarding a candidate commits nothing; publication rejects a stale or reset
-origin. `result(index)` is a `DeclarationChild` with named `env`, `observation`,
-`transition_json`, `reward` and `done` fields.
-
-Academy stages those actual child roots and ordinary canonical rows, presentation
-and the parent receipt, then saves the candidate recording before publishing its
-native state under the exclusive table lock. A rules, capacity or recording
-preparation failure commits nothing. A `DeclarationCommand` carries complete
-answers plus the current match, prompt, revision and native binding. Its receipt
-links ordered child Command IDs and the native completion. The receipt's resulting
-revision/hash describe the declaration commit; opponent policies or configured
-priority automation may advance the accompanying response frame further. Retrying
-the parent ID returns that receipt without replaying children, including after a
-subsequent policy failure. Parent linkage is private recording metadata; ordinary
-children remain replay and exact-fork authority. Viewer exports omit the parent
-ledger. Client IDs cannot use the reserved `authority.` or native-child
-`compound-` prefixes. The browser's draft is local intent, validated read-only and revalidated
-on confirmation; it never becomes a game snapshot.
-
-Native `Game::new`, `step` and `play` propagate `AgentError`. Solver exhaustion is
-`AgentError::Capacity`, naming the resource, node limit and visited-node count.
-Python exposes `managym.CapacityError`, a `managym.AgentError` subtype with
-`resource`, `limit` and `visited` attributes. It is an execution failure, with no
-successful transition, reward or terminal game result. An in-place scalar game
-whose progression fails remains unavailable until reset; declaration candidates
-are discarded while their live root remains unchanged.
-
-Ordinary vector calls raise the typed error without promising batch rollback.
-Isolated calls identify only the failed stream with `game_error_kind=resource_limit`
-and retain its pre-action frame and capacity payload for replacement through the
-existing stream/seed lifecycle. Native failure receipts keep the `AgentError`
-class name; replay recognizes the typed Python subtype.
 
 ## Forks, replay and determinization
 

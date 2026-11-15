@@ -5,7 +5,6 @@ use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
     flow::{
         combat::CombatState,
-        declaration::{DeclarationCollector, DeclarationCompletion, DeclarationStage},
         event::GameEvent,
         game::Game,
         turn::{PhaseKind, StepKind, TurnState, PHASE_STEPS},
@@ -18,26 +17,17 @@ use crate::{
 
 impl Game {
     pub fn step(&mut self, action: usize) -> Result<bool, AgentError> {
-        self.step_with_completion(action, None)
-    }
-
-    pub(crate) fn step_with_completion(
-        &mut self,
-        action: usize,
-        completion: Option<&mut DeclarationCollector>,
-    ) -> Result<bool, AgentError> {
-        self.ensure_playable()?;
         if self.is_game_over() {
-            return Err(AgentError::Rules("game is over".to_string()));
+            return Err(AgentError("game is over".to_string()));
         }
         let action_space = self
             .current_action_space
             .take()
-            .ok_or_else(|| AgentError::Rules("no active action space".to_string()))?;
+            .ok_or_else(|| AgentError("no active action space".to_string()))?;
 
         if action >= action_space.actions.len() {
             self.current_action_space = Some(action_space.clone());
-            return Err(AgentError::Rules(format!(
+            return Err(AgentError(format!(
                 "Action index {action} out of bounds: {}",
                 action_space.actions.len()
             )));
@@ -60,24 +50,17 @@ impl Game {
                 .choices
                 .push(choice);
         }
-        self.finish_action_step_with_completion(completion)
+        Ok(self.finish_action_step())
     }
 
     /// Finish one externally committed action after its complete declaration
     /// has been applied. Structured commands reuse this boundary so an atomic
     /// cast-plus-target has the same SBA, priority, tracking, and consistency
     /// behavior as the legacy positional path.
-    pub(crate) fn finish_action_step(&mut self) -> Result<bool, AgentError> {
-        self.finish_action_step_with_completion(None)
-    }
-
-    fn finish_action_step_with_completion(
-        &mut self,
-        completion: Option<&mut DeclarationCollector>,
-    ) -> Result<bool, AgentError> {
+    pub(crate) fn finish_action_step(&mut self) -> bool {
         self.state.priority_mut().sba_done = false;
 
-        let game_over = self.tick_with_completion(completion)?;
+        let game_over = self.tick();
         if game_over {
             if let Some(winner) = self.winner_index() {
                 self.trackers[winner].on_game_won();
@@ -85,15 +68,7 @@ impl Game {
         }
         self.assert_stack_consistent();
 
-        Ok(game_over)
-    }
-
-    /// Reject a partially advanced failed stream until its owner resets it.
-    pub fn ensure_playable(&self) -> Result<(), AgentError> {
-        match &self.progression_error {
-            Some(error) => Err(error.as_ref().clone()),
-            None => Ok(()),
-        }
+        game_over
     }
 
     /// Publish a newly computed external decision and invalidate commands
@@ -112,64 +87,41 @@ impl Game {
         self.current_action_space = Some(action_space);
     }
 
-    pub fn play(&mut self) -> Result<(), AgentError> {
-        self.ensure_playable()?;
+    pub fn play(&mut self) {
         while !self.is_game_over() {
-            self.step(0)?;
+            let _ = self.step(0);
         }
-        Ok(())
     }
 
     pub fn drain_events(&mut self) -> Vec<GameEvent> {
         self.state.events_mut().take()
     }
 
-    pub(crate) fn tick(&mut self) -> Result<bool, AgentError> {
-        self.tick_with_completion(None)
-    }
-
-    fn tick_with_completion(
-        &mut self,
-        completion: Option<&mut DeclarationCollector>,
-    ) -> Result<bool, AgentError> {
-        self.ensure_playable()?;
-        let result = self.progress_until_decision(completion);
-        if let Err(error) = &result {
-            self.current_action_space = None;
-            self.progression_error = Some(Box::new(error.clone()));
-        }
-        result
-    }
-
-    fn progress_until_decision(
-        &mut self,
-        mut completion: Option<&mut DeclarationCollector>,
-    ) -> Result<bool, AgentError> {
+    pub(crate) fn tick(&mut self) -> bool {
         loop {
-            let action_space = self.turn_tick(completion.as_deref_mut())?;
+            let action_space = self.turn_tick();
             if self.is_game_over() {
                 self.publish_action_space(ActionSpace::game_over());
-                return Ok(true);
+                return true;
             }
 
             if let Some(space) = action_space {
                 if !self.skip_trivial || space.actions.len() > 1 {
                     self.publish_action_space(space);
-                    return Ok(false);
+                    return false;
                 }
                 self.skip_trivial_count += 1;
                 if let Some(action) = space.actions.first() {
-                    self.execute_action(action)?;
+                    if self.execute_action(action).is_err() {
+                        return true;
+                    }
                 }
                 continue;
             }
         }
     }
 
-    fn turn_tick(
-        &mut self,
-        mut completion: Option<&mut DeclarationCollector>,
-    ) -> Result<Option<ActionSpace>, AgentError> {
+    fn turn_tick(&mut self) -> Option<ActionSpace> {
         let step = self.state.turn.current_step_kind();
 
         if !self.state.turn.step_initialized {
@@ -179,16 +131,16 @@ impl Game {
         }
 
         if let Some(space) = self.suspended_decision_action_space() {
-            return Ok(Some(space));
+            return Some(space);
         }
 
         if !self.state.turn.turn_based_actions_complete {
-            if let Some(space) = self.perform_turn_based_actions(step, completion.as_deref_mut())? {
-                return Ok(Some(space));
+            if let Some(space) = self.perform_turn_based_actions(step) {
+                return Some(space);
             }
             self.state.set_turn_based_actions_complete(true);
             if let Some(space) = self.suspended_decision_action_space() {
-                return Ok(Some(space));
+                return Some(space);
             }
         }
 
@@ -199,43 +151,37 @@ impl Game {
                     self.state.set_cleanup_priority(true);
                 }
                 if let Some(space) = choice {
-                    return Ok(Some(space));
+                    return Some(space);
                 }
             }
             if self.state.turn.cleanup_priority {
                 if let Some(space) = self.tick_priority() {
-                    return Ok(Some(space));
+                    return Some(space);
                 }
                 // CR 514.3a: repeat cleanup after this priority round finishes.
                 self.state.set_cleanup_priority(false);
                 self.state.set_turn_based_actions_complete(false);
-                return Ok(None);
+                return None;
             }
         }
 
         if TurnState::step_has_priority(step) {
             if let Some(space) = self.tick_priority() {
-                return Ok(Some(space));
+                return Some(space);
             }
             if !self.state.turn.step_initialized {
-                if let Some(collector) = completion {
-                    collector.close(step);
-                }
-                return Ok(None);
+                return None;
             }
         }
 
         // CR 106.4 — Unspent mana empties at the end of each step and phase.
         self.clear_mana_pools();
         self.on_step_end(step);
-        if let Some(collector) = completion {
-            collector.close(step);
-        }
         self.remember_controlled_hands();
         self.state.advance_step();
         self.skip_combat_phases_if_required();
 
-        Ok(None)
+        None
     }
 
     /// End the turn (CR 723.1): exile every spell on the stack and remove
@@ -350,12 +296,8 @@ impl Game {
         }
     }
 
-    fn perform_turn_based_actions(
-        &mut self,
-        step: StepKind,
-        completion: Option<&mut DeclarationCollector>,
-    ) -> Result<Option<ActionSpace>, AgentError> {
-        Ok(match step {
+    fn perform_turn_based_actions(&mut self, step: StepKind) -> Option<ActionSpace> {
+        match step {
             StepKind::Untap => {
                 // CR 502.2 — Active player untaps permanents they control.
                 // "Until your next turn" ends as the turn begins, and their
@@ -413,10 +355,6 @@ impl Game {
                     // CR 508.1 — Attack triggers fire once the whole batch of
                     // attackers has been declared.
                     let attackers = combat.attackers.clone();
-                    let fact = DeclarationCompletion::from_game(self, DeclarationStage::Attackers)?;
-                    if let Some(collector) = completion {
-                        collector.observe(fact)?;
-                    }
                     if !attackers.is_empty() {
                         self.emit(GameEvent::AttackersDeclared {
                             player: active,
@@ -434,7 +372,7 @@ impl Game {
                             });
                         }
                     }
-                    return Ok(None);
+                    return None;
                 };
                 Some(ActionSpace {
                     player: Some(active),
@@ -458,15 +396,7 @@ impl Game {
                 let defending = self.non_active_player();
                 let combat = self.state.combat.get_or_insert_with(CombatState::default);
                 let Some(blocker) = combat.blockers_to_declare.pop() else {
-                    crate::flow::block_declaration::BlockProblem::from_game(self)?.validate(
-                        self,
-                        None,
-                        &[],
-                    )?;
-                    let fact = DeclarationCompletion::from_game(self, DeclarationStage::Blockers)?;
-                    if let Some(collector) = completion {
-                        collector.observe(fact)?;
-                    }
+                    self.cleanup_illegal_menace_blocks();
                     let assignments: Vec<_> = self
                         .state
                         .combat
@@ -493,9 +423,35 @@ impl Game {
                     if !assignments.is_empty() {
                         self.emit_observation_event(GameEvent::BlockersDeclared { assignments });
                     }
-                    return Ok(None);
+                    return None;
                 };
-                let actions = self.block_declaration_actions(blocker)?;
+                let attackers = combat.attackers.clone();
+
+                let mut actions = Vec::with_capacity(attackers.len() + 1);
+                for attacker in &attackers {
+                    if self.blocker_can_block_attacker(blocker, *attacker) {
+                        actions.push(Action::DeclareBlocker {
+                            player: defending,
+                            blocker,
+                            attacker: Some(*attacker),
+                        });
+                    }
+                }
+                // CR 509.1c: a blocker able to block an attacker every able
+                // creature must block declares one of those blocks.
+                let required = |action: &Action| {
+                    matches!(action, Action::DeclareBlocker { attacker: Some(attacker), .. }
+                        if self.must_be_blocked_by_all_able(*attacker))
+                };
+                if actions.iter().any(required) {
+                    actions.retain(required);
+                } else {
+                    actions.push(Action::DeclareBlocker {
+                        player: defending,
+                        blocker,
+                        attacker: None,
+                    });
+                }
 
                 Some(ActionSpace {
                     player: Some(defending),
@@ -522,7 +478,7 @@ impl Game {
                         player,
                         remaining: 1,
                     });
-                    return Ok(self.suspended_decision_action_space());
+                    return self.suspended_decision_action_space();
                 }
                 // CR 514.2 — Damage marked on permanents is removed during cleanup.
                 self.clear_damage();
@@ -530,7 +486,7 @@ impl Game {
                 None
             }
             _ => None,
-        })
+        }
     }
 
     fn tick_priority(&mut self) -> Option<ActionSpace> {

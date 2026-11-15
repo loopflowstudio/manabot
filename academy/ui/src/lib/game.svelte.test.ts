@@ -154,24 +154,16 @@ describe('GameStore', () => {
     expect(store.actions).toEqual([]);
   });
 
-  it('keeps the last confirmed table readable after authority is lost', () => {
+  it('marks failed resume and clears stale session state', () => {
     const store = createGameStore();
-    const frame = structuredClone(boltProtocolFixture.recovery.frame);
-    store.applyFrame(frame, 'session-a', 'token-a');
-    store.recordingId = 'saved-attempt';
-    store.beginCommand();
-    store.beginFastForward();
+    store.applyObservation(makeObservation(), [], 'session-a', 'token-a');
+
     store.markResumeFailed('expired');
 
     expect(store.resumeFailed).toBe(true);
     expect(store.sessionId).toBeNull();
     expect(store.resumeToken).toBeNull();
-    expect(store.protocolFrame).toEqual(frame);
-    expect(store.observation).toEqual(frame.projection);
-    expect(store.recordingId).toBe('saved-attempt');
-    expect(store.commandPending).toBe(false);
-    expect(store.fastForwarding).toBe(false);
-    expect(store.decisionStatus).toContain('Interrupted');
+    expect(store.observation).toBeNull();
   });
 
   it('starts with default stops and toggles individual stop steps', () => {
@@ -217,15 +209,6 @@ describe('GameStore', () => {
     const config = store.newGameConfig();
     expect(config.villain_type).toBe('policy');
     expect(config.opponent_sha256).toBe(sha256);
-  });
-
-  it('keeps next-game search edits separate from the running opponent budget', () => {
-    const store = createGameStore();
-    store.activeSearchConfig = { algorithm: 'local_update', belief: 'physical_deal',
-      worlds: 1, depth: 2, decision_seconds: 30, alpha: 0.02, beta: 1 };
-    store.searchConfig = { ...store.activeSearchConfig, worlds: 4 };
-    expect(store.newGameConfig().mirror).toEqual(store.searchConfig);
-    expect(store.activeSearchConfig.worlds).toBe(1);
   });
 
   it('adopts the server stops echo from observation payloads', () => {

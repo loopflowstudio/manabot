@@ -42,8 +42,7 @@ fn fixture() -> (Game, ObjectId, ObjectId, Target, Target) {
         ],
         115_2026,
         false,
-    )
-    .expect("valid game setup");
+    );
     let ogre = game
         .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
         .unwrap();

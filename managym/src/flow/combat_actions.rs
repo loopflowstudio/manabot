@@ -47,12 +47,10 @@ impl Game {
 
         let has_vigilance = {
             if self.state.permanents[permanent_id].is_none() {
-                return Err(AgentError::Rules(
-                    "attacker permanent not found".to_string(),
-                ));
+                return Err(AgentError("attacker permanent not found".to_string()));
             }
             if !self.permanent_can_attack(permanent_id) {
-                return Err(AgentError::Rules("permanent cannot attack".to_string()));
+                return Err(AgentError("permanent cannot attack".to_string()));
             }
             self.characteristics(permanent_id)
                 .keywords
@@ -81,8 +79,8 @@ impl Game {
         attacker: Option<PermanentId>,
     ) -> Result<(), AgentError> {
         if let Some(attacker_id) = attacker {
-            if !self.blocker_pair_eligible(blocker, attacker_id) {
-                return Err(AgentError::Rules(
+            if !self.blocker_can_block_attacker(blocker, attacker_id) {
+                return Err(AgentError(
                     "block declaration is illegal for this attacker/blocker pair".to_string(),
                 ));
             }
@@ -283,44 +281,23 @@ impl Game {
     /// a creature that can tap, without defender unless an effect lets it
     /// attack as though it didn't have defender (Platypus-Bear).
     fn permanent_can_attack(&self, permanent_id: PermanentId) -> bool {
-        self.attacker_eligibility(permanent_id).is_ok()
-    }
-
-    pub(crate) fn attacker_eligibility(
-        &self,
-        permanent_id: PermanentId,
-    ) -> Result<(), crate::agent::guidance::UnavailableReason> {
-        use crate::agent::guidance::UnavailableReason as Reason;
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
-            return Err(Reason::NotCreature);
+            return false;
         };
         let view = self.characteristics(permanent_id);
-        if !view.is_creature() {
-            return Err(Reason::NotCreature);
-        }
-        if permanent.tapped {
-            return Err(Reason::Tapped);
-        }
-        if !self.permanent_can_tap(permanent_id) {
-            return Err(Reason::SummoningSick);
-        }
         let defender_applies = view.keywords.has(Keyword::Defender)
             && !view.static_abilities.iter().any(|ability| matches!(ability,
                 StaticAbility::AttacksDespiteDefender(condition) if self.check_static_condition(condition, permanent.controller)));
-        if defender_applies {
-            return Err(Reason::Defender);
-        }
-        if !self.combat_condition_met(permanent_id)
-            || !self
+        view.is_creature()
+            && self.permanent_can_tap(permanent_id)
+            && !defender_applies
+            && self.combat_condition_met(permanent_id)
+            && self
                 .state
                 .turn
                 .combat_attackers
                 .as_ref()
                 .is_none_or(|attackers| self.permanent_matches_predicate(permanent_id, attackers))
-        {
-            return Err(Reason::CombatRestriction);
-        }
-        Ok(())
     }
 
     pub(crate) fn eligible_blockers(&self, player: PlayerId) -> Vec<PermanentId> {
@@ -339,7 +316,7 @@ impl Game {
         out
     }
 
-    pub(crate) fn blocker_pair_eligible(
+    pub(crate) fn blocker_can_block_attacker(
         &self,
         blocker_id: PermanentId,
         attacker_id: PermanentId,
@@ -388,8 +365,20 @@ impl Game {
         if self.cant_be_blocked(attacker_id) {
             return false;
         }
-        let attacker_keywords = attacker_view.keywords;
-        let blocker_keywords = blocker_view.keywords;
+        // Blockers are declared one at a time; a second blocker is refused.
+        if self.has_restriction(attacker_id, Restriction::CantBeBlockedByMoreThanOne)
+            && self
+                .state
+                .combat
+                .as_ref()
+                .and_then(|combat| combat.attacker_to_blockers.get(&attacker_id))
+                .is_some_and(|blockers| blockers.iter().any(|&other| other != blocker_id))
+        {
+            return false;
+        }
+
+        let attacker_keywords = self.characteristics(attacker_id).keywords;
+        let blocker_keywords = self.characteristics(blocker_id).keywords;
         if attacker_keywords.has(Keyword::Flying)
             && !(blocker_keywords.has(Keyword::Flying) || blocker_keywords.has(Keyword::Reach))
         {
@@ -397,5 +386,33 @@ impl Game {
         }
 
         true
+    }
+
+    pub(crate) fn cleanup_illegal_menace_blocks(&mut self) {
+        let attackers = match self.state.combat.as_ref() {
+            Some(combat) => combat.attackers.clone(),
+            None => return,
+        };
+        for attacker_id in attackers {
+            if self.state.permanents[attacker_id].is_none() {
+                continue;
+            }
+            if !self
+                .characteristics(attacker_id)
+                .keywords
+                .has(Keyword::Menace)
+            {
+                continue;
+            }
+            let Some(combat) = self.state.combat.as_mut() else {
+                return;
+            };
+            let Some(blockers) = combat.attacker_to_blockers.get_mut(&attacker_id) else {
+                continue;
+            };
+            if blockers.len() == 1 {
+                blockers.clear();
+            }
+        }
     }
 }

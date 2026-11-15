@@ -129,26 +129,6 @@ class PreparedPossibleWorldMaterializer:
 class DecisionCapture:
     def to_json(self) -> str: ...
 
-class PreparedDeclaration:
-    """Private validated candidate; child evidence can be staged before publish."""
-
-    def to_json(self) -> str: ...
-    def root(self, index: int) -> Env: ...
-    def result(self, index: int) -> DeclarationChild: ...
-    def publish(self) -> None: ...
-
-class DeclarationChild:
-    @property
-    def env(self) -> Env: ...
-    @property
-    def observation(self) -> Observation: ...
-    @property
-    def transition_json(self) -> str: ...
-    @property
-    def reward(self) -> float: ...
-    @property
-    def done(self) -> bool: ...
-
 class Env:
     def __init__(
         self,
@@ -189,9 +169,6 @@ class Env:
     # Shared semantic decision contract (managym.decision). JSON mirrors of
     # DecisionFrame / composite Observation / {receipt, observation}.
     def semantic_decision_frame_json(self) -> str: ...
-    def declaration_projection_json(self, viewer: int) -> str: ...
-    def validate_declaration_plan_json(self, plan_json: str) -> None: ...
-    def prepare_declaration_plan_json(self, plan_json: str) -> PreparedDeclaration: ...
     def player_controls_json(self) -> str: ...
     def public_schedule_json(self) -> str: ...
     def decision_context_json(self, viewer: int) -> str: ...
@@ -976,13 +953,7 @@ class EventData:
     amount: int
     controller_id: int
 
-class UnavailableAction:
-    object: int
-    reason: str
-    message: str
-
 class Observation:
-    unavailable_actions: list[UnavailableAction] | None
     shared_effects: list[SharedEffect] | None
     continuation: list[ContinuationFrame]
 
@@ -1017,14 +988,6 @@ class Observation:
     def toJSON(self) -> str: ...
 
 class AgentError(RuntimeError): ...
-
-class CapacityError(AgentError):
-    resource: str
-    limit: int
-    visited: int
-    # Vector failures also carry the stream slot and its failure context.
-    slot: int
-    frame: str | None
 
 WORLD_VERSION: str
 MAX_DECISION_CODE: int

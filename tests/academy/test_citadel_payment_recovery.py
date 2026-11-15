@@ -20,7 +20,6 @@ from manabot.semantic.decision_contract import SemanticDecisionContract
 import managym
 from managym.academy import server, trace as trace_store
 from managym.experience import ExperienceFrame, InteractionOffer
-from tests.academy.socket_messages import settled_message
 
 CITADEL = "Activate ability: Tarnished Citadel"
 
@@ -55,7 +54,7 @@ def test_citadel_color_choice_reconnect_vector_fork_and_stale(
     with TestClient(server.app) as client:
         with client.websocket_connect("/ws/play") as socket:
             socket.send_json({"type": "new_game", "config": config})
-            initial = settled_message(socket)
+            initial = socket.receive_json()
             game = server.SESSION_REGISTRY[initial["session_id"]].game
             frame = ExperienceFrame.model_validate(initial["recovery"]["frame"])
             casting = False
@@ -85,7 +84,7 @@ def test_citadel_color_choice_reconnect_vector_fork_and_stale(
                         "command": _command(frame, offer, f"prefix.{ordinal}"),
                     }
                 )
-                result = settled_message(socket)
+                result = socket.receive_json()
                 assert result["status"] == "accepted"
                 frame = ExperienceFrame.model_validate(result["update"]["frame"])
             else:
@@ -101,7 +100,7 @@ def test_citadel_color_choice_reconnect_vector_fork_and_stale(
                     "command": _command(frame, activation, "activate"),
                 }
             )
-            result = settled_message(socket)
+            result = socket.receive_json()
             assert result["status"] == "accepted"
             frame = ExperienceFrame.model_validate(result["update"]["frame"])
 
@@ -136,7 +135,7 @@ def test_citadel_color_choice_reconnect_vector_fork_and_stale(
                 }
             )
             recovered = ExperienceFrame.model_validate(
-                settled_message(socket)["recovery"]["frame"]
+                socket.receive_json()["recovery"]["frame"]
             )
             assert recovered == frame
             assert game.env.state_digest() == digest == fork.state_digest()
@@ -155,7 +154,7 @@ def test_citadel_color_choice_reconnect_vector_fork_and_stale(
             assert game.env.state_digest() == digest, "the fork is independent"
             before = len(game.trace.events)
             socket.send_json({"type": "command", "command": command})
-            result = settled_message(socket)
+            result = socket.receive_json()
             assert result["status"] == "accepted"
             # The server then plays the passive villain's decisions; the fork
             # takes the same recorded steps.
@@ -167,14 +166,14 @@ def test_citadel_color_choice_reconnect_vector_fork_and_stale(
             committed = game.env.state_digest()
             events = len(game.trace.events)
             socket.send_json({"type": "command", "command": command})
-            assert settled_message(socket)["status"] == "duplicate"
+            assert socket.receive_json()["status"] == "duplicate"
             socket.send_json(
                 {
                     "type": "command",
                     "command": command | {"command_id": "stale.color"},
                 }
             )
-            rejected = settled_message(socket)
+            rejected = socket.receive_json()
             assert rejected["status"] == "rejected"
             assert rejected["rejection"]["code"] == "stale_revision"
             assert game.env.state_digest() == committed
