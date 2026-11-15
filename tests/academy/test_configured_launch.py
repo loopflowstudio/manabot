@@ -589,7 +589,7 @@ def test_launch_uses_the_same_explicit_search_spec_for_play_and_watch(
             ).url
         ).query
     )
-    assert json.loads(query["mirror"][0]) == [asdict(search), None]
+    assert json.loads(query["search"][0]) == [asdict(search), None]
     assert query["seat1"] == [f"policy:{key}"]
     with pytest.raises(AcademyLaunchError, match="open decklists"):
         academy.new_game(opponent="search-launch", search=search, decklists="closed")
@@ -642,7 +642,7 @@ def test_cli_search_specs_reach_the_shared_python_launch_api(
         == 0
     )
     query = parse_qs(urlparse(targets[-1]).query)
-    assert json.loads(query["mirror"][0]) == [config["mirror"], None]
+    assert json.loads(query["search"][0]) == [config["mirror"], None]
     assert ("removed in 0.4.0" in capsys.readouterr().err) == (option == "--mirror")
 
 

@@ -13,6 +13,6 @@
 
 {#if active}
   <p role="status" class="type-caption py-2 text-ink-2" data-testid="search-thinking">
-    Waiting for the bot decision · {budget}<span aria-hidden="true"> · {elapsed.toFixed(1)} s</span>
+    Waiting for the bot decision · {budget}<span aria-hidden="true">{` · ${elapsed.toFixed(1)} s`}</span>
   </p>
 {/if}

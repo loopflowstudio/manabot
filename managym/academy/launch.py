@@ -397,7 +397,7 @@ class Academy:
                     raise AcademyLaunchError("setup.invalid", str(exc)) from exc
         query = {"watch": "1", "seat1": seats[0], "seat2": seats[1]}
         if any(search):
-            query["mirror"] = json.dumps(
+            query["search"] = json.dumps(
                 [asdict(spec) if spec else None for spec in search]
             )
         return Launched(f"{self.url}/replay?{urlencode(query)}")
