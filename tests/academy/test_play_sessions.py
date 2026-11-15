@@ -13,6 +13,7 @@ from managym.academy.recording import Recording
 from managym.academy.shared_table_protocol import RematchMessage
 from managym.academy.watch import WatchRequest, create_watch
 from managym.policy import PolicyRegistry
+from tests.academy.socket_messages import settled_message
 from tests.academy.test_policy_runtime import IndependentFactory
 
 CONFIG: dict[str, Any] = {
@@ -137,7 +138,7 @@ def test_session_summary_is_private_complete_and_paginated(
     server.SESSION_REGISTRY.clear()
     with TestClient(server.app) as client, client.websocket_connect("/ws/play") as ws:
         ws.send_json({"type": "new_game", "config": CONFIG})
-        first = ws.receive_json()
+        first = settled_message(ws)
         assert "play_session" in first
         session = first["play_session"]
         token = first["resume_token"]
@@ -237,7 +238,7 @@ def test_restart_recovers_only_setup_then_explicit_continuation(
                     },
                 }
             )
-            original = ws.receive_json()
+            original = settled_message(ws)
         identifier = original["table"]["attempt_id"]
         # Simulate the only state lost by process death, without stopping a
         # real host or claiming the old native authority can be reconstructed.
@@ -257,7 +258,7 @@ def test_restart_recovers_only_setup_then_explicit_continuation(
                     "play_session_id": original["play_session"]["id"],
                 }
             )
-            recovered = ws.receive_json()
+            recovered = settled_message(ws)
             assert recovered["type"] == "table_snapshot"
             assert recovered["session_interrupted"] is True
             assert "frame" not in recovered and "recovery" not in recovered
@@ -271,7 +272,7 @@ def test_restart_recovers_only_setup_then_explicit_continuation(
                     "setup_revision": recovered["play_session"]["revision"],
                 }
             )
-            next_game = ws.receive_json()
+            next_game = settled_message(ws)
             assert next_game["play_session"]["game_number"] == 2
             assert next_game["table"]["attempt_id"] != identifier
             assert next_game["session_interrupted"] is False
@@ -294,7 +295,7 @@ def test_saved_draft_is_versioned_without_changing_live_record(
     server.SESSION_REGISTRY.clear()
     with TestClient(server.app) as client, client.websocket_connect("/ws/play") as ws:
         ws.send_json({"type": "new_game", "config": CONFIG})
-        original = ws.receive_json()
+        original = settled_message(ws)
         identifier = original["play_session"]["id"]
         headers = {"x-etude-participant-token": original["resume_token"]}
         body = {

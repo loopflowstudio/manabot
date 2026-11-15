@@ -23,3 +23,5 @@ pub mod event_observations;
 pub mod presentation_events;
 pub mod structured_attacker_offers;
 pub mod structured_offers;
+
+pub mod decision_guidance;

@@ -20,6 +20,7 @@ import type {
 } from './shared-table-protocol';
 import type {
   ActionOption,
+  WorkStatus,
   CommandRejection,
   ConnectionState,
   DeckNames,
@@ -138,6 +139,7 @@ export class GameStore {
   sessionId = $state<string | null>(null);
   resumeToken = $state<string | null>(null);
   resumeFailed = $state(false);
+  recordingId = $state<string | null>(null);
   selectedTargetId = $state<number | null>(null);
   opponentChoice = $state<PlayerChoice>('search-64');
   decklists = $state<Decklists>('open');
@@ -158,15 +160,20 @@ export class GameStore {
   // fast-forwarding priority windows on our behalf.
   fastForwarding = $state(false);
   commandPending = $state(false);
+  work = $state<WorkStatus | null>(null);
+  interruptedIdentity = $state<Pick<TableSnapshot, 'opponent' | 'opponent_label'> | null>(null);
+  submissionAccepted = $state(false);
   newGamePending = $state(false);
   // Monotonic count of applied server updates (observation/game_over).
   // Surfaced in the DOM so tests can serialize on server responses.
   updateSeq = $state(0);
 
   get decisionStatus(): string {
+    if (this.resumeFailed) return 'Interrupted — the live session is unavailable.';
     if (this.restoredDecision) return 'Study position — return to live to play.';
     if (this.gameOver) return 'Game over — no next decision.';
     if (this.connection !== 'connected') return 'Waiting for connection — play is unavailable.';
+    if (this.work?.state === 'running') return this.submissionAccepted ? 'Your choice was accepted. The table is working.' : 'The table is working.';
     if (this.commandPending || this.fastForwarding) return 'Waiting for the table — your action is being processed.';
     const prompt = this.protocolFrame?.prompt;
     if (!prompt) return 'Waiting for the next decision.';
@@ -188,6 +195,7 @@ export class GameStore {
       this.opponentChoice = policyChoice(table.opponent.base_sha256 ?? table.opponent.sha256);
     }
     this.table = table;
+    this.recordingId = table.attempt_id ?? null;
     if (previousRole && previousRole !== table.access.role) {
       this.tableAnnouncement = `You are now the ${table.access.role}.`;
     }
@@ -308,6 +316,7 @@ export class GameStore {
 
   beginCommand(): void {
     this.lastCommandRejection = null;
+    this.submissionAccepted = false;
     this.commandPending = true;
   }
 
@@ -441,9 +450,20 @@ export class GameStore {
   }
 
   markResumeFailed(message: string): void {
-    this.resetMatchState();
-    this.playSession = null;
+    // Keep the last confirmed table readable, but retire every input authority.
+    this.fastForwarding = false;
+    this.commandPending = false;
+    this.newGamePending = false;
+    this.searchRetry = null;
+    this.work = null;
+    this.submissionAccepted = false;
+    this.declarationValidation = null;
+    this.lastCommandRejection = null;
+    if (this.table?.opponent || this.table?.opponent_label) this.interruptedIdentity = {opponent: this.table.opponent, opponent_label: this.table.opponent_label};
     this.table = null;
+    this.restoredDecision = null;
+    this.branchProjection = null;
+    this.branchAttemptId = null;
     this.resumeFailed = true;
     this.errorMessage = message;
     this.sessionId = null;
@@ -500,6 +520,10 @@ export class GameStore {
   }
 
   private resetMatchState(): void {
+    this.interruptedIdentity = null;
+    this.searchRetry = null;
+    this.work = null;
+    this.submissionAccepted = false;
     this.declarationValidation = null;
     this.lastCommandRejection = null;
     this.protocolFrame = null;

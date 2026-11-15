@@ -391,6 +391,15 @@ admission. Admission-rejection fixtures must mark the config as submitted
   Vite dev servers. Running `svelte-kit sync` or a build during browser proofs
   can reload active pages and destroy in-page revision probes; use isolated
   ports and stable generated files for concurrent headless runs.
+- Give each Academy browser-proof subprocess its own proof/artifact directory,
+  including checkpoints and traces. Policy registration freezes artifact identity;
+  another process rewriting the same checkpoint makes a live selection stale.
+- Academy WebSocket tests that inspect settled results use
+  `tests.academy.socket_messages.settled_message`; runner status and the early
+  accepted receipt can precede the settled reply. Lifecycle proofs read the
+  socket directly so they verify receipt delivery before bot work completes.
+  Browser proofs await enabled input before submitting again. Read-only combat draft validation must not publish
+  live-advancement work: it disables and restarts the reactive composer.
 
 ### Card definitions
 

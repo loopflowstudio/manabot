@@ -1,12 +1,13 @@
 import { defineConfig } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 
 const frontendDir = fileURLToPath(new URL('.', import.meta.url));
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 const apiPort = process.env.ACADEMY_RELEASE_API_PORT ?? '8012';
 const frontendPort = process.env.ACADEMY_RELEASE_FRONTEND_PORT ?? '5184';
-const outputDir = fileURLToPath(new URL('./test-results/release', import.meta.url));
-const traceDir = fileURLToPath(new URL('./test-results/release/traces', import.meta.url));
+const outputDir = process.env.ACADEMY_RELEASE_PROOF_DIR ?? fileURLToPath(new URL('./test-results/release', import.meta.url));
+const traceDir = join(outputDir, 'traces');
 
 export default defineConfig({
   testDir: './e2e',

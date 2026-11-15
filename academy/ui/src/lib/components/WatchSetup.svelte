@@ -1,10 +1,14 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import WorkStatus from './WorkStatus.svelte';
   import GameFileImport from './GameFileImport.svelte';
   import { onMount } from 'svelte';
   import GameSetup from './GameSetup.svelte';
   import { gameStore, type PlayerChoice } from '$lib/game.svelte';
   import { startConfiguredWatch } from '$lib/new-game';
+  import { onDestroy } from 'svelte';
+  onDestroy(() => watchStart.cancel());
+  import { watchStart } from '$lib/watch-start.svelte';
   import { parseSearchConfigs } from '$lib/search';
   let { onOpen, disabled = false, setup = null }: { onOpen: (id: string) => void; disabled?: boolean; setup?: Record<string, unknown> | null } = $props();
   let setupReady = $state(false);
@@ -40,6 +44,8 @@
 </script>
 <section aria-label="Game setup for watching">
   {#if setupReady}<GameSetup setup={gameStore} onStart={() => void start()} disabled={busy || disabled} humanActionLabel="Continue to play" />{/if}
+  <WorkStatus work={watchStart.work} connected={!watchStart.checking} />
+  {#if watchStart.checking}<p role="status">Checking the same Watch setup; loading status is unavailable.</p>{/if}
   <GameFileImport {onOpen} disabled={busy || disabled} />
   {#if error}<p role="alert">{error}</p>{/if}
 </section>

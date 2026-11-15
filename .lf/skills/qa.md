@@ -150,6 +150,13 @@ publish, land or choose the next Graph step from here.
   buttons, or every click times out while the bot plays on. Hover a card name
   to read `[data-testid=card-rules-text]`. Search 64 with a fast creature deck
   usually wins before a slow card is used; give the opponent a light deck.
+- Behind `vite preview` (`ACADEMY_API_PORT` → forwarder), a cut during a Watch
+  step reaches the page as the proxy's HTTP 500, not a network error, so Watch
+  asks for **Refresh saved head** instead of reading the lost reply itself;
+  same-origin CLI serving gives the network-error path. Setup pickers are
+  `getByTestId('opponent-select')` (seat 1 set to Bot gives two). Filter offers
+  with an unanchored regex such as `/Play (Mountain|Island)/`; `^Play` misses
+  because the button's text starts with whitespace.
 - Live network recovery: browser offline emulation may leave an existing
   WebSocket connected. To prove recovery, put a local TCP forwarder between the
   browser and the real server, destroy its active socket pairs, stop listening
@@ -168,6 +175,15 @@ publish, land or choose the next Graph step from here.
   trace for a single commit: `attempts.trace_json` in
   `<ACADEMY_TRACES_DIR>/play.sqlite`, `events[].action_description` by turn.
   Forced children (one legal action) are skipped and absent from `events`.
+- Interruption and Watch checks: Rematch and Swap sides during a live game
+  open `window.confirm`, which Playwright dismisses unless a `dialog` handler
+  accepts it; a dismissed confirm looks like a dead button. For a backend
+  restart, SIGKILL the uvicorn listener (`lsof -ti tcp:<api> -sTCP:LISTEN`)
+  and its `uv` parent, start it again, and expect "Interrupted" with only New
+  game and the saved recording as paths forward. `vite preview` keeps serving
+  the old chunk names after a rebuild; restart it. Watch's frontier status is
+  the `Live frontier work` region (`getByRole('region', ...)`); Search 16
+  decisions finish too quickly to see it, Search 256 shows seconds elapsed.
 - First-time clone: copy tracked plus untracked non-ignored files
   (`git ls-files -co --exclude-standard`) to an empty `/tmp` directory and run
   `ACADEMY_CLEAN_API_PORT=… ACADEMY_CLEAN_FRONTEND_PORT=… ./scripts/verify-clean-machine`

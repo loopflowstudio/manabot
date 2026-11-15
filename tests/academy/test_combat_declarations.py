@@ -324,3 +324,43 @@ def test_combat_parent_cannot_use_native_child_identity(tmp_path: Path) -> None:
     result = session.hero_declaration(command.model_dump(mode="json"))
     assert result["rejection"]["code"] == "reserved_command_id"
     assert _snapshot(session) == before
+
+
+def test_socket_draft_validation_does_not_claim_live_advancement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from fastapi.testclient import TestClient
+
+    from tests.academy.socket_messages import settled_message
+
+    monkeypatch.setattr(server.trace_store, "TRACES_DIR", tmp_path)
+    with TestClient(server.app).websocket_connect("/ws/play") as socket:
+        socket.send_json({"type": "new_game", "config": combat_config()})
+        created = settled_message(socket)
+        record = server.SESSION_REGISTRY[created["session_id"]]
+        session = record.game
+        assert session.env is not None
+        session.obs = configure_combat(session.env, "attackers")
+        session.published_prompt = None
+        session._publish_current_prompt()
+        command = declaration_command(_frame(session), "preview", select=True)
+        before = _snapshot(session)
+        work = session.work.read()
+        for request_id in ("preview.1", "preview.2"):
+            socket.send_json(
+                {
+                    "type": "validate_declaration",
+                    "request_id": request_id,
+                    "command": command.model_dump(mode="json"),
+                }
+            )
+            # Read the socket directly: no running-work message may precede the
+            # validation response or disable the composer's pending request.
+            response = socket.receive_json()
+            assert response["type"] == "declaration_validation"
+            assert response["request_id"] == request_id
+            assert response["status"] == "valid"
+            assert (response.get("work") or {}).get("state") != "running"
+            assert session.work.read() == work
+            assert _snapshot(session) == before
+    server._drop_session(record.session_id, "test")

@@ -222,3 +222,115 @@ it.each([false, true])('pause holds the reader while a pending producer saves (l
   expect(store.current?.key).toBe('new-choice');
   expect(commands).toBe(1);
 });
+
+it('stops playback at a failed frontier and produces only through explicit retry', async () => {
+  const calls = installApi(true);
+  const store = createReplayStore();
+  await store.open('trace-1', 'latest');
+  store.index = {...store.index!, mirror_retry: {code: 'policy_failed', message: 'Bot failed', match_id: 'trace-1', expected_revision: 91}};
+  store.playing = true;
+  await store.next(true);
+  expect(store.playing).toBe(false);
+  expect(calls.some(call => call.startsWith('POST'))).toBe(false);
+  await store.seek(0);
+  expect(store.current?.key).toBe('exact-choice');
+  await store.seek(2);
+  const bodies: unknown[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (input: string, init: RequestInit) => {
+    if (init.method === 'POST') bodies.push(JSON.parse(init.body as string));
+    return Response.json(input.includes('/positions/') ? current('latest') : index(true));
+  }));
+  await store.produce(true);
+  expect(bodies).toEqual([{revision: 91, retry: true}]);
+});
+
+it('keeps an uncertain Watch head blocked until an explicit read succeeds', async () => {
+  installApi(true);
+  const store = createReplayStore();
+  await store.open('trace-1', 'latest');
+  let posts = 0;
+  vi.stubGlobal('fetch', vi.fn(async (_input: string, init: RequestInit) => {
+    if (init.method === 'POST') posts++;
+    throw new Error('Connection unavailable');
+  }));
+  await store.produce();
+  expect(store.headUncertain).toBe(true);
+  await store.produce(true);
+  expect(posts).toBe(1);
+  vi.stubGlobal('fetch', vi.fn(async () => Response.json(index(true))));
+  await store.refreshHead();
+  expect(store.headUncertain).toBe(false);
+  expect(store.error).toBe('');
+});
+
+it('keeps historical reading separate from blocked frontier work and retires late source updates', async () => {
+  installApi(true);
+  const store = createReplayStore();
+  await store.open('trace-1', 'latest');
+  vi.useFakeTimers();
+  let finishStep!: () => void;
+  let finishStatus!: (response: Response) => void;
+  const status = {scope: 'match', setup_id: null, loading_seat: null, operation_id: 'frontier', sequence: 2, kind: 'choose', started_at: 1, match_id: 'trace-1', revision: 91, chooser: 1, state: 'running'};
+  const fetcher = vi.fn(async (input: string, init: RequestInit) => {
+    if (init.method === 'POST') { await new Promise<void>(resolve => finishStep = resolve); return Response.json({}); }
+    if (input.endsWith('/work')) return new Promise<Response>(resolve => finishStatus = resolve);
+    if (input.includes('/positions/')) return Response.json(current(decodeURIComponent(input.split('/positions/')[1].split('?')[0])));
+    return Response.json({...index(true), id: input.includes('trace-2') ? 'trace-2' : 'trace-1'});
+  });
+  vi.stubGlobal('fetch', fetcher);
+  try {
+    const production = store.produce();
+    await vi.advanceTimersByTimeAsync(1000);
+    finishStatus(Response.json({work: status}));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(store.work?.revision).toBe(91);
+    await store.seek(0);
+    expect(store.current?.key).toBe('exact-choice');
+    expect(store.producing).toBe(true);
+    expect(store.work?.match_id).toBe('trace-1');
+    await store.next();
+    expect(store.current?.key).toBe('after:0');
+    await vi.advanceTimersByTimeAsync(1000);
+    await store.open('trace-2');
+    finishStatus(Response.json({work: {...status, sequence: 99}}));
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(store.work).toBeNull();
+    expect(store.index?.id).toBe('trace-2');
+    expect(fetcher.mock.calls.filter(([input]) => input.endsWith('/work'))).toHaveLength(2);
+    finishStep();
+    await production;
+    expect(store.index?.id).toBe('trace-2');
+    expect(store.work).toBeNull();
+  } finally { store.cancelReads(); vi.useRealTimers(); }
+});
+
+it('marks lost frontier status as disconnected without retrying the producer', async () => {
+  installApi(true);
+  const store = createReplayStore();
+  await store.open('trace-1', 'latest');
+  vi.useFakeTimers();
+  let finish!: () => void;
+  let disconnected = true;
+  let commands = 0;
+  vi.stubGlobal('fetch', vi.fn(async (input: string, init: RequestInit) => {
+    if (init.method === 'POST') { commands++; await new Promise<void>(resolve => finish = resolve); return Response.json({}); }
+    if (input.endsWith('/work')) {
+      if (disconnected) throw new Error('Disconnected');
+      return Response.json({work: {scope: 'match', setup_id: null, loading_seat: null, operation_id: 'current', sequence: 2, kind: 'choose', started_at: 1, match_id: 'trace-1', revision: 91, chooser: 1, state: 'running'}});
+    }
+    return Response.json(index(true));
+  }));
+  try {
+    const production = store.produce();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(store.workDisconnected).toBe(true);
+    disconnected = false;
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(store.workDisconnected).toBe(false);
+    expect(store.work?.operation_id).toBe('current');
+    expect(commands).toBe(1);
+    store.cancelReads();
+    finish();
+    await production;
+  } finally { store.cancelReads(); vi.useRealTimers(); }
+});
