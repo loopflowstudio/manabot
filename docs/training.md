@@ -850,7 +850,7 @@ uv run manabot train --recipe local --training-game-logs --out .runs/journal-dem
 ```
 
 The training run directory holds `game-journals/operation.json` and one rolling
-`game-journals/PRODUCER.jsonl` snapshot per active producer. Scalar and vector
+`game-journals/PRODUCER.jsonl` journal per active producer. Scalar and vector
 producers use the same private replay evidence; sharded producers write separate
 files with global stream identities. The baseline recipe nests these under each
 training attempt directory; `run.json` records `game_journal_directory`.
@@ -937,12 +937,30 @@ checkpoints. Choose a [recovery contract](#recovery) separately to resume work.
 
 Journals contain privileged replay inputs, including hidden decks and state.
 Files use mode 0600 and directories 0700; keep them private and out of Academy
-viewer exports. Each replacement flushes and fsyncs a complete snapshot before
-atomically replacing the previous one. Logging can substantially reduce training
-throughput. Retained file count is bounded by the run's maximum simultaneous
-producers, but snapshot size grows with the active games' action prefixes.
-Successful games replace earlier cursors; this is not a complete game archive.
-Final cursors remain after close, and immutable failure receipts stay separate.
+viewer exports. Each required boundary is appended and fsynced before the next
+operation. Producer files contain a checkpoint plus sequenced changes; automatic
+atomic compaction discards superseded history once appended bytes reach the
+larger of the last checkpoint size and 64 KiB. Allow for one oversized record
+and a temporary checkpoint during compaction. Directory entries are synced on
+creation/replacement. Phase-only changes do not serialize action prefixes, but
+fresh decision frames still need serialization and each boundary needs durable
+I/O. Logging remains opt-in and can reduce throughput.
+
+A deterministic fixture with a 10,000-action prefix and five publications wrote
+32,743 bytes instead of the previous full-snapshot path's 153,601 bytes. Both
+paths made five writes and five file syncs; directory syncs fell from ten to
+one. With ten actions the same fixture wrote 2,773 versus 3,751 bytes. These
+counts measure serialization and I/O work on synthetic inputs, not training
+throughput; no controlled on/off throughput measurement is available.
+
+Retained file count is bounded by the run's maximum simultaneous producers;
+bytes depend on active prefixes and the compaction allowance. Successful games
+supersede earlier inputs; this is not a complete game archive. Final cursors
+remain after close, and immutable failure receipts stay separate. Inspect a
+private copy of an active producer file. A torn final append reports an
+incomplete tail and projects only complete records; malformed complete records
+or sequence gaps fail inspection. An incomplete first checkpoint is rejected.
+A missing return acknowledgment remains pending with unknown outcome.
 
 The run registers the journal directory before training starts and registers
 terminal snapshots on success or failure. On Etude workers the directory is

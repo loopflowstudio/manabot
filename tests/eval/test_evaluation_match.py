@@ -351,3 +351,25 @@ def test_checkpoint_observation_bounds_survive_selected_replay(tmp_path):
 
     with pytest.raises(RuntimeError, match="SHA-256"):
         validate_registered_player(candidate, path, backend=TORCH_BACKEND)
+
+
+def test_shared_writer_keeps_eval_pending_unknown_and_torn_records_fail_closed(
+    tmp_path: Path,
+) -> None:
+    from manabot.infra.journal import DurableJournal
+    from manabot.sim.replay import read_game_journal
+
+    path = tmp_path / "private/game.jsonl"
+    journal = DurableJournal(path)
+    journal.append(
+        ["game", {"decisions": [], "failure": None, "winner": None}], create=True
+    )
+    journal.append(["pending", {"command": "retained-command"}])
+    retained = read_game_journal(path)
+    assert retained["failure"] == "execution_outcome_unknown"
+    assert retained["pending_decision"] == {"command": "retained-command"}
+    assert path.stat().st_mode & 0o777 == 0o600
+    with path.open("ab") as output:
+        output.write(b'["decision",')
+    with pytest.raises(json.JSONDecodeError):
+        read_game_journal(path)
