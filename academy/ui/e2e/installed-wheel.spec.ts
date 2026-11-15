@@ -56,7 +56,9 @@ test('installed Academy plays and opens its recorded decisions', async ({ page }
   await page.getByRole('link', { name: 'Watch', exact: true }).first().click();
   await expect(page.getByRole('button', { name: 'Start watching' })).toBeEnabled();
   for (const seat of ['Seat 1', 'Seat 2']) {
-    await expect(page.getByRole('combobox', { name: seat, exact: true }).locator('option')).toHaveText(['random', 'search']);
+    await expect(page.getByRole('combobox', { name: seat, exact: true }).locator('option')).toHaveText([
+      'Random', 'Search 16', 'Search 64', 'Search 256', 'Registered policy',
+    ]);
   }
   await expect(page.getByText('Trained bots need manabot installed on this server.')).toBeVisible();
   await expect(page.getByLabel('Open a game file')).toHaveCount(0);

@@ -415,8 +415,9 @@ into its source box. Write one `count card name` per line, with optional
 `Main` and `Sideboard` headings. Select **Check decklists**, correct any
 reported lines, choose a built-in opponent such as **Search 64**, then select
 **New Game**. Imported decks use the development format and supported cards;
-this is not tournament legality validation. Checkpoint opponents are unavailable
-for imported decks. Uncheck the import option to return to bundled decks.
+this is not tournament legality validation. Registered policies check the complete
+setup, including imported lists, against their own admission requirements. Uncheck
+the import option to return to bundled decks.
 `managym academy play` starts the same game from the command line
 ([Start in a chosen game](#start-in-a-chosen-game)).
 
