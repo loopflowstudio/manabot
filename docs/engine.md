@@ -181,6 +181,18 @@ knowledge changes only where the game does:
   state and nothing else. A world is possible exactly when it satisfies what
   the observation says, so search never plays out a deal the seat knows is
   impossible.
+- **Sightings, not objects.** Each view is updated from what its viewer saw
+  of a move: the scope it came from and went to (an exact position, the top or
+  bottom N, the whole library, the hand) and the definition if it was shown.
+  A hand or library write that states no sighting is treated as the widest
+  scope with nothing seen, so a forgotten site loses knowledge and cannot leak
+  it.
+- **Which view constrains whom.** A viewer reads the other player's `public`
+  view, and their own `own` view. `own` is never coarser than `public` on the
+  library: every public sighting also reaches `own`, and a merge at a cap in
+  `own` merges `public` too. A world sampled for a viewer honors exactly those
+  two views; the opponent's `own` library view in that world is reset to what
+  their `public` view implies, so it knows no order the viewer cannot know.
 - **Player control.** A player controlling another reads that player's `own`
   view through `shares_information`, as it reads their hand.
 - **Choices are not deals.** Which cards a player chose to return is their

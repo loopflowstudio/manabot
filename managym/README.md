@@ -273,8 +273,9 @@ made of segments and bags of `CardDefId` counts, never revealed physical cards
 `known_hand()` is the hand-only bag. It is the only knowledge record: the
 observation, `determinize` and the possible-world space read it, and no encoder
 or sampler keeps a second one. Every write to a hand or library goes through
-`commit_zone_move`, `shuffle_library` or the reorder helpers, which update both
-views in O(cap). A debug build checks the true zones against both views after
+`commit_zone_move`, `shuffle_library` or the reorder helpers, which update each
+view in O(cap) from what its viewer saw of the move; a write that states no
+sighting takes the widest scope, losing knowledge rather than leaking it. A debug build checks the true zones against both views after
 each update, so a library write that bypasses them fails the debug suite.
 Coarsening at a cap is counted, never raised. Search forks by full clone: clone the
 `Game` before a normal Command `apply` and compare `search_state::witness` to
