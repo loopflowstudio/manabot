@@ -39,3 +39,10 @@ and its acceptance supersede the exact-197-input requirement in the older plan.
 on the Task base and on main without source taps, so the directed fixture goes
 first on the base; integration with the source-tap trajectory stays a reported
 dependency if no owned prerequisite is available.
+
+2026-11-15 implementation: use the base's shared announcement model and a
+synthetic two-life fee in its private test to isolate accounting without adding
+or changing a card definition. The Yue fixture uses real cards and native
+trivial skipping, with semantic Commands checking exact forks. No source-tap
+prerequisite was imported. The four audit measurements are recorded in the
+plan; their 2x targets and the observed timing difference remain unresolved.
