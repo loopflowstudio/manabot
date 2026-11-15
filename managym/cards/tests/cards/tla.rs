@@ -10442,7 +10442,12 @@ fn printed_trample_first_strike_lifelink_and_menace_affect_combat() {
         s.advance_to_active_step(0, StepKind::DeclareAttackers);
         s.declare_attack();
         s.advance_to_active_step(0, StepKind::DeclareBlockers);
-        s.declare_block();
+        if name == "Callous Inspector" {
+            // Menace makes a lone blocker illegal, so only declining is offered.
+            s.decline_block();
+        } else {
+            s.declare_block();
+        }
         s.advance_to_active_step(0, StepKind::EndOfCombat);
         match name {
             "Earth King's Lieutenant" => assert_eq!(s.life(1), 18),
