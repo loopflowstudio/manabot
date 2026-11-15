@@ -108,19 +108,22 @@ export class ReplayStore {
     const id = this.id;
     const production = ++this.productionGeneration;
     this.work = null; this.workDisconnected = false;
+    const isCurrentProduction = (): boolean => sourceGeneration === this.sourceGeneration
+      && production === this.productionGeneration && this.producing;
     let polling = false;
     const poll = async (): Promise<void> => {
       if (polling) return;
       polling = true;
       try {
         const {work} = await this.api<{work: WorkStatus | null}>(`/api/watch/${encodeURIComponent(id)}/work`);
-        if (sourceGeneration === this.sourceGeneration && production === this.productionGeneration && this.producing) this.workDisconnected = false;
-        if (sourceGeneration === this.sourceGeneration && production === this.productionGeneration && this.producing && work?.scope === 'match' && work.match_id === id
+        if (!isCurrentProduction()) return;
+        this.workDisconnected = false;
+        if (work?.scope === 'match' && work.match_id === id
           && work.revision === revision && work.sequence >= (this.work?.sequence ?? 0)) this.work = work;
       } catch {
         // A failed read proves no outcome and grants no retry. Stop claiming
         // verified remote progress until a subsequent status read succeeds.
-        if (sourceGeneration === this.sourceGeneration && production === this.productionGeneration && this.producing) this.workDisconnected = true;
+        if (isCurrentProduction()) this.workDisconnected = true;
       }
       finally { polling = false; }
     };

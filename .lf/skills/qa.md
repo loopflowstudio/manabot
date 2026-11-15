@@ -150,6 +150,13 @@ publish, land or choose the next Graph step from here.
   buttons, or every click times out while the bot plays on. Hover a card name
   to read `[data-testid=card-rules-text]`. Search 64 with a fast creature deck
   usually wins before a slow card is used; give the opponent a light deck.
+- Behind `vite preview` (`ACADEMY_API_PORT` → forwarder), a cut during a Watch
+  step reaches the page as the proxy's HTTP 500, not a network error, so Watch
+  asks for **Refresh saved head** instead of reading the lost reply itself;
+  same-origin CLI serving gives the network-error path. Setup pickers are
+  `getByTestId('opponent-select')` (seat 1 set to Bot gives two). Filter offers
+  with an unanchored regex such as `/Play (Mountain|Island)/`; `^Play` misses
+  because the button's text starts with whitespace.
 - Live network recovery: browser offline emulation may leave an existing
   WebSocket connected. To prove recovery, put a local TCP forwarder between the
   browser and the real server, destroy its active socket pairs, stop listening

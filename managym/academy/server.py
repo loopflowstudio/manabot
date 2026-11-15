@@ -3632,23 +3632,22 @@ def _request_error(request: object, message: str) -> dict[str, Any]:
     return error
 
 
-def _cached_recovery_response(record: SessionRecord) -> dict[str, Any]:
+def _cache_table_recovery(record: SessionRecord) -> None:
+    # Project once at a safe worker boundary, then apply each viewer's access.
+    response: dict[str, Any]
     if record.game.obs is None:
-        return {"type": "table_snapshot"}
-    recovery = record.game.current_recovery("reconnect")
-    frame = recovery["frame"]
-    return {
-        "type": "game_over" if frame["projection"]["game_over"] else "observation",
-        "data": frame["projection"],
-        "actions": [],
-        "winner": frame["winner"],
-        "frame": frame,
-        "recovery": recovery,
-    }
-
-
-async def _cache_table(record: SessionRecord) -> None:
-    response = _cached_recovery_response(record)
+        response = {"type": "table_snapshot"}
+    else:
+        recovery = record.game.current_recovery("reconnect")
+        frame = recovery["frame"]
+        response = {
+            "type": "game_over" if frame["projection"]["game_over"] else "observation",
+            "data": frame["projection"],
+            "actions": [],
+            "winner": frame["winner"],
+            "frame": frame,
+            "recovery": recovery,
+        }
     for participant in list(record.participants.values()):
         record.published[participant.viewer_id] = _response_with_participant(
             response, record, participant
@@ -3677,6 +3676,7 @@ async def _send_table_response(
     broadcast: bool,
     watcher_invite: str | None = None,
 ) -> None:
+    _cache_table_recovery(record)
     recipients = list(record.participants.values()) if broadcast else [initiator]
     for recipient in recipients:
         socket = recipient.websocket
@@ -3690,9 +3690,6 @@ async def _send_table_response(
         )
         if recipient is initiator and response.get("launch") in LAUNCH_CONFIGS:
             payload.update(_launch_metadata(response["launch"]))
-        record.published[recipient.viewer_id] = _response_with_participant(
-            _cached_recovery_response(record), record, recipient
-        )
         try:
             await socket.send_json(payload)
         except Exception:
@@ -3838,7 +3835,7 @@ async def play_socket(websocket: WebSocket) -> None:
                         )
                         status = record.game.work.read()
                         assert status is not None
-                        await _cache_table(record)
+                        _cache_table_recovery(record)
                         await _publish_work(record, status)
                         record.game.work.publish = publish_work
                     failed = True
