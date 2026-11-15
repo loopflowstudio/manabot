@@ -1041,6 +1041,8 @@ its search budget and elapsed waiting time. Reload preserves the configuration.
 | Depth, including the root choice | 1 | 1–40 |
 | Decision ceiling | 30 seconds | Greater than zero, at most 30 seconds |
 
+<a id="mirror-search"></a>
+
 **Uniform belief (physical deal)** samples unseen cards with copy counts and
 public knowledge. Three unseen copies of one card and one of another give a
 hidden card a three-in-four chance of being the first. It ignores behavioral
@@ -1055,7 +1057,10 @@ probability. Both rollout seats use that base evaluator from their own views.
 Finished branches use the actual result; cutoffs use the declared signed
 expected-outcome value. The existing regularized mirror update shifts the
 decision distribution without training weights. Exact base zeros stay zero.
-The regularization defaults remain alpha 0.02 and beta 1.
+Action priors come from the selected policy, not the uniform hidden-world belief.
+The update also uses a uniform action reference for regularization; this is
+separate from the policy prior. The regularization defaults remain alpha 0.02
+and beta 1.
 
 Search requires open decklists, complete legal-action probabilities, a compatible
 signed-outcome or W/D/L value evaluator, and isolated forks. V1 evaluation must
@@ -1084,22 +1089,28 @@ Python and the CLI accept the same explicit settings:
 
 ```python
 from managym.academy.launch import serve
-from managym.mirror_search import MirrorSearch
+from managym.search import SearchConfig
 from managym.policy import PolicySpec
 
 with serve(policies={"challenger": PolicySpec("manabot", "/models/self-play-raw.pt")}) as academy:
-    mirror = MirrorSearch(worlds=4, depth=2)
-    print(academy.new_game(opponent="challenger", mirror=mirror).url)
-    print(academy.watch(players=("challenger", "random"), mirror=(mirror, None)).url)
+    search = SearchConfig(worlds=4, depth=2)
+    print(academy.new_game(opponent="challenger", search=search).url)
+    print(academy.watch(players=("challenger", "random"), search=(search, None)).url)
     academy.wait()
 ```
 
 ```bash
 uv run --no-project managym academy --policy challenger.json play \
-    --opponent challenger --mirror '{"worlds":4,"depth":2}'
+    --opponent challenger --search '{"worlds":4,"depth":2}'
 uv run --no-project managym academy --policy challenger.json watch \
-    --player challenger --player random --mirror '[{"worlds":4,"depth":2},null]'
+    --player challenger --player random --search '[{"worlds":4,"depth":2},null]'
 ```
+
+`managym.mirror_search.MirrorSearch`, `configure_mirror`, Python `mirror=`
+and CLI `--mirror` remain deprecated aliases until 0.4.0 and warn when used.
+Existing serialized `mirror` fields, error codes and receipt schema names retain
+their spelling so saved games and frozen evidence remain readable. The magnetic
+mirror optimizer remains in `managym.mirror`.
 
 The initial budget tries each supported root action in one sampled world and
 uses the value evaluator immediately after that action. Increase worlds or depth

@@ -13,8 +13,8 @@ from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
 from managym.bots import BotPolicy
-from managym.mirror_search import MirrorSearch, MirrorSearchError
 from managym.policy import PolicyRunner
+from managym.search import SearchConfig, SearchError
 
 from . import server
 from .attempts import AttemptStore, RecordedPlayer, bot_player
@@ -46,7 +46,7 @@ class WatchRequest(BaseModel):
     seed: int | None = Field(default=0, ge=0, lt=2**64)
     deck_import: DeckImportInput | None = None
     villain_sims: int = Field(default=16, ge=1, le=4096)
-    mirror: list[MirrorSearch | None] | None = Field(
+    mirror: list[SearchConfig | None] | None = Field(
         default=None, min_length=2, max_length=2
     )
     decklists: Literal["open", "closed"] = "open"
@@ -88,10 +88,10 @@ def create_watch(
                 seats.append((policy, player))
                 if isinstance(policy, PolicyRunner):
                     candidates.callback(policy.close)
-        except (ValueError, OSError, ImportError, MirrorSearchError) as error:
+        except (ValueError, OSError, ImportError, SearchError) as error:
             detail = (
                 {"code": error.reason, "message": str(error)}
-                if isinstance(error, MirrorSearchError)
+                if isinstance(error, SearchError)
                 else str(error)
             )
             raise HTTPException(400, detail) from error
@@ -156,7 +156,7 @@ def step_watch(trace_id: str, token: str | None, expected_revision: int) -> Watc
     assert game.watch_policies is not None
     try:
         decision = game._choose_bot(game.watch_policies[seat])
-    except MirrorSearchError:
+    except SearchError:
         raise
     except ValueError as exc:
         # Nothing was committed; the pending decision stays for an explicit retry.

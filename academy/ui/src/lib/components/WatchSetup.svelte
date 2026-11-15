@@ -5,7 +5,7 @@
   import GameSetup from './GameSetup.svelte';
   import { gameStore, type PlayerChoice } from '$lib/game.svelte';
   import { startConfiguredWatch } from '$lib/new-game';
-  import { parseMirrors } from '$lib/mirror';
+  import { parseSearchConfigs } from '$lib/search';
   let { onOpen, disabled = false, setup = null }: { onOpen: (id: string) => void; disabled?: boolean; setup?: Record<string, unknown> | null } = $props();
   let setupReady = $state(false);
   let busy = $state(false);
@@ -15,14 +15,15 @@
       gameStore.applySetupDraft(setup);
       const players = setup.watch_players as string[] | null;
       if (players?.length === 2) { gameStore.watchPlayerChoice = players[0] as PlayerChoice; gameStore.opponentChoice = players[1] as PlayerChoice; }
-      if (setup.watch_mirrors) { const mirrors = parseMirrors(setup.watch_mirrors); gameStore.watchMirrorSearch = mirrors[0]; gameStore.mirrorSearch = mirrors[1]; }
+      if (setup.watch_mirrors) { const mirrors = parseSearchConfigs(setup.watch_mirrors); gameStore.watchSearchConfig = mirrors[0]; gameStore.searchConfig = mirrors[1]; }
     }
     gameStore.watchMode = true;
     const params = new URLSearchParams(location.search);
     gameStore.watchPlayerChoice = (params.get('seat1') ?? gameStore.watchPlayerChoice) as PlayerChoice;
     gameStore.setOpponentChoice((params.get('seat2') ?? gameStore.opponentChoice) as PlayerChoice);
-    if (params.has('mirror')) {
-      try { const search = parseMirrors(JSON.parse(params.get('mirror')!)); gameStore.watchMirrorSearch = search[0]; gameStore.mirrorSearch = search[1]; } catch (reason) { fail(reason); }
+    const searchParam = params.get('search') ?? params.get('mirror');
+    if (searchParam !== null) {
+      try { const search = parseSearchConfigs(JSON.parse(searchParam)); gameStore.watchSearchConfig = search[0]; gameStore.searchConfig = search[1]; } catch (reason) { fail(reason); }
     }
     setupReady = true;
   });

@@ -7,7 +7,7 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Literal
 
-from etude.run.storage import DirectoryStorage
+from etude.storage import DirectoryStorage
 from pydantic import JsonValue, model_validator
 
 from manabot.env.card_capture import CapturedCards, Seat

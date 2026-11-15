@@ -6,10 +6,10 @@ from types import SimpleNamespace
 from typing import cast
 from urllib.parse import unquote, urlsplit
 
-from etude.run.storage import DirectoryStorage
+from etude.storage import DirectoryStorage
 from etude.train.read import read, read_all
 from etude.train.records import CheckpointRecord, Step
-from etude.train.run import track
+from etude.train.tracking import track
 import pytest
 import torch
 

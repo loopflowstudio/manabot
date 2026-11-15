@@ -83,7 +83,7 @@ def test_mps_admitted_without_changing_saved_regimes() -> None:
         "live_tokens": "auto",
     }
     saved = TrainingJob.model_validate_json(
-        packing.runs("HEAD", "d1")[0].job.config or ""
+        packing.training_jobs("HEAD", "d1")[0].job.config or ""
     )
     assert canonical_sha256(saved.regime.model_dump(mode="json")) == (
         "5684d15da200eef2c9169b75cce8b54dd643e22a0201a148be80bf2958505b84"

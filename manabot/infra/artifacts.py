@@ -17,8 +17,8 @@ import tempfile
 from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import unquote, urlsplit
 
-from etude.run.records import ArtifactRef
-from etude.run.storage import storage_from_uri
+from etude.records import ArtifactRef
+from etude.storage import storage_from_uri
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 if TYPE_CHECKING:

@@ -1,4 +1,4 @@
-import type { MirrorSearch, PendingMirror } from './mirror';
+import type { SearchConfig, PendingSearch } from './search';
 import type { AddressedReplayDecision } from './replay-index';
 import type { Observation, PresentationEvent, PresentationLabels, RecordedPlayer, TraceConfig } from './types';
 
@@ -44,8 +44,8 @@ export interface RecordingIndex {
   revision: number | null;
   status: 'finished' | 'waiting' | 'interrupted';
   can_produce: boolean;
-  mirror?: (MirrorSearch | null)[];
-  mirror_retry?: PendingMirror | null;
+  mirror?: (SearchConfig | null)[];
+  mirror_retry?: PendingSearch | null;
   can_study: boolean;
   winner: number | null;
   players: RecordedPlayer[];

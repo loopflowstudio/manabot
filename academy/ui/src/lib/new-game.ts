@@ -8,7 +8,7 @@ export async function startConfiguredWatch(): Promise<string> {
   if (gameStore.dealMode === 'repeat' && seedError(gameStore.seed)) throw new Error(seedError(gameStore.seed)!);
   const humanFirst = gameStore.humanSeat === 0;
   const rolePlayers = [gameStore.watchPlayerChoice, gameStore.opponentChoice];
-  const roleMirrors = [gameStore.watchMirrorSearch, gameStore.mirrorSearch];
+  const roleMirrors = [gameStore.watchSearchConfig, gameStore.searchConfig];
   const imported = gameStore.deckImport;
   const response = await recordFetch('/api/watch', {
     method:'POST', headers:{'content-type':'application/json'},

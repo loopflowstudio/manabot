@@ -19,7 +19,7 @@ from pydantic import TypeAdapter
 import managym
 from managym.bots import BotDecision
 from managym.experience_projection import redact_observation
-from managym.mirror_search import MirrorSearch
+from managym.search import SearchConfig
 
 TRACE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
 TRACES_DIR = Path(os.getenv("ACADEMY_TRACES_DIR", "academy/traces"))
@@ -61,7 +61,7 @@ class GameConfig:
     villain_sideboard: dict[str, int] = field(default_factory=dict)
     watch_players: list[str] | None = None
     # One bot composition; Watch records each bot through its descriptor.
-    mirror: MirrorSearch | None = None
+    mirror: SearchConfig | None = None
     # "open": each player knows the other's main deck and sideboard;
     # "closed": neither. Traces that predate the option were open.
     decklists: Literal["open", "closed"] = "open"
@@ -73,9 +73,9 @@ class GameConfig:
     def __post_init__(self) -> None:
         if type(self.human_seat) is not int or self.human_seat not in (0, 1):
             raise ValueError("human_seat must be 0 or 1.")
-        self.mirror = TypeAdapter(MirrorSearch | None).validate_python(self.mirror)
+        self.mirror = TypeAdapter(SearchConfig | None).validate_python(self.mirror)
         if self.decklists == "closed" and self.mirror is not None:
-            raise ValueError("Mirror search requires open decklists.")
+            raise ValueError("Search requires open decklists.")
 
     def to_rust(self) -> list[managym.PlayerConfig]:
         """Order human/opponent setup roles by their recorded native seats."""

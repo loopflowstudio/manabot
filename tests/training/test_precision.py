@@ -37,7 +37,9 @@ from manabot.training.updates.damped_policy import update_damped_iteration
 
 def test_float32_regimes_keep_their_bytes() -> None:
     # The D1 packing regime omits the input version, so it resolves to v9.
-    d1 = TrainingJob.model_validate_json(packing.runs("HEAD", "d1")[0].job.config or "")
+    d1 = TrainingJob.model_validate_json(
+        packing.training_jobs("HEAD", "d1")[0].job.config or ""
+    )
     assert (
         canonical_sha256(d1.regime.model_dump(mode="json"))
         == "5684d15da200eef2c9169b75cce8b54dd643e22a0201a148be80bf2958505b84"

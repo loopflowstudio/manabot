@@ -66,12 +66,12 @@ from managym.experience_projection import (
     redact_observation,
     serialize_observation,
 )
-from managym.mirror_search import (
-    MirrorSearch,
-    MirrorSearchError,
-    descriptor_mirror_unavailable,
-)
 from managym.policy import PolicyRunner
+from managym.search import (
+    SearchConfig,
+    SearchError,
+    descriptor_search_unavailable,
+)
 
 from . import trace as trace_store, villain as villain_module
 from .advice import (
@@ -778,16 +778,14 @@ def _parse_game_config(config: Any) -> GameConfig:
     if villain_type == "policy":
         opponent = _select_opponent(data.get("opponent_sha256"))
 
-    mirror = TypeAdapter(MirrorSearch | None).validate_python(data.get("mirror"))
+    mirror = TypeAdapter(SearchConfig | None).validate_python(data.get("mirror"))
     if mirror is not None:
         if opponent is not None:
-            reason = descriptor_mirror_unavailable(opponent.descriptor)
+            reason = descriptor_search_unavailable(opponent.descriptor)
             if reason:
                 raise ValueError(reason)
         else:
-            raise ValueError(
-                "Mirror search requires a registered search-capable policy."
-            )
+            raise ValueError("Search requires a registered search-capable policy.")
     parsed = GameConfig(
         **provenance,
         hero_deck=hero_deck,
@@ -835,7 +833,7 @@ def close_policies(policies: Iterable[BotPolicy | None]) -> None:
                 resources.callback(policy.close)
 
 
-class PendingMirror(TypedDict):
+class PendingSearch(TypedDict):
     code: str
     message: str
     match_id: str
@@ -861,7 +859,7 @@ class GameSession:
         self.interrupted_config: dict[str, Any] | None = None
         self.watch_policies: tuple[BotPolicy, BotPolicy] | None = None
         self._bot_decision: BotDecision | None = None
-        self.mirror_retry: PendingMirror | None = None
+        self.mirror_retry: PendingSearch | None = None
         self._id_factory = id_factory or (lambda _kind: secrets.token_urlsafe(16))
         self._clock = clock or trace_store.utc_now_iso
         self.attempt_owner = participant_id(secrets.token_urlsafe(32))
@@ -995,7 +993,7 @@ class GameSession:
                 if self.watch_mode
                 else build_villain_policy(config, seat=1 - config.human_seat)
             )
-        except MirrorSearchError as exc:
+        except SearchError as exc:
             raise ValueError(f"{exc.reason}: {exc}") from exc
         except ValueError:
             raise
@@ -1717,7 +1715,7 @@ class GameSession:
         self.mirror_retry = None
         try:
             self._bot_decision = choose_bot(policy, self.env, self.obs)
-        except MirrorSearchError as exc:
+        except SearchError as exc:
             if exc.reason == "mirror_deadline_exceeded":
                 self.mirror_retry = {
                     "code": exc.reason,
@@ -1752,7 +1750,7 @@ class GameSession:
                 self.authority_fallback_counters["legacy_fixed_action"] += 1
                 try:
                     action_index = self._choose_bot(self.villain_policy).action
-                except MirrorSearchError as exc:
+                except SearchError as exc:
                     if exc.reason != "mirror_deadline_exceeded":
                         raise
                     return
@@ -4122,7 +4120,7 @@ async def advance_bot_watch(
             return await asyncio.to_thread(
                 step_watch, trace_id, x_etude_participant_token, revision
             )
-        except MirrorSearchError as exc:
+        except SearchError as exc:
             raise HTTPException(409, {"code": exc.reason, "message": str(exc)}) from exc
 
 

@@ -29,8 +29,8 @@
         if (imported) gameStore.deckImport = {hero:imported.villain, villain:imported.hero};
         const opponent = gameStore.opponentChoice;
         gameStore.opponentChoice = gameStore.watchPlayerChoice; gameStore.watchPlayerChoice = opponent;
-        const search = gameStore.mirrorSearch;
-        gameStore.mirrorSearch = gameStore.watchMirrorSearch; gameStore.watchMirrorSearch = search;
+        const search = gameStore.searchConfig;
+        gameStore.searchConfig = gameStore.watchSearchConfig; gameStore.watchSearchConfig = search;
       }
       gameStore.humanSeat = seat as 0 | 1; gameStore.watchMode = false;
     }
@@ -61,8 +61,8 @@
             <PlayerPicker label={`Seat ${seat + 1} bot`} value={hero ? gameStore.watchPlayerChoice : gameStore.opponentChoice} {trained} {extension} {catalogError} {disabled}
               decklists={gameStore.decklists} setup={{human_seat:gameStore.humanSeat,hero_deck:gameStore.decks.hero,villain_deck:gameStore.decks.villain,...(gameStore.deckImport ? {deck_import:gameStore.deckImport} : {})}}
               onChange={value => {if (hero) gameStore.watchPlayerChoice = value; else gameStore.setOpponentChoice(value);}}
-              mirror={hero ? gameStore.watchMirrorSearch : gameStore.mirrorSearch}
-              onMirrorChange={value => {if (hero) gameStore.watchMirrorSearch = value; else gameStore.mirrorSearch = value;}} />
+              search={hero ? gameStore.watchSearchConfig : gameStore.searchConfig}
+              onSearchChange={value => {if (hero) gameStore.watchSearchConfig = value; else gameStore.searchConfig = value;}} />
           {:else}<p class="type-caption text-ink-2">Play your complete legal choices. Inspect cards at any time.</p>{/if}
         </fieldset>
       {/if}

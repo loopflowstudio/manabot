@@ -53,7 +53,7 @@ import tempfile
 import time
 from typing import TYPE_CHECKING
 
-from etude.eval.match import Result, Row, environment as eval_environment, evaluate
+from etude.eval.match import Result, environment as eval_environment, evaluate
 from etude.eval.records import (
     CheckpointKey,
     CheckpointRef,
@@ -62,10 +62,11 @@ from etude.eval.records import (
     Match,
     Model,
 )
-from etude.launch.client import default, queue_cohort, quote, status
+from etude.eval.run import Row
+from etude.launch.client import default, queue, quote, status
 from etude.launch.records import Job, Run
-from etude.run.declaration import declare
-from etude.run.records import ArtifactRef
+from etude.records import ArtifactRef
+from etude.run import declare
 from pydantic import BaseModel, ConfigDict
 
 from experiments.elemental_grid import (
@@ -481,9 +482,9 @@ def launch(revision: str) -> str:
     if SPENT_USD + CARDS_USD > CAP_USD:
         raise SystemExit(f"the card job would exceed the ${CAP_USD} cap")
     runs = [Run(job=job(endpoint(), revision=revision))]
-    priced = quote(runs, rent=RENT, cohort=COHORT, max_usd=CARDS_USD)
+    priced = quote(runs, rent=RENT)
     print(priced.model_dump_json(), flush=True)
-    [run] = queue_cohort(COHORT, runs, rent=RENT, max_usd=CARDS_USD)
+    [run] = queue(runs, rent=RENT)
     print(f"{COHORT}: launched {run}", flush=True)
     return run
 
@@ -493,7 +494,7 @@ def collect(run: str) -> Path:
     if not status(run).done:
         raise SystemExit(f"{run} is not done")
     scheduler = default()
-    spec = CardJob.model_validate_json(scheduler.record(run).spec.config or "")
+    spec = CardJob.model_validate_json(scheduler.record(run).launch.spec.config or "")
     if spec.schedule_sha256 != SCHEDULE_SHA256 or spec.pairing != endpoint():
         raise ValueError(f"{run}: job differs from the card schedule")
     target = OUT / "eval"

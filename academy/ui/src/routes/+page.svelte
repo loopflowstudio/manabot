@@ -24,7 +24,7 @@
   import Feedback from '$lib/components/Feedback.svelte';
   import GameLog from '$lib/components/GameLog.svelte';
   import PresentationHistory from '$lib/components/PresentationHistory.svelte';
-  import MirrorThinking from '$lib/components/MirrorThinking.svelte';
+  import SearchThinking from '$lib/components/SearchThinking.svelte';
   import StopsPanel from '$lib/components/StopsPanel.svelte';
   import SharedTablePanel from '$lib/components/SharedTablePanel.svelte';
   import { policyChoice, gameStore } from '$lib/game.svelte';
@@ -37,7 +37,7 @@
     sendNewGame,
     sendContinuation,
     sendPassTurn,
-    sendRetryMirror,
+    sendRetrySearch,
     sendRestoreDecision,
     sendRetryDecision,
     sendReturnFromBranch,
@@ -146,7 +146,7 @@
     if (!session || !table || !gameStore.resumeToken) return;
     if (gameStore.dealMode === 'repeat' && seedError(gameStore.seed)) { gameStore.setError(seedError(gameStore.seed)); return; }
     try {
-      const config = changingOpponent ? {...gameStore.opponentConfig(), mirror: gameStore.mirrorSearch} : gameStore.newGameConfig();
+      const config = changingOpponent ? {...gameStore.opponentConfig(), mirror: gameStore.searchConfig} : gameStore.newGameConfig();
       const response = await recordFetch(`/api/play-sessions/${encodeURIComponent(session.id)}`, {
         method: 'PUT', headers: {'content-type':'application/json', 'x-etude-participant-token':gameStore.resumeToken},
         body: JSON.stringify({table_id:table.table_id, grant_revision:table.access.grant_revision, revision:session.revision, config}),
@@ -163,7 +163,7 @@
     if (gameActive && !window.confirm('Stop the current game and start the next game in this session?')) return;
     if (gameStore.dealMode === 'repeat' && seedError(gameStore.seed)) { gameStore.setError(seedError(gameStore.seed)); return; }
     const config = changingOpponent
-      ? { ...gameStore.opponentConfig(), mirror: gameStore.mirrorSearch }
+      ? { ...gameStore.opponentConfig(), mirror: gameStore.searchConfig }
       : gameStore.newGameConfig();
     delete (config as Record<string, unknown>).request_id;
     sendContinuation(changingOpponent ? 'change_opponent' : 'rematch', config);
@@ -175,7 +175,7 @@
 
   const gameActive = $derived(gameStore.observation !== null && !gameStore.gameOver);
   const pilotCanAct = $derived(gameStore.hasCapability('submit_live_command'));
-  const thinkingSearch = $derived(gameStore.newGamePending ? gameStore.mirrorSearch : gameStore.activeMirrorSearch);
+  const thinkingSearch = $derived(gameStore.newGamePending ? gameStore.searchConfig : gameStore.activeSearchConfig);
   const participantStudying = $derived(gameStore.restoredDecision !== null);
   const tablePresentation = $derived(participantStudying ? studyPresentationPlayer : presentationPlayer);
   const inputReady = $derived(!gameStore.commandPending && stopsPending === null && gameStore.connection === 'connected');
@@ -387,16 +387,16 @@
       {gameStore.errorMessage}
     </section>
   {/if}
-  {#if gameStore.mirrorRetry}
+  {#if gameStore.searchRetry}
     <section role="alert" class="mb-4 rounded border border-line bg-panel px-4 py-3">
-      <p>{gameStore.mirrorRetry.message}</p>
-      <button class="mt-2 rounded border border-line px-3 py-2" disabled={gameStore.commandPending || !pilotCanAct} onclick={sendRetryMirror}>Retry search</button>
+      <p>{gameStore.searchRetry.message}</p>
+      <button class="mt-2 rounded border border-line px-3 py-2" disabled={gameStore.commandPending || !pilotCanAct} onclick={sendRetrySearch}>Retry search</button>
     </section>
   {/if}
-  <MirrorThinking active={(gameStore.commandPending || gameStore.newGamePending) && thinkingSearch !== null}
+  <SearchThinking active={(gameStore.commandPending || gameStore.newGamePending) && thinkingSearch !== null}
     budget={thinkingSearch ? `Search ${thinkingSearch.worlds}×${thinkingSearch.depth}` : ''} />
-  {#if gameStore.observation && gameStore.activeMirrorSearch}
-    <p class="type-caption mb-2 text-ink-2">Opponent: Search {gameStore.activeMirrorSearch.worlds}×{gameStore.activeMirrorSearch.depth} · Uniform belief (physical deal)</p>
+  {#if gameStore.observation && gameStore.activeSearchConfig}
+    <p class="type-caption mb-2 text-ink-2">Opponent: Search {gameStore.activeSearchConfig.worlds}×{gameStore.activeSearchConfig.depth} · Uniform belief (physical deal)</p>
   {/if}
 
   <!-- The sheet: one continuous leaf. Regions are ruled, never boxed. -->

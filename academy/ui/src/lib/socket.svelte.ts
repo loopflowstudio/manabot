@@ -30,7 +30,7 @@ import type {
 const LAUNCH_STORAGE_KEY = 'academy.launch';
 
 function applyLaunchSetup(setup: LaunchSetup): void {
-  gameStore.mirrorSearch = setup.mirror ?? null;
+  gameStore.searchConfig = setup.mirror ?? null;
   const decks = sanitizeDeckSelection({ hero: setup.hero_deck, villain: setup.villain_deck });
   if (decks) { gameStore.setHeroDeck(decks.hero); gameStore.setVillainDeck(decks.villain); }
   gameStore.deckImport = setup.deck_import ?? null;
@@ -336,8 +336,8 @@ export class GameSocketController {
     return true;
   }
 
-  sendRetryMirror(): void {
-    const pending = gameStore.mirrorRetry;
+  sendRetrySearch(): void {
+    const pending = gameStore.searchRetry;
     if (!pending || gameStore.commandPending) return;
     gameStore.beginCommand();
     this.send({ type: 'retry_mirror', match_id: pending.match_id,
@@ -461,12 +461,12 @@ export class GameSocketController {
       gameStore.setError('Received invalid server payload.');
       return;
     }
-    if ('mirror_retry' in message) gameStore.mirrorRetry = message.mirror_retry ?? null;
+    if ('mirror_retry' in message) gameStore.searchRetry = message.mirror_retry ?? null;
     if ('mirror' in message) {
       const search = message.mirror ?? null;
-      gameStore.activeMirrorSearch = search;
+      gameStore.activeSearchConfig = search;
       if (!gameStore.observation || this.pendingResume || message.table?.attempt_id !== gameStore.table?.attempt_id) {
-        gameStore.mirrorSearch = search;
+        gameStore.searchConfig = search;
       }
     }
 
@@ -851,8 +851,8 @@ export function sendPassTurn(): boolean {
   return controller.sendPassTurn();
 }
 
-export function sendRetryMirror(): void {
-  controller.sendRetryMirror();
+export function sendRetrySearch(): void {
+  controller.sendRetrySearch();
 }
 
 export function sendTransferPilot(targetViewerId: string): void {

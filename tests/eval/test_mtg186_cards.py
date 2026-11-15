@@ -62,7 +62,7 @@ def test_one_match_delivers_games_and_both_card_tables(
     b = _checkpoint(tmp_path / "b.pt", 2, "mtg181")
     pairing = Pairing(name="endpoint", mtg186=a.checkpoint, mtg181=b.checkpoint)
     [match] = [
-        m.model_copy(update={"conditions": {"deals": [cards.DEAL_BASE]}, "games": 4})
+        m.model_copy(update={"config": {"deals": [cards.DEAL_BASE]}, "games": 4})
         for m in cards.matches(pairing)[:1]
     ]
     directory = tmp_path / "eval"
