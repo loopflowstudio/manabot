@@ -13,15 +13,18 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
-from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.checkpoint import (
+    BACKEND as TORCH_BACKEND,
+    load_checkpoint,
+    save_checkpoint,
+)
+from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.env.failures import CaptureScope, FailureEvidence, capture_scope
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.model.catalog import checkpoint_incompatibility, inspect_checkpoint
-from manabot.model.inference import PolicyInference
 from manabot.model.world import (
     checkpoint_world,
     validate_agent_decks,
@@ -46,6 +49,7 @@ from manabot.training.state.game_errors import (
 from manabot.training.validation import validate_regime
 import managym
 from managym import MAX_DECKLIST_BYTES, Deck, DeckImportError, Decklist
+from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
 WORLD = managym.WORLD_SETUP
 ROSTER_PACK = "elemental-world-v2"
@@ -270,7 +274,7 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
     target = tmp_path / "policy.pt"
     save_checkpoint(_agent(), ObservationSpace(), target, player_configs=None)
     # Nothing about training travels with the model.
-    raw = torch.load(target, map_location="cpu", weights_only=True)
+    raw = read_checkpoint(target, map_location="cpu", weights_only=True)
     binding = raw["world_binding"]
     assert "setups" not in binding and "content_manifest" not in binding
     assert set(binding) == {
@@ -285,7 +289,7 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
         "naming_vocabulary",
     }
     assert binding["world"] == managym.WORLD_VERSION
-    assert inspect_checkpoint(target).compatible
+    assert inspect_checkpoint(target, backend=TORCH_BACKEND).compatible
     policy, _ = load_checkpoint(str(target))
 
     unseen = Deck({"Swamp": 10, "Forest": 4, "Accumulate Wisdom": 1}).player()
@@ -309,7 +313,7 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
             changed["world_binding"][key] = {**binding[key], **change}
         assert checkpoint_incompatibility(changed) is not None
         path = tmp_path / f"changed-{key}.pt"
-        torch.save(changed, path)
+        write_checkpoint(changed, path)
         with pytest.raises(ValueError, match="binding"):
             load_checkpoint(str(path))
 

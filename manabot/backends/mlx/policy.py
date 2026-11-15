@@ -24,18 +24,20 @@ are `query_proj`/`key_proj`/`value_proj`, and GRUs hold `Wx`, `Wh`, `input_bias`
 (`manabot.backends.mlx.checkpoint` maps them from the canonical names).
 """
 
-from collections.abc import Iterator, Mapping, Sequence
-from contextlib import contextmanager
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from dataclasses import dataclass, field
+from types import TracebackType
+from typing import Literal
 
 import mlx.core as mx
 import mlx.nn as nn
-from mlx.utils import tree_map
+from mlx.utils import tree_flatten, tree_map
 import numpy as np
 
 from manabot.backends.mlx.arrays import default_precision, precision_dtype, to_numpy
-from manabot.backends.mlx.rl import legal_mask
-from manabot.env.observation import PERMANENT_DEFINITION_INDEX, ObservationSpace
+from manabot.backends.mlx.rl import NumericalError
+from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.policy import admission
 from manabot.policy.checkpoint import Dimensions
@@ -43,10 +45,9 @@ from manabot.policy.prepare import (
     Packed,
     Prepared,
     Tables,
-    catalog_schedule,
     prepare,
 )
-from manabot.policy.protocol import Precision
+from manabot.policy.protocol import InferenceResult, Precision
 
 # -- building blocks -----------------------------------------------------------------
 
@@ -125,7 +126,7 @@ class PackedGRU(nn.Module):
         return mx.concatenate(outputs), mx.concatenate(finished[::-1])
 
 
-def packed_steps(rows: np.ndarray, schedule: Packed) -> list[mx.array]:
+def packed_steps(rows: np.ndarray, schedule: Packed[np.ndarray]) -> list[mx.array]:
     """Split packed-order `rows` into the schedule's steps (`PackedGRU.run`)."""
     return [mx.array(part) for part in np.split(rows, np.cumsum(schedule.sizes)[:-1])]
 
@@ -240,7 +241,7 @@ class _Static:
     """Per-model constants derived from `Tables`, kept off the parameter tree."""
 
     catalog_steps: list[mx.array]  # token ids of each catalog GRU step
-    catalog: Packed
+    catalog: Packed[np.ndarray]
     named_rows: mx.array  # program rows of names that have a definition
     named_names: mx.array  # their name rows
     tables: Tables
@@ -267,6 +268,7 @@ class MLXActorCritic(nn.Module):
         # The model configuration the weights were trained under, as the
         # torch policy carries it; the updates read its `value_kind`.
         self.config = config
+        self.value_semantic: Literal["signed_outcome", "win_logit"] | None = None
         hidden = dims.hidden
         self.semantic_cards = SemanticCards(dims)
         self.player_embedding = Projection(dims.player, hidden)
@@ -298,7 +300,8 @@ class MLXActorCritic(nn.Module):
         self.shared_effects = SharedEffects(dims)
         self.name_candidates = NameCandidates(dims)
         self.continuation = Continuation(dims)
-        tokens, schedule = catalog_schedule(tables)
+        programs = tables.full_programs
+        tokens, schedule = programs.tokens, programs.schedule
         named = np.nonzero(tables.name_definitions != 0)[0]
         # Underscore attributes outside the module tree: never parameters.
         object.__setattr__(
@@ -313,6 +316,116 @@ class MLXActorCritic(nn.Module):
                 space,
             ),
         )
+
+    @property
+    def device_type(self) -> str:
+        return (
+            "cpu"
+            if getattr(self, "_inference_device", mx.default_device()) == mx.cpu
+            else "mps"
+        )
+
+    @property
+    def parameter_count(self) -> int:
+        return sum(value.size for _, value in tree_flatten(self.parameters()))
+
+    @property
+    def belief_count_buckets(self) -> int:
+        return self.config.belief_count_buckets
+
+    @staticmethod
+    def normalize_logits(logits: np.ndarray, *, double: bool = False) -> np.ndarray:
+        if double:
+            # MLX has no float64; search's host-only normalization retains it.
+            values = np.asarray(logits, np.float64)
+            weights = np.exp(values - values.max(axis=-1, keepdims=True))
+            return weights / weights.sum(axis=-1, keepdims=True)
+        return to_numpy(mx.softmax(mx.array(logits), axis=-1))
+
+    @staticmethod
+    def probability_from_logit(value: float) -> float:
+        return float(1.0 / (1.0 + np.exp(-np.float64(value))))
+
+    @property
+    def resident_bytes(self) -> int:
+        tables = self._static.tables
+        buffers = [getattr(tables, name) for name in Tables.BUFFERS]
+        return (
+            sum(value.nbytes for _, value in tree_flatten(self.parameters()))
+            + sum(value.nbytes for value in buffers if value is not None)
+            + (len(tables.catalog_lengths) + 1) * self.dims.hidden * 4
+        )
+
+    @property
+    def has_programs(self) -> bool:
+        return True
+
+    def inference_scope(self, *, cache_catalog: bool = True) -> "PolicyInference":
+        return PolicyInference(self, cache_catalog=cache_catalog)
+
+    @staticmethod
+    def sample_rows(
+        logits: np.ndarray, masks: np.ndarray, seeds: list[int], deterministic: bool
+    ) -> list[int]:
+        valid = masks != 0
+        if (
+            logits.shape != masks.shape
+            or not valid.any(1).all()
+            or not np.isfinite(logits[valid]).all()
+        ):
+            raise ValueError("invalid legal logits or empty action support")
+        actions = []
+        for row, seed in enumerate(seeds):
+            values = mx.array(logits[row])
+            action = (
+                int(mx.argmax(values))
+                if deterministic
+                else int(mx.random.categorical(values, key=mx.random.key(seed)))
+            )
+            if not valid[row, action]:
+                raise ValueError("policy selected a masked offer")
+            actions.append(action)
+        return actions
+
+    @property
+    def observation_space(self) -> ObservationSpace:
+        return self._static.space
+
+    def to(self, device: str) -> "MLXActorCritic":
+        """Select the inference stream on MLX's shared-memory devices."""
+        if device not in {"cpu", "mps", "gpu"}:
+            raise ValueError(f"MLX does not support device {device!r}")
+        object.__setattr__(
+            self, "_inference_device", mx.cpu if device == "cpu" else mx.gpu
+        )
+        return self
+
+    def sample(
+        self,
+        batch: Prepared[np.ndarray],
+        *,
+        deterministic: bool = False,
+        temperature: float = 1.0,
+        sampling: Literal["categorical", "multinomial"] = "categorical",
+    ) -> np.ndarray:
+        if not batch.legal_support:
+            raise ValueError("No valid actions available")
+        with mx.stream(getattr(self, "_inference_device", mx.default_device())):
+            logits, _ = self(batch)
+            actions = (
+                mx.argmax(logits, axis=-1)
+                if deterministic
+                else mx.random.categorical(logits / temperature)
+            )
+            mx.eval(actions)
+        return to_numpy(actions).astype(np.int64)
+
+    def win_probabilities(self, batch: Prepared[np.ndarray]) -> np.ndarray:
+        with mx.stream(getattr(self, "_inference_device", mx.default_device())):
+            _, values = self(batch)
+            probabilities = mx.sigmoid(values[:, 0])
+            mx.eval(probabilities)
+        return to_numpy(probabilities)
 
     @property
     def precision(self) -> Precision:
@@ -353,70 +466,39 @@ class MLXActorCritic(nn.Module):
             self.update(masters)
 
     def prepare(
-        self, obs: Mapping[str, np.ndarray], *, inference: bool = False
-    ) -> Prepared:
+        self, obs: ObservationBuffers, *, inference: bool = False
+    ) -> Prepared[np.ndarray]:
         """Admit and index raw host observations; malformed inputs are refused."""
         self.check_observation(obs)
         return self.prepare_admitted(obs, inference=inference)
 
     def prepare_admitted(
-        self, obs: Mapping[str, np.ndarray], *, inference: bool = False
-    ) -> Prepared:
+        self, obs: ObservationBuffers, *, inference: bool = False
+    ) -> Prepared[np.ndarray]:
         """Index unchanged rows previously checked for this policy's configuration."""
-        return prepare(obs, self._static.tables, inference=inference)
+        return prepare(
+            obs,
+            self._static.tables,
+            inference=inference,
+            binding=admission.binding(self.config, self._static.space),
+        )
 
-    def check_observation(self, obs: Mapping[str, np.ndarray]) -> None:
+    def check_observation(self, obs: ObservationBuffers) -> None:
         """The shared admission checks on raw rows, before booleans or lookups."""
         tables = self._static.tables
-        lookup = tables.definition_rows
-        for ids in (
-            obs["semantic_cards"],
-            np.stack(
-                [
-                    obs[key][..., PERMANENT_DEFINITION_INDEX]
-                    for key in ("agent_permanents", "opponent_permanents")
-                ],
-                axis=1,
-            ),
-            obs["known_hand"][..., 0],
-            obs["decklists"][..., 0],
-        ):
-            admission.definition_ids(ids, len(lookup), lookup)
-        objects = tables.layout.objects
-        catalog = admission.Catalog(
-            lookup, tables.record_name_keys, tables.record_token_keys
+        mask = np.asarray(obs["actions_valid"])
+        try:
+            legal = admission.legal_mask(mask)
+        except ValueError as error:
+            # Allocate framework evidence only for a rejected host input.
+            failed = ~(np.isfinite(mask) & ((mask == 0) | (mask == 1)))
+            raise NumericalError(
+                "invalid_action_mask",
+                {"mask": mx.array(mask), "failed": mx.array(failed)},
+            ) from error
+        admission.check(
+            obs, admission.Spec(self.config, self._static.space, tables, 0), legal
         )
-        admission.permanent_links(obs, objects)
-        admission.facts(
-            obs["facts"], self._static.space.encoder.config.max_facts, objects, catalog
-        )
-        admission.shared_effects(
-            obs["effects"],
-            obs["effect_details"],
-            obs["effect_members"],
-            objects,
-            catalog,
-        )
-        admission.definition_ids(obs["relations"][..., [5, 23]], len(lookup), lookup)
-        admission.relations(obs["relations"], self.dims.relation, objects)
-        validity = np.concatenate(
-            [
-                obs[key]
-                for key in (
-                    "agent_player_valid",
-                    "opponent_player_valid",
-                    "agent_cards_valid",
-                    "opponent_cards_valid",
-                    "agent_permanents_valid",
-                    "opponent_permanents_valid",
-                )
-            ],
-            axis=1,
-        )
-        if (validity.sum(1) == 0).any():
-            raise ValueError("value aggregation requires a valid object")
-        legal = to_numpy(legal_mask(mx.array(obs["actions_valid"])))
-        admission.actions(obs, legal, objects, tables.name_definitions, lookup)
 
     # Programs ----------------------------------------------------------------------
 
@@ -442,13 +524,16 @@ class MLXActorCritic(nn.Module):
     def clear_cache(self) -> None:
         self._static.cache.clear()
 
-    def evaluate(self, batch: Prepared) -> tuple[np.ndarray, np.ndarray]:
+    def evaluate(self, batch: Prepared[np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
         """Evaluated logits [B,A] and values [B] as NumPy (`BackendPolicy.evaluate`)."""
-        logits, values = self(batch)
-        mx.eval(logits, values)
+        with mx.stream(getattr(self, "_inference_device", mx.default_device())):
+            logits, values = self(batch)
+            mx.eval(logits, values)
         return to_numpy(logits), to_numpy(values)[:, 0]
 
-    def forward_distribution(self, batch: Prepared) -> tuple[mx.array, mx.array]:
+    def forward_distribution(
+        self, batch: Prepared[np.ndarray]
+    ) -> tuple[mx.array, mx.array]:
         """The training forward the updates differentiate: `__call__`."""
         return self(batch)
 
@@ -464,13 +549,17 @@ class MLXActorCritic(nn.Module):
         """Features and masks follow compute weights, never promote half activations."""
         return mx.array(values).astype(self.compute_dtype)
 
-    def __call__(self, batch: Prepared) -> tuple[mx.array, mx.array]:
+    def __call__(self, batch: Prepared[np.ndarray]) -> tuple[mx.array, mx.array]:
         """Policy logits [B,A] (-1e8 off the legal support) and critic [B,1]."""
         with self.forward_precision():
             return self._forward(batch)
 
-    def _forward(self, batch: Prepared) -> tuple[mx.array, mx.array]:
+    def _forward(self, batch: Prepared[np.ndarray]) -> tuple[mx.array, mx.array]:
+        if not isinstance(batch, Prepared):
+            raise TypeError("policy forward requires a Prepared batch")
         static: _Static = self._static
+        if batch.binding != admission.binding(self.config, static.space):
+            raise ValueError("prepared batch belongs to another policy configuration")
         dims = self.dims
         hidden = dims.hidden
         b = batch.batch
@@ -489,7 +578,7 @@ class MLXActorCritic(nn.Module):
         # Objects: players, cards and permanents with their programs.
         card_programs = defs(batch.card_rows)
         known = (
-            defs(batch.known_rows) * self._floating(batch.known_counts)[..., None]
+            defs(batch.known_rows) * self._floating(batch.known_counts)[..., None] / 60
         ).sum(2)
         pooled = mx.einsum(
             "bsrh,bsrc->bsch", defs(batch.deck_rows), self._floating(batch.deck_counts)
@@ -570,7 +659,7 @@ class MLXActorCritic(nn.Module):
 
         # Attention over the object table.
         validity = self._floating(batch.validity)
-        sign = self._floating(batch.ownership)[None, :, None]
+        sign = self._floating(np.where(batch.is_agent, 1, -1))[..., None]
         attended, attended_validity = objects, validity
         columns = batch.attention_columns
         if columns is not None:
@@ -647,7 +736,7 @@ class MLXActorCritic(nn.Module):
         pooled_value = projected.sum(1) / validity.sum(1, keepdims=True)
         return logits, value[5](value[4](value[3](pooled_value))).astype(mx.float32)
 
-    def _links(self, batch: Prepared, objects: mx.array) -> mx.array:
+    def _links(self, batch: Prepared[np.ndarray], objects: mx.array) -> mx.array:
         """`ActorCritic._join_permanent_links`."""
         b, count, hidden = objects.shape
         start = 2 + 2 * batch.agent_cards.shape[1]
@@ -679,7 +768,7 @@ class MLXActorCritic(nn.Module):
 
     def _facts(
         self,
-        batch: Prepared,
+        batch: Prepared[np.ndarray],
         objects: mx.array,
         tokens: mx.array,
         definitions: mx.array,
@@ -706,25 +795,22 @@ class MLXActorCritic(nn.Module):
             + ids
             + facts.numeric(self._floating(routes.columns))
         )
-        if routes.program_schedule is not None:
-            assert (
-                routes.program_rows is not None and routes.program_numbers is not None
-            )
-            assert (
-                routes.program_positions is not None and routes.program_mask is not None
-            )
-            schedule = routes.program_schedule
+        programs = routes.programs
+        if programs is not None:
+            schedule = programs.schedule
             flat = hidden_rows.reshape(-1, hidden)
-            program = _take(
-                flat, mx.array(routes.program_rows)
-            ) + facts.program_numeric(self._floating(routes.program_numbers)[:, None])
+            program = _take(flat, mx.array(programs.rows)) + facts.program_numeric(
+                _program_number(mx.array(programs.numbers)).astype(self.compute_dtype)[
+                    :, None
+                ]
+            )
             states, _ = facts.program_sequence.run(
                 program, packed_steps(schedule.gather, schedule)
             )
             program = program + _take(states, mx.array(schedule.unpack))
             flat = mx.where(
-                mx.array(routes.program_mask)[:, None],
-                _take(program, mx.array(routes.program_positions)),
+                mx.array(programs.mask)[:, None],
+                _take(program, mx.array(programs.positions)),
                 flat,
             )
             hidden_rows = flat.reshape(*shape, hidden)
@@ -741,7 +827,7 @@ class MLXActorCritic(nn.Module):
 
     def _effects(
         self,
-        batch: Prepared,
+        batch: Prepared[np.ndarray],
         objects: mx.array,
         tokens: mx.array,
         definitions: mx.array,
@@ -771,7 +857,11 @@ class MLXActorCritic(nn.Module):
         detail = (
             _take(tokens, mx.array(routes.detail_rows))
             + effects.detail_kind(mx.array(routes.detail_kinds))
-            + effects.detail_number(self._floating(routes.detail_numbers)[:, None])
+            + effects.detail_number(
+                _program_number(mx.array(routes.detail_numbers)).astype(
+                    self.compute_dtype
+                )[:, None]
+            )
             * self._floating(routes.detail_is_number)[:, None]
         )
         table = mx.concatenate(
@@ -795,3 +885,70 @@ class MLXActorCritic(nn.Module):
             .add(_take(encoded, mx.array(routes.member_records)))
         )
         return objects + delta.reshape(b, count, hidden)
+
+
+def _program_number(value: mx.array) -> mx.array:
+    """Signed log magnitude in the framework graph, matching Torch's order."""
+    return mx.sign(value) * mx.log1p(mx.abs(value)) / 10
+
+
+class PolicyInference:
+    """An unchanged inference policy and its optional weight-only program cache."""
+
+    def __init__(self, agent: MLXActorCritic, *, cache_catalog: bool = True) -> None:
+        self.agent = agent
+        self.cache_catalog = cache_catalog
+        self._closed = False
+        self._weights = tuple(
+            id(value) for _, value in tree_flatten(agent.parameters())
+        )
+        self._binding = agent.config.model_dump_json()
+        agent.clear_cache()
+
+    def _check(self) -> None:
+        if self._closed:
+            raise RuntimeError("inference scope is closed")
+        if (
+            self._binding != self.agent.config.model_dump_json()
+            or self._weights
+            != tuple(id(value) for _, value in tree_flatten(self.agent.parameters()))
+        ):
+            raise RuntimeError("inference policy changed within its scope")
+
+    def cache_programs(self) -> None:
+        self._check()
+        if self.cache_catalog and "programs" not in self.agent._static.cache:
+            self.agent.cache_programs()
+
+    def __enter__(self) -> "PolicyInference":
+        self._check()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        self._closed = True
+        self.agent.clear_cache()
+
+    def infer(
+        self,
+        obs: ObservationBuffers,
+        *,
+        span: Callable[[str], AbstractContextManager[object]] | None = None,
+    ) -> InferenceResult:
+        self._check()
+        measure = span or (lambda name: nullcontext())
+        with measure("input_admission_and_transfer_host"):
+            batch = self.agent.prepare(obs, inference=True)
+        with (
+            measure("forward_host"),
+            mx.stream(getattr(self.agent, "_inference_device", mx.default_device())),
+        ):
+            self.cache_programs()
+            logits, _ = self.agent(batch)
+            mx.eval(logits)
+        with measure("output_transfer_host"):
+            return InferenceResult(to_numpy(logits))

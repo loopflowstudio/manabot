@@ -14,16 +14,18 @@
   import DeckIdentity from '$lib/components/DeckIdentity.svelte';
   import DeckSelector from '$lib/components/DeckSelector.svelte';
   import DeckImport from '$lib/components/DeckImport.svelte';
+  import { checkpointIdentity, playerIdentity } from '$lib/player-identity';
   import GameBoard from '$lib/components/GameBoard.svelte';
   import Feedback from '$lib/components/Feedback.svelte';
   import GameLog from '$lib/components/GameLog.svelte';
   import PresentationHistory from '$lib/components/PresentationHistory.svelte';
-  import OpponentSelector from '$lib/components/OpponentSelector.svelte';
+  import PlayerPicker from '$lib/components/PlayerPicker.svelte';
+  import MirrorThinking from '$lib/components/MirrorThinking.svelte';
   import DecklistsSelector from '$lib/components/DecklistsSelector.svelte';
   import StopsPanel from '$lib/components/StopsPanel.svelte';
   import SharedTablePanel from '$lib/components/SharedTablePanel.svelte';
   import { fetchAdviceMeta, postAdvice, type AdviceMeta, type AdviceResponse } from '$lib/advice';
-  import { checkpointChoice, gameStore } from '$lib/game.svelte';
+  import { policyChoice, gameStore } from '$lib/game.svelte';
   import { sanitizeDeckSelection } from '$lib/decks';
   import { presentationPlayer, studyPresentationPlayer } from '$lib/presentation.svelte';
   import {
@@ -33,6 +35,7 @@
     sendAuthorBelief,
     sendNewGame,
     sendPassTurn,
+    sendRetryMirror,
     sendRestoreDecision,
     sendRetryDecision,
     sendReturnFromBranch,
@@ -87,7 +90,7 @@
         gameStore.setVillainDeck(decks.villain);
       }
       const opponent = params.get('opponent');
-      if (opponent && /^[a-f0-9]{64}$/.test(opponent)) gameStore.setOpponentChoice(checkpointChoice(opponent));
+      if (opponent && /^[a-f0-9]{64}$/.test(opponent)) gameStore.setOpponentChoice(policyChoice(opponent));
     }
     learnDemo = demoName === 'learn';
     if (demoName) gameStore.setOpponentChoice(learnDemo ? 'random' : 'passive');
@@ -193,6 +196,7 @@
 
   const gameActive = $derived(gameStore.observation !== null && !gameStore.gameOver);
   const pilotCanAct = $derived(gameStore.hasCapability('submit_live_command'));
+  const thinkingSearch = $derived(gameStore.newGamePending ? gameStore.mirrorSearch : gameStore.activeMirrorSearch);
   const participantStudying = $derived(gameStore.restoredDecision !== null);
   const tablePresentation = $derived(participantStudying ? studyPresentationPlayer : presentationPlayer);
   const inputReady = $derived(!gameStore.commandPending && stopsPending === null && gameStore.connection === 'connected');
@@ -293,11 +297,9 @@
     random: 'Random',
     passive: 'Passive',
   };
-  const opponentLabel = $derived(
-    gameStore.table?.opponent_label
-      ?? OPPONENT_LABELS[gameStore.opponentChoice]
-      ?? 'Opponent',
-  );
+  const opponentIdentity = $derived(gameStore.table?.opponent
+    ? checkpointIdentity(gameStore.table.opponent)
+    : playerIdentity({ name: gameStore.table?.opponent_label ?? OPPONENT_LABELS[gameStore.opponentChoice] ?? 'Opponent' }));
 
   function syncStopsToServer(): void {
     if (gameActive && gameStore.hasCapability('configure_match')) {
@@ -406,6 +408,17 @@
       {gameStore.errorMessage}
     </section>
   {/if}
+  {#if gameStore.mirrorRetry}
+    <section role="alert" class="mb-4 rounded border border-line bg-panel px-4 py-3">
+      <p>{gameStore.mirrorRetry.message}</p>
+      <button class="mt-2 rounded border border-line px-3 py-2" disabled={gameStore.commandPending || !pilotCanAct} onclick={sendRetryMirror}>Retry search</button>
+    </section>
+  {/if}
+  <MirrorThinking active={(gameStore.commandPending || gameStore.newGamePending) && thinkingSearch !== null}
+    budget={thinkingSearch ? `Mirror search ${thinkingSearch.worlds}×${thinkingSearch.depth}` : ''} />
+  {#if gameStore.observation && gameStore.activeMirrorSearch}
+    <p class="type-caption mb-2 text-ink-2">Opponent: Mirror search {gameStore.activeMirrorSearch.worlds}×{gameStore.activeMirrorSearch.depth} · Uniform belief (physical deal)</p>
+  {/if}
 
   <!-- The sheet: one continuous leaf. Regions are ruled, never boxed. -->
   <div class="play-sheet overflow-hidden rounded-sm border border-line bg-panel shadow-sheet">
@@ -422,7 +435,7 @@
         <!-- The players live at their bars; this line is the summary for
              assistive tech and the proof suite. -->
         <span data-testid="deck-names" class="sr-only">
-          You ({gameStore.deckNames.hero}) vs {opponentLabel} ({gameStore.deckNames.villain})
+          You ({gameStore.deckNames.hero}) vs {opponentIdentity.text} ({gameStore.deckNames.villain})
         </span>
       {:else}
         <span class="type-annotation text-ink-2">No game in progress</span>
@@ -433,13 +446,16 @@
       {#if learnDemo}<p class="type-caption">Learn demo · UR Lessons vs Random GW Allies. Automated checked setup; New Game repeats it.</p>
       {:else if demoName}<p class="type-caption" data-testid="demo-origin">Precision demo · custom stress decks · automated checked setup. Choose actions from the legal choices below. New Game repeats setup.</p>{/if}
       {#if !demoName && (!gameStore.observation || gameStore.gameOver || showSetup) && gameStore.hasCapability('configure_match')}
-        <OpponentSelector
+        <PlayerPicker
           value={gameStore.opponentChoice}
           trained={trainedOpponents}
           {catalogError}
           extension={botExtension}
           decklists={gameStore.decklists}
+          setup={{hero_deck: gameStore.decks.hero, villain_deck: gameStore.decks.villain, ...(gameStore.deckImport ? {deck_import: gameStore.deckImport} : {})}}
           onChange={(value) => gameStore.setOpponentChoice(value)}
+          mirror={gameStore.mirrorSearch}
+          onMirrorChange={(value) => gameStore.mirrorSearch = value}
         />
       {/if}
       <div class="flex items-center gap-4">
@@ -532,8 +548,8 @@
         onHoverTarget={handleBoardTargetHover}
         winner={gameStore.winner}
         deckNames={gameStore.deckNames}
-        heroLabel="You"
-        villainLabel={opponentLabel}
+        heroIdentity={playerIdentity({ name: 'You', kind: 'human' })}
+        villainIdentity={opponentIdentity}
         overlayActionLabel="Play Again"
         onOverlayAction={startNewGame}
         presentationPlayer={tablePresentation}

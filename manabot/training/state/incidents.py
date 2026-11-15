@@ -199,7 +199,7 @@ def save_incident(
         "sampling_contract": "masked-log-softmax-v1",
         "attempted_collection": collector.stats.to_dict(),
         "last_valid_exports": [
-            str(path) for path in sorted((out / "policies").glob("*.pt"))
+            str(path) for path in sorted((out / "policies").glob("*.safetensors"))
         ],
         "recovery": "diagnostic only; no engine journal or collection-time RNG",
     }

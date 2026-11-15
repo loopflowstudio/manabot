@@ -1,4 +1,6 @@
 //! Foundations behavior through ordinary activation, payment and combat.
+use crate::support::game::move_card;
+use crate::support::inspect::permanent_of;
 use crate::support::{
     game::five_color_setup,
     inspect::{card_of, permanent_named},
@@ -40,9 +42,9 @@ fn kellan_upgrades_replace_types_keep_trigger_and_pay_real_costs() {
         before + 2
     );
     let object = card_of(&s, k);
-    s.game_mut().move_object(object, ZoneType::Hand);
-    s.game_mut().move_object(object, ZoneType::Battlefield);
-    let reentered = s.game().state.object_to_permanent[object].unwrap();
+    let object = move_card(&mut s, object, ZoneType::Hand);
+    let object = move_card(&mut s, object, ZoneType::Battlefield);
+    let reentered = permanent_of(&s, object).unwrap();
     assert!(s.game().characteristics(reentered).has_subtype("Scout"));
     assert!(s
         .game()

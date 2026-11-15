@@ -314,6 +314,10 @@ def reorder_objects(obs: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
         result[key + "_valid"] = obs[key + "_valid"][:, order]
         if index < 2:
             result["semantic_cards"][:, index] = obs["semantic_cards"][:, index, order]
+            if "card_turn_state" in obs:
+                result["card_turn_state"][:, index] = obs["card_turn_state"][
+                    :, index, order
+                ]
         focus = obs["action_focus"]
         mask = (focus >= offset) & (focus < offset + count)
         result["action_focus"][mask] = offset + count - 1 - (focus[mask] - offset)
@@ -340,9 +344,14 @@ def reorder_objects(obs: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
         offset += count
     # Remap after moving all source rows: links can cross either owner's slots.
     for key in ("agent_permanents", "opponent_permanents"):
-        if result[key].shape[-1] == observation_schema.PERMANENT_DIM:
-            for column in observation_schema.PERMANENT_LINK_INDEXES:
-                result[key][..., column] = references[result[key][..., column].long()]
+        for column in observation_schema.PERMANENT_LINK_INDEXES:
+            result[key][..., column] = references[result[key][..., column].long()]
+    # Input v11 stack rows stay in stack order; their source links name permanents.
+    if "stack" in obs:
+        column = observation_schema.STACK_SOURCE_INDEX
+        result["stack"][..., column] = references[obs["stack"][..., column].long()].to(
+            obs["stack"].dtype
+        )
     return result
 
 

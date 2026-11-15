@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from manabot.backends.torch.checkpoint import save_checkpoint
+from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
@@ -100,6 +100,7 @@ class TestPlayers:
                 "checkpoint": value_checkpoint,
             },
             seed=1,
+            backend=TORCH_BACKEND,
         )
         assert isinstance(player, VGreedyPlayer)
         for _ in range(20):
@@ -122,6 +123,7 @@ class TestPlayers:
                 "checkpoint": value_checkpoint,
             },
             seed=2,
+            backend=TORCH_BACKEND,
         )
         assert isinstance(player, ValueSearchPlayer)
         for _ in range(10):

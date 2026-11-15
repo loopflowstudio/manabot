@@ -65,31 +65,27 @@ impl Game {
         // Capture admits only policy history, not the presentation's prose suffix.
         let continuation = self.decision_context_from_frames(viewer, &agent.continuation);
         let mut objects = BTreeMap::new();
-        for visible in agent.agent_cards.iter().chain(&agent.opponent_cards) {
-            let (index, object) = self
+        for visible in agent.object_records() {
+            let (reference, object) = self
                 .state
-                .objects
-                .iter()
-                .enumerate()
+                .latest_objects()
                 .find(|(_, object)| object.id.0 as i32 == visible.id)
                 .ok_or(SemanticError::ViewerSafetyViolation)?;
-            let reference = self
-                .current_object_ref(crate::state::game_object::ObjectId(index))
+            self.state
+                .live(reference)
                 .ok_or(SemanticError::ViewerSafetyViolation)?;
             let permanent = self
                 .state
-                .object_to_permanent
-                .get(index)
-                .and_then(|id| *id)
+                .permanent_of(reference)
                 .and_then(|id| self.state.permanents[id].as_ref())
                 .map(|permanent| permanent.id.0);
             objects.insert(
                 object.id.0 as i32,
-                json!({"permanent_id": permanent, "incarnation": reference.incarnation.0}),
+                json!({"permanent_id": permanent, "incarnation": reference.generation()}),
             );
         }
         let mut ids = BTreeSet::new();
-        for object in agent.agent_cards.iter().chain(&agent.opponent_cards) {
+        for object in agent.object_records() {
             ids.insert(object.registry_key as u32);
         }
         for object in &agent.agent_sideboard {
@@ -124,13 +120,8 @@ impl Game {
                 } => {
                     ids.insert(*definition);
                     // Same visibility/link admission as the native tensor encoder.
-                    let visible = context_id.filter(|id| {
-                        agent
-                            .agent_cards
-                            .iter()
-                            .chain(&agent.opponent_cards)
-                            .any(|object| object.id == *id)
-                    });
+                    let visible = context_id
+                        .filter(|id| agent.object_records().any(|object| object.id == *id));
                     json!({"kind": "card", "definition": definition, "owner": owner.0,
                         "zone": zone.map(|zone| zone as i32), "context_id": visible})
                 }

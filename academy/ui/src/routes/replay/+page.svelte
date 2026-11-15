@@ -7,6 +7,7 @@
   import Feedback from '$lib/components/Feedback.svelte';
   import { tick, untrack } from 'svelte';
 
+  import { checkpointIdentity, playerIdentity, recordedIdentity, type PlayerIdentity } from '$lib/player-identity';
   import GameBoard from '$lib/components/GameBoard.svelte';
   import DecisionSurface from '$lib/components/DecisionSurface.svelte';
   import { offerFocus } from '$lib/offer-map';
@@ -115,6 +116,8 @@
   });
 
   const currentFrame = $derived(replayStore.frames[replayStore.currentFrameIndex] ?? null);
+  const firstMirrorDecision = $derived(replayStore.trace?.config.mirror
+    ? replayStore.trace.events.findIndex(event => event.actor === 'villain') : -1);
   const logEntries = $derived(replayStore.trace ? replayLogEntries(replayStore.trace) : []);
   const activeLogEntryId = $derived(
     replayStore.currentFrameIndex > 0
@@ -461,6 +464,20 @@
     saveNotes();
     editingNote = null;
   }
+  /**
+   * A seat's recorded identity; a trace that predates recorded players falls back to its
+   * configured opponent or `fallback`. Seat 1 carries the checkpoint's producer and provenance.
+   */
+  function seatIdentity(seat: number, fallback: string): PlayerIdentity {
+    const config = replayStore.trace?.config;
+    const opponent = seat === 1 ? config?.opponent : null;
+    const recorded = replayStore.trace?.players?.find(p => p.seat === seat);
+    const identity = recorded ? recordedIdentity(recorded)
+      : opponent ? checkpointIdentity(opponent) : playerIdentity({ name: fallback });
+    return opponent
+      ? { ...identity, producer: opponent.producer, provenance: config?.opponent_checkpoint ?? undefined }
+      : identity;
+  }
 </script>
 
 {#if page.url.searchParams.has('watch')}
@@ -495,6 +512,9 @@
           {/if}
         </div>
         <div class="flex flex-wrap items-center gap-2">
+          {#if replayStore.trace?.id && replayStore.trace.end_reason === 'game_over' && firstMirrorDecision >= 0}
+            <a class="btn btn-secondary" href={`/replay?watch=1&trace=${encodeURIComponent(replayStore.trace.id ?? '')}&decision=${firstMirrorDecision}`}>Inspect bot search</a>
+          {/if}
           {#if replayStore.summaries.length > 0}
             <label class="type-label flex items-center gap-2 text-ink-2">
               Trace
@@ -679,8 +699,8 @@
             <div class="mt-3 border-t border-line">
               {#if boardObservation}
                 <GameBoard
-                  heroLabel={replayStore.trace.players?.find((p) => p.seat === 0)?.name ?? 'Hero'}
-                  villainLabel={replayStore.trace.players?.find((p) => p.seat === 1)?.name ?? 'Opponent'}
+                  heroIdentity={seatIdentity(0, 'Hero')}
+                  villainIdentity={seatIdentity(1, 'Opponent')}
                   observation={boardObservation}
                   {focusedIds}
                   winner={boardObservation.game_over ? replayStore.trace.winner : undefined}

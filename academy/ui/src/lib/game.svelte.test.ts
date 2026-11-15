@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
-import { checkpointChoice, createGameStore } from './game.svelte';
+import { policyChoice, createGameStore } from './game.svelte';
 import type { Command, Observation, RecoveryEnvelope } from './types';
 
 interface BoltProtocolFixture {
@@ -204,11 +204,20 @@ describe('GameStore', () => {
   it('names a chosen trained checkpoint by its digest', () => {
     const store = createGameStore();
     const sha256 = 'a'.repeat(64);
-    store.setOpponentChoice(checkpointChoice(sha256));
+    store.setOpponentChoice(policyChoice(sha256));
 
     const config = store.newGameConfig();
-    expect(config.villain_type).toBe('checkpoint');
+    expect(config.villain_type).toBe('policy');
     expect(config.opponent_sha256).toBe(sha256);
+  });
+
+  it('keeps next-game search edits separate from the running opponent budget', () => {
+    const store = createGameStore();
+    store.activeMirrorSearch = { algorithm: 'local_update', belief: 'physical_deal',
+      worlds: 1, depth: 2, decision_seconds: 30, alpha: 0.02, beta: 1 };
+    store.mirrorSearch = { ...store.activeMirrorSearch, worlds: 4 };
+    expect(store.newGameConfig().mirror).toEqual(store.mirrorSearch);
+    expect(store.activeMirrorSearch.worlds).toBe(1);
   });
 
   it('adopts the server stops echo from observation payloads', () => {

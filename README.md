@@ -159,8 +159,9 @@ tensor, the LLM text and the learning tokens all derive from the same
 observation, and a mechanic reaches all three in the change that adds it
 ([observations](docs/observation-and-model.md)).
 
-**Identity is typed.** An `ObjectRef` carries its incarnation and fails after
-a zone change. An action index is valid only in one decision epoch. Checkpoints
+**Identity is typed.** An `ObjectId` names one appearance of an object in one
+zone and fails after a zone change; a `CardId` names the physical card and
+follows it. An action index is valid only in one decision epoch. Checkpoints
 bind world, deck setup and input schema and load only where the digest
 matches. Every durable value has a canonical serialization and digest
 (`manabot.infra.identity`), and locators are not identity.

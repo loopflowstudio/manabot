@@ -150,7 +150,12 @@ closure treats the transition quota as a minimum.
 Run the existing encoder tests alongside cutoff/parity fixtures so callers of
 changed private helpers are checked too. Action overflow is checked at the
 public encoder boundary, before the retained action list reaches row encoding.
-Changes to retained execution or its record vocabulary also require
+Changes to effects or runtime token registration require the
+[effect vocabulary checks](../managym/cards/tests/cards/README.md#effect-vocabulary-checks):
+the exhaustive debug Rust witness guard and the rebuilt-extension Python
+admission checks. These check token membership independently of which effects
+a game happens to reach. Changes to retained execution or its record vocabulary
+also require
 `uv run --extra dev pytest tests/model/test_record_coverage.py -q` after rebuilding
 the native extension. This bounded sweep checks that emitted execution tokens
 have catalog rows, including decisions reached through changed game paths.
@@ -222,7 +227,7 @@ Check changed Python modules and type stubs with
 compatibility stub is part of the public package surface.
 
 **Policy backends.** Shared damped-update or backend changes need
-`uv run --extra dev pytest tests/training/test_update_backend_protocols.py tests/training/test_update_backends.py tests/model/test_torch_backend_protocol.py tests/model/test_torch_container_load.py tests/model/test_mlx_backend.py tests/test_package_boundaries.py -q`.
+`uv run --extra dev pytest tests/training/test_update_backend_protocols.py tests/training/test_update_backends.py tests/model/test_torch_backend_protocol.py tests/model/test_torch_container_load.py tests/model/test_prepare_rows.py tests/model/test_mlx_backend.py tests/test_package_boundaries.py -q`.
 The installed-backend tests run the real update, force gradient clipping,
 compare every post-Adam weight and reject malformed raw rollout rows. MLX
 cases skip where it is unavailable; run them on Apple Silicon with the `mlx`

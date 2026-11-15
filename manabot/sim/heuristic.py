@@ -11,10 +11,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import numpy as np
-
-from manabot import managym
 from manabot.env.env import Env
+from manabot.env.observation import ObservationBuffers
+import managym
 
 
 def heuristic_source_paths() -> list[Path]:
@@ -38,6 +37,6 @@ class HeuristicPlayer:
             raise ValueError("heuristic max_actions must be a positive integer")
         self._native = managym.Heuristic(max_actions=max_actions)
 
-    def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
+    def act(self, env: Env, obs: ObservationBuffers) -> int:
         del obs
         return self._native.select_action(env.last_raw_obs)

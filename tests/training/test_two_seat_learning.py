@@ -10,7 +10,6 @@ import manabot.backends.torch as torch_backend
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import transition_gae
-from manabot.backends.torch.rollout import observation_tensors
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
@@ -18,7 +17,6 @@ from manabot.infra.config import (
     ModelConfig,
     RewardConfig,
 )
-from manabot.model.admission import admit_observation
 from manabot.training.learning import DampedPolicyLearning
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.training.rollout.collection import (
@@ -31,6 +29,7 @@ from manabot.training.rollout.collection import (
 )
 from manabot.training.updates.damped_policy import update_damped_iteration
 import managym
+from tests.model.prepared_routes import device_input
 
 
 class ScriptedGames:
@@ -111,23 +110,19 @@ def _at_update_boundary(collector: Collector) -> None:
 
 def _behavior_matches(batch: RolloutBatch, agent: ActorCritic) -> None:
     rows = batch.observations()
-    obs = admit_observation(
+    obs = device_input(
         agent,
-        observation_tensors(
-            {
-                key: value.reshape((-1,) + value.shape[2:])
-                for key, value in rows.observation.items()
-            }
-        ),
+        {
+            key: value.reshape((-1,) + value.shape[2:])
+            for key, value in rows.observation.items()
+        },
     )
     with torch.no_grad():
         logits, values = agent(obs)
     np.testing.assert_allclose(batch.values.ravel(), values.numpy().ravel(), atol=1e-6)
     np.testing.assert_allclose(
         rows.log_probabilities.reshape(logits.shape),
-        logits.masked_fill(obs["actions_valid"] == 0, -torch.inf)
-        .log_softmax(-1)
-        .numpy(),
+        logits.masked_fill(~obs.legal, -torch.inf).log_softmax(-1).numpy(),
         atol=1e-6,
     )
     selected = np.take_along_axis(rows.log_probabilities, batch.actions[..., None], -1)

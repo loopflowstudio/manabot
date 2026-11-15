@@ -585,6 +585,16 @@ export interface GameLogEntry {
   text: string;
 }
 
+export interface PolicyRuntimeIdentity {
+  id: string;
+  provider: string;
+  runner: string;
+  artifacts: Record<string, string>;
+  config: Record<string, unknown>;
+  supports_search: boolean;
+  contract_version?: number;
+}
+
 export interface RecordedPlayer {
   seat: number;
   player_id: string;
@@ -592,7 +602,7 @@ export interface RecordedPlayer {
   name: string;
   deck: string;
   version: string | null;
-  inference: Record<string, unknown> | null;
+  inference: (Record<string, unknown> & { runtime?: PolicyRuntimeIdentity }) | null;
 }
 
 export interface GameSummary extends TraceSummary {
@@ -615,20 +625,18 @@ export interface TraceSummary {
   num_events: number;
 }
 
-export type VillainType = 'passive' | 'random' | 'search' | 'checkpoint';
+export type VillainType = 'passive' | 'random' | 'search' | 'policy';
 
-// One entry of GET /api/opponents: a checkpoint the server found. `reason` names why an unavailable entry cannot play.
+// Provider-authored presentation from GET /api/opponents.
 export interface TrainedOpponent {
+  supports_search?: boolean;
+  search_reason?: string | null;
+  policy?: PolicyRuntimeIdentity;
   sha256: string;
   name: string;
   producer: string;
-  source: 'path' | 'runs' | 'tournament';
-  world: string | null;
-  model: string | null;
-  parameters: number | null;
-  step: number | null;
-  // Display names of the decks the checkpoint was bound to (either seat).
-  decks: string[];
+  group: string;
+  details: { label: string; value: string }[];
   available: boolean;
   reason: string | null;
 }
@@ -647,8 +655,20 @@ export interface OpponentConfig {
   opponent_sha256?: string;
 }
 
+/** What a game recorded about its policy; an unrecorded value is absent. */
+export interface CheckpointProvenance {
+  policy?: PolicyRuntimeIdentity;
+  source?: string | null;
+  world?: string | null;
+  model?: string | null;
+  step?: number | null;
+}
+
 export interface TraceConfig {
+  opponent?: { name: string; sha256: string; producer?: string } | null;
+  opponent_checkpoint?: CheckpointProvenance | null;
   watch_players?: string[] | null;
+  mirror?: import('./watch').MirrorSearch | null;
   hero_deck: Record<string, number>;
   villain_deck: Record<string, number>;
   villain_type: string;
@@ -776,8 +796,10 @@ export type ServerMessage = (
           recovery?: RecoveryEnvelope;
         }
     ))
-  | { type: 'error'; message: string }
+  | { type: 'error'; message: string; session_ended?: boolean }
 ) & {
+  mirror_retry?: import('./watch').PendingMirror | null;
+  mirror?: import('./watch').MirrorSearch | null;
   table?: import('./shared-table-protocol').TableSnapshot;
   session_id?: string;
   resume_token?: string;
@@ -787,6 +809,7 @@ export type ServerMessage = (
 };
 
 export interface LaunchSetup {
+  mirror?: import('./watch').MirrorSearch | null;
   hero_deck?: string;
   villain_deck?: string;
   villain_type: string;

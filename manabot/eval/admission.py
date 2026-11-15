@@ -11,13 +11,13 @@ from typing import Literal
 
 from pydantic import JsonValue
 
-from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig
 from manabot.infra.identity import file_sha256
 from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
 from manabot.model.world import validate_agent_setup
+from manabot.policy.protocol import Backend
 from manabot.sim import anchors
 from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.registration import PlayerRegistration
@@ -41,6 +41,7 @@ class CheckpointAdmission:
 def register_checkpoint(
     path: Path,
     *,
+    backend: Backend,
     match: MatchConfig,
     content_suite: str,
     player_id: str,
@@ -63,7 +64,7 @@ def register_checkpoint(
         expected_bytes is not None and size != expected_bytes
     ):
         raise ValueError("checkpoint differs from recorded artifact")
-    agent, space = load_checkpoint(str(path))
+    agent, space = backend.load_policy(str(path))
     validate_agent_setup(
         agent, Match(match).to_rust(), allow_deck_repetition=allow_deck_repetition
     )
@@ -94,7 +95,7 @@ def register_checkpoint(
         compute_class_id="policy-cpu-one-thread-one-pass",
         checkpoint_sha256=digest,
         checkpoint_bytes=size,
-        parameter_count=sum(parameter.numel() for parameter in agent.parameters()),
+        parameter_count=agent.parameter_count,
         training_seed=training_seed,
         artifact_id=f"{artifact_prefix}/{digest}",
     )

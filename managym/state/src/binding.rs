@@ -3,7 +3,7 @@
 //! frame finishes. Sampling may change an unknown witness, never its constraints.
 
 use crate::{
-    game_object::{ObjectRef, PlayerId},
+    game_object::{ObjectId, PlayerId},
     predicate::CardPredicate,
     zone::ZoneType,
 };
@@ -17,7 +17,8 @@ pub struct ZoneSelection {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ObjectBinding {
-    pub object: ObjectRef,
+    #[serde(serialize_with = "crate::game_object::exact")]
+    pub object: ObjectId,
     /// Membership and predicate at capture, not a predicate re-read after movement.
     pub selection: Option<ZoneSelection>,
     /// Seats that knew this exact witness at capture. Definition-only hand

@@ -1,4 +1,5 @@
 import { playerToken } from './records';
+import type { MirrorSearch, PendingMirror } from './watch';
 import {
   loadStoredDeckSelection,
   saveStoredDeckSelection,
@@ -27,28 +28,31 @@ import type {
   StopSide,
 } from './types';
 
-// Trained opponents are chosen by exact checkpoint digest: `checkpoint:<sha256>`.
-export type OpponentChoice =
+// Registered policies are chosen by complete execution identity: `policy:<id>`.
+export type PlayerChoice =
   | `search-${number}`
   | 'random'
   | 'passive'
-  | `checkpoint:${string}`;
+  | 'search'
+  | 'greedy'
+  | 'heuristic'
+  | `policy:${string}`;
 
-export function checkpointChoice(sha256: string): OpponentChoice {
-  return `checkpoint:${sha256}`;
+export function policyChoice(sha256: string): PlayerChoice {
+  return `policy:${sha256}`;
 }
 
 // Search opponents sample hidden cards from the opponent's decklists, so the
 // server refuses them in closed-decklist games.
-export function isSearchChoice(choice: OpponentChoice): boolean {
+export function isSearchChoice(choice: PlayerChoice): boolean {
   return choice.startsWith('search-');
 }
 
-export function buildOpponentConfig(choice: OpponentChoice): OpponentConfig {
-  if (choice.startsWith('checkpoint:')) {
+export function buildOpponentConfig(choice: PlayerChoice): OpponentConfig {
+  if (choice.startsWith('policy:')) {
     return {
-      villain_type: 'checkpoint',
-      opponent_sha256: choice.slice('checkpoint:'.length),
+      villain_type: 'policy',
+      opponent_sha256: choice.slice('policy:'.length),
     };
   }
   if (choice === 'random' || choice === 'passive') {
@@ -73,13 +77,16 @@ export class GameStore {
   gameOver = $state(false);
   winner = $state<number | null>(null);
   errorMessage = $state<string | null>(null);
+  mirrorRetry = $state<PendingMirror | null>(null);
+  mirrorSearch = $state<MirrorSearch | null>(null);
+  activeMirrorSearch = $state<MirrorSearch | null>(null);
   connection = $state<ConnectionState>('disconnected');
   focusIds = $state<Set<number>>(new Set());
   sessionId = $state<string | null>(null);
   resumeToken = $state<string | null>(null);
   resumeFailed = $state(false);
   selectedTargetId = $state<number | null>(null);
-  opponentChoice = $state<OpponentChoice>('search-64');
+  opponentChoice = $state<PlayerChoice>('search-64');
   decklists = $state<Decklists>('open');
   // Deck pickers (named decks; gui/server.py NAMED_DECKS). Loaded from
   // localStorage and sent with new_game.
@@ -123,7 +130,7 @@ export class GameStore {
     if (!table) return;
     const previousRole = this.table?.access.role;
     if (table.opponent && table.attempt_id !== this.table?.attempt_id) {
-      this.opponentChoice = checkpointChoice(table.opponent.sha256);
+      this.opponentChoice = policyChoice(table.opponent.base_sha256 ?? table.opponent.sha256);
     }
     this.table = table;
     if (previousRole && previousRole !== table.access.role) {
@@ -170,7 +177,7 @@ export class GameStore {
     this.errorMessage = message;
   }
 
-  setOpponentChoice(next: OpponentChoice): void {
+  setOpponentChoice(next: PlayerChoice): void {
     this.opponentChoice = next;
   }
 
@@ -202,6 +209,7 @@ export class GameStore {
       stop_on_stack: this.stops.stop_on_stack,
       auto_pass: this.stops.auto_pass,
       decklists: this.decklists,
+      mirror: this.mirrorSearch,
     };
   }
 

@@ -80,7 +80,8 @@ publish, land or choose the next Graph step from here.
   obs.action_space.actions))`; equal digests mean equal offers, taps and
   events. Use the authored setups (`managym.authored_deck_keys`) plus the TLA
   pool corpus human builds (`experiments/data/mtg282/pools-v2/corpus.json`,
-  `PlayerConfig(name, pool["human_build"])`), which bring waterbend, Treasure
+  in the artifact store: fetch it with `manabot.data fetch` when a checkout
+  lacks it; `PlayerConfig(name, pool["human_build"])`), which bring waterbend, Treasure
   and any-color sources the curated benchmark decks lack; 2,400 games took
   about two minutes per engine. A few games end in `PyAgentError` on `main`
   too; the error must match, not be absent. `maturin build` without
@@ -181,14 +182,22 @@ publish, land or choose the next Graph step from here.
   games per arm at 4 worlds × depth 20 took about 90 s).
 - Model or training-path changes: `uv run etude train manabot/recipes/local.py`
   runs the local CPU smoke. Inspect metric rows for per-phase collection and
-  learning seconds; the command prints its run id. Play
+  learning seconds; the command prints its run id. For installed-wheel QA use
+  `scripts/release/smoke.py`: it trains one tiny policy on the native
+  lethal-target root through `etude train`, reloads its
+  `out/policies/00000002-raw.safetensors`, and discovers that exact path
+  through `managym.academy.bots`. Run from outside the checkout with
+  `uv run --no-project --python <venv>/bin/python <script>`. Play
   checkpoints with `uv run manabot sim --hero-deck-file <f> --villain-deck-file
-  <f> --set sim.hero=<ckpt.pt> --set sim.villain=<ckpt.pt> --set
-  sim.num_games=10 --set sim.num_threads=1`. The deck files must equal the
+  <f> --set sim.hero=<checkpoint.safetensors>
+  --set sim.villain=<checkpoint.safetensors> --set sim.num_games=10 --set sim.num_threads=1`. The deck files must equal the
   checkpoint's `world_binding["setups"]`, written as `N Name` lines with a
   `Sideboard` section, because the default sim match is refused. Fixed seeds
   make equal win, timeout and mean-step counts a check that every sampled
-  action matched. Ten games took about two minutes on a loaded laptop.
+  action matched. Ten games took about two minutes on a loaded laptop. Sim
+  logs a model failure as `Error getting action`, plays a random move and
+  still prints win rates: count those lines before trusting a result. The
+  regime's decks are `run.json` `regime.match` (`hero_deck`, `hero_sideboard`).
 - MLX backend (`manabot.backends.mlx`, Apple Silicon with the `mlx` extra only):
   run it on the Mac that owns the measurement, not on a shared laptop. The
   published `experiments/data/mlx_pilot/capture/initial.pt` is now refused by
@@ -200,11 +209,10 @@ publish, land or choose the next Graph step from here.
   (about 2 minutes on CPU; `hidden_dim=64` takes 20 s). Convert its
   `initial.pt` with `uv run python -m manabot.backends.convert` (`local` recipe
   checkpoints use FiLM and are refused), load it with
-  `load_mlx_policy` and step a `VectorEnv` with `MatchConfig(world=WORLD_SETUP)`,
-  admitting each batch with `admit_observation` and comparing against torch
-  `PolicyInference` (torch values are `[B]`, MLX `[B,1]` from `policy(...)` and `[B]` from
-  `policy.evaluate`; untrained-policy argmax
-  differences are exact ties). `uv run python -m manabot.backends.parity <initial.pt>
+  `resolve("mlx").load_policy` and step a `VectorEnv` with `MatchConfig(world=WORLD_SETUP)`,
+  preparing each batch with `policy.prepare(obs, inference=True)` and evaluating
+  with `policy.evaluate` (logits `[B,A]`, values `[B]`); untrained-policy argmax
+  differences are exact ties. `uv run python -m manabot.backends.parity <initial.pt>
   --capture <capture dir> --backend mlx --precision <dtype> --minibatches 4`
   takes seconds; `--json` keeps per-minibatch `loss_torch`/`loss_backend`, which
   show when a relative-loss failure comes from a near-zero loss.
@@ -218,24 +226,37 @@ publish, land or choose the next Graph step from here.
   Torch/Etude pins and run a copy of `scripts/release/smoke.py` (CPU training,
   about 20 s). Also `uv init` a project and `uv add` both `file://` wheels for
   latest resolution. Returning users: install PyPI `manabot==0.2.0` in a
-  `--seed` venv and upgrade with plain `pip` (wheel paths plus `--find-links`
+  `--seed` venv and upgrade with
+  `uv run --no-project --python <venv>/bin/python -m pip`
+  (wheel paths plus `--find-links`
   and the CPU Torch index), since uv's one-step upgrade hides file-ownership
   problems that pip's install order exposes.
 - Installed Academy (`managym[academy]` wheel): build as above, then in a fresh
   `/tmp` directory `uv venv --python 3.13 --seed` (without `--seed` there is
-  no `pip`) and `pip install '<wheel>[academy]'`, with `node`/`npm`/`cargo`
+  no `pip`) and
+  `uv run --no-project --python <venv>/bin/python -m pip install '<wheel>[academy]'`,
+  with `node`/`npm`/`cargo`
   shadowed by failing stubs on PATH. Re-running that on an already installed
   identical wheel file exits 0 silently and skips the extra; install by name
   with `--find-links <dist>` instead. When the candidate's version is already
-  on PyPI, `pip install --find-links <dist> manabot` takes PyPI's copy (no
+  on PyPI, `uv run --no-project --python <venv>/bin/python -m pip install
+  --find-links <dist> manabot` takes PyPI's copy (no
   `managym.academy.bots` entry point); `--force-reinstall --no-deps` the local
   wheel. Never patch files inside the installed `managym`: manabot's training
   refuses a changed source bundle. Supervise `managym academy` from a Python
   `Popen(start_new_session=True)` that writes `p.wait()`, delete the old log
-  before relaunching, and wait for its `ACADEMY_PLAY_READY`. `manabot train
-  --recipe local --device cpu --out .runs/<x>` in that directory gives trained
-  opponents within a minute. Another project's server may hold `*:8000`; use
+  before relaunching, and wait for its `ACADEMY_PLAY_READY`. `uv run etude
+  train manabot/recipes/local.py` with `ETUDE_HOME` in that directory gives
+  trained opponents under `track/<experiment>/out/policies/` within a minute. Another project's server may hold `*:8000`; use
   your own port.
+  With a current installed policy, set `ACADEMY_PLAY_CHECKPOINTS=<absolute path>`
+  before launch. Read `/api/opponents` for its digest, then open
+  `/?hero=ur_lessons&villain=gw_allies&opponent=<digest>` for the local recipe's
+  bound decks (Elemental UR/GW are different lists and correctly refuse it).
+  Click New Game, then the legal Play Island offer and Pass Turn. Wait until
+  an action offer is enabled and automation has settled before recording
+  `main[data-frame-revision]`; reload must restore that revision. A merely
+  visible offer can still belong to an automated pending transition.
 - Engine rules changes (zones, tokens, copies, SBAs): play many games through
   `managym.Env` with `PlayerConfig(name, {card: count}, world=managym.WORLD_SETUP)`
   decks built around the cards involved, and a scripted policy over
@@ -245,6 +266,25 @@ publish, land or choose the next Graph step from here.
   (`zone`, `is_token`) at every decision. A token in the graveyard during a
   mana ability's color choice is correct: SBAs wait for priority. Academy's
   game end is a "Game Over" dialog with "Play Again".
+  Battlefield permanents are `agent_permanents`, with their own ids (the ones
+  activation offers focus) and an integer `registry_key`; join them to a name
+  through `agent_cards` rows that have the same `registry_key`.
+- Policy vocabulary/admission changes (`record_vocabulary.rs`, token kinds,
+  `manabot/policy/admission.py`): the consumer is training's catalog policy.
+  Script a directed `managym.Env` game that reaches the runtime program,
+  `space.encode` each decision at `ObservationConfig(policy_input_version=10)`
+  and pass it through `manabot.verify.record_coverage._embed` with a tiny
+  catalog `ActorCritic`, as `coverage_sweep` does. Find decisions carrying a
+  token by scanning encoded buffers for its u32 as adjacent 16-bit halves
+  (hi, lo). For Koh's `HaveAbilitiesOf`: Swamps plus Koh against Forests plus
+  Giant Spider, Koh cast once, always targeting with its ETB, the villain
+  playing randomly, and one Pay-1-life activation per turn. The choice
+  is a Modal decision only with two or more cards exiled with Koh (one is
+  skipped as forced). 3 of 6 games reached it (8 decisions, about 7 minutes at load ~110).
+  For the negative, build a mutated release wheel with
+  `-o /tmp/<dir>/wheels`, restore the source at once, unzip the wheel into
+  `/tmp/<dir>/site` and run with `PYTHONPATH=/tmp/<dir>/site` (print
+  `managym.__file__`); admission must then fail at the first such decision.
 - "No behavior change" engine claims: `git worktree add --detach /tmp/<x>
   <before>`, build it with `uv run --extra play maturin build --release -i .venv/bin/python -m
   /tmp/<x>/managym/Cargo.toml` (about 4-5 min), drop its `.so` into
@@ -317,7 +357,15 @@ publish, land or choose the next Graph step from here.
 - Ctrl-C a run: start it with `subprocess.Popen(..., start_new_session=True,
   preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))` and
   `os.killpg(pid, SIGINT)`. A job started with `&` from a non-interactive shell
-  ignores SIGINT, so `pkill -INT` appears to hang.
+  ignores SIGINT, so `pkill -INT` appears to hang. When the child is `uv run`,
+  `killpg` delivers SIGINT twice (uv forwards it) and the server prints an
+  ignored `KeyboardInterrupt` at exit; signal only the Python child for a
+  clean shutdown.
+- Scripted Play against a searched opponent: one human Command runs the whole
+  opponent turn, so a 2×2 Mirror reply took 49 s (ten searched decisions) and
+  the waiting badge reached 170 s+. Do not treat a long badge as a hang; set
+  stall detectors above a full opponent turn, and confirm with the trace's
+  `events[].bot_decision.mirror.seconds` in the attempts table.
 - Experiment reports and figures: arrive as a new reader with
   `MANABOT_DATA_CACHE` set to an empty directory, then `doppler run --project
   manabot --config prd -- uv run --extra artifacts python -m manabot.data fetch
@@ -327,6 +375,27 @@ publish, land or choose the next Graph step from here.
   figure that changes bytes on every redraw also changes its manifest entry.
   Render SVGs with `rsvg-convert -z 2 -b white` and look at them.
 
+- Mirror search (search-capable policy in Play/Watch): `uv run etude train
+  manabot/recipes/local.py` gives a compatible
+  `out/policies/<update>-raw.safetensors` in about 90 s; save `{"provider": "manabot",
+  "artifact": "<abs path>", "config": {}}` as `<alias>.json` and launch `uv run managym
+  academy --policy <alias>.json play --opponent <alias> --mirror
+  '{"worlds":1,"depth":1}' --seed 7` (or `watch --player <alias> --player
+  random --mirror '[{...},null]'`, then press Start watching). Seed 7 puts the
+  bot on the play. The initial budget is 1×1 with a 30 s ceiling. With the
+  provider's cached card catalog, full games at 1×1 (Watch, both seats) and
+  4×2 (Play) completed with median decisions near 0.5 s and 1 s at load ~150;
+  16×20 still exceeded 30 s. If one evaluation takes seconds, profile it:
+  re-encoding the card catalog per forward (`_encode_programs`, `torch.gru`)
+  means the session is not using `inference_scope()`. To time decisions
+  without a browser, drive `create_watch`/`step_watch` in-process as
+  `tests/academy/test_mirror_baseline.py` does. Retained evidence is in
+  the attempts table's `trace_json`
+  (`events[].bot_decision.mirror`). To probe reconnect, click an offer that hands
+  priority to the bot and reload about 1.5 s later while the table shows
+  `Mirror search W×D· N s`; the game must stay `active` and resume at the
+  committed state. A reload before the first response has no resume
+  credentials and launches a new game by design.
 - Live Academy QA without fixtures: build first, then start the ordinary
   `managym.academy.server:app` with `ACADEMY_TRACES_DIR` pointing into an ignored
   `.runs/` directory and `ACADEMY_PLAY_RECORD_ORIGIN=automated_validation`.
@@ -376,3 +445,22 @@ publish, land or choose the next Graph step from here.
   have no resumed game. Initial automatic history may precede a launch's received
   tail; compare that tail exactly to the saved source and the full saved prefix
   to Replay, retaining explicit unavailable-prefix labels.
+- Registered policies (`managym.policy`, Play/Watch pickers): for a no-manabot
+  user, `uv run --no-sync --extra play maturin build --release -i .venv/bin/python
+  -m managym/Cargo.toml -o .runs/<dir>` takes seconds when the Rust is cached;
+  `uv pip install '<wheel>[academy]'` into a fresh `/tmp` venv, confirm
+  `find_spec('manabot')` is None, set `ACADEMY_FRONTEND_BUILD`, and install a
+  tiny third-party provider package written from `docs/academy.md` (its
+  `managym.bots` entry point names a provider instance). Drive `--policy
+  <spec.json>`, `serve(policies={...})` with direct factories, and a factory whose
+  session returns a stale binding: Play must end with the named reason and not
+  redeal its launch; Watch must answer 422 and keep the pending decision. Reopen
+  replays after uninstalling the provider. Ambient manabot discovery registers
+  `.runs` checkpoints first and the registry keeps the first factory per Policy
+  ID, so a live artifact-swap check needs `MANABOT_RUNS_DIR` pointed at an
+  empty directory. Watch setup persists only on **Start watching**; for a real
+  runner-change check, start a Watch in a persistent Playwright profile, append a
+  comment to any `manabot/*.py`, restart, expect **Reselect**, then restore the
+  file. A checkpoint bound to other decks is refused at Start, not disabled, and
+  mixing an Elemental roster deck with the default `ur_lessons`/`gw_allies`
+  fails before any policy admission.

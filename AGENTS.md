@@ -48,7 +48,8 @@ checkpoint fields and frozen evidence keep their spelling.
 
 Code dependencies flow `managym.academy` → `managym` and `manabot` → `managym`.
 Academy never imports manabot or Torch; optional bot capabilities are discovered
-through the `managym.academy.bots` entry point. manabot never imports Academy.
+through the `managym.bots` provider entry points; optional historical replay/advice
+capabilities use `managym.academy.bots`. manabot never imports Academy.
 PyPI distributes the engine as `managym` and training as `manabot`, released
 together at the same version. Release builds use `scripts/release/prepare.py`
 to stage self-contained source archives; direct engine sdists from the workspace
@@ -141,6 +142,20 @@ checkpoints or experiment evidence.
   (`tests/test_package_boundaries.py` enforces the child modules). Launch
   evaluation children with `manabot.sim.child.ChildProcess`, not
   `multiprocessing` spawn, which re-imports the parent's `__main__`.
+- Library code receives a framework backend (the module for an update, a
+  `BackendPolicy` for simulation and evaluation) and never imports
+  `manabot.backends.*`. Only composition roots choose one: `experiments/`,
+  `scripts/`, recipe entry points, the CLI and child-process entry points, `manabot/sim/policy_provider.py` and the
+  backends' tests, by import or `manabot.backends.resolve("torch")`.
+  `tests/test_package_boundaries.py` lists the remaining exceptions by name;
+  that list only shrinks ([who chooses a backend](manabot/backends/README.md#who-chooses-a-backend)).
+- Generic backend learning helpers (`rl`, `learner`, `arrays`) keep role-specific
+  types under `TYPE_CHECKING`; importing their annotations at runtime must not
+  pull in checkpoint, player, observation or training-configuration modules.
+- `manabot.policy.prepare.Prepared` is the only policy input in every backend.
+  Integer lookups, masks and admission run once on the host in `prepare`; do
+  not add a forward that reads an observation dictionary or a second
+  preparation for one framework.
 
 ### Functions and objects (Python)
 
@@ -225,16 +240,25 @@ change already touches it; do not rewrite a module only for style. Rust in
   so a layout change refuses older checkpoints, naming that revision and the
   buffers that differ. Do not bump the input version for a layout change or add
   a loading path for an older layout.
-- Main carries policy input v9, the fresh default, and explicit v10
-  (`ObservationConfig.policy_input_version`); it is always serialized. V10 is
-  v9 plus the `player_turn_state` and `card_turn_state` buffers, whose
-  presence selects it natively; a v9 encoder refuses an observation that needs
-  them (`managym.input_v10_state`) before writing buffers. A checkpoint,
+- Main carries policy input v11, the fresh default
+  (`ObservationConfig.policy_input_version`, always serialized): one row per
+  game thing. Card rows hold cards outside the battlefield and stack;
+  permanents own one effective `CharacteristicsData` projection plus object
+  identity and token status; spells own a `SpellData` projection, and abilities
+  carry only source references. Old Python `.card` and flat characteristic
+  getters derive from those records (removed in 0.4.0); the `stack`
+  buffer holds every spell and ability. A battlefield object's or spell's card
+  id indexes its permanent or stack row, so focus, relations and history name
+  one row. V11 carries v10's `player_turn_state` and `card_turn_state`; a
+  turn-state-free encoder refuses an observation that needs them
+  (`managym.input_v10_state`) before writing buffers. Inputs v9 and v10 are a
+  deprecated fork for earlier checkpoints (`agent/legacy_input.rs`,
+  `manabot/env/legacy_input.py`, `InputLayout::Legacy`; removed in 0.4.0,
+  MTG-353 owns portability across worlds); never extend it. A checkpoint,
   replay or saved configuration bound to any other version, or omitting it,
   raises `UnsupportedPolicyInput`, which names the revision to run it from
-  (`ac601834d` is the last revision supporting v1-v8). The v10 turn-state
-  append is the only version branch in the encoders and the model; add no
-  others, and a new layout replaces these at a world freeze.
+  (`ac601834d` is the last revision supporting v1-v8). Add no other version
+  branch; a new layout replaces these at a world freeze.
 - Open-ended vocabularies (counter kinds, added subtypes, set names, used
   abilities, continuous-effect records, copy effects and their exceptions) are
   fact rows, never columns. Active effects are shared records: `effects`
@@ -512,6 +536,34 @@ or inspecting a newly cast spell. Call `spend_colorless` explicitly to preserve
 the colors in `five_color_setup`; tests of color, restriction, rider or expiry
 choices select their intended native offer.
 
+An `ObjectId` names one appearance of a card, token or copy in one zone (CR
+109) and goes stale when that object changes zones (CR 400.7), stack to
+battlefield included; a `CardId` names the physical `Card` (CR 108: owner and
+definition) for the whole game. `GameState::object_of(card)` and
+`card_of(object)` are the only bridges; a token or spell copy has no card.
+Hold an `ObjectId` for "that creature", a target or an event subject, a
+`CardId` for ownership or "that card", and read what a departed object was
+from `ObjectLkiLog`. A zone move is the one place an object is made from
+another and returns the new id; `ZoneManager::successor(old)` finds what an
+object became by its one next move (CR 400.7e, j). A fact crosses a zone
+change only as a `CarryOver` field citing its CR 400.7 sub-rule, never as a
+field copied by hand or an id that keeps working. Slots are private storage:
+never build an `ObjectId` from a number, in tests included. A test that
+follows one card through moves the engine made uses the support helpers
+`now`, `zone_of`, `permanent_of` and `move_card`; a pre-move id passed to
+`Game::move_object` or compared with an event's object does nothing or fails
+([objects and zones](docs/engine.md#objects-and-zones)).
+
+`GameState::object` and `state[object]` check appearance identity against the
+zone manager; `ObjectVec` has no object-id or card-id indexing. Zone-entry
+code alone uses `entry_object` before placement (new tokens and outside-game
+cards), still checking the allocated generation. Departed-source consumers
+read LKI and `source_base`/`source_face` definition provenance, never a later
+appearance's copy state. Recorded spell, mill and discard predicates use
+`recorded_object_matches_predicate` after their captured appearance departs.
+`AbilitySource` holds one id and the creator's exact
+reference presence; v16 serialization projects both historical source fields.
+
 A permanent's characteristics after continuous effects (name, types, colors,
 keywords, static/triggered/activated abilities, power/toughness) are one view,
 `Game::characteristics(id)`, which applies static abilities and effect records
@@ -543,7 +595,7 @@ sources are looked up per event kind through `TriggerIndex`
 (`flow/triggers.rs`), invalidated by trigger and layer dependencies; departed-object
 facts are an `ObjectLkiLog`. A cloned `Game` carries these caches.
 Layer rebuilds reuse immutable copiable source objects and static plans, bound to
-exact definition identity, incarnation and timestamp; copy/transform definition
+exact definition identity, appearance and timestamp; copy/transform definition
 changes invalidate that source. Intermediate layer objects detach on writes.
 Conservative characteristic read/write summaries skip impossible dependency
 probes; plausible pairs still compare instructions and generating-ability

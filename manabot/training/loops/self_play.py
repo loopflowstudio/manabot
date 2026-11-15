@@ -402,13 +402,18 @@ def publish(
         learner.agent,
         settings,
         counts,
-        directory / f"{name}-raw.pt",
+        directory / f"{name}-raw.safetensors",
         "raw",
         seed=run.seed,
     )
     if ema is not None:
         path = write_policy(
-            ema, settings, counts, directory / f"{name}-ema.pt", "ema", seed=run.seed
+            ema,
+            settings,
+            counts,
+            directory / f"{name}-ema.safetensors",
+            "ema",
+            seed=run.seed,
         )
     run.checkpoint(
         path, updates=counts.updates, training_seconds=counts.training_seconds

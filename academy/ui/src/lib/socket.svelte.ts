@@ -2,7 +2,7 @@ import { browser } from '$app/environment';
 
 import { sanitizeDeckSelection } from './decks';
 import { rememberRecordCredential } from './records';
-import { checkpointChoice, gameStore } from './game.svelte';
+import { policyChoice, gameStore } from './game.svelte';
 import {
   mergePresentationLabels,
   presentationLabelsFromFrame,
@@ -28,11 +28,12 @@ import type {
 const LAUNCH_STORAGE_KEY = 'academy.launch';
 
 function applyLaunchSetup(setup: LaunchSetup): void {
+  gameStore.mirrorSearch = setup.mirror ?? null;
   const decks = sanitizeDeckSelection({ hero: setup.hero_deck, villain: setup.villain_deck });
   if (decks) { gameStore.setHeroDeck(decks.hero); gameStore.setVillainDeck(decks.villain); }
   gameStore.deckImport = setup.deck_import ?? null;
   gameStore.setDecklists(setup.decklists);
-  if (setup.villain_type === 'checkpoint' && setup.opponent_sha256) gameStore.setOpponentChoice(checkpointChoice(setup.opponent_sha256));
+  if (setup.villain_type === 'policy' && setup.opponent_sha256) gameStore.setOpponentChoice(policyChoice(setup.opponent_sha256));
   else if (setup.villain_type === 'search') gameStore.setOpponentChoice(`search-${setup.villain_sims ?? 64}`);
   else if (setup.villain_type === 'random' || setup.villain_type === 'passive') gameStore.setOpponentChoice(setup.villain_type);
 }
@@ -52,7 +53,7 @@ const VALID_SERVER_TYPES = new Set([
   'control_error',
 ]);
 
-type TableServerMessage = ServerMessage | SharedTableControlEvent;
+type TableServerMessage = (ServerMessage | SharedTableControlEvent) & Pick<ServerMessage, 'mirror_retry' | 'mirror'>;
 
 interface ResumeCredentials {
   session_id: string;
@@ -300,6 +301,16 @@ export class GameSocketController {
     return true;
   }
 
+  sendRetryMirror(): void {
+    const pending = gameStore.mirrorRetry;
+    if (!pending || gameStore.commandPending) return;
+    gameStore.beginCommand();
+    this.send({ type: 'retry_mirror', match_id: pending.match_id,
+      expected_revision: pending.expected_revision,
+      ...(gameStore.table ? { grant_revision: gameStore.table.access.grant_revision } : {}),
+    });
+  }
+
   sendSetStops(): void {
     const stops = gameStore.stops;
     this.send({
@@ -427,6 +438,16 @@ export class GameSocketController {
       gameStore.setError('Received invalid server payload.');
       return;
     }
+    if ('mirror_retry' in message) gameStore.mirrorRetry = message.mirror_retry ?? null;
+    if ('mirror' in message) {
+      const search = message.mirror ?? null;
+      gameStore.activeMirrorSearch = search;
+      if (!gameStore.observation || this.pendingResume || message.table?.attempt_id !== gameStore.table?.attempt_id) {
+        gameStore.mirrorSearch = search;
+      }
+    }
+
+    if ('launch_setup' in message && message.launch_setup) applyLaunchSetup(message.launch_setup);
 
     if ('table' in message && message.table) {
       gameStore.applyTable(message.table);
@@ -486,7 +507,6 @@ export class GameSocketController {
       gameStore.newGamePending = false;
       if ('launch' in message && message.launch && message.launch_setup) {
         sessionStorage.setItem(LAUNCH_STORAGE_KEY, JSON.stringify({ id: message.launch, session_id: message.session_id, setup: message.launch_setup }));
-        applyLaunchSetup(message.launch_setup);
       }
       this.pendingResume = false;
       this.inFlightCommand = null;
@@ -563,6 +583,15 @@ export class GameSocketController {
     gameStore.endFastForward();
     gameStore.endCommand();
     gameStore.newGamePending = false;
+    if (message.session_ended) {
+      // The server stopped this game; resuming or redealing its launch would hide why.
+      this.inFlightCommand = null;
+      this.launchId = null;
+      clearResumeCredentials();
+      if (browser) sessionStorage.removeItem(LAUNCH_STORAGE_KEY);
+      gameStore.markResumeFailed(message.message);
+      return;
+    }
     gameStore.setError(message.message);
   }
 
@@ -771,6 +800,10 @@ export function sendSetStops(): void {
 
 export function sendPassTurn(): boolean {
   return controller.sendPassTurn();
+}
+
+export function sendRetryMirror(): void {
+  controller.sendRetryMirror();
 }
 
 export function sendTransferPilot(targetViewerId: string): void {

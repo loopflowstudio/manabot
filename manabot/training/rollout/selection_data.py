@@ -15,7 +15,8 @@ from typing import Literal
 from pydantic import ConfigDict, Field, model_validator
 import torch
 
-from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.backends.torch.arrays import device_of, on_device
+from manabot.backends.torch.checkpoint import load_checkpoint, load_metadata
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.failures import ScalarCapture
 from manabot.env.match import Match
@@ -23,7 +24,6 @@ from manabot.env.observation import ACTION_TYPE_DIM, ObservationSpace
 from manabot.infra.config import MatchConfig
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
-from manabot.model.admission import admit_observation
 from manabot.model.world import validate_agent_setup
 from manabot.policy.prepare import reference_distribution
 from manabot.training.regime import SelectionGameSpec, Strict
@@ -141,8 +141,12 @@ def collect_selection_game(
             encoded = space.encode(raw)
             if len(frame.offers) != int(encoded["actions_valid"].sum()):
                 raise ValueError("selection policy cannot encode every legal offer")
-            tensors = admit_observation(
-                agent, {k: torch.as_tensor(v).unsqueeze(0) for k, v in encoded.items()}
+            tensors = on_device(
+                agent.prepare(
+                    {key: value[None] for key, value in encoded.items()},
+                    inference=True,
+                ),
+                device_of(agent),
             )
             logits, value = agent(tensors)
             probabilities = logits.softmax(-1)
@@ -159,9 +163,7 @@ def collect_selection_game(
                 actor=actor,
                 observation_identity=observation.viewer_state_hash,
                 action=action,
-                action_type=int(
-                    tensors["actions"][0, action, :ACTION_TYPE_DIM].argmax()
-                ),
+                action_type=int(encoded["actions"][action, :ACTION_TYPE_DIM].argmax()),
                 value=float(value.item()),
                 action_probability=float(probabilities[0, action]),
                 entropy=float(-(probabilities * logs).sum()),
@@ -288,7 +290,7 @@ def collect_selection(
     out.parent.mkdir(parents=True, exist_ok=True)
     journals = Path(tempfile.mkdtemp(prefix=f"{out.stem}-games-", dir=out.parent))
     base_match = Match(match)
-    payload = torch.load(policy, map_location="cpu", weights_only=False)
+    payload = load_metadata(policy)
     weights = payload.get("bc", {}).get("weights")
     if weights not in {"raw", "ema"}:
         raise ValueError("selection checkpoint must identify raw or EMA weights")

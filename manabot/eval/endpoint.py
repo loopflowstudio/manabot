@@ -8,6 +8,7 @@ one-Match callback Etude plays.
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from multiprocessing.connection import Client
 from multiprocessing.managers import BaseManager
 from pathlib import Path
 import secrets
@@ -82,11 +83,21 @@ class _CallbackSupervisor:
 
 
 def _serve(server: Any) -> None:
-    try:
-        server.serve_forever()
-    except SystemExit:
-        # BaseManager's process-oriented server exits even when hosted in a thread.
-        pass
+    # Server.serve_forever starts an unjoinable accepter that retries a
+    # closed listener forever. Own that loop so this thread has a lifetime.
+    while not server.stop_event.is_set():
+        try:
+            connection = server.listener.accept()
+        except OSError:
+            if server.stop_event.is_set():
+                return
+            raise
+        if server.stop_event.is_set():
+            connection.close()
+            return
+        threading.Thread(
+            target=server.handle_request, args=(connection,), daemon=True
+        ).start()
 
 
 @contextmanager
@@ -108,14 +119,25 @@ def serve_callbacks(runtime: InferenceRuntime) -> Iterator[InferenceEndpoint]:
         )
         # BaseManager's server is untyped.
         server: Any = ServerManager(address=address, authkey=authkey).get_server()
-        thread = threading.Thread(target=_serve, args=(server,), daemon=True)
+        server.stop_event = threading.Event()
+        thread = threading.Thread(
+            target=_serve,
+            args=(server,),
+            name="evaluation-callback-accept",
+            daemon=True,
+        )
         thread.start()
+        endpoint = InferenceEndpoint(address, authkey, runtime.execution)
         try:
-            yield InferenceEndpoint(address, authkey, runtime.execution)
+            yield endpoint
         finally:
             server.stop_event.set()
+            # Wake accept before closing its socket; close from another thread
+            # need not interrupt a blocking accept on every platform.
+            with Client(address):
+                pass
+            thread.join()
             server.listener.close()
-            thread.join(timeout=1)
 
 
 @contextmanager

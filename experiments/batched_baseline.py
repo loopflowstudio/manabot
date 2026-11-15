@@ -21,7 +21,7 @@ from etude.train.tracking import track
 from pydantic import BaseModel, Field
 
 from manabot.experiment.setup import machine_setup
-from manabot.infra.config import ModelConfig
+from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.recipes.builders import PACK, move_learning
 from manabot.sim.matchup import selected_match
 from manabot.training.learning import IterationSchedule
@@ -39,6 +39,9 @@ class BatchedConfig(BaseModel):
 def train(config: BatchedConfig) -> None:
     inputs = SelfPlay(
         match=selected_match(),
+        # The family was frozen reading input v9; it keeps that input and its
+        # digests while fresh recipes read v11.
+        observation=ObservationConfig(policy_input_version=9),
         model=ModelConfig(
             world=PACK, value_aggregation="masked_mean", attention_layers=2
         ),

@@ -36,6 +36,21 @@ class BeliefSummary:
 
 
 @dataclass(frozen=True)
+class MirrorSummary:
+    algorithm: str
+    worlds: int
+    depth: int
+    alpha: float
+    beta: float
+    rollouts: int
+    decision_seconds: float
+    seconds: float
+    seed: str  # Hexadecimal so browser JSON preserves all 64 bits.
+    prior: list[float]
+    receipt_sha256: str
+
+
+@dataclass(frozen=True)
 class BotDecision:
     action: int
     probabilities: list[float] = field(default_factory=list)
@@ -45,6 +60,7 @@ class BotDecision:
     unavailable: str | None = None
     factors: list[PolicyFactor] = field(default_factory=list)
     belief: BeliefSummary | None = None
+    mirror: MirrorSummary | None = None
 
 
 class FlatSearchPolicy:
@@ -143,11 +159,7 @@ def choose_bot(
         if not isinstance(retained, BotDecision) or retained.action != action:
             raise ValueError("Bot outputs do not describe the selected action")
         return retained
-    probabilities = (
-        [1.0 / count] * count
-        if isinstance(policy, RandomPolicy)
-        else [float(index == action) for index in range(count)]
-    )
+    probabilities = [1.0 / count] * count if isinstance(policy, RandomPolicy) else []
     return BotDecision(
         action=action,
         probabilities=probabilities,

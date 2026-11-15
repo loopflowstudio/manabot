@@ -67,7 +67,7 @@ written under `~/.etude/track` (moved by `ETUDE_HOME`):
     failures/             private replay evidence, created when a game fails
 ```
 
-The policy a run trained is its last checkpoint: `out/policies/00003200-ema.pt`
+The policy a run trained is its last checkpoint: `out/policies/00003200-ema.safetensors`
 for a recipe that reached update 3200. `state/` reads with `json` and
 `torch.load`, without Etude or manabot. Read it through `current.json`: a save
 folder it does not name is being written or waiting to be removed.
@@ -168,11 +168,14 @@ float32 self-play and requires Torch 2.15 or newer: on an Apple M2, Torch
 2.10–2.13 compute wrong MPS linear-layer weight gradients, which gradient
 clipping then applies (see `manabot/training/mps.py`). The repository lock
 installs 2.15; with an older Torch, an MPS run stops before training with a
-message naming both versions. An unavailable device fails explicitly. BF16 forwards are available on CUDA and MPS; TF32 is CUDA-only. Belief inputs and frozen opponents are unsupported
-on MPS. Evaluation and search stay on CPU. A separate
-[MLX backend](../manabot/backends/mlx.md) of the policy and the damped update
-reads the same checkpoints, converted to the shared container, for measurement
-on Apple Silicon; no recipe runs on it. This support makes no speed or strength claim.
+message naming both versions. An unavailable device fails explicitly. Float64
+loss and diagnostic arithmetic runs on the host with gradients preserved; no
+automatic operator fallback is enabled. Precision follows the
+[one rule for every GPU backend](#reduced-precision); TF32 is CUDA-only. Belief
+inputs and frozen opponents are unsupported on MPS. Evaluation and search stay
+on CPU. A separate [MLX backend](../manabot/backends/mlx.md) of the policy and
+the damped update reads the same policy files for measurement on Apple
+Silicon; no recipe runs on it. This support makes no speed or strength claim.
 
 ### Saved regimes
 
@@ -331,7 +334,7 @@ The pieces that are manabot's:
 | `self_play_games(settings, run, counts)` | A context manager around the `Collector` (`open_collector` in `manabot.training.rollout.collection`), the game-error ledger and failure capture under `run.out`. Streams, sampling and minibatch order are seeded from `run.seed` and the update the attempt starts at, so a resumed loop plays fresh, reproducible games. |
 | `step(settings, learner, ema, collector, counts, rng, out=)` | One update: collect a batch with the behavior policy, `learn` from it, and return the metric row. The learner, Adam, EMA and `counts` are updated in place. |
 | `learn` | The update the learning record selects: `update_damped_iteration` for `DampedPolicyLearning`, `update_iteration` for `Learning` ([training loops](training-loop.md#the-updates-we-maintain)), then the EMA. Rates come from the completed update count alone and never from the target ([schedules and clocks](#schedules-and-clocks)). |
-| `publish(settings, run, learner, ema, counts)` | Writes world-bound raw and EMA policies at this update into `run.out / "policies"` (`NNNNNNNN-raw.pt`, `-ema.pt`), each carrying `checkpoint_source`, and records the one the loop returns with `run.checkpoint(path)`. A file is written once; publishing an update again keeps its file and its one record. |
+| `publish(settings, run, learner, ema, counts)` | Writes world-bound raw and EMA policies at this update into `run.out / "policies"` (`NNNNNNNN-raw.safetensors`, `-ema.safetensors`), each carrying `checkpoint_source`, and records the one the loop returns with `run.checkpoint(path)`. A file is written once; publishing an update again keeps its file and its one record. |
 
 The loop takes Etude's `Run`; there is no untracked path through it. The
 updates and pieces it calls need no run
@@ -416,7 +419,7 @@ The defaults are a pilot's: one policy update, three games and a small
 sampler. Each stage's files are in its own run:
 
 ```text
-~/.etude/track/belief/policy@0/out/policies/00000001-raw.pt
+~/.etude/track/belief/policy@0/out/policies/00000001-raw.safetensors
 ~/.etude/track/belief/sampler@0/out/histories.json
 ~/.etude/track/belief/sampler@0/out/belief.pt
 ```
@@ -580,7 +583,7 @@ used by passing its file where a recipe would pass the one its run was started
 from:
 
 ```python
-histories = collect_belief(Path("inputs/producer-ema.pt"), run.out / "histories.json",
+histories = collect_belief(Path("inputs/producer-ema.safetensors"), run.out / "histories.json",
                            match=match, games=256, seed=run.seed)
 ```
 
@@ -827,8 +830,10 @@ checkpoints; experiment results are published with
 TrainingRun manifests remain readable as `StoredArtifact`
 (`manabot.infra.artifacts`), which `load_checkpoint` accepts directly, caching
 under `MANABOT_ARTIFACT_CACHE` (default `.runs/artifact-cache`) and rehashing
-on every hit. Storage never relaxes world, architecture or setup admission;
-load only trusted producers' Torch files.
+on every hit. Storage never relaxes world, architecture or setup admission.
+A policy file is a [safetensors container](../manabot/backends/README.md#policy-checkpoints)
+of arrays and JSON; policies saved by earlier revisions are `.pt` pickles,
+which still load, so load only trusted producers' `.pt` files.
 
 ## Numerical health
 

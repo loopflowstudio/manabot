@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import NumericalError
@@ -54,7 +55,9 @@ def test_resume_keeps_adam_ema_counts_and_immutable_policies(
     ) as run:
         final = self_play(settings, run, updates=2)
     assert earlier.read_bytes() == before
-    assert final.name == ("00000002-raw.pt" if averaging is None else "00000002-ema.pt")
+    assert final.name == (
+        "00000002-raw.safetensors" if averaging is None else "00000002-ema.safetensors"
+    )
     with track(
         experiment="test",
         run="policy",
@@ -72,13 +75,13 @@ def test_resume_keeps_adam_ema_counts_and_immutable_policies(
         counts = run.resume(**objects, extra=Counts())
         assert counts.updates == 2 and counts.optimizer_updates > 0
         assert counts.training_seconds > 0 and learner.optimizer.state
-        saved = torch.load(final.with_name("00000002-raw.pt"), weights_only=False)[
-            "model_state_dict"
-        ]
+        saved = load_checkpoint(final.with_name("00000002-raw.safetensors"))[
+            0
+        ].state_dict()
         for name, value in learner.agent.state_dict().items():
             torch.testing.assert_close(value, saved[name], rtol=0, atol=0)
     if ema is not None:
-        averaged = torch.load(final, weights_only=False)["model_state_dict"]
+        averaged = load_checkpoint(final)[0].state_dict()
         for name, value in ema.state_dict().items():
             torch.testing.assert_close(value, averaged[name], rtol=0, atol=0)
     recorded = read(tmp_path / "track", "test", "policy")
@@ -132,7 +135,7 @@ def test_stop_keeps_registered_counts_at_the_completed_boundary(
         directory=tmp_path / "track",
         resume=True,
     ) as run:
-        assert self_play(settings, run, updates=2).name == "00000002-raw.pt"
+        assert self_play(settings, run, updates=2).name == "00000002-raw.safetensors"
 
 
 @pytest.mark.parametrize("capture_failure", [False, True])
@@ -176,7 +179,7 @@ def test_numerical_failure_keeps_previous_policy_and_private_diagnostics(
             self_play(settings, run, updates=2)
     assert policy.read_bytes() == original
     assert (tmp_path / "out/state/current.json").read_bytes() == pointer
-    assert not (tmp_path / "out/policies/00000002-raw.pt").exists()
+    assert not (tmp_path / "out/policies/00000002-raw.safetensors").exists()
     if capture_failure:
         assert any("incident capture failed" in note for note in caught.value.__notes__)
     else:

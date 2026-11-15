@@ -11,6 +11,7 @@ import numpy as np
 from numpy.typing import NDArray
 import torch
 
+from manabot.backends.torch.arrays import device_of, on_device, to_numpy
 from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.encoding import BeliefEncodingSchema, encode_belief
 from manabot.belief.range import BeliefError, BeliefState
@@ -19,7 +20,6 @@ from manabot.belief.state import (
     BeliefUpdate,
     ViewerHistory,
 )
-from manabot.model.inference import admit_on_device
 from managym.decision import Command
 from managym.possible_worlds import PossibleWorldSpace
 
@@ -169,7 +169,13 @@ class Manabot:
         observation.update(
             view.to_torch_observation(batch_size=1, device=torch.device("cpu"))
         )
-        observation = admit_on_device(self.policy_value, observation)
+        observation = on_device(
+            self.policy_value.prepare(
+                {key: to_numpy(value) for key, value in (observation).items()},
+                inference=True,
+            ),
+            device_of(self.policy_value),
+        )
         was_training = self.policy_value.training
         self.policy_value.eval()
         inference_started = time.perf_counter()
@@ -187,9 +193,7 @@ class Manabot:
         scalar_value = np.float32(value[0].detach().cpu().item())
         legal_action_indexes = tuple(
             int(index)
-            for index in torch.nonzero(
-                observation["actions_valid"][0] > 0, as_tuple=False
-            )
+            for index in torch.nonzero(observation.legal[0], as_tuple=False)
             .flatten()
             .cpu()
             .tolist()

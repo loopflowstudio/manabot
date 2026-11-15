@@ -11,7 +11,6 @@ from manabot.belief.range import BeliefError
 from manabot.belief.state import CompatibleDealBeliefModel, ViewerHistory
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model.admission import admit_observation
 from managym.decision import Observation
 from managym.possible_worlds import PossibleWorldSpace
 from tests.belief.support import (
@@ -20,6 +19,7 @@ from tests.belief.support import (
     fixture_manabot,
     fixture_space,
 )
+from tests.model.prepared_routes import device_input
 
 
 def test_autonomous_and_exact_override_share_policy_value_bytes() -> None:
@@ -48,7 +48,7 @@ def test_belief_enabled_agent_has_no_silent_fallback() -> None:
     )
 
     with pytest.raises(ValueError, match="missing inputs"):
-        admit_observation(agent, dict(decision.observation))
+        device_input(agent, dict(decision.observation))
 
 
 def test_world_space_mismatch_fails_before_inference() -> None:

@@ -19,7 +19,12 @@ import numpy as np
 from pydantic import Field
 import torch
 
-from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.backends.torch.arrays import device_of, on_device, to_numpy
+from manabot.backends.torch.checkpoint import (
+    BACKEND as TORCH_BACKEND,
+    load_checkpoint,
+    load_metadata,
+)
 from manabot.env.observation import ActionEnum
 from manabot.eval.evaluation import EvaluationResult, evaluate_local
 from manabot.eval.local import checkpoint_request
@@ -29,7 +34,6 @@ from manabot.experiment.checkpoint_evaluation import checkpoints
 from manabot.experiment.records import Attempt, ExperimentRun
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
-from manabot.model.admission import admit_observation
 from manabot.model.world import validate_agent_setup
 from manabot.sim.execution import EvalExecution
 from manabot.sim.matchup import selected_decks
@@ -156,9 +160,15 @@ def inspect_policy(path: Path, cases: list[Case], updates: int) -> PolicySnapsho
         managym.authored_deck_setup(PACK, key) for key in ("ur_lessons", "gw_allies")
     ]
     validate_agent_setup(agent, configs)
-    batch = admit_observation(
-        agent,
-        {key: torch.cat([case.obs[key] for case in cases]) for key in cases[0].obs},
+    batch = on_device(
+        agent.prepare(
+            {
+                key: to_numpy(torch.cat([case.obs[key] for case in cases]))
+                for key in cases[0].obs
+            },
+            inference=True,
+        ),
+        device_of(agent),
     )
     logits, values = agent(batch)
     probabilities = logits.softmax(-1)
@@ -173,14 +183,42 @@ def inspect_policy(path: Path, cases: list[Case], updates: int) -> PolicySnapsho
     scores = []
     for row, case in enumerate(cases):
         obs = case.obs
-        single, value = agent(admit_observation(agent, obs))
+        single, value = agent(
+            on_device(
+                agent.prepare(
+                    {key: to_numpy(value) for key, value in (obs).items()},
+                    inference=True,
+                ),
+                device_of(agent),
+            )
+        )
         p = single.softmax(-1)
         count = int(obs["actions_valid"].sum())
         order = torch.arange(count - 1, -1, -1)
         offers, offer_value = agent(
-            admit_observation(agent, reorder_offers(obs, order))
+            on_device(
+                agent.prepare(
+                    {
+                        key: to_numpy(value)
+                        for key, value in (reorder_offers(obs, order)).items()
+                    },
+                    inference=True,
+                ),
+                device_of(agent),
+            )
         )
-        objects, object_value = agent(admit_observation(agent, reorder_objects(obs)))
+        objects, object_value = agent(
+            on_device(
+                agent.prepare(
+                    {
+                        key: to_numpy(value)
+                        for key, value in (reorder_objects(obs)).items()
+                    },
+                    inference=True,
+                ),
+                device_of(agent),
+            )
+        )
         errors.extend(
             [
                 float((p[0] - probabilities[row]).abs().max()),
@@ -540,11 +578,11 @@ def report_recipe(
     try:
         exported = [
             PolicyPoint(path, int(path.stem.split("-")[0]), file_sha256(path))
-            for path in sorted((directory / "policies").glob("*-raw.pt"))
+            for path in sorted((directory / "policies").glob("*-raw.safetensors"))
         ]
         if not exported or exported[0].updates != 0 or exported[-1].updates != updates:
             raise ValueError("missing initial or endpoint checkpoint")
-        payload = torch.load(exported[-1].path, weights_only=False, map_location="cpu")
+        payload = load_metadata(exported[-1].path)
         counts = Counts.model_validate(payload.get("bc", {}).get("counts"))
         if counts.updates != updates or counts.optimizer_updates == 0:
             raise ValueError(
@@ -558,7 +596,7 @@ def report_recipe(
         deadline = time.time() + seconds
         for point in (exported[0], exported[-1]):
             request = checkpoint_request(
-                point.path, opponent="random", deal_seeds=deals
+                point.path, opponent="random", deal_seeds=deals, backend=TORCH_BACKEND
             )
             target = directory / "evaluation" / f"{point.updates:08d}"
             if (target / "evaluation.json").exists():

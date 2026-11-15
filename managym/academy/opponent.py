@@ -1,214 +1,127 @@
-"""Trained opponents: the checkpoint catalog, chosen by exact SHA-256.
+"""Server-scoped selectable policies. Providers own artifact discovery and admission.
 
-The catalog lists checkpoints the researcher trained: everything under the
-manabot runs directory (``MANABOT_RUNS_DIR``, default ``./.runs``) plus the
-files, run directories and Tournament files in ``ACADEMY_PLAY_CHECKPOINTS``
-(``os.pathsep``-separated). The installed bot extension reads and
-checks them; incompatible entries stay listed with the mismatch so the table
-can say why they cannot play (``opponent_catalog``, ``catalog_opponent``).
-
-Paths are server configuration; the browser only ever names a digest. The
-extension owns training dependencies; ordinary play needs no extension.
+The historical identity envelope (name/producer/sha256) remains readable by
+existing tables and traces; new records bind the complete runtime descriptor.
 """
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
-import hashlib
-import os
-from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from dataclasses import dataclass, replace
+from typing import Any
+
+from managym.mirror_search import (
+    MirrorSearch,
+    descriptor_mirror_unavailable,
+    mirror_descriptor,
+)
+from managym.policy import PolicyDescriptor, PolicyRegistry
 
 from . import advice
-from .extensions import CheckpointSummary, bot_extension
-from .villain import NATIVE_WATCH_PLAYERS
 
-if TYPE_CHECKING:
-    import managym
+_registry: PolicyRegistry | None = None
 
-OpponentSource = Literal["path", "runs", "tournament"]
+
+def policy_registry() -> PolicyRegistry:
+    global _registry
+    if _registry is None:
+        _registry = PolicyRegistry()
+        _registry.discover()
+    return _registry
+
+
+def set_policy_registry(registry: PolicyRegistry | None) -> None:
+    global _registry
+    _registry = registry
 
 
 @dataclass(frozen=True)
 class Opponent:
-    name: str
-    producer: str
-    sha256: str
-    checkpoint: Path
-    deterministic: bool
-    source: OpponentSource
-    world: str | None = None
-    model: str | None = None
-    step: int | None = None
-    # Sorted ``{"deck", "sideboard"}`` setups the checkpoint was bound to.
-    setups: list[dict] = field(default_factory=list)
+    descriptor: PolicyDescriptor
 
-    def identity(self) -> dict:
-        """The table protocol's ``OpponentIdentity`` fields."""
-        return {
-            "name": self.name,
-            "producer": self.producer,
-            "sha256": self.sha256,
-        }
-
-    def record(self) -> dict:
-        """Everything a trace needs to say exactly which bot played."""
-        return {
-            **self.identity(),
-            "source": self.source,
-            "world": self.world,
-            "model": self.model,
-            "step": self.step,
-            "checkpoint": str(self.checkpoint),
-            "deterministic": self.deterministic,
-        }
-
-
-# ---------------------------------------------------------------------------
-# Checkpoint catalog
-# ---------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class CatalogEntry:
-    """One selectable (or refused) trained opponent, as the table lists it."""
-
-    sha256: str
-    name: str
-    producer: str
-    source: OpponentSource
-    world: str | None = None
-    model: str | None = None
-    parameters: int | None = None
-    step: int | None = None
-    setups: list[dict] = field(default_factory=list)
-    available: bool = True
-    reason: str | None = None
-
-    @classmethod
-    def from_summary(cls, summary: CheckpointSummary) -> CatalogEntry:
-        return cls(
-            sha256=summary.sha256,
-            name=summary.label,
-            producer=summary.producer,
-            source=summary.source,
-            world=summary.world,
-            model=summary.model,
-            parameters=summary.parameters,
-            step=summary.step,
-            setups=[_setup_record(deck) for deck in summary.setups],
-            available=summary.compatible,
-            reason=summary.incompatibility,
+    @property
+    def name(self) -> str:
+        aliases = sorted(
+            alias
+            for alias, key in policy_registry().aliases.items()
+            if key == self.descriptor.id
+            and alias.casefold() != self.descriptor.name.casefold()
         )
+        return " · ".join((self.descriptor.name, *aliases))
+
+    def identity(self, mirror: MirrorSearch | None = None) -> dict[str, str]:
+        base = replace(self.descriptor, name=self.name)
+        descriptor = base if mirror is None else mirror_descriptor(base, mirror)
+        return {
+            "name": descriptor.name,
+            "producer": descriptor.provider,
+            "sha256": descriptor.id,
+            "bot_id": f"policy:{descriptor.id}",
+            **({"base_sha256": self.descriptor.id} if mirror is not None else {}),
+        }
+
+    def record(self, mirror: MirrorSearch | None = None) -> dict[str, Any]:
+        descriptor = (
+            self.descriptor
+            if mirror is None
+            else mirror_descriptor(self.descriptor, mirror)
+        )
+        return {
+            **self.identity(mirror),
+            "schema": "managym-policy-1",
+            "policy": descriptor.record(),
+        }
 
 
-def _setup_record(deck: managym.Deck) -> dict[str, dict[str, int]]:
-    """A bound seat in the catalog's ``{"deck", "sideboard"}`` wire shape."""
-    return {"deck": deck.main, "sideboard": deck.sideboard}
-
-
-def checkpoint_sources() -> list[Path]:
-    value = os.environ.get("ACADEMY_PLAY_CHECKPOINTS", "")
-    return [Path(part).expanduser() for part in value.split(os.pathsep) if part]
-
-
-def runs_directory() -> Path:
-    return Path(os.environ.get("MANABOT_RUNS_DIR") or Path.cwd() / ".runs")
-
-
-def opponent_catalog() -> dict:
-    """Every trained opponent this server can name.
-
-    ``catalog_error`` explains a catalog that could not be read at all (for
-    example, a play-only install without Torch).
-    """
-
-    extension = bot_extension()
-    capabilities = {
-        "advice_available": advice.FIXTURE_PATH.is_file(),
-        "extension": extension.name if extension else None,
-        "watch_players": [
-            *NATIVE_WATCH_PLAYERS,
-            *(extension.watch_players if extension else ()),
-        ],
-    }
-    if extension is None:
-        return {**capabilities, "opponents": [], "catalog_error": None}
+def opponent_catalog() -> dict[str, Any]:
+    entries = []
+    error = None
+    provider_names: list[str] = []
     try:
-        found, missing = extension.discover(checkpoint_sources(), runs_directory())
-    except (ImportError, OSError, ValueError) as error:
-        return {
-            **capabilities,
-            "opponents": [],
-            "catalog_error": f"Checkpoints could not be listed: {error}",
-        }
-    entries = [CatalogEntry.from_summary(summary) for summary in found]
-    entries.extend(
-        CatalogEntry(
-            sha256=entry.sha256,
-            name=entry.label,
-            producer=entry.producer,
-            source="tournament",
-            available=False,
-            reason=entry.reason,
-        )
-        for entry in missing
-    )
+        registry = policy_registry()
+        provider_names = sorted(registry.providers)
+        error = "; ".join(registry.discovery_errors) or None
+        for descriptor in registry.descriptors():
+            record = descriptor.record()
+            search_reason = descriptor_mirror_unavailable(descriptor)
+            entries.append(
+                {
+                    "sha256": descriptor.id,
+                    "name": Opponent(descriptor).name,
+                    "producer": descriptor.provider,
+                    "group": descriptor.group or descriptor.provider,
+                    "details": record["details"],
+                    "available": descriptor.incompatibility is None,
+                    "reason": descriptor.incompatibility,
+                    "supports_search": search_reason is None,
+                    "search_reason": search_reason,
+                    "policy": record,
+                }
+            )
+    except (ImportError, OSError, ValueError) as exc:
+        error = f"Policies could not be listed: {exc}"
     return {
-        **capabilities,
-        "opponents": [asdict(entry) for entry in entries],
-        "catalog_error": None,
+        "opponents": entries,
+        "catalog_error": error,
+        "advice_available": advice.FIXTURE_PATH.is_file(),
+        "extension": ", ".join(provider_names) or None,
+        "watch_players": ["random", "search"],
     }
 
 
-def catalog_opponent(sha256: str) -> Opponent | None:
-    """Resolve a catalog digest to a verified, admissible opponent.
-
-    Returns ``None`` when no catalog checkpoint has these bytes. Raises
-    ``ValueError`` naming the mismatch when the checkpoint is incompatible
-    with the running engine or its bytes changed since listing.
-    """
-
-    extension = bot_extension()
-    if extension is None:
-        return None
+def catalog_opponent(key: str) -> Opponent | None:
     try:
-        found, _ = extension.discover(checkpoint_sources(), runs_directory())
-    except ImportError as error:
+        descriptor = policy_registry().descriptor(key)
+    except ValueError:
+        matches = [
+            d
+            for d in policy_registry().descriptors()
+            if d.artifacts.get("actor") == key
+        ]
+        if len(matches) != 1:
+            return None
+        descriptor = matches[0]
+    if descriptor.incompatibility:
         raise ValueError(
-            "Trained checkpoints need the training dependencies on this server."
-        ) from error
-    summary = next((entry for entry in found if entry.sha256 == sha256), None)
-    if summary is None:
-        return None
-    if summary.incompatibility is not None:
-        raise ValueError(
-            f"{summary.label} cannot play here: {summary.incompatibility}."
+            f"{descriptor.name} cannot play here: {descriptor.incompatibility}"
         )
-    opponent = Opponent(
-        name=summary.label,
-        producer=summary.producer,
-        sha256=summary.sha256,
-        checkpoint=summary.path,
-        # Trained policies play as sampled during training.
-        deterministic=False,
-        source=summary.source,
-        world=summary.world,
-        model=summary.model,
-        step=summary.step,
-        setups=[_setup_record(deck) for deck in summary.setups],
-    )
-    verify_checkpoint(opponent)
-    return opponent
-
-
-def verify_checkpoint(opponent: Opponent) -> None:
-    """Refuse an opponent whose checkpoint bytes are missing or no longer pinned."""
-    try:
-        actual = hashlib.sha256(opponent.checkpoint.read_bytes()).hexdigest()
-    except OSError as exc:
-        raise ValueError("The selected opponent checkpoint is unavailable.") from exc
-    if actual != opponent.sha256:
-        raise ValueError(
-            "The selected opponent checkpoint changed; restore the pinned artifact."
-        )
+    return Opponent(descriptor)

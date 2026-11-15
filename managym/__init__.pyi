@@ -29,14 +29,16 @@ class ObservationArrayLayout(TypedDict):
     element: NotRequired[ObservationValueLayout]
 
 def observation_layout(
-    *, policy_history: bool = False, turn_state: bool = False
+    *, policy_history: bool = False, turn_state: bool = True, legacy: bool = False
 ) -> dict[str, ObservationArrayLayout]:
     """Column names, value encodings and fixed extents of each encoded array.
 
     Keys match `encode_observation` and the vector env buffers; a None extent
     is a caller-selected capacity. `policy_history` selects the public history
-    rows of `events` instead of raw events; `turn_state` adds policy input
-    v10's `player_turn_state` and `card_turn_state`. Seats are viewer-relative.
+    rows of `events` instead of raw events; `turn_state` adds
+    `player_turn_state` and `card_turn_state` (inputs v10 and v11); `legacy`
+    selects the deprecated v9/v10 object rows (removed in 0.4.0) instead of
+    input v11's one-token rows and `stack`. Seats are viewer-relative.
     No game or buffer is created.
     """
 
@@ -299,6 +301,20 @@ class HandSnapshot:
     @property
     def cards(self) -> dict[str, int]: ...
 
+class ObservationRead:
+    """Identity of a viewer-safe encoded row at one native seat's read boundary."""
+
+    @property
+    def slot(self) -> int: ...
+    @property
+    def player(self) -> int: ...
+    @property
+    def game_id(self) -> int: ...
+    @property
+    def seed(self) -> int: ...
+    @property
+    def revision(self) -> int: ...
+
 class VectorEnv:
     def __init__(
         self,
@@ -346,6 +362,13 @@ class VectorEnv:
     def current_game_seeds(self) -> list[int]: ...
     def current_game_generations(self) -> list[int]:
         """Opaque process-local game identities; every reset or replacement changes them."""
+    def write_observations_for_players(
+        self,
+        players: list[int],
+        buffers: dict[str, np.ndarray],
+        action_overflow: Literal["error", "first-legal"] = "error",
+    ) -> list[ObservationRead]:
+        """Write every fixed-seat view; discard all output rows after an error."""
     def hand_snapshots(self, players: list[int]) -> list[HandSnapshot]:
         """One native seat per slot; after done, snapshots describe the reset game."""
     def current_action_summaries(self) -> list[tuple[int, str]]: ...
@@ -706,17 +729,40 @@ class CastPermission:
     waterbend: bool
     foretold: bool
 
+class ObservationCharacteristics:
+    """Viewer-safe characteristics. P/T and keywords are effective on the battlefield.
+
+    Rules text and mana cost describe the definition; this is not the full
+    layered rules view. Values are read-only snapshots of the native record.
+    """
+
+    name: str
+    text_box: str
+    power: int
+    toughness: int
+    is_legendary: bool
+    is_ally: bool
+    is_lesson: bool
+    ward_cost: int
+    kicker_cost: int
+    card_types: CardTypes
+    keywords: Keywords
+    mana_cost: ManaCost
+
 class Card:
-    """A card in any zone. On the battlefield every characteristic field
-    (name, power/toughness, card types, legendary, Ally, Lesson, ward,
-    keywords) reads the engine's layered characteristics; elsewhere the
-    printed card. Identity, token status and casting costs are printed."""
+    """A visible card outside the battlefield and stack.
+
+    Flat characteristic accessors are deprecated aliases, removed in 0.4.0.
+    """
+
+    characteristics: ObservationCharacteristics
 
     zone: ZoneEnum
     owner_id: int
     id: int
     registry_key: int
     name: str
+    text_box: str
     power: int
     toughness: int
     is_token: bool
@@ -788,6 +834,11 @@ class CopyEffect:
     exceptions: list[ContinuousEffect]
 
 class Permanent:
+    characteristics: ObservationCharacteristics
+    # Underlying object identity; live/normalized observations always have it.
+    object_id: int | None
+    owner_id: int
+    is_token: bool
     colors: list[str] | None
     keyword_counter_timestamps: dict[str, int]
     transforms: int
@@ -799,6 +850,7 @@ class Permanent:
     is_summoning_sick: bool
     plus1_counters: int
     cant_be_blocked_this_turn: bool
+    # Derived characteristic aliases warn; removed in 0.4.0.
     power: int
     toughness: int
     is_animated: bool
@@ -830,6 +882,9 @@ class Permanent:
     timestamp: int | None
     # The copy effect that made it a copy; None for an original.
     copy: CopyEffect | None
+    @property
+    @deprecated("use characteristics and object_id/owner_id/is_token; removed in 0.4.0")
+    def card(self) -> Card | None: ...
 
 class Turn:
     turn_number: int
@@ -864,6 +919,12 @@ class StackTarget:
     card_id: int | None
 
 class StackObject:
+    # Spells own characteristics; abilities own only their source reference.
+    characteristics: ObservationCharacteristics | None
+    object_id: int | None
+    owner_id: int | None
+    is_copy: bool | None
+    announced_x: int | None
     description: str | None
     stack_object_id: int
     kind: StackObjectKindEnum
@@ -877,6 +938,11 @@ class StackObject:
     x: int
     # Keywords a static grants this spell on the stack.
     granted_keywords: Keywords | None
+    # Whether a spell's kicker cost was paid.
+    kicked: bool
+    @property
+    @deprecated("use characteristics and object_id/owner_id/is_copy; removed in 0.4.0")
+    def card(self) -> Card | None: ...
 
 class EventData:
     event_type: EventTypeEnum
@@ -910,6 +976,14 @@ class Observation:
     stack_objects: List[StackObject]
     recent_events: List[EventData]
 
+    def encode_policy_history(
+        self, capacity: int, object_indexes: dict[int, int]
+    ) -> list[list[float]]: ...
+    # Deprecated input v9/v10 views (removed in 0.4.0).
+    def legacy_card_lists(self) -> tuple[list[Card], list[Card]]: ...
+    def encode_legacy_policy_history(
+        self, capacity: int, cards_per_player: int
+    ) -> list[list[float]]: ...
     def validate(self) -> bool: ...
     def toJSON(self) -> str: ...
 

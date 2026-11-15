@@ -139,6 +139,12 @@ at the source each run pinned; ac601834d is the last revision carrying them.
 
 ## Index
 
+[One token per game thing, MTG-344](reports/one_token_layout.md): **completed
+2026-11-14**, exploratory (USD 2.65). Input v10 rows and input v11's one token
+per game thing are indistinguishable against the heuristic at matched updates,
+with matched throughput per learner transition. Evidence is under
+`experiments/data/one_token_layout/`.
+
 [Live-token attention, MTG-319](reports/live_token_attention.md): **completed
 2026-11-12**, exploratory pilot on one L4 (USD 0.24). Attending over valid objects
 only, on top of bucketed shapes, takes the w384l8 learner step from 386 ms to

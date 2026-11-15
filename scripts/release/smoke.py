@@ -104,20 +104,36 @@ def main() -> None:
         check=True,
         timeout=180,
     )
-    policy, _ = load_checkpoint(
-        str(output / "etude/track/smoke/out/policies/00000002-raw.pt")
-    )
+    checkpoint_path = output / "etude/track/smoke/out/policies/00000002-raw.safetensors"
+    policy, _ = load_checkpoint(str(checkpoint_path))
     assert not policy.training
     extension = bot_extension()
     assert extension is not None and extension.name == "manabot", (
         "Installed Academy bot entry point is missing"
     )
-    assert extension.watch_players == ("greedy", "heuristic")
-    checkpoints, missing = extension.discover(
-        [output / "etude/track/smoke/out/policies/00000002-raw.pt"], runs_dir=output / "no-other-runs"
+    from managym.policy import PolicyRegistry, PolicySource
+
+    registry = PolicyRegistry()
+    assert "manabot" in registry.providers and "qwen" in registry.providers
+    registry.discover(
+        [
+            PolicySource(
+                "manabot",
+                {
+                    "paths": [str(checkpoint_path)],
+                    "runs_dir": str(output / "no-other-runs"),
+                },
+            )
+        ]
     )
-    assert not missing, missing
-    assert len(checkpoints) == 1 and checkpoints[0].compatible, checkpoints
+    # Ambient reference players coexist with the explicitly discovered artifact.
+    [descriptor] = [
+        descriptor
+        for descriptor in registry.descriptors()
+        if descriptor.artifacts.get("actor") == file_sha256(checkpoint_path)
+    ]
+    assert descriptor.incompatibility is None
+    assert descriptor.artifacts["actor"]
     print(
         f"release smoke passed: Python {sys.version.split()[0]}, manabot {version('manabot')}, "
         f"torch {torch.__version__}, etude-sdk {version('etude-sdk')}, Academy bot extension"

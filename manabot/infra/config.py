@@ -15,15 +15,22 @@ from pydantic import (
     model_validator,
 )
 
+from manabot.env.legacy_input import warn_deprecated_input
 from managym import WORLD_SETUP, Deck, DeckImport, Decklist
 
-# The policy input a fresh configuration selects. Input v10 is v9 plus turn
-# state (life lost, graveyard cards from the battlefield, Powerstone mana) and
-# is selected explicitly; earlier inputs run from the revision that recorded
-# them.
-PolicyInputVersion = Literal[9, 10]
-POLICY_INPUT_VERSION: PolicyInputVersion = 9
-SUPPORTED_POLICY_INPUTS: tuple[PolicyInputVersion, ...] = (9, 10)
+# The policy input a fresh configuration selects. Input v11 gives each game
+# thing one object row (cards outside the battlefield and stack, permanents
+# with their characteristics, a stack segment) and carries v10's turn state.
+# Inputs v9 and v10 (v9 plus turn state) are deprecated and read only by
+# checkpoints trained on them (`manabot.env.legacy_input`, removed in 0.4.0);
+# earlier inputs run from the revision that recorded them.
+PolicyInputVersion = Literal[9, 10, 11]
+POLICY_INPUT_VERSION: PolicyInputVersion = 11
+SUPPORTED_POLICY_INPUTS: tuple[PolicyInputVersion, ...] = (9, 10, 11)
+DEPRECATED_POLICY_INPUTS: tuple[PolicyInputVersion, ...] = (9, 10)
+# What a saved regime's observation settings mean when they omit the version:
+# the fresh default when they were written.
+SAVED_POLICY_INPUT_VERSION: PolicyInputVersion = 9
 # The last revision whose encoders, bindings and model accept inputs v1-v8.
 LAST_MULTI_INPUT_REVISION = "ac601834d"
 # How the critic summarizes the final object board; see ActorCritic._value_from_objects.
@@ -58,7 +65,7 @@ class UnsupportedPolicyInput(ValueError):
 
     `version` is the saved or required version; a saved configuration that
     omits it was written for policy input v1. `state` names what a v9
-    observation needed when v10 is required.
+    observation needed when turn state (v10 or v11) is required.
     """
 
     def __init__(self, version: object, state: str | None = None) -> None:
@@ -88,6 +95,10 @@ class ObservationConfig(BaseConfig):
     max_cards_per_player: int = 60
     # 30 -> 40: token-heavy GW Allies games exceed 30 battlefield entries.
     max_permanents_per_player: int = 40
+    # Input v11 stack rows; overflow is a capacity error.
+    max_stack_objects: int = Field(
+        default=32, gt=0, exclude_if=lambda value: value == 32
+    )
     # Naming is bounded group prompts, so this capacity is independent of the
     # name vocabulary. A pilot may explicitly retain a legal prefix.
     max_actions: int = Field(default=512, gt=0)
@@ -106,6 +117,8 @@ class ObservationConfig(BaseConfig):
         """Name the recording revision instead of a bare literal mismatch."""
         if value not in SUPPORTED_POLICY_INPUTS:
             raise UnsupportedPolicyInput(value)
+        if value in DEPRECATED_POLICY_INPUTS:
+            warn_deprecated_input(value)
         return value
 
     @classmethod

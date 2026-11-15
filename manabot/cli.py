@@ -6,6 +6,7 @@ from typing import Optional
 
 import typer
 
+from manabot.backends import resolve
 from manabot.config.load import load_sim_config
 from manabot.config.presets import DEFAULT_SIM_PRESET
 from manabot.infra.config import MatchConfig
@@ -68,9 +69,7 @@ def sim_command(
             )
     except (ValueError, OSError) as error:
         raise typer.BadParameter(str(error)) from error
-    from manabot.sim.sim import run_simulation
-
-    run_simulation(sim_config, runtime_config)
+    run_simulation(sim_config, runtime_config, backend=resolve("torch"))
 
 
 @app.command("training-report")

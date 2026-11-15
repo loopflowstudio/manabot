@@ -5,7 +5,7 @@ use super::{
         effect_target_requirements, Ability, Condition, Effect, EffectValue, PaymentCost,
         TargetRequirement, TargetSpec,
     },
-    game_object::ObjectRef,
+    game_object::ObjectId,
     mana::{Color, Colors, Mana, ManaCost},
     permanent::CounterKind,
     predicate::CardPredicate,
@@ -668,7 +668,8 @@ pub struct SacrificeCost {
 /// another permanent came from; the stack keeps it after the grantor leaves.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct AbilityGrant {
-    pub grantor: ObjectRef,
+    #[serde(serialize_with = "crate::game_object::exact")]
+    pub grantor: ObjectId,
     pub index: usize,
 }
 

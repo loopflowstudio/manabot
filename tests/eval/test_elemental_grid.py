@@ -24,13 +24,13 @@ from experiments.elemental_grid import (
     summarize,
 )
 from experiments.elemental_play import H2HRequest, LocalCheckpoint, play_h2h_group
-from manabot.backends.torch.checkpoint import save_checkpoint
+from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.eval.execution import bind_execution
 from manabot.eval.models import EvaluationKey
-from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.infra.config import POLICY_INPUT_VERSION, ModelConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.sim.execution import EvalExecution
@@ -84,7 +84,9 @@ def test_pair_admits_both_saved_schemas_and_forwards_shared_service(
         assert legs == (leg,)
         execution = EvalExecution(deadline_unix=time.time() + 60)
         _, players = bind_execution(key, (player_a, player_b), execution)
-        store = PolicyStore(execution, EvalPerformance("pair-admission"))
+        store = PolicyStore(
+            execution, EvalPerformance("pair-admission"), backend=TORCH_BACKEND
+        )
         try:
             for player in players:
                 actual = store.admit(
@@ -107,7 +109,7 @@ def test_pair_admits_both_saved_schemas_and_forwards_shared_service(
         ),
         inference=shared,  # type: ignore[arg-type] -- forwarding sentinel; no games run
     )
-    assert admitted == [9, 9]
+    assert admitted == [POLICY_INPUT_VERSION] * 2
 
 
 def test_grid_registers_saved_policy_inputs_for_shared_admission(
@@ -137,7 +139,9 @@ def test_grid_registers_saved_policy_inputs_for_shared_admission(
         assert key.anchor_cohort_sha256 == canonical_sha256(player_b.model_dump())
         execution = EvalExecution(deadline_unix=time.time() + 60)
         _, (bound,) = bind_execution(key, (player_a,), execution)
-        store = PolicyStore(execution, EvalPerformance("grid-admission"))
+        store = PolicyStore(
+            execution, EvalPerformance("grid-admission"), backend=TORCH_BACKEND
+        )
         try:
             actual = store.admit(PolicyAdmission(bound, str(path), (setup.match(),)))
             admitted.append(actual.policy_input_version)
@@ -157,7 +161,7 @@ def test_grid_registers_saved_policy_inputs_for_shared_admission(
             output=tmp_path / "evidence",
         )
     )
-    assert admitted == [9]
+    assert admitted == [POLICY_INPUT_VERSION]
 
 
 def test_schedule_is_frozen_and_complete() -> None:

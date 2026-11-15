@@ -1,5 +1,7 @@
 """Independent RL estimator, policy-reference and update-clock contracts."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from copy import deepcopy
 
 import numpy as np
@@ -34,18 +36,54 @@ class TinyPolicy(torch.nn.Module):
         return self(obs)[1]
 
 
+class TinyRollout:
+    """The rule fixture's own action-only input; no player model is involved."""
+
+    def __init__(self, agent: TinyPolicy, batch: RolloutBatch) -> None:
+        self.batch = batch
+
+    def admit_rows(self, indexes: np.ndarray, chunk_rows: int) -> None:
+        pass
+
+    def next_observation(self, device: torch.device) -> dict[str, torch.Tensor]:
+        return {
+            key: torch.as_tensor(value, device=device)
+            for key, value in self.batch.next_obs.items()
+        }
+
+    def rows(
+        self, indexes: np.ndarray, device: torch.device
+    ) -> tuple[dict[str, torch.Tensor], ActionRows]:
+        rows = self.batch.observations(indexes)
+        return {
+            key: torch.as_tensor(value, device=device)
+            for key, value in rows.observation.items()
+        }, rows
+
+    @contextmanager
+    def minibatches(
+        self, indexes: np.ndarray, size: int, device: torch.device
+    ) -> Iterator[Iterator[tuple[np.ndarray, dict[str, torch.Tensor], ActionRows]]]:
+        def batches() -> Iterator[
+            tuple[np.ndarray, dict[str, torch.Tensor], ActionRows]
+        ]:
+            for start in range(0, len(indexes), size):
+                chunk = indexes[start : start + size]
+                obs, rows = self.rows(chunk, device)
+                yield chunk, obs, rows
+
+        yield batches()
+
+    def legal(self, obs: dict[str, torch.Tensor]) -> torch.Tensor:
+        return obs["actions_valid"]
+
+    def evidence(self, obs: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+        return obs
+
+
 @pytest.fixture(autouse=True)
-def _stub_admission(monkeypatch: pytest.MonkeyPatch) -> None:
-    """TinyPolicy tests the learning rule; it reads no policy input to admit."""
-    monkeypatch.setattr(learner_module, "admit_observation", lambda agent, obs: obs)
-    monkeypatch.setattr(learner_module, "check_observation", lambda agent, obs: None)
-    monkeypatch.setattr(
-        learner_module, "measure_row_needs", lambda agent, obs, **_: None
-    )
-    monkeypatch.setattr(learner_module, "bind_admitted", lambda agent, obs, **_: obs)
-    monkeypatch.setattr(
-        learner_module, "transfer_admitted", lambda admitted, device: (admitted, 0)
-    )
+def _rule_input(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(learner_module, "AdmittedRollout", TinyRollout)
 
 
 def fixture() -> tuple[Learner, RolloutBatch]:
@@ -285,7 +323,8 @@ def test_learning_materializes_only_selected_minibatches(
 
     monkeypatch.setattr(RolloutBatch, "observations", selected_rows_only)
     run(trainer, batch, control(minibatches=2))
-    # Admission reads each minibatch-sized chunk once, then minibatches re-read.
-    assert seen == [2, 2, 2, 2]
+    # The generic rule reads only its selected minibatches. Player admission is
+    # covered independently by test_admission, using the real policy backend.
+    assert seen == [2, 2]
     assert "actions" not in batch.recorded.rows
     assert "actions_valid" not in batch.recorded.rows

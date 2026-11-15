@@ -14,9 +14,12 @@ from pathlib import Path
 import re
 from typing import Any, Literal
 
+from pydantic import TypeAdapter
+
 import managym
 from managym.bots import BotDecision
 from managym.experience_projection import redact_observation
+from managym.mirror_search import MirrorSearch
 
 TRACE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
 TRACES_DIR = Path(os.getenv("ACADEMY_TRACES_DIR", "academy/traces"))
@@ -42,9 +45,9 @@ class GameConfig:
     villain_checkpoint: str | None = None  # checkpoint: path to .pt file
     villain_deterministic: bool = False  # checkpoint: argmax instead of sampling
     opponent: dict[str, str] | None = None
-    # Exact trained-opponent identity: digest, source, world, model shape,
-    # training step, checkpoint path and inference setting.
-    opponent_checkpoint: dict[str, str | int | bool | None] | None = None
+    # Historical checkpoint provenance, or a managym-policy-1 descriptor with
+    # complete provider/runner/config/artifact identity. Read without a loader.
+    opponent_checkpoint: dict[str, Any] | None = None
     # Priority-stop configuration at game start (MTGO-style auto-pass).
     # ``stops`` maps "my"/"opponent" to the stop step names that surface;
     # None means the server defaults. set_stops updates the live session,
@@ -55,6 +58,8 @@ class GameConfig:
     hero_sideboard: dict[str, int] = field(default_factory=dict)
     villain_sideboard: dict[str, int] = field(default_factory=dict)
     watch_players: list[str] | None = None
+    # One bot composition; Watch records each bot through its descriptor.
+    mirror: MirrorSearch | None = None
     # "open": each player knows the other's main deck and sideboard;
     # "closed": neither. Traces that predate the option were open.
     decklists: Literal["open", "closed"] = "open"
@@ -62,6 +67,11 @@ class GameConfig:
     # JSON form), admitted by the world. Viewer exports strip them.
     hero_source: dict[str, Any] | None = None
     villain_source: dict[str, Any] | None = None
+
+    def __post_init__(self) -> None:
+        self.mirror = TypeAdapter(MirrorSearch | None).validate_python(self.mirror)
+        if self.decklists == "closed" and self.mirror is not None:
+            raise ValueError("Mirror search requires open decklists.")
 
     def to_rust(self) -> list[managym.PlayerConfig]:
         """Rebuild the recorded root with its explicit outside-game copies."""
@@ -287,6 +297,9 @@ def prepare_trace_payload(
         event.pop("analysis_observation", None)
     config = prepared.get("config", {})
     config.pop("villain_checkpoint", None)
+    checkpoint = config.get("opponent_checkpoint")
+    if isinstance(checkpoint, dict):
+        checkpoint.pop("checkpoint", None)
     config.pop("seed", None)
     sources = [config.pop(key, None) for key in ("hero_source", "villain_source")]
     if any(source is not None for source in sources):
