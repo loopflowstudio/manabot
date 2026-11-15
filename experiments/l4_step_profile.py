@@ -56,6 +56,7 @@ import warnings
 import numpy as np
 import torch
 
+import manabot.backends.torch as torch_backend
 from manabot.backends.torch.policy import PolicyInference
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -388,7 +389,7 @@ def _learner(agent: Any, device: str) -> tuple[Any, Any]:
     health = NumericalHealth(
         optimizer_steps=0, skipped_steps=0, rejected_steps=0, sampled_steps=1
     )
-    return learner, OptimizerHealth(learner.agent, learner.optimizer, health, 2)
+    return learner, OptimizerHealth(health, 2, backend=torch_backend)
 
 
 def _sync(device: str) -> None:

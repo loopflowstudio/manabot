@@ -7,7 +7,11 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends import resolve
 import manabot.backends.torch as torch_backend
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
@@ -55,6 +59,7 @@ def _collector(config: AdaptiveConfig, agent: ActorCritic) -> SeatRoutedCollecto
         learning_seats="both",
         adaptive=config,
         recovery_max_game_microsteps=40000,
+        numerics=TorchCollectionSession(device="cpu", seed=197, precision="float32"),
     )
 
 
@@ -205,7 +210,9 @@ def test_current_elemental_training_exports_scored_admitted_checkpoint(
         ),
     )
     with VerifyStore(tmp_path / "training.sqlite") as store:
-        run = execute_regime(regime, 17501, tmp_path / "run", store)
+        run = execute_regime(
+            regime, 17501, tmp_path / "run", store, backend=resolve("torch")
+        )
     assert run.status == "completed"
     updates = tracked_updates(run, tmp_path / "run")
     assert len(updates) == 1

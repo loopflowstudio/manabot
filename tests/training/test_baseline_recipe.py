@@ -10,6 +10,7 @@ import torch
 from typer.testing import CliRunner
 
 from manabot import cli
+from manabot.policy.protocol import Backend
 from manabot.recipes import local
 from manabot.recipes.baseline import TrainingRecipe, baseline, baseline_test
 from manabot.recipes.device import accelerator
@@ -213,11 +214,17 @@ def test_recipe_and_cli_device_selection(
         stages=[SimpleNamespace(artifacts={"raw": {"path": "policy.pt"}})],
     )
 
-    def run_plan(self: TrainingRecipe, **kwargs: object) -> SimpleNamespace:
+    def run_plan(
+        self: TrainingRecipe, *, backend: Backend, **kwargs: object
+    ) -> SimpleNamespace:
+        assert backend.name == "torch"
         observed.append(self.regime.stages[0].execution.device)
         return result
 
-    def execute(plan: TrainingRegime, *args: object) -> SimpleNamespace:
+    def execute(
+        plan: TrainingRegime, *args: object, backend: Backend
+    ) -> SimpleNamespace:
+        assert backend.name == "torch"
         observed.append(plan.stages[0].execution.device)
         return result
 
@@ -258,11 +265,17 @@ def test_cli_padded_shapes_reaches_the_recipe_stage(
         execution = regime.stages[0].execution
         observed.append((execution.bucketed_shapes, execution.live_tokens))
 
-    def run_plan(self: TrainingRecipe, **kwargs: object) -> SimpleNamespace:
+    def run_plan(
+        self: TrainingRecipe, *, backend: Backend, **kwargs: object
+    ) -> SimpleNamespace:
+        assert backend.name == "torch"
         record(self.regime)
         return result
 
-    def execute(plan: TrainingRegime, *args: object) -> SimpleNamespace:
+    def execute(
+        plan: TrainingRegime, *args: object, backend: Backend
+    ) -> SimpleNamespace:
+        assert backend.name == "torch"
         record(plan)
         return result
 

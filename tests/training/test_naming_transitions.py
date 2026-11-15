@@ -9,8 +9,12 @@ import numpy as np
 import torch
 
 import manabot.backends.torch as torch_backend
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
+import manabot.backends.torch.rollout as torch_rollout
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
@@ -53,6 +57,7 @@ def test_rollout_and_ppo_update_cover_group_and_name_transitions() -> None:
         seed=243,
         opponent_mode="self",
         learning_seats="both",
+        numerics=TorchCollectionSession(device="cpu", seed=243, precision="float32"),
     )
     agent = ActorCritic(space, ModelConfig(hidden_dim=16, attention_on=False))
     batch = None
@@ -69,7 +74,7 @@ def test_rollout_and_ppo_update_cover_group_and_name_transitions() -> None:
     flat_valid = obs["actions_valid"].reshape(-1, obs["actions_valid"].shape[-1])
     assert (flat_valid[np.concatenate([groups, names])].sum(-1) <= 64).all()
     # Every naming transition retains complete behavior evidence.
-    batch.action_data.check(batch.actions, batch.logprobs)
+    batch.action_data.check(batch.actions, batch.logprobs, validator=torch_rollout)
 
     learner = Learner(agent, "cpu", minibatch_rows=batch.actions.size)
     assert agent.name_candidates is not None

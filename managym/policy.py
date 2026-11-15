@@ -21,6 +21,14 @@ import uuid
 
 import managym
 from managym.bots import BotDecision
+from managym.mirror_search import (
+    MirrorSearch,
+    MirrorSearchError,
+    mirror_decision,
+    mirror_descriptor,
+    mirror_source_identity,
+    mirror_unavailable,
+)
 
 JSONValue: TypeAlias = (
     None | bool | int | float | str | list["JSONValue"] | dict[str, "JSONValue"]
@@ -76,6 +84,8 @@ class PolicyDescriptor:
     supports_search: bool = False
     contract_version: int = 1
     recurrent: bool = False
+    search_reason: str | None = None
+    base_policy: PolicyDescriptor | None = None
 
     @property
     def id(self) -> str:
@@ -94,6 +104,7 @@ class PolicyDescriptor:
         return {
             **asdict(self),
             "details": [asdict(detail) for detail in self.details],
+            "base_policy": self.base_policy.record() if self.base_policy else None,
             "id": self.id,
         }
 
@@ -198,12 +209,13 @@ class PolicyRegistry:
         if descriptor.contract_version != 1:
             raise ValueError("Unsupported policy adapter contract version.")
         key = descriptor.id
-        self._factories.setdefault(key, policy)
-        self._descriptors.setdefault(key, descriptor)
         name = name if name is not None else descriptor.alias
         if name is not None:
             if name in self.aliases and self.aliases[name] != key:
                 raise ValueError(f"Policy alias {name!r} is already registered.")
+        self._factories.setdefault(key, policy)
+        self._descriptors.setdefault(key, descriptor)
+        if name is not None:
             self.aliases[name] = key
         return key
 
@@ -219,7 +231,11 @@ class PolicyRegistry:
                 if discover is not None:
                     try:
                         for policy in discover(None):
-                            self.register(policy)
+                            try:
+                                self.register(policy)
+                            except (ImportError, OSError, ValueError) as exc:
+                                # One unusable entry must not hide later policies.
+                                self.discovery_errors.append(f"{name}: {exc}")
                     except (ImportError, OSError, ValueError) as exc:
                         self.discovery_errors.append(f"{name}: {exc}")
         for source in sources:
@@ -268,7 +284,13 @@ class PolicyRegistry:
         return descriptor
 
     def load(
-        self, key: str, setup: Sequence[managym.PlayerConfig], *, seat: int, seed: int
+        self,
+        key: str,
+        setup: Sequence[managym.PlayerConfig],
+        *,
+        seat: int,
+        seed: int,
+        mirror: MirrorSearch | None = None,
     ) -> PolicyRunner:
         descriptor = self.admit(key, setup)
         factory = self._factories[descriptor.id]
@@ -286,12 +308,18 @@ class PolicyRegistry:
             session.close()
             raise
         self._active_sessions.add(id(session))
-        return PolicyRunner(
+        runner = PolicyRunner(
             session,
             descriptor,
             seat,
             release=lambda: self._active_sessions.discard(id(session)),
         )
+        try:
+            runner.configure_mirror(mirror, seed=seed)
+        except BaseException:
+            runner.close()
+            raise
+        return runner
 
 
 class PolicyRunner:
@@ -307,12 +335,37 @@ class PolicyRunner:
     ) -> None:
         self.session = session
         self.descriptor = descriptor
+        self.base_descriptor = descriptor
         self.seat = seat
         self.last_decision: BotDecision | None = None
         self._closed = False
         self._release = release
+        self.mirror: MirrorSearch | None = None
+        self.mirror_runtime: str | None = None
+        self._mirror_seed = 0
+        self._mirror_calls = 0
+        self._started = False
+
+    def configure_mirror(self, mirror: MirrorSearch | None, *, seed: int) -> None:
+        """Configure before play; preserve the base runner as a distinct identity."""
+        if self._started:
+            raise ValueError("Search cannot change after a decision.")
+        if mirror is not None:
+            reason = mirror_unavailable(self)
+            if reason:
+                raise MirrorSearchError("mirror_unavailable", reason)
+            self.mirror_runtime = mirror_source_identity()
+            self.descriptor = mirror_descriptor(
+                self.base_descriptor, mirror, source=self.mirror_runtime
+            )
+        else:
+            self.descriptor = self.base_descriptor
+            self.mirror_runtime = None
+        self.mirror = mirror
+        self._mirror_seed = seed
 
     def observe(self, observation: managym.Observation) -> None:
+        self._started = True
         self.session.observe(self.view(observation))
 
     def view(self, observation: managym.Observation) -> PolicyView:
@@ -327,8 +380,17 @@ class PolicyRunner:
         if self._closed:
             raise ValueError("Policy session is closed.")
         self.last_decision = None
+        self._started = True
         if int(obs.agent.player_index) != self.seat:
             raise ValueError("Policy received another chooser’s observation.")
+        if self.mirror is not None:
+            # Retry the same uncommitted decision with the same random streams.
+            # Increment only once a complete searched proposal exists.
+            seed = (self._mirror_seed * 1_000_003 + self._mirror_calls + 1) % 2**63
+            self.last_decision = mirror_decision(self, env, obs, self.mirror, seed=seed)
+            self._mirror_calls += 1
+            return self.last_decision.action
+
         view = replace(
             self.view(obs), capture_json=env.capture_decision(self.seat, 0).to_json()
         )

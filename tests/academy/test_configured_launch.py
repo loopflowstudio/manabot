@@ -1,7 +1,8 @@
 """Configured launch reaches the existing game and replay authorities."""
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 import copy
+from dataclasses import asdict
 import gzip
 import json
 from pathlib import Path
@@ -15,7 +16,7 @@ from fastapi.testclient import TestClient
 import pytest
 from websockets.sync.client import ClientConnection, connect
 
-from managym.academy import extensions, server
+from managym.academy import cli, extensions, server
 from managym.academy.launch import (
     Academy,
     AcademyLaunchError,
@@ -23,6 +24,9 @@ from managym.academy.launch import (
     read_games,
     serve,
 )
+from managym.academy.opponent import policy_registry
+from managym.mirror_search import MirrorSearch
+from tests.academy.test_mirror_play import SearchFactory
 
 
 @pytest.fixture
@@ -566,3 +570,72 @@ def test_watch_launch_registers_policy_spec_without_starting(
     assert configured["opponent_sha256"] == key
     with pytest.raises(AcademyLaunchError):
         academy.watch(players=(tmp_path / "missing.json", "random"))
+
+
+def test_launch_uses_the_same_explicit_search_spec_for_play_and_watch(
+    academy: Academy,
+) -> None:
+    key = policy_registry().register(SearchFactory(), name="mirror-launch")
+    search = MirrorSearch(worlds=4, depth=2)
+    configured = server.LAUNCH_CONFIGS[
+        _launch_id(academy.new_game(opponent="mirror-launch", mirror=search).url)
+    ]
+    assert configured["opponent_sha256"] == key
+    assert configured["mirror"] == asdict(search)
+    query = parse_qs(
+        urlparse(
+            academy.watch(
+                players=("mirror-launch", "random"), mirror=(search, None)
+            ).url
+        ).query
+    )
+    assert json.loads(query["mirror"][0]) == [asdict(search), None]
+    assert query["seat1"] == [f"policy:{key}"]
+    with pytest.raises(AcademyLaunchError, match="open decklists"):
+        academy.new_game(opponent="mirror-launch", mirror=search, decklists="closed")
+    with pytest.raises(AcademyLaunchError, match="search-capable policy"):
+        academy.watch(players=("random", "random"), mirror=(search, None))
+
+
+def test_cli_search_specs_reach_the_shared_python_launch_api(
+    academy: Academy, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    policy_registry().register(SearchFactory(), name="mirror-cli")
+    targets: list[str] = []
+
+    def run(shared: cli._Shared, prepare: Callable[[Academy], str]) -> None:
+        targets.append(prepare(academy))
+
+    monkeypatch.setattr(cli, "_run", run)
+    assert (
+        cli.main(
+            [
+                "academy",
+                "play",
+                "--opponent",
+                "mirror-cli",
+                "--mirror",
+                '{"worlds":4,"depth":2}',
+            ]
+        )
+        == 0
+    )
+    config = server.LAUNCH_CONFIGS[_launch_id(targets[-1])]
+    assert config["mirror"] == asdict(MirrorSearch(worlds=4, depth=2))
+    assert (
+        cli.main(
+            [
+                "academy",
+                "watch",
+                "--player",
+                "mirror-cli",
+                "--player",
+                "random",
+                "--mirror",
+                '[{"worlds":4,"depth":2},null]',
+            ]
+        )
+        == 0
+    )
+    query = parse_qs(urlparse(targets[-1]).query)
+    assert json.loads(query["mirror"][0]) == [config["mirror"], None]

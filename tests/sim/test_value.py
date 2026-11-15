@@ -11,7 +11,7 @@ from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
-from manabot.sim.rollout import _allocate_buffers
+from manabot.sim.rollout import allocate_buffers
 from manabot.sim.search.flat_mc import make_player, spec_name
 from manabot.sim.search.value import (
     ValueScorer,
@@ -64,7 +64,7 @@ class TestPoolPerspective:
         # (world, action, rollout) lexicographic layout
         expect = [a for _ in range(3) for a in range(num_actions) for _ in range(2)]
         assert roots == expect
-        buffers = _allocate_buffers(ObservationSpace(), pool.num_slots)
+        buffers = allocate_buffers(ObservationSpace(), pool.num_slots)
         pool.set_buffers(buffers, pool.num_slots)
         active = pool.encode_active()
         acting = pool.acting_players()

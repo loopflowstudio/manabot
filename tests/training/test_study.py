@@ -2,10 +2,12 @@
 
 import hashlib
 import json
+from types import SimpleNamespace
 
 import pytest
 
 from experiments.ataraxos_ablation import ARMS as ABLATIONS
+from manabot.backends import resolve
 from manabot.experiment import study as regime_study
 from manabot.experiment.study import (
     EvaluationProtocol,
@@ -349,7 +351,6 @@ def test_calibrated_plan_scales_work_within_the_campaign(tmp_path, monkeypatch):
 def test_resume_evaluates_remaining_cells_without_retraining_or_retrying_failure(
     tmp_path, monkeypatch
 ):
-    import torch
 
     from manabot.training.records import StageRecord, TrainingRun
 
@@ -375,7 +376,9 @@ def test_resume_evaluates_remaining_cells_without_retraining_or_retrying_failure
         runner, "execute_regime", lambda *a: pytest.fail("resume must not retrain")
     )
     monkeypatch.setattr(
-        runner, "load_checkpoint", lambda *a: (torch.nn.Linear(1, 1), None)
+        resolve("torch"),
+        "load_policy",
+        lambda *a: (SimpleNamespace(parameter_count=2), None),
     )
     monkeypatch.setattr(runner, "report", lambda *a: None)
     calls = []
@@ -464,7 +467,13 @@ def test_resume_evaluates_remaining_cells_without_retraining_or_retrying_failure
         json.dumps([r.model_dump(mode="json") for r in recipes])
     )
     with pytest.raises(RuntimeError, match="incomplete arena cohort"):
-        runner.run_study("ataraxos-ablations", ABLATIONS, tmp_path, resume=True)
+        runner.run_study(
+            "ataraxos-ablations",
+            ABLATIONS,
+            tmp_path,
+            resume=True,
+            backend=resolve("torch"),
+        )
     saved = json.loads((tmp_path / "study.json").read_text())
     assert len(calls) == 17
     assert len(saved["comparisons"]) == 18

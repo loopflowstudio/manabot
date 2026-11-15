@@ -8,7 +8,7 @@
   import type { Observation, ObjectRenderId } from '$lib/types';
   import PresentationStage from './PresentationStage.svelte';
 
-  let { player, observation = null }: { player: PresentationPlayer; observation?: Observation | null } = $props();
+  let { player, observation = null, externallyDriven = false, onRead }: { player: PresentationPlayer; observation?: Observation | null; externallyDriven?: boolean; onRead?: () => void } = $props();
   const PAGE_SIZE = 100;
   let region: HTMLOListElement | undefined = $state();
   let summary: HTMLElement | undefined = $state();
@@ -20,6 +20,7 @@
   let inspectionButton: HTMLButtonElement | null = null;
   let selected = $state<ObjectRenderId | null>(null);
   let knownScope = '';
+  let readerScroll = false;
   let readingAnchor: { seq: number; offset: number } | null = null;
   const total = $derived(player.events.length);
   const latestStart = $derived(Math.max(0, total - PAGE_SIZE));
@@ -32,6 +33,12 @@
     beat: presentationBeat(event, player.labelsAt(start + offset)),
   })));
   const inspected = $derived(selected ? available(selected) : null);
+
+  // Restoring our own anchor must not become a new reader action.
+  function scrollTo(top: number): void {
+    readerScroll = false;
+    if (region) region.scrollTop = top;
+  }
 
   function visibleAnchor(): { seq: number; offset: number } | null {
     if (!region) return null;
@@ -97,10 +104,10 @@
           if (restoreInspectionFocus || focused) summary?.focus({ preventScroll: true });
           return;
         }
-        if (following) region.scrollTop = region.scrollHeight;
+        if (following) scrollTo(region.scrollHeight);
         else if (targetSeq !== null) {
           const row = region.querySelector<HTMLElement>(`[data-presentation-seq="${targetSeq}"]`);
-          if (row) region.scrollTop += row.getBoundingClientRect().top - region.getBoundingClientRect().top - (removedAnchor ? 0 : offset);
+          if (row) scrollTo(region.scrollTop + row.getBoundingClientRect().top - region.getBoundingClientRect().top - (removedAnchor ? 0 : offset));
         }
         if (restoreInspectionFocus || (focused && !focused.isConnected)) region.focus({ preventScroll: true });
       });
@@ -108,6 +115,7 @@
   });
 
   async function inspect(id: ObjectRenderId, seq: number, button: HTMLButtonElement): Promise<void> {
+    onRead?.();
     inspectionButton = button;
     inspectionSeq = seq;
     selected = id;
@@ -127,6 +135,8 @@
   function onScroll(): void {
     if (!region) return;
     following = start === latestStart && region.scrollHeight - region.clientHeight - region.scrollTop <= 32;
+    if (!following && readerScroll) onRead?.();
+    readerScroll = false;
     readingAnchor = following ? null : visibleAnchor();
     if (!following && pageSeq === null) pageSeq = player.events[start]?.seq ?? null;
     if (following) {
@@ -135,10 +145,11 @@
     }
   }
   function pageBy(delta: number): void {
+    onRead?.();
     following = false;
     readingAnchor = null;
     pageSeq = player.events[Math.max(0, Math.min(latestStart, start + delta * PAGE_SIZE))]?.seq ?? null;
-    if (region) region.scrollTop = 0;
+    if (region) scrollTo(0);
   }
   async function latest(): Promise<void> {
     pageSeq = null;
@@ -146,13 +157,13 @@
     following = true;
     read = new Set(player.events.map(event => event.seq));
     await tick();
-    if (region) region.scrollTop = region.scrollHeight;
+    if (region) scrollTo(region.scrollHeight);
   }
 </script>
 
 <section aria-label="Consequences" class="my-3 border-y border-line py-2" data-testid="presentation-history" data-scope={player.scope}>
   <details>
-    <summary bind:this={summary} class="type-rubric cursor-pointer text-ink-2">Consequences ({total} available)</summary>
+    <summary bind:this={summary} onclick={event => { if (!event.currentTarget.closest('details')?.open) onRead?.(); }} class="type-rubric cursor-pointer text-ink-2">Consequences ({total} available)</summary>
     <p class="type-caption mt-1 text-ink-2">Choices, Auto passes and observed-state summaries are in the decision log. Event attribution is unavailable.</p>
     {#if player.incomplete}<p role="status" class="type-caption text-mountain-ink">History incomplete · presentation error.</p>{/if}
     {#if player.unavailablePrefix}<p class="type-caption text-ink-2">Earlier history unavailable.</p>{/if}
@@ -163,8 +174,12 @@
         <button class="btn btn-secondary btn-sm" disabled={start >= latestStart} onclick={() => pageBy(1)}>Later events</button>
         <button class="btn btn-secondary btn-sm" onclick={() => void latest()}>Latest{unread ? ` (${unread} unread)` : ''}</button>
       </nav>
-      <!-- svelte-ignore a11y_no_noninteractive_tabindex (keyboard scrolling) -->
-      <ol bind:this={region} onscroll={onScroll} class="mt-2 max-h-40 overflow-y-auto pl-5 text-sm text-ink" style="overflow-anchor: none" tabindex="0" aria-label="Recorded game events">
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (focusable history supports keyboard and pointer scrolling) -->
+      <ol bind:this={region} onscroll={onScroll}
+        onwheel={() => readerScroll = true}
+        onpointerdown={() => readerScroll = true}
+        onpointermove={event => { if (event.buttons === 1) readerScroll = true; }}
+        onkeydown={event => { readerScroll = ['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key); }} class="mt-2 max-h-40 overflow-y-auto pl-5 text-sm text-ink" style="overflow-anchor: none" tabindex="0" aria-label="Recorded game events">
         {#each rows as row, index (row.event.seq)}
           {#if row.gap}
             <li class="type-caption border-t border-line py-2 text-ink-2" data-history-gap>Events {row.gap.first}–{row.gap.last} unavailable · turn context unknown.</li>
@@ -197,5 +212,5 @@
       <p class="type-caption mt-1 text-ink-2">Consequences not recorded for this position.</p>
     {/if}
   </details>
-  <PresentationStage {player} />
+  <PresentationStage {player} {externallyDriven} />
 </section>

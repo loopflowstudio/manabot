@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 import torch
 
+from manabot.backends import resolve
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
@@ -78,7 +79,9 @@ def test_frozen_run_preserves_opponent_and_initial_attacker(tmp_path: Path) -> N
     assert isinstance(first, TrainSelfPlay)
     regime.stages.append(first.model_copy(update={"id": "next", "initial": "attack"}))
     with VerifyStore(tmp_path / "store.sqlite") as store:
-        run = execute_regime(regime, 41, tmp_path / "run", store)
+        run = execute_regime(
+            regime, 41, tmp_path / "run", store, backend=resolve("torch")
+        )
     assert run.status == "completed"
     assert file_sha256(path) == before
     assert run.stages[0].inputs["frozen_opponent"]["sha256"] == before
@@ -108,4 +111,6 @@ def test_removed_compound_opponent_is_rejected_before_training(
     write_checkpoint(payload, path)
     with VerifyStore(tmp_path / "store.sqlite") as store:
         with pytest.raises(ValueError, match="no longer executable"):
-            execute_regime(_regime(path), 41, tmp_path / "run", store)
+            execute_regime(
+                _regime(path), 41, tmp_path / "run", store, backend=resolve("torch")
+            )

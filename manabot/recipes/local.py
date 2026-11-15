@@ -67,6 +67,8 @@ def run_local(
     device: Literal["cpu", "mps", "cuda"] | None = None,
     padded_shapes: bool = False,
 ) -> TrainingRun:
+    from manabot.backends import resolve
+
     plan = local_smoke(
         steps=steps,
         seconds=seconds,
@@ -79,4 +81,4 @@ def run_local(
     )
     destination.parent.mkdir(parents=True, exist_ok=True)
     with VerifyStore(destination.parent / "training.sqlite") as store:
-        return execute_regime(plan, seed, destination, store)
+        return execute_regime(plan, seed, destination, store, backend=resolve("torch"))

@@ -333,6 +333,8 @@ class TrainingJob(Strict):
 
 def run_worker() -> TrainingRun:
     """Consume SDK worker inputs, retaining failed runs without automatic retries."""
+    from manabot.backends import resolve
+
     environment = os.environ
     for key in ("ETUDE_RUN", "ETUDE_TRACK_DIR"):
         if not environment.get(key):
@@ -406,6 +408,7 @@ def run_worker() -> TrainingRun:
             stop_path=stop,
             stop_reserve_seconds=spec.stop_reserve,
             training_exposure=spec.training_exposure,
+            backend=resolve("torch"),
         )
     finished = run.status == "completed" and run.updates_through() == spec.updates
     # A wall-bounded stop exported the complete learner state short of target.

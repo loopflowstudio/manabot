@@ -1,14 +1,13 @@
 import {
   assertRestoredReplayDecisionBinds,
-  assertViewerSafeReplayProjectionResponse,
   type AddressedReplayDecision,
-  type CanonicalReplayProjectionResponseV1,
   type RestoredReplayDecision,
 } from './replay-index';
 import {
   bindStudyArtifact,
   buildStudyPlans,
   type StudyDisplayPlan,
+  type StudySource,
   type StudyPlanKind,
   type StudyPlanPreviewResponse,
   type StudyRetryResponse,
@@ -23,7 +22,7 @@ function cloneDto<T>(value: T): T {
 }
 
 export class StudyStore {
-  projection = $state<CanonicalReplayProjectionResponseV1 | null>(null);
+  source = $state<StudySource | null>(null);
   selectedDecision = $state<AddressedReplayDecision | null>(null);
   restored = $state<RestoredReplayDecision | null>(null);
   phase = $state<StudyPhase>('score');
@@ -32,24 +31,8 @@ export class StudyStore {
   plans = $state<StudyDisplayPlan[]>([]);
   selectedPlan = $state<StudyPlanKind | null>(null);
   preview = $state<StudyPlanPreviewResponse | null>(null);
-  loadingScore = $state(false);
   busy = $state(false);
   errorMessage = $state<string | null>(null);
-
-  loadProjection(projection: CanonicalReplayProjectionResponseV1): void {
-    assertViewerSafeReplayProjectionResponse(projection);
-    this.projection = cloneDto(projection);
-    this.resetSelection();
-  }
-
-  clearProjection(): void {
-    this.projection = null;
-    this.resetSelection();
-  }
-
-  setLoadingScore(next: boolean): void {
-    this.loadingScore = next;
-  }
 
   setBusy(next: boolean): void {
     this.busy = next;
@@ -60,14 +43,14 @@ export class StudyStore {
   }
 
   restore(
+    source: StudySource,
     decision: AddressedReplayDecision,
     restored: RestoredReplayDecision,
   ): void {
-    if (!this.projection) throw new Error('Study Score is not loaded.');
-    assertRestoredReplayDecisionBinds(this.projection, restored);
-    if (decision.address !== restored.address) {
-      throw new Error('Selected Study decision address drifted.');
-    }
+    if (source.viewer !== decision.viewer || source.match_id !== decision.frame.match_id
+      || source.content_hash !== decision.frame.content_hash || source.asset_manifest_hash !== decision.frame.asset_manifest_hash) throw new Error('Study source differs from selected decision.');
+    assertRestoredReplayDecisionBinds(source, decision, restored);
+    this.source = cloneDto(source);
     this.selectedDecision = cloneDto(decision);
     this.restored = cloneDto(restored);
     this.phase = 'restored';
@@ -92,18 +75,18 @@ export class StudyStore {
     this.errorMessage = null;
   }
 
-  async reveal(response: StudyRevealResponse): Promise<void> {
+  reveal(response: StudyRevealResponse): void {
     if (
-      !this.projection
+      !this.source
       || !this.restored
       || !this.attemptId
       || response.attempt_id !== this.attemptId
     ) {
       throw new Error('Reveal response differs from the active Study attempt.');
     }
-    const landmark = await bindStudyArtifact(
+    const landmark = bindStudyArtifact(
       response.artifact,
-      this.projection,
+      this.source,
       this.restored,
     );
     this.plans = buildStudyPlans(landmark);
@@ -131,11 +114,8 @@ export class StudyStore {
   }
 
   returnToScore(restored: RestoredReplayDecision): void {
-    if (!this.projection) throw new Error('Study Score is not loaded.');
-    assertRestoredReplayDecisionBinds(this.projection, restored);
-    if (this.selectedDecision?.address !== restored.address) {
-      throw new Error('Returned Study decision differs from the Score selection.');
-    }
+    if (!this.source || !this.selectedDecision) throw new Error('Study Score is not loaded.');
+    assertRestoredReplayDecisionBinds(this.source, this.selectedDecision, restored);
     this.restored = cloneDto(restored);
     this.phase = 'score';
     this.attemptId = null;
@@ -148,6 +128,7 @@ export class StudyStore {
 
   resetSelection(): void {
     this.selectedDecision = null;
+    this.source = null;
     this.restored = null;
     this.phase = 'score';
     this.attemptId = null;

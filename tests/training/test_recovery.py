@@ -10,6 +10,7 @@ import pytest
 import torch
 
 from experiments.direct_self_play import direct_self_play
+from manabot.backends import resolve
 from manabot.training import execution
 from manabot.training.records import TrainingRun
 from manabot.training.regime import DampedPolicyLearning, TrainingRegime, TrainSelfPlay
@@ -131,7 +132,7 @@ def interrupt(
     with monkeypatch.context() as patch:
         patch.setattr(execution, "export_training_run", fail_after_commit)
         with pytest.raises(KeyboardInterrupt):
-            execution.execute_regime(value, 197, out, store)
+            execution.execute_regime(value, 197, out, store, backend=resolve("torch"))
     row = store.con.execute(
         "SELECT id FROM training_runs ORDER BY rowid DESC LIMIT 1"
     ).fetchone()
@@ -157,11 +158,18 @@ def test_real_interruption_restores_complete_learning_state(
             gradient="damped_policy", ema=0.9, min_advantage=0, advantage_quantile=0
         )
     with VerifyStore(tmp_path / "training.sqlite") as store:
-        whole = execution.execute_regime(value, 197, tmp_path / "whole", store)
+        whole = execution.execute_regime(
+            value, 197, tmp_path / "whole", store, backend=resolve("torch")
+        )
         failed = interrupt(value, tmp_path / "failed", store, monkeypatch)
         frozen = (tmp_path / "failed/run.json").read_bytes()
         resumed = execution.execute_regime(
-            value, 197, tmp_path / "resumed", store, resume_from=failed.id
+            value,
+            197,
+            tmp_path / "resumed",
+            store,
+            resume_from=failed.id,
+            backend=resolve("torch"),
         )
         assert store.training_run(failed.id) == failed
         assert (tmp_path / "failed/run.json").read_bytes() == frozen
@@ -176,7 +184,10 @@ def test_real_interruption_restores_complete_learning_state(
             resumed.stages[0].collection_timings[step].calls
             < whole.stages[0].collection_timings[step].calls
         )
-        a, b = load_update(whole), load_update(resumed)
+        a, b = (
+            load_update(whole, backend=resolve("torch").state),
+            load_update(resumed, backend=resolve("torch").state),
+        )
         for name in (
             "learner",
             "optimizer",
@@ -208,7 +219,12 @@ def test_real_interruption_restores_complete_learning_state(
         assert whole.stages[0].optimizer_exposures > 0
         with pytest.raises(ValueError, match="already has a recovery child"):
             execution.execute_regime(
-                value, 197, tmp_path / "fork", store, resume_from=failed.id
+                value,
+                197,
+                tmp_path / "fork",
+                store,
+                resume_from=failed.id,
+                backend=resolve("torch"),
             )
 
 
@@ -221,13 +237,23 @@ def test_recovery_rejects_seed_and_corrupt_bytes(
         failed = interrupt(value, tmp_path / "failed", store, monkeypatch)
         with pytest.raises(ValueError, match="recipe or seed"):
             execution.execute_regime(
-                value, 198, tmp_path / "wrong-seed", store, resume_from=failed.id
+                value,
+                198,
+                tmp_path / "wrong-seed",
+                store,
+                resume_from=failed.id,
+                backend=resolve("torch"),
             )
         assert failed.recovery_artifact is not None
         Path(failed.recovery_artifact["path"]).write_bytes(b"corrupt")
         with pytest.raises(ValueError, match="digest mismatch"):
             execution.execute_regime(
-                value, 197, tmp_path / "corrupt", store, resume_from=failed.id
+                value,
+                197,
+                tmp_path / "corrupt",
+                store,
+                resume_from=failed.id,
+                backend=resolve("torch"),
             )
 
 
@@ -249,7 +275,12 @@ def test_sleep_inclusive_watchdog_retains_cost_without_reset(
         monkeypatch.setattr(execution, "watchdog_seconds", suspended_clock)
         with pytest.raises(TimeoutError):
             execution.execute_regime(
-                value, 197, tmp_path / "sleep", store, resume_from=failed.id
+                value,
+                197,
+                tmp_path / "sleep",
+                store,
+                resume_from=failed.id,
+                backend=resolve("torch"),
             )
         row = store.con.execute(
             "SELECT id FROM training_runs ORDER BY rowid DESC LIMIT 1"
@@ -281,6 +312,7 @@ def test_abrupt_exit_recovers_without_rewriting_last_export(
 import os
 import sys
 from pathlib import Path
+from manabot.backends import resolve
 from manabot.training import execution
 from manabot.training.regime import TrainingRegime
 from manabot.verify.store import VerifyStore
@@ -297,7 +329,7 @@ def terminate_after_commit(run_id, store, out):
 execution.export_training_run = terminate_after_commit
 recipe = TrainingRegime.model_validate_json(Path(sys.argv[1]).read_text())
 with VerifyStore(Path(sys.argv[2])) as store:
-    execution.execute_regime(recipe, 197, Path(sys.argv[3]), store)
+    execution.execute_regime(recipe, 197, Path(sys.argv[3]), store, backend=resolve("torch"))
 """
     result = subprocess.run(
         [
@@ -320,15 +352,25 @@ with VerifyStore(Path(sys.argv[2])) as store:
         parent_id = store.con.execute("SELECT id FROM training_runs").fetchone()[0]
         assert store.training_run(parent_id).status == "running"
         resumed = execution.execute_regime(
-            value, 197, tmp_path / "continued", store, resume_from=parent_id
+            value,
+            197,
+            tmp_path / "continued",
+            store,
+            resume_from=parent_id,
+            backend=resolve("torch"),
         )
         parent = store.training_run(parent_id)
         assert parent.status == "interrupted"
         assert parent.unobserved_seconds > 0
         assert resumed.prior_seconds == parent.seconds
         assert (failed_out / "run.json").read_bytes() == evidence
-        whole = execution.execute_regime(value, 197, tmp_path / "whole", store)
-        a, b = load_update(whole), load_update(resumed)
+        whole = execution.execute_regime(
+            value, 197, tmp_path / "whole", store, backend=resolve("torch")
+        )
+        a, b = (
+            load_update(whole, backend=resolve("torch").state),
+            load_update(resumed, backend=resolve("torch").state),
+        )
         assert_state_equal(a.learner, b.learner)
         assert_state_equal(a.optimizer, b.optimizer)
 
@@ -343,7 +385,12 @@ def test_live_lease_rejects_recovery(
         with attempt_lock(Path(parent.recovery_lock_path), existing=True):
             with pytest.raises(ValueError, match="live writer"):
                 execution.execute_regime(
-                    value, 197, tmp_path / "child", store, resume_from=parent.id
+                    value,
+                    197,
+                    tmp_path / "child",
+                    store,
+                    resume_from=parent.id,
+                    backend=resolve("torch"),
                 )
 
 
@@ -372,7 +419,12 @@ def test_setup_failure_retains_stage_lineage_and_admission_slot(
             )
             with pytest.raises(ValueError, match="runtime/source"):
                 execution.execute_regime(
-                    value, 197, tmp_path / "incompatible", store, resume_from=parent.id
+                    value,
+                    197,
+                    tmp_path / "incompatible",
+                    store,
+                    resume_from=parent.id,
+                    backend=resolve("torch"),
                 )
         assert execution._runtime_identities is fingerprints
         export = execution.export_training_run
@@ -392,14 +444,24 @@ def test_setup_failure_retains_stage_lineage_and_admission_slot(
             patch.setattr(execution, "export_training_run", fail_setup)
             with pytest.raises(KeyboardInterrupt):
                 execution.execute_regime(
-                    value, 197, tmp_path / "setup", store, resume_from=parent.id
+                    value,
+                    197,
+                    tmp_path / "setup",
+                    store,
+                    resume_from=parent.id,
+                    backend=resolve("torch"),
                 )
         child_id = store.con.execute(
             "SELECT id FROM training_runs ORDER BY rowid DESC LIMIT 1"
         ).fetchone()[0]
         child = store.training_run(child_id)
         resumed = execution.execute_regime(
-            value, 197, tmp_path / "resumed", store, resume_from=child.id
+            value,
+            197,
+            tmp_path / "resumed",
+            store,
+            resume_from=child.id,
+            backend=resolve("torch"),
         )
         assert resumed.status == "completed"
         assert resumed.prior_seconds == parent.seconds + child.seconds
@@ -428,7 +490,9 @@ def test_stage_budgets_do_not_charge_previous_stages(
     monkeypatch.setattr(execution, "watchdog_seconds", lambda: clock)
     monkeypatch.setattr(execution, "update_iteration", timed_update)
     with VerifyStore(tmp_path / "training.sqlite") as store:
-        run = execution.execute_regime(value, 197, tmp_path / "run", store)
+        run = execution.execute_regime(
+            value, 197, tmp_path / "run", store, backend=resolve("torch")
+        )
         assert run.status == "completed"
         assert run.watchdog_seconds == 120
         assert [stage.watchdog_seconds for stage in run.stages] == [60, 60]
@@ -460,7 +524,9 @@ def test_completed_artifact_corruption_rejects_before_claim(
         with monkeypatch.context() as patch:
             patch.setattr(execution, "export_training_run", fail_completed)
             with pytest.raises(KeyboardInterrupt):
-                execution.execute_regime(value, 197, tmp_path / "parent", store)
+                execution.execute_regime(
+                    value, 197, tmp_path / "parent", store, backend=resolve("torch")
+                )
         parent_id = store.con.execute("SELECT id FROM training_runs").fetchone()[0]
         parent = store.training_run(parent_id)
         path = Path(parent.stages[0].artifacts["raw"]["path"])
@@ -468,11 +534,21 @@ def test_completed_artifact_corruption_rejects_before_claim(
         path.write_bytes(b"stale bytes")
         with pytest.raises(ValueError, match="stage artifact digest"):
             execution.execute_regime(
-                value, 197, tmp_path / "rejected", store, resume_from=parent.id
+                value,
+                197,
+                tmp_path / "rejected",
+                store,
+                resume_from=parent.id,
+                backend=resolve("torch"),
             )
         path.write_bytes(original)
         resumed = execution.execute_regime(
-            value, 197, tmp_path / "resumed", store, resume_from=parent.id
+            value,
+            197,
+            tmp_path / "resumed",
+            store,
+            resume_from=parent.id,
+            backend=resolve("torch"),
         )
         assert resumed.status == "completed"
         assert resumed.stages[0] == parent.stages[0]
@@ -494,14 +570,24 @@ def test_death_immediately_after_recovery_claim_keeps_snapshot_admissible(
             patch.setattr(store, "claim_training_recovery", die_after_claim)
             with pytest.raises(KeyboardInterrupt):
                 execution.execute_regime(
-                    value, 197, tmp_path / "claimed", store, resume_from=parent.id
+                    value,
+                    197,
+                    tmp_path / "claimed",
+                    store,
+                    resume_from=parent.id,
+                    backend=resolve("torch"),
                 )
         child_id = store.con.execute(
             "SELECT id FROM training_runs ORDER BY rowid DESC LIMIT 1"
         ).fetchone()[0]
         assert store.training_run(child_id).status == "running"
         resumed = execution.execute_regime(
-            value, 197, tmp_path / "resumed", store, resume_from=child_id
+            value,
+            197,
+            tmp_path / "resumed",
+            store,
+            resume_from=child_id,
+            backend=resolve("torch"),
         )
         child = store.training_run(child_id)
         assert child.status == "interrupted"
@@ -527,23 +613,35 @@ def test_sparse_recovery_replays_unsaved_updates_exactly(
         return run
 
     with VerifyStore(tmp_path / "training.sqlite") as store:
-        whole = execution.execute_regime(value, 197, tmp_path / "whole", store)
+        whole = execution.execute_regime(
+            value, 197, tmp_path / "whole", store, backend=resolve("torch")
+        )
         with monkeypatch.context() as patch:
             patch.setattr(execution, "export_training_run", fail_after_second_update)
             with pytest.raises(KeyboardInterrupt):
-                execution.execute_regime(value, 197, tmp_path / "failed", store)
+                execution.execute_regime(
+                    value, 197, tmp_path / "failed", store, backend=resolve("torch")
+                )
         row = store.con.execute(
             "SELECT id FROM training_runs ORDER BY rowid DESC LIMIT 1"
         ).fetchone()
         failed = store.training_run(row[0])
         assert failed.stages[0].updates == 2
-        assert load_update(failed).iteration == 1
+        assert load_update(failed, backend=resolve("torch").state).iteration == 1
         resumed = execution.execute_regime(
-            value, 197, tmp_path / "resumed", store, resume_from=failed.id
+            value,
+            197,
+            tmp_path / "resumed",
+            store,
+            resume_from=failed.id,
+            backend=resolve("torch"),
         )
         assert resumed.status == "completed"
         assert resumed.prior_seconds == failed.seconds
-        a, b = load_update(whole), load_update(resumed)
+        a, b = (
+            load_update(whole, backend=resolve("torch").state),
+            load_update(resumed, backend=resolve("torch").state),
+        )
         for name in ("learner", "optimizer", "ema", "torch_rng", "minibatch_rng"):
             assert_state_equal(getattr(a, name), getattr(b, name))
         assert a.collector.journal == b.collector.journal

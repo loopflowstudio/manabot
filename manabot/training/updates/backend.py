@@ -10,7 +10,8 @@ provides loading and NumPy parity; `Learner` extends its `BackendLearner`.
 Both backends satisfy `UpdateBackend`. The PPO update needs `PPOBackend`, which adds
 standardization, top-count selection and a policy `__call__`/`get_value`; only
 torch provides it. A categorical critic needs `CategoricalRL` (torch only);
-`categorical_rl` narrows to it and refuses a backend without one.
+`categorical_rl` narrows to it and refuses a backend without one. `ppo_rl`
+likewise refuses an unsupported PPO update before reading rollout or learner state.
 `tests/training/test_update_backend_protocols.py` checks each backend's files
 against these member lists and signatures.
 
@@ -21,9 +22,11 @@ indexing and reductions on it and reads it through `arrays.to_numpy` or
 only handed back to it.
 """
 
+from __future__ import annotations
+
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import AbstractContextManager
-from typing import Any, Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
 import numpy as np
 from numpy.typing import NDArray
@@ -32,8 +35,10 @@ from manabot.env.observation import ObservationBuffers
 from manabot.infra.profiler import Profiler
 from manabot.policy.prepare import Prepared
 from manabot.policy.protocol import BackendLearner
-from manabot.training.rollout.actions import ActionRows
-from manabot.training.rollout.collection import RolloutBatch
+from manabot.training.rollout.actions import ActionRows, ActionValidator
+
+if TYPE_CHECKING:
+    from manabot.training.rollout.collection import RolloutBatch
 
 # A backend's array, device and admitted observation minibatch. `Any` because
 # the update applies the framework's own operators to arrays, and only the
@@ -143,6 +148,7 @@ def categorical_rl(rl: RL) -> CategoricalRL:
     return rl
 
 
+@runtime_checkable
 class PPORL(CategoricalRL, Protocol):
     """`rl` of a backend the PPO update runs on."""
 
@@ -158,6 +164,14 @@ class PPORL(CategoricalRL, Protocol):
         *,
         kind: FilterKind = "top_count",
     ) -> Array: ...
+
+
+def ppo_rl(rl: RL) -> PPORL:
+    """Refuse an unsupported update before reading its rollout or learner."""
+    if not isinstance(rl, PPORL):
+        name = getattr(rl, "__name__", type(rl).__name__)
+        raise TypeError(f"{name} has no PPO update")
+    return rl
 
 
 # -- arrays, learner and rollout files ------------------------------------------
@@ -184,6 +198,14 @@ class LearnerFile(Protocol):
         """Nothing computed inside records a gradient."""
         ...
 
+    def critic_gradient_norms(self, model: Any) -> tuple[float, float | None]: ...
+    def gradient_health(
+        self, model: Any, norm_before: Array, critic_norms: tuple[float, float | None]
+    ) -> dict[str, float | int]: ...
+    def parameter_health(
+        self, parameters: list[Any], before: list[Array]
+    ) -> dict[str, float]: ...
+
 
 class AdmittedRollout(Protocol):
     """A rollout batch admitted once for one policy (`backend.rollout`)."""
@@ -204,7 +226,7 @@ class AdmittedRollout(Protocol):
     def evidence(self, obs: Observations) -> Mapping[str, Array]: ...
 
 
-class RolloutFile(Protocol):
+class RolloutFile(ActionValidator, Protocol):
     """`backend.rollout`. The first argument is the learner's `agent`."""
 
     @property

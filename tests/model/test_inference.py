@@ -8,6 +8,9 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.env.match import Match, Reward
 from manabot.env.observation import (
@@ -52,11 +55,17 @@ class PolicyFixture:
     obs: ObservationBuffers
 
 
-def _policy(*, semantic: bool = True, history: bool = False) -> PolicyFixture:
+def _policy(
+    *, semantic: bool = True, history: bool = False, input_version: int | None = None
+) -> PolicyFixture:
     torch.set_num_threads(1)
     torch.manual_seed(819)
     config = recipe()
     config.agent.value_aggregation = "masked_mean"
+    if input_version is not None:
+        config.observation = config.observation.model_copy(
+            update={"policy_input_version": input_version}
+        )
     if history:
         config.observation.policy_history_version = 1
         config.agent.recent_events = True
@@ -72,6 +81,7 @@ def _policy(*, semantic: bool = True, history: bool = False) -> PolicyFixture:
         seed=91,
         opponent_mode="self",
         recovery_max_microsteps=10000,
+        numerics=TorchCollectionSession(device="cpu", seed=91, precision="float32"),
     )
     return PolicyFixture(agent, collector, collector._slice_obs_rows(np.arange(2)))
 

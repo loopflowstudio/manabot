@@ -6,6 +6,9 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import PERMANENT_DEFINITION_INDEX, ObservationSpace
@@ -125,7 +128,12 @@ def test_token_preserves_action_focus_indexes(depth: Literal[1, 2]) -> None:
         ModelConfig(value_aggregation="value_token", attention_layers=depth),
     )
     collector = SeatRoutedCollector(
-        agent.observation_space, Match(), Reward(RewardConfig()), num_envs=1, seed=29
+        agent.observation_space,
+        Match(),
+        Reward(RewardConfig()),
+        num_envs=1,
+        seed=29,
+        numerics=TorchCollectionSession(device="cpu", seed=29, precision="float32"),
     )
     batch = collector.collect(agent, 1)
     obs = {
@@ -199,7 +207,12 @@ def test_real_forward_padding_and_historical_equation(aggregation: Aggregation) 
     torch.manual_seed(106)
     agent = ActorCritic(ObservationSpace(), ModelConfig(value_aggregation=aggregation))
     collector = SeatRoutedCollector(
-        agent.observation_space, Match(), Reward(RewardConfig()), num_envs=1, seed=29
+        agent.observation_space,
+        Match(),
+        Reward(RewardConfig()),
+        num_envs=1,
+        seed=29,
+        numerics=TorchCollectionSession(device="cpu", seed=29, precision="float32"),
     )
     batch = collector.collect(agent, 1)
     obs = {
@@ -394,7 +407,12 @@ def test_attention_readout_shares_initialization_and_actor_path() -> None:
         torch.testing.assert_close(readout_state[key], value, rtol=0, atol=0)
 
     collector = SeatRoutedCollector(
-        masked.observation_space, Match(), Reward(RewardConfig()), num_envs=1, seed=29
+        masked.observation_space,
+        Match(),
+        Reward(RewardConfig()),
+        num_envs=1,
+        seed=29,
+        numerics=TorchCollectionSession(device="cpu", seed=29, precision="float32"),
     )
     batch = collector.collect(masked, 1)
     obs = {

@@ -92,13 +92,14 @@ def main() -> None:
         )
         encoder = ObservationEncoder(
             ObservationConfig(
-                policy_input_version=10,
+                policy_input_version=11,
                 max_cards_per_player=max(
                     60, len(obs.agent_cards), len(obs.opponent_cards)
                 ),
                 max_permanents_per_player=max(
                     40, len(obs.agent_permanents), len(obs.opponent_permanents)
                 ),
+                max_stack_objects=max(32, len(obs.stack_objects)),
                 max_actions=max(512, len(obs.action_space.actions)),
                 max_facts=4096,
                 max_events=max(32, len(obs.recent_events)),

@@ -16,7 +16,7 @@ import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
-from manabot.belief.sampling_types import SamplerInput, _digest
+from manabot.belief.sampling_types import SamplerInput, sampling_digest
 from manabot.sim.search.rollout_receipt import RolloutReceipt
 from manabot.sim.search.sampling_receipt import (
     PHYSICAL_SAMPLER_IDENTITY,
@@ -25,6 +25,7 @@ from manabot.sim.search.sampling_receipt import (
     validate_hand,
 )
 from managym.decision import Command, Observation
+from managym.mirror import regularized_update
 
 FloatArray = NDArray[np.float64]
 
@@ -80,58 +81,6 @@ class LearnedBeliefReceipt:
     constraints_json: str
     sampling_seed: int
     hands: tuple[HandSample, ...]
-
-
-def regularized_update(
-    base: FloatArray,
-    values: FloatArray,
-    reference: FloatArray,
-    *,
-    alpha: float,
-    beta: float,
-) -> FloatArray:
-    """Maximize p·Q - alpha KL(p||reference) - beta KL(p||base).
-
-    All vectors have shape [legal_actions]. Base zeros restrict the feasible
-    simplex; values outside its support may be NaN and are never consulted.
-    The reference remains strictly positive. Values are signed expected outcomes;
-    beta is the inverse step scale. This is one detached local simplex update,
-    not a gradient through a determinized game or an argmax improvement claim.
-    """
-    if not np.isfinite([alpha, beta]).all() or alpha < 0 or beta <= 0:
-        raise ValueError("local update requires finite alpha >= 0 and beta > 0")
-    arrays = [np.asarray(item, dtype=np.float64) for item in (base, values, reference)]
-    base, values, reference = arrays
-    if base.ndim != 1 or not base.size or any(a.shape != base.shape for a in arrays):
-        raise ValueError("local update vectors must align with legal offers")
-    support = base > 0
-    if not np.isfinite(values[support]).all() or any(
-        not np.isfinite(a).all() for a in (base, reference)
-    ):
-        raise ValueError("local update vectors must be finite")
-    for probabilities in (base, reference):
-        if np.any(probabilities < 0) or not np.isclose(probabilities.sum(), 1):
-            raise ValueError(
-                "base and reference require normalized nonnegative support"
-            )
-    if np.any(reference <= 0):
-        raise ValueError("reference requires positive support")
-    # beta > 0 restricts the feasible simplex to the base support. Missing Q
-    # outside it is deliberately unused, never treated as a zero-valued rollout.
-    logits = (
-        values[support]
-        + alpha * np.log(reference[support])
-        + beta * np.log(base[support])
-    ) / (alpha + beta)
-    if not np.isfinite(logits).all():
-        raise ValueError("local update logits are nonfinite")
-    target = np.exp(logits - logits.max())
-    target /= target.sum()
-    if np.any(target == 0):
-        raise ValueError("local update numerically lost mixed support")
-    aligned = np.zeros_like(base)
-    aligned[support] = target
-    return aligned
 
 
 @dataclass(frozen=True)
@@ -258,7 +207,7 @@ class LocalUpdateReceipt:
                     raise ValueError(
                         "compact rollout must omit actor observation hashes"
                     )
-                _validate_rollout_audit(
+                validate_rollout_audit(
                     row.branch_audit_json, row.canonical_commands, full=False
                 )
         prefix = receipt.compound_prefix
@@ -358,7 +307,7 @@ class LocalUpdateReceipt:
             identity["viewer"] != receipt.viewer
             or identity["revision"] != receipt.revision
             or identity["viewer_state_hash"] != receipt.viewer_state_hash
-            or _digest(source) != receipt.world_identity
+            or sampling_digest(source) != receipt.world_identity
             or sampling_seed != receipt.seed
             or receipt.sampling_probabilities
             or receipt.condition_mass != 1.0
@@ -416,7 +365,7 @@ class _RolloutAudit(BaseModel):
     tapes: dict[str, list[dict[str, object]]]
 
 
-def _validate_rollout_audit(encoded: str, commands: int, *, full: bool) -> None:
+def validate_rollout_audit(encoded: str, commands: int, *, full: bool) -> None:
     """A rollout forks once at the world site and applies only child Commands.
 
     Native counters count every applied Command in either mode; only an audited
