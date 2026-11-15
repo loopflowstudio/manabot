@@ -91,6 +91,19 @@ publish, land or choose the next Graph step from here.
   (buttons are disabled while a Command is in flight, and `Pass Turn (F6)` in
   the panel is not an offer). Tapped lands show only in a `fullPage`
   screenshot, not in the board's text.
+- Academy policy/session recovery: build the static SPA before browser servers
+  (`ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build`). Then use
+  `npm --prefix academy/ui run test:e2e -- --config playwright.policy.config.ts`
+  for policy refusal, both Watch seats, original-Command reload and backend
+  restart; `--config playwright.search.config.ts` covers explicit Search retry
+  and saved evidence. Ports are scoped by `ACADEMY_POLICY_PORT` and
+  `ACADEMY_SEARCH_PORT`. The release config covers unified replay, session
+  continuation and laptop navigation. Keep generation/builds finished while
+  browser proofs run; rebuilding replaces chunks under a preview server.
+  Combat remains ordinary per-creature offers, including nonparticipation.
+  A swapped human is native seat 1; check player-target role labels against
+  actual native seats. Floating mana has its own disclosure outside player
+  status; status retains full policy identity and provenance.
 - Configured launch (`managym academy play|replay`, `managym.academy.launch.serve`):
   from a checkout first build the static SPA with
   `ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build`, then set

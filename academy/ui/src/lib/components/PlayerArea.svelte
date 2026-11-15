@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ManaPool from './ManaPool.svelte';
   import { getContext } from 'svelte';
   import { PRESENTATION_CONTEXT, presentationSubjects, type PresentationEvent } from '$lib/presentation';
   import { revealWithinScrollRegions } from '$lib/scroll-regions';
@@ -52,6 +53,7 @@
   }: Props = $props();
 
   const label = $derived(identity.text);
+  const runtime = $derived(identity.runtime ?? identity.provenance?.policy);
 
   const narratedEvent = getContext<(() => PresentationEvent | null) | undefined>(PRESENTATION_CONTEXT);
   const narrated = $derived.by(() => {
@@ -140,9 +142,6 @@
       toughness: card.types.is_creature ? card.toughness : null,
     });
   }
-  function manaText(pool: number[]): string {
-    return pool.map((amount, index) => amount ? `${amount} {${['W', 'U', 'B', 'R', 'G', 'C'][index]}}` : '').filter(Boolean).join(' · ') || 'Empty';
-  }
 </script>
 
 {#snippet rubric(text: string)}
@@ -152,33 +151,23 @@
 {/snippet}
 
 <section class="player-area" class:empty-battlefield={opponent && player.battlefield.length === 0} aria-label={`${label}${deckName ? ` — ${deckName}` : ''}`}>
-  <details class="player-status type-caption"><summary>{label} status and mana</summary>
+  <details class="player-status type-caption"><summary>{label} status</summary>
   {#if identity.digest || identity.producer || identity.full !== identity.compact}
   <div class="identity-details" data-testid="player-identity">
     <p>{identity.full}</p>
-    {#if identity.digest}<p>SHA-256: {identity.digest}</p>{/if}
+    {#if identity.digest}<p>{runtime ? 'Policy ID' : 'SHA-256'}: {identity.digest}</p>{/if}
     {#if identity.producer}<p>Producer: {identity.producer}</p>{/if}
+    {#if runtime}
+      <p>Runner: {runtime.runner}</p>
+      {#each Object.entries(runtime.artifacts) as [role, digest]}<p>{role}: {digest}</p>{/each}
+      <p>Config: {JSON.stringify(runtime.config)}</p>
+    {/if}
     {#each ['source', 'world', 'model', 'step'] as const as key}
       {@const value = identity.provenance?.[key]}
       {#if value != null}<p>{key}: {value}</p>{/if}
     {/each}
   </div>
   {/if}
-  {#if player.mana}
-    <p class="type-caption py-1" data-testid="mana-pool">{label} mana: {manaText(player.mana)}
-      {#if player.restricted_mana?.length}
-        {#each player.restricted_mana as restricted}
-          · {manaText(restricted.mana)} only for {spendingText(restricted)}
-        {/each}
-      {:else if player.lesson_mana?.some(Boolean)} · Restricted mana: {manaText(player.lesson_mana)}{/if}
-      <!-- Class rows are subsets of the amounts above, not additional mana. -->
-      {#each player.pooled_mana_classes ?? [] as pooled, index}
-        {index ? '; ' : ' — including '}{manaText(pooled.mana)}{pooled.restriction ? ` only for ${pooled.restriction}` : ''}{pooled.effect ? ` that puts ${pooled.effect}` : ''}, expiring {pooled.combat ? 'at end of combat' : 'at step end'}
-      {/each}
-      {#if !player.pooled_mana_classes?.length && player.combat_mana} · {player.combat_mana} mana expires at end of combat{/if}
-      {#if player.keeps_red_mana} · Keeps unspent red mana until end of turn{/if}
-    </p>
-  {:else}<p class="type-caption text-ink-2">Mana details not recorded.</p>{/if}
   {#if player.hand_only_until !== undefined}
     <p class="type-caption py-1" data-testid="hand-only">
       {label} can cast spells only from hand until the other player's next turn.
@@ -207,6 +196,7 @@
     </p>
   {/if}
   </details>
+  <ManaPool {player} {label} />
   <!-- Identity and life stay above the scrolling battlefield and zones. -->
   <div
     data-player-id={player.id}
@@ -340,38 +330,42 @@
   {#if !opponent}
       <div class="hand-staff">
         {@render rubric(`Hand (${player.hand.length})`)}
-        <!-- svelte-ignore a11y_no_noninteractive_tabindex (keyboard access to horizontal hand scrolling) -->
-        <div role="region" aria-label={`${label} hand`} tabindex="0" class="hand-cards"
-          onfocusin={(event) => {
-            if (event.target instanceof HTMLElement) revealWithinScrollRegions(event.target);
-          }}>
-          {#if player.hand.length === 0}
-            <div class="type-caption px-1 py-1 text-ink-3">Empty hand</div>
-          {/if}
-          {#each player.hand as card}
-            <Card
-              objectId={card.id}
-              name={card.name}
-              copyDescription={copyLabel(player.hand, card.id)}
-              power={card.types.is_creature ? card.power : null}
-              toughness={card.types.is_creature ? card.toughness : null}
-              focused={focusedIds.has(card.id)}
-              clickable={onSelectTarget !== undefined}
-              onSelect={() => onSelectTarget?.(card.id)}
-              onHoverStart={() => {
-                onHoverTarget?.(clickableTargets?.has(card.id) ? card.id : null);
-                preview(card);
-              }}
-              onHoverEnd={() => {
-                onHoverTarget?.(null);
-                onPreviewCard?.(null);
-              }}
-            />
-          {/each}
-        </div>
+        {@render handCards()}
       </div>
   {/if}
 </section>
+
+{#snippet handCards()}
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex (keyboard access to horizontal hand scrolling) -->
+  <div role="region" aria-label={`${label} hand`} tabindex="0" class="hand-cards"
+    onfocusin={(event) => {
+      if (event.target instanceof HTMLElement) revealWithinScrollRegions(event.target);
+    }}>
+    {#if player.hand.length === 0}
+      <div class="type-caption px-1 py-1 text-ink-3">Empty hand</div>
+    {/if}
+    {#each player.hand as card}
+      <Card
+        objectId={card.id}
+        name={card.name}
+        copyDescription={copyLabel(player.hand, card.id)}
+        power={card.types.is_creature ? card.power : null}
+        toughness={card.types.is_creature ? card.toughness : null}
+        focused={focusedIds.has(card.id)}
+        clickable={onSelectTarget !== undefined}
+        onSelect={() => onSelectTarget?.(card.id)}
+        onHoverStart={() => {
+          onHoverTarget?.(clickableTargets?.has(card.id) ? card.id : null);
+          preview(card);
+        }}
+        onHoverEnd={() => {
+          onHoverTarget?.(null);
+          onPreviewCard?.(null);
+        }}
+      />
+    {/each}
+  </div>
+{/snippet}
 
 <style>
   [data-narrated-seq] { outline: 2px solid var(--info); outline-offset: 2px; }

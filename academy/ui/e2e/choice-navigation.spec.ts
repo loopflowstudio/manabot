@@ -1,7 +1,10 @@
+import { tableSnapshot } from './fixtures/table';
 import { expect, test, type Page } from '@playwright/test';
 import positionsJson from '../../../managym/academy/fixtures/choice-navigation-w17-token-cards.json' with { type: 'json' };
 import boltJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type { Command, ExperienceFrame, RecoveryEnvelope } from '../src/lib/types';
+
+test.beforeEach(({ page }) => { page.on('dialog', dialog => dialog.accept()); });
 
 const positions = positionsJson.positions;
 type Family = keyof typeof positions;
@@ -12,6 +15,7 @@ declare global {
       socket: WebSocket | null;
       frame: ExperienceFrame | null;
       status: string;
+      working: boolean;
     };
   }
 }
@@ -29,8 +33,8 @@ async function installPosition(page: Page, family: Family): Promise<Command[]> {
   await page.routeWebSocket('**/ws/play', socket => {
     socket.onMessage(raw => {
       const message = JSON.parse(String(raw));
-      if (message.type === 'new_game') {
-        socket.send(JSON.stringify({ type: 'observation', data: frame.projection,
+      if (message.type === 'new_game' || message.type === 'resume') {
+        socket.send(JSON.stringify({ type: 'observation', table: tableSnapshot(), data: frame.projection,
           actions: [], recovery, session_id: 'navigation', resume_token: 'navigation' }));
       } else if (message.type === 'command') {
         commands.push(message.command);
@@ -42,7 +46,7 @@ async function installPosition(page: Page, family: Family): Promise<Command[]> {
       }
     });
   });
-  await page.goto('/');
+  await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByRole('button', { name: 'New Game', exact: true }).first().click();
   await expect(page.getByTestId('action-panel')).toHaveAttribute('data-action-space-kind', family);
@@ -125,7 +129,7 @@ for (const family of ['CHOOSE_TARGET', 'DISCARD'] as const) {
     const position = positions[family];
     await page.addInitScript(config => {
       const state: Window['__choiceNavigation'] = {
-        socket: null, frame: null, status: '',
+        socket: null, frame: null, status: '', working: false,
       };
       const Native = window.WebSocket;
       class TrackedSocket extends Native {
@@ -134,6 +138,7 @@ for (const family of ['CHOOSE_TARGET', 'DISCARD'] as const) {
           state.socket = this;
           this.addEventListener('message', event => {
             const message = JSON.parse(event.data);
+            if (message.work) state.working = message.work.state === 'running';
             if (message.type === 'command_outcome') state.status = message.status;
             const findFrame = (value: unknown): void => {
               if (!value || typeof value !== 'object') return;
@@ -157,6 +162,7 @@ for (const family of ['CHOOSE_TARGET', 'DISCARD'] as const) {
     await page.getByRole('button', { name: 'New Game', exact: true }).first().click();
     await expect(page.getByTestId('action-option').first()).toBeVisible();
     for (const [ordinal, step] of position.prefix.entries()) {
+      await expect.poll(() => page.evaluate(() => window.__choiceNavigation.working)).toBe(false);
       const revision = await page.evaluate(({ ordinal, step }) => {
         const state = window.__choiceNavigation;
         const frame = state.frame!;
@@ -175,6 +181,7 @@ for (const family of ['CHOOSE_TARGET', 'DISCARD'] as const) {
       )).toBeGreaterThan(revision);
     }
     await expect(page.getByTestId('action-panel')).toHaveAttribute('data-action-space-kind', family);
+    await expect(page.getByTestId('action-option').first()).toBeEnabled();
     const actual = await page.evaluate(() =>
       window.__choiceNavigation.frame!,
     );

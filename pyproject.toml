@@ -121,6 +121,10 @@ torch = [
     { index = "pytorch-training", group = "training-runtime", marker = "sys_platform != 'linux'" },
 ]
 
+[project.entry-points."managym.bots"]
+manabot = "manabot.sim.policy_provider:provider"
+qwen = "manabot.sim.qwen_provider:provider"
+
 [project.entry-points."managym.academy.bots"]
 manabot = "manabot.sim.table_bots:extension"
 

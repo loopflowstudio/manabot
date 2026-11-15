@@ -1,3 +1,6 @@
+import { tableSnapshot } from './fixtures/table';
+import { writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 
 import combatSequence from '../src/lib/fixtures/curated-combat-to-turn.json' with { type: 'json' };
@@ -165,7 +168,7 @@ async function installCombatAuthority(
           frame.offers = [];
         }
         socket.send(JSON.stringify({
-          type: 'observation',
+          type: 'observation', table: tableSnapshot(),
           data: frame.projection,
           actions: [],
           session_id: 'combat-session',
@@ -340,7 +343,10 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await expect(history).toContainText('Otter-Penguin, Badgermole Cub die.');
     await expect(history).toContainText("Hero's turn begins.");
 
-    await page.getByRole('button', { name: 'New Game' }).first().click();
+    await page.getByRole('banner').getByRole('link', { name: 'New game', exact: true }).click();
+    await page.clock.runFor(32); // Flush the navigation's animation frame while narration time is controlled.
+    page.once('dialog', dialog => dialog.accept());
+    await page.getByRole('button', { name: 'New Game', exact: true }).click();
     await expect(stage).toBeVisible();
     await page.getByRole('button', { name: 'Skip beat' }).click();
     await page.getByRole('button', { name: 'Fast-forward' }).click();
@@ -409,7 +415,7 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 800
           if (message.type === 'command') { commands.push(message.command); return; }
           if (message.type !== 'new_game') return;
           const frame = frameAt('attack');
-          socket.send(JSON.stringify({ type: 'observation', data: frame.projection, actions: [],
+          socket.send(JSON.stringify({ type: 'observation', table: tableSnapshot(), data: frame.projection, actions: [],
             session_id: 'history', resume_token: 'history', recovery: {
               ...structuredClone(boltFixture.recovery), frame,
               presentation_tail: history, presentation_cursor: 0,
@@ -489,20 +495,37 @@ test('Replay seeks retain exactly the recorded prefix and label missing old cons
     })),
     final_observation: observation, winner: null, end_reason: 'fixture', timestamp: '2026-11-14T00:00:00Z',
   };
+  const positions = Array.from({length: 7}, (_, index) => ({
+    key: index === 6 ? 'latest' : index % 2 === 0 ? `legacy-choice:${index / 2}` : `after:${(index - 1) / 2}`,
+    kind: index === 6 ? 'state' : index % 2 === 0 ? 'choice' : 'consequences',
+    turn: 1, phase: 'COMBAT', step: 'DAMAGE', actor: null, automatic: false, can_reveal: false,
+  }));
   await page.route('**/api/traces', route => route.fulfill({ json: [] }));
-  await page.route('**/api/traces/recorded-history', route => route.fulfill({ json: trace }));
-  await page.route('**/api/traces/recorded-history/decisions', route => route.fulfill({ status: 404 }));
+  await page.route('**/api/traces/recorded-history/recording', route => route.fulfill({json: {
+    id: trace.id, positions, total: positions.length, next_offset: null, revision: 11,
+    status: 'interrupted', can_produce: false, winner: null, players: [], source_kind: null, watch: false, can_feedback: false,
+  }}));
+  await page.route('**/api/traces/recorded-history/positions/**', route => {
+    const key = decodeURIComponent(new URL(route.request().url()).pathname.split('/positions/')[1]);
+    const index = positions.findIndex(position => position.key === key);
+    const events = trace.events.slice(0, Math.ceil(index / 2)).flatMap(event => event.presentation);
+    return route.fulfill({json: {...positions[index], observation, decision: null, outputs: null,
+      description: null, note_key: key, viewer: 0, revealed: false, history: events,
+      history_labels: events.map(() => combatSequence.labels), history_before: null,
+      cursor: events.length, transition_start: Math.max(0, events.length - 2), consequences_recorded: events.length > 0,
+    }});
+  });
   await page.goto('/replay?trace=recorded-history');
   const history = page.getByTestId('presentation-history');
   await history.locator('summary').click();
   await expect(history).toContainText('Consequences not recorded');
-  await page.getByRole('button', { name: 'Next frame', exact: true }).click();
-  await expect(history.getByRole('listitem')).toHaveCount(2);
-  await page.getByRole('button', { name: 'Next frame', exact: true }).click();
-  await expect(history.getByRole('listitem')).toHaveCount(4);
-  await page.getByRole('button', { name: 'Previous frame', exact: true }).click();
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(history.getByRole('listitem')).toHaveCount(2);
   await page.getByRole('slider', { name: 'Replay position' }).fill('3');
+  await expect(history.getByRole('listitem')).toHaveCount(4);
+  await page.getByRole('button', { name: 'Previous', exact: true }).click();
+  await expect(history.getByRole('listitem')).toHaveCount(2);
+  await page.getByRole('slider', { name: 'Replay position' }).fill('5');
   await expect(history.getByRole('listitem')).toHaveCount(6);
   await expect(history.locator('[data-presentation-seq="1"]')).toHaveCount(1);
   await expect(history).toContainText('Otter-Penguin, Badgermole Cub die.');
@@ -550,7 +573,7 @@ test('partial history recovery preserves event pixels, focus and recovered unrea
       const frame = frameAt('attack');
       frame.match_id = match;
       if (match === 'different-viewer-scope') frame.projection.opponent.battlefield[0].name = 'Scope-only name';
-      socket.send(JSON.stringify({ type: 'observation', data: frame.projection, actions: [],
+      socket.send(JSON.stringify({ type: 'observation', table: tableSnapshot(), data: frame.projection, actions: [],
         session_id: 'partial-history', resume_token: 'partial-history', recovery: {
           ...structuredClone(boltFixture.recovery), frame, presentation_tail: tail, presentation_cursor: tail[0]?.seq ?? 0,
         },
@@ -618,23 +641,25 @@ test('partial history recovery preserves event pixels, focus and recovered unrea
 
 test('history seek removes inspection and repositions to a preceding retained event', async ({ page }) => {
   const observation = combatObservation();
+  // Two transitions of a legacy record: ten facts, then ninety-five more.
   const events: PresentationEvent[] = Array.from({ length: 105 }, (_, seq) => ({
     ...structuredClone(combatSequence.events[0]) as PresentationEvent, seq,
+    from_revision: seq < 10 ? 1 : 2, to_revision: seq < 10 ? 2 : 3,
   }));
   const trace = {
-    id: 'history-anchor-seek', config: { hero_deck: {}, villain_deck: {}, villain_type: 'passive', seed: 42 },
+    config: { hero_deck: {}, villain_deck: {}, villain_type: 'passive' },
     events: [events.slice(0, 10), events.slice(10)].map((presentation, index) => ({
       actor: 'hero', observation, actions: [], action: 0, action_description: `Choice ${index}`,
       reward: 0, presentation,
     })),
     final_observation: observation, winner: null, end_reason: 'fixture', timestamp: '2026-11-14T00:00:00Z',
   };
-  await page.route('**/api/traces', route => route.fulfill({ json: [] }));
-  await page.route('**/api/traces/history-anchor-seek', route => route.fulfill({ json: trace }));
-  await page.route('**/api/traces/history-anchor-seek/decisions', route => route.fulfill({ status: 404 }));
-  await page.goto('/replay?trace=history-anchor-seek');
+  // The real legacy reader serves the record from the release server's store.
+  await writeFile(fileURLToPath(new URL('../test-results/release/traces/history-anchor-seek.json', import.meta.url)), JSON.stringify(trace));
+  await page.goto('/replay?trace=history-anchor-seek&position=latest');
   const slider = page.getByRole('slider', { name: 'Replay position' });
-  await slider.fill('2');
+  // Positions: choice 0, its consequences, choice 1, its consequences, latest state.
+  await expect(slider).toHaveAttribute('max', '4');
   const panel = page.getByTestId('presentation-history');
   await panel.locator('summary').click();
   const region = panel.getByRole('list', { name: 'Recorded game events' });
@@ -657,12 +682,12 @@ test('history seek removes inspection and repositions to a preceding retained ev
   });
   await expect(inspection).toHaveCount(0);
   await expect(region).toBeFocused();
-  await expect(region.locator('[data-presentation-seq]')).toHaveCount(1);
-  await expect(panel.locator('[data-presentation-seq="9"]')).toBeVisible();
+  await expect(region.locator('[data-presentation-seq="9"]')).toBeVisible();
+  await expect(region.locator('[data-presentation-seq="10"]')).toHaveCount(0);
   await slider.fill('0');
-  await expect(panel).toContainText('Consequences not recorded');
+  await expect(panel.locator('[data-presentation-seq]')).toHaveCount(0);
   await slider.fill('1');
-  await expect(panel.locator('[data-presentation-seq="0"]')).toHaveCount(1);
+  await expect(region.locator('[data-presentation-seq="0"]')).toHaveCount(1);
   await region.getByRole('button').first().click();
   await expect(inspection).toBeFocused();
   await slider.evaluate((element: HTMLInputElement) => {
@@ -671,4 +696,182 @@ test('history seek removes inspection and repositions to a preceding retained ev
   });
   await expect(inspection).toHaveCount(0);
   await expect(panel.locator('summary')).toBeFocused();
+});
+
+test('Replay reader actions hold playback and reject a delayed position without pausing hover or restored scroll', async ({ page }) => {
+  const observation = combatObservation();
+  const events: PresentationEvent[] = Array.from({length: 150}, (_, seq) => ({
+    ...structuredClone(combatSequence.events[0]) as PresentationEvent, seq,
+  }));
+  const positions = ['choice', 'consequences', 'state'].map((kind, i) => ({
+    key: `held:${i}`, kind, turn: 4, phase: 'COMBAT', step: 'DAMAGE', actor: null, automatic: false, can_reveal: false,
+  }));
+  await page.route('**/api/traces', route => route.fulfill({json: []}));
+  await page.route('**/api/traces/reader/recording', route => route.fulfill({json: {
+    id: 'reader', positions, total: 3, next_offset: null, revision: 11,
+    status: 'finished', can_produce: false, winner: null, players: [], source_kind: null, watch: false, can_feedback: false,
+  }}));
+  let delay = false;
+  let release: (() => void) | null = null;
+  await page.route('**/api/traces/reader/positions/**', async route => {
+    const url = new URL(route.request().url());
+    const key = decodeURIComponent(url.pathname.split('/positions/')[1]);
+    if (delay && key === 'held:1') await new Promise<void>(resolve => release = resolve);
+    const position = positions.find(position => position.key === key)!;
+    await route.fulfill({json: {...position, observation, decision: null, outputs: null,
+      description: null, note_key: key, viewer: 0, revealed: false, history: url.searchParams.has('before') ? [] : events,
+      history_labels: url.searchParams.has('before') ? [] : events.map(() => combatSequence.labels), history_before: url.searchParams.has('before') ? null : 1,
+      cursor: 150, transition_start: 150, consequences_recorded: true,
+    }});
+  });
+  await page.setViewportSize({width: 1280, height: 800});
+  await page.goto('/replay?trace=reader');
+  const counter = page.getByTestId('position-counter');
+  await expect(counter).toHaveText('Position 1 / 3');
+  await page.clock.install({time: 0});
+  await page.clock.pauseAt(1000);
+  await page.getByRole('combobox', {name: 'Speed', exact: true}).selectOption('16');
+  const play = page.getByRole('button', {name: 'Play', exact: true});
+  const pause = page.getByRole('button', {name: 'Pause', exact: true});
+  const card = page.getByTestId('game-board').locator('button[data-object-id]').first();
+  const inspection = page.getByRole('region', {name: 'Inspected card', exact: true});
+  for (const input of ['pointer', 'keyboard']) {
+    await play.click();
+    await card.hover();
+    await expect(pause).toBeVisible();
+    if (input === 'pointer') await card.click();
+    else { await card.focus(); await page.keyboard.press('Enter'); }
+    await expect(inspection).toBeVisible();
+    await expect(play).toBeVisible();
+    await page.clock.runFor(500);
+    await expect(counter).toHaveText('Position 1 / 3');
+    await page.getByRole('button', {name: 'Swap seats'}).click();
+    await expect(inspection).toBeVisible();
+    await page.getByRole('button', {name: 'Close inspection', exact: true}).click();
+    await expect(play).toBeVisible();
+  }
+  // The delayed read is already in flight when inspection claims the board.
+  delay = true;
+  await play.click();
+  await page.clock.runFor(100);
+  await expect.poll(() => release !== null).toBe(true);
+  await card.click();
+  release!();
+  await expect(page.getByText('Reading saved recording…', {exact: true})).toHaveCount(0);
+  await page.clock.runFor(500);
+  await expect(inspection).toBeVisible();
+  await expect(counter).toHaveText('Position 1 / 3');
+  await page.getByRole('button', {name: 'Close inspection', exact: true}).click();
+  const history = page.getByTestId('presentation-history');
+  await play.click();
+  await history.locator('summary').click();
+  await expect(play).toBeVisible();
+  const region = history.getByRole('list', {name: 'Recorded game events'});
+  await play.click();
+  // Programmatic anchor restoration is not reader intent.
+  await region.evaluate(element => { element.scrollTop = 100; });
+  await expect(pause).toBeVisible();
+  await region.focus();
+  await page.keyboard.press('Tab');
+  await expect(pause).toBeVisible();
+  await region.focus();
+  // Tab can reveal the first row. Page Up must have somewhere to scroll.
+  await region.evaluate(element => { element.scrollTop = 100; });
+  await expect.poll(() => region.evaluate(element => element.scrollTop)).toBe(100);
+  await page.keyboard.press('PageUp');
+  await page.clock.runFor(50);
+  await expect(play).toBeVisible();
+  // Page Up scrolls smoothly in real time; measure the anchor once it settles.
+  let anchor = -1;
+  await expect.poll(async () => {
+    const previous = anchor;
+    anchor = await region.evaluate(element => element.scrollTop);
+    return anchor === previous;
+  }).toBe(true);
+  await page.clock.runFor(500);
+  expect(await region.evaluate(element => element.scrollTop)).toBe(anchor);
+  await history.getByRole('button', {name: 'Latest', exact: false}).click();
+  await expect(play).toBeVisible();
+  await play.click();
+  await region.hover();
+  await page.mouse.wheel(0, -200);
+  await page.clock.runFor(50);
+  await expect(play).toBeVisible();
+  await history.getByRole('button', {name: 'Latest', exact: false}).click();
+  await play.click();
+  await history.getByRole('button', {name: 'Earlier events', exact: true}).click();
+  await expect(play).toBeVisible();
+  await play.click();
+  await history.getByRole('button', {name: /^Inspect /}).first().click();
+  await expect(play).toBeVisible();
+  await page.clock.runFor(500);
+  await expect(history.getByRole('region', {name: 'History card inspection'})).toBeVisible();
+  await history.getByRole('button', {name: 'Close history inspection'}).click();
+  await expect(play).toBeVisible();
+  await play.click();
+  await page.getByRole('button', {name: 'Load earlier recorded history'}).click();
+  await expect(play).toBeVisible();
+  await expect(counter).toHaveText('Position 1 / 3');
+  delay = false;
+  await play.click();
+  await page.clock.runFor(100);
+  await expect(counter).toHaveText('Position 2 / 3');
+});
+
+test('Replay holds inspection while a live producer saves and resumes at its saved choice', async ({ page }) => {
+  const observation = combatObservation();
+  const latest = {key: 'latest', kind: 'state', turn: 4, phase: 'COMBAT', step: 'DAMAGE', actor: null, automatic: false, can_reveal: false};
+  const choice = {...latest, key: 'saved-choice', kind: 'choice'};
+  const consequences = {...latest, key: 'saved-consequences', kind: 'consequences'};
+  let produced = 0;
+  let committed = false;
+  let release: (() => void) | null = null;
+  await page.route('**/api/traces', route => route.fulfill({json: []}));
+  await page.route('**/api/watch/pending/step', async route => {
+    produced++;
+    await new Promise<void>(resolve => release = resolve);
+    committed = true;
+    await route.fulfill({json: {}});
+  });
+  await page.route('**/api/traces/pending/recording', route => route.fulfill({json: {
+    id: 'pending', positions: committed ? [choice, consequences, latest] : [latest],
+    total: committed ? 3 : 1, next_offset: null, revision: committed ? 12 : 11,
+    status: 'waiting', can_produce: true, winner: null, players: [], source_kind: null, watch: true, can_feedback: false,
+  }}));
+  await page.route('**/api/traces/pending/positions/**', route => {
+    const key = decodeURIComponent(new URL(route.request().url()).pathname.split('/positions/')[1]);
+    const position = [choice, consequences, latest].find(position => position.key === key)!;
+    return route.fulfill({json: {...position, observation, decision: null, outputs: null,
+      description: position.kind === 'choice' ? 'Saved producer choice' : null, note_key: key, viewer: 0, revealed: false, history: [], history_labels: [], history_before: null,
+      cursor: 0, transition_start: 0, consequences_recorded: true,
+    }});
+  });
+  await page.goto('/replay?trace=pending');
+  await expect(page.getByText('Waiting at the live edge', {exact: true})).toBeVisible();
+  await page.clock.install({time: 0});
+  await page.clock.pauseAt(1000);
+  await page.getByRole('combobox', {name: 'Speed', exact: true}).selectOption('16');
+  await page.getByRole('button', {name: 'Play', exact: true}).click();
+  await page.clock.runFor(100);
+  await expect.poll(() => release !== null).toBe(true);
+  await expect(page.getByRole('button', {name: 'Pause', exact: true})).toBeEnabled();
+  await page.getByTestId('game-board').locator('button[data-object-id]').first().click();
+  release!();
+  const counter = page.getByTestId('position-counter');
+  await expect(counter).toHaveText('Position 1 / 3');
+  await expect(page.getByRole('region', {name: 'Inspected card', exact: true})).toBeVisible();
+  await expect(page.getByText('Live Watch · reading saved recording', {exact: true})).toBeVisible();
+  await expect.poll(() => new URL(page.url()).searchParams.get('position')).toBe('saved-choice');
+  await expect(page.getByText('Saved producer choice', {exact: true})).toHaveCount(0);
+  await page.clock.runFor(500);
+  expect(produced).toBe(1);
+  await expect(counter).toHaveText('Position 1 / 3');
+  await page.getByRole('button', {name: 'Close inspection', exact: true}).click();
+  await page.getByRole('button', {name: 'Next', exact: true}).click();
+  await expect(counter).toHaveText('Position 1 / 3');
+  await expect(page.getByText('Saved producer choice', {exact: true})).toBeVisible();
+  await expect(page.getByTestId('study-score').locator('[aria-current="true"]')).toContainText('Choice');
+  await page.reload();
+  await expect(counter).toHaveText('Position 1 / 3');
+  expect(produced).toBe(1);
 });
