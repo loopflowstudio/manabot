@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { BotDecision } from '$lib/watch';
+  import type { BotDecision } from '$lib/recording';
   import { onMount } from 'svelte';
 
   import type { AdviceScenarioSummary } from '$lib/advice';

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { visibleCardLabel } from '$lib/decision-labels';
+  import { turnStageLabel, visibleCardLabel } from '$lib/decision-labels';
   import { tick, setContext, untrack } from 'svelte';
 
   import type { CardPreview, CardState, Observation, PermanentState } from '$lib/types';
@@ -70,8 +70,13 @@
 
   setContext(PRESENTATION_CONTEXT, () => presentationPlayer?.currentEvent ?? null);
 
-  let inspected = $state<{ id: number; card: CardPreview } | null>(null);
-  let inspectedSource: CardState | PermanentState | null = null;
+  // Keep the permitted object itself: reference identity certifies seating-only
+  // updates, while a fetched historical snapshot must close inspection.
+  let inspected = $state.raw<CardState | PermanentState | null>(null);
+  const visibleCards = $derived([observation.agent, observation.opponent].flatMap(player => [
+    ...player.hand, ...player.graveyard, ...player.exile, ...player.stack,
+    ...player.battlefield, ...(player.inspected ?? []),
+  ]));
   let inspectionButton: HTMLElement | null = null;
   let inspectionNotice = $state('');
   let boardRegion: HTMLElement | null = $state(null);
@@ -92,15 +97,12 @@
   });
 
   $effect(() => {
-    const visible = [observation.agent, observation.opponent].flatMap(player => [
-      ...player.hand, ...player.graveyard, ...player.exile, ...player.stack,
-      ...player.battlefield, ...(player.inspected ?? []),
-    ]);
+    const visible = visibleCards;
     untrack(() => {
       // The legacy board cannot certify incarnation across fetched snapshots.
       // A seating-only update retains the same permitted object reference.
-      if (!inspected || (inspectedSource && visible.includes(inspectedSource))) return;
-      inspected = null; inspectedSource = null;
+      if (!inspected || visible.includes(inspected)) return;
+      inspected = null;
       inspectionNotice = 'Historical card details are unavailable at this position.';
       void tick().then(() => (inspectionButton?.isConnected ? inspectionButton : boardRegion)?.focus({preventScroll: true}));
     });
@@ -113,12 +115,9 @@
 
   function inspectTarget(id: number): void {
     onInspect?.();
-    const players = [observation.agent, observation.opponent];
-    const card = players.flatMap(player => [...player.hand, ...player.graveyard, ...player.exile, ...player.stack, ...player.battlefield, ...(player.inspected ?? [])]).find(card => card.id === id);
     inspectionButton = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    inspectedSource = card ?? null;
-    inspectionNotice = card ? '' : 'Historical card details are unavailable at this position.';
-    inspected = card ? { id, card: { name: card.name, text_box: card.text_box, power: card.power, toughness: card.toughness } } : null;
+    inspected = visibleCards.find(card => card.id === id) ?? null;
+    inspectionNotice = inspected ? '' : 'Historical card details are unavailable at this position.';
   }
 
   function setPreview(card: CardPreview | null): void {
@@ -133,21 +132,8 @@
     (resultAction ?? resultDialog)?.focus();
   }
 
-  // Notation, not enumeration: the turn line writes human notation; raw
-  // engine identifiers stay in data attributes for Study surfaces.
-  function titleWords(value: string): string {
-    return value
-      .toLowerCase()
-      .split('_')
-      .filter(Boolean)
-      .map((word) => word[0].toUpperCase() + word.slice(1))
-      .join(' ');
-  }
-
   const turnLine = $derived.by(() => {
-    const phase = titleWords(observation.turn.phase);
-    const step = titleWords(observation.turn.step.replace(/_STEP$/, ''));
-    const stage = step === phase ? phase : `${phase} · ${step}`;
+    const stage = turnStageLabel(observation.turn.phase, observation.turn.step);
     const owner = observation.turn.active_player_id === observation.agent.id ? heroIdentity.text : villainIdentity.text;
     const ownership = owner === 'You' ? 'Your turn' : `${owner}'s turn`;
     return `Turn ${observation.turn.turn_number} · ${ownership} · ${stage}`;
@@ -285,8 +271,8 @@
   {#if inspectionNotice}<p role="status" class="type-caption">{inspectionNotice}</p>{/if}
   {#if inspected}
     <section aria-label="Inspected card" class="border-y border-line py-3">
-      <h3 class="font-medium">{visibleCardLabel(observation, inspected.id) ?? inspected.card.name}</h3>
-      <p class="type-caption whitespace-pre-line">{inspected.card.text_box}</p>
+      <h3 class="font-medium">{visibleCardLabel(observation, inspected.id) ?? inspected.name}</h3>
+      <p class="type-caption whitespace-pre-line">{inspected.text_box}</p>
       <p class="type-caption text-ink-2">Legal offers determine what this card can do now.</p>
       <button class="btn btn-secondary mt-2" onclick={() => inspected = null}>Close inspection</button>
     </section>

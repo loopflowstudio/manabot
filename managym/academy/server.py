@@ -3505,6 +3505,11 @@ def get_recording_index(
         and producer.game.watch_policies is not None
     )
     opponent = payload["config"].get("opponent") or {}
+    # Seat 2's configured checkpoint identity and provenance, as the full trace
+    # read redacts them: the checkpoint path stays private.
+    provenance = payload["config"].get("opponent_checkpoint")
+    if isinstance(provenance, dict):
+        provenance = {k: v for k, v in provenance.items() if k != "checkpoint"}
     players = deepcopy(metadata.get("players", []))
     if payload["config"].get("decklists") == "closed":
         for player in players:
@@ -3531,6 +3536,8 @@ def get_recording_index(
         "winner": payload.get("winner") if finished else None,
         "players": players,
         "source_kind": opponent.get("source_kind"),
+        "opponent": payload["config"].get("opponent"),
+        "opponent_checkpoint": provenance,
         "watch": recording.watch,
         "can_feedback": bool(
             (getattr(request.state, "record_access", None) or {}).get("mine")

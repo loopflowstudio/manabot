@@ -95,16 +95,15 @@ export interface StudySource {
   sha256: string;
 }
 
-export async function bindStudyArtifact(
+export function bindStudyArtifact(
   artifact: StudyArtifact,
   projection: StudySource,
   restored: RestoredReplayDecision,
-): Promise<StudyLandmark> {
+): StudyLandmark {
   assertViewerSafeStudyArtifact(artifact);
-  const digest = projection.sha256;
   if (
     artifact.identity.source_replay_id !== projection.replay_id
-    || artifact.identity.source_replay_sha256 !== digest
+    || artifact.identity.source_replay_sha256 !== projection.sha256
     || artifact.identity.match_id !== projection.match_id
     || artifact.identity.content_pack.content_hash !== projection.content_hash
     || artifact.identity.content_pack.asset_manifest_sha256

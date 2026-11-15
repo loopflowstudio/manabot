@@ -51,9 +51,6 @@ export class StudyStore {
       || source.content_hash !== decision.frame.content_hash || source.asset_manifest_hash !== decision.frame.asset_manifest_hash) throw new Error('Study source differs from selected decision.');
     assertRestoredReplayDecisionBinds(source, decision, restored);
     this.source = cloneDto(source);
-    if (decision.address !== restored.address) {
-      throw new Error('Selected Study decision address drifted.');
-    }
     this.selectedDecision = cloneDto(decision);
     this.restored = cloneDto(restored);
     this.phase = 'restored';
@@ -78,7 +75,7 @@ export class StudyStore {
     this.errorMessage = null;
   }
 
-  async reveal(response: StudyRevealResponse): Promise<void> {
+  reveal(response: StudyRevealResponse): void {
     if (
       !this.source
       || !this.restored
@@ -87,7 +84,7 @@ export class StudyStore {
     ) {
       throw new Error('Reveal response differs from the active Study attempt.');
     }
-    const landmark = await bindStudyArtifact(
+    const landmark = bindStudyArtifact(
       response.artifact,
       this.source,
       this.restored,
@@ -119,9 +116,6 @@ export class StudyStore {
   returnToScore(restored: RestoredReplayDecision): void {
     if (!this.source || !this.selectedDecision) throw new Error('Study Score is not loaded.');
     assertRestoredReplayDecisionBinds(this.source, this.selectedDecision, restored);
-    if (this.selectedDecision?.address !== restored.address) {
-      throw new Error('Returned Study decision differs from the Score selection.');
-    }
     this.restored = cloneDto(restored);
     this.phase = 'score';
     this.attemptId = null;

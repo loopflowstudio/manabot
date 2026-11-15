@@ -479,3 +479,31 @@ def test_recording_rejects_a_missing_legacy_board() -> None:
     payload["final_observation"] = {}
     with pytest.raises(ValueError, match="recording_board_unavailable"):
         Recording("broken", payload)
+
+
+def test_recording_index_keeps_seat_two_checkpoint_provenance_private_path_out(
+    monkeypatch, tmp_path
+):
+    payload = _terminal_recording()
+    payload.pop("canonical_replay")
+    opponent = {"name": "learner-8", "sha256": "ab" * 32, "producer": "manabot"}
+    payload["config"] = {
+        "opponent": opponent,
+        "opponent_checkpoint": {
+            "source": "runs",
+            "world": "w6",
+            "step": 8,
+            "checkpoint": "/private/runs/learner-8.safetensors",
+        },
+    }
+    payload["timestamp"] = "2026-11-14T00:00:00+00:00"
+    (tmp_path / "provenance.json").write_text(json.dumps(payload), encoding="utf-8")
+    monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
+    server.SESSION_REGISTRY.clear()
+
+    with TestClient(app) as client:
+        response = client.get("/api/traces/provenance/recording")
+    assert response.status_code == 200
+    index = response.json()
+    assert index["opponent"] == opponent
+    assert index["opponent_checkpoint"] == {"source": "runs", "world": "w6", "step": 8}

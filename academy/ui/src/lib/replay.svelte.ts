@@ -20,10 +20,16 @@ export class ReplayStore {
   private id = '';
   private sourceGeneration = 0;
 
-  async api<T>(path: string, body?: unknown): Promise<T> {
+  request(path: string, init: RequestInit = {}): Promise<Response> {
     const token = sessionStorage.getItem(`etude.watch.${this.id}`);
-    const response = await recordFetch(path, {
-      ...(token ? { headers: { 'x-etude-participant-token': token, 'content-type': 'application/json' } } : { headers: { 'content-type': 'application/json' } }),
+    const headers = new Headers(init.headers);
+    if (token) headers.set('x-etude-participant-token', token);
+    return recordFetch(path, {...init, headers});
+  }
+
+  async api<T>(path: string, body?: unknown): Promise<T> {
+    const response = await this.request(path, {
+      headers: { 'content-type': 'application/json' },
       ...(body === undefined ? {} : { method: 'POST', body: JSON.stringify(body) }),
     });
     if (!response.ok) {

@@ -15,11 +15,12 @@
   import Timeline from '$lib/components/Timeline.svelte';
   import { createReplayStore } from '$lib/replay.svelte';
   import { orientBoard } from '$lib/recording';
+  import { turnStageLabel } from '$lib/decision-labels';
   import type { RecordedPosition } from '$lib/recording';
   import { createStudyStore } from '$lib/study.svelte';
   import { createPresentationPlayer } from '$lib/presentation.svelte';
   import { mergePresentationLabels, presentationLabelsFromFrame, presentationLabelsFromObservation } from '$lib/presentation';
-  import { playerIdentity, recordedIdentity } from '$lib/player-identity';
+  import { checkpointIdentity, playerIdentity, recordedIdentity, type PlayerIdentity } from '$lib/player-identity';
   import type { RestoredReplayDecision } from '$lib/replay-index';
   import type { InteractionOffer, TraceSummary } from '$lib/types';
   import type { StudyPlanKind, StudySource, StudyRetryResponse, StudyRevealResponse, StudyPlanPreviewResponse } from '$lib/study-runtime';
@@ -50,7 +51,33 @@
     return new Set(plan ? offerFocus(plan.offer) : []);
   });
   const markers = $derived(index?.positions.filter((position, i, positions) => i === 0 || position.turn !== positions[i - 1].turn || position.phase !== positions[i - 1].phase || position.step !== positions[i - 1].step) ?? []);
+  // The passage holding the selected position, so the seek control names where playback is.
+  const markerKey = $derived.by(() => {
+    const positions = index?.positions ?? [];
+    let i = Math.min(replayStore.selected, positions.length - 1);
+    while (i > 0 && positions[i].turn === positions[i - 1].turn && positions[i].phase === positions[i - 1].phase && positions[i].step === positions[i - 1].step) i--;
+    return positions[i]?.key ?? '';
+  });
   const score = $derived(index?.positions.slice(scoreStart, scoreStart + 60) ?? []);
+  // A recorded result is a status line under the board; reaching it brings it into view.
+  $effect(() => {
+    if (!board?.game_over) return;
+    void tick().then(() => document.querySelector('.recording-viewer [data-testid="game-result-dialog"]')?.scrollIntoView({block: 'nearest'}));
+  });
+  let scoreList = $state<HTMLOListElement | null>(null);
+  // The score page follows the selected position through playback and Next;
+  // Earlier/Later paging holds until the selection moves again. Only the list
+  // scrolls, so a reader's place in the rail's history stays put.
+  $effect(() => {
+    const selected = replayStore.selected;
+    untrack(() => { scoreStart = Math.floor(selected / 60) * 60; });
+    void tick().then(() => {
+      const row = scoreList?.querySelector<HTMLElement>('[aria-current="true"]');
+      if (!scoreList || !row) return;
+      const top = row.offsetTop - scoreList.offsetTop;
+      if (top < scoreList.scrollTop || top + row.offsetHeight > scoreList.scrollTop + scoreList.clientHeight) scoreList.scrollTop = top;
+    });
+  });
 
   $effect(() => {
     const id = page.url.searchParams.get('trace');
@@ -76,15 +103,8 @@
     replayStore.reveal = (params.get('view') ?? (saved.reveal ? 'spectator' : 'acting')) === 'spectator';
     try { notes = JSON.parse(localStorage.getItem(`etude.score.notes.${id}`) ?? '{}'); } catch { notes = {}; }
     await replayStore.open(id, params.get('position') ?? saved.key);
-    scoreStart = Math.floor(replayStore.selected / 60) * 60;
   }
   function selectRecording(id: string): void { void goto(`/replay?trace=${encodeURIComponent(id)}`); }
-  async function request(path: string, init: RequestInit = {}): Promise<Response> {
-    const token = sessionStorage.getItem(`etude.watch.${index?.id}`);
-    const headers = new Headers(init.headers);
-    if (token) headers.set('x-etude-participant-token', token);
-    return recordFetch(path, {...init, headers});
-  }
 
   function loadHistory(animate: boolean): void {
     if (!current || !index) return;
@@ -96,7 +116,6 @@
     presentationPlayer.playing = false;
   }
   $effect(() => {
-    current;
     if (!current || inStudy) return;
     untrack(() => { loadHistory(current.key !== lastHistoryKey); lastHistoryKey = current.key; });
   });
@@ -128,7 +147,6 @@
   function seek(selected: number): void {
     if (inStudy) return;
     void replayStore.seek(selected);
-    scoreStart = Math.floor(selected / 60) * 60;
   }
   async function earlierHistory(): Promise<void> {
     if (!current?.history_before || historyBusy || !index) return;
@@ -147,9 +165,16 @@
     notes[key] = value;
     if (index) localStorage.setItem(`etude.score.notes.${index.id}`, JSON.stringify(notes));
   }
-  function identity(seat: number) {
+  /**
+   * A seat's recorded identity; a record that predates recorded players falls back to
+   * its configured opponent. Seat 2 carries the checkpoint's producer and provenance.
+   */
+  function identity(seat: number): PlayerIdentity {
+    const opponent = seat === 1 ? index?.opponent : null;
     const recorded = index?.players.find(player => player.seat === seat);
-    return recorded ? recordedIdentity(recorded) : playerIdentity({name: `Seat ${seat + 1}`});
+    const base = recorded ? recordedIdentity(recorded)
+      : opponent ? checkpointIdentity(opponent) : playerIdentity({name: `Seat ${seat + 1}`});
+    return opponent ? {...base, producer: opponent.producer, provenance: index?.opponent_checkpoint ?? undefined} : base;
   }
   async function responseError(response: Response, fallback: string): Promise<string> {
     try {
@@ -173,7 +198,7 @@
     const decision = replayStore.current?.decision;
     const traceId = replayStore.index?.id;
     if (!decision || !traceId) return;
-    replayStore.pause(); replayStore.cancelReads();
+    replayStore.cancelReads();
     studyStore.setBusy(true); studyStore.setError(null);
     try {
       const selected = await replayStore.api<RecordedPosition & {study_source: StudySource}>(`/api/traces/${traceId}/positions/${encodeURIComponent(decision.address)}?study=true`);
@@ -204,7 +229,7 @@
         offer_id: offer.id,
         answers: [],
       };
-      const response = await request(
+      const response = await replayStore.request(
         `/api/traces/${traceId}/decisions/${encodeURIComponent(restored.address)}/retry`,
         {
           method: 'POST',
@@ -235,11 +260,11 @@
     studyStore.setBusy(true);
     studyStore.setError(null);
     try {
-      const response = await request(`/api/study-attempts/${studyStore.attemptId}/reveal`, {
+      const response = await replayStore.request(`/api/study-attempts/${studyStore.attemptId}/reveal`, {
         method: 'POST',
       });
       if (!response.ok) throw new Error(await responseError(response, 'Reveal failed.'));
-      await studyStore.reveal((await response.json()) as StudyRevealResponse);
+      studyStore.reveal((await response.json()) as StudyRevealResponse);
       await previewStudyPlan('played');
     } catch (error) {
       studyStore.setError(error instanceof Error ? error.message : 'Reveal failed.');
@@ -253,7 +278,7 @@
     studyStore.setBusy(true);
     studyStore.setError(null);
     try {
-      const response = await request(`/api/study-attempts/${studyStore.attemptId}/preview`, {
+      const response = await replayStore.request(`/api/study-attempts/${studyStore.attemptId}/preview`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ plan }),
@@ -286,7 +311,7 @@
     try {
       let returned = studyStore.restored;
       if (attemptId) {
-        const response = await request(`/api/study-attempts/${attemptId}/return`, {
+        const response = await replayStore.request(`/api/study-attempts/${attemptId}/return`, {
           method: 'POST',
         });
         if (!response.ok) throw new Error(await responseError(response, 'Return failed.'));
@@ -314,6 +339,13 @@
 
 </script>
 
+{#snippet watchSetup()}
+  <details open={!page.url.searchParams.has('trace')} class="mb-4 rounded border border-line bg-panel p-4">
+    <summary class="type-label cursor-pointer">{index ? 'Watch another matchup' : 'Choose a bot matchup'}</summary>
+    <WatchSetup disabled={inStudy || studyStore.busy || replayStore.producing} onOpen={selectRecording} />
+  </details>
+{/snippet}
+
 <main class="replay-page mx-auto w-full max-w-[1400px] px-4 py-3" class:replay-active={index !== null}>
   <header class="mb-2 flex flex-wrap items-center gap-3">
     <h1 class="type-title text-display">Replay</h1>
@@ -321,40 +353,45 @@
     {#if summaries.length}
       <label>Recording <select data-testid="trace-select" class="max-w-64 rounded border border-line bg-field p-2" value={index?.id ?? ''} disabled={inStudy || studyStore.busy || replayStore.producing} onchange={event => selectRecording(event.currentTarget.value)}>
         <option value="" disabled>Select a recording…</option>
-        {#each summaries as summary}<option value={summary.id}>{summary.timestamp ?? summary.id}</option>{/each}
+        {#each summaries as summary}<option value={summary.id}>{summary.timestamp ? new Date(summary.timestamp).toLocaleString() : summary.id}</option>{/each}
       </select></label>
     {/if}
     <button class="btn btn-secondary" disabled={inStudy || studyStore.busy || replayStore.producing} onclick={() => { if (index) void replayStore.open(index.id, selectedKey); else void loadList(); }}>Refresh saved head</button>
+    {#if index}
+      <div class="recording-heading flex flex-wrap items-baseline gap-x-3">
+        <h2 class="type-title">The Score{index.source_kind ? ` · ${index.source_kind === 'training' ? 'Training game' : 'Evaluation game'}` : ''}</h2>
+        <p role="status">{replayStore.producing ? 'Producing a decision…' : replayStore.busy ? 'Reading saved recording…' : index.status === 'finished' ? `Finished · ${index.winner === null ? 'Draw' : `Seat ${index.winner + 1} wins`}` : index.status === 'waiting' ? index.watch ? atLiveEdge ? 'Waiting at the live edge' : 'Live Watch · reading saved recording' : 'Live game · saved recording only' : 'Interrupted · saved recording only'}</p>
+      </div>
+    {/if}
     {#if listError}<p role="alert">{listError}</p>{/if}
     {#if replayStore.error}<p role="alert">{replayStore.error}</p>{/if}
     {#if studyStore.errorMessage}<p role="alert">{studyStore.errorMessage}</p>{/if}
   </header>
-  {#if !index}  {#if page.url.searchParams.has('watch')}
-    <details open={!page.url.searchParams.has('trace')} class="mb-4 rounded border border-line bg-panel p-4">
-      <summary class="type-label cursor-pointer">{index ? 'Watch another matchup' : 'Choose a bot matchup'}</summary>
-      <WatchSetup disabled={inStudy || studyStore.busy || replayStore.producing} onOpen={selectRecording} />
-    </details>
-  {/if}
-{/if}
+  {#if !index && page.url.searchParams.has('watch')}{@render watchSetup()}{/if}
   {#if index}
     <div class="recording-shell rounded border border-line bg-panel p-4 shadow-sheet">
-      <header class="mb-2 flex flex-wrap items-baseline gap-x-3 border-b border-line pb-2">
-        <h2 class="type-title">The Score{index.source_kind ? ` · ${index.source_kind === 'training' ? 'Training game' : 'Evaluation game'}` : ''}</h2>
-        <p role="status">{replayStore.producing ? 'Producing a decision…' : replayStore.busy ? 'Reading saved recording…' : index.status === 'finished' ? `Finished · ${index.winner === null ? 'Draw' : `Seat ${index.winner + 1} wins`}` : index.status === 'waiting' ? index.watch ? atLiveEdge ? 'Waiting at the live edge' : 'Live Watch · reading saved recording' : 'Live game · saved recording only' : 'Interrupted · saved recording only'}</p>
-      </header>
       <div class="recording-workspace grid items-start gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
         <aside class="recording-rail" aria-label="Score">
+          {#if current}
+            <section aria-label="Seating and view" class="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line pb-2">
+              <p class="type-caption" data-testid="replay-perspective">{current.kind === 'choice' && current.decision ? `Chooser: seat ${current.decision.viewer + 1} · ${current.revealed ? 'Both hands · spectator view' : `Acting view · seat ${current.viewer + 1}`}` : 'Recorded seat-0 view · private post-action views unavailable'}</p>
+              <button class="btn btn-secondary btn-sm" onclick={() => replayStore.nearSeat = 1 - replayStore.nearSeat}>Swap seats</button>
+              <span class="type-caption">Near: seat {replayStore.nearSeat + 1}</span>
+              <label class="type-caption"><input type="checkbox" checked={current.revealed} disabled={inStudy || studyStore.busy || replayStore.busy || !current.can_reveal} onchange={event => { replayStore.reveal = event.currentTarget.checked; void replayStore.seek(replayStore.selected); }} /> Show both hands</label>
+          {#if current.kind === 'choice' && !current.can_reveal}<span class="type-caption">Spectator view not recorded.</span>{/if}
+            </section>
+          {/if}
           <label class="type-caption">Turn and phase
-            <select class="mt-1 w-full rounded border border-line bg-field p-2" aria-label="Jump to turn and phase" disabled={inStudy || studyStore.busy || replayStore.producing} value={selectedKey} onchange={event => seek(index!.positions.findIndex(position => position.key === event.currentTarget.value))}>
+            <select class="mt-1 w-full rounded border border-line bg-field p-2" aria-label="Jump to turn and phase" disabled={inStudy || studyStore.busy || replayStore.producing} value={markerKey} onchange={event => seek(index!.positions.findIndex(position => position.key === event.currentTarget.value))}>
               <option value="" disabled>Choose a passage</option>
-              {#each markers as marker}<option value={marker.key}>Turn {marker.turn ?? '?'} · {marker.phase ?? 'Unknown'} · {marker.step ?? ''}</option>{/each}
+              {#each markers as marker}<option value={marker.key}>Turn {marker.turn ?? '?'} · {marker.phase ? turnStageLabel(marker.phase, marker.step ?? '') : 'Unknown'}</option>{/each}
             </select>
           </label>
           <div class="my-2 flex gap-2">
             <button class="btn btn-secondary btn-sm" disabled={scoreStart === 0} onclick={() => scoreStart = Math.max(0, scoreStart - 60)}>Earlier score</button>
             <button class="btn btn-secondary btn-sm" disabled={scoreStart + 60 >= index.positions.length} onclick={() => scoreStart += 60}>Later score</button>
           </div>
-          <ol data-testid="study-score" class="max-h-[25vh] space-y-1 overflow-y-auto" aria-label="Score lines">
+          <ol bind:this={scoreList} data-testid="study-score" class="max-h-[25vh] space-y-1 overflow-y-auto" aria-label="Score lines">
             {#each score as position, offset}
               <li><button data-testid={position.kind === 'choice' ? 'study-decision' : undefined} class="w-full rounded border border-line px-2 py-2 text-left type-caption" aria-current={selectedKey === position.key ? 'true' : undefined} disabled={inStudy || studyStore.busy || replayStore.producing} onclick={() => seek(scoreStart + offset)}>
                 {scoreStart + offset + 1}. {position.kind === 'state' ? index.status === 'finished' ? 'Result' : 'Latest state' : position.kind === 'choice' ? 'Choice' : position.automatic ? 'Automation consequences' : 'Consequences'} · Turn {position.turn ?? '?'}
@@ -385,16 +422,9 @@
 
         </aside>
         <section class="recording-viewer min-w-0" aria-label="Recording viewer">
-          <Timeline selected={replayStore.selected} total={index.positions.length} playing={replayStore.playing} speed={replayStore.speed} disabled={inStudy || studyStore.busy} producing={replayStore.producing} busy={replayStore.busy} canProduce={index.can_produce}
-            onPrevious={() => seek(Math.max(0, replayStore.selected - 1))} onNext={() => { replayStore.pause(); void replayStore.next(); }} onTogglePlaying={() => { if (replayStore.playing) replayStore.pause(); else replayStore.playing = true; }} onScrub={seek} onSpeedChange={speed => replayStore.speed = speed} />
+          <div class="replay-transport mb-2 border-b border-line bg-panel pb-2"><Timeline selected={replayStore.selected} total={index.positions.length} playing={replayStore.playing} speed={replayStore.speed} disabled={inStudy || studyStore.busy} producing={replayStore.producing} busy={replayStore.busy} canProduce={index.can_produce}
+            onPrevious={() => seek(Math.max(0, replayStore.selected - 1))} onNext={() => { replayStore.pause(); void replayStore.next(); }} onTogglePlaying={() => { if (replayStore.playing) replayStore.pause(); else replayStore.playing = true; }} onScrub={seek} onSpeedChange={speed => replayStore.speed = speed} /></div>
           {#if current}
-            <div class="my-3 flex flex-wrap items-center gap-3 border-b border-line pb-3">
-              <p class="type-caption" data-testid="replay-perspective">{current.kind === 'choice' && current.decision ? `Chooser: seat ${current.decision.viewer + 1} · ${current.revealed ? 'Both hands · spectator view' : `Acting view · seat ${current.viewer + 1}`}` : 'Recorded seat-0 view · private post-action views unavailable'}</p>
-              <button class="btn btn-secondary btn-sm" onclick={() => replayStore.nearSeat = 1 - replayStore.nearSeat}>Swap seats</button>
-              <span class="type-caption">Near: seat {replayStore.nearSeat + 1}</span>
-              <label class="type-caption"><input type="checkbox" checked={current.revealed} disabled={inStudy || studyStore.busy || replayStore.busy || !current.can_reveal} onchange={event => { replayStore.reveal = event.currentTarget.checked; void replayStore.seek(replayStore.selected); }} /> Show both hands</label>
-              {#if current.kind === 'choice' && !current.can_reveal}<span class="type-caption">Spectator view not recorded.</span>{/if}
-            </div>
             {#if current.description}<p class="type-annotation mb-2">{current.description}</p>{/if}
             {#if board}<GameBoard onInspect={inStudy ? undefined : () => replayStore.pause()} workspace observation={board} {focusedIds} heroIdentity={identity(replayStore.nearSeat)} villainIdentity={identity(1 - replayStore.nearSeat)} winner={board.game_over ? index.winner : undefined} {presentationPlayer} />{/if}
 
@@ -406,13 +436,7 @@
   {:else if !page.url.searchParams.has('watch')}<p>Select a recording from Games to open its score.</p>{/if}
 </main>
 <div class="mx-auto w-full max-w-[1400px] px-4">
-  {#if index}  {#if page.url.searchParams.has('watch') || index?.watch}
-    <details open={!page.url.searchParams.has('trace')} class="mb-4 rounded border border-line bg-panel p-4">
-      <summary class="type-label cursor-pointer">{index ? 'Watch another matchup' : 'Choose a bot matchup'}</summary>
-      <WatchSetup disabled={inStudy || studyStore.busy || replayStore.producing} onOpen={selectRecording} />
-    </details>
-  {/if}
-{/if}
+  {#if index && (page.url.searchParams.has('watch') || index.watch)}{@render watchSetup()}{/if}
   {#if index?.can_feedback}<Feedback attemptId={index.id} />{/if}
 
 </div>
@@ -425,8 +449,11 @@
     .recording-shell { flex: 1; min-height: 0; display: flex; flex-direction: column; }
     .recording-workspace { flex: 1; min-height: 0; align-items: stretch; }
     .recording-rail { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-right: .5rem; scrollbar-gutter: stable; }
-    .recording-viewer { min-height: 0; display: flex; flex-direction: column; }
+    /* The board keeps room for a whole row of cards in each battlefield lane
+       (about 660px); a shorter window scrolls the viewer under its sticky transport. */
+    .recording-viewer { min-height: 0; display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; }
     .recording-viewer > :global(*) { flex-shrink: 0; }
-    .recording-viewer :global([data-testid="game-board"]) { flex: 1; min-height: 0; }
+    .replay-transport { position: sticky; top: 0; z-index: 10; }
+    .recording-viewer :global([data-testid="game-board"]) { flex: 1 0 660px; }
   }
 </style>

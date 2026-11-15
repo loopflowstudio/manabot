@@ -115,18 +115,12 @@ class Recording:
         self.event_by_revision = {revision: i for i, revision in self.revisions.items()}
 
     def _board(self, position: Position) -> dict[str, Any]:
-        index = position.event_index + (position.kind == "consequences")
-        observation = (
-            self.payload["events"][index]["observation"]
-            if index < len(self.payload["events"])
-            else self.payload["final_observation"]
-        )
         # Reuse the established redaction boundary on only the selected board.
         return prepare_trace_payload(
             {
                 "config": self.payload["config"],
                 "events": [],
-                "final_observation": observation,
+                "final_observation": self._raw_board(position),
                 "end_reason": self.payload.get("end_reason"),
             }
         )["final_observation"]

@@ -1,3 +1,5 @@
+import { writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 
 import combatSequence from '../src/lib/fixtures/curated-combat-to-turn.json' with { type: 'json' };
@@ -635,23 +637,25 @@ test('partial history recovery preserves event pixels, focus and recovered unrea
 
 test('history seek removes inspection and repositions to a preceding retained event', async ({ page }) => {
   const observation = combatObservation();
+  // Two transitions of a legacy record: ten facts, then ninety-five more.
   const events: PresentationEvent[] = Array.from({ length: 105 }, (_, seq) => ({
     ...structuredClone(combatSequence.events[0]) as PresentationEvent, seq,
+    from_revision: seq < 10 ? 1 : 2, to_revision: seq < 10 ? 2 : 3,
   }));
   const trace = {
-    id: 'history-anchor-seek', config: { hero_deck: {}, villain_deck: {}, villain_type: 'passive', seed: 42 },
+    config: { hero_deck: {}, villain_deck: {}, villain_type: 'passive' },
     events: [events.slice(0, 10), events.slice(10)].map((presentation, index) => ({
       actor: 'hero', observation, actions: [], action: 0, action_description: `Choice ${index}`,
       reward: 0, presentation,
     })),
     final_observation: observation, winner: null, end_reason: 'fixture', timestamp: '2026-11-14T00:00:00Z',
   };
-  await page.route('**/api/traces', route => route.fulfill({ json: [] }));
-  await page.route('**/api/traces/history-anchor-seek', route => route.fulfill({ json: trace }));
-  await page.route('**/api/traces/history-anchor-seek/decisions', route => route.fulfill({ status: 404 }));
-  await page.goto('/replay?trace=history-anchor-seek');
+  // The real legacy reader serves the record from the release server's store.
+  await writeFile(fileURLToPath(new URL('../test-results/release/traces/history-anchor-seek.json', import.meta.url)), JSON.stringify(trace));
+  await page.goto('/replay?trace=history-anchor-seek&position=latest');
   const slider = page.getByRole('slider', { name: 'Replay position' });
-  await slider.fill('2');
+  // Positions: choice 0, its consequences, choice 1, its consequences, latest state.
+  await expect(slider).toHaveAttribute('max', '4');
   const panel = page.getByTestId('presentation-history');
   await panel.locator('summary').click();
   const region = panel.getByRole('list', { name: 'Recorded game events' });
@@ -674,12 +678,12 @@ test('history seek removes inspection and repositions to a preceding retained ev
   });
   await expect(inspection).toHaveCount(0);
   await expect(region).toBeFocused();
-  await expect(region.locator('[data-presentation-seq]')).toHaveCount(1);
-  await expect(panel.locator('[data-presentation-seq="9"]')).toBeVisible();
+  await expect(region.locator('[data-presentation-seq="9"]')).toBeVisible();
+  await expect(region.locator('[data-presentation-seq="10"]')).toHaveCount(0);
   await slider.fill('0');
-  await expect(panel).toContainText('Consequences not recorded');
+  await expect(panel.locator('[data-presentation-seq]')).toHaveCount(0);
   await slider.fill('1');
-  await expect(panel.locator('[data-presentation-seq="0"]')).toHaveCount(1);
+  await expect(region.locator('[data-presentation-seq="0"]')).toHaveCount(1);
   await region.getByRole('button').first().click();
   await expect(inspection).toBeFocused();
   await slider.evaluate((element: HTMLInputElement) => {
@@ -773,7 +777,13 @@ test('Replay reader actions hold playback and reject a delayed position without 
   await page.keyboard.press('PageUp');
   await page.clock.runFor(50);
   await expect(play).toBeVisible();
-  const anchor = await region.evaluate(element => element.scrollTop);
+  // Page Up scrolls smoothly in real time; measure the anchor once it settles.
+  let anchor = -1;
+  await expect.poll(async () => {
+    const previous = anchor;
+    anchor = await region.evaluate(element => element.scrollTop);
+    return anchor === previous;
+  }).toBe(true);
   await page.clock.runFor(500);
   expect(await region.evaluate(element => element.scrollTop)).toBe(anchor);
   await history.getByRole('button', {name: 'Latest', exact: false}).click();

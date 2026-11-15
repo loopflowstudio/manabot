@@ -1,6 +1,16 @@
 import type { AddressedReplayDecision } from './replay-index';
-import type { BotDecision } from './watch';
-import type { Observation, PresentationEvent, PresentationLabels, RecordedPlayer } from './types';
+import type { Observation, PresentationEvent, PresentationLabels, RecordedPlayer, TraceConfig } from './types';
+
+export interface BotDecision {
+  action: number;
+  probabilities: number[];
+  value: number | null;
+  value_semantic: string | null;
+  search_scores: (number | null)[];
+  unavailable: string | null;
+  factors: {chosen: number; probabilities: number[]; value: number}[];
+  belief: {model: string; digest: string; condition_mass: number; sampled_worlds: number} | null;
+}
 
 export interface Position {
   key: string;
@@ -24,6 +34,9 @@ export interface RecordingIndex {
   winner: number | null;
   players: RecordedPlayer[];
   source_kind: string | null;
+  /** Seat 2's configured checkpoint, for records that predate recorded players. */
+  opponent?: TraceConfig['opponent'];
+  opponent_checkpoint?: TraceConfig['opponent_checkpoint'];
   watch: boolean;
   can_feedback: boolean;
 }
