@@ -84,6 +84,25 @@ pub fn set_cards(sets: &[&str]) -> Vec<PoolDefinition> {
         .collect()
 }
 
+/// Complete nonbasic printing membership for the supplied sets. Unlike the
+/// first-printing filter, an uncurated set is an error, never a partial pool.
+pub fn printed_set_cards(sets: &[&str]) -> Result<Vec<PoolDefinition>, crate::cards::ContentError> {
+    let mut ids = BTreeSet::new();
+    for set in sets {
+        ids.extend(
+            crate::cards::printings::set_printings(set)?
+                .into_iter()
+                .map(|r| r.card_def_id),
+        );
+    }
+    Ok(world_pool()
+        .definitions
+        .iter()
+        .filter(|r| ids.contains(&r.card_def_id))
+        .cloned()
+        .collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -137,6 +137,41 @@ deck. Construction legality does not establish checkpoint compatibility or
 playing strength. Ordinary custom-game setup retains its existing construction
 rules; selecting Limited is explicit.
 
+## Public Rotisserie drafts
+
+`managym.format.Rotisserie` owns a public snake draft before construction:
+
+```python
+from managym.format import Rotisserie
+
+draft = Rotisserie("tla", "example-episode", seats=8, picks_per_seat=45)
+state = draft.observe()
+assert state["chooser"] == 0
+assert sum(state["remaining"]) == 664
+chosen_definition = state["legal"][0]  # Illustrative legal choice, not a strategy.
+draft.pick(state["episode_id"], state["revision"], 0, chosen_definition)
+```
+
+The complete TLA nonbasic inventory contains four copies per common, two per
+uncommon and one per rare/mythic. It excludes basics, tokens and bonus sheets.
+Printing membership includes the three TLA reprints defined under earlier sets;
+the bundled inventory is checked against authored definition identities before
+any draft begins. Unknown printing inventories fail without a partial supply.
+
+`observe()` returns an owned snapshot: initial and remaining supply, all seats'
+pools, revision and chooser, and one legal choice per available definition. Count
+rows use the same catalog axis as Limited arrays. The round is
+`revision // len(pools)`; even rounds pick ascending seats and odd rounds descend,
+so endpoint seats pick twice consecutively between rounds. A wrong episode,
+stale revision, wrong chooser or unavailable definition raises `ValueError` and
+changes nothing. Editing a returned snapshot cannot change the native draft.
+
+After 360 picks, `chooser` is `None`, `legal` is empty and each seat has 45 cards.
+`draft.pool(seat)` then returns its `CardPool` for `Limited.build`; it refuses
+while drafting remains in progress. Construction still uses the existing Limited
+rules and free basics. For the complete unscored draft/build demo and the planned
+reward comparison, see [TLA Rotisserie](../experiments/tla-rotisserie.md).
+
 ## The TLA pool corpus
 
 Restore the frozen corpus from the repository root:
