@@ -211,7 +211,7 @@ The browser renders provider-authored groups and detail lines and precise unavai
 missing training counts remain "not recorded". Optional advice/import capabilities
 are separate from policy loading.
 
-Optional per-seat `SearchSpec` values compose an admitted policy with the
+An optional `MirrorSearch` per bot composes an admitted policy with the
 framework-free `managym.mirror_search` owner in Play, Watch and launch APIs
 ([Mirror search](../../docs/academy.md#mirror-search)). Native physical-deal
 sampling and bound Commands remain authoritative; the two-KL numerical update
@@ -220,7 +220,7 @@ signed values and isolated current-view forks are mandatory. Deadline failure
 retains the live decision for an explicit, match/revision-bound pilot retry.
 Budget checks bracket synchronous provider calls; an in-flight call returns
 before its overdue result is rejected, and no overdue action is accepted.
-`BotDecision.search` retains prior probabilities, budget, timing, hexadecimal seed
+`BotDecision.mirror` retains prior probabilities, budget, timing, hexadecimal seed
 and receipt digest; model outputs stay out of an opponent's live/viewer export.
 Completed Play games expose retained actor-view evidence through Replay's
 **Inspect bot search** link without loading a provider.

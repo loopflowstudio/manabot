@@ -193,8 +193,8 @@ class PassTurnMessage(ProtocolModel):
     grant_revision: UInt64 | None = None
 
 
-class RetrySearchMessage(ProtocolModel):
-    type: Literal["retry_search"]
+class RetryMirrorMessage(ProtocolModel):
+    type: Literal["retry_mirror"]
     grant_revision: UInt64 | None = None
     match_id: str
     expected_revision: UInt64
@@ -271,7 +271,7 @@ SharedTableRequest: TypeAlias = Annotated[
     | CommandMessage
     | ActionMessage
     | PassTurnMessage
-    | RetrySearchMessage
+    | RetryMirrorMessage
     | SetStopsMessage
     | TransferPilotMessage
     | AuthorBeliefMessage
@@ -294,7 +294,7 @@ REQUEST_TYPES = (
     "command",
     "action",
     "pass_turn",
-    "retry_search",
+    "retry_mirror",
     "set_stops",
     "transfer_pilot",
     "author_belief",

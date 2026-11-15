@@ -19,18 +19,18 @@ from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
 from numpy.typing import NDArray
-from pydantic import ConfigDict, Field, TypeAdapter
+from pydantic import ConfigDict, Field
 from pydantic.dataclasses import dataclass as validated_dataclass
 
 import managym
-from managym.bots import BeliefSummary, BotDecision, SearchSummary
+from managym.bots import BeliefSummary, BotDecision, MirrorSummary
 from managym.decision import DecisionFrame
 from managym.mirror import regularized_update
 
 if TYPE_CHECKING:
     from managym.policy import PolicyDescriptor, PolicyRunner, SearchPolicySession
 
-PHYSICAL_BELIEF = "physical-compatible-hand/v1"
+NATIVE_PHYSICAL_BELIEF = "managym.determinize/physical-deal/v1"
 MIRROR_METHOD = "regularized-local-update"
 
 
@@ -38,8 +38,8 @@ MIRROR_METHOD = "regularized-local-update"
     frozen=True,
     config=ConfigDict(extra="forbid", allow_inf_nan=False, validate_default=True),
 )
-class SearchSpec:
-    """One explicit per-seat search configuration, shared by all launch paths."""
+class MirrorSearch:
+    """One bot’s explicit Mirror search configuration, shared by all launch paths."""
 
     algorithm: Literal["local_update"] = "local_update"
     belief: Literal["physical_deal"] = "physical_deal"
@@ -50,16 +50,7 @@ class SearchSpec:
     beta: float = Field(default=1, gt=0, strict=True)
 
 
-def parse_search_seats(value: object) -> list[SearchSpec | None] | None:
-    if value is None:
-        return None
-    result = TypeAdapter(list[SearchSpec | None]).validate_python(value)
-    if len(result) != 2:
-        raise ValueError("Search settings require exactly two seats.")
-    return result
-
-
-class SearchError(RuntimeError):
+class MirrorSearchError(RuntimeError):
     """A named failure that commits no action and never selects a fallback."""
 
     def __init__(self, reason: str, message: str) -> None:
@@ -67,8 +58,8 @@ class SearchError(RuntimeError):
         super().__init__(message)
 
 
-def search_unavailable(runner: PolicyRunner) -> str | None:
-    reason = descriptor_search_unavailable(runner.base_descriptor)
+def mirror_unavailable(runner: PolicyRunner) -> str | None:
+    reason = descriptor_mirror_unavailable(runner.base_descriptor)
     if reason:
         return reason
     if not all(
@@ -78,7 +69,7 @@ def search_unavailable(runner: PolicyRunner) -> str | None:
     return None
 
 
-def descriptor_search_unavailable(descriptor: PolicyDescriptor) -> str | None:
+def descriptor_mirror_unavailable(descriptor: PolicyDescriptor) -> str | None:
     if not descriptor.supports_search:
         reason = descriptor.search_reason
         if isinstance(reason, str) and reason:
@@ -89,18 +80,18 @@ def descriptor_search_unavailable(descriptor: PolicyDescriptor) -> str | None:
     return None
 
 
-def searched_descriptor(
-    base: PolicyDescriptor, spec: SearchSpec, *, source: str | None = None
+def mirror_descriptor(
+    base: PolicyDescriptor, spec: MirrorSearch, *, source: str | None = None
 ) -> PolicyDescriptor:
     """One composition identity for admission, tables, history and Replay."""
-    reason = descriptor_search_unavailable(base)
+    reason = descriptor_mirror_unavailable(base)
     if reason:
-        raise SearchError("search_unavailable", reason)
+        raise MirrorSearchError("mirror_unavailable", reason)
     return replace(
         base,
         name=f"{base.name} + mirror search {spec.worlds}×{spec.depth}",
-        runner=f"mirror/{source or search_source_identity()}",
-        config={"base_policy": base.id, "search": asdict(spec)},
+        runner=f"mirror/{source or mirror_source_identity()}",
+        config={"base_policy": base.id, "mirror": asdict(spec)},
         base_policy=base,
     )
 
@@ -113,7 +104,7 @@ def _digest(value: object) -> str:
     ).hexdigest()
 
 
-def search_source_identity() -> str:
+def mirror_source_identity() -> str:
     """Bind both execution and numerical implementation to the composition."""
     directory = Path(__file__).parent
     files = {
@@ -139,7 +130,7 @@ def mirror_decision(
     runner: PolicyRunner,
     env: managym.Env,
     obs: managym.Observation,
-    spec: SearchSpec,
+    spec: MirrorSearch,
     *,
     seed: int,
 ) -> BotDecision:
@@ -152,23 +143,23 @@ def mirror_decision(
     Deadline checks bracket provider/native calls; an in-process call must
     return before its overdue result can be rejected.
     """
-    unavailable = search_unavailable(runner)
+    unavailable = mirror_unavailable(runner)
     if unavailable:
-        raise SearchError("search_unavailable", unavailable)
+        raise MirrorSearchError("mirror_unavailable", unavailable)
     if type(seed) is not int or not 0 <= seed < 2**64:
         raise ValueError("Search seed must be an unsigned 64-bit integer.")
     viewer = runner.seat
     if env.current_agent_index() != viewer or int(obs.agent.player_index) != viewer:
-        raise SearchError(
-            "search_invalid_view", "Search requires the chooser's current view."
+        raise MirrorSearchError(
+            "mirror_invalid_view", "Search requires the chooser's current view."
         )
     started = time.perf_counter()
     deadline = started + spec.decision_seconds
 
     def check() -> None:
         if time.perf_counter() >= deadline:
-            raise SearchError(
-                "search_deadline_exceeded",
+            raise MirrorSearchError(
+                "mirror_deadline_exceeded",
                 "Mirror search reached its time limit. Retry the pending decision explicitly.",
             )
 
@@ -177,7 +168,7 @@ def mirror_decision(
     try:
         constraints = env.hidden_hand_constraints_json(viewer)
     except managym.AgentError as exc:
-        raise SearchError("search_world_unavailable", str(exc)) from exc
+        raise MirrorSearchError("mirror_world_unavailable", str(exc)) from exc
     frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
     viewer_hash = env.semantic_viewer_state_hash(viewer)
     source = cast("SearchPolicySession", runner.session)
@@ -191,8 +182,8 @@ def mirror_decision(
             check()
             branch = source.fork(seed=branch_seed)
             if any(branch is existing for existing in known_sessions):
-                raise SearchError(
-                    "search_branch_isolation",
+                raise MirrorSearchError(
+                    "mirror_branch_isolation",
                     "Policy fork reused live or branch state.",
                 )
             known_sessions.append(branch)
@@ -203,7 +194,9 @@ def mirror_decision(
 
             owner.callback(release)
             if not callable(getattr(branch, "evaluate", None)):
-                raise SearchError("search_unavailable", "Policy fork has no evaluator.")
+                raise MirrorSearchError(
+                    "mirror_unavailable", "Policy fork has no evaluator."
+                )
             check()
             return branch
 
@@ -217,8 +210,8 @@ def mirror_decision(
             # Use the live reset/step projection: for_player omits recent events
             # and a canonical JSON round trip also loses selector focus.
             if int(observation.agent.player_index) != actor:
-                raise SearchError(
-                    "search_invalid_view", "Rollout observation changed its chooser."
+                raise MirrorSearchError(
+                    "mirror_invalid_view", "Rollout observation changed its chooser."
                 )
             view = runner.view(observation)
             # Search v1 sessions evaluate either seat from current view alone.
@@ -246,13 +239,13 @@ def mirror_decision(
                     and -1 <= value.value <= 1
                 )
             except (AttributeError, TypeError, ValueError):
-                raise SearchError(
-                    "search_invalid_evaluation",
+                raise MirrorSearchError(
+                    "mirror_invalid_evaluation",
                     "Policy returned no valid search evaluation.",
                 ) from None
             if not valid:
-                raise SearchError(
-                    "search_invalid_evaluation",
+                raise MirrorSearchError(
+                    "mirror_invalid_evaluation",
                     "Mirror search requires full legal probabilities and signed outcome values from the acting seat.",
                 )
             return probabilities, float(value.value)
@@ -260,8 +253,8 @@ def mirror_decision(
         base, root_value = evaluate(fork(seed ^ 0xABCDEF, resources), env, obs)
         supported = [int(action) for action in np.flatnonzero(base > 0)]
         if len(frame.offers) != len(base):
-            raise SearchError(
-                "search_invalid_evaluation", "Policy rows differ from native offers."
+            raise MirrorSearchError(
+                "mirror_invalid_evaluation", "Policy rows differ from native offers."
             )
         sums = np.zeros(len(base), dtype=np.float64)
         counts = np.zeros(len(base), dtype=np.int64)
@@ -276,14 +269,14 @@ def mirror_decision(
             try:
                 world.determinize(seed=world_seed, perspective=viewer)
             except managym.AgentError as exc:
-                raise SearchError("search_world_unavailable", str(exc)) from exc
+                raise MirrorSearchError("mirror_world_unavailable", str(exc)) from exc
             if (
                 world.semantic_viewer_state_hash(viewer) != viewer_hash
                 or DecisionFrame.from_json(world.semantic_decision_frame_json()).offers
                 != frame.offers
             ):
-                raise SearchError(
-                    "search_world_mismatch",
+                raise MirrorSearchError(
+                    "mirror_world_mismatch",
                     "Sampled world changed the viewer or legal offers.",
                 )
             for action in supported:
@@ -305,8 +298,8 @@ def mirror_decision(
                             runtime.apply_policy_choice(branch, "child", choice)
                         )
                         if truncated:
-                            raise SearchError(
-                                "search_rollout_truncated",
+                            raise MirrorSearchError(
+                                "mirror_rollout_truncated",
                                 "Rollout ended without an authoritative outcome.",
                             )
                         if branch.is_game_over():
@@ -351,7 +344,7 @@ def mirror_decision(
                 base, values, reference, alpha=spec.alpha, beta=spec.beta
             )
         except ValueError as exc:
-            raise SearchError("search_numerical_failure", str(exc)) from exc
+            raise MirrorSearchError("mirror_numerical_failure", str(exc)) from exc
         check()
 
     # Cleanup is inside the budget and must succeed before a proposal exists.
@@ -360,12 +353,12 @@ def mirror_decision(
     receipt = {
         "schema": "managym.mirror-search/v1",
         "policy": runner.base_descriptor.id,
-        "source": runner.search_runtime or search_source_identity(),
+        "source": runner.mirror_runtime or mirror_source_identity(),
         "spec": asdict(spec),
         "seed": seed,
         "viewer": viewer,
         "viewer_state_hash": viewer_hash,
-        "belief": PHYSICAL_BELIEF,
+        "belief": NATIVE_PHYSICAL_BELIEF,
         "constraints": json.loads(constraints),
         "base": base.tolist(),
         "values": scores,
@@ -383,9 +376,9 @@ def mirror_decision(
         value_semantic="signed_outcome",
         search_scores=scores,
         belief=BeliefSummary(
-            PHYSICAL_BELIEF, _digest(json.loads(constraints)), 1.0, spec.worlds
+            NATIVE_PHYSICAL_BELIEF, _digest(json.loads(constraints)), 1.0, spec.worlds
         ),
-        search=SearchSummary(
+        mirror=MirrorSummary(
             algorithm=MIRROR_METHOD,
             worlds=spec.worlds,
             depth=spec.depth,

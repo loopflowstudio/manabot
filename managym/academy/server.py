@@ -30,7 +30,7 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.responses import FileResponse, JSONResponse, Response
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 import managym
 from managym.academy.card_art import card_art
@@ -63,9 +63,9 @@ from managym.experience_projection import (
     serialize_observation,
 )
 from managym.mirror_search import (
-    SearchError,
-    descriptor_search_unavailable,
-    parse_search_seats,
+    MirrorSearch,
+    MirrorSearchError,
+    descriptor_mirror_unavailable,
 )
 from managym.policy import PolicyRunner
 
@@ -128,7 +128,7 @@ from .shared_table_protocol import (
     RestoreDecisionMessage,
     ResumeMessage,
     RetryDecisionMessage,
-    RetrySearchMessage,
+    RetryMirrorMessage,
     ReturnFromBranchMessage,
     ReturnToLiveMessage,
     SetStopsMessage,
@@ -778,14 +778,13 @@ def _parse_game_config(config: Any) -> GameConfig:
     if villain_type == "policy":
         opponent = _select_opponent(data.get("opponent_sha256"))
 
-    search = parse_search_seats(data.get("search"))
-    opponent_search = search[1] if search else None
-    if opponent_search is not None:
+    mirror = TypeAdapter(MirrorSearch | None).validate_python(data.get("mirror"))
+    if mirror is not None:
         if opponent is not None:
-            reason = descriptor_search_unavailable(opponent.descriptor)
+            reason = descriptor_mirror_unavailable(opponent.descriptor)
             if reason:
                 raise ValueError(reason)
-        elif villain_type != "random":
+        else:
             raise ValueError(
                 "Mirror search requires a registered search-capable policy."
             )
@@ -802,15 +801,13 @@ def _parse_game_config(config: Any) -> GameConfig:
         seed=seed,
         seed_was_requested=seed_value is not None,
         villain_sims=villain_sims,
-        opponent=opponent.identity(opponent_search) if opponent is not None else None,
-        opponent_checkpoint=opponent.record(opponent_search)
-        if opponent is not None
-        else None,
+        opponent=opponent.identity(mirror) if opponent is not None else None,
+        opponent_checkpoint=opponent.record(mirror) if opponent is not None else None,
         stops=_parse_stops(data.get("stops")),
         stop_on_stack=_parse_flag(data, "stop_on_stack", True),
         auto_pass=_parse_flag(data, "auto_pass", True),
         decklists=decklists,
-        search=search,
+        mirror=mirror,
     )
     if opponent is not None:
         policy_registry().admit(opponent.descriptor.id, parsed.to_rust())
@@ -837,7 +834,7 @@ def close_policies(policies: Iterable[BotPolicy | None]) -> None:
                 resources.callback(policy.close)
 
 
-class PendingSearch(TypedDict):
+class PendingMirror(TypedDict):
     code: str
     message: str
     match_id: str
@@ -861,7 +858,7 @@ class GameSession:
         self.watch_mode = watch_mode
         self.watch_policies: tuple[BotPolicy, BotPolicy] | None = None
         self._bot_decision: BotDecision | None = None
-        self.search_retry: PendingSearch | None = None
+        self.mirror_retry: PendingMirror | None = None
         self._id_factory = id_factory or (lambda _kind: secrets.token_urlsafe(16))
         self._clock = clock or trace_store.utc_now_iso
         self.attempt_owner = participant_id(secrets.token_urlsafe(32))
@@ -965,13 +962,11 @@ class GameSession:
             raw_config = {**raw_config, **demo.config}
 
         config = _parse_game_config(raw_config)
-        if not self.watch_mode and config.search and config.search[0] is not None:
-            raise ValueError("The human Play seat cannot use bot search.")
         seed = config.seed if config.seed is not None else secrets.randbits(32)
         config.seed = seed
         try:
             policy = None if self.watch_mode else build_villain_policy(config)
-        except SearchError as exc:
+        except MirrorSearchError as exc:
             raise ValueError(f"{exc.reason}: {exc}") from exc
         except ValueError:
             raise
@@ -1022,7 +1017,7 @@ class GameSession:
             self._record_player_owner = self.attempt_owner
             self._close_policies()
             self.env, self.obs, self.villain_policy = env, obs, policy
-            self.search_retry = None
+            self.mirror_retry = None
             prepared.pop_all()
         self._demo_name = demo_name
         # A pack identifies both decks, so closed games use the generic identity.
@@ -1250,16 +1245,16 @@ class GameSession:
             },
         }
 
-    def retry_search(self, match_id: str, expected_revision: int) -> dict[str, Any]:
+    def retry_mirror(self, match_id: str, expected_revision: int) -> dict[str, Any]:
         """Retry only the bound, uncommitted bot decision after a deadline."""
         if (
             self.watch_mode
-            or self.search_retry is None
+            or self.mirror_retry is None
             or self.match_id != match_id
             or self.revision != expected_revision
         ):
             raise ValueError("The pending search changed. Recover the current table.")
-        self.search_retry = None
+        self.mirror_retry = None
         self._advance()
         return self._wire_message()
 
@@ -1609,10 +1604,10 @@ class GameSession:
                         self.villain_policy, self.env, self.obs
                     )
                     action_index = self._bot_decision.action
-                except SearchError as exc:
-                    if exc.reason != "search_deadline_exceeded":
+                except MirrorSearchError as exc:
+                    if exc.reason != "mirror_deadline_exceeded":
                         raise
-                    self.search_retry = {
+                    self.mirror_retry = {
                         "code": exc.reason,
                         "message": str(exc),
                         "match_id": self.match_id,
@@ -1657,7 +1652,7 @@ class GameSession:
         the same recorded authority path as a click.
         Bounded so a stuck engine cannot spin the server forever.
         """
-        if self.search_retry is not None:
+        if self.mirror_retry is not None:
             return
         if (
             self.watch_mode
@@ -1670,7 +1665,7 @@ class GameSession:
         hero_steps = 0
         while True:
             self._auto_play_villain()
-            if self.search_retry is not None:
+            if self.mirror_retry is not None:
                 return
             if self.obs.game_over:
                 self._f6_turn = None
@@ -1760,8 +1755,8 @@ class GameSession:
 
     def _advance_protocol_revision(self) -> None:
         self.revision += 1
-        if self.search_retry is not None:
-            self.search_retry["expected_revision"] = self.revision
+        if self.mirror_retry is not None:
+            self.mirror_retry["expected_revision"] = self.revision
         self.published_prompt = None
         self._pending_decision = None
 
@@ -1969,7 +1964,7 @@ class GameSession:
         if self.obs is None:
             raise RuntimeError("No observation available.")
 
-        if self.search_retry is not None:
+        if self.mirror_retry is not None:
             # The pending choice belongs to the bot. Publish the human's view
             # without a human prompt or any of the bot's private legal offers.
             self.published_prompt = None
@@ -2081,7 +2076,7 @@ class GameSession:
         if "asset_pack" in frame:
             payload["asset_pack"] = frame["asset_pack"]
         payload.update(transient)
-        payload["search_retry"] = self.search_retry
+        payload["mirror_retry"] = self.mirror_retry
         return payload
 
     def _reject_command(
@@ -2460,7 +2455,7 @@ class GameSession:
                 self.villain_policy = None
                 self.watch_policies = None
                 self._bot_decision = None
-                self.search_retry = None
+                self.mirror_retry = None
 
 
 def _error_message(message: str) -> dict[str, str]:
@@ -2705,9 +2700,9 @@ def _response_with_participant(
     watcher_invite: str | None = None,
 ) -> dict[str, Any]:
     payload = deepcopy(response)
-    payload["search_retry"] = record.game.search_retry
-    payload["search"] = (
-        asdict(record.game.trace.config).get("search") if record.game.trace else None
+    payload["mirror_retry"] = record.game.mirror_retry
+    payload["mirror"] = (
+        asdict(record.game.trace.config).get("mirror") if record.game.trace else None
     )
     # Launch metadata belongs only to the browser that submitted the setup.
     payload.pop("launch", None)
@@ -2781,7 +2776,7 @@ DISPATCH_CAPABILITIES: dict[str, TableCapability] = {
     "command": TableCapability.SUBMIT_LIVE_COMMAND,
     "action": TableCapability.SUBMIT_LIVE_COMMAND,
     "pass_turn": TableCapability.SUBMIT_LIVE_COMMAND,
-    "retry_search": TableCapability.SUBMIT_LIVE_COMMAND,
+    "retry_mirror": TableCapability.SUBMIT_LIVE_COMMAND,
     "set_stops": TableCapability.CONFIGURE_MATCH,
     "transfer_pilot": TableCapability.TRANSFER_PILOT,
     "author_belief": TableCapability.AUTHOR_BELIEF,
@@ -2921,7 +2916,7 @@ def _dispatch_table_request(
                 "hero_deck": previous.hero_deck_name,
                 "villain_deck": previous.villain_deck_name,
                 "decklists": previous.decklists,
-                "search": asdict(previous).get("search"),
+                "mirror": asdict(previous).get("mirror"),
                 "stops": record.game.stops,
                 "auto_pass": record.game.auto_pass,
                 "stop_on_stack": record.game.stop_on_stack,
@@ -2961,8 +2956,8 @@ def _dispatch_table_request(
         return record.game.hero_action(request.index), True
     if isinstance(request, PassTurnMessage):
         return record.game.pass_turn(), True
-    if isinstance(request, RetrySearchMessage):
-        return record.game.retry_search(
+    if isinstance(request, RetryMirrorMessage):
+        return record.game.retry_mirror(
             request.match_id, request.expected_revision
         ), True
     if isinstance(request, SetStopsMessage):
@@ -3726,7 +3721,7 @@ async def advance_bot_watch(
             return await asyncio.to_thread(
                 step_watch, trace_id, x_etude_participant_token, revision
             )
-        except SearchError as exc:
+        except MirrorSearchError as exc:
             raise HTTPException(409, {"code": exc.reason, "message": str(exc)}) from exc
 
 

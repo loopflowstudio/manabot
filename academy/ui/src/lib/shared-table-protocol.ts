@@ -13,7 +13,7 @@ export const SHARED_TABLE_REQUEST_TYPES = [
   'command',
   'action',
   'pass_turn',
-  'retry_search',
+  'retry_mirror',
   'set_stops',
   'transfer_pilot',
   'author_belief',
@@ -118,7 +118,7 @@ export type SharedTableRequest =
   | ({ type: 'command'; grant_revision?: number | null; command: Command })
   | ({ type: 'action'; grant_revision?: number | null; index: number })
   | ({ type: 'pass_turn'; grant_revision?: number | null })
-  | ({ type: 'retry_search'; grant_revision?: number | null; match_id: string; expected_revision: number })
+  | ({ type: 'retry_mirror'; grant_revision?: number | null; match_id: string; expected_revision: number })
   | ({
       type: 'set_stops';
       grant_revision?: number | null;

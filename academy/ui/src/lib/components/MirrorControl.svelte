@@ -1,13 +1,13 @@
 <script lang="ts">
-  import type { MirrorSearchSpec } from '$lib/watch';
+  import type { MirrorSearch } from '$lib/watch';
 
   interface Props {
-    value: MirrorSearchSpec | null;
+    value: MirrorSearch | null;
     supported: boolean;
     reason?: string | null;
     label?: string;
     disabled?: boolean;
-    onChange: (value: MirrorSearchSpec | null) => void;
+    onChange: (value: MirrorSearch | null) => void;
   }
   let { value, supported, reason = null, label = 'Search', disabled = false, onChange }: Props = $props();
 

@@ -1,5 +1,5 @@
 import { playerToken } from './records';
-import type { MirrorSearchSpec, PendingSearch } from './watch';
+import type { MirrorSearch, PendingMirror } from './watch';
 import {
   loadStoredDeckSelection,
   saveStoredDeckSelection,
@@ -77,9 +77,9 @@ export class GameStore {
   gameOver = $state(false);
   winner = $state<number | null>(null);
   errorMessage = $state<string | null>(null);
-  searchRetry = $state<PendingSearch | null>(null);
-  mirrorSearch = $state<MirrorSearchSpec | null>(null);
-  activeMirrorSearch = $state<MirrorSearchSpec | null>(null);
+  mirrorRetry = $state<PendingMirror | null>(null);
+  mirrorSearch = $state<MirrorSearch | null>(null);
+  activeMirrorSearch = $state<MirrorSearch | null>(null);
   connection = $state<ConnectionState>('disconnected');
   focusIds = $state<Set<number>>(new Set());
   sessionId = $state<string | null>(null);
@@ -209,7 +209,7 @@ export class GameStore {
       stop_on_stack: this.stops.stop_on_stack,
       auto_pass: this.stops.auto_pass,
       decklists: this.decklists,
-      search: [null, this.mirrorSearch],
+      mirror: this.mirrorSearch,
     };
   }
 

@@ -4,8 +4,8 @@
   import type { PolicyRuntimeIdentity } from '$lib/types';
   import { policyChoice, type PlayerChoice } from '$lib/game.svelte';
   import type { Decklists, TrainedOpponent } from '$lib/types';
-  import type { MirrorSearchSpec } from '$lib/watch';
-  import SearchControl from './SearchControl.svelte';
+  import type { MirrorSearch } from '$lib/watch';
+  import MirrorControl from './MirrorControl.svelte';
 
   interface Props {
     value?: PlayerChoice;
@@ -18,12 +18,12 @@
     label?: string;
     referencePlayers?: string[];
     onChange?: (value: PlayerChoice) => void;
-    search?: MirrorSearchSpec | null;
-    onSearchChange?: (value: MirrorSearchSpec | null) => void;
+    mirror?: MirrorSearch | null;
+    onMirrorChange?: (value: MirrorSearch | null) => void;
   }
   let { value = 'search-64', trained = [], extension = undefined, catalogError = null,
     setup, decklists = 'open', disabled = false, label = 'Opponent', referencePlayers,
-    onChange, search = null, onSearchChange }: Props = $props();
+    onChange, mirror = null, onMirrorChange }: Props = $props();
   const uid = $props.id();
   const selected = $derived(trained.find(entry => policyChoice(entry.sha256) === value));
   const custom = $derived(value.startsWith('policy:'));
@@ -141,8 +141,8 @@
     </details>
   {/if}
 </div>
-{#if onSearchChange && (custom || search !== null)}
-  <SearchControl value={search} supported={selected?.supports_search === true && decklists === 'open'}
+{#if onMirrorChange && (custom || mirror !== null)}
+  <MirrorControl value={mirror} supported={selected?.supports_search === true && decklists === 'open'}
     reason={decklists === 'closed' ? 'Mirror search requires open decklists.' : selected?.search_reason}
-    label={`${label} search`} {disabled} onChange={value => onSearchChange?.(value)} />
+    label={`${label} search`} {disabled} onChange={value => onMirrorChange?.(value)} />
 {/if}

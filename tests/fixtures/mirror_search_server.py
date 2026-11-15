@@ -13,7 +13,7 @@ from managym.academy.launch import serve
 from managym.academy.opponent import policy_registry
 from managym.academy.trace import load_trace
 from managym.bots import passive_policy
-from managym.mirror_search import SearchSpec
+from managym.mirror_search import MirrorSearch
 from managym.policy import PolicySpec
 from tests.academy.test_mirror_baseline import write_search_checkpoint
 from tests.academy.test_mirror_play import SearchFactory
@@ -29,7 +29,7 @@ def _finished_play(key: str) -> str:
                 "villain_deck": {"Forest": 8, "Llanowar Elves": 8},
                 "villain_type": "policy",
                 "opponent_sha256": key,
-                "search": [None, asdict(SearchSpec(worlds=1, depth=1))],
+                "mirror": asdict(MirrorSearch(worlds=1, depth=1)),
                 "seed": 42,
                 "auto_pass": False,
             }
@@ -66,8 +66,8 @@ def main() -> None:
             "action-only": IndependentFactory("Action-only"),
         },
     ) as academy:
-        spec = SearchSpec(worlds=1, depth=1)
-        timeout = SearchSpec(worlds=1, depth=1, decision_seconds=1e-9)
+        spec = MirrorSearch(worlds=1, depth=1)
+        timeout = MirrorSearch(worlds=1, depth=1, decision_seconds=1e-9)
         saved = _finished_play(policy_registry().descriptor("independent").id)
         trace = load_trace(saved)
         ordinal = next(
@@ -79,16 +79,16 @@ def main() -> None:
             json.dumps(
                 {
                     "play": academy.new_game(
-                        opponent="baseline", search=spec, seed=7
+                        opponent="baseline", mirror=spec, seed=7
                     ).url,
                     "timeout": academy.new_game(
-                        opponent="baseline", search=timeout, seed=7
+                        opponent="baseline", mirror=timeout, seed=7
                     ).url,
                     "watch": academy.watch(
-                        players=("independent", "baseline"), search=(spec, None)
+                        players=("independent", "baseline"), mirror=(spec, None)
                     ).url,
                     "watch_timeout": academy.watch(
-                        players=("independent", "baseline"), search=(timeout, None)
+                        players=("independent", "baseline"), mirror=(timeout, None)
                     ).url,
                     "saved": f"{academy.url}/replay?trace={saved}",
                     "saved_ordinal": ordinal,

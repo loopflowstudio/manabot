@@ -171,7 +171,7 @@ def test_closed_dispatch_denies_every_watcher_live_mutation_without_state_change
                 "hero_command",
                 "hero_action",
                 "pass_turn",
-                "retry_search",
+                "retry_mirror",
                 "set_stops",
                 "new_game",
             ):
@@ -195,7 +195,7 @@ def test_closed_dispatch_denies_every_watcher_live_mutation_without_state_change
                 },
                 {"type": "pass_turn", "grant_revision": watcher_grant},
                 {
-                    "type": "retry_search",
+                    "type": "retry_mirror",
                     "grant_revision": watcher_grant,
                     "match_id": frame["match_id"],
                     "expected_revision": frame["revision"],

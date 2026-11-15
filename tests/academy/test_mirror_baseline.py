@@ -16,7 +16,7 @@ from managym.academy import server
 from managym.academy.opponent import set_policy_registry
 from managym.academy.watch import WatchRequest, create_watch, inspect_watch, step_watch
 from managym.bots import passive_policy
-from managym.mirror_search import SearchSpec
+from managym.mirror_search import MirrorSearch
 from managym.policy import PolicyRegistry, PolicySpec
 
 
@@ -55,14 +55,14 @@ def test_baseline_provider_search_runs_in_play_and_either_watch_seat(
     registry = PolicyRegistry(providers={})
     key = registry.register(factory)
     set_policy_registry(registry)
-    spec = SearchSpec(worlds=1, depth=1)
+    spec = MirrorSearch(worlds=1, depth=1)
     game = server.GameSession()
     try:
         game.new_game(
             {
                 "villain_type": "policy",
                 "opponent_sha256": key,
-                "search": [None, asdict(spec)],
+                "mirror": asdict(spec),
                 "seed": 42,
                 "auto_pass": False,
             }
@@ -76,12 +76,12 @@ def test_baseline_provider_search_runs_in_play_and_either_watch_seat(
             game.hero_action(passive_policy(game.env, game.obs))
         assert game.trace is not None
         assert any(
-            event.bot_decision and event.bot_decision.search
+            event.bot_decision and event.bot_decision.mirror
             for event in game.trace.events
         )
         created = create_watch(
             WatchRequest(
-                players=[f"policy:{key}", f"policy:{key}"], search=[spec, spec], seed=42
+                players=[f"policy:{key}", f"policy:{key}"], mirror=[spec, spec], seed=42
             )
         )
         try:
@@ -89,7 +89,7 @@ def test_baseline_provider_search_runs_in_play_and_either_watch_seat(
             for revision in range(8):
                 step_watch(created["id"], created["token"], revision)
                 row = inspect_watch(created["id"], revision, created["token"])
-                assert row["outputs"]["search"]["worlds"] == 1
+                assert row["outputs"]["mirror"]["worlds"] == 1
                 assert len(row["outputs"]["probabilities"]) == len(
                     row["decision"]["frame"]["offers"]
                 )

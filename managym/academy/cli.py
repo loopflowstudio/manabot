@@ -28,7 +28,7 @@ from managym.academy.launch import (
     _path_or_name,
     serve,
 )
-from managym.mirror_search import SearchSpec, parse_search_seats
+from managym.mirror_search import MirrorSearch
 from managym.policy import PolicySpec
 
 DEFAULT_URL = "http://127.0.0.1:8000"
@@ -130,9 +130,9 @@ def play(
     decklists: Literal["open", "closed"] = typer.Option(
         "open", help="Whether each player knows the other's list"
     ),
-    search_spec: str | None = typer.Option(
+    mirror_json: str | None = typer.Option(
         None,
-        "--search-spec",
+        "--mirror",
         help="Mirror search settings as a JSON object; requires a search-capable policy.",
     ),
     host: str | None = _HOST,
@@ -145,14 +145,14 @@ def play(
 
     def prepare(running: Academy) -> str:
         try:
-            search = (
-                TypeAdapter(SearchSpec).validate_json(search_spec)
-                if search_spec
+            mirror = (
+                TypeAdapter(MirrorSearch).validate_json(mirror_json)
+                if mirror_json
                 else None
             )
         except ValueError as exc:
             raise AcademyLaunchError(
-                "setup.invalid", f"Invalid search spec: {exc}"
+                "setup.invalid", f"Invalid Mirror search spec: {exc}"
             ) from exc
         return running.new_game(
             deck=_path_or_name(deck, _DECK_SUFFIXES, server.NAMED_DECKS),
@@ -163,7 +163,7 @@ def play(
             sims=sims,
             seed=seed,
             decklists=decklists,
-            search=search,
+            mirror=mirror,
         ).url
 
     _run(
@@ -180,10 +180,10 @@ def watch(
         "--player",
         help="Seat player (exactly twice): random, search-N or registered policy",
     ),
-    search_spec: str | None = typer.Option(
+    mirror_json: str | None = typer.Option(
         None,
-        "--search-spec",
-        help='Two-seat JSON search settings, e.g. [{"worlds":4},null].',
+        "--mirror",
+        help='Two-seat JSON Mirror search settings, e.g. [{"worlds":4},null].',
     ),
     host: str | None = _HOST,
     port: int | None = _PORT,
@@ -201,16 +201,20 @@ def watch(
 
     def prepare(running: Academy) -> str:
         try:
-            searches = (
-                parse_search_seats(json.loads(search_spec)) if search_spec else None
+            mirrors = (
+                TypeAdapter(
+                    tuple[MirrorSearch | None, MirrorSearch | None]
+                ).validate_json(mirror_json)
+                if mirror_json
+                else None
             )
         except ValueError as exc:
             raise AcademyLaunchError(
-                "setup.invalid", f"Invalid search spec: {exc}"
+                "setup.invalid", f"Invalid Mirror search spec: {exc}"
             ) from exc
         return running.watch(
             players=(player[0], player[1]),
-            search=(searches[0], searches[1]) if searches else (None, None),
+            mirror=(mirrors[0], mirrors[1]) if mirrors else (None, None),
         ).url
 
     _run(

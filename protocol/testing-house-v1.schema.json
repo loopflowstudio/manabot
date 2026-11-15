@@ -1376,7 +1376,7 @@
       "title": "RetryDecisionMessage",
       "type": "object"
     },
-    "RetrySearchMessage": {
+    "RetryMirrorMessage": {
       "additionalProperties": false,
       "properties": {
         "expected_revision": {
@@ -1404,7 +1404,7 @@
           "type": "string"
         },
         "type": {
-          "const": "retry_search",
+          "const": "retry_mirror",
           "title": "Type",
           "type": "string"
         }
@@ -1414,7 +1414,7 @@
         "match_id",
         "expected_revision"
       ],
-      "title": "RetrySearchMessage",
+      "title": "RetryMirrorMessage",
       "type": "object"
     },
     "ReturnFromBranchMessage": {
@@ -1952,7 +1952,7 @@
             "restore_decision": "#/$defs/RestoreDecisionMessage",
             "resume": "#/$defs/ResumeMessage",
             "retry_decision": "#/$defs/RetryDecisionMessage",
-            "retry_search": "#/$defs/RetrySearchMessage",
+            "retry_mirror": "#/$defs/RetryMirrorMessage",
             "return_from_branch": "#/$defs/ReturnFromBranchMessage",
             "return_to_live": "#/$defs/ReturnToLiveMessage",
             "set_stops": "#/$defs/SetStopsMessage",
@@ -1984,7 +1984,7 @@
             "$ref": "#/$defs/PassTurnMessage"
           },
           {
-            "$ref": "#/$defs/RetrySearchMessage"
+            "$ref": "#/$defs/RetryMirrorMessage"
           },
           {
             "$ref": "#/$defs/SetStopsMessage"

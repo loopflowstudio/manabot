@@ -22,12 +22,12 @@ import uuid
 import managym
 from managym.bots import BotDecision
 from managym.mirror_search import (
-    SearchError,
-    SearchSpec,
+    MirrorSearch,
+    MirrorSearchError,
     mirror_decision,
-    search_source_identity,
-    search_unavailable,
-    searched_descriptor,
+    mirror_descriptor,
+    mirror_source_identity,
+    mirror_unavailable,
 )
 
 JSONValue: TypeAlias = (
@@ -285,7 +285,7 @@ class PolicyRegistry:
         *,
         seat: int,
         seed: int,
-        search: SearchSpec | None = None,
+        mirror: MirrorSearch | None = None,
     ) -> PolicyRunner:
         descriptor = self.admit(key, setup)
         factory = self._factories[descriptor.id]
@@ -310,7 +310,7 @@ class PolicyRegistry:
             release=lambda: self._active_sessions.discard(id(session)),
         )
         try:
-            runner.configure_search(search, seed=seed)
+            runner.configure_mirror(mirror, seed=seed)
         except BaseException:
             runner.close()
             raise
@@ -335,29 +335,29 @@ class PolicyRunner:
         self.last_decision: BotDecision | None = None
         self._closed = False
         self._release = release
-        self.search: SearchSpec | None = None
-        self.search_runtime: str | None = None
-        self._search_seed = 0
-        self._search_calls = 0
+        self.mirror: MirrorSearch | None = None
+        self.mirror_runtime: str | None = None
+        self._mirror_seed = 0
+        self._mirror_calls = 0
         self._started = False
 
-    def configure_search(self, search: SearchSpec | None, *, seed: int) -> None:
+    def configure_mirror(self, mirror: MirrorSearch | None, *, seed: int) -> None:
         """Configure before play; preserve the base runner as a distinct identity."""
         if self._started:
             raise ValueError("Search cannot change after a decision.")
-        if search is not None:
-            reason = search_unavailable(self)
+        if mirror is not None:
+            reason = mirror_unavailable(self)
             if reason:
-                raise SearchError("search_unavailable", reason)
-            self.search_runtime = search_source_identity()
-            self.descriptor = searched_descriptor(
-                self.base_descriptor, search, source=self.search_runtime
+                raise MirrorSearchError("mirror_unavailable", reason)
+            self.mirror_runtime = mirror_source_identity()
+            self.descriptor = mirror_descriptor(
+                self.base_descriptor, mirror, source=self.mirror_runtime
             )
         else:
             self.descriptor = self.base_descriptor
-            self.search_runtime = None
-        self.search = search
-        self._search_seed = seed
+            self.mirror_runtime = None
+        self.mirror = mirror
+        self._mirror_seed = seed
 
     def observe(self, observation: managym.Observation) -> None:
         self._started = True
@@ -378,12 +378,12 @@ class PolicyRunner:
         self._started = True
         if int(obs.agent.player_index) != self.seat:
             raise ValueError("Policy received another chooser’s observation.")
-        if self.search is not None:
+        if self.mirror is not None:
             # Retry the same uncommitted decision with the same random streams.
             # Increment only once a complete searched proposal exists.
-            seed = (self._search_seed * 1_000_003 + self._search_calls + 1) % 2**63
-            self.last_decision = mirror_decision(self, env, obs, self.search, seed=seed)
-            self._search_calls += 1
+            seed = (self._mirror_seed * 1_000_003 + self._mirror_calls + 1) % 2**63
+            self.last_decision = mirror_decision(self, env, obs, self.mirror, seed=seed)
+            self._mirror_calls += 1
             return self.last_decision.action
 
         view = replace(

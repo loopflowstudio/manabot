@@ -14,10 +14,12 @@ from pathlib import Path
 import re
 from typing import Any, Literal
 
+from pydantic import TypeAdapter
+
 import managym
 from managym.bots import BotDecision
 from managym.experience_projection import redact_observation
-from managym.mirror_search import SearchSpec, parse_search_seats
+from managym.mirror_search import MirrorSearch
 
 TRACE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
 TRACES_DIR = Path(os.getenv("ACADEMY_TRACES_DIR", "academy/traces"))
@@ -56,8 +58,8 @@ class GameConfig:
     hero_sideboard: dict[str, int] = field(default_factory=dict)
     villain_sideboard: dict[str, int] = field(default_factory=dict)
     watch_players: list[str] | None = None
-    # One shared per-seat search specification in Play, Watch and saved Replay.
-    search: list[SearchSpec | None] | None = None
+    # One bot composition; Watch records each bot through its descriptor.
+    mirror: MirrorSearch | None = None
     # "open": each player knows the other's main deck and sideboard;
     # "closed": neither. Traces that predate the option were open.
     decklists: Literal["open", "closed"] = "open"
@@ -67,8 +69,8 @@ class GameConfig:
     villain_source: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
-        self.search = parse_search_seats(self.search)
-        if self.decklists == "closed" and self.search and any(self.search):
+        self.mirror = TypeAdapter(MirrorSearch | None).validate_python(self.mirror)
+        if self.decklists == "closed" and self.mirror is not None:
             raise ValueError("Mirror search requires open decklists.")
 
     def to_rust(self) -> list[managym.PlayerConfig]:

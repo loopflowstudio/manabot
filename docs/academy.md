@@ -836,7 +836,10 @@ its search budget and elapsed waiting time. Reload preserves the configuration.
 public knowledge. Three unseen copies of one card and one of another give a
 hidden card a three-in-four chance of being the first. It ignores behavioral
 history; it does not mean uniform actions or uniform distinct hands. Native
-sampling preserves the bot's information and full legal choices.
+sampling preserves the bot's information and full legal choices. Retained belief
+identity `managym.determinize/physical-deal/v1` names native determinization,
+including foretold slots and rejection against retained selection commitments;
+it is distinct from the historical `physical-compatible-hand/v1` sampler.
 
 Every sampled world is tried under each root action with positive base-policy
 probability. Both rollout seats use that base evaluator from their own views.
@@ -850,7 +853,7 @@ signed-outcome or W/D/L value evaluator, and isolated forks. V1 evaluation must
 depend on the current view alone. Recurrent and action-only policies still play
 and Watch, with search unavailable and a reason. Qwen v1 does not support search.
 No missing capability is replaced by a synthetic distribution, terminal rollout,
-raw-policy fallback or the built-in Search opponent.
+raw-policy fallback.
 
 On a timeout, no bot action commits. The pending decision remains on the table
 with **Retry search**. Only an explicit retry tries it again; reconnecting or
@@ -860,8 +863,9 @@ another policy.
 
 Watch shows **Raw policy**, **Search values** and **Updated policy**, alongside
 belief, budget, elapsed/ceiling seconds, rollouts, regularization, the exact
-hexadecimal seed and receipt digest. A completed Play replay offers **Inspect
-bot search** for the same retained evidence. The human opponent's live view and
+hexadecimal seed and receipt digest. The full receipt is not retained and no
+verifier ships; recomputing its digest requires the same provider, position and seed.
+A completed Play replay offers **Inspect bot search** for the same retained evidence. The human opponent's live view and
 viewer export do not contain these outputs. Sampled hands and private branch
 audits are not stored in the summary. Replay needs no provider or new inference.
 Raw, searched and differently budgeted configurations have distinct recorded
@@ -871,21 +875,21 @@ Python and the CLI accept the same explicit settings:
 
 ```python
 from managym.academy.launch import serve
-from managym.mirror_search import SearchSpec
+from managym.mirror_search import MirrorSearch
 from managym.policy import PolicySpec
 
 with serve(policies={"challenger": PolicySpec("manabot", "/models/self-play-raw.pt")}) as academy:
-    search = SearchSpec(worlds=4, depth=2)
-    print(academy.new_game(opponent="challenger", search=search).url)
-    print(academy.watch(players=("challenger", "random"), search=(search, None)).url)
+    mirror = MirrorSearch(worlds=4, depth=2)
+    print(academy.new_game(opponent="challenger", mirror=mirror).url)
+    print(academy.watch(players=("challenger", "random"), mirror=(mirror, None)).url)
     academy.wait()
 ```
 
 ```bash
 uv run --no-project managym academy --policy challenger.json play \
-    --opponent challenger --search-spec '{"worlds":4,"depth":2}'
+    --opponent challenger --mirror '{"worlds":4,"depth":2}'
 uv run --no-project managym academy --policy challenger.json watch \
-    --player challenger --player random --search-spec '[{"worlds":4,"depth":2},null]'
+    --player challenger --player random --mirror '[{"worlds":4,"depth":2},null]'
 ```
 
 More worlds or depth costs time and does not by itself establish stronger play.

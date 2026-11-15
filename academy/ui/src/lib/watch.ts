@@ -1,7 +1,7 @@
 import type { AddressedReplayDecision } from './replay-index';
 import type { Observation, PresentationEvent, RecordedPlayer } from './types';
 
-export interface MirrorSearchSpec {
+export interface MirrorSearch {
   algorithm: 'local_update';
   belief: 'physical_deal';
   worlds: number;
@@ -11,15 +11,15 @@ export interface MirrorSearchSpec {
   beta: number;
 }
 
-export interface PendingSearch {
+export interface PendingMirror {
   code: string;
   message: string;
   match_id: string;
   expected_revision: number;
 }
 
-export function parseMirrorSearches(value: unknown): [MirrorSearchSpec | null, MirrorSearchSpec | null] {
-  function valid(spec: unknown): spec is MirrorSearchSpec | null {
+export function parseMirrors(value: unknown): [MirrorSearch | null, MirrorSearch | null] {
+  function valid(spec: unknown): spec is MirrorSearch | null {
     if (spec === null) return true;
     if (typeof spec !== 'object' || spec === null) return false;
     const fields = spec as Record<string, unknown>;
@@ -45,7 +45,7 @@ export interface BotDecision {
   unavailable: string | null;
   factors: {chosen: number; probabilities: number[]; value: number}[];
   belief: {model: string; digest: string; condition_mass: number; sampled_worlds: number} | null;
-  search?: {
+  mirror?: {
     algorithm: string;
     worlds: number;
     depth: number;
@@ -61,8 +61,8 @@ export interface BotDecision {
 }
 
 export interface WatchDecision {
-  search_retry?: PendingSearch | null;
-  search?: (MirrorSearchSpec | null)[] | null;
+  mirror_retry?: PendingMirror | null;
+  mirror?: (MirrorSearch | null)[] | null;
   id: string;
   players: string[];
   source_kind?: string;
