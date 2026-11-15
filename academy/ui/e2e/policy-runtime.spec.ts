@@ -79,6 +79,8 @@ for (const theme of ['light', 'dark'] as const) {
     await page.getByRole('button', { name: 'Step decision', exact: true }).click();
     await expect(page.getByText(/^Decision 2 of 2 ·/)).toBeVisible();
     await page.reload();
+    await expect(page.getByText(/^Decision 2 of 2 ·/)).toBeVisible();
+    await page.getByRole('button', { name: 'Previous decision', exact: true }).click();
     await expect(page.getByText(/^Decision 1 of 2 ·/)).toBeVisible();
     await page.screenshot({ path: fileURLToPath(new URL(`../test-results/policy/watch-${theme}.png`, import.meta.url)) });
     const status = page.locator('details.player-status').first();

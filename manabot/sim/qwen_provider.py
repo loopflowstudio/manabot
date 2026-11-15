@@ -51,6 +51,7 @@ class QwenFactory:
             f"{runner_identity()}:transformers/{version('transformers')}",
             artifacts,
             self.spec.config,
+            search_reason="Qwen v1 returns actions without full legal probabilities or a value evaluator.",
             supports_search=False,
         )
 
