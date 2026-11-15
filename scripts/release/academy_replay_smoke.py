@@ -38,10 +38,11 @@ def write_example_trace(path: Path) -> None:
             ),
         ],
     )
-    # Tiny decks lose to the first draw after their opening hand.
+    # Pass both first-turn priority stops without playing a land. Tiny decks
+    # lose to the first draw after their opening hand.
     game = record_actions(
         setup,
-        [0],
+        [1, 1],
         players=("first-legal-a", "first-legal-b"),
         source={"kind": "evaluation"},
     )

@@ -270,7 +270,9 @@ def test_avatar_grant_reaches_native_python_and_academy_views() -> None:
         )
         if action is None:
             action = next(
-                row for row in actions if row["type"] == "PRIORITY_PASS_PRIORITY"
+                row
+                for row in actions
+                if row["type"] in ("PAY_COST", "PRIORITY_PASS_PRIORITY")
             )
         obs = engine.step(action["index"])[0]
     else:
@@ -357,42 +359,94 @@ def test_elemental_complete_games_use_the_ordinary_training_encoder(
 
 
 def test_retained_professor_offer_completes_payment_and_replays_exactly() -> None:
-    # Apply the retained w10 action prefix to the current w11 WB/UG setup.
-    # This preserves the regression; it does not relabel the frozen w10 root.
+    # Current-catalog path to MTG-175's one-Forest/Prism payment root.
+    # Explicit passes and payments retain the original strategic choices;
+    # the frozen w10 receipt is unchanged.
     prefix = [
         2,
         2,
         0,
         0,
         4,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
         3,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
         3,
+        1,
+        1,
         5,
-        2,
+        1,
+        1,
+        3,
+        1,
+        1,
+        1,
+        1,
+        1,
         0,
+        4,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
         2,
         2,
         2,
         6,
         2,
+        2,
+        2,
+        3,
         3,
         1,
         2,
+        3,
+        2,
         1,
-        0,
         4,
         0,
         0,
         8,
         0,
-        0,
+        3,
+        2,
         1,
         4,
         6,
-        2,
-        2,
+        1,
+        1,
+        3,
+        1,
+        1,
+        1,
+        1,
+        1,
+        3,
+        1,
+        5,
         5,
         1,
+        5,
         1,
     ]
     digests: list[str] = []
@@ -406,14 +460,31 @@ def test_retained_professor_offer_completes_payment_and_replays_exactly() -> Non
         )
         for action in prefix:
             obs, _, _, _, _ = env.step(action)
-        assert len(obs.action_space.actions) == 8
+        assert len(obs.action_space.actions) == 12
         assert "Gnarled Professor" in describe_actions(obs)[4]["description"]
         root = env.state_digest()
         branch = env.clone_env()
         obs, _, _, _, _ = branch.step(4)
-        # The production wrapper skips forced payment and priority steps,
-        # reaching the resolved Professor's player-visible Learn decision.
-        # Directed native regressions exercise each explicit payment step.
+        # Prism supplies the second green; explicitly pay its activation fee.
+        prism = next(
+            row
+            for row in describe_actions(obs)
+            if row["description"] == "Activate ability: Prophetic Prism"
+        )
+        obs = branch.step(prism["index"])[0]
+        pay = next(row for row in describe_actions(obs) if row["type"] == "PAY_COST")
+        obs = branch.step(pay["index"])[0]
+        for _ in range(12):
+            if any(action.action_type == 10 for action in obs.action_space.actions):
+                break
+            passing = next(
+                row
+                for row in describe_actions(obs)
+                if row["type"] == "PRIORITY_PASS_PRIORITY"
+            )
+            obs = branch.step(passing["index"])[0]
+        else:
+            pytest.fail("Professor did not reach Learn after payment")
         assert any(
             p.characteristics.name == "Gnarled Professor" for p in obs.agent_permanents
         )

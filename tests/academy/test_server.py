@@ -98,6 +98,7 @@ def test_protocol_v1_bolt_and_pass_offers_round_trip(monkeypatch, tmp_path):
                 ("PRIORITY_PLAY_LAND", None),
                 ("PRIORITY_CAST_SPELL", "Cast Lightning Bolt"),
                 ("CHOOSE_TARGET", "Target Villain"),
+                ("PAY_COST", None),
                 ("PRIORITY_PASS_PRIORITY", "Pass priority"),
             ):
                 offer = _offer(frame, action_type=action_type, label=label)
