@@ -221,6 +221,10 @@ checkpoints or experiment evidence.
   that adds it; the policy input never silently falls behind.
   `managym/cards/tests/cards/observability.rs` names each `Observation` field's
   tensor columns or fact kind and fails to compile when a field is unlisted.
+- Policy history consumers read only `ViewerHistory`'s projection. A random
+  library placement must conceal member identities from both seats in its move
+  rows, even when the cards were public: chronological names disclose the hidden
+  order. Keep counts, owner, zones and library end, and earlier public rows.
 - Decklist disclosure (open by default, or closed) lives on native
   `PlayerConfig.disclosure`, written by `MatchConfig.decklists` and Academy
   `GameConfig.decklists`. Observations, search and possible worlds read it

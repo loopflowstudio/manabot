@@ -26,7 +26,7 @@ number. A run on an open world makes no comparability claim.
 | **w14** | in development, MTG-195, 2026-10-26 | 40 / 41 / 28 / 17; controller-selected trigger placement and policy-input v3 occurrence joins | unchanged authored packs; fresh w14 conformance and play fixtures | no strength baseline |
 | **w15** | in development, MTG-177, 2026-10-27 | 40 / 41 / 28 / 17; retained resolution eligibility, policy-input v4 relations 64 × 33 | unchanged authored packs; fresh integrated conformance and play fixtures | no strength baseline |
 | **w16** | in development, Task 892c47, 2026-10-28 | 40 / 41 / 28 / 17; typed Rust cards compiled in process, first-printing set keys, one default pack | `tla-pool-v1`: every defined card (115 supported); conformance receipts not yet regenerated | no strength baseline |
-| **w17** | open (Tasks 892c47, 87e012, 6875f0, 488a40, a7234f, MTG-225, MTG-226, MTG-243), 2026-10-29 | 73 / 56 / 38 / 17 plus 512 × 12 fact rows (policy input v9, the only input on main); cards in engine rules types, learning schema 10 tokens derived from them, attacking permanent column; TLA casting, costs, zone permissions and private zones; counters by kind, Equipment and Auras, Vehicles, continuous effects as timestamped records, layered type/keyword/P/T grants, ability loss, activation X and crew; ward against abilities, T4 triggers and turn history; token copies with copy exceptions, surveil; T6 Sagas, double-faced cards, extra turns and combats, bending history; shared naming vocabulary as bounded group-then-name decisions, name/group joins | `world` (the default pack): every defined card (340 supported); `semantic-kernel-w17-v2`, `authored-match-w17-v1`, `authored-match-parity-w17-v1` and `public-commitment-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
+| **w17** | open (Tasks 16628a, 892c47, 87e012, 6875f0, 488a40, a7234f, MTG-225, MTG-226, MTG-243), 2026-10-29 | 73 / 56 / 38 / 17 plus 512 × 12 fact rows (policy input v9, the only input on main); cards in engine rules types, learning schema 10 tokens derived from them, attacking permanent column; TLA casting, costs, zone permissions and private zones; counters by kind, Equipment and Auras, Vehicles, continuous effects as timestamped records, layered type/keyword/P/T grants, ability loss, activation X and crew; ward against abilities, T4 triggers and turn history; token copies with copy exceptions, surveil; T6 Sagas, double-faced cards, extra turns and combats, bending history; shared naming vocabulary as bounded group-then-name decisions, name/group joins | `world` (the default pack): every defined card (340 supported); `semantic-kernel-w17-v2`, `authored-match-w17-v1`, `authored-match-parity-w17-v1` and `public-commitment-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
 
 **Open world: w17.** `managym.WORLD_VERSION` identifies live runs. Checkpoints
 from earlier worlds are **not comparable** to w17; do not reuse their
@@ -68,6 +68,19 @@ replay or configuration bound to one raises `UnsupportedPolicyInput` and runs
 from the revision that recorded it (`ac601834d` is the last supporting them).
 The paragraphs below that describe v1–v8 layouts, or v6 as the fresh default,
 record the revisions that introduced them.
+
+Task 16628a (same world) records hidden-zone activity in the optional policy
+history: every zone move including those into a hand or library, draws,
+reveals, looks, shuffles and declined optional instructions, with the library
+end a card went to. A card's identity is carried only for the viewers entitled
+to it when the row was written; `determinize` removes the rest from a fork.
+History rows widen from 12 to 14 columns (`from_zone`, `library_end`) and kinds
+from six to eleven, so a checkpoint trained with history is refused by the
+`events` shape; `policy_history_version` stays 1. History for policy inputs v9
+and v10 is removed (`b5478d8789` is the last revision carrying it). No
+`GameEvent`, state hash, conformance receipt or history-off tensor changes.
+Decision-capture history is version 2; version 1 captures still render.
+[Row reference](docs/observation-and-model.md#optional-recent-events).
 
 MTG-243 makes naming ordinary group-then-name decisions of at most 64 options
 and adds explicit policy input v9: public name/definition joins and group spans

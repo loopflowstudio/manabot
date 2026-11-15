@@ -123,7 +123,7 @@ class PlayerReference(CaptureModel):
 
 class CardReference(CaptureModel):
     kind: Literal["card"]
-    definition: int
+    definition: int | None
     owner: int
     zone: int | None
     context_id: int | None
@@ -137,10 +137,12 @@ class HistoryRow(CaptureModel):
     amount: int
     source: HistoryReference
     target: HistoryReference
+    from_zone: int | None = None
+    library_end: int = 0
 
 
 class PublicHistory(CaptureModel):
-    version: Literal[1]
+    version: Literal[1, 2]
     capacity: int
     rows: list[HistoryRow]
 

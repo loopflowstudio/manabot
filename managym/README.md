@@ -335,9 +335,15 @@ Academy legal action sets remain complete. Other capacity excesses still fail.
 Complete outside program bindings and public known-hand definition
 counts still require the semantic input path during the Learn migration.
 
-The optional [policy-history v1 projection](../docs/observation-and-model.md#policy-inputs) is a bounded
-derived suffix updated at the native event append. Observation reads share it;
-clone and diagnostic injection must preserve its documented lifecycle.
+The optional [policy history](../docs/observation-and-model.md#optional-recent-events) is a bounded
+derived suffix of one game, updated at the native event append and at the
+shuffle, look, library-end and declined-option sites that have no rules event.
+Both seats share the window; `Observation.policy_history` is a `ViewerHistory`
+that yields rows already projected for its viewer, and it is the only place a
+card's identity is withheld. Encoders, decision capture and the browser read
+that projection and never filter identities themselves. Clone and diagnostic
+injection must preserve its documented lifecycle; `Game::determinize` removes
+what its perspective may not know.
 
 Every match, authored or not, runs on the world's one catalog
 (`cards::content_pack::default_content_pack`): every set-file definition in name
@@ -472,8 +478,9 @@ rather than drop it.
 
 `Env.capture_decision(viewer, history_capacity=0)` supplies atomic decision capture
 v5: the schema-8 semantic Observation, shared native continuation frames, bound public card
-characteristics, visible object joins, world/content identity and optional public
-history v1 (0 disables it; 1..32 admits a chronological suffix). Its SHA-256 covers
+characteristics, visible object joins, world/content identity and optional
+history v2 as that viewer was shown it (0 disables it; 1..32 admits a
+chronological suffix; cards the viewer may not identify carry no definition). Its SHA-256 covers
 all fields except the digest itself using recursively key-sorted compact JSON.
 `DECISION_CAPTURE_VERSION` owns this aggregate's inclusion/order/digest contract;
 `SEMANTIC_DECISION_VERSION` owns embedded schema 8. Historical captures retain

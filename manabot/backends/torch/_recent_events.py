@@ -1,6 +1,6 @@
-"""Stateless identity-aware encoding of managym public history v1.
+"""Stateless identity-aware encoding of managym viewer history.
 
-Rows [B,E,12] contain kind/amount and two typed references. Definition transport
+Rows [B,E,14] contain kind/amount and two typed references. Definition transport
 IDs join the same semantic catalog as visible cards. Context indexes gather
 current objects, never become numeric features; departed objects keep only their
 public definition, historical zone and owner. The native ledger owns visibility,
@@ -20,10 +20,10 @@ class RecentEventEncoder(nn.Module):
 
     def __init__(self, width: int) -> None:
         super().__init__()
-        # kind(6), amount/20, log ordinal age; two references each with semantic
-        # definition + current context + owner(3), zone(8), availability(3).
+        # kind(11), amount/20, log ordinal age; two references each with semantic
+        # definition + current context + owner(3), zone(8), availability(4), plus from-zone(8), library-end(4).
         self.projection = nn.Sequential(
-            nn.Linear(8 + 2 * (2 * width + 14), width),
+            nn.Linear(13 + 12 + 2 * (2 * width + 15), width),
             nn.Tanh(),
             nn.Linear(width, width),
         )
@@ -40,7 +40,9 @@ class RecentEventEncoder(nn.Module):
             return F.one_hot(values, size).to(rows.amounts.dtype)
 
         features = [
-            categorical(rows.kinds, 6),
+            categorical(rows.kinds, 11),
+            categorical(rows.from_zones, 8),
+            categorical(rows.library_ends, 4),
             rows.amounts,
             rows.ages.log1p().unsqueeze(-1),
         ]
@@ -55,7 +57,7 @@ class RecentEventEncoder(nn.Module):
                     context,
                     categorical(rows.owners[..., index], 3),
                     categorical(rows.zones[..., index], 8),
-                    categorical(rows.status[..., index], 3),
+                    categorical(rows.status[..., index], 4),
                 )
             )
         encoded = self.projection(torch.cat(features, dim=-1))

@@ -53,7 +53,7 @@ from manabot.env.observation import (
     ObservationBuffers,
 )
 from manabot.env.shared_effects import DETAIL_DIM, EFFECT_ROWS, MEMBER_DIM
-from manabot.policy.buckets import has_history_events
+from manabot.policy.buckets import HISTORY_COLUMNS, has_history_events
 
 Array = np.ndarray
 
@@ -399,6 +399,8 @@ class EventRows[A]:
     focus: A
     focus_mask: A
     status: A
+    from_zones: A
+    library_ends: A
 
 
 @dataclass(frozen=True)
@@ -684,7 +686,11 @@ def _referenced_definitions(
     ]
     if has_history_events(obs):
         references.extend(
-            obs["events"][..., col][obs["events_valid"] == 1] for col in (2, 7)
+            obs["events"][..., col][obs["events_valid"] == 1]
+            for col in (
+                HISTORY_COLUMNS["source_definition"],
+                HISTORY_COLUMNS["target_definition"],
+            )
         )
     if "stack" in obs:
         references.append(obs["stack"][..., STACK_DEFINITION_INDEX])
@@ -906,19 +912,29 @@ def _events(
     valid = obs["events_valid"]
     rows = np.where((valid != 0)[..., None], obs["events"], 0)
     counts = valid.sum(1, keepdims=True)
-    focus = rows[..., [5, 10]].astype(np.int64)
+
+    def pair(field: str) -> Array:
+        return rows[
+            ...,
+            [HISTORY_COLUMNS[f"source_{field}"], HISTORY_COLUMNS[f"target_{field}"]],
+        ]
+
+    focus = pair("context").astype(np.int64)
     return EventRows(
-        kinds=rows[..., 0].astype(np.int64),
-        amounts=rows[..., 1:2].astype(np.float32) / np.float32(20),
+        kinds=rows[..., HISTORY_COLUMNS["kind"]].astype(np.int64),
+        amounts=rows[..., HISTORY_COLUMNS["amount"], None].astype(np.float32)
+        / np.float32(20),
         ages=(counts - valid.cumsum(1)).clip(min=0).astype(np.float32),
         validity=valid.astype(bool),
         counts=counts.astype(np.float32),
-        definitions=tables.rows(rows[..., [2, 7]]),
-        owners=rows[..., [3, 8]].astype(np.int64),
-        zones=rows[..., [4, 9]].astype(np.int64),
+        definitions=tables.rows(pair("definition")),
+        owners=pair("owner").astype(np.int64),
+        zones=pair("zone").astype(np.int64),
         focus=np.arange(len(rows))[:, None, None] * objects + focus.clip(min=0),
         focus_mask=(focus >= 0) & (valid != 0)[..., None],
-        status=rows[..., [6, 11]].astype(np.int64),
+        status=pair("status").astype(np.int64),
+        from_zones=rows[..., HISTORY_COLUMNS["from_zone"]].astype(np.int64),
+        library_ends=rows[..., HISTORY_COLUMNS["library_end"]].astype(np.int64),
     )
 
 

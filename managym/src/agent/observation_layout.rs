@@ -407,18 +407,20 @@ columns! { event {
 } }
 
 columns! { history {
-    0: KIND => ("kind", ValueLayout::new("category", "HistoryKind: 0 arrival, 1 damage, 2 life, 3 cast, 4 resolved, 5 countered", "0..5")),
+    0: KIND => ("kind", ValueLayout::new("category", "HistoryKind: 0 moved, 1 damage, 2 life, 3 cast, 4 resolved, 5 countered, 6 draw, 7 reveal, 8 look, 9 shuffle, 10 declined", "0..10")),
     1: AMOUNT => ("amount", ValueLayout::new("number", "Unscaled signed value", "signed; no fixed bound")),
     2: SOURCE_DEFINITION => ("source_definition", ValueLayout::DEFINITION),
     3: SOURCE_OWNER => ("source_owner", ValueLayout::new("category", "0 unknown, 1 agent, 2 opponent", "0..2")),
     4: SOURCE_ZONE => ("source_zone", ValueLayout::new("category", "ZoneType + 1; 0 unknown", "0..7")),
     5: SOURCE_CONTEXT => ("source_context", ValueLayout::new("reference", "Zero-based padded object-table index; -1 unavailable", "integers >= -1")),
-    6: SOURCE_STATUS => ("source_status", ValueLayout::new("category", "0 unavailable, 1 current object join, 2 definition only", "0..2")),
+    6: SOURCE_STATUS => ("source_status", ValueLayout::new("category", "0 unavailable, 1 current object join, 2 definition only, 3 hidden", "0..3")),
     7: TARGET_DEFINITION => ("target_definition", ValueLayout::DEFINITION),
     8: TARGET_OWNER => ("target_owner", ValueLayout::new("category", "0 unknown, 1 agent, 2 opponent", "0..2")),
     9: TARGET_ZONE => ("target_zone", ValueLayout::new("category", "ZoneType + 1; 0 unknown", "0..7")),
     10: TARGET_CONTEXT => ("target_context", ValueLayout::new("reference", "Zero-based padded object-table index; -1 unavailable", "integers >= -1")),
-    11: TARGET_STATUS => ("target_status", ValueLayout::new("category", "0 unavailable, 1 current object join, 2 definition only", "0..2")),
+    11: TARGET_STATUS => ("target_status", ValueLayout::new("category", "0 unavailable, 1 current object join, 2 definition only, 3 hidden", "0..3")),
+    12: FROM_ZONE => ("from_zone", ValueLayout::new("category", "ZoneType + 1; 0 none", "0..7")),
+    13: LIBRARY_END => ("library_end", ValueLayout::new("category", "0 none, 1 top, 2 bottom, 3 second from top", "0..3")),
 } }
 
 columns! { fact {
@@ -751,8 +753,7 @@ mod tests {
     fn named_layout_matches_every_encoder_width() {
         for (policy_history, turn_state, layout_kind) in [
             (false, false, InputLayout::Legacy),
-            (true, false, InputLayout::Legacy),
-            (true, true, InputLayout::Legacy),
+            (false, true, InputLayout::Legacy),
             (false, true, InputLayout::OneToken),
             (true, true, InputLayout::OneToken),
         ] {
@@ -795,7 +796,7 @@ mod tests {
                 (
                     "events",
                     config.event_dim(),
-                    if policy_history { 12 } else { 7 },
+                    if policy_history { 14 } else { 7 },
                 ),
                 ("relations", relation::WIDTH, 49),
                 ("facts", FACT_DIM, 12),

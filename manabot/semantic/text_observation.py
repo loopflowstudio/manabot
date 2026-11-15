@@ -528,7 +528,11 @@ class _Renderer:
         if isinstance(value, PlayerReference):
             return self.seats[value.seat]
         assert isinstance(value, CardReference)
-        definition = self.definition(value.definition)
+        definition = (
+            "hidden card"
+            if value.definition is None
+            else self.definition(value.definition)
+        )
         zone = "unavailable zone" if value.zone is None else _enum(_ZONES, value.zone)
         link = (
             "no current object link (expired or unavailable)"
@@ -1214,14 +1218,55 @@ class _Renderer:
             lines.append(f"Outstanding mana cost: {context.mana_cost}.")
         lines += ["", "Bound public card definitions:"]
         lines.extend(self._definitions_lines())
-        lines += [
-            "",
-            f"Public policy history v1: chronological suffix, capacity {capture.history.capacity} records; no writable model memory.",
-        ]
+        header = (
+            f"Public policy history v1: chronological suffix, capacity {capture.history.capacity} records; no writable model memory."
+            if capture.history.version == 1
+            else f"Policy history v2: what this viewer was shown, oldest first, capacity {capture.history.capacity} records; no writable model memory."
+        )
+        lines += ["", header]
         for row in capture.history.rows:
-            lines.append(
-                f"{_enum(('Arrival', 'Damage', 'Life change', 'Cast', 'Resolved', 'Countered'), row.kind)}: amount {row.amount}; source {self.history_reference(row.source)}; target {self.history_reference(row.target)}."
-            )
+            if capture.history.version == 1:
+                lines.append(
+                    f"{_enum(('Arrival', 'Damage', 'Life change', 'Cast', 'Resolved', 'Countered'), row.kind)}: amount {row.amount}; source {self.history_reference(row.source)}; target {self.history_reference(row.target)}."
+                )
+                continue
+            source = self.history_reference(row.source)
+            target = self.history_reference(row.target)
+            if row.kind in (0, 6) and isinstance(row.source, CardReference):
+                card = row.source
+                definition = (
+                    "hidden card"
+                    if card.definition is None
+                    else self.definition(card.definition)
+                )
+                owner = self.seats[card.owner]
+                zone = "unknown" if card.zone is None else _enum(_ZONES, card.zone)
+                if row.kind == 6:
+                    line = f"Draw: {target}; {definition}, owner {owner}, {zone}."
+                else:
+                    previous = (
+                        "unknown"
+                        if row.from_zone is None
+                        else _enum(_ZONES, row.from_zone)
+                    )
+                    end = (
+                        ""
+                        if row.library_end == 0
+                        else f" ({_enum(('none', 'top', 'bottom', 'second from top'), row.library_end)})"
+                    )
+                    line = f"Moved: {definition}, owner {owner}, {previous} -> {zone}{end}."
+            elif row.kind == 8:
+                zone = (
+                    "unknown" if row.from_zone is None else _enum(_ZONES, row.from_zone)
+                )
+                line = f"Look: {source}; {target}'s {zone}, {row.amount} cards."
+            elif row.kind == 9:
+                line = f"Shuffle: {target}'s library."
+            elif row.kind == 10:
+                line = f"Declined: {source}; source {target}."
+            else:
+                line = f"{_enum(('Moved', 'Damage', 'Life change', 'Cast', 'Resolved', 'Countered', 'Draw', 'Reveal'), row.kind)}: amount {row.amount}; source {source}; target {target}."
+            lines.append(line)
         if not capture.history.rows:
             lines.append("Empty." if capture.history.capacity else "History disabled.")
         if capture.frames:

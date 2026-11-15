@@ -2974,6 +2974,29 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         recent_events => [Rows("events")],
         policy_history => [Rows("events")],
     });
+    use managym::agent::policy_history::{HistoryEvent, HistoryKind};
+    fields.extend(encoding!(HistoryEvent {
+        kind => [Rows("events.kind")], amount => [Rows("events.amount")],
+        source => [Rows("events.source_*: definition joins catalog tokens")],
+        target => [Rows("events.target_*: definition joins catalog tokens")],
+        from_zone => [Rows("events.from_zone")], library_end => [Rows("events.library_end")],
+    }));
+    fn history_kind(kind: HistoryKind) -> &'static str {
+        match kind {
+            HistoryKind::Moved => "events: moved",
+            HistoryKind::Damage => "events: damage",
+            HistoryKind::Life => "events: life",
+            HistoryKind::Cast => "events: cast",
+            HistoryKind::Resolved => "events: resolved",
+            HistoryKind::Countered => "events: countered",
+            HistoryKind::Draw => "events: draw",
+            HistoryKind::Reveal => "events: reveal",
+            HistoryKind::Look => "events: look",
+            HistoryKind::Shuffle => "events: shuffle",
+            HistoryKind::Declined => "events: declined",
+        }
+    }
+    assert!(!history_kind(HistoryKind::Moved).is_empty());
     fields.extend(encoding!(SharedEffectData {
         effect => [Rows("v7 effects columns 0..10, 11 and effect_details")],
         controller_id => [Rows("v7 effects column 10: exact player join")],

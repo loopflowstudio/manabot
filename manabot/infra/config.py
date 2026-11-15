@@ -71,7 +71,9 @@ class UnsupportedPolicyInput(ValueError):
     def __init__(self, version: object, state: str | None = None) -> None:
         self.version = version
         self.state = state
-        if state is not None:
+        if state == "legacy_history":
+            message = f"policy input v{version} history must be run from revision b5478d8789; use input v11 here"
+        elif state is not None:
             message = (
                 f"policy input v{version} required: this observation needs "
                 f"{state}, which v9 cannot hold"

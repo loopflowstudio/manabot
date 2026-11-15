@@ -152,7 +152,7 @@ def test_semantics_order_padding_and_stateless_reset() -> None:
         not torch.equal(a, b)
         for a, b in zip(expected, agent(device_input(agent, changed)), strict=True)
     )
-    padded = torch.full((1, count * 2 + 3, 12), float("nan"))
+    padded = torch.full((1, count * 2 + 3, 14), float("nan"))
     validity = torch.zeros(1, count * 2 + 3)
     padded[:, 1 : 2 * count : 2] = obs["events"][:, :count]
     validity[:, 1 : 2 * count : 2] = 1
@@ -162,7 +162,7 @@ def test_semantics_order_padding_and_stateless_reset() -> None:
         strict=True,
     ):
         torch.testing.assert_close(left, right, atol=1e-6, rtol=1e-5)
-    empty = {**obs, "events": torch.empty(1, 0, 12), "events_valid": torch.empty(1, 0)}
+    empty = {**obs, "events": torch.empty(1, 0, 14), "events_valid": torch.empty(1, 0)}
     zero = {**obs, "events": padded, "events_valid": torch.zeros_like(validity)}
     baseline = ActorCritic(ObservationSpace(), ModelConfig(hidden_dim=16, world=PACK))
     baseline.load_state_dict(
@@ -303,7 +303,7 @@ def test_short_window_native_collector_and_bad_contracts() -> None:
     space = ObservationSpace(ObservationConfig(policy_history_version=1, max_events=3))
     agent = _agent(space)
     obs = _collected(agent)
-    assert obs["events"].shape == (1, 3, 12)
+    assert obs["events"].shape == (1, 3, 14)
     assert obs["events_valid"].sum() == 3
     with pytest.raises(ValueError, match="policy_history_version"):
         _agent(ObservationSpace())
@@ -315,3 +315,28 @@ def test_short_window_native_collector_and_bad_contracts() -> None:
                 Environment(observation=ObservationConfig(policy_history_version=1)),
             ),
         ).resolve()
+
+
+def test_twelve_column_history_checkpoint_names_events_and_source(
+    tmp_path: Path,
+) -> None:
+    agent = _agent(_space())
+    path = tmp_path / "old-history.safetensors"
+    save_checkpoint(
+        agent, agent.observation_space, path, player_configs=_match().to_rust()
+    )
+    payload = read_checkpoint(path)
+    payload["world_binding"]["input_schema"]["events"]["shape"][-1] = 12
+    payload["source"] = {"commit": "b5478d8789", "dirty": False, "etude_run": None}
+    write_checkpoint(payload, path)
+    with pytest.raises(ValueError, match=r"events.*12.*14.*b5478d8789"):
+        load_checkpoint(str(path))
+
+
+@pytest.mark.parametrize("version", [9, 10])
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
+def test_legacy_history_refuses_the_changed_projection(version: int) -> None:
+    with pytest.raises(ValueError, match="b5478d8789"):
+        ObservationSpace(
+            ObservationConfig(policy_input_version=version, policy_history_version=1)
+        )

@@ -4340,7 +4340,7 @@ fn sozins_comet_foretells_face_down_and_casts_on_a_later_turn() {
     let definition = s.game().state[comet].definition_id.0;
     assert!(opponent.policy_history.iter().all(|row| !matches!(
         row.source,
-        HistoryReference::Card { definition: d, .. } if d == definition
+        HistoryReference::Card { definition: d, .. } if d == Some(definition)
     )));
 
     // Not castable this turn; castable for {2}{R} on its owner's next turn.

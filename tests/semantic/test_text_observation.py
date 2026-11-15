@@ -1347,3 +1347,89 @@ def test_shared_mill_selection_reaches_text_commands_and_both_encoders() -> None
             submit_response(branch, captured, action.reference)
     assert len(outcomes) >= 2
     assert env.state_digest() == before
+
+
+@pytest.mark.parametrize("viewer", [0, 1])
+def test_history_v2_renders_every_kind_and_hidden_cards(viewer: int) -> None:
+    env = priority_root(("Lightning Bolt",), ("Mountain",))
+    payload = json.loads(env.capture_decision(env.current_agent_index(), 32).to_json())
+    # A retained input's relative seat labels depend on its acting viewer.
+    owner = viewer
+    card = {
+        "kind": "card",
+        "definition": None,
+        "owner": owner,
+        "zone": 1,
+        "context_id": None,
+    }
+    player = {"kind": "player", "seat": owner}
+    unavailable = {"kind": "unavailable"}
+    rows = []
+    for kind in range(11):
+        rows.append(
+            {
+                "kind": kind,
+                "amount": 3 if kind == 8 else 1,
+                "source": player if kind in (8, 10) else card,
+                "target": player if kind in (6, 8, 9) else unavailable,
+                "from_zone": 0 if kind in (0, 6, 8) else None,
+                "library_end": 1 if kind == 0 else 0,
+            }
+        )
+    payload["history"] = {"version": 2, "capacity": 32, "rows": rows}
+    del payload["digest"]
+    payload["digest"] = sha256(
+        json.dumps(
+            payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+        ).encode()
+    ).hexdigest()
+    text = render_decision(json.dumps(payload)).text
+    for label in (
+        "Moved",
+        "Damage",
+        "Life change",
+        "Cast",
+        "Resolved",
+        "Countered",
+        "Draw",
+        "Reveal",
+        "Look",
+        "Shuffle",
+        "Declined",
+    ):
+        assert f"{label}:" in text
+    assert "hidden card" in text
+    assert "Policy history v2: what this viewer was shown" in text
+
+
+def test_history_v1_capture_still_renders() -> None:
+    env = priority_root(("Lightning Bolt",), ("Mountain",))
+    payload = json.loads(env.capture_decision(env.current_agent_index(), 0).to_json())
+    definition = int(next(iter(payload["definitions"])))
+    payload["history"] = {
+        "version": 1,
+        "capacity": 1,
+        "rows": [
+            {
+                "kind": 0,
+                "amount": 0,
+                "source": {
+                    "kind": "card",
+                    "definition": definition,
+                    "owner": 0,
+                    "zone": 2,
+                    "context_id": None,
+                },
+                "target": {"kind": "unavailable"},
+            }
+        ],
+    }
+    del payload["digest"]
+    payload["digest"] = sha256(
+        json.dumps(
+            payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+        ).encode()
+    ).hexdigest()
+    text = render_decision(json.dumps(payload)).text
+    assert "Public policy history v1: chronological suffix" in text
+    assert "Arrival: amount 0; source D" in text

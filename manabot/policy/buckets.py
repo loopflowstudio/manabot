@@ -104,7 +104,10 @@ ZERO_BASED_REFERENCES: tuple[tuple[str, int], ...] = (
     ("events", _column("events", "source_context")),
     ("events", _column("events", "target_context")),
 )
-_EVENT_WIDTH = len(_LAYOUT["events"]["columns"])
+HISTORY_COLUMNS = {
+    name: column["index"] for name, column in _LAYOUT["events"]["columns"].items()
+}
+_EVENT_WIDTH = len(HISTORY_COLUMNS)
 # Row joins into other variable axes.
 _DETAIL_SPAN = (_column("effects", "detail_offset"), _column("effects", "detail_count"))
 _MEMBER_SPAN = (_column("effects", "member_offset"), _column("effects", "member_count"))

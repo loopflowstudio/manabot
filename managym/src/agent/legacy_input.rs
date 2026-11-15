@@ -12,12 +12,7 @@
 //! branches that call it) removes inputs v9 and v10. Removal release: 0.4.0.
 //! MTG-353 owns the general mechanism for checkpoints across worlds.
 
-use std::collections::HashMap;
-
-use super::{
-    observation::{CardData, Observation},
-    policy_history::{encode_rows, HISTORY_DIM},
-};
+use super::observation::{CardData, Observation};
 
 /// A v9/v10 permanent row ends at `dealt_damage_this_turn`, then validity.
 pub const PERMANENT_VALID: usize = 37;
@@ -56,29 +51,4 @@ pub fn view(obs: &Observation) -> Observation {
         .opponent_cards
         .extend(battlefield(&obs.opponent_permanents));
     legacy
-}
-
-/// History v1 rows of a v9/v10 view, whose contexts resolve only to card rows.
-pub fn history(
-    obs: &Observation,
-    capacity: usize,
-    cards_per_player: usize,
-) -> Vec<[f32; HISTORY_DIM]> {
-    let agent: HashMap<i32, usize> = obs
-        .agent_cards
-        .iter()
-        .enumerate()
-        .rev()
-        .map(|(slot, card)| (card.id, 2 + slot))
-        .collect();
-    let opponent: HashMap<i32, usize> = obs
-        .opponent_cards
-        .iter()
-        .enumerate()
-        .rev()
-        .map(|(slot, card)| (card.id, 2 + cards_per_player + slot))
-        .collect();
-    encode_rows(obs, capacity, |id| {
-        agent.get(&id).or_else(|| opponent.get(&id)).copied()
-    })
 }

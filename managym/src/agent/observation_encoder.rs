@@ -509,6 +509,11 @@ pub fn encode_into(
     config: &ObservationEncoderConfig,
     out: EncodedObservationMut<'_>,
 ) -> Result<(), ObservationEncodeError> {
+    if config.policy_history && config.layout == InputLayout::Legacy {
+        return Err(ObservationEncodeError::Unrepresentable(
+            "policy history for inputs v9/v10: run revision b5478d8789".into(),
+        ));
+    }
     // Deprecated v9/v10 rows read the card lists they were trained on.
     let legacy;
     let obs = match config.layout {
@@ -939,14 +944,7 @@ pub fn encode_into(
     );
 
     if config.policy_history {
-        let rows = match config.layout {
-            InputLayout::OneToken => {
-                super::policy_history::encode(obs, config.max_events, &object_to_index)
-            }
-            InputLayout::Legacy => {
-                super::legacy_input::history(obs, config.max_events, config.max_cards_per_player)
-            }
-        };
+        let rows = super::policy_history::encode(obs, config.max_events, &object_to_index);
         for (index, row) in rows.iter().enumerate() {
             out.events[index * config.event_dim()..(index + 1) * config.event_dim()]
                 .copy_from_slice(row);

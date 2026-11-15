@@ -749,6 +749,45 @@ pub enum Decision {
 }
 
 impl Decision {
+    /// Whether a decline takes none of a resolving instruction, rather than
+    /// finishing a selection or declining a casting cost.
+    fn declines_instruction(&self) -> bool {
+        match self {
+            Self::ChoosePaymentX { .. }
+            | Self::ChooseObject { optional: true, .. }
+            | Self::CastDuringResolution { .. }
+            | Self::ExileLinked { up_to: true, .. }
+            | Self::Learn { .. } => true,
+            Self::Payment(payment) => payment.can_decline(),
+            Self::LookAndSelect { selected, .. } => *selected == 0,
+            Self::SearchDistinctNames { selected, .. } => selected.is_empty(),
+            Self::OrderReplacement { .. }
+            | Self::EnterAsCopy { .. }
+            | Self::NameCard { .. }
+            | Self::SearchNamed { .. }
+            | Self::ManaSpend { .. }
+            | Self::ManaUpfront { .. }
+            | Self::ManaChoice { .. }
+            | Self::ChooseObject {
+                optional: false, ..
+            }
+            | Self::DistributeCounters { .. }
+            | Self::SelectCards { .. }
+            | Self::Scry { .. }
+            | Self::Surveil { .. }
+            | Self::OrderLibrary { .. }
+            | Self::DiscardFromRevealedHand { .. }
+            | Self::OpponentSplitsRevealed { .. }
+            | Self::ExileLinked { up_to: false, .. }
+            | Self::Modal { .. }
+            | Self::Discard { .. }
+            | Self::KeepCreatures { .. }
+            | Self::Retarget { .. }
+            | Self::ChooseToExile { .. }
+            | Self::LegendRule { .. } => false,
+        }
+    }
+
     pub fn player(&self) -> PlayerId {
         match self {
             Decision::Payment(payment) => payment.player,
@@ -1460,6 +1499,7 @@ impl Game {
                         self.state
                             .zones
                             .reposition(ZoneType::Library, owner, object, below_top);
+                        crate::agent::policy_history::library_end(self, object, 3, true);
                     } else {
                         self.put_on_bottom_of_library(object);
                     }
@@ -2017,7 +2057,19 @@ impl Game {
         {
             return self.advance_mana_spend(Some(*mode));
         }
+        let decline = matches!(action, Action::Decline { .. })
+            && suspended.decision.declines_instruction()
+            && self
+                .suspended_decision_action_space()
+                .is_some_and(|space| space.actions.contains(action));
         let mut suspended = self.state.suspended_decision_mut().take().unwrap();
+        if decline {
+            crate::agent::policy_history::declined(
+                self,
+                suspended.decision.player(),
+                suspended.frame.source(),
+            );
+        }
         match (&mut suspended.decision, action) {
             (Decision::EnterAsCopy { candidates, .. }, choice) => {
                 let of = match choice {
@@ -2461,8 +2513,9 @@ impl Game {
                         self.state
                             .zones
                             .reposition(ZoneType::Library, *player, *object, 0);
+                        crate::agent::policy_history::library_end(self, *object, 2, false);
                     }
-                    self.put_on_top_of_library(*player, top);
+                    self.put_on_top_of_library(*player, top, true);
                     self.run_frame(suspended.frame);
                 } else {
                     *self.state.suspended_decision_mut() = Some(suspended);
@@ -2578,8 +2631,12 @@ impl Game {
                 object_ids[*next..=*next + offset].rotate_right(1);
                 *next += 1;
                 match end {
-                    LibraryEnd::Bottom => self.put_on_bottom_of_library(*object_id),
-                    LibraryEnd::Top => self.put_on_top_of_library(*player, object_ids),
+                    LibraryEnd::Bottom => {
+                        self.reorder_in_library(*object_id, LibraryEnd::Bottom, false)
+                    }
+                    LibraryEnd::Top => {
+                        self.put_on_top_of_library(*player, object_ids, *next == object_ids.len())
+                    }
                 }
                 if *next == object_ids.len() {
                     self.run_frame(suspended.frame);
@@ -2865,6 +2922,11 @@ impl Game {
                 }
                 let effects = std::mem::take(&mut modes[*mode]);
                 if effects.is_empty() {
+                    crate::agent::policy_history::declined(
+                        self,
+                        suspended.decision.player(),
+                        suspended.frame.source(),
+                    );
                     // Stopping an "up to" counter choice completes its
                     // instruction; the next verb must choose independently.
                     suspended.frame.chosen = None;
@@ -3229,16 +3291,29 @@ impl Game {
         }
         match end {
             LibraryEnd::Bottom => {
-                for object in objects {
-                    self.put_on_bottom_of_library(object);
+                for &object in &objects {
+                    self.reorder_in_library(object, LibraryEnd::Bottom, false);
                 }
             }
-            LibraryEnd::Top => self.put_on_top_of_library(player, &objects),
+            LibraryEnd::Top => self.put_on_top_of_library(player, &objects, true),
+        }
+        if random_order {
+            for object in objects {
+                crate::agent::policy_history::conceal_random_placement(self, object);
+            }
         }
         None
     }
 
     fn finish_card_selection(&mut self, suspended: SuspendedResolution) {
+        if matches!(&suspended.decision, Decision::SelectCards { selected, .. } if selected.is_empty())
+        {
+            crate::agent::policy_history::declined(
+                self,
+                suspended.decision.player(),
+                suspended.frame.source(),
+            );
+        }
         let Decision::SelectCards {
             selected,
             from,
@@ -3284,11 +3359,14 @@ impl Game {
 
     /// Reorder inspected library cards, first to draw first. Their exact
     /// objects survive: placement within a zone emits no zone-change events.
-    fn put_on_top_of_library(&mut self, player: PlayerId, objects: &[ObjectId]) {
+    fn put_on_top_of_library(&mut self, player: PlayerId, objects: &[ObjectId], completed: bool) {
         for object in objects.iter().rev() {
             self.state
                 .zones
                 .reposition(ZoneType::Library, player, *object, usize::MAX);
+            if completed {
+                crate::agent::policy_history::library_end(self, *object, 1, false);
+            }
         }
     }
 
@@ -3300,19 +3378,23 @@ impl Game {
         for object in objects {
             let object = self.move_object(object, ZoneType::Library);
             self.put_on_bottom_of_library(object);
+            crate::agent::policy_history::conceal_random_placement(self, object);
         }
     }
 
     /// Move a library card to the bottom of its owner's library. Not a zone
     /// change (CR 701.26b-style reorder), so no events fire.
     pub(crate) fn put_on_bottom_of_library(&mut self, object: ObjectId) {
-        self.reorder_in_library(object, LibraryEnd::Bottom);
+        self.reorder_in_library(object, LibraryEnd::Bottom, true);
     }
 
     /// Put a card already in its owner's library at one end: a reorder
     /// within one zone, so no zone change (CR 400.7) and no zone-move
     /// inverse applies. Index 0 is the bottom; the last card is the top.
-    pub(crate) fn reorder_in_library(&mut self, object: ObjectId, end: LibraryEnd) {
+    pub(crate) fn reorder_in_library(&mut self, object: ObjectId, end: LibraryEnd, moved: bool) {
+        if self.state.zones.zone_of(object) != Some(ZoneType::Library) {
+            return;
+        }
         let owner = self.state[object].owner;
         let index = match end {
             LibraryEnd::Bottom => 0,
@@ -3321,6 +3403,12 @@ impl Game {
         self.state
             .zones
             .reposition(ZoneType::Library, owner, object, index);
+        crate::agent::policy_history::library_end(
+            self,
+            object,
+            if end == LibraryEnd::Top { 1 } else { 2 },
+            moved,
+        );
     }
 }
 

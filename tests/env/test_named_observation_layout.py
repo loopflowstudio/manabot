@@ -22,8 +22,8 @@ def board() -> tuple[managym.Env, managym.Observation]:
 
 @pytest.mark.parametrize(
     "history,input_version",
-    [(0, 9), (1, 9), (1, 10), (0, 11), (1, 11)],
-    ids=["raw", "v9", "v10", "v11-raw", "v11"],
+    [(0, 9), (0, 10), (0, 11), (1, 11)],
+    ids=["v9", "v10", "v11-raw", "v11"],
 )
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")
 def test_named_layout_matches_native_buffers_and_python_values(
@@ -108,8 +108,8 @@ def test_named_layout_describes_tagged_rows_and_history() -> None:
 
 
 def test_named_layout_names_v10_turn_state() -> None:
-    v9 = managym.observation_layout(policy_history=True, turn_state=False, legacy=True)
-    v10 = managym.observation_layout(policy_history=True, legacy=True)
+    v9 = managym.observation_layout(turn_state=False, legacy=True)
+    v10 = managym.observation_layout(legacy=True)
     assert v10.keys() - v9.keys() == {"player_turn_state", "card_turn_state"}
     player = v10["player_turn_state"]
     assert player["shape"] == [2, 8]

@@ -29,11 +29,15 @@ fn main() {
     managym::benchmark_layers::reset();
     #[cfg(feature = "benchmark")]
     managym::benchmark_payments::reset();
+    #[cfg(feature = "benchmark")]
+    managym::agent::policy_history::measurement::reset();
     let mut steps = 0u64;
     let mut digest = 0u64;
     let mut capped = 0u64;
     let start = Instant::now();
     for seed in seeds {
+        #[cfg(feature = "benchmark")]
+        managym::agent::policy_history::measurement::start_game();
         let mut env = Env::new(seed, true, false, false);
         env.reset(curated::players()).unwrap();
         if layers {
@@ -42,6 +46,8 @@ fn main() {
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
         let mut game_steps = 0usize;
         while !env.is_game_over() && game_steps < MAX_STEPS {
+            #[cfg(feature = "benchmark")]
+            managym::agent::policy_history::measurement::decision();
             let count = env.action_count().unwrap();
             let action = rng.gen_range(0..count);
             let step_start = (tail_samples && samples.len() < 128).then(Instant::now);
@@ -66,6 +72,11 @@ fn main() {
     println!(
         "{{\"games\":{games},\"capped\":{capped},\"steps\":{steps},\"elapsed_s\":{elapsed:.6},\"steps_per_s\":{:.1},\"digest\":{digest}}}",
         steps as f64 / elapsed
+    );
+    #[cfg(feature = "benchmark")]
+    println!(
+        "{}",
+        serde_json::json!({"history_metrics": managym::agent::policy_history::measurement::snapshot(games as u64)})
     );
     if tail_samples {
         println!("{}", serde_json::json!({"step_prefix_samples_s":samples}));

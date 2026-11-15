@@ -17,6 +17,7 @@ from manabot.env.observation import (
     FACT_VALID_INDEX,
     FACT_VALUE_INDEX,
     PERMANENT_DEFINITION_INDEX,
+    STACK_IS_MINE_INDEX,
     TURN_STATE_DIM,
     ObservationSpace,
 )
@@ -73,7 +74,9 @@ def _tables(agent: ActorCritic) -> Tables:
 )
 @pytest.mark.parametrize("bucketed", [False, True])
 def test_prepared_joins_match_admitted_rows(kind: str, bucketed: bool) -> None:
-    space, obs = _observations(10 if kind == "v10" else 9, kind == "history")
+    space, obs = _observations(
+        11 if kind == "history" else 10 if kind == "v10" else 9, kind == "history"
+    )
     config = ModelConfig(
         hidden_dim=8,
         num_attention_heads=2,
@@ -150,7 +153,12 @@ def test_prepared_joins_match_admitted_rows(kind: str, bucketed: bool) -> None:
         ownership = torch.cat(
             [ownership[:, part] for part in object_columns(buckets)], 1
         )
-    np.testing.assert_array_equal(prepared.is_agent, ownership.expand(3, -1).numpy())
+    expected_ownership = ownership.expand(3, -1).numpy()
+    if "stack" in trimmed:
+        expected_ownership = np.concatenate(
+            (expected_ownership, trimmed["stack"][..., STACK_IS_MINE_INDEX] > 0), axis=1
+        )
+    np.testing.assert_array_equal(prepared.is_agent, expected_ownership)
     compact = prepare(trimmed, tables, inference=True, bucketed=bucketed)
     assert compact.facts.kinds.shape[1] == (
         trimmed["facts"].shape[1]
@@ -372,3 +380,36 @@ def test_v10_masked_mean_forward_and_gradients_survive_object_buckets(
             strict=True,
         ):
             torch.testing.assert_close(left, right, atol=1e-6, rtol=1e-5)
+
+
+def test_revealed_history_definition_reaches_selected_learning_tokens() -> None:
+    space, original = _observations(11, True)
+    agent = ActorCritic(
+        space,
+        ModelConfig(
+            hidden_dim=8,
+            num_attention_heads=2,
+            world=managym.WORLD_SETUP,
+            recent_events=True,
+        ),
+    )
+    tables = _tables(agent)
+    obs = {key: value.copy() for key, value in original.items()}
+    obs["events_valid"][:] = 0
+    baseline = prepare(obs, tables, select_programs=True)
+    assert baseline.programs is not None and tables.definition_rows is not None
+    definition = next(
+        int(definition)
+        for definition in np.flatnonzero(tables.definition_rows > 0)
+        if tables.definition_rows[definition] not in baseline.programs.rows
+    )
+    obs["events"][:] = 0
+    obs["events"][..., [5, 10]] = -1
+    obs["events"][0, 0, [0, 2, 3, 6]] = [7, definition, 2, 2]
+    obs["events_valid"][0, 0] = 1
+    revealed = prepare(obs, tables, select_programs=True)
+    assert revealed.events is not None and revealed.programs is not None
+    row = int(tables.definition_rows[definition])
+    assert revealed.events.definitions[0, 0, 0] == row
+    assert row in revealed.programs.rows
+    assert revealed.programs.schedule.lengths

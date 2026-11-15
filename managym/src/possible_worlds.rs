@@ -596,6 +596,7 @@ impl HiddenHandConstraints {
             branch.shuffle_private_library(opponent, &mut rng);
         }
         branch.shuffle_private_library(self.viewer, &mut rng);
+        crate::agent::policy_history::scrub(&mut branch, self.viewer);
         if !branch.rebind_commitments(&commitments, &mut rng) {
             return Err(MaterializeError::InconsistentWorld);
         }

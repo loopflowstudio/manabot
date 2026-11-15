@@ -109,6 +109,7 @@ impl Game {
     }
 
     pub(crate) fn shuffle_library(&mut self, player: PlayerId) {
+        crate::agent::policy_history::shuffle(self, player);
         let state = &mut *self.state;
         state
             .zones

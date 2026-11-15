@@ -66,6 +66,7 @@ impl Game {
             self.determinize_zones(perspective, &commitments, sample_seed);
             let mut rng = ChaCha8Rng::seed_from_u64(mix_seed(sample_seed, 241));
             if self.rebind_commitments(&commitments, &mut rng) {
+                crate::agent::policy_history::scrub(self, perspective);
                 self.refresh_sampled_decision(perspective);
                 return Ok(());
             }

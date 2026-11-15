@@ -3925,3 +3925,362 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
         std::fs::write(path, serde_json::to_string(&evidence).unwrap()).unwrap();
     }
 }
+
+/// Hidden choices change the entitled viewer's history, never the other seat's.
+#[test]
+fn hidden_zone_history_brainstorm_privacy_and_possible_worlds() {
+    use crate::agent::{
+        observation::Observation,
+        policy_history::{self, HistoryKind, HistoryReference},
+    };
+    let owner = PlayerId(1);
+    let viewer = PlayerId(0);
+    let (root, _, _) = fixture(owner);
+    let mut worlds = Vec::new();
+    for name in ["Mountain", "Gray Ogre"] {
+        let mut game = root.clone();
+        let chosen: Vec<_> = game
+            .state
+            .zones
+            .zone_objects(ZoneType::Library, owner)
+            .iter()
+            .copied()
+            .filter(|&object| game.state[object].name == name)
+            .take(3)
+            .collect();
+        assert_eq!(chosen.len(), 3);
+        for &object in &chosen {
+            game.state
+                .zones
+                .reposition(ZoneType::Library, owner, object, usize::MAX);
+        }
+        game.policy_history = Default::default();
+        game.run_frame(crate::flow::decision::EffectFrame::new(
+            owner,
+            vec![
+                Effect::DrawCards { count: 3.into() },
+                Effect::SelectCards {
+                    from: ObjectSelector::Zone(ZoneType::Hand),
+                    predicate: CardPredicate::default(),
+                    min: 2,
+                    max: 2.into(),
+                    if_declined: vec![],
+                    effects: vec![Effect::put_in_library(
+                        ObjectSelector::Selected,
+                        LibraryEnd::Top,
+                    )],
+                },
+            ],
+        ));
+        for &object in chosen.iter().take(2) {
+            let object = game.state.zones.successor(object).unwrap();
+            game.execute_decision_action(&Action::SelectCard {
+                player: owner,
+                object,
+            })
+            .unwrap();
+        }
+        let own = Observation::for_player(&game, owner);
+        let other = Observation::for_player(&game, viewer);
+        let rows: Vec<_> = own.policy_history.iter().collect();
+        assert_eq!(rows.len(), 5);
+        assert_eq!(
+            rows.iter().map(|row| row.kind).collect::<Vec<_>>(),
+            vec![
+                HistoryKind::Draw,
+                HistoryKind::Draw,
+                HistoryKind::Draw,
+                HistoryKind::Moved,
+                HistoryKind::Moved
+            ]
+        );
+        for row in &rows {
+            assert!(matches!(
+                row.source,
+                HistoryReference::Card {
+                    definition: Some(_),
+                    ..
+                }
+            ));
+        }
+        for row in rows.iter().skip(3) {
+            assert_eq!(row.from_zone, Some(ZoneType::Hand));
+            assert_eq!(row.library_end, 1);
+        }
+        let encoded = policy_history::encode(&other, 32, &Default::default());
+        assert!(encoded
+            .iter()
+            .all(|row| row[2] == 0.0 && row[5] == -1.0 && row[6] == 3.0));
+        worlds.push(game);
+    }
+    let project = |game: &Game, viewer| {
+        let obs = Observation::for_player(game, viewer);
+        policy_history::encode(&obs, 32, &Default::default())
+    };
+    assert_eq!(project(&worlds[0], viewer), project(&worlds[1], viewer));
+    assert_ne!(project(&worlds[0], owner), project(&worlds[1], owner));
+    let capture =
+        |game: &Game| serde_json::to_vec(&game.capture_decision(viewer, 32).unwrap()).unwrap();
+    assert_eq!(capture(&worlds[0]), capture(&worlds[1]));
+    for game in &mut worlds {
+        game.determinize(viewer, 17).unwrap();
+    }
+    for seat in [viewer, owner] {
+        assert_eq!(project(&worlds[0], seat), project(&worlds[1], seat));
+    }
+}
+
+#[test]
+fn hidden_zone_history_looks_reorders_shuffle_and_declined_instructions() {
+    use crate::agent::{observation::Observation, policy_history::HistoryKind};
+    let player = PlayerId(0);
+    let (mut game, _, _) = fixture(player);
+    game.policy_history = Default::default();
+    let object = game.library_top_objects(player, 1)[0];
+    game.run_frame(crate::flow::decision::EffectFrame::new(
+        player,
+        vec![Effect::Scry { count: 1 }],
+    ));
+    game.execute_decision_action(&Action::ScryCard {
+        player,
+        object,
+        to_bottom: true,
+    })
+    .unwrap();
+    game.shuffle_library(player);
+    game.run_frame(crate::flow::decision::EffectFrame::new(
+        player,
+        vec![Effect::SelectCards {
+            from: ObjectSelector::Zone(ZoneType::Hand),
+            predicate: CardPredicate::default(),
+            min: 0,
+            max: 1.into(),
+            effects: vec![Effect::gain_life(10)],
+            if_declined: vec![],
+        }],
+    ));
+    game.execute_decision_action(&Action::Decline { player })
+        .unwrap();
+    let obs = Observation::for_player(&game, player);
+    let rows: Vec<_> = obs.policy_history.iter().collect();
+    assert_eq!(
+        rows.iter().map(|row| row.kind).collect::<Vec<_>>(),
+        vec![
+            HistoryKind::Look,
+            HistoryKind::Moved,
+            HistoryKind::Shuffle,
+            HistoryKind::Declined
+        ]
+    );
+    assert_eq!(rows[0].amount, 1);
+    assert_eq!(rows[0].from_zone, Some(ZoneType::Library));
+    assert_eq!(rows[1].from_zone, Some(ZoneType::Library));
+    assert_eq!(rows[1].library_end, 2);
+    assert_eq!(game.state.players[0].life, 20);
+}
+
+#[test]
+fn hidden_zone_history_declined_sacrifice_and_empty_mode() {
+    use crate::agent::policy_history::HistoryKind;
+    let player = PlayerId(0);
+    let (mut game, _, _) = fixture(player);
+    game.scenario_force_battlefield(player, "Gray Ogre", true)
+        .unwrap();
+    game.run_frame(crate::flow::decision::EffectFrame::new(
+        player,
+        vec![Effect::may_sacrifice(CardPredicate::default(), false)],
+    ));
+    game.execute_decision_action(&Action::Decline { player })
+        .unwrap();
+    assert_eq!(
+        game.policy_history.back().unwrap().kind,
+        HistoryKind::Declined
+    );
+    game.run_frame(crate::flow::decision::EffectFrame::new(
+        player,
+        vec![Effect::Modal {
+            modes: vec![vec![], vec![Effect::gain_life(10)]],
+        }],
+    ));
+    game.execute_decision_action(&Action::ChooseMode { player, mode: 0 })
+        .unwrap();
+    assert_eq!(
+        game.policy_history
+            .iter()
+            .filter(|row| row.kind == HistoryKind::Declined)
+            .count(),
+        2
+    );
+    assert_eq!(game.state.players[0].life, 20);
+}
+
+#[test]
+fn hidden_zone_history_library_order_records_each_card_once() {
+    use crate::agent::policy_history::HistoryKind;
+    let player = PlayerId(0);
+    let (mut game, _, _) = fixture(player);
+    game.policy_history = Default::default();
+    let looked = game.library_top_objects(player, 3);
+    game.run_frame(crate::flow::decision::EffectFrame::new(
+        player,
+        vec![Effect::Surveil { count: 3 }],
+    ));
+    game.execute_decision_action(&Action::Decline { player })
+        .unwrap();
+    for (index, object) in looked.into_iter().enumerate() {
+        game.execute_decision_action(&Action::SelectCard { player, object })
+            .unwrap();
+        let moved = game
+            .policy_history
+            .iter()
+            .filter(|row| row.kind == HistoryKind::Moved)
+            .count();
+        assert_eq!(moved, if index == 2 { 3 } else { 0 });
+    }
+}
+
+#[test]
+fn hidden_zone_history_hand_inspection_names_who_saw_each_zone() {
+    use crate::agent::policy_history::{HistoryKind, HistoryReference};
+    let player = PlayerId(0);
+    let owner = PlayerId(1);
+    let (mut game, _, _) = fixture(player);
+    game.policy_history = Default::default();
+    let hand = game.state.zones.size(ZoneType::Hand, owner);
+    let library = game.state.zones.size(ZoneType::Library, owner);
+    let mut frame = crate::flow::decision::EffectFrame::new(
+        player,
+        vec![Effect::ExileNamed {
+            name: "Mountain".into(),
+            count: 1,
+        }],
+    );
+    frame.context_target = Some(Target::Player(owner));
+    game.run_frame(frame);
+    let rows: Vec<_> = game.policy_history.iter().collect();
+    assert_eq!(rows.len(), 2);
+    for (row, zone, count) in [
+        (rows[0], ZoneType::Hand, hand),
+        (rows[1], ZoneType::Library, library),
+    ] {
+        assert_eq!(row.kind, HistoryKind::Look);
+        assert_eq!(row.source, HistoryReference::Player(player));
+        assert_eq!(row.target, HistoryReference::Player(owner));
+        assert_eq!(row.amount, count as i32);
+        assert_eq!(row.from_zone, Some(zone));
+    }
+}
+
+#[test]
+fn hidden_zone_history_declining_search_is_not_finishing_a_partial_selection() {
+    use crate::agent::policy_history::HistoryKind;
+    for take_one in [false, true] {
+        let player = PlayerId(0);
+        let (mut game, _, _) = fixture(player);
+        game.policy_history = Default::default();
+        game.run_frame(crate::flow::decision::EffectFrame::new(
+            player,
+            vec![Effect::SearchDistinctNames {
+                predicate: CardPredicate::default(),
+                count: 2,
+                end: crate::state::ability::DistinctSearchEnd::Hand,
+            }],
+        ));
+        if take_one {
+            let space = game.suspended_decision_action_space().unwrap();
+            let choice = space
+                .actions
+                .iter()
+                .find(|action| matches!(action, Action::SelectCard { .. }))
+                .unwrap();
+            game.execute_decision_action(choice).unwrap();
+        }
+        game.execute_decision_action(&Action::Decline { player })
+            .unwrap();
+        assert_eq!(
+            game.policy_history
+                .iter()
+                .filter(|row| row.kind == HistoryKind::Declined)
+                .count(),
+            usize::from(!take_one)
+        );
+        assert_eq!(
+            game.policy_history.back().unwrap().kind,
+            HistoryKind::Shuffle
+        );
+    }
+}
+
+#[test]
+fn hidden_zone_history_look_then_random_bottom_keeps_order_private_from_owner() {
+    use crate::agent::{observation::Observation, policy_history};
+    let player = PlayerId(0);
+    let (mut root, _, _) = fixture(player);
+    for name in ["Mountain", "Gray Ogre"] {
+        let object = root
+            .state
+            .zones
+            .zone_objects(ZoneType::Library, player)
+            .iter()
+            .copied()
+            .find(|&object| root.state[object].name == name)
+            .unwrap();
+        root.state
+            .zones
+            .reposition(ZoneType::Library, player, object, usize::MAX);
+    }
+    root.policy_history = Default::default();
+    let mut orders = std::collections::BTreeSet::new();
+    let mut expected = None;
+    for seed in 0..8 {
+        let mut game = root.clone();
+        game.reseed(seed);
+        game.run_frame(crate::flow::decision::EffectFrame::new(
+            player,
+            vec![Effect::LookAndSelect {
+                random_order: true,
+                reveal: false,
+                to_battlefield: false,
+                look: 2.into(),
+                min_select: 0,
+                max_select: 1,
+                predicate: CardPredicate::default(),
+            }],
+        ));
+        game.execute_decision_action(&Action::Decline { player })
+            .unwrap();
+        orders.insert(
+            game.state
+                .zones
+                .zone_objects(ZoneType::Library, player)
+                .iter()
+                .take(2)
+                .map(|&object| game.state[object].definition_id)
+                .collect::<Vec<_>>(),
+        );
+        let rows: Vec<_> = [PlayerId(0), PlayerId(1)]
+            .into_iter()
+            .map(|viewer| {
+                policy_history::encode(
+                    &Observation::for_player(&game, viewer),
+                    32,
+                    &Default::default(),
+                )
+            })
+            .collect();
+        for projected in &rows {
+            assert_eq!(projected.len(), 4);
+            for row in &projected[2..] {
+                assert_eq!(row[2], 0.0);
+                assert_eq!(row[6], 3.0);
+                assert_eq!(row[13], 2.0);
+            }
+        }
+        if let Some(expected) = &expected {
+            assert_eq!(&rows, expected);
+        } else {
+            expected = Some(rows);
+        }
+    }
+    assert_eq!(orders.len(), 2);
+}

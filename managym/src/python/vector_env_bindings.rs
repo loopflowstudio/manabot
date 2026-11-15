@@ -498,9 +498,7 @@ pub(super) fn input_buffer_config(
         _ => return Err(PyValueError::new_err("unsupported event buffer width")),
     };
     if policy_history && max_events > crate::agent::policy_history::HISTORY_LIMIT {
-        return Err(PyValueError::new_err(
-            "public history v1 requires 1..32 rows",
-        ));
+        return Err(PyValueError::new_err("policy history requires 1..32 rows"));
     }
     let mut config = ObservationEncoderConfig {
         max_cards_per_player: shape("agent_cards")?[0],

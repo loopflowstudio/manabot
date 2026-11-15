@@ -10,9 +10,6 @@ from dataclasses import asdict
 import json
 from pathlib import Path
 
-from managym.decision import Observation, SemanticContractError, apply_semantic_command
-from managym.decision_capture import CardReference, DecisionInput
-
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from manabot.semantic.text_observation import (
     ResponseProtocolError,
@@ -23,6 +20,8 @@ from manabot.semantic.text_observation import (
     submit_response,
 )
 import managym
+from managym.decision import Observation, SemanticContractError, apply_semantic_command
+from managym.decision_capture import CardReference, DecisionInput
 
 
 def priority_root(
@@ -214,7 +213,7 @@ def _retain(path: Path, decision: TextDecision) -> None:
                 "capture_digest": decision.capture_digest,
                 "actions": [asdict(action) for action in decision.actions],
                 "origin": "live native handle; deliberately not reconstructible from retained JSON",
-                "memory": "public policy history v1, capacity 32; no writable model memory",
+                "memory": "viewer policy history v2, capacity 32; no writable model memory",
                 "selection_source": "response stub; no model loaded",
             },
             indent=2,
@@ -318,7 +317,7 @@ def run_demo(out: Path) -> None:
         "captured_continuations_and_text_distinct": True,
         "equal_current_state_distinct_history": True,
         "expired_history_links_explicit": True,
-        "history": "public v1 / 32",
+        "history": "viewer v2 / 32",
         "model": "response stub",
     }
     (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")

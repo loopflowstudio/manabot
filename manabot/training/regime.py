@@ -931,7 +931,7 @@ class TrainingRegime(Strict):
         if self.agent.recent_events and self.agent.world is None:
             raise ValueError("recent events require a world for public identities")
         if self.agent.recent_events and not 1 <= self.observation.max_events <= 32:
-            raise ValueError("public history v1 requires 1..32 event rows")
+            raise ValueError("policy history requires 1..32 event rows")
         # The model treatment owns this input contract; callers cannot silently
         # train history-on against the historical drained event tensor.
         self.observation = self.observation.model_copy(

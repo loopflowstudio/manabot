@@ -836,8 +836,7 @@ def test_scout_s_warning_record_and_minus_counters_native_reference_and_text_par
         np.testing.assert_array_equal(buffers[key], value, err_msg=key)
 
 
-@pytest.mark.parametrize("version", [9, 10, 11])
-@pytest.mark.parametrize("history", [0, 1])
+@pytest.mark.parametrize("version,history", [(9, 0), (10, 0), (11, 0), (11, 1)])
 def test_every_input_layout_agrees_natively_on_elemental_games(
     version: int, history: int
 ) -> None:

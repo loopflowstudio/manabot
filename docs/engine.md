@@ -96,7 +96,7 @@ action_space.player = action_space
 ### Observations
 
 The acting seat gets an observation of what it may see: its hand, both
-boards, the stack, the pending decision, public history and the legal actions.
+boards, the stack, the pending decision, recent history and the legal actions.
 The opponent's hand and both library orders are absent, not masked later.
 
 From `Observation::for_player` in
@@ -643,10 +643,11 @@ Tagged fact, relation and effect rows describe meanings conditional on their
 row kind in `row_kinds` (integer codes mapped to descriptions). Masks and
 scalar-valued arrays have empty `columns` and describe their `element` meaning
 without inventing a feature axis. Shared headers own the detail/member slices;
-unused rows are zero. `policy_history=True` describes the 12-column public
-history rows of `events` instead of the 7-column raw events; public history is
-bounded to 32 rows, even though its allocated event capacity is selected
-separately. `turn_state=True` adds policy input v10's `player_turn_state` (columns
+unused rows are zero. `policy_history=True` describes the 14-column
+[history rows](observation-and-model.md#optional-recent-events) of `events`
+instead of the 7-column raw events, including the `kind` codes, `from_zone` and
+`library_end`; history is bounded to 32 rows, even though its allocated event
+capacity is selected separately. `turn_state=True` adds policy input v10's `player_turn_state` (columns
 `life_lost`, `spells_cast`, then `nonartifact_mana_white` through
 `nonartifact_mana_colorless`) and `card_turn_state`.
 

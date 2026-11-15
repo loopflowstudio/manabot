@@ -324,7 +324,13 @@ class ObservationEncoder:
         self.one_token = config.policy_input_version == 11
         self.permanent_dim = PERMANENT_DIM if self.one_token else LEGACY_PERMANENT_DIM
         self.max_stack_objects = config.max_stack_objects if self.one_token else 0
-        self.event_dim = 12 if config.policy_history_version == 1 else 7
+        if not self.one_token and config.policy_history_version:
+            raise UnsupportedPolicyInput(config.policy_input_version, "legacy_history")
+        self.event_dim = len(
+            managym.observation_layout(
+                policy_history=config.policy_history_version == 1
+            )["events"]["columns"]
+        )
         self.turn_state = config.policy_input_version in (10, 11)
 
         # Preserve attack/decline independently of action family and focus.
@@ -611,13 +617,7 @@ class ObservationEncoder:
         # Actionspace
         out.update(self._encode_actions(actions))
         if self.config.policy_history_version == 1:
-            rows = (
-                obs.encode_policy_history(self.max_events, self.object_to_index)
-                if self.one_token
-                else obs.encode_legacy_policy_history(
-                    self.max_events, self.cards_per_player
-                )
-            )
+            rows = obs.encode_policy_history(self.max_events, self.object_to_index)
             out["events"] = np.zeros(
                 (self.max_events, self.event_dim), dtype=np.float32
             )

@@ -41,6 +41,7 @@ from manabot.env.shared_effects import (
     MEMBER_ROWS,
 )
 from manabot.infra.config import ModelConfig
+from manabot.policy.buckets import HISTORY_COLUMNS
 from manabot.policy.prepare import (
     NAMED_DETAIL_KINDS,
     NUMBER_TOKEN_KINDS,
@@ -444,12 +445,16 @@ def actions(
 def recent_events(
     obs: ObservationBuffers, object_count: int, definition_rows: np.ndarray
 ) -> None:
-    """Reject malformed public history v1 before any forward; padding is ignored."""
+    """Reject malformed viewer history before any forward; padding is ignored."""
     if "events" not in obs or "events_valid" not in obs:
         raise ValueError("recent-event ActorCritic requires events and events_valid")
     events, valid = obs["events"], obs["events_valid"]
-    if events.ndim != 3 or events.shape[-1] != 12 or valid.shape != events.shape[:2]:
-        raise ValueError("public history v1 requires [batch, events, 12]")
+    if (
+        events.ndim != 3
+        or events.shape[-1] != len(HISTORY_COLUMNS)
+        or valid.shape != events.shape[:2]
+    ):
+        raise ValueError("policy history requires [batch, events, 14]")
     if not ((valid == 0) | (valid == 1)).all():
         raise ValueError("event validity must be binary")
     rows = np.where(valid.astype(bool)[..., None], events, 0)
@@ -460,9 +465,14 @@ def recent_events(
         if not ((values == np.floor(values)) & (values >= 0) & (values < size)).all():
             raise ValueError("invalid public history categorical field")
 
-    categorical(rows[..., 0], 6)
-    for start in (2, 7):
-        ids, owner, zone, focus, status = (rows[..., start + i] for i in range(5))
+    categorical(rows[..., HISTORY_COLUMNS["kind"]], 11)
+    categorical(rows[..., HISTORY_COLUMNS["from_zone"]], 8)
+    categorical(rows[..., HISTORY_COLUMNS["library_end"]], 4)
+    for prefix in ("source", "target"):
+        ids, owner, zone, focus, status = (
+            rows[..., HISTORY_COLUMNS[f"{prefix}_{field}"]]
+            for field in ("definition", "owner", "zone", "context", "status")
+        )
         if not (
             (ids == np.floor(ids)) & (ids >= 0) & (ids < len(definition_rows))
         ).all():
@@ -475,7 +485,9 @@ def recent_events(
             raise ValueError("invalid historical context reference")
         categorical(owner, 3)
         categorical(zone, 8)
-        categorical(status, 3)
+        categorical(status, 4)
+        if ((status == 3) & ((ids != 0) | (focus != -1))).any():
+            raise ValueError("hidden historical reference carries identity")
 
 
 def beliefs(obs: ObservationBuffers, model: ModelConfig) -> None:

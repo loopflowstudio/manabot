@@ -790,7 +790,7 @@ impl Game {
                     if let (Some(ZoneType::Library), ZoneType::Library, Some(end)) =
                         (from, *to, library_end)
                     {
-                        self.reorder_in_library(object, *end);
+                        self.reorder_in_library(object, *end, false);
                         continue;
                     }
                     // A token cannot return after leaving the battlefield (CR 111.7).
@@ -990,10 +990,19 @@ impl Game {
                     .collect();
                 let max = self.effect_value(max, frame).max(0) as usize;
                 let min = (*min).min(max).min(candidates.len());
-                if *from == ObjectSelector::Zone(ZoneType::Library) {
-                    frame.complete_with_event(GameEvent::LibrarySearched {
-                        player: frame.controller,
-                    });
+                if let Some((owner, ZoneType::Library)) = self.selection_zone(from, frame) {
+                    crate::agent::policy_history::look(
+                        self,
+                        frame.controller,
+                        owner,
+                        ZoneType::Library,
+                        self.state.zones.size(ZoneType::Library, owner),
+                    );
+                    if *from == ObjectSelector::Zone(ZoneType::Library) {
+                        frame.complete_with_event(GameEvent::LibrarySearched {
+                            player: frame.controller,
+                        });
+                    }
                 }
                 if max == 0 || candidates.is_empty() {
                     frame.select_scope(Vec::new(), None, if_declined.clone());
@@ -1316,6 +1325,13 @@ impl Game {
                 count,
                 end,
             } => {
+                crate::agent::policy_history::look(
+                    self,
+                    frame.controller,
+                    frame.controller,
+                    ZoneType::Library,
+                    self.state.zones.size(ZoneType::Library, frame.controller),
+                );
                 self.emit(GameEvent::LibrarySearched {
                     player: frame.controller,
                 });
@@ -1745,7 +1761,21 @@ impl Game {
                 let Some(Target::Player(player)) = self.present_primary_target(frame) else {
                     return None;
                 };
+                crate::agent::policy_history::look(
+                    self,
+                    frame.controller,
+                    player,
+                    ZoneType::Hand,
+                    self.state.zones.size(ZoneType::Hand, player),
+                );
                 self.remember_hand(player);
+                crate::agent::policy_history::look(
+                    self,
+                    frame.controller,
+                    player,
+                    ZoneType::Library,
+                    self.state.zones.size(ZoneType::Library, player),
+                );
                 self.emit(GameEvent::LibrarySearched { player });
                 Some(Decision::SearchNamed {
                     player: frame.controller,
@@ -1831,6 +1861,13 @@ impl Game {
                     });
                 }
                 let remaining = self.library_top_objects(frame.controller, *count);
+                crate::agent::policy_history::look(
+                    self,
+                    frame.controller,
+                    frame.controller,
+                    ZoneType::Library,
+                    remaining.len(),
+                );
                 if remaining.is_empty() {
                     return None;
                 }
@@ -1849,6 +1886,13 @@ impl Game {
                     });
                 }
                 let looked = self.library_top_objects(frame.controller, *count);
+                crate::agent::policy_history::look(
+                    self,
+                    frame.controller,
+                    frame.controller,
+                    ZoneType::Library,
+                    looked.len(),
+                );
                 (!looked.is_empty()).then_some(Decision::Surveil {
                     player: frame.controller,
                     looked,
@@ -1866,6 +1910,13 @@ impl Game {
             } => {
                 let look = self.effect_value(look, frame).max(0) as usize;
                 let looked = self.library_top_objects(frame.controller, look);
+                crate::agent::policy_history::look(
+                    self,
+                    frame.controller,
+                    frame.controller,
+                    ZoneType::Library,
+                    looked.len(),
+                );
                 if looked.is_empty() {
                     return None;
                 }

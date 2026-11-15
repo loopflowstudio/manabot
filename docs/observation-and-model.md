@@ -407,7 +407,7 @@ Capacities are configuration; widths are the layout.
 | `effects`, `effect_details`, `effect_members` | 128 × 18, 4096 × 3, 2048 × 2 | Each active effect once, with its payload tokens and affected objects |
 | `decklists`, `known_hand`, `semantic_cards` | 2 × 60 × 5, 2 × 60 × 2, 2 × 60 | Disclosed lists, known-hand minima, definition joins |
 | `actions`, `action_focus`, `name_candidates` | 512 × 22, 512 × 2, 512 × 4 | Legal actions, the objects each names, name choices |
-| `events` | 32 × 7, or 32 × 12 with recent events | Public events |
+| `events` | 32 × 7, or 32 × 14 with recent events | Raw public events, or the viewer's [recent history](#optional-recent-events) |
 
 Allocate and collect every key from the supplied `ObservationSpace`, on both
 the scalar and vector paths. Fact, relation, effect and action overflow is a
@@ -528,20 +528,123 @@ definitions; this is exercised only by the offline large-vocabulary fixture.
 This does not claim that the supported catalog exhausts every name legal under
 Magic's rules, and does not broaden deck admission.
 
-### Optional recent public events
+### Optional recent events
 
 `ModelConfig(recent_events=True)` (or `with_recent_events` / `ModelOverride`)
-adds shared policy/value context from a bounded suffix of public events; the
-regime derives `observation.policy_history_version=1`. `Game::emit` maintains
-the projection at the same append as the rules ledger, keeping at most 32
-rows; private arrivals produce no row, and owner (not controller) is recorded.
-History-on uses an `[E,12]` tensor (`1 <= E <= 32`) with a validity mask:
-kind (public arrival, damage, life change, spell cast, resolved, countered),
-signed amount, and source/target references `(definition+1, owner_role,
-zone+1, context_index, availability)`. Valid rows are mean-pooled and added to
-shared object embeddings; an empty window gives exactly zero context.
-History-off keeps the historical `[E,7]` tensor and parameters. This is not
-complete decision history, and no training benefit has been measured.
+adds shared policy/value context from the viewer's recent history; the recipe
+derives `observation.policy_history_version=1`. It is off by default. The same
+rows reach an LLM through decision capture:
+
+```python
+capture = env.capture_decision(viewer, history_capacity=32)
+print(render_decision(capture.to_json()).text)
+```
+
+After a player resolves "draw three cards, then put two cards from your hand on
+top of your library", that player reads (`D4` and `D7` are definitions bound
+earlier in the same text):
+
+```
+Policy history v2: what this viewer was shown, oldest first, capacity 32 records; no writable model memory.
+Draw: You; D4, owner You, hand.
+Draw: You; D7, owner You, hand.
+Draw: You; D4, owner You, hand.
+Moved: D4, owner You, hand -> library (top).
+Moved: D7, owner You, hand -> library (top).
+```
+
+The other player reads the same five rows without the cards:
+
+```
+Draw: Opponent; hidden card, owner Opponent, hand.
+Draw: Opponent; hidden card, owner Opponent, hand.
+Draw: Opponent; hidden card, owner Opponent, hand.
+Moved: hidden card, owner Opponent, hand -> library (top).
+Moved: hidden card, owner Opponent, hand -> library (top).
+```
+
+A move, draw or reveal is one row per card, so a count is a count of rows. The window keeps the
+32 most recent rows of one game, shared by both seats, and each viewer reads
+its own projection of it.
+
+| Kind | Row | Source | Target | Amount |
+| --- | --- | --- | --- | --- |
+| 0 | Moved | The card | none | 0 |
+| 1 | Damage | Source of the damage, when public | Damaged permanent or player | Damage dealt |
+| 2 | Life change | none | Player | Signed change |
+| 3 | Cast | The spell | One row per target; none without targets | 0 |
+| 4 | Resolved | The spell | none | 0 |
+| 5 | Countered | What countered it, when public | The spell, or the countered ability's source | 0 |
+| 6 | Draw | The card, in hand | Drawing player | 1 |
+| 7 | Reveal | The revealed card | none | 0 |
+| 8 | Look | Looking player | Owner of the zone looked at | Cards seen |
+| 9 | Shuffle | none | Library's owner | 0 |
+| 10 | Declined | Deciding player | Source of the optional instruction | 0 |
+
+- **Moved** is written for every zone change, hidden destinations included. A
+  discard is hand -> graveyard, a mill is library -> graveyard, a bounce is
+  battlefield -> hand. A card that a scry or reorder puts on the bottom is
+  library -> library with its library end.
+- **Draw** replaces the Moved row of the drawn card; a draw is never two rows.
+- **Look** covers scry, surveil, look-and-select, looking at a hand and
+  searching a library. It says who looked, whose zone, which zone (`from_zone`)
+  and how many cards. It never names the cards: one that is then moved or
+  revealed gets its own row, and what a player learned about cards left in
+  place is not history.
+- **Shuffle** is written for each shuffle of a library during the game, not for
+  setup.
+- **Declined** is written when a player takes none of an optional choice while
+  a spell or ability resolves ("you may sacrifice", choosing no cards, choosing
+  no mode). Choices made while casting are not recorded.
+
+Mulligans and opening hands produce no rows.
+
+**Who sees a card's identity.** It is decided once, when the row is written. A
+card that was public just before or just after the move is named for both
+viewers. Otherwise it is named only for its owner and for a player who shares
+that owner's information. For every other viewer the reference keeps its owner
+and zone, with definition 0, no object link and availability 3. Later events do
+not reopen a row: a card drawn privately and revealed the next turn stays hidden
+in its Draw row and is named in its Reveal row. When a group of cards
+is put into a library in random order (for example, after cascade), the move
+rows conceal identities from both seats: naming them chronologically would
+reveal the hidden order. Their earlier public rows remain unchanged.
+Two games that differ only in
+cards a viewer may not see give that viewer identical rows.
+
+Search carries nothing extra. `Game::determinize(perspective)` removes every
+identity the perspective is not entitled to from the fork's window, so a
+rollout policy or the opponent seat of a possible world reads only what the
+searcher knows.
+
+**Tensor.** History-on uses `events[E,14]` (`1 <= E <= 32`) with a validity
+mask; read column indexes from `observation_layout(policy_history=True)`:
+
+| Columns | Meaning |
+| --- | --- |
+| `kind` | The codes above |
+| `amount` | Signed amount |
+| source and target, five each | `definition + 1`, owner role (0 unknown, 1 viewer, 2 opponent), `zone + 1`, object-row index (-1 absent), availability (0 unknown, 1 exact current object or player, 2 definition without a current link, 3 hidden from this viewer) |
+| `from_zone` | `zone + 1` the card left or the zone looked at; 0 none |
+| `library_end` | 0 none, 1 top, 2 bottom, 3 second from top |
+
+Owner, not controller, is recorded. A named definition joins the card token
+rows like any other referenced card, so a revealed or drawn card needs no
+vocabulary of its own. Valid rows are mean-pooled and added to shared object
+embeddings; an empty window gives exactly zero context. History-off keeps the
+`[E,7]` raw event tensor and parameters.
+
+A checkpoint trained with 12-column history rows is refused at load by the
+`events` buffer shape, and the error names the revision that wrote it. Policy
+inputs v9 and v10 do not carry history: selecting it with either raises
+`UnsupportedPolicyInput`, which names the last revision that did (`b5478d8789`).
+Decision captures written with history version 1 still render as they did.
+
+The window is not complete decision history. A busy turn pushes older rows out,
+and hidden-zone rows compete with the public ones for the same 32 places.
+Nothing the rules need lives only here: current effects, zones and pending
+obligations stay in the observation whatever the window holds. No training
+benefit has been measured.
 
 ## Proposed: state, records, history and memory
 
@@ -564,7 +667,7 @@ does not make hidden cards observable or the game fully observed.
 | --- | --- | --- | --- |
 | Effective state | Current characteristics from `Game::characteristics`, zones, stack, suspended decisions, waiting triggers, known-hand minima, deck disclosure | Object rows and the 64 × 49 relation table | Raw effect bookkeeping a consumer must replay to learn the current value |
 | Shared records | Each active effect once: payload, duration, timestamp rank, controller, source definition, exact visible source, exact memberships | `effects`, `effect_details`, `effect_members`; local facts for copy exceptions and other per-object kinds | A recomputed layer result, or a merged record that loses a future difference |
-| History | Chronological public events, explicitly bounded | At most 32 rows of arrival, damage, life, cast, resolved and countered; optional and off by default | Anything needed to know the current rules state. Effect creation is not an event kind, and an activation adds no row |
+| History | Chronological events as the viewer was shown them, explicitly bounded | At most 32 rows: moves, draws, reveals, looks, shuffles, declined options, damage, life, cast, resolved and countered; optional and off by default | Anything needed to know the current rules state. Effect creation is not an event kind, and an activation adds no row |
 | Memory | Inference from everything the seat has been shown | Nothing | A fact the current observation should carry, or anything the viewer may not see |
 
 ### Counterexamples

@@ -52,7 +52,7 @@ impl Game {
     ) -> Result<DecisionCapture, SemanticError> {
         if history_capacity > HISTORY_LIMIT {
             return Err(SemanticError::IllegalCommand(
-                "public history v1 requires 0..32 rows".into(),
+                "policy history requires 0..32 rows".into(),
             ));
         }
         let (observation, mut agent) = self.semantic_observation_with_input(viewer)?;
@@ -117,8 +117,9 @@ impl Game {
                     owner,
                     zone,
                     context_id,
+                    ..
                 } => {
-                    ids.insert(*definition);
+                    ids.extend(*definition);
                     // Same visibility/link admission as the native tensor encoder.
                     let visible = context_id
                         .filter(|id| agent.object_records().any(|object| object.id == *id));
@@ -133,7 +134,8 @@ impl Game {
             .skip(agent.policy_history.len().saturating_sub(history_capacity))
             .map(|event| {
                 json!({"kind": event.kind as u8, "amount": event.amount,
-                "source": reference(&event.source), "target": reference(&event.target)})
+                "source": reference(&event.source), "target": reference(&event.target),
+                "from_zone": event.from_zone.map(|zone| zone as u8), "library_end": event.library_end})
             })
             .collect();
         for effects in [&agent.agent.effects, &agent.opponent.effects]
@@ -198,7 +200,7 @@ impl Game {
             frames: agent.continuation,
             definitions,
             history: PublicHistory {
-                version: 1,
+                version: 2,
                 capacity: history_capacity,
                 rows,
             },

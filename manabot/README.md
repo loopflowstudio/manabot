@@ -550,7 +550,7 @@ Self-play update diagnostics live in the run's Etude metrics and referenced
 outcome tables; TrainingRun keeps counters and receipts. The [dashboard guide](../docs/training.md#monitoring)
 covers reading them offline and separate checkpoint monitoring.
 
-Optional [public recent-event input](../docs/observation-and-model.md#policy-inputs) uses the existing
+Optional [recent-event input](../docs/observation-and-model.md#optional-recent-events) uses the existing
 semantic catalog and a bounded native history suffix. Recipe history-on/off is
 independent of capacity and learning rules; comparison plans remain unexecuted.
 
@@ -770,7 +770,7 @@ uses the same native fact, separately from current object presence.
 Run the local response-stub proof with
 `uv run python -m manabot.verify.text_observation --out .runs/text-observation`.
 It retains native inputs, prompts, bindings, malformed/stale checks and execution
-receipts. This uses bounded public policy history v1; it loads no model and has
+receipts. This uses the bounded viewer [policy history](../docs/observation-and-model.md#optional-recent-events); it loads no model and has
 no writable model memory. Tokenizer/model recovery belongs to the caller;
 `TextDecision.check_token_budget` checks the complete prompt without truncation.
 

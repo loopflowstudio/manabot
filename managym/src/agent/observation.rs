@@ -925,7 +925,7 @@ pub struct Observation {
     pub stack_objects: Vec<StackObjectData>,
     pub recent_events: Vec<EventData>,
     #[serde(skip)]
-    pub policy_history: crate::agent::policy_history::HistoryWindow,
+    pub policy_history: crate::agent::policy_history::ViewerHistory,
 }
 
 impl Observation {
@@ -1078,7 +1078,10 @@ impl Observation {
             opponent_cards: Vec::new(),
             opponent_permanents: Vec::new(),
             stack_objects: Vec::new(),
-            policy_history: game.policy_history.clone(),
+            policy_history: crate::agent::policy_history::ViewerHistory::new(
+                game.policy_history.clone(),
+                agent_player,
+            ),
             recent_events: recent_events
                 .into_iter()
                 .flat_map(Self::event_data)
