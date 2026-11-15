@@ -4,7 +4,7 @@
   import { tick, untrack } from 'svelte';
   import { offerFocus } from '$lib/offer-map';
   import { recordFetch } from '$lib/records';
-  import MirrorThinking from '$lib/components/MirrorThinking.svelte';
+  import SearchThinking from '$lib/components/SearchThinking.svelte';
   import WatchSetup from '$lib/components/WatchSetup.svelte';
   import Feedback from '$lib/components/Feedback.svelte';
   import GameBoard from '$lib/components/GameBoard.svelte';
@@ -368,7 +368,7 @@
       <button class="btn btn-secondary" disabled={inStudy || studyStore.busy} onclick={() => seek(index!.positions.findIndex(position => position.kind === 'choice' && position.actor === 1))}>Inspect bot search</button>
     {/if}
     {#if listError}<p role="alert">{listError}</p>{/if}
-    <MirrorThinking active={replayStore.producing && !!index?.mirror?.some(spec => spec !== null)} budget={index?.mirror?.map((spec, seat) => spec ? `Seat ${seat + 1} mirror ${spec.worlds}×${spec.depth}` : '').filter(Boolean).join(' · ') ?? ''} />
+    <SearchThinking active={replayStore.producing && !!index?.mirror?.some(spec => spec !== null)} budget={index?.mirror?.map((spec, seat) => spec ? `Seat ${seat + 1} search ${spec.worlds}×${spec.depth}` : '').filter(Boolean).join(' · ') ?? ''} />
     {#if index?.mirror_retry && !replayStore.error}<p role="alert">{index.mirror_retry.message}</p>{/if}
     {#if replayStore.error}<p role="alert">{replayStore.error}</p>{/if}
     {#if studyStore.errorMessage}<p role="alert">{studyStore.errorMessage}</p>{/if}

@@ -1,4 +1,4 @@
-export interface MirrorSearch {
+export interface SearchConfig {
   algorithm: 'local_update';
   belief: 'physical_deal';
   worlds: number;
@@ -8,15 +8,15 @@ export interface MirrorSearch {
   beta: number;
 }
 
-export interface PendingMirror {
+export interface PendingSearch {
   code: string;
   message: string;
   match_id: string;
   expected_revision: number;
 }
 
-export function parseMirrors(value: unknown): [MirrorSearch | null, MirrorSearch | null] {
-  function valid(spec: unknown): spec is MirrorSearch | null {
+export function parseSearchConfigs(value: unknown): [SearchConfig | null, SearchConfig | null] {
+  function valid(spec: unknown): spec is SearchConfig | null {
     if (spec === null) return true;
     if (typeof spec !== 'object' || spec === null) return false;
     const fields = spec as Record<string, unknown>;
@@ -28,7 +28,7 @@ export function parseMirrors(value: unknown): [MirrorSearch | null, MirrorSearch
       && typeof fields.beta === 'number' && Number.isFinite(fields.beta) && fields.beta > 0;
   }
   if (!Array.isArray(value) || value.length !== 2 || !valid(value[0]) || !valid(value[1])) {
-    throw new Error('Invalid two-seat Mirror search settings.');
+    throw new Error('Invalid two-seat Search settings.');
   }
   return [value[0], value[1]];
 }

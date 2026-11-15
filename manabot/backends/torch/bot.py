@@ -14,7 +14,7 @@ def evaluate_observation(
     """Return legal-action probabilities and the acting viewer's value.
 
     The open scope caches the full card-program table once for its unchanged
-    policy, so repeated evaluations (Mirror search calls this per rollout ply)
+    policy, so repeated evaluations (Search calls this per rollout ply)
     run only the observation forward instead of re-encoding the catalog.
     """
     count = len(observation.action_space.actions)

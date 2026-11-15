@@ -18,8 +18,8 @@ from managym.academy import server
 from managym.academy.opponent import set_policy_registry
 from managym.academy.watch import WatchRequest, create_watch, inspect_watch, step_watch
 from managym.bots import passive_policy
-from managym.mirror_search import MirrorSearch
 from managym.policy import PolicyRegistry, PolicySpec, PolicyView
+from managym.search import SearchConfig
 
 
 def write_search_checkpoint(path: Path) -> None:
@@ -57,7 +57,7 @@ def test_baseline_provider_search_runs_in_play_and_either_watch_seat(
     registry = PolicyRegistry(providers={})
     key = registry.register(factory)
     set_policy_registry(registry)
-    spec = MirrorSearch()
+    spec = SearchConfig()
     game = server.GameSession()
     try:
         game.new_game(
