@@ -99,6 +99,9 @@ publish, land or choose the next Graph step from here.
   combat, import `16 Mountain\n10 Gray Ogre\n8 Boggart Brute\n6 Raging Goblin`
   (menace via Boggart Brute) against Search 16. A `vite preview` server dies
   when a later build replaces `.svelte-kit/output`; restart it after building.
+  Setup/navigation changes also run `npm --prefix academy/ui run test:e2e:policy`
+  and `npm --prefix academy/ui run test:e2e:search`; the release browser config
+  does not include those policy refusal, reload and Search journeys.
 - Configured launch (`managym academy play|replay`, `managym.academy.launch.serve`):
   from a checkout first build the static SPA with
   `ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build`, then set

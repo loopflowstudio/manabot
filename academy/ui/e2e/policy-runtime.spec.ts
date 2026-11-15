@@ -15,13 +15,15 @@ for (const theme of ['light', 'dark'] as const) {
     const frames: { match_id: string; revision: number }[] = [];
     page.on('websocket', socket => socket.on('framereceived', event => {
       const message = JSON.parse(String(event.payload));
-      const frame = message.recovery?.frame ?? message.frame;
+      const frame = message.update?.frame ?? message.recovery?.frame ?? message.frame;
       if (frame) frames.push(frame);
     }));
     await page.goto(addresses.refused);
-    await expect(page.getByTestId('checkpoint-select')).toHaveValue(`policy:${addresses.ids['refused-config']}`);
     await expect(page.getByText(/restore the pinned artifact and runner/).first()).toBeVisible();
+    await page.getByRole('banner').getByRole('link', { name: 'New game', exact: true }).click();
+    await expect(page.getByTestId('checkpoint-select')).toHaveValue(`policy:${addresses.ids['refused-config']}`);
     await page.getByRole('button', { name: 'New Game', exact: true }).click();
+    await expect(page.getByText(/restore the pinned artifact and runner/).first()).toBeVisible();
     await expect(page.getByTestId('checkpoint-select')).toHaveValue(`policy:${addresses.ids['refused-config']}`);
     await expect(page.getByTestId('action-option')).toHaveCount(0);
     const preview = new URL(addresses.play);
