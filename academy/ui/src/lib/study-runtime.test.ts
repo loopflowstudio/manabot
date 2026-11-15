@@ -4,11 +4,12 @@ import { describe, expect, it } from 'vitest';
 
 import {
   serializeReplayDecisionAddress,
+  canonicalReplayProjectionSha256,
   type CanonicalReplayProjectionV1,
   type CanonicalReplayProjectionResponseV1,
   type RestoredReplayDecision,
 } from './replay-index';
-import { bindStudyArtifact, buildStudyPlans } from './study-runtime';
+import { bindStudyArtifact, buildStudyPlans, type StudySource } from './study-runtime';
 import type { StudyArtifact } from './study-protocol';
 
 function fixture<T>(name: string): T {
@@ -20,10 +21,10 @@ function fixture<T>(name: string): T {
 const replay = fixture<CanonicalReplayProjectionV1>('canonical-replay-player-0.json');
 const artifact = fixture<StudyArtifact>('study-curated-decision.json');
 
-function projectionAndRestored(): {
-  projection: CanonicalReplayProjectionResponseV1;
+async function projectionAndRestored(): Promise<{
+  projection: StudySource;
   restored: RestoredReplayDecision;
-} {
+}> {
   const addressedDecisions = replay.decisions.map((row) => ({
     ...structuredClone(row),
     address: serializeReplayDecisionAddress({
@@ -47,7 +48,7 @@ function projectionAndRestored(): {
   };
   const row = projection.decisions[0];
   return {
-    projection,
+    projection: {...projection, sha256: await canonicalReplayProjectionSha256(replay)},
     restored: {
       address: row.address,
       ordinal: row.ordinal,
@@ -64,7 +65,7 @@ function projectionAndRestored(): {
 
 describe('Study runtime consumer', () => {
   it('joins exact evidence and keeps Played, Policy, and Search distinct', async () => {
-    const { projection, restored } = projectionAndRestored();
+    const { projection, restored } = await projectionAndRestored();
     const landmark = await bindStudyArtifact(artifact, projection, restored);
     const plans = buildStudyPlans(landmark);
 
@@ -94,7 +95,7 @@ describe('Study runtime consumer', () => {
   });
 
   it('fails closed when replay or restored identities drift', async () => {
-    const { projection, restored } = projectionAndRestored();
+    const { projection, restored } = await projectionAndRestored();
     const driftedArtifact = structuredClone(artifact);
     driftedArtifact.identity.source_replay_sha256 = 'f'.repeat(64);
     await expect(

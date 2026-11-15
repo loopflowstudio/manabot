@@ -489,20 +489,37 @@ test('Replay seeks retain exactly the recorded prefix and label missing old cons
     })),
     final_observation: observation, winner: null, end_reason: 'fixture', timestamp: '2026-11-14T00:00:00Z',
   };
+  const positions = Array.from({length: 7}, (_, index) => ({
+    key: index === 6 ? 'latest' : index % 2 === 0 ? `legacy-choice:${index / 2}` : `after:${(index - 1) / 2}`,
+    kind: index === 6 ? 'state' : index % 2 === 0 ? 'choice' : 'consequences',
+    turn: 1, phase: 'COMBAT', step: 'DAMAGE', actor: null, automatic: false, can_reveal: false,
+  }));
   await page.route('**/api/traces', route => route.fulfill({ json: [] }));
-  await page.route('**/api/traces/recorded-history', route => route.fulfill({ json: trace }));
-  await page.route('**/api/traces/recorded-history/decisions', route => route.fulfill({ status: 404 }));
+  await page.route('**/api/traces/recorded-history/recording', route => route.fulfill({json: {
+    id: trace.id, positions, total: positions.length, next_offset: null, revision: 11,
+    status: 'interrupted', can_produce: false, winner: null, players: [], source_kind: null, watch: false, can_feedback: false,
+  }}));
+  await page.route('**/api/traces/recorded-history/positions/**', route => {
+    const key = decodeURIComponent(new URL(route.request().url()).pathname.split('/positions/')[1]);
+    const index = positions.findIndex(position => position.key === key);
+    const events = trace.events.slice(0, Math.ceil(index / 2)).flatMap(event => event.presentation);
+    return route.fulfill({json: {...positions[index], observation, decision: null, outputs: null,
+      description: null, note_key: key, viewer: 0, revealed: false, history: events,
+      history_labels: events.map(() => combatSequence.labels), history_before: null,
+      cursor: events.length, transition_start: Math.max(0, events.length - 2), consequences_recorded: events.length > 0,
+    }});
+  });
   await page.goto('/replay?trace=recorded-history');
   const history = page.getByTestId('presentation-history');
   await history.locator('summary').click();
   await expect(history).toContainText('Consequences not recorded');
-  await page.getByRole('button', { name: 'Next frame', exact: true }).click();
-  await expect(history.getByRole('listitem')).toHaveCount(2);
-  await page.getByRole('button', { name: 'Next frame', exact: true }).click();
-  await expect(history.getByRole('listitem')).toHaveCount(4);
-  await page.getByRole('button', { name: 'Previous frame', exact: true }).click();
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(history.getByRole('listitem')).toHaveCount(2);
   await page.getByRole('slider', { name: 'Replay position' }).fill('3');
+  await expect(history.getByRole('listitem')).toHaveCount(4);
+  await page.getByRole('button', { name: 'Previous', exact: true }).click();
+  await expect(history.getByRole('listitem')).toHaveCount(2);
+  await page.getByRole('slider', { name: 'Replay position' }).fill('5');
   await expect(history.getByRole('listitem')).toHaveCount(6);
   await expect(history.locator('[data-presentation-seq="1"]')).toHaveCount(1);
   await expect(history).toContainText('Otter-Penguin, Badgermole Cub die.');

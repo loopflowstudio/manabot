@@ -76,6 +76,8 @@ separate from deliberate human decisions.
 Academy resume credentials and the started-launch marker live in browser
 `sessionStorage`. Keep them scoped together; a launch must not resume another
 tab's or another launch's game.
+Game-file imports send original JSON source spans: JavaScript numeric parsing and
+re-encoding can round u64 identities and invalidate retained digests.
 Watch history is the selected acting viewer's recorded track strictly before
 that decision's `presentation_cursor`; spectator reveal never supplies history
 labels. Event emphasis stays separate from choice focus and lane navigation.

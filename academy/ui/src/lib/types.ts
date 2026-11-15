@@ -732,14 +732,6 @@ export interface PresentationLabels {
   stacks: Record<string, string>;
 }
 
-export interface ReplayFrame {
-  observation: Observation;
-  actionDescription: string | null;
-  actor: 'hero' | 'villain' | null;
-  presentation: PresentationEvent[];
-  presentationLabels: PresentationLabels;
-}
-
 export type StopSide = 'my' | 'opponent';
 
 // Effective priority-stop configuration; the server echoes this on every

@@ -8,7 +8,7 @@
   import type { Observation, ObjectRenderId } from '$lib/types';
   import PresentationStage from './PresentationStage.svelte';
 
-  let { player, observation = null }: { player: PresentationPlayer; observation?: Observation | null } = $props();
+  let { player, observation = null, externallyDriven = false }: { player: PresentationPlayer; observation?: Observation | null; externallyDriven?: boolean } = $props();
   const PAGE_SIZE = 100;
   let region: HTMLOListElement | undefined = $state();
   let summary: HTMLElement | undefined = $state();
@@ -197,5 +197,5 @@
       <p class="type-caption mt-1 text-ink-2">Consequences not recorded for this position.</p>
     {/if}
   </details>
-  <PresentationStage {player} />
+  <PresentationStage {player} {externallyDriven} />
 </section>

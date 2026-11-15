@@ -1,8 +1,8 @@
 <script lang="ts">
   import { visibleCardLabel } from '$lib/decision-labels';
-  import { tick, setContext } from 'svelte';
+  import { tick, setContext, untrack } from 'svelte';
 
-  import type { CardPreview, Observation } from '$lib/types';
+  import type { CardPreview, CardState, Observation, PermanentState } from '$lib/types';
   import type { PresentationPlayer } from '$lib/presentation.svelte';
 
   import HoverPreview from './HoverPreview.svelte';
@@ -69,6 +69,10 @@
   setContext(PRESENTATION_CONTEXT, () => presentationPlayer?.currentEvent ?? null);
 
   let inspected = $state<{ id: number; card: CardPreview } | null>(null);
+  let inspectedSource: CardState | PermanentState | null = null;
+  let inspectionButton: HTMLElement | null = null;
+  let inspectionNotice = $state('');
+  let boardRegion: HTMLElement | null = $state(null);
   let preview = $state<CardPreview | null>(null);
   let resultDialog: HTMLDivElement | null = $state(null);
   let resultAction: HTMLButtonElement | null = $state(null);
@@ -86,8 +90,18 @@
   });
 
   $effect(() => {
-    observation;
-    inspected = null;
+    const visible = [observation.agent, observation.opponent].flatMap(player => [
+      ...player.hand, ...player.graveyard, ...player.exile, ...player.stack,
+      ...player.battlefield, ...(player.inspected ?? []),
+    ]);
+    untrack(() => {
+      // The legacy board cannot certify incarnation across fetched snapshots.
+      // A seating-only update retains the same permitted object reference.
+      if (!inspected || (inspectedSource && visible.includes(inspectedSource))) return;
+      inspected = null; inspectedSource = null;
+      inspectionNotice = 'Historical card details are unavailable at this position.';
+      void tick().then(() => (inspectionButton?.isConnected ? inspectionButton : boardRegion)?.focus({preventScroll: true}));
+    });
   });
 
   function selectTarget(id: number): void {
@@ -98,6 +112,9 @@
   function inspectTarget(id: number): void {
     const players = [observation.agent, observation.opponent];
     const card = players.flatMap(player => [...player.hand, ...player.graveyard, ...player.exile, ...player.stack, ...player.battlefield, ...(player.inspected ?? [])]).find(card => card.id === id);
+    inspectionButton = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    inspectedSource = card ?? null;
+    inspectionNotice = card ? '' : 'Historical card details are unavailable at this position.';
     inspected = card ? { id, card: { name: card.name, text_box: card.text_box, power: card.power, toughness: card.toughness } } : null;
   }
 
@@ -135,7 +152,7 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions (delegates pointer gestures from descendant card buttons; explicit actions serve keyboard input) -->
-<section aria-label="Game board" data-testid="game-board" class="relative min-w-0" class:workspace-board={workspace}
+<section bind:this={boardRegion} tabindex="-1" aria-label="Game board" data-testid="game-board" class="relative min-w-0" class:workspace-board={workspace}
   onclickcapture={onHandClickCapture} onpointerdown={onHandPointerDown} onpointermove={onHandPointerMove} onpointerup={onHandPointerUp}
   onpointercancel={onHandPointerCancel} onlostpointercapture={onHandPointerCancel}>
   {#if playMode}
@@ -262,6 +279,7 @@
       {/each}
     </section>
   {/if}
+  {#if inspectionNotice}<p role="status" class="type-caption">{inspectionNotice}</p>{/if}
   {#if inspected}
     <section aria-label="Inspected card" class="border-y border-line py-3">
       <h3 class="font-medium">{visibleCardLabel(observation, inspected.id) ?? inspected.card.name}</h3>
@@ -273,7 +291,7 @@
 
   {#if observation.game_over}
     <!-- The scrim layer: content is never dimmed by its own opacity. -->
-    <div class="absolute inset-0 z-[190] grid place-items-center rounded bg-[color-mix(in_srgb,var(--text)_45%,transparent)]">
+    <div class={interactiveResult ? "absolute inset-0 z-[190] grid place-items-center rounded bg-[color-mix(in_srgb,var(--text)_45%,transparent)]" : "shrink-0 border-t border-line pt-1"}>
       <div
         bind:this={resultDialog}
         role={interactiveResult ? 'alertdialog' : 'status'}
@@ -283,16 +301,17 @@
         tabindex="-1"
         data-testid="game-result-dialog"
         onkeydown={keepResultFocus}
-        class="z-[200] rounded-lg border border-line bg-panel p-6 text-center shadow-raised"
+        class={interactiveResult ? "z-[200] rounded-lg border border-line bg-panel p-6 text-center shadow-raised" : "flex flex-wrap items-baseline gap-3"}
       >
-        <h2 id="game-over-heading" class="type-display mb-2 text-display">Game Over</h2>
-        <p id="game-result" data-testid="game-result" class="mb-4 text-ink-2">
-          {#if winner === null}
+        <h2 id="game-over-heading" class={interactiveResult ? "type-display mb-2 text-display" : "type-title text-display"}>Game Over</h2>
+        <p id="game-result" data-testid="game-result" class={interactiveResult ? "mb-4 text-ink-2" : "type-caption text-ink-2"}>
+          {#if winner === undefined}
+            Result not recorded
+          {:else if winner === null}
             Draw
-          {:else if winner === 0}
-            Hero wins
           {:else}
-            Opponent wins
+            {@const winnerName = winner === observation.agent.player_index ? heroIdentity.text : villainIdentity.text}
+            {winnerName === 'You' ? 'You win' : `${winnerName} wins`}{!interactiveResult ? ` · Seat ${winner! + 1}` : ''}
           {/if}
         </p>
         {#if overlayActionLabel && onOverlayAction}

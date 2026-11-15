@@ -18,8 +18,7 @@ from .attempts import AttemptStore, RecordedPlayer, bot_player
 from .extensions import bot_extension
 from .launch import refuse_training_receipt
 from .opponent import policy_registry
-from .replay_index import DecisionAddressV2, load_canonical_replay
-from .trace import load_trace
+from .replay_index import DecisionAddressV2
 from .villain import NATIVE_WATCH_PLAYERS, build_villain_policy, player_fields
 
 
@@ -73,9 +72,11 @@ def create_watch(
     try:
         for seat, kind in enumerate(request.players):
             seats.append(resolve_player(kind, request, seat))
-    except (ValueError, OSError, ImportError) as error:
+    except BaseException as error:
         server.close_policies(policy for policy, _ in seats)
-        raise HTTPException(400, str(error)) from error
+        if isinstance(error, (ValueError, OSError, ImportError)):
+            raise HTTPException(400, str(error)) from error
+        raise
     token = server.secrets.token_urlsafe(32)
     game = server.GameSession(watch_mode=True)
     game.attempt_owner = server.participant_id(token)
@@ -153,53 +154,44 @@ def step_watch(trace_id: str, token: str | None, expected_revision: int) -> Watc
 def inspect_watch(
     trace_id: str, ordinal: int, token: str | None, reveal: bool = False
 ) -> dict[str, Any]:
-    payload = load_trace(trace_id)
-    if not payload["config"].get("watch_players"):
+    access = AttemptStore(server.trace_store.TRACES_DIR / "play.sqlite").access(
+        trace_id, {server.participant_id(token)} if token else set()
+    )
+    if access is not None and not access["replay"]:
+        raise HTTPException(403, "participant_credential_required")
+    recording, metadata = server._recording_read(trace_id)
+    if not recording.watch:
         raise HTTPException(409, "not_a_bot_watch")
-    finished = (
-        payload["end_reason"] == "game_over"
-        and payload["final_observation"]["game_over"]
+    payload = recording.payload
+    finished = payload.get("end_reason") == "game_over" and bool(
+        payload["final_observation"].get("game_over")
     )
     if not finished:
         record_for_watch(trace_id, token)
-    replay = load_canonical_replay(payload)
-    if ordinal >= len(replay.decisions):
+    replay = recording.replay
+    if replay is None or ordinal < 0 or ordinal >= len(replay.decisions):
         raise HTTPException(404, "decision_not_found")
-    row = replay.decisions[ordinal]
-    event = payload["events"][ordinal]
-    address = DecisionAddressV2.from_decision(replay, row).serialize()
-    observation = row.frame.projection.model_dump(mode="json")
-    if reveal:
-        observation = event["analysis_observation"]
-    # Only the acting viewer's committed prefix belongs to this decision.
-    # Keep the response bounded; unavailable older history is explicit in the UI.
-    track = next(
-        track for track in replay.presentation_tracks if track.viewer == row.viewer
+    key = DecisionAddressV2.from_decision(replay, replay.decisions[ordinal]).serialize()
+    position = recording.read(
+        key, reveal=reveal, history_limit=server.MAX_PRESENTATION_EVENTS
     )
-    presentation = track.events[
-        max(
-            0, row.presentation_cursor - server.MAX_PRESENTATION_EVENTS
-        ) : row.presentation_cursor
-    ]
     opponent = payload["config"].get("opponent") or {}
     return {
         "id": trace_id,
-        "decision": {**row.model_dump(mode="json"), "address": address},
-        "observation": observation,
-        "outputs": event.get("bot_decision"),
-        "presentation": [event.model_dump(mode="json") for event in presentation],
+        "decision": position["decision"],
+        "observation": position["observation"],
+        "outputs": position["outputs"],
+        "presentation": position["history"],
         "count": len(replay.decisions),
         "finished": finished,
         "revealed": reveal,
-        "revision": row.revision,
+        "revision": replay.decisions[ordinal].revision,
         "winner": payload.get("winner"),
         "players": payload["config"]["watch_players"],
         "source_kind": opponent.get(
             "source_kind", "evaluation" if opponent.get("kind") == "arena" else None
         ),
-        "identities": AttemptStore(server.trace_store.TRACES_DIR / "play.sqlite")
-        .metadata(trace_id)
-        .get("players", []),
+        "identities": metadata.get("players", []),
     }
 
 

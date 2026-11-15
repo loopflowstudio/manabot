@@ -68,16 +68,17 @@ test('launch replaces unrelated resume, reloads pending game and opens selected 
   expect(frames.at(-1)!.match_id).toBe(ordinary);
   await page.goto(addresses.replay);
   await expect(page.getByRole('heading', { name: 'Replay', exact: true })).toBeVisible();
-  await expect(page.getByText('Seat 1: first-legal-a · Seat 2: first-legal-b', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('game-board')).toContainText('first-legal-a');
+  await expect(page.getByTestId('game-board')).toContainText('first-legal-b');
   await expect(page.getByRole('banner').getByRole('link', { name: 'Replay', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(page.getByRole('button', { name: 'Start watching' })).toBeHidden();
   await expect(page.getByTestId('deck-browser')).toBeHidden();
   await expect(page.getByTestId('game-board')).toBeVisible();
   // This tiny retained game ends at its first decision.
-  await expect(page.getByText(/^Decision 1 of 1 ·/)).toBeVisible();
-  const step = page.getByRole('button', { name: 'Step decision', exact: true });
+  await expect(page.getByTestId('position-counter')).toHaveText('Position 1 / 3');
+  const step = page.getByRole('button', { name: 'Next', exact: true });
   await expect(step).toBeInViewport();
-  await expect(step).toBeDisabled();
+  await expect(step).toBeEnabled();
   await page.screenshot({ path: 'test-results/launch/replay-landing.png' });
   await page.getByText('Watch another matchup', { exact: true }).click();
   await expect(page.getByRole('button', { name: 'Start watching' })).toBeVisible();
