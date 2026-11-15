@@ -1,5 +1,30 @@
 # Combat and mana decision shapes on the Small TLA model
 
+**Restart in progress: `mtg265-study-20261115`, source `b3b47e82d31b`.**
+Repaired combat calibration `1fa799261cc9` completed two updates on seed
+26501, which had failed before its first update on the earlier source.
+The supervisor is preparing six fresh 500-update jobs, then acquiring two
+additional capped L4s beside the one used for calibration. Population and
+arms are unchanged: 900 training/100 held-out decks, 256 streams, common v10,
+baseline/combat-pick/mana-taps at seeds 26501 and 26502. No deck exclusion
+has been needed. Prior cohorts remain failed operational attempts.
+
+Replacement hardware is capped at USD48 across exactly three manually rented
+L4s (USD16 and 23 hours each). The launcher retained about USD1.1071 of earlier
+rental costs when planning this retry, including estimates. With USD5 reserved
+for evaluation, this stays within USD55. Jobs retain the 500-update damping
+horizon with a 21-hour maximum job window and USD15.50 job allowance. This
+shorter allowance fits the first lease after calibration and source setup;
+it does not change the update target. The supply permits no automatic rental.
+The single supervisor `.runs/decision-shapes-restart.py` waits for calibration,
+launches the cohort only on success, waits for terminal outcomes and terminates
+its leases. Machine timers independently cap their windows.
+
+Read current progress with `uv run etude status mtg265-study-20261115`.
+
+## Earlier failed full cohort
+
+
 **Training stopped: `mtg265-study-20261114d`, source `ee0281c0d402`.** All six
 jobs failed vocabulary admission: baseline at 2/12 updates, combat at 0/15,
 and mana taps at 7/6. No completed study learning result is available. The
@@ -11,18 +36,18 @@ supervisor terminated all three L4 rentals after the diagnostic retry ended.
 | Combat pick-then-done | `8b1208dffc09` | `86569bef127e` |
 | Manual mana taps | `ef6848121d91` | `5b578c31fbea` |
 
-The three held rentals each have a USD16 cap and 23-hour timer: USD48 maximum
+The three earlier rentals each had a USD16 cap and 23-hour timer: USD48 maximum
 hardware, with USD5 reserved for evaluation and preparation below USD1,
 within the USD55 authorization. The supply `mtg265-l4-held` permits manual
 rental only (`max=0`), so this cohort cannot acquire additional machines.
 The rental caps, rather than the launcher's duplicate per-job reservation,
 are the spending authority for these already allocated machines. Jobs have
-a 22-hour allowance and USD15.50 per-job ceiling. A local supervisor waits
-for this cohort and then terminates exactly these three manual rentals:
+a 22-hour allowance and USD15.50 per-job ceiling. The previous supervisor waited
+for this cohort and then terminated exactly these three manual rentals:
 `mtg265-l4-held-08fc662039b4`, `mtg265-l4-held-60c5dd4c4bee`, and
 `mtg265-l4-held-996fb972dd40`. The timers remain independent of that supervisor.
 
-Read current progress with `uv run etude status mtg265-study-20261114d`.
+Inspect the retained failed cohort with `uv run etude status mtg265-study-20261114d`.
 The stopped attempts below remain history; do not relaunch them.
 
 Exploratory study. Compare the existing combat decisions and smart automatic
@@ -174,3 +199,10 @@ repaired training has yet run; do not reuse old policy checkpoints with this
 expanded vocabulary. All three study rentals terminated successfully. The
 causal investigation is in `scratch/decision-shapes-vocabulary-failure.md`;
 its prevention proposals are not implemented by this patch.
+
+Repaired calibration evidence: `1fa799261cc9` (combat-pick seed26501)
+completed two updates. Its TrainingRun records 168.26 seconds collecting
+and41.31 seconds learning (212.38 seconds for the stage including other
+work). This is a short single-job placement check, not sustained two-job
+throughput or a learning result. It remains excluded from scored tags by
+its `-calibration` regime ID.
