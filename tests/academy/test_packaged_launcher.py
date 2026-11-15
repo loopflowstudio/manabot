@@ -5,8 +5,8 @@ from pathlib import Path
 import socket
 import subprocess
 import sys
-from types import SimpleNamespace
 
+from click import unstyle
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 import pytest
@@ -14,20 +14,30 @@ import pytest
 from managym.academy import extensions, opponent, server
 from managym.academy.launch import Academy
 from managym.academy.watch import WatchRequest, create_watch, import_arena
-from managym.bots import BotPolicy, passive_policy
 from managym.cli import academy
 
 
-def test_launcher_help_lists_options_and_guide() -> None:
+@pytest.mark.parametrize("color", [False, True])
+def test_launcher_help_lists_options_and_guide(
+    color: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TERM", "xterm-256color")
+    if color:
+        monkeypatch.delenv("NO_COLOR", raising=False)
+        monkeypatch.setenv("FORCE_COLOR", "1")
+    else:
+        monkeypatch.delenv("FORCE_COLOR", raising=False)
+        monkeypatch.setenv("NO_COLOR", "1")
     result = subprocess.run(
         [sys.executable, "-m", "managym.academy", "--help"],
         capture_output=True,
         text=True,
         check=True,
     )
-    assert "--traces-dir" in result.stdout
-    assert "http://127.0.0.1:8000" in result.stdout
-    assert "docs/academy.md" in result.stdout
+    help_text = unstyle(result.stdout)
+    assert "--traces-dir" in help_text
+    assert "http://127.0.0.1:8000" in help_text
+    assert "docs/academy.md" in help_text
 
 
 def test_missing_site_names_checkout_launcher(
@@ -137,6 +147,9 @@ def test_play_only_capabilities_are_explicit(
 ) -> None:
     monkeypatch.setattr(extensions, "entry_points", lambda **kwargs: [])
     extensions.bot_extension.cache_clear()
+    from managym.policy import PolicyRegistry
+
+    monkeypatch.setattr(opponent, "_registry", PolicyRegistry(providers={}))
     monkeypatch.setattr(server.trace_store, "TRACES_DIR", tmp_path)
     try:
         catalog = opponent.opponent_catalog()
@@ -146,7 +159,7 @@ def test_play_only_capabilities_are_explicit(
         with pytest.raises(HTTPException) as refused:
             create_watch(WatchRequest(players=["greedy", "random"]))
         assert refused.value.status_code == 400
-        assert refused.value.detail == "watch_player_unavailable"
+        assert "no longer available" in refused.value.detail
         with pytest.raises(HTTPException) as refused:
             import_arena({})
         assert refused.value.detail == "arena_import_unavailable"
@@ -222,66 +235,48 @@ def test_shared_options_go_before_or_after_the_verb(
         server.trace_store.TRACES_DIR = previous
 
 
-def test_extension_declared_watch_player_plays_and_records(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+def test_policy_cli_uses_spec_alias_and_reports_missing_provider(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    from manabot.sim.table_bots import TrainingBots
-    from managym.academy.extensions import CheckpointSummary, UnavailableEntry
-    from managym.academy.watch import inspect_watch, step_watch
-
-    class ExtraBots(TrainingBots):
-        watch_players = ("extra",)
-
-        def discover(
-            self, paths: list[Path], runs_dir: Path
-        ) -> tuple[list[CheckpointSummary], list[UnavailableEntry]]:
-            return [], []
-
-        def watch_policy(self, kind: str) -> BotPolicy:
-            return passive_policy
-
-    provider = ExtraBots()
-    monkeypatch.setattr(
-        extensions,
-        "entry_points",
-        lambda **kwargs: [SimpleNamespace(name="extra", load=lambda: provider)],
+    site = tmp_path / "site"
+    site.mkdir()
+    (site / "index.html").write_text("Academy")
+    monkeypatch.setenv("ACADEMY_FRONTEND_BUILD", str(site))
+    monkeypatch.setattr(Academy, "wait", lambda self: None)
+    specification = tmp_path / "challenger.json"
+    specification.write_text(
+        json.dumps({"provider": "manabot", "config": {"kind": "heuristic"}})
     )
-    monkeypatch.setattr(server.trace_store, "TRACES_DIR", tmp_path)
-    extensions.bot_extension.cache_clear()
-    created = None
+    previous = server.trace_store.TRACES_DIR
     try:
-        with TestClient(server.app) as client:
-            catalog = client.get("/api/opponents").json()
-            assert catalog["watch_players"] == ["random", "search", "extra"]
-            response = client.post(
-                "/api/watch", json={"players": ["extra", "extra"], "seed": 42}
+        assert (
+            academy(
+                [
+                    "watch",
+                    "--policy",
+                    str(specification),
+                    "--player",
+                    "challenger",
+                    "--player",
+                    "random",
+                    "--port",
+                    "0",
+                    "--no-open",
+                ]
             )
-            assert response.status_code == 200, response.text
-            created = response.json()
-            result = step_watch(created["id"], created["token"], 0)
-            assert result["revision"] == 1
-            row = inspect_watch(created["id"], 0, created["token"])
-            assert row["players"] == ["extra", "extra"]
-            assert [player["name"] for player in row["identities"]] == [
-                "Extra",
-                "Extra",
-            ]
-            assert row["outputs"]["probabilities"][row["outputs"]["action"]] == 1
-            for kind in ("greedy", "unknown", "passive"):
-                refused = client.post("/api/watch", json={"players": ["extra", kind]})
-                assert refused.status_code == 400
-                assert refused.json()["detail"] == "watch_player_unavailable"
+            == 0
+        )
+        ready = json.loads(
+            capsys.readouterr().out.splitlines()[0].removeprefix("ACADEMY_PLAY_READY ")
+        )
+        assert "seat1=policy%3A" in ready["open"]
+        assert "seat2=random" in ready["open"]
+        specification.write_text(json.dumps({"provider": "absent-provider"}))
+        assert (
+            academy(["--policy", str(specification), "--port", "0", "--no-open"]) == 2
+        )
+        error = json.loads(capsys.readouterr().err.removeprefix("ACADEMY_PLAY_ERROR "))
+        assert error["code"] == "policy.unavailable"
+        assert "absent-provider" in error["message"]
     finally:
-        if created is not None:
-            server._drop_session(created["id"], "test")
-        extensions.bot_extension.cache_clear()
-
-
-@pytest.mark.parametrize("kind", ["random", "search", "passive", "unknown"])
-def test_training_extension_rejects_undeclared_watch_players(kind: str) -> None:
-    from manabot.sim.table_bots import TrainingBots
-
-    provider = TrainingBots()
-    assert provider.watch_players == ("greedy", "heuristic")
-    with pytest.raises(ValueError, match="Unsupported watch player"):
-        provider.watch_policy(kind)
+        server.trace_store.TRACES_DIR = previous
