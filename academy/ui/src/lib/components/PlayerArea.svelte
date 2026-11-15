@@ -52,6 +52,7 @@
   }: Props = $props();
 
   const label = $derived(identity.text);
+  const runtime = $derived(identity.runtime ?? identity.provenance?.policy);
 
   const narratedEvent = getContext<(() => PresentationEvent | null) | undefined>(PRESENTATION_CONTEXT);
   const narrated = $derived.by(() => {
@@ -146,8 +147,13 @@
   {#if identity.digest || identity.producer || identity.full !== identity.compact}
   <div class="identity-details" data-testid="player-identity">
     <p>{identity.full}</p>
-    {#if identity.digest}<p>SHA-256: {identity.digest}</p>{/if}
+    {#if identity.digest}<p>{runtime ? 'Policy ID' : 'SHA-256'}: {identity.digest}</p>{/if}
     {#if identity.producer}<p>Producer: {identity.producer}</p>{/if}
+    {#if runtime}
+      <p>Runner: {runtime.runner}</p>
+      {#each Object.entries(runtime.artifacts) as [role, digest]}<p>{role}: {digest}</p>{/each}
+      <p>Config: {JSON.stringify(runtime.config)}</p>
+    {/if}
     {#each ['source', 'world', 'model', 'step'] as const as key}
       {@const value = identity.provenance?.[key]}
       {#if value != null}<p>{key}: {value}</p>{/if}

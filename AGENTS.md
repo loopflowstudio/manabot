@@ -48,7 +48,8 @@ checkpoint fields and frozen evidence keep their spelling.
 
 Code dependencies flow `managym.academy` → `managym` and `manabot` → `managym`.
 Academy never imports manabot or Torch; optional bot capabilities are discovered
-through the `managym.academy.bots` entry point. manabot never imports Academy.
+through the `managym.bots` provider entry points; optional historical replay/advice
+capabilities use `managym.academy.bots`. manabot never imports Academy.
 PyPI distributes the engine as `managym` and training as `manabot`, released
 together at the same version. Release builds use `scripts/release/prepare.py`
 to stage self-contained source archives; direct engine sdists from the workspace
@@ -143,7 +144,7 @@ checkpoints or experiment evidence.
 - Library code receives a framework backend (the module for an update, a
   `BackendPolicy` for simulation and evaluation) and never imports
   `manabot.backends.*`. Only composition roots choose one: `experiments/`,
-  `scripts/`, recipe entry points, the CLI and child-process entry points, `manabot/sim/table_bots.py` and the
+  `scripts/`, recipe entry points, the CLI and child-process entry points, `manabot/sim/policy_provider.py` and the
   backends' tests, by import or `manabot.backends.resolve("torch")`.
   `tests/test_package_boundaries.py` lists the remaining exceptions by name;
   that list only shrinks ([who chooses a backend](manabot/backends/README.md#who-chooses-a-backend)).

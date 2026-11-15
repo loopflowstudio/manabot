@@ -53,7 +53,7 @@ def test_ordinary_loader_and_play_accept_full_setup_in_either_seat(
     assert agent.world_binding == payload["world_binding"]
     for match in (selected_match(), selected_match().swapped()):
         policy = CheckpointVillain(str(path), player_configs=match.to_rust())
-        assert policy.agent.world_binding == agent.world_binding
+        assert policy.session.agent.world_binding == agent.world_binding
     assert space.shapes["actions"][0] == 512
 
 
@@ -118,7 +118,9 @@ def test_same_shapes_do_not_admit_another_matchup():
 
 
 @pytest.mark.parametrize("consumer", ["policy", "puct", "rollout", "value", "play"])
-def test_loaded_consumers_reject_another_actual_setup(tmp_path, consumer):
+def test_loaded_consumers_reject_another_actual_setup(
+    tmp_path: Path, consumer: str
+) -> None:
     from manabot.env.env import Env
     from manabot.env.match import Reward
     from manabot.sim.rollout import BatchedSampler, PolicyRolloutMCPlayer
@@ -129,7 +131,7 @@ def test_loaded_consumers_reject_another_actual_setup(tmp_path, consumer):
     path = tmp_path / "policy.pt"
     torch.save(checkpoint(), path)
     if consumer == "play":
-        with pytest.raises(ValueError, match="setup differs"):
+        with pytest.raises(ValueError, match="was trained on ur_lessons vs gw_allies"):
             CheckpointVillain(str(path), player_configs=Match().to_rust())
         return
     agent, space = load_checkpoint(str(path))
