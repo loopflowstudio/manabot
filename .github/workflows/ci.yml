@@ -281,6 +281,7 @@ jobs:
           ACADEMY_STATIC_BUILD=1 npm run build
           npm run test:e2e:launch
           npm run test:e2e:policy
+          npm run test:e2e:mirror
 
       - name: Upload browser failure evidence
         if: failure()
@@ -290,6 +291,7 @@ jobs:
           path: |
             academy/ui/test-results/release
             academy/ui/test-results/policy
+            academy/ui/test-results/mirror
           if-no-files-found: warn
 
   clean-machine-play:

@@ -17,6 +17,7 @@ import json
 from pathlib import Path
 from typing import Literal
 
+from pydantic import TypeAdapter
 import typer
 
 from managym.academy.launch import (
@@ -27,6 +28,7 @@ from managym.academy.launch import (
     _path_or_name,
     serve,
 )
+from managym.mirror_search import MirrorSearch
 from managym.policy import PolicySpec
 
 DEFAULT_URL = "http://127.0.0.1:8000"
@@ -128,6 +130,11 @@ def play(
     decklists: Literal["open", "closed"] = typer.Option(
         "open", help="Whether each player knows the other's list"
     ),
+    mirror_json: str | None = typer.Option(
+        None,
+        "--mirror",
+        help="Mirror search settings as a JSON object; requires a search-capable policy.",
+    ),
     host: str | None = _HOST,
     port: int | None = _PORT,
     traces_dir: Path | None = _TRACES_DIR,
@@ -137,6 +144,16 @@ def play(
     from managym.academy import server
 
     def prepare(running: Academy) -> str:
+        try:
+            mirror = (
+                TypeAdapter(MirrorSearch).validate_json(mirror_json)
+                if mirror_json
+                else None
+            )
+        except ValueError as exc:
+            raise AcademyLaunchError(
+                "setup.invalid", f"Invalid Mirror search spec: {exc}"
+            ) from exc
         return running.new_game(
             deck=_path_or_name(deck, _DECK_SUFFIXES, server.NAMED_DECKS),
             opponent_deck=_path_or_name(
@@ -146,6 +163,7 @@ def play(
             sims=sims,
             seed=seed,
             decklists=decklists,
+            mirror=mirror,
         ).url
 
     _run(
@@ -162,6 +180,11 @@ def watch(
         "--player",
         help="Seat player (exactly twice): random, search-N or registered policy",
     ),
+    mirror_json: str | None = typer.Option(
+        None,
+        "--mirror",
+        help='Two-seat JSON Mirror search settings, e.g. [{"worlds":4},null].',
+    ),
     host: str | None = _HOST,
     port: int | None = _PORT,
     traces_dir: Path | None = _TRACES_DIR,
@@ -177,7 +200,22 @@ def watch(
         raise typer.Exit(2)
 
     def prepare(running: Academy) -> str:
-        return running.watch(players=(player[0], player[1])).url
+        try:
+            mirrors = (
+                TypeAdapter(
+                    tuple[MirrorSearch | None, MirrorSearch | None]
+                ).validate_json(mirror_json)
+                if mirror_json
+                else (None, None)
+            )
+        except ValueError as exc:
+            raise AcademyLaunchError(
+                "setup.invalid", f"Invalid Mirror search spec: {exc}"
+            ) from exc
+        return running.watch(
+            players=(player[0], player[1]),
+            mirror=mirrors,
+        ).url
 
     _run(
         _Shared(host, port, traces_dir, no_open, policies).over(_earlier(ctx)),

@@ -12,12 +12,14 @@
   import DecisionContext from './DecisionContext.svelte';
   import DeckSelector from './DeckSelector.svelte';
   import PlayerPicker from './PlayerPicker.svelte';
+  import MirrorThinking from './MirrorThinking.svelte';
   import type { PlayerChoice } from '$lib/game.svelte';
   import type { OpponentCatalog, TrainedOpponent } from '$lib/types';
   import DecisionAdvice from './DecisionAdvice.svelte';
   import StudyPanel from './StudyPanel.svelte';
   import type { DeckChoice } from '$lib/decks';
   import type { WatchDecision } from '$lib/watch';
+  import { parseMirrors, type MirrorSearch } from '$lib/watch';
   import type { RestoredReplayDecision } from '$lib/replay-index';
   import type { InteractionOffer, Observation } from '$lib/types';
   import type { StudyRetryResponse } from '$lib/study-runtime';
@@ -38,6 +40,10 @@
   let playing = $state(false);
   let speed = $state(1);
   let busy = $state(false);
+  let mirrors = $state<(MirrorSearch | null)[]>([null, null]);
+  let activeMirrors = $state<(MirrorSearch | null)[]>([null, null]);
+  let retryMirror = $state(false);
+  let computing = $state(false);
   let error = $state('');
   let ready = $state(false);
   let restored = $state<RestoredReplayDecision | null>(null);
@@ -59,6 +65,10 @@
     });
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
+      if (payload.detail?.code === 'mirror_deadline_exceeded') retryMirror = true;
+      if (typeof payload.detail?.revision === 'number') revision = payload.detail.revision;
+      if (payload.detail?.mirror) activeMirrors = parseMirrors(payload.detail.mirror);
+      if (typeof payload.detail?.message === 'string') throw new Error(payload.detail.message);
       throw new Error(typeof payload.detail === 'string' ? payload.detail.replaceAll('_', ' ') : `Request failed (${response.status})`);
     }
     return response.json() as Promise<T>;
@@ -77,15 +87,22 @@
       const saved = JSON.parse(localStorage.getItem('etude.watch.setup') ?? 'null');
       if (saved && Array.isArray(saved.players) && saved.players.length === 2 && saved.players.every((p: unknown) => typeof p === 'string')) {
         players = saved.players; hero = saved.hero; villain = saved.villain; seed = saved.seed;
+        if (saved.mirror) mirrors = parseMirrors(saved.mirror);
       }
     } catch { /* Ignore invalid browser preferences. */ }
     players = players.map((player, seat) => (params.get(`seat${seat + 1}`) ?? player) as PlayerChoice);
+    if (params.has('mirror')) {
+      try { mirrors = parseMirrors(JSON.parse(params.get('mirror')!)); }
+      catch (reason) { fail(reason); }
+    }
     const selected = params.get('trace');
     if (selected) {
       id = selected;
       token = localStorage.getItem(`etude.watch.${id}`) ?? '';
       busy = true;
-      void inspect(0).catch(fail).finally(() => busy = false);
+      const selectedDecision = params.has('decision') ? Number(params.get('decision')) : -1;
+      const initialDecision = Number.isSafeInteger(selectedDecision) && selectedDecision >= 0 ? selectedDecision : -1;
+      void inspect(initialDecision).catch(fail).finally(() => busy = false);
     }
   });
 
@@ -101,12 +118,15 @@
   async function inspect(index: number): Promise<void> {
     const next = await api<WatchDecision>(`/api/watch/${id}/decisions/${index}?reveal=${reveal}`);
     current = next;
+    retryMirror = next.mirror_retry?.code === 'mirror_deadline_exceeded';
+    error = retryMirror ? next.mirror_retry!.message : '';
+    activeMirrors = next.mirror ? parseMirrors(next.mirror) : [null, null];
     // Use the decision's permitted view even when spectator reveal is enabled.
     presentationPlayer.loadPrefix([{
       events: next.presentation ?? [],
       labels: presentationLabelsFromObservation(next.decision.frame.projection),
     }], `watch:${id}:viewer:${next.decision.viewer}`, false);
-    ordinal = index;
+    ordinal = index === -1 ? next.count - 1 : index;
     count = next.count;
     finished = next.finished;
     revision = next.count;
@@ -117,10 +137,11 @@
     busy = true; playing = false; error = ''; reveal = false;
     try {
       const next = await api<{id: string; token: string}>('/api/watch', {
-        players, hero_deck: hero, villain_deck: villain, seed, villain_sims: 16,
+        players, hero_deck: hero, villain_deck: villain, seed, villain_sims: 16, mirror: mirrors,
       });
-      localStorage.setItem('etude.watch.setup', JSON.stringify({players, hero, villain, seed}));
+      localStorage.setItem('etude.watch.setup', JSON.stringify({players, hero, villain, seed, mirror: mirrors}));
       id = next.id; token = next.token; revision = 0; current = null; count = 0; finished = false;
+      activeMirrors = [...mirrors];
       localStorage.setItem(`etude.watch.${id}`, token);
       rememberRecordCredential(token);
       replaceState(`/replay?watch=1&trace=${encodeURIComponent(id)}`, {});
@@ -131,17 +152,18 @@
 
   async function nextDecision(): Promise<void> {
     if (busy || restored) return;
-    busy = true; error = '';
+    busy = true; error = ''; retryMirror = false;
     try {
       if (current && ordinal + 1 < count) await inspect(ordinal + 1);
       else if (!finished) {
+        computing = true;
         const next = await api<{revision: number; finished: boolean}>(`/api/watch/${id}/step`, {revision});
         revision = next.revision;
         finished = next.finished;
         await inspect(revision - 1);
       } else playing = false;
     } catch (reason) { fail(reason); }
-    finally { busy = false; }
+    finally { busy = false; computing = false; }
   }
 
   async function seek(index: number): Promise<void> {
@@ -242,10 +264,15 @@
 </script>
 
 <main class="mx-auto w-full max-w-[1400px] px-4 py-6">
+  {#if id && !current && !busy}
+    <button class="btn btn-primary mb-3" onclick={() => void nextDecision()}>{retryMirror ? 'Retry search' : 'Step decision'}</button>
+  {/if}
+  <MirrorThinking active={computing && activeMirrors.some(spec => spec !== null)}
+    budget={activeMirrors.map((spec, seat) => spec ? `Seat ${seat + 1} mirror ${spec.worlds}×${spec.depth}` : '').filter(Boolean).join(' · ')} />
   <div class="rounded-sm border border-line bg-panel p-6 shadow-sheet">
     <h1 class="type-title text-display">{finished ? 'Replay' : 'Watch two bots'}</h1>
     {#if current}
-      {#if current.source_kind}<p class="type-label mt-2 text-ink-2">{current.source_kind === 'training' ? 'Training game' : 'Evaluation game'}</p>{/if}
+      {#if current.source_kind}<p class="type-label mt-2 text-ink-2">{current.source_kind === 'play' ? 'Recorded Play game' : current.source_kind === 'training' ? 'Training game' : 'Evaluation game'}</p>{/if}
       <p class="type-annotation mt-2 text-ink-2">Seat 1: {playerName(0)} · Seat 2: {playerName(1)}</p>
     {/if}
     <p class="type-annotation mt-2 text-ink-2">Start with the acting bot's view; Show both hands opens spectator analysis. Each bot chooses using only its own information.</p>
@@ -256,7 +283,8 @@
         {#each [0, 1] as seat}
           <PlayerPicker label={`Seat ${seat + 1}`} value={players[seat]} {trained} {extension} {catalogError}
             setup={{hero_deck: hero, villain_deck: villain}}
-            referencePlayers={choices} onChange={value => players[seat] = value} />
+            referencePlayers={choices} onChange={value => players[seat] = value}
+            mirror={mirrors[seat]} onMirrorChange={value => mirrors[seat] = value} />
         {/each}
         <DeckSelector {hero} {villain} heroLabel="Seat 1 deck" villainLabel="Seat 2 deck" onHeroChange={v => hero = v} onVillainChange={v => villain = v} />
         <label class="flex flex-col gap-2 type-label">Deal seed<input class="w-32 rounded border border-line bg-field p-2" bind:value={seed} inputmode="numeric" /></label>
@@ -280,7 +308,7 @@
     {#if current}
       <div class="flex flex-wrap items-center gap-3 py-4">
         <button class="btn btn-secondary" disabled={busy || ordinal === 0 || restored !== null} onclick={() => void seek(ordinal - 1)}>Previous decision</button>
-        <button class="btn btn-primary" disabled={busy || restored !== null || (finished && ordinal + 1 === count)} onclick={() => { playing = false; void nextDecision(); }}>Step decision</button>
+        <button class="btn btn-primary" disabled={busy || restored !== null || (finished && ordinal + 1 === count)} onclick={() => { playing = false; void nextDecision(); }}>{retryMirror && ordinal + 1 === count ? 'Retry search' : 'Step decision'}</button>
         <button class="btn btn-secondary" disabled={restored !== null || (finished && ordinal + 1 === count)} onclick={() => playing = !playing}>{playing ? 'Pause' : 'Play'}</button>
         <button class="btn btn-secondary" disabled={restored !== null || (finished && ordinal + 1 === count)} onclick={() => { speed = 16; playing = true; }}>Fast-forward</button>
         <label>Speed <select bind:value={speed}><option value={1}>1×</option><option value={4}>4×</option><option value={16}>16×</option></select></label>
@@ -301,8 +329,8 @@
           {:else}
             <DecisionSurface frame={current.decision.frame} readOnly chosenOffer={current.decision.offer_id} />
             <DecisionAdvice mode="watch" frame={current.decision.frame} offers={current.decision.frame.offers} recorded={current.outputs} chosenOffer={current.decision.offer_id} scenarios={[]} selectedScenarioId="" evidence={null} deltas={null} status="ok" reason={null} advisorId="" computeId="" onSelectScenario={() => {}} />
-            <button class="btn btn-secondary mt-4" disabled={busy || !token} onclick={() => void anotherLine()}>Try another line</button>
-            {#if !token}<p class="type-caption mt-2">Study requires the original watch session.</p>{/if}
+            {#if current.source_kind !== 'play'}<button class="btn btn-secondary mt-4" disabled={busy || !token} onclick={() => void anotherLine()}>Try another line</button>{:else}<a class="type-caption underline" href={`/replay?trace=${encodeURIComponent(id)}`}>Return to the Play replay</a>{/if}
+            {#if !token && current.source_kind !== 'play'}<p class="type-caption mt-2">Study requires the original watch session.</p>{/if}
           {/if}
         </aside>
       </div>
