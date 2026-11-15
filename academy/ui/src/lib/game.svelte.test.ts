@@ -154,16 +154,24 @@ describe('GameStore', () => {
     expect(store.actions).toEqual([]);
   });
 
-  it('marks failed resume and clears stale session state', () => {
+  it('keeps the last confirmed table readable after authority is lost', () => {
     const store = createGameStore();
-    store.applyObservation(makeObservation(), [], 'session-a', 'token-a');
-
+    const frame = structuredClone(boltProtocolFixture.recovery.frame);
+    store.applyFrame(frame, 'session-a', 'token-a');
+    store.recordingId = 'saved-attempt';
+    store.beginCommand();
+    store.beginFastForward();
     store.markResumeFailed('expired');
 
     expect(store.resumeFailed).toBe(true);
     expect(store.sessionId).toBeNull();
     expect(store.resumeToken).toBeNull();
-    expect(store.observation).toBeNull();
+    expect(store.protocolFrame).toEqual(frame);
+    expect(store.observation).toEqual(frame.projection);
+    expect(store.recordingId).toBe('saved-attempt');
+    expect(store.commandPending).toBe(false);
+    expect(store.fastForwarding).toBe(false);
+    expect(store.decisionStatus).toContain('Interrupted');
   });
 
   it('starts with default stops and toggles individual stop steps', () => {

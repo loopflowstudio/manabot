@@ -453,6 +453,11 @@ pub struct PresentationEvent {
     pub kind: PresentationKind,
 }
 
+// A receipt identifies the committed deliberate Command transition. Its
+// resulting revision and hash are fixed before subsequent automation or bot
+// work. An update may coalesce later transitions into a newer frame; the
+// receipt still names the original commitment and never changes on retry.
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct CommandReceipt {
     pub command_id: CommandId,

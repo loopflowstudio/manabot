@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const port = process.env.ACADEMY_POLICY_PORT ?? '8377';
 export default defineConfig({
-  testDir: './e2e', testMatch: 'policy-runtime.spec.ts',
+  testDir: './e2e', testMatch: ['policy-runtime.spec.ts', 'input-recovery.spec.ts'],
   outputDir: './test-results/policy/browser', timeout: 60_000, workers: 1,
   expect: { timeout: 15_000 },
   use: { baseURL: `http://127.0.0.1:${port}`, browserName: 'chromium', reducedMotion: 'reduce',

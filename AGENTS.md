@@ -368,6 +368,9 @@ admission. Admission-rejection fixtures must mark the config as submitted
   Vite dev servers. Running `svelte-kit sync` or a build during browser proofs
   can reload active pages and destroy in-page revision probes; use isolated
   ports and stable generated files for concurrent headless runs.
+- Give each Academy browser-proof subprocess its own proof/artifact directory,
+  including checkpoints and traces. Policy registration freezes artifact identity;
+  another process rewriting the same checkpoint makes a live selection stale.
 
 ### Card definitions
 

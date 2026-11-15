@@ -6,13 +6,12 @@ view. The mixed canonical record and retained roots remain server-private.
 
 from contextlib import ExitStack
 from dataclasses import asdict, replace
-import logging
 from typing import Any, Literal, TypedDict
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
-from managym.bots import BotPolicy, choose_bot
+from managym.bots import BotPolicy
 from managym.mirror_search import SearchError, SearchSpec
 from managym.policy import PolicyRunner
 
@@ -150,28 +149,12 @@ def step_watch(trace_id: str, token: str | None, expected_revision: int) -> Watc
     assert context is not None
     assert game.watch_policies is not None
     game.search_retry = None
-    try:
-        game._bot_decision = choose_bot(game.watch_policies[seat], game.env, game.obs)
-    except SearchError as exc:
-        if exc.reason == "search_deadline_exceeded":
-            game.search_retry = {
-                "code": exc.reason,
-                "message": str(exc),
-                "match_id": game.match_id,
-                "expected_revision": game.revision,
-            }
-        raise
-    except ValueError as exc:
-        # Nothing was committed; the pending decision stays for an explicit retry.
-        raise HTTPException(
-            422, f"Seat {seat + 1} policy could not choose: {exc}"
-        ) from exc
-    except Exception as exc:
-        logging.getLogger(__name__).exception("Watch policy failed")
-        raise HTTPException(
-            500,
-            f"Seat {seat + 1} policy failed ({type(exc).__name__}); see the server log.",
-        ) from exc
+    proposal = game._choose_bot(game.watch_policies[seat])
+    if proposal is None:
+        assert game.search_retry is not None
+        if game.search_retry["code"].startswith("search_"):
+            raise SearchError(game.search_retry["code"], game.search_retry["message"])
+        raise HTTPException(422, dict(game.search_retry))
     offer_id = next(
         key
         for key, index in context.action_by_offer.items()

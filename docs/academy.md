@@ -14,6 +14,7 @@ digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 - [Shared decision surface](#shared-decision-surface)
 - [Using the laptop table](#using-the-laptop-table)
 - [Play and Inspect modes](#play-and-inspect-modes)
+- [Pending input, waits and recovery](#pending-input-waits-and-recovery)
 - [Choosing priority stops](#choosing-priority-stops)
 - [Reading consequences and controlling narration](#reading-consequences-and-controlling-narration)
 - [Choice navigation](#choice-navigation)
@@ -173,8 +174,10 @@ The launch address is good for as long as that server runs. Opened in another
 browser it starts that browser's own game with the same decks and opponent.
 With `--seed`, each opening deals the same game; without it, each opening
 deals afresh.
-After the server stops the address means nothing: the page says the
-launch is unknown and shows ordinary setup, so run the command again.
+After the server stops, the address cannot restore its live game. A tab that
+already started it shows **Interrupted**; choose **New game** explicitly to
+play again. Opening an unknown launch without a retained game shows ordinary
+setup; run the command again to create a new launch.
 
 ### Open a replay directly
 
@@ -469,8 +472,10 @@ readable and action submission is disabled. Reconnect or reload in the same
 tab to recover the actual pending decision. If a choice is rejected because
 the game has advanced, inspect the refreshed prompt and choose again. A
 submitted action cannot be cancelled by clearing inspection or going back.
-Reloading a configured launch in its tab resumes that game; a separate tab or
-another launch has its own game.
+Reloading a configured launch in its tab resumes that game while its server
+session remains available; a separate tab or another launch has its own game.
+See [Pending input, waits and recovery](#pending-input-waits-and-recovery) if
+recovery fails.
 
 For bot inspection, open **Watch** or a recording in **Replay**. The shared
 decision surface shows the acting seat's permitted view and the complete legal
@@ -513,6 +518,63 @@ unavailable while disconnected, awaiting a submitted action or changing settings
 These live-play shortcuts do not submit moves in Watch, recorded Replay or Study;
 use their own decision controls. Cancellation only discards local selection:
 after commitment, costs and revealed information remain committed.
+
+### Pending input, waits and recovery
+
+Cast a spell, then follow its target and payment prompts. If the bot's next
+decision fails, your submitted choice stays committed and the board stays
+visible. Read the failure, then choose **Retry bot decision**, or **Retry search**
+for a search failure, when offered. Retrying asks the same bot to finish its
+pending decision; it does not cast your spell again.
+
+**Who chooses.** Read the chooser and requested input beside the current prompt.
+The player choosing can differ from the player whose turn it is. Target and
+cost prompts identify their source and required input. Focus or inspect a
+visible card to discover its current cast or attack restriction; payment
+guidance explains when the complete cost cannot be paid. A reason describes
+the current decision and may change after you act. Finish a pending target or
+cost choice before trying another spell. Inspection and **Show all** keep the
+complete legal choices accessible. Older recordings without explanations say
+they were not recorded.
+
+**What is taking time.** Live status distinguishes loading a bot, choosing its
+action, searching and advancing the live game. When a wait lasts more than a
+second, elapsed time shows how long that operation has been running; it is
+not a completion estimate. Recorded playback shows saved choices and
+consequences without running a bot. Pausing narration affects presentation
+only. **Disconnected** or **Reconnecting** takes precedence when the connection
+cannot confirm the live state. The last board remains readable, with submission
+disabled until recovery confirms the current decision.
+
+**Retrying a bot.** An unsuccessful bot proposal leaves its native decision
+unchanged. Retry is explicit; reloading, reconnecting or changing priority stops
+does not retry it or select a replacement action. Costs already committed by
+earlier choices remain spent. If the bot cannot safely continue, Academy
+explains why retry is unavailable; start another game explicitly. A bot-load
+failure leaves setup available to correct the selection and try again.
+
+**Recovering a submitted choice.** If the connection drops just after you act,
+reconnect or reload in the same tab and wait for recovery before choosing again.
+Academy keeps the unresolved submission with that tab's game identity and
+checks whether it was accepted. If it must resend, it resends that exact
+submission so an accepted choice is not applied twice. If the decision or your
+permission changed, Academy reports the stale or unknown outcome and refreshes
+the table. Going back or clearing a selection cannot cancel a submission.
+In live Watch, recovery checks the recorded position before another step;
+do not repeat a step just because its reply was lost.
+
+**When recovery is impossible.** A server restart or an expired live session
+shows **Interrupted**, retaining the last known table and a recording link
+when available. Saved recordings preserve available evidence; they cannot
+restore the live game. Choose **New game** explicitly to return to setup.
+Academy never silently deals a replacement or replays your submissions into
+a new game. Keep the original tab open for temporary connection failures:
+resume credentials and unresolved input belong to that tab's session storage.
+
+Back, Escape and clear controls discard only unsubmitted local selections.
+Once an action commits, its costs and revealed information remain committed.
+Cancellation is possible only when the current legal choices explicitly offer
+it; there is no general browser undo.
 
 ### Choosing priority stops
 

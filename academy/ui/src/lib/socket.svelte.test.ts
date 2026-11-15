@@ -170,7 +170,8 @@ describe('GameSocketController offline gameplay', () => {
     const reason = 'The opponent could not continue this game: Policy returned a stale decision binding.';
     deliver(controller, { type: 'error', message: reason, session_ended: true });
     expect(gameStore.errorMessage).toBe(reason);
-    expect(gameStore.protocolFrame).toBeNull();
+    expect(gameStore.protocolFrame).toEqual(recovery.frame);
+    expect(gameStore.resumeFailed).toBe(true);
     expect(internals.launchId).toBeNull();
     expect(internals.outboundQueue.filter(message => message.type === 'new_game')).toHaveLength(0);
   });
@@ -197,6 +198,75 @@ describe('GameSocketController offline gameplay', () => {
 
     expect(gameStore.protocolFrame?.revision).toBe(43);
     expect(queue).toEqual([]);
+  });
+});
+
+describe('unresolved Command recovery', () => {
+  function pendingController(grant?: number) {
+    const controller = new GameSocketController();
+    const sent: string[] = [];
+    const request = { type: 'command' as const,
+      ...(grant === undefined ? {} : { grant_revision: grant }),
+      command: structuredClone(boltProtocolFixture.command) };
+    const state = controller as unknown as {
+      pendingCommand: typeof request | null;
+      pendingResume: boolean;
+      socket: { send(raw: string): void; close(): void };
+      reconcileCommand(recovery: RecoveryEnvelope): void;
+    };
+    state.pendingCommand = request;
+    state.socket = { send: raw => sent.push(raw), close: () => {} };
+    gameStore.prepareForNewGame();
+    gameStore.table = null;
+    gameStore.beginCommand();
+    return { controller, state, request, sent };
+  }
+
+  it('resends exactly the original envelope only at the original decision', () => {
+    const { state, request, sent } = pendingController();
+    const recovery = structuredClone(boltProtocolFixture.recovery);
+    recovery.accepted_commands = [];
+    state.reconcileCommand(recovery);
+    expect(sent.map(raw => JSON.parse(raw))).toEqual([request]);
+    expect(state.pendingCommand).toEqual(request);
+    expect(gameStore.commandPending).toBe(true);
+  });
+
+  it('retires a proven accepted submission without sending another choice', () => {
+    const { state, request, sent } = pendingController();
+    const recovery = structuredClone(boltProtocolFixture.recovery);
+    recovery.accepted_commands = [{ command_id: request.command.command_id, actor: 0,
+      accepted_at: request.command.expected_revision, resulting_revision: 43,
+      resulting_frame_hash: 'committed' }];
+    state.reconcileCommand(recovery);
+    expect(sent).toEqual([]);
+    expect(state.pendingCommand).toBeNull();
+    expect(gameStore.commandPending).toBe(false);
+  });
+
+  it.each(['revision', 'prompt', 'match', 'grant'])('does not replay a stale %s or infer execution from a missing receipt', kind => {
+    const { state, sent } = pendingController(kind === 'grant' ? 99 : undefined);
+    const recovery = structuredClone(boltProtocolFixture.recovery);
+    recovery.accepted_commands = [];
+    if (kind === 'revision') recovery.frame.revision += 1;
+    if (kind === 'prompt') recovery.frame.prompt!.id += 1;
+    if (kind === 'match') recovery.frame.match_id = 'another-game';
+    state.reconcileCommand(recovery);
+    expect(sent).toEqual([]);
+    expect(state.pendingCommand).toBeNull();
+    expect(gameStore.errorMessage).toContain('stale or unknown outcome');
+    expect(gameStore.commandPending).toBe(false);
+  });
+
+  it('interrupts an expired launched session without queuing a replacement', () => {
+    const { controller, state, sent } = pendingController();
+    gameStore.applyFrame(boltProtocolFixture.recovery.frame);
+    state.pendingResume = true;
+    deliver(controller, {type: 'error', message: 'Session expired.'});
+    expect(sent).toEqual([]);
+    expect(gameStore.protocolFrame?.match_id).toBe(boltProtocolFixture.command.match_id);
+    expect(gameStore.resumeFailed).toBe(true);
+    expect(gameStore.commandPending).toBe(false);
   });
 });
 

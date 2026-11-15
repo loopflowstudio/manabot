@@ -43,6 +43,7 @@
   let searches = $state<(MirrorSearchSpec | null)[]>([null, null]);
   let activeSearches = $state<(MirrorSearchSpec | null)[]>([null, null]);
   let retrySearch = $state(false);
+  let retryLabel = $state('Retry search');
   let computing = $state(false);
   let error = $state('');
   let ready = $state(false);
@@ -65,7 +66,10 @@
     });
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
-      if (payload.detail?.code === 'search_deadline_exceeded') retrySearch = true;
+      if (payload.detail?.code === 'search_deadline_exceeded' || payload.detail?.code === 'policy_failed') {
+        retrySearch = true;
+        retryLabel = payload.detail.code.startsWith('search_') ? 'Retry search' : 'Retry bot decision';
+      }
       if (typeof payload.detail?.revision === 'number') revision = payload.detail.revision;
       if (payload.detail?.search) activeSearches = parseMirrorSearches(payload.detail.search);
       if (typeof payload.detail?.message === 'string') throw new Error(payload.detail.message);
@@ -118,7 +122,8 @@
   async function inspect(index: number): Promise<void> {
     const next = await api<WatchDecision>(`/api/watch/${id}/decisions/${index}?reveal=${reveal}`);
     current = next;
-    retrySearch = next.search_retry?.code === 'search_deadline_exceeded';
+    retrySearch = !!next.search_retry;
+    retryLabel = next.search_retry?.code.startsWith('search_') ? 'Retry search' : 'Retry bot decision';
     activeSearches = next.search ? parseMirrorSearches(next.search) : [null, null];
     // Use the decision's permitted view even when spectator reveal is enabled.
     presentationPlayer.loadPrefix([{
@@ -156,10 +161,19 @@
       if (current && ordinal + 1 < count) await inspect(ordinal + 1);
       else if (!finished) {
         computing = true;
-        const next = await api<{revision: number; finished: boolean}>(`/api/watch/${id}/step`, {revision});
-        revision = next.revision;
-        finished = next.finished;
-        await inspect(revision - 1);
+        const pendingRevision = revision;
+        try {
+          const next = await api<{revision: number; finished: boolean}>(`/api/watch/${id}/step`, {revision});
+          revision = next.revision;
+          finished = next.finished;
+          await inspect(revision - 1);
+        } catch (reason) {
+          // The step may have committed before its reply was lost. Read the
+          // recorded frontier once; never repeat production to recover a reply.
+          playing = false;
+          try { await inspect(pendingRevision); }
+          catch { throw reason; }
+        }
       } else playing = false;
     } catch (reason) { fail(reason); }
     finally { busy = false; computing = false; }
@@ -264,7 +278,7 @@
 
 <main class="mx-auto w-full max-w-[1400px] px-4 py-6">
   {#if id && !current && !busy}
-    <button class="btn btn-primary mb-3" onclick={() => void nextDecision()}>{retrySearch ? 'Retry search' : 'Step decision'}</button>
+    <button class="btn btn-primary mb-3" onclick={() => void nextDecision()}>{retrySearch ? retryLabel : 'Step decision'}</button>
   {/if}
   <SearchThinking active={computing && activeSearches.some(spec => spec !== null)}
     budget={activeSearches.map((spec, seat) => spec ? `Seat ${seat + 1} mirror ${spec.worlds}×${spec.depth}` : '').filter(Boolean).join(' · ')} />
@@ -307,7 +321,7 @@
     {#if current}
       <div class="flex flex-wrap items-center gap-3 py-4">
         <button class="btn btn-secondary" disabled={busy || ordinal === 0 || restored !== null} onclick={() => void seek(ordinal - 1)}>Previous decision</button>
-        <button class="btn btn-primary" disabled={busy || restored !== null || (finished && ordinal + 1 === count)} onclick={() => { playing = false; void nextDecision(); }}>{retrySearch && ordinal + 1 === count ? 'Retry search' : 'Step decision'}</button>
+        <button class="btn btn-primary" disabled={busy || restored !== null || (finished && ordinal + 1 === count)} onclick={() => { playing = false; void nextDecision(); }}>{retrySearch && ordinal + 1 === count ? retryLabel : 'Step decision'}</button>
         <button class="btn btn-secondary" disabled={restored !== null || (finished && ordinal + 1 === count)} onclick={() => playing = !playing}>{playing ? 'Pause' : 'Play'}</button>
         <button class="btn btn-secondary" disabled={restored !== null || (finished && ordinal + 1 === count)} onclick={() => { speed = 16; playing = true; }}>Fast-forward</button>
         <label>Speed <select bind:value={speed}><option value={1}>1×</option><option value={4}>4×</option><option value={16}>16×</option></select></label>

@@ -19,9 +19,11 @@ import type {
 } from './shared-table-protocol';
 import type {
   ClientMessage,
+  Command,
   FrameUpdate,
   LaunchSetup,
   RecoveryEnvelope,
+  ExperienceFrame,
   ServerMessage,
 } from './types';
 
@@ -39,6 +41,7 @@ function applyLaunchSetup(setup: LaunchSetup): void {
 }
 
 const RESUME_STORAGE_KEY = 'etude.gui.resume';
+type PendingCommand = Extract<SharedTableRequest, { type: 'command' }>;
 const VALID_SERVER_TYPES = new Set([
   'observation',
   'game_over',
@@ -59,6 +62,9 @@ interface ResumeCredentials {
   session_id: string;
   resume_token: string;
   presentation_cursor?: number;
+  pending_command?: PendingCommand;
+  last_frame?: ExperienceFrame;
+  recording_id?: string;
 }
 
 function loadResumeCredentials(): ResumeCredentials | null {
@@ -86,6 +92,9 @@ function loadResumeCredentials(): ResumeCredentials | null {
     return {
       session_id: parsed.session_id,
       resume_token: parsed.resume_token,
+      ...(typeof parsed.recording_id === 'string' ? { recording_id: parsed.recording_id } : {}),
+      ...(parsed.last_frame?.match_id && parsed.last_frame?.projection ? { last_frame: parsed.last_frame } : {}),
+      ...(validPendingCommand(parsed.pending_command) ? { pending_command: parsed.pending_command } : {}),
       ...(presentationCursor === undefined
         ? {}
         : { presentation_cursor: presentationCursor }),
@@ -93,6 +102,17 @@ function loadResumeCredentials(): ResumeCredentials | null {
   } catch {
     return null;
   }
+}
+
+function validPendingCommand(value: unknown): value is PendingCommand {
+  if (!value || typeof value !== 'object') return false;
+  const request = value as Partial<PendingCommand>;
+  const command = request.command as Partial<Command> | undefined;
+  return request.type === 'command' && !!command
+    && typeof command.command_id === 'string' && typeof command.match_id === 'string'
+    && Number.isSafeInteger(command.expected_revision) && Number.isSafeInteger(command.prompt_id)
+    && Number.isSafeInteger(command.offer_id) && Array.isArray(command.answers) && command.answers.length === 0
+    && (request.grant_revision === undefined || Number.isSafeInteger(request.grant_revision));
 }
 
 function saveResumeCredentials(credentials: ResumeCredentials): void {
@@ -108,6 +128,7 @@ function clearResumeCredentials(): void {
     return;
   }
   window.sessionStorage.removeItem(RESUME_STORAGE_KEY);
+  window.sessionStorage.removeItem(LAUNCH_STORAGE_KEY);
 }
 
 export function parseServerMessage(raw: string): TableServerMessage | null {
@@ -135,7 +156,7 @@ export class GameSocketController {
   private intentionallyClosed = false;
   private pendingResume = false;
   private outboundQueue: SharedTableRequest[] = [];
-  private inFlightCommand: string | null = null;
+  private pendingCommand: PendingCommand | null = null;
   private presentationCursor: number | null = null;
   private loadingHistory = false;
 
@@ -175,6 +196,10 @@ export class GameSocketController {
       if (!this.outboundQueue.some((message) => message.type === 'new_game')) {
         const credentials = loadResumeCredentials();
         if (credentials) {
+          if (!gameStore.protocolFrame && credentials.last_frame) gameStore.applyFrame(credentials.last_frame);
+          gameStore.recordingId = credentials.recording_id ?? gameStore.recordingId;
+          this.pendingCommand = credentials.pending_command ?? this.pendingCommand;
+          gameStore.beginCommand();
           this.loadingHistory = this.presentationCursor === null;
           this.pendingResume = true;
           // A persisted cursor outlives the in-memory history. Only request a
@@ -193,7 +218,7 @@ export class GameSocketController {
     };
 
     socket.onmessage = (event: MessageEvent<string>) => {
-      this.handleRawMessage(event.data);
+      if (this.socket === socket) this.handleRawMessage(event.data);
     };
 
     socket.onerror = () => {
@@ -201,6 +226,7 @@ export class GameSocketController {
     };
 
     socket.onclose = () => {
+      if (this.socket !== socket) return;
       this.socket = null;
       if (this.intentionallyClosed) {
         gameStore.setConnection('disconnected');
@@ -272,7 +298,7 @@ export class GameSocketController {
   sendAction(offerId: number): boolean {
     const frame = gameStore.protocolFrame;
     const prompt = frame?.prompt;
-    if (!frame || !prompt || this.inFlightCommand !== null) {
+    if (!frame || !prompt || this.pendingCommand !== null || this.pendingResume || gameStore.resumeFailed) {
       return false;
     }
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
@@ -281,23 +307,29 @@ export class GameSocketController {
       return false;
     }
 
-    const commandId = crypto.randomUUID();
-    this.inFlightCommand = commandId;
-    gameStore.beginCommand();
-    this.socket.send(JSON.stringify({
+    if (browser && !loadResumeCredentials()) {
+      gameStore.setError('This tab has no resume authority. Recover the table before choosing again.');
+      return false;
+    }
+    const request: PendingCommand = {
       type: 'command',
-      ...(gameStore.table
-        ? { grant_revision: gameStore.table.access.grant_revision }
-        : {}),
+      ...(gameStore.table ? { grant_revision: gameStore.table.access.grant_revision } : {}),
       command: {
-        command_id: commandId,
-        match_id: frame.match_id,
-        expected_revision: frame.revision,
-        prompt_id: prompt.id,
-        offer_id: offerId,
-        answers: [],
+        command_id: crypto.randomUUID(), match_id: frame.match_id,
+        expected_revision: frame.revision, prompt_id: prompt.id,
+        offer_id: offerId, answers: [],
       },
-    } satisfies ClientMessage));
+    };
+    this.pendingCommand = request;
+    try {
+      this.persistResumeState();
+    } catch {
+      this.pendingCommand = null;
+      gameStore.setError('Could not retain your submission in this tab. Free browser storage before trying again.');
+      return false;
+    }
+    gameStore.beginCommand();
+    this.socket.send(JSON.stringify(request));
     return true;
   }
 
@@ -325,6 +357,7 @@ export class GameSocketController {
   }
 
   sendPassTurn(): boolean {
+    if (this.pendingResume || gameStore.resumeFailed || this.pendingCommand) return false;
     gameStore.beginFastForward();
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
       gameStore.endFastForward();
@@ -455,7 +488,13 @@ export class GameSocketController {
 
     if (message.type === 'table_snapshot') {
       this.pendingResume = false;
+      gameStore.endCommand();
       this.persistControlCredentials(message);
+      if (this.pendingCommand) {
+        this.clearPendingCommand();
+        gameStore.endCommand();
+        gameStore.setError('The unresolved submission has an unknown outcome; this table has no live decision.');
+      }
       return;
     }
 
@@ -499,6 +538,8 @@ export class GameSocketController {
     if (message.type === 'control_error') {
       gameStore.newGamePending = false;
       gameStore.endFastForward();
+      this.clearPendingCommand();
+      gameStore.endCommand();
       gameStore.setError(message.message);
       return;
     }
@@ -509,8 +550,7 @@ export class GameSocketController {
         sessionStorage.setItem(LAUNCH_STORAGE_KEY, JSON.stringify({ id: message.launch, session_id: message.session_id, setup: message.launch_setup }));
       }
       this.pendingResume = false;
-      this.inFlightCommand = null;
-      gameStore.endCommand();
+      if (!this.pendingCommand) gameStore.endCommand();
       if (message.recovery) {
         const sessionId = message.type === 'observation' ? message.session_id : undefined;
         const resumeToken = message.type === 'observation' ? message.resume_token : undefined;
@@ -521,6 +561,7 @@ export class GameSocketController {
           message.log ?? [],
           message.auto_passed ?? 0,
         );
+        this.reconcileCommand(message.recovery);
       } else if (message.type === 'observation') {
         gameStore.applyObservation(
           message.data,
@@ -551,7 +592,10 @@ export class GameSocketController {
     }
 
     if (message.type === 'command_outcome') {
-      this.inFlightCommand = null;
+      const outcomeId = message.status === 'accepted' ? message.update.receipt?.command_id
+        : message.status === 'duplicate' ? message.receipt.command_id : message.rejection.command_id;
+      if (this.pendingCommand && outcomeId !== this.pendingCommand.command.command_id) return;
+      this.clearPendingCommand();
       gameStore.endCommand();
       if (message.status === 'accepted') {
         this.applyUpdate(message.update);
@@ -570,13 +614,10 @@ export class GameSocketController {
       this.pendingResume = false;
       clearResumeCredentials();
       this.outboundQueue = [];
-      presentationPlayer.clear();
-      gameStore.markResumeFailed('Previous session expired or invalid. Start a new game.');
+      this.pendingCommand = null;
+      gameStore.newGamePending = false;
+      gameStore.markResumeFailed('The previous live session is unavailable. Choose New game explicitly to play again.');
       this.disconnect();
-      if (this.launchId) {
-        gameStore.newGamePending = false;
-        this.sendNewGame({ launch: this.launchId });
-      }
       return;
     }
 
@@ -585,14 +626,43 @@ export class GameSocketController {
     gameStore.newGamePending = false;
     if (message.session_ended) {
       // The server stopped this game; resuming or redealing its launch would hide why.
-      this.inFlightCommand = null;
+      this.pendingCommand = null;
       this.launchId = null;
       clearResumeCredentials();
-      if (browser) sessionStorage.removeItem(LAUNCH_STORAGE_KEY);
       gameStore.markResumeFailed(message.message);
       return;
     }
     gameStore.setError(message.message);
+  }
+
+  private clearPendingCommand(): void {
+    this.pendingCommand = null;
+    this.persistResumeState();
+  }
+
+  private reconcileCommand(recovery: RecoveryEnvelope): void {
+    const request = this.pendingCommand;
+    if (!request) return;
+    const command = request.command;
+    if (recovery.frame.match_id === command.match_id
+      && recovery.accepted_commands.some(receipt => receipt.command_id === command.command_id)) {
+      this.clearPendingCommand();
+      gameStore.endCommand();
+      return;
+    }
+    const frame = recovery.frame;
+    const sameGrant = request.grant_revision === gameStore.table?.access.grant_revision;
+    if (frame.match_id === command.match_id && frame.revision === command.expected_revision
+      && frame.prompt?.id === command.prompt_id && sameGrant
+      && gameStore.hasCapability('submit_live_command')) {
+      // No replacement ID or choice: the server deduplicates this exact envelope.
+      gameStore.beginCommand();
+      this.socket?.send(JSON.stringify(request));
+      return;
+    }
+    this.clearPendingCommand();
+    gameStore.endCommand();
+    gameStore.setError('The unresolved submission has a stale or unknown outcome. Review the recovered decision before choosing again.');
   }
 
   private restoreStudyHistory(restored: RestoredReplayDecision): void {
@@ -722,6 +792,9 @@ export class GameSocketController {
     saveResumeCredentials({
       session_id: resolvedSessionId,
       resume_token: resolvedResumeToken,
+      ...(this.pendingCommand ? { pending_command: this.pendingCommand } : {}),
+      ...(gameStore.protocolFrame ? { last_frame: gameStore.protocolFrame } : {}),
+      ...(gameStore.recordingId ? { recording_id: gameStore.recordingId } : {}),
       ...(this.presentationCursor === null
         ? {}
         : { presentation_cursor: this.presentationCursor }),

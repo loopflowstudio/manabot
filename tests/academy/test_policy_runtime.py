@@ -96,8 +96,9 @@ def test_independent_policies_watch_both_seats_and_cleanup(
     with pytest.raises(HTTPException) as refused:
         step_watch(created["id"], created["token"], before)
     assert refused.value.status_code == 422
-    assert refused.value.detail == (
-        "Seat 1 policy could not choose: Policy returned a stale decision binding."
+    assert refused.value.detail["code"] == "policy_failed"
+    assert (
+        refused.value.detail["message"] == "Policy returned a stale decision binding."
     )
     assert game.revision == before
     server._drop_session(created["id"], "test")
@@ -121,10 +122,9 @@ def test_policy_identity_rejects_runner_change(registry: PolicyRegistry) -> None
     assert not factory.sessions
 
 
-def test_failed_opponent_policy_ends_play_with_its_reason(
+def test_failed_opponent_policy_preserves_commitment_until_explicit_retry(
     registry: PolicyRegistry,
 ) -> None:
-    # The browser must show why and neither resume nor redeal the game.
     @dataclass
     class StaleFactory(IndependentFactory):
         def load(self, *, seat: int, seed: int) -> IndependentSession:
@@ -132,25 +132,76 @@ def test_failed_opponent_policy_ends_play_with_its_reason(
             session.stale = True
             return session
 
-    key = registry.register(StaleFactory())
-    config = {"villain_type": "policy", "opponent_sha256": key, "seed": 3}
+    factory = StaleFactory()
+    key = registry.register(factory)
+    config = {
+        "villain_type": "policy",
+        "opponent_sha256": key,
+        "seed": 3,
+        "auto_pass": False,
+    }
     with TestClient(server.app) as client:
         with client.websocket_connect("/ws/play") as websocket:
             websocket.send_json({"type": "new_game", "config": config})
             payload = websocket.receive_json()
-            for _ in range(20):
-                if payload["type"] == "error":
+            for attempt in range(20):
+                if payload.get("search_retry"):
                     break
-                websocket.send_json(
-                    {"type": "action", "index": payload["actions"][-1]["index"]}
-                )
+                frame = payload.get("frame") or payload["update"]["frame"]
+                command = {
+                    "command_id": f"human.{attempt}",
+                    "match_id": frame["match_id"],
+                    "expected_revision": frame["revision"],
+                    "prompt_id": frame["prompt"]["id"],
+                    "offer_id": frame["offers"][-1]["id"],
+                    "answers": [],
+                }
+                websocket.send_json({"type": "command", "command": command})
                 payload = websocket.receive_json()
-    assert payload == {
-        "type": "error",
-        "message": "The opponent could not continue this game: "
-        "Policy returned a stale decision binding.",
-        "session_ended": True,
-    }
+            else:
+                pytest.fail("Never reached the failing bot")
+            assert payload["type"] == "command_outcome"
+            assert payload["status"] == "accepted"
+            receipt = payload["update"]["receipt"]
+            assert receipt["command_id"] == command["command_id"]
+            assert receipt["resulting_revision"] == command["expected_revision"] + 1
+            pending = payload["search_retry"]
+            assert pending["message"] == "Policy returned a stale decision binding."
+            game = next(
+                record.game
+                for record in server.SESSION_REGISTRY.values()
+                if record.game.match_id == command["match_id"]
+            )
+            assert game.env is not None and game.trace is not None
+            digest = game.env.state_digest()
+            events = len(game.trace.events)
+            websocket.send_json({"type": "command", "command": command})
+            duplicate = websocket.receive_json()
+            assert duplicate["status"] == "duplicate"
+            assert duplicate["receipt"] == receipt
+            assert duplicate["recovery"]["frame"]["prompt"] is None
+            assert game.env.state_digest() == digest
+            assert len(game.trace.events) == events
+            # Resume and settings do not call choose or clear the failure.
+            calls = len(factory.sessions[0].seen)
+            websocket.send_json({"type": "set_stops", "auto_pass": False})
+            recovered = websocket.receive_json()
+            assert recovered["search_retry"]["code"] == "policy_failed"
+            assert game.env.state_digest() == digest
+            assert len(factory.sessions[0].seen) == calls
+            factory.sessions[0].stale = False
+            websocket.send_json(
+                {
+                    "type": "retry_search",
+                    "match_id": game.match_id,
+                    "expected_revision": game.revision,
+                }
+            )
+            retried = websocket.receive_json()
+            assert retried["search_retry"] is None
+            assert len(game.trace.events) > events
+            assert game.accepted_commands[command["command_id"]] == receipt
+            assert len(factory.sessions) == 1
 
 
 def test_class_entry_point_is_refused_with_its_fix() -> None:

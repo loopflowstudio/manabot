@@ -194,7 +194,7 @@
     showSetup = false;
   }
 
-  const gameActive = $derived(gameStore.observation !== null && !gameStore.gameOver);
+  const gameActive = $derived(gameStore.observation !== null && !gameStore.gameOver && !gameStore.resumeFailed);
   const pilotCanAct = $derived(gameStore.hasCapability('submit_live_command'));
   const thinkingSearch = $derived(gameStore.newGamePending ? gameStore.mirrorSearch : gameStore.activeMirrorSearch);
   const participantStudying = $derived(gameStore.restoredDecision !== null);
@@ -405,13 +405,16 @@
 
   {#if gameStore.errorMessage}
     <section role="alert" aria-atomic="true" class="mb-4 rounded border border-mountain/50 bg-mountain/20 px-4 py-3 text-mountain-ink">
-      {gameStore.errorMessage}
+      {#if gameStore.resumeFailed}<strong>Interrupted.</strong>{' '}{/if}{gameStore.errorMessage}
+      {#if gameStore.resumeFailed && gameStore.recordingId}
+        <a class="ml-2 underline" href={`/replay?trace=${encodeURIComponent(gameStore.recordingId)}`}>Open saved recording</a>
+      {/if}
     </section>
   {/if}
   {#if gameStore.searchRetry}
     <section role="alert" class="mb-4 rounded border border-line bg-panel px-4 py-3">
       <p>{gameStore.searchRetry.message}</p>
-      <button class="mt-2 rounded border border-line px-3 py-2" disabled={gameStore.commandPending || !pilotCanAct} onclick={sendRetrySearch}>Retry search</button>
+      <button class="mt-2 rounded border border-line px-3 py-2" disabled={gameStore.commandPending || !pilotCanAct || gameStore.connection !== 'connected'} onclick={sendRetrySearch}>{gameStore.searchRetry.code.startsWith('search_') ? 'Retry search' : 'Retry bot decision'}</button>
     </section>
   {/if}
   <SearchThinking active={(gameStore.commandPending || gameStore.newGamePending) && thinkingSearch !== null}

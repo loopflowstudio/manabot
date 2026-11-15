@@ -837,7 +837,7 @@ def close_policies(policies: Iterable[BotPolicy | None]) -> None:
                 resources.callback(policy.close)
 
 
-class PendingSearch(TypedDict):
+class PendingBotDecision(TypedDict):
     code: str
     message: str
     match_id: str
@@ -861,7 +861,7 @@ class GameSession:
         self.watch_mode = watch_mode
         self.watch_policies: tuple[BotPolicy, BotPolicy] | None = None
         self._bot_decision: BotDecision | None = None
-        self.search_retry: PendingSearch | None = None
+        self.search_retry: PendingBotDecision | None = None
         self._id_factory = id_factory or (lambda _kind: secrets.token_urlsafe(16))
         self._clock = clock or trace_store.utc_now_iso
         self.attempt_owner = participant_id(secrets.token_urlsafe(32))
@@ -1218,6 +1218,20 @@ class GameSession:
         base_revision = context.revision
         batch_cursor = self.presentation.next_seq
         self._apply_bound_command(context, command, source="client")
+        # The receipt names the human transition, before any opponent proposal.
+        # A later failure must not make an accepted Command appear unexecuted.
+        committed_frame = self._experience_frame()
+        receipt = {
+            "command_id": command_id,
+            "actor": HERO_PLAYER_INDEX,
+            "accepted_at": base_revision,
+            "resulting_revision": self.revision,
+            "resulting_frame_hash": committed_frame["frame_hash"],
+        }
+        self.accepted_commands[command_id] = receipt
+        while len(self.accepted_commands) > MAX_ACCEPTED_COMMANDS:
+            self.accepted_commands.pop(next(iter(self.accepted_commands)))
+
         self._advance()
         self._last_presentation_cursor = batch_cursor
         presentation = [
@@ -1227,16 +1241,6 @@ class GameSession:
         ]
         frame = self._experience_frame()
         transient = self._drain_surface_metadata()
-        receipt = {
-            "command_id": command_id,
-            "actor": HERO_PLAYER_INDEX,
-            "accepted_at": base_revision,
-            "resulting_revision": self.revision,
-            "resulting_frame_hash": frame["frame_hash"],
-        }
-        self.accepted_commands[command_id] = receipt
-        while len(self.accepted_commands) > MAX_ACCEPTED_COMMANDS:
-            self.accepted_commands.pop(next(iter(self.accepted_commands)))
 
         return {
             "type": "command_outcome",
@@ -1251,7 +1255,7 @@ class GameSession:
         }
 
     def retry_search(self, match_id: str, expected_revision: int) -> dict[str, Any]:
-        """Retry only the bound, uncommitted bot decision after a deadline."""
+        """Retry only the bound, uncommitted bot proposal after an explicit request."""
         if (
             self.watch_mode
             or self.search_retry is None
@@ -1582,6 +1586,36 @@ class GameSession:
             if next_obs.game_over:
                 self._close_policies()
 
+    def _choose_bot(self, policy: BotPolicy) -> BotDecision | None:
+        """Retain failed proposals on the same native decision and policy session.
+
+        Only proposal work belongs here. Native commitment, observer delivery and
+        recording failures must still interrupt: they may follow a mutation.
+        The search_retry wire name is retained for existing clients.
+        """
+        assert self.env is not None and self.obs is not None
+        self._bot_decision = None
+        try:
+            proposal = choose_bot(policy, self.env, self.obs)
+        except Exception as exc:
+            code = exc.reason if isinstance(exc, SearchError) else "policy_failed"
+            if isinstance(exc, (SearchError, ValueError)):
+                message = str(exc)
+            else:
+                logging.getLogger(__name__).exception("Bot proposal failed")
+                message = (
+                    f"Bot decision failed ({type(exc).__name__}); see the server log."
+                )
+            self.search_retry = {
+                "code": code,
+                "message": message,
+                "match_id": self.match_id,
+                "expected_revision": self.revision,
+            }
+            return None
+        self._bot_decision = proposal
+        return proposal
+
     def _auto_play_villain(self) -> None:
         if self.env is None or self.obs is None or self.trace is None:
             return
@@ -1604,30 +1638,10 @@ class GameSession:
                     )
             else:
                 self.authority_fallback_counters["legacy_fixed_action"] += 1
-                try:
-                    self._bot_decision = choose_bot(
-                        self.villain_policy, self.env, self.obs
-                    )
-                    action_index = self._bot_decision.action
-                except SearchError as exc:
-                    if exc.reason != "search_deadline_exceeded":
-                        raise
-                    self.search_retry = {
-                        "code": exc.reason,
-                        "message": str(exc),
-                        "match_id": self.match_id,
-                        "expected_revision": self.revision,
-                    }
+                proposal = self._choose_bot(self.villain_policy)
+                if proposal is None:
                     return
-                except ValueError as exc:
-                    # Validation and provider refusals carry authored reasons.
-                    raise RuntimeError(
-                        f"The opponent could not continue this game: {exc}"
-                    ) from exc
-                except Exception as exc:
-                    raise RuntimeError(
-                        "The opponent could not continue this game."
-                    ) from exc
+                action_index = proposal.action
                 if action_index < 0 or action_index >= len(context.actions):
                     raise RuntimeError(
                         f"Villain policy selected invalid action index: {action_index}"
@@ -1969,7 +1983,7 @@ class GameSession:
         if self.obs is None:
             raise RuntimeError("No observation available.")
 
-        if self.search_retry is not None:
+        if not self.obs.game_over and not _is_hero_turn(self.obs):
             # The pending choice belongs to the bot. Publish the human's view
             # without a human prompt or any of the bot's private legal offers.
             self.published_prompt = None
@@ -3164,14 +3178,17 @@ async def play_socket(websocket: WebSocket) -> None:
                     await _attach_participant_websocket(record, participant, websocket)
                     attached_table_id = record.session_id
                     attached_viewer_id = participant.viewer_id
-                    response = (
-                        record.game.current_message(presentation_cursor)
-                        if record.game.obs is not None
-                        else {"type": "table_snapshot"}
-                    )
-                    await _send_table_response(
-                        record, participant, response, broadcast=True
-                    )
+                    # The worker may still be committing a previous request.
+                    # Never read Env or construct recovery concurrently with it.
+                    async with record.lock:
+                        response = (
+                            record.game.current_message(presentation_cursor)
+                            if record.game.obs is not None
+                            else {"type": "table_snapshot"}
+                        )
+                        await _send_table_response(
+                            record, participant, response, broadcast=True
+                        )
                     continue
                 if isinstance(parsed, ResumeMessage):
                     presentation_cursor = _parse_presentation_cursor(
@@ -3183,14 +3200,17 @@ async def play_socket(websocket: WebSocket) -> None:
                     await _attach_participant_websocket(record, participant, websocket)
                     attached_table_id = record.session_id
                     attached_viewer_id = participant.viewer_id
-                    response = (
-                        record.game.current_message(presentation_cursor)
-                        if record.game.obs is not None
-                        else {"type": "table_snapshot"}
-                    )
-                    await _send_table_response(
-                        record, participant, response, broadcast=True
-                    )
+                    # The worker may still be committing a previous request.
+                    # Never read Env or construct recovery concurrently with it.
+                    async with record.lock:
+                        response = (
+                            record.game.current_message(presentation_cursor)
+                            if record.game.obs is not None
+                            else {"type": "table_snapshot"}
+                        )
+                        await _send_table_response(
+                            record, participant, response, broadcast=True
+                        )
                     continue
 
                 invite_token: str | None = None

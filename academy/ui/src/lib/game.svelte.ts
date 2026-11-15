@@ -85,6 +85,7 @@ export class GameStore {
   sessionId = $state<string | null>(null);
   resumeToken = $state<string | null>(null);
   resumeFailed = $state(false);
+  recordingId = $state<string | null>(null);
   selectedTargetId = $state<number | null>(null);
   opponentChoice = $state<PlayerChoice>('search-64');
   decklists = $state<Decklists>('open');
@@ -111,6 +112,7 @@ export class GameStore {
   updateSeq = $state(0);
 
   get decisionStatus(): string {
+    if (this.resumeFailed) return 'Interrupted — the live session is unavailable.';
     if (this.restoredDecision) return 'Study position — return to live to play.';
     if (this.gameOver) return 'Game over — no next decision.';
     if (this.connection !== 'connected') return 'Waiting for connection — play is unavailable.';
@@ -133,6 +135,7 @@ export class GameStore {
       this.opponentChoice = policyChoice(table.opponent.base_sha256 ?? table.opponent.sha256);
     }
     this.table = table;
+    this.recordingId = table.attempt_id ?? null;
     if (previousRole && previousRole !== table.access.role) {
       this.tableAnnouncement = `You are now the ${table.access.role}.`;
     }
@@ -374,7 +377,15 @@ export class GameStore {
   }
 
   markResumeFailed(message: string): void {
-    this.resetMatchState();
+    // Keep the last confirmed table readable, but retire every input authority.
+    this.fastForwarding = false;
+    this.commandPending = false;
+    this.newGamePending = false;
+    this.searchRetry = null;
+    this.table = null;
+    this.restoredDecision = null;
+    this.branchProjection = null;
+    this.branchAttemptId = null;
     this.resumeFailed = true;
     this.errorMessage = message;
     this.sessionId = null;
@@ -431,6 +442,7 @@ export class GameStore {
   }
 
   private resetMatchState(): void {
+    this.searchRetry = null;
     this.protocolFrame = null;
     this.observation = null;
     this.actions = [];
