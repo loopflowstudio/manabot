@@ -1,5 +1,162 @@
 # MTG-347 — higher-level player control of mana spending
 
+## Implementation status — 2026-11-15
+
+Choice 1 remains unresolved after reading the preceding review and current
+source/docs. Missing input: choose the bounded distinct-mana-cost heuristic
+(1a) or playable-action preservation (1b). The supplied direction says
+"Stop for real unresolved product choices"; neither objective is selected
+here. No implementation, sync or publication performed. Existing edits and
+the parent stack remain intact. Builds/tests skipped because no code changed.
+
+## Write docs — 2026-11-15
+
+Shipping doc path: `managym/README.md`, automatic-payer paragraph. No doc
+edits made: choice 1 remains unanswered, so replacing its promise with the
+proposed 1a wording would select a product objective. Exact open question:
+should automatic payment preserve distinct mana-cost options with partial
+checks, or actual playable cards and abilities with their required resources
+and legality? The existing `docs/academy.md` pending-decision and stale-Command
+contracts already cover recovery and need no revision.
+
+`lf open --host desktop --file managym/README.md` returned "No Desktop Files
+view attached; nothing opened." The docs remain at that path. Publication
+and implementation remain stopped under the supplied "Stop for real unresolved
+product choices" instruction; the existing review and kickoff edits are kept.
+
+## Kickoff — 2026-11-15
+
+Planning remains blocked on concept-review choice 1 below. The supplied
+direction says "Stop for real unresolved product choices." No answer choosing
+distinct mana-cost options or playable cards/abilities accompanies it. Neither
+the existing code nor permission to pursue and publish resolves that choice.
+
+Source inspection at `b1ecacd974` confirms the conflict:
+`Game::payment_followups` in `managym/src/flow/mana.rs` deduplicates hand
+costs, caps the probe, and excludes single-use abilities by cost equality;
+`Chooser::affordable` in `mana/tap_choice.rs` unions affordability across
+possible remainders. The automatic-payer paragraph in `managym/README.md`
+instead promises the most hand cards and battlefield abilities affordable.
+These objectives can choose different taps. Option 1a changes the stated
+promise; option 1b requires a different probe. Neither is an implementation
+detail that this plan can settle.
+
+The next slice cannot be selected until that objective is supplied. Keep the
+existing concept review and its concrete payment/reconnect acceptance scenarios;
+do not substitute the inherited #523 report plan for this child implementation.
+No source edits, runtime probes, sync or publication were performed in kickoff.
+Frozen evidence, the stack and unrelated work remain untouched. Context is
+within both configured limits; inherited history need not be compressed here.
+
+## PR #524 concept review — 2026-11-15
+
+Rechecked in session `session_c0ae492837834478b84ff0a9d5d10323`: HEAD remains
+`b1ecacd974`; the live PR #524 description still promises "keeps the most of
+the payer's other hand cards and battlefield abilities affordable" and remains
+based on `jack/mtg-347-explore-higher-level-player-control-of-mana` (#523).
+The supplied follow-on direction contains no answer to choice 1. Outcome stays
+**Blocked**, not an implement iteration. Normal payment, failure and reconnect
+contracts below remain the acceptance scenarios; no runtime proof was run.
+
+This section governs the current automatic-payer review at `b1ecacd974`.
+The measurement-only scope below is inherited from #523; it does not describe
+the implementation now on this child branch. #524 remains stacked on #523.
+Jack Heart's supplied instruction: "can you run concept review > pursue flows
+on the 3 outstanding prs". This phase is review only.
+
+**Outcome: Blocked on the meaning of a preserved follow-up.** The PR promises
+the most affordable hand cards and abilities, but implements a bounded score
+over distinct mana-cost records. It does not establish that those actions can
+actually be taken. Neither the inherited four chooser questions nor the PR
+description settles this difference. Do not treat the existing implementation
+as a person's decision.
+
+### Experience and concrete semantics
+
+Existing interaction: cast or activate, reach native payment, use `PayCost`
+when offered, then finish any native pooled-unit choices. A trivial payment
+may be skipped. #524 changes the automatic fixed sources; it adds no source
+chooser, preview, cancellation or new Command. With Mountain, Mountain,
+Forest paying {1}{G}, the payer needs one Mountain and the Forest, leaving the
+other Mountain untapped. With a Forest and a green mana creature paying {G}
+and equal follow-up scores, it prefers the Forest. Follow-up score takes
+precedence over preserving a creature for combat; this ordering is already
+explicit in the PR's stated outcome, not a new question here.
+
+The simpler contract is one native automatic payment with two distinct
+responsibilities: legality from `PaymentModel`, preference from `choose_taps`.
+Source classes are an internal search compression, not a declaration that
+the sources are strategically interchangeable. `produce_mana` commits the
+chosen fixed taps; native spending retains ownership of the exact receipt.
+Keep pending obligations, source identities and actual pools as authority;
+no persisted preference session or browser payment model is needed.
+
+### Findings and next direction
+
+- **The objective needs an explicit product contract.** `payment_followups`
+  deduplicates hand entries by `ManaCost`, takes at most 64 records, and omits
+  targets, timing within the turn and several nonmana costs. Ability records
+  also carry a source reservation when their own cost taps it. Thus three
+  cards sharing one cost can count less than two distinct costs. An ability
+  with an unpayable discard or sacrifice cost can still influence tapping.
+  Calling these "cards kept castable" hides an observable strategic choice.
+- **Possible spending is not a promised remaining pool.** `Chooser::affordable`
+  unions follow-ups affordable under different enumerated remainders. Those
+  follow-ups need not coexist after the player's eventual unit choice. The
+  search also bounds remainders and candidate checks, so "most" is a heuristic
+  objective, not a global optimum guarantee. Saved obligations receive surplus
+  pruning only. These limits belong in usage wording regardless of choice 1.
+- **Shared parent probe needs an identity counterexample.** The single-use
+  ability exclusion compares `ability.mana_cost == *cost`; two distinct
+  sources can have equal costs, and equality does not identify the activation
+  being paid for. Next implementation should check two equal-cost abilities
+  on distinct sources and exclude only the actual unavailable activation.
+  Coordinate that one fixture and `PaymentProbe` semantics with #523; keep
+  one owner, without merging either branch or rerunning its measurements.
+
+### Failure and recovery walkthrough
+
+If fixed sources cannot pay, `produce_mana` returns its existing error before
+tapping. Search-budget exhaustion retains a payable candidate; it must not
+become payment failure or a new human decision. If a player dislikes the
+sources after they have tapped, reconnect is not undo: restore the actual
+pending spending decision and already-committed taps. A stale or duplicate
+Command must leave state unchanged. `docs/academy.md` already states that
+contract; leave it alone. A future proof should interrupt between production
+and unit spending, reconnect, reject the old Command, and finish with the same
+receipt as uninterrupted play. This was inspected as a contract, not executed
+in this review. Replay/fork behavior remains tied to the original revision;
+do not rewrite frozen traces to make a changed preference agree.
+
+### Proposed usage wording, pending choice 1
+
+For option 1a: "Automatic payment avoids unnecessary fixed-source taps and
+uses a bounded estimate of remaining mana options to prefer sources. It scores
+distinct mana costs, not the number of playable cards; targets and other costs
+can still prevent a follow-up. Ties favor hand costs, then instant-timing hand
+costs, then less reluctant sources and colorless output. Saved obligations
+only receive surplus pruning. Any remaining mana-unit choice is still yours."
+
+Put the eventual wording in the automatic-payer paragraph of `managym/README.md`
+and align the PR description. No skill instruction needs a new workflow.
+
+### Open question for loop-or-next
+
+1. What should "keeps follow-ups affordable" mean?
+   - **1a — bounded mana-option heuristic:** retain distinct cost records and
+     partial affordability checks, document their limits and fix identity
+     attribution. Small scope; it can prefer an option that is not playable.
+   - **1b — playable-action preservation:** count actual cards/abilities and
+     their required resources/legality. This changes the objective and needs
+     a larger shared probe design and bounded execution strategy.
+
+Do not implement either answer as settled. The earlier outcome-menu questions
+belong to the separate chooser proposal, not to this automatic-payer patch.
+Show next: the equal-cost-card counterexample, a reserved-source ability, and
+mid-payment reconnect under the chosen contract. No training or baseline run
+is needed to resolve the product choice. Review artifacts only were edited;
+implementation, evidence, parent branch and independent MTG350 work were untouched.
+
 ## Outcome and scope
 
 Explore higher-level payment control and recommend a design for review in
