@@ -4,6 +4,9 @@
   import { page } from '$app/state';
   import GameSetup from '$lib/components/GameSetup.svelte';
   import { startConfiguredWatch } from '$lib/new-game';
+  import { onDestroy } from 'svelte';
+  onDestroy(() => watchStart.cancel());
+  import { watchStart } from '$lib/watch-start.svelte';
   import { revealWithinScrollRegions } from '$lib/scroll-regions';
   import { onMount, tick, untrack, setContext } from 'svelte';
 
@@ -20,6 +23,7 @@
   import CombatComposer from '$lib/components/CombatComposer.svelte';
   import { combatFocus, combatPlanMarkers, combatKey, newCombatDraft, objectKey, selectCombatObject, type CombatDraft } from '$lib/combat-plan';
   import DecisionContext from '$lib/components/DecisionContext.svelte';
+  import UnavailableActions from '$lib/components/UnavailableActions.svelte';
   import PlaySessionStrip from '$lib/components/PlaySessionStrip.svelte';
   import { recordFetch } from '$lib/records';
   import type { PlaySession } from '$lib/play-session';
@@ -29,7 +33,7 @@
   import Feedback from '$lib/components/Feedback.svelte';
   import GameLog from '$lib/components/GameLog.svelte';
   import PresentationHistory from '$lib/components/PresentationHistory.svelte';
-  import SearchThinking from '$lib/components/SearchThinking.svelte';
+  import WorkStatus from '$lib/components/WorkStatus.svelte';
   import StopsPanel from '$lib/components/StopsPanel.svelte';
   import SharedTablePanel from '$lib/components/SharedTablePanel.svelte';
   import { policyChoice, gameStore, type GameStore } from '$lib/game.svelte';
@@ -219,19 +223,18 @@
     }
   });
 
-  const gameActive = $derived(gameStore.observation !== null && !gameStore.gameOver);
+  const gameActive = $derived(gameStore.observation !== null && !gameStore.gameOver && !gameStore.resumeFailed);
   const pilotCanAct = $derived(gameStore.hasCapability('submit_live_command'));
-  const thinkingSearch = $derived(gameStore.newGamePending ? gameStore.searchConfig : gameStore.activeSearchConfig);
   const participantStudying = $derived(gameStore.restoredDecision !== null);
   const tablePresentation = $derived(participantStudying ? studyPresentationPlayer : presentationPlayer);
-  const inputReady = $derived(!gameStore.commandPending && stopsPending === null && gameStore.connection === 'connected');
+  const inputReady = $derived(!gameStore.commandPending && gameStore.work?.state !== 'running' && stopsPending === null && gameStore.connection === 'connected');
   // Both table modes submit through the same live authority gate. Play only
   // adds selection and gestures; Study retains its separate retry capability.
   const canSubmitLive = $derived(gameActive && pilotCanAct && !participantStudying
     && !gameStore.branchProjection && !gameStore.newGamePending && inputReady);
   const paymentSlot = $derived(canSubmitLive && decisionKey !== null && paymentSlotDecision === decisionKey);
   const canPassTurn = $derived(canSubmitLive && tableFrame?.action_space === 'PRIORITY' && offers.length > 0);
-  const combatProjection = $derived(!participantStudying && !gameStore.branchProjection ? tableFrame?.declaration ?? null : null);
+  const combatProjection = $derived(!gameStore.resumeFailed && !participantStudying && !gameStore.branchProjection ? tableFrame?.declaration ?? null : null);
   const combatScope = $derived(tableFrame ? combatKey(tableFrame, gameStore.updateSeq) : '');
   const boardFocus = $derived(new Set([...gameStore.focusIds, ...combatFocus(combatDraft, combatProjection)]));
   const boardCombatMarkers = $derived(combatPlanMarkers(combatDraft, combatProjection));
@@ -353,9 +356,10 @@
     random: 'Random',
     passive: 'Passive',
   };
-  const opponentIdentity = $derived(gameStore.table?.opponent
-    ? checkpointIdentity(gameStore.table.opponent)
-    : playerIdentity({ name: gameStore.table?.opponent_label ?? OPPONENT_LABELS[gameStore.opponentChoice] ?? 'Opponent' }));
+  const tableIdentity = $derived(gameStore.table ?? gameStore.interruptedIdentity);
+  const opponentIdentity = $derived(tableIdentity?.opponent
+    ? checkpointIdentity(tableIdentity.opponent)
+    : playerIdentity({ name: tableIdentity?.opponent_label ?? OPPONENT_LABELS[gameStore.opponentChoice] ?? 'Opponent' }));
 
   function syncStopsToServer(): void {
     if (!gameStore.observation && editor.kind !== 'closed') {
@@ -479,17 +483,21 @@
 
   {#if gameStore.errorMessage}
     <section role="alert" aria-atomic="true" class="mb-4 rounded border border-mountain/50 bg-mountain/20 px-4 py-3 text-mountain-ink">
-      {gameStore.errorMessage}
+      {#if gameStore.resumeFailed}<strong>Interrupted.</strong>{' '}{/if}{gameStore.errorMessage}
+      {#if gameStore.resumeFailed && gameStore.recordingId}
+        <a class="ml-2 underline" href={`/replay?trace=${encodeURIComponent(gameStore.recordingId)}`}>Open saved recording</a>
+      {/if}
     </section>
   {/if}
   {#if gameStore.searchRetry}
     <section role="alert" class="mb-4 rounded border border-line bg-panel px-4 py-3">
-      <p>{gameStore.searchRetry.message}</p>
-      <button class="mt-2 rounded border border-line px-3 py-2" disabled={gameStore.commandPending || !pilotCanAct} onclick={sendRetrySearch}>Retry search</button>
+      <p>{gameStore.submissionAccepted ? 'Your choice was accepted. ' : ''}{gameStore.searchRetry.message}</p>
+      <button class="mt-2 rounded border border-line px-3 py-2" disabled={gameStore.commandPending || !pilotCanAct || gameStore.connection !== 'connected'} onclick={sendRetrySearch}>{(gameStore.searchRetry.code.startsWith('search_') || gameStore.searchRetry.code.startsWith('mirror_')) ? 'Retry search' : 'Retry bot decision'}</button>
     </section>
   {/if}
-  <SearchThinking active={(gameStore.commandPending || gameStore.newGamePending) && thinkingSearch !== null}
-    budget={thinkingSearch ? `Search ${thinkingSearch.worlds}×${thinkingSearch.depth}` : ''} />
+  <WorkStatus work={watchStart.work} connected={!watchStart.checking} />
+  {#if watchStart.checking}<p role="status">Checking the same Watch setup; loading status is unavailable.</p>{/if}
+  <WorkStatus work={gameStore.work} connected={gameStore.connection === 'connected'} />
   {#if gameStore.observation && gameStore.activeSearchConfig}
     <p class="type-caption mb-2 text-ink-2">Opponent: Search {gameStore.activeSearchConfig.worlds}×{gameStore.activeSearchConfig.depth} · Uniform belief (physical deal)</p>
   {/if}
@@ -542,10 +550,10 @@
             role="status"
             aria-live="polite"
             aria-atomic="true"
-            aria-label={`Connection status: ${gameStore.connection}`}
+            aria-label={gameStore.resumeFailed ? 'Session status: interrupted' : `Connection status: ${gameStore.connection}`}
             class="type-label uppercase text-ink-3"
           >
-            {gameStore.connection}
+            {gameStore.resumeFailed ? 'Interrupted' : gameStore.connection}
           </span>
         </div>
 
@@ -642,6 +650,7 @@
         {:else if tableFrame}
         <DecisionSurface
           workspace
+          interrupted={gameStore.resumeFailed}
           frame={tableFrame}
           navigationKey={String(gameStore.updateSeq)}
           selectedTargetId={gameStore.selectedTargetId}
@@ -659,13 +668,14 @@
         {#if paymentSlot}<PaymentPreview state={paymentState} observation={tableFrame.projection} onClose={() => payments.clear()} onRetry={() => { if (tableFrame && paymentState) void payments.select(tableFrame, paymentState.offer, paymentState.label); }} />{/if}
         {/if}
 
+        <UnavailableActions observation={gameStore.branchProjection ?? tableFrame?.projection ?? boardObservation} />
         <p data-testid="automation-status" class="type-caption text-ink-2">Priority-stop automation: {gameStore.stops.auto_pass ? `on · your turn ${gameStore.stops.my.length} / opponent ${gameStore.stops.opponent.length} · stack ${gameStore.stops.stop_on_stack ? 'on' : 'off'}` : 'off · every priority choice'}{gameStore.fastForwarding ? ' · yielding this turn' : ''}{stopsPending !== null ? ' · updating…' : ''} <button class="underline" onclick={editStops}>Edit stops</button></p>
         <details bind:open={secondaryOpen} class="secondary-panels">
           <summary class="type-rubric cursor-pointer">History and settings</summary>
           <div class="secondary-content space-y-4" tabindex="0" role="region" aria-label="History and settings">
             <PresentationHistory player={tablePresentation} observation={boardObservation} />
             {#if tableFrame && !gameStore.branchProjection}
-              <DecisionContext observation={tableFrame.projection} actor={tableFrame.prompt?.actor ?? null} declaration={combatProjection} />
+              <DecisionContext observation={tableFrame.projection} actor={tableFrame.prompt?.actor ?? null} declaration={combatProjection} interrupted={gameStore.resumeFailed} />
             {/if}
 
             <div class="border-t border-line pt-4">

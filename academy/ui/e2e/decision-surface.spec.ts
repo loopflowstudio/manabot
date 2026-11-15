@@ -51,6 +51,7 @@ async function track(page: Page): Promise<void> {
 async function choose(page: Page, id: number): Promise<void> {
   const revision = await page.evaluate(() => window.__surface.frame!.revision);
   const button = page.locator(`[data-testid="action-option"][data-offer-id="${id}"]`);
+  await expect(button).toBeEnabled();
   await button.focus();
   await page.keyboard.press('Enter');
   await expect.poll(() => page.evaluate(() => window.__surface.frame?.revision)).toBeGreaterThan(revision);

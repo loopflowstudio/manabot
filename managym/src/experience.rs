@@ -699,7 +699,17 @@ pub struct CombatView {
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
+pub struct UnavailableActionView {
+    pub object: i32,
+    pub reason: String,
+    pub message: String,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct LegacyHeroObservation {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unavailable_actions: Option<Vec<UnavailableActionView>>,
     /// Absent in historical frames; present empty means no scheduled control.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub player_controls: Option<Vec<PlayerControlView>>,

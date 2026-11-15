@@ -358,6 +358,9 @@ a separate `ACADEMY_TRACES_DIR`, and
 `ACADEMY_PLAY_RECORD_ORIGIN=automated_validation`. Keep existing human-play
 stores and sibling servers untouched. Shared-history proofs use separate
 browser identities and cover private unfinished replays and participant feedback.
+For release-config proofs, set an absolute `ACADEMY_RELEASE_PROOF_DIR` per
+subprocess; both browser artifacts and its trace store live below that directory.
+Finish frontend generation and builds before starting the proof servers.
 
 Changes to persistence or Study addresses require presentation, Study runtime,
 and protocol checks as well as attempt-store checks. SQLite is the trace

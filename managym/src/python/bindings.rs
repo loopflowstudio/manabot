@@ -3112,6 +3112,8 @@ impl PySharedEffect {
 #[derive(Clone)]
 pub struct PyObservation {
     #[pyo3(get)]
+    pub unavailable_actions: Option<Vec<crate::agent::guidance::UnavailableAction>>,
+    #[pyo3(get)]
     pub shared_effects: Option<Vec<PySharedEffect>>,
     #[pyo3(get)]
     pub continuation: Vec<crate::agent::continuation::ContinuationFrame>,
@@ -3148,6 +3150,7 @@ pub struct PyObservation {
 impl From<Observation> for PyObservation {
     fn from(value: Observation) -> Self {
         Self {
+            unavailable_actions: value.unavailable_actions,
             shared_effects: value.shared_effects.map(|records| {
                 records
                     .into_iter()
@@ -3197,6 +3200,7 @@ impl From<Observation> for PyObservation {
 impl From<PyObservation> for Observation {
     fn from(value: PyObservation) -> Self {
         Self {
+            unavailable_actions: value.unavailable_actions,
             shared_effects: value
                 .shared_effects
                 .map(|records| records.into_iter().map(|record| record.inner).collect()),
@@ -5603,6 +5607,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPermanent>()?;
     m.add_class::<PyContinuousEffect>()?;
     m.add_class::<PySharedEffect>()?;
+    m.add_class::<crate::agent::guidance::UnavailableAction>()?;
     m.add_class::<crate::agent::shared_effects::EffectObject>()?;
     m.add_class::<crate::agent::shared_effects::EffectMembership>()?;
     m.add_class::<PyCopyEffect>()?;
