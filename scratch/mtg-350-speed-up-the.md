@@ -2,13 +2,14 @@
 
 ## Current outcome (2026-11-15)
 
-The reservation/life repair is preserved. Latest sequential local speedups
-against production baseline `592f499546` are 3.50x counted-tap, 2.72x
-diverse-mana, 2.03x mixed and 2.91x restricted-filter, with matching witnesses
-and stress digests. All four local 2x targets pass in both comparison orders;
-mixed is marginal and this is not Engine Budget CI. The retained experimental game now advances under the authorized isolated
-reservation/life overlay: its candidate-owned Command returns in 0.81 ms.
-Independent production integration and gate/CI remain.
+The reservation/life repair is preserved and integrated onto main
+`2176882620`. A fresh sequential release comparison gives 12.80x counted-tap,
+2.60x diverse-mana, 2.01x mixed and 3.24x restricted-filter, with matching
+witnesses, outputs and closing digests. Mixed remains marginal; this is local
+measurement, not Engine Budget CI. Earlier pre-integration comparisons passed
+all four 2x targets in both orders. The retained experimental game advances
+under the authorized isolated reservation/life overlay: its candidate-owned
+Command returns in 0.81 ms. Implementation checks pass; gate/CI and delivery remain.
 
 Jack Heart, 2026-11-15: "launch an auto task stacked on this to fix the yue bug?"
 The Task comment separately requires "Keep legal actions, first witnesses and
@@ -188,23 +189,51 @@ failed on old production code. `tests/training/test_game_errors.py`'s three
 fail on unchanged base too (`binding_mismatch`); main's `452d7b5357` resolves
 it on rebase. No binding check was changed.
 
-## Remaining implementation
+## Current-main integration measurement
 
-The shared payment contract is unchanged; no open product choice was found.
+Main baseline `2176882620` exported into an isolated source directory; candidate
+includes only this Task's net repair/performance diff. Release `benchmark`
+`bench_states`, same four cells/arguments as above, sequential baseline then
+candidate, no compiler or test runner. Complete first witnesses, plan counts,
+non-payment counters and simulation outputs match at every checkpoint.
 
-1. Four local 2x audit targets now pass in both comparison orders (latest
-   3.50x counted, 2.72x diverse, 2.03x mixed, 2.91x restricted). Gate still
-   owns Engine Budget CI. Keep exact keys, the 64-entry FIFO, independent
-   branch mutations and complete first witnesses. No inline-vector or
-   reachability-closure revival.
-2. Retained experimental integration proof passes as described above. Preserve
-   the repair-only snapshot provenance and candidate-owned continuation.
-3. Detach with `lf sync main` as directed in `scratch/landing-direction.md`;
-   resolve ObjectId/payment_object fixture changes and verify the repair and
-   receipt tests on current main. Gate owns CI, broad debug nextest/clippy and
-   Engine Budget. Never move the reference to disguise a changed digest.
+| Required cell | Main baseline ms | Candidate ms | Baseline / candidate |
+|---|---:|---:|---:|
+| counted-tap 16 cast-choice | 3540.790 | 276.582 | 12.80x |
+| diverse-mana 16 cast-choice | 346.694 | 133.286 | 2.60x |
+| mixed 16 cast-choice | 258.851 | 128.626 | 2.01x |
+| restricted-filter 4 priority | 108.592 | 33.500 | 3.24x |
+
+Closing digests match between this main and candidate: size-16
+`ee476afb928628d61f01469a7de6fe2eefa95121bdd1006ca1a270c3faa1abb3`;
+restricted-4 `ce8fcd164f2c4e5e918af37e56b6d79753267a3c024f4d5739d87611e798739b`.
+The latter differs from the older baseline above across main's intervening
+changes; it is equal in this same-revision comparison. Engine Budget's reference
+has not moved. Raw rows/comparison are ignored `.lf/tmp/mtg350/main-*`.
+
+## Remaining work
+
+Implementation and focused checks are complete on main `2176882620`. The
+retained-game proof and four-cell witness parity pass. Current-main timing is
+one sequential matched pair; earlier pre-integration timing passed in both
+orders. Mixed is close to the local 2x target, so retain that limitation in
+review. Exact keys, the 64-entry FIFO, independent branch mutations and complete
+first witnesses remain required; no rejected optimization should be revived.
+
+Gate owns CI, broad debug nextest/clippy and Engine Budget, then delivery can
+publish and land this independent repair. PR #523 is no prerequisite. Never
+move the Engine Budget reference to disguise a changed digest. Retain the
+repair-only snapshot provenance and candidate-owned continuation in PR copy
+before scratch is cleared; no experimental source-preference feature ships.
 
 ## Delete — do not maintain
+
+Main removed the parent report's opt-in `mana/outcomes.rs`,
+`PaymentShapeCapture`, capture hooks and `is_surplus`. Keep those deletions
+while integrating the performance work; remove the exclusive `into_uncached`
+helper as well. This Task ships no reporting API or source-preference feature.
+Synthetic source ids use main's `payment_object` allocator; live fixture writes
+use `state[object]` so appearance identity is validated.
 
 Removed the one-off `payment_cache_profile` test and its exclusive
 `CachedPayment::clone`: allocation diagnostics belong to `bench_states
@@ -255,3 +284,20 @@ only) and its rows search again with base's call counts.
 Implementation proof (2026-11-15): repair-only snapshot root cp313 release build
 and retained-game comparison passed; debug nextest filter
 `test(yue_rejects_rumble_arena_filter)` — 1 passed (0.016 s).
+
+Current-main checks (2026-11-15): debug nextest `test(flow::mana::)` —
+30 passed; cards `test(yue_reserves_her_tap) |
+test(yue_rejects_rumble_arena_filter) | test(heartbeat)` — 9 passed. The
+removed six outcome-capture tests belong to main's deleted parent-report path.
+
+Final integration checks (2026-11-15): root cp313 release wheel rebuilt and
+extension replaced atomically; import passed, SHA256
+`1d95d76a879af46309635f0fe7b7a1f9fa86f541bd5f354189cfd6ede5f0d8dd`.
+After syncing main's locked Etude migration dependency, pytest
+`tests/training/test_game_errors.py -k
+test_resource_limit_replay_rejects_old_schema_and_reproduces_current_boundary`
+— 3 passed; `tests/model/test_record_coverage.py` — 4 passed. Main renamed the
+receipt regression; the old filter selected no tests and is superseded by this
+result. Workspace fmt and diff whitespace checks pass. Original receipt and
+context hashes still match the retained values. Scratch remains below both
+configured limits.

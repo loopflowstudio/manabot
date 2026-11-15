@@ -2917,7 +2917,7 @@ mod tests {
             .scenario_force_battlefield(player, "Sunbaked Canyon", true)
             .unwrap();
         let object = game.state.permanents[source].as_ref().unwrap().object;
-        game.state.objects[object].activated_abilities = vec![ActivatedAbilityDefinition {
+        game.state[object].activated_abilities = vec![ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("1"),
             waterbend: true,
             tap_source: true,

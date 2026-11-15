@@ -409,6 +409,11 @@ and frame. Only after that obligation finishes do its tap/life/sacrifice costs
 commit and its output become a visible color decision. Mana abilities do not
 create stack objects. Fixed production keeps source order; a nested automatic
 prefix considers concrete pool remainders and the parent's completion.
+The announced activation's own tap, sacrifice and unpaid life fee remain
+reserved throughout waterbend and nested mana decisions, including a saved
+spending caller. A nested mana ability cannot consume those resources and
+leave the announcement without a complete payment. Its own upfront life fee
+is counted once, on that ability's output obligation.
 
 Most payment questions never reach the search. With four untapped Islands and
 an empty pool, "can this player pay `{2}{U}`?" is answered by adding: the pool
