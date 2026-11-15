@@ -10,6 +10,7 @@ matchup whose winner is deck-determined must flip player index with the seat).
 import numpy as np
 import pytest
 
+from manabot.backends import resolve
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
@@ -154,6 +155,7 @@ def test_seat_balancing_alternates_and_swap_reaches_engine():
         hero_deck=MOUNTAIN_ONLY,
         villain_deck=STANDARD_DECK,
         seat_balanced=True,
+        backend=resolve("torch"),
     )
 
     assert [p.hero_seat for p in profiles] == [0, 1, 0, 1]

@@ -26,6 +26,7 @@ from experiments.inference_baseline import (
 )
 from experiments.report_prototype.build import write_report
 from manabot._process import bounded_call
+from manabot.backends import resolve
 from manabot.eval.evaluation import EvaluationRequest
 from manabot.reports.inference import EvidenceFile
 from manabot.sim.execution import EvalAllocation, EvalExecution
@@ -316,7 +317,10 @@ def _llm_failure(
     )
     with InferenceSession(config, factory=RecoveryRuntime, load_seconds=20) as session:
         result = play(
-            GameConfig(max_decisions=100, max_seconds=30), out / "game", session
+            GameConfig(max_decisions=100, max_seconds=30),
+            out / "game",
+            session,
+            backend=resolve("torch"),
         )
     sender.send(
         {

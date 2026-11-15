@@ -38,6 +38,7 @@ from manabot.backends.torch._shared_effects import SharedEffectEncoder
 from manabot.backends.torch.arrays import array_fields, device_of, on_device, to_numpy
 from manabot.backends.torch.live_tokens import LiveTokens
 from manabot.backends.torch.rl import NumericalError
+from manabot.belief.range import BeliefError
 from manabot.env.observation import (
     STACK_DEFINITION_INDEX,
     STACK_DIM,
@@ -55,6 +56,9 @@ from manabot.policy.checkpoint import layout
 from manabot.policy.prepare import BeliefRows, Prepared, Tables, prepare
 from manabot.policy.protocol import InferenceResult
 import managym
+
+if TYPE_CHECKING:
+    from manabot.belief.encoding import BeliefEncodingSchema
 
 if TYPE_CHECKING:
     from manabot.belief.encoding import BeliefCheckpointBinding
@@ -391,6 +395,32 @@ class ActorCritic(nn.Module):
         self._program_cache: torch.Tensor | None = None
         self._cache_versions: tuple[tuple[int, int], ...] = ()
 
+    def admit_belief(self, belief_schema: "BeliefEncodingSchema") -> None:
+        """Admit a host belief vocabulary against this policy's input embeddings."""
+        if self.belief_count_buckets != belief_schema.count_buckets:
+            raise BeliefError("ActorCritic and belief encoding count buckets differ")
+        if self.belief_card_embedding is None:
+            raise BeliefError(
+                "Manabot requires an ActorCritic with belief input enabled"
+            )
+        maximum_card_id = max(row.card_def_id for row in belief_schema.rows)
+        if maximum_card_id >= self.belief_card_embedding.num_embeddings:
+            raise BeliefError("belief schema exceeds the ActorCritic card vocabulary")
+        if self.belief_owner_embedding is None:
+            raise BeliefError("Manabot requires an ActorCritic owner-role vocabulary")
+        maximum_owner_id = max(row.owner_role_id for row in belief_schema.rows)
+        if maximum_owner_id >= self.belief_owner_embedding.num_embeddings:
+            raise BeliefError(
+                "belief schema exceeds the ActorCritic owner-role vocabulary"
+            )
+        if self.belief_zone_embedding is None:
+            raise BeliefError("Manabot requires an ActorCritic hidden-zone vocabulary")
+        maximum_zone_id = max(row.hidden_zone_id for row in belief_schema.rows)
+        if maximum_zone_id >= self.belief_zone_embedding.num_embeddings:
+            raise BeliefError(
+                "belief schema exceeds the ActorCritic hidden-zone vocabulary"
+            )
+
     def _binding(self) -> str:
         return admission.binding(self.config, self.observation_space)
 
@@ -488,12 +518,30 @@ class ActorCritic(nn.Module):
             else tuple(tuple(map(int, row)) for row in needs),
         )
 
+    def _evaluate_outputs(
+        self, batch: Prepared[np.ndarray]
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        modes = [(module, module.training) for module in self.modules()]
+        self.eval()
+        try:
+            return self(on_device(batch, device_of(self)))
+        finally:
+            for module, training in modes:
+                module.training = training
+
     @torch.no_grad()
     def evaluate(self, batch: Prepared[np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
-        """Run an admitted host batch without gradients and return NumPy outputs."""
-        self.eval()
-        logits, values = self(on_device(batch, device_of(self)))
+        """Run one admitted batch, preserving the caller's module modes."""
+        logits, values = self._evaluate_outputs(batch)
         return to_numpy(logits), to_numpy(values)
+
+    @torch.no_grad()
+    def evaluate_probabilities(
+        self, batch: Prepared[np.ndarray]
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Normalize on the policy device before transferring outputs to the host."""
+        logits, values = self._evaluate_outputs(batch)
+        return to_numpy(torch.softmax(logits, dim=-1)), to_numpy(values)
 
     @property
     def device_type(self) -> str:

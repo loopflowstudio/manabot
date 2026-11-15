@@ -9,16 +9,9 @@ import json
 import time
 from typing import Any, Mapping
 
-from managym.decision import (
-    Command,
-    DecisionFrame,
-    Observation,
-    apply_semantic_command,
-)
-from managym.possible_worlds import PossibleWorldSpace
 import numpy as np
 
-from manabot.belief.demo import _runtime_env
+from manabot.belief.demo import runtime_env
 from manabot.belief.encoding import BeliefEncodingSchema, belief_schema_from_engine
 from manabot.belief.population import (
     BehaviorPopulationProvenance,
@@ -33,6 +26,13 @@ from manabot.belief.population import (
 )
 from manabot.belief.range import BeliefState
 from manabot.belief.state import CompatibleDealBeliefModel, ViewerHistory
+from managym.decision import (
+    Command,
+    DecisionFrame,
+    Observation,
+    apply_semantic_command,
+)
+from managym.possible_worlds import PossibleWorldSpace
 
 SCRIPTED_POPULATION = BehaviorPopulationProvenance(
     policy="scripted-most-held-land-then-pass",
@@ -70,7 +70,7 @@ def _capture_population(
     episodes: int,
     seed: int,
 ) -> tuple[BeliefPopulationDataset, BeliefEncodingSchema, dict[str, int], int]:
-    env, _ = _runtime_env()
+    env, _ = runtime_env()
     root = env._engine
     root_frame = DecisionFrame.from_json(root.semantic_decision_frame_json())
     acting = root_frame.actor

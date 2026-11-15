@@ -13,7 +13,12 @@ from manabot.eval.admission import register_anchor, register_checkpoint
 from manabot.eval.evaluation import evaluate
 from manabot.eval.execution import bind_execution, resolve_execution
 from manabot.eval.models import EvaluationKey
-from manabot.eval.monitor import MonitorProtocol, MonitorResult, _request, _summarize
+from manabot.eval.monitor import (
+    MonitorProtocol,
+    MonitorResult,
+    evaluation_request,
+    summarize,
+)
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
 from manabot.infra.provenance import authored_matchup_sha256, source_bundle_sha256
@@ -233,7 +238,7 @@ def evaluate_checkpoint(
             directory = output_dir / f"deal-{block:03d}"
             # The arena persists command traces after every attempted game.
             panel = evaluate(
-                _request(result, tuple(seeds)),
+                evaluation_request(result, tuple(seeds)),
                 out_dir=directory,
                 execution=execution,
                 inference=inference,
@@ -261,7 +266,7 @@ def evaluate_checkpoint(
         result.coordinator_rss_after_bytes = process.memory_info().rss
         result.host_load_after = os.getloadavg()
         try:
-            _summarize(result)
+            summarize(result)
         except ValueError as error:
             result.error = f"{type(error).__name__}: {error}"
             result.status = "incomplete"

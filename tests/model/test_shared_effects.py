@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends import resolve
 from manabot.backends.torch._shared_effects import SharedEffectEncoder
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
@@ -131,7 +132,9 @@ def test_shared_effect_policy_uses_ordinary_learner_and_export(
     regime.observation = ObservationConfig(max_cards_per_player=card_capacity)
     regime = TrainingRegime.model_validate(regime.model_dump())
     with VerifyStore(tmp_path / "verify.sqlite") as store:
-        run = execute_regime(regime, 73200, tmp_path / "training", store)
+        run = execute_regime(
+            regime, 73200, tmp_path / "training", store, backend=resolve("torch")
+        )
     assert run.status == "completed" and run.updates_through() == 1
     assert run.stages[0].learner_transitions > 0
     model, space = load_checkpoint(run.stages[0].artifacts["raw"]["path"])

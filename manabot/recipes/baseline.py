@@ -24,6 +24,7 @@ from manabot.experiment.execution import (
 )
 from manabot.experiment.runner import run_experiment
 from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.policy.protocol import Backend
 from manabot.recipes.builders import PACK
 from manabot.recipes.device import accelerator
 from manabot.sim.matchup import selected_match
@@ -82,7 +83,9 @@ class TrainingRecipe(Strict):
             ),
         )
 
-    def run(self, *, seed: int = 197, out: Path | None = None) -> ExperimentRun:
+    def run(
+        self, *, seed: int = 197, out: Path | None = None, backend: Backend
+    ) -> ExperimentRun:
         """Train, export and evaluate with one reserved CPU evaluator thread."""
         destination = out or Path(".runs") / (
             "baseline-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
@@ -97,12 +100,14 @@ class TrainingRecipe(Strict):
             )
         )
         try:
-            result = run_experiment(self.experiment(seed), hardware, destination)
+            result = run_experiment(
+                self.experiment(seed), hardware, destination, backend=backend
+            )
         except Exception:
             if (destination / "experiment.json").exists():
-                report_baseline(destination)
+                report_baseline(destination, backend=backend)
             raise
-        report = report_baseline(destination)
+        report = report_baseline(destination, backend=backend)
         if report.software != "passed" and result.status == "completed":
             raise RuntimeError(
                 f"baseline inspection failed: {report.error}; see {destination}"
@@ -235,6 +240,8 @@ def run_baseline(
     padded_shapes: bool = False,
 ) -> ExperimentRun:
     """Train, export and evaluate; retain every failure without automatic retry."""
+    from manabot.backends import resolve
+
     plan = baseline(
         steps,
         seconds=seconds,
@@ -242,4 +249,4 @@ def run_baseline(
         device=device,
         padded_shapes=padded_shapes,
     )
-    return plan.run(seed=seed, out=out)
+    return plan.run(seed=seed, out=out, backend=resolve("torch"))

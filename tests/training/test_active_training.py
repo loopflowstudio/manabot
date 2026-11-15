@@ -8,6 +8,7 @@ from typing import ParamSpec, TypeVar
 import pytest
 
 from experiments.ataraxos_move import ataraxos_move_scalar
+from manabot.backends import resolve
 from manabot.experiment.checkpoint_evaluation import stage_checkpoint
 from manabot.training import execution
 from manabot.training.records import TrainingRun
@@ -72,7 +73,7 @@ def test_endpoint_excludes_exports_and_rejects_early_ceiling(
         clock.charge(execution.update_damped_iteration, 10),
     )
     monkeypatch.setattr(
-        execution, "save_checkpoint", clock.charge(execution.save_checkpoint, 100)
+        resolve("torch"), "save_policy", clock.charge(resolve("torch").save_policy, 100)
     )
     with VerifyStore(tmp_path / "store.sqlite") as store:
         if expected == "failed":
@@ -83,13 +84,19 @@ def test_endpoint_excludes_exports_and_rejects_early_ceiling(
                     tmp_path / "run",
                     store,
                     checkpoint_seconds=5,
+                    backend=resolve("torch"),
                 )
             run = TrainingRun.model_validate_json(
                 (tmp_path / "run/run.json").read_text()
             )
         else:
             run = execution.execute_regime(
-                recipe(updates), 10351, tmp_path / "run", store, checkpoint_seconds=5
+                recipe(updates),
+                10351,
+                tmp_path / "run",
+                store,
+                checkpoint_seconds=5,
+                backend=resolve("torch"),
             )
         assert run == store.training_run(run.id)
     assert run.status == expected
@@ -167,6 +174,7 @@ def test_initial_admission_precedes_collection(
                 store,
                 checkpoint_seconds=5,
                 initial_admission=gate,
+                backend=resolve("torch"),
             )
 
     if admitted:

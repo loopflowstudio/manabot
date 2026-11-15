@@ -8,6 +8,7 @@ import pytest
 import torch
 
 from experiments.direct_self_play import direct_self_play
+from manabot.backends import resolve
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.experiment.evaluation_queue import checkpoints
 from manabot.reports import training as monitoring
@@ -72,9 +73,16 @@ def test_monitor_exports_do_not_change_learning_and_survive_reload(
 ) -> None:
     recipe = _recipe()
     with VerifyStore(tmp_path / "runs.sqlite") as store:
-        baseline = execute_regime(recipe, 197, tmp_path / "plain", store)
+        baseline = execute_regime(
+            recipe, 197, tmp_path / "plain", store, backend=resolve("torch")
+        )
         monitored = execute_regime(
-            recipe, 197, tmp_path / "monitored", store, checkpoint_seconds=1e-9
+            recipe,
+            197,
+            tmp_path / "monitored",
+            store,
+            checkpoint_seconds=1e-9,
+            backend=resolve("torch"),
         )
         assert store.training_run(monitored.id) == monitored
     # The stage's raw export owns the endpoint; monitoring must not duplicate it.

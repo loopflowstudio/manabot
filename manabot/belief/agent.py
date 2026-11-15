@@ -9,10 +9,7 @@ from typing import Mapping
 
 import numpy as np
 from numpy.typing import NDArray
-import torch
 
-from manabot.backends.torch.arrays import device_of, on_device, to_numpy
-from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.encoding import BeliefEncodingSchema, encode_belief
 from manabot.belief.range import BeliefError, BeliefState
 from manabot.belief.state import (
@@ -20,6 +17,7 @@ from manabot.belief.state import (
     BeliefUpdate,
     ViewerHistory,
 )
+from manabot.policy.protocol import BackendPolicy
 from managym.decision import Command
 from managym.possible_worlds import PossibleWorldSpace
 
@@ -35,7 +33,7 @@ def _output_bytes(policy: NDArray[np.float32], value: np.float32) -> bytes:
 class ViewerDecision:
     """One viewer-safe policy decision and its authoritative belief domain."""
 
-    observation: Mapping[str, torch.Tensor]
+    observation: Mapping[str, np.ndarray]
     world_space: PossibleWorldSpace
     viewer_history: ViewerHistory
     legal_commands: tuple[Command, ...]
@@ -97,33 +95,11 @@ class Manabot:
     def __init__(
         self,
         *,
-        policy_value: ActorCritic,
+        policy_value: BackendPolicy,
         belief_model: BeliefModel,
         belief_schema: BeliefEncodingSchema,
     ) -> None:
-        if policy_value.belief_count_buckets != belief_schema.count_buckets:
-            raise BeliefError("ActorCritic and belief encoding count buckets differ")
-        if policy_value.belief_card_embedding is None:
-            raise BeliefError(
-                "Manabot requires an ActorCritic with belief input enabled"
-            )
-        maximum_card_id = max(row.card_def_id for row in belief_schema.rows)
-        if maximum_card_id >= policy_value.belief_card_embedding.num_embeddings:
-            raise BeliefError("belief schema exceeds the ActorCritic card vocabulary")
-        if policy_value.belief_owner_embedding is None:
-            raise BeliefError("Manabot requires an ActorCritic owner-role vocabulary")
-        maximum_owner_id = max(row.owner_role_id for row in belief_schema.rows)
-        if maximum_owner_id >= policy_value.belief_owner_embedding.num_embeddings:
-            raise BeliefError(
-                "belief schema exceeds the ActorCritic owner-role vocabulary"
-            )
-        if policy_value.belief_zone_embedding is None:
-            raise BeliefError("Manabot requires an ActorCritic hidden-zone vocabulary")
-        maximum_zone_id = max(row.hidden_zone_id for row in belief_schema.rows)
-        if maximum_zone_id >= policy_value.belief_zone_embedding.num_embeddings:
-            raise BeliefError(
-                "belief schema exceeds the ActorCritic hidden-zone vocabulary"
-            )
+        policy_value.admit_belief(belief_schema)
         self.policy_value = policy_value
         self.belief_model = belief_model
         self.belief_schema = belief_schema
@@ -165,38 +141,17 @@ class Manabot:
         view = encode_belief(belief, self.belief_schema)
         encoding_seconds = time.perf_counter() - encoded_started
 
-        observation = {key: value.cpu() for key, value in decision.observation.items()}
-        observation.update(
-            view.to_torch_observation(batch_size=1, device=torch.device("cpu"))
-        )
-        observation = on_device(
-            self.policy_value.prepare(
-                {key: to_numpy(value) for key, value in (observation).items()},
-                inference=True,
-            ),
-            device_of(self.policy_value),
-        )
-        was_training = self.policy_value.training
-        self.policy_value.eval()
+        observation = dict(decision.observation)
+        observation.update(view.observation(batch_size=1))
+        prepared = self.policy_value.prepare(observation, inference=True)
         inference_started = time.perf_counter()
-        try:
-            with torch.inference_mode():
-                logits, value = self.policy_value(observation)
-                policy_tensor = torch.softmax(logits[0], dim=-1)
-        finally:
-            self.policy_value.train(was_training)
+        probabilities, value = self.policy_value.evaluate_probabilities(prepared)
+        policy = np.asarray(probabilities[0], dtype=np.float32).copy()
         inference_seconds = time.perf_counter() - inference_started
-        policy = np.asarray(
-            policy_tensor.detach().cpu().numpy(), dtype=np.float32
-        ).copy()
         policy.setflags(write=False)
-        scalar_value = np.float32(value[0].detach().cpu().item())
+        scalar_value = np.float32(value[0])
         legal_action_indexes = tuple(
-            int(index)
-            for index in torch.nonzero(observation.legal[0], as_tuple=False)
-            .flatten()
-            .cpu()
-            .tolist()
+            int(index) for index in np.flatnonzero(prepared.legal[0])
         )
         output_bytes = _output_bytes(policy, scalar_value)
         receipt = hashlib.sha256()
