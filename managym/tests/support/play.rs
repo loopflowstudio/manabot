@@ -186,6 +186,7 @@ impl Scenario {
         self.force_card_in_hand(player, creature_name);
         assert!(self.take_action_by_type(ActionType::PriorityPlayLand));
         assert!(self.take_action_by_type(ActionType::PriorityCastSpell));
+        assert!(self.take_action_by_type(ActionType::PayCost));
         self.pass_priority();
         self.pass_priority();
     }
@@ -423,9 +424,12 @@ pub fn cast_only(s: &mut Scenario) {
     );
 }
 
-/// Take the first offered cast action, then both players pass.
+/// Announce the first offered spell, pay if prompted, then both players pass.
+/// Expects no targets, price choices or ambiguous mana spending. Native trivial
+/// skipping may already have paid; otherwise submit the ordinary payment action.
 pub fn cast_and_resolve(s: &mut Scenario) {
     cast_only(s);
+    s.take_action_by_type(ActionType::PayCost);
     resolve_top(s);
 }
 

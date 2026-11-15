@@ -1230,6 +1230,20 @@ mod tests {
             .all(|pair| pair == &vec![first.clone(); 2]));
     }
 
+    // Seed/autoreset tests deliberately pass priority to reach deck exhaustion.
+    // First-legal play can spend whole turns activating every mana source.
+    fn exhaustion_action(env: &Env) -> i64 {
+        if env.action_space_kind() == Some(crate::agent::action::ActionSpaceKind::Priority) {
+            (env.action_count().unwrap() - 1) as i64
+        } else {
+            0
+        }
+    }
+
+    fn exhaustion_actions(vector: &VectorEnv) -> Vec<i64> {
+        vector.envs.iter().map(exhaustion_action).collect()
+    }
+
     fn sample_player_configs() -> Vec<PlayerConfig> {
         vec![
             PlayerConfig::new(
@@ -1314,10 +1328,11 @@ mod tests {
         let mut changed = 0;
         for _ in 0..1200 {
             let previous = vector.current_matchup_indices();
-            let results = vector.step(&[0, 0]).unwrap();
+            let results = vector.step(&exhaustion_actions(&vector)).unwrap();
             let pairs = vector.current_matchup_indices();
             for index in 0..2 {
-                let (mut obs, _, done, trunc, _) = scalar[index].step(0).unwrap();
+                let action = exhaustion_action(&scalar[index]);
+                let (mut obs, _, done, trunc, _) = scalar[index].step(action).unwrap();
                 if done || trunc {
                     terminals += 1;
                     changed += usize::from(previous[index] != pairs[index]);
@@ -1383,7 +1398,7 @@ mod tests {
         for _ in 0..2000 {
             vector
                 .step_into(
-                    &[0, 0, 0],
+                    &exhaustion_actions(&vector),
                     Some(&[true, false, false]),
                     |_, _, _, terminal, truncated| {
                         assert!(!truncated);
@@ -1611,9 +1626,10 @@ mod tests {
         }
         let mut terminals = 0;
         for _ in 0..1000 {
-            let actual = vector.step(&[0, 0]).unwrap();
+            let actual = vector.step(&exhaustion_actions(&vector)).unwrap();
             for index in 0..2 {
-                let (mut obs, _, done, truncated, _) = scalar[index].step(0).unwrap();
+                let action = exhaustion_action(&scalar[index]);
+                let (mut obs, _, done, truncated, _) = scalar[index].step(action).unwrap();
                 if done || truncated {
                     terminals += 1;
                     seeds[index] += 2;
@@ -1699,7 +1715,11 @@ mod tests {
         let mut terminals = [0; 3];
         for step in 0..1000 {
             let active = [step % 3 != 0, true, step % 2 == 0];
-            let actions = active.map(|enabled| if enabled { 0 } else { -999 });
+            let actions: Vec<_> = active
+                .iter()
+                .zip(exhaustion_actions(&vector))
+                .map(|(enabled, action)| if *enabled { action } else { -999 })
+                .collect();
             let observed = RefCell::new(Vec::new());
             vector
                 .step_into(
@@ -1722,8 +1742,9 @@ mod tests {
                 active.iter().filter(|x| **x).count()
             );
             for (index, actual, reward, done, trunc) in observed.into_inner() {
+                let action = exhaustion_action(&scalar[index]);
                 let (mut obs, expected_reward, expected_done, expected_trunc, _) =
-                    scalar[index].step(0).unwrap();
+                    scalar[index].step(action).unwrap();
                 assert_eq!(
                     (reward, done, trunc),
                     (expected_reward, expected_done, expected_trunc)
@@ -1767,9 +1788,9 @@ mod tests {
                         .unwrap();
                 }
             }
-            let expected = whole.step(&[0, 0, 0]).unwrap();
-            let mut actual = left.step(&[0, 0]).unwrap();
-            actual.extend(right.step(&[0]).unwrap());
+            let expected = whole.step(&exhaustion_actions(&whole)).unwrap();
+            let mut actual = left.step(&exhaustion_actions(&left)).unwrap();
+            actual.extend(right.step(&exhaustion_actions(&right)).unwrap());
             for (expected, actual) in expected.iter().zip(actual.iter()) {
                 assert_eq!(format!("{:?}", expected.obs), format!("{:?}", actual.obs));
                 assert_eq!(expected.reward, actual.reward);

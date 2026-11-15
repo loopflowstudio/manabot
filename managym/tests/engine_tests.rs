@@ -160,7 +160,11 @@ fn combat_damage_reduces_life() {
             ActionSpaceKind::DeclareBlocker => space.actions.len() - 1,
             ActionSpaceKind::ChooseTarget => 0,
             // Priority: play lands and cast spells when possible, else pass
-            ActionSpaceKind::Priority => 0,
+            ActionSpaceKind::Priority => space
+                .actions
+                .iter()
+                .position(|action| action.action_type() != ActionType::PriorityActivateAbility)
+                .expect("spell, land or pass"),
             ActionSpaceKind::GameOver => break,
             // Mid-resolution / cost decisions: take the first option.
             ActionSpaceKind::Scry
@@ -234,7 +238,14 @@ fn observation_stays_valid_through_game() {
     assert!(obs.validate(), "initial observation should validate");
 
     for _ in 0..2000 {
-        let (next_obs, _reward, done, truncated, _info) = env.step(0).expect("step should succeed");
+        let action = obs
+            .action_space
+            .actions
+            .iter()
+            .position(|action| action.action_type == ActionType::PriorityPassPriority)
+            .unwrap_or(0);
+        let (next_obs, _reward, done, truncated, _info) =
+            env.step(action as i64).expect("step should succeed");
         assert!(
             next_obs.validate(),
             "observation should validate at every step"

@@ -52,6 +52,7 @@ fn cr_106_3_casting_uses_mana_abilities() {
     assert!(s.take_action_by_type(ActionType::PriorityPlayLand));
     s.assert_action_available(ActionType::PriorityCastSpell);
     assert!(s.take_action_by_type(ActionType::PriorityCastSpell));
+    assert!(s.take_action_by_type(ActionType::PayCost));
 
     assert_eq!(s.zone_size(0, ZoneType::Stack), 1);
 
