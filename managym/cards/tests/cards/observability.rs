@@ -33,9 +33,9 @@ use managym::{
         },
         observation::{
             ActionOption, ActionSpaceData, CardData, CardTypeData, CastPermissionData,
-            ContinuousEffectData, CopyData, EventData, Observation, PermanentData, PlayerData,
-            PooledManaClassData, RestrictedManaData, SideboardCardData, StackObjectData,
-            StackTargetData, TurnData, KEYWORD_COUNT,
+            CharacteristicsData, ContinuousEffectData, CopyData, EventData, Observation,
+            PermanentData, PlayerData, PooledManaClassData, RestrictedManaData, SideboardCardData,
+            SpellData, StackObjectData, StackTargetData, TurnData, KEYWORD_COUNT,
         },
         observation_encoder::{
             encode, EncodedObservation, FactKind, InputLayout, ObservationEncoderConfig, CARD_DIM,
@@ -2748,10 +2748,7 @@ fn every_token_is_referenced_by_its_creator_and_observed_with_its_characteristic
             .agent_permanents
             .iter()
             .position(|permanent| {
-                permanent
-                    .card
-                    .as_ref()
-                    .is_some_and(|card| card.name == token.name && card.is_token)
+                permanent.characteristics.name == token.name && permanent.is_token
             })
             .unwrap_or_else(|| panic!("{} is not observed", token.key));
         let row = &encoded.agent_permanents[slot * PERMANENT_DIM..(slot + 1) * PERMANENT_DIM];
@@ -2965,20 +2962,11 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         bent => [Columns(Player, player::BENT_WATER, 4)],
         life_lost => [column(PlayerTurnState, turn_state::LIFE_LOST)],
     }));
-    fields.extend(encoding!(CardData {
-        zone => [Columns(Card, card::ZONE_LIBRARY, 7)],
-        owner_id => [column(Card, card::IS_MINE), Side],
-        id => [Identity],
-        registry_key => [Rows("semantic_cards")],
+    fields.extend(encoding!(CharacteristicsData {
         name => [Definition],
         text_box => [Definition],
-        power => [column(Card, card::POWER), column(Stack, stack::POWER)],
-        toughness => [column(Card, card::TOUGHNESS), column(Stack, stack::TOUGHNESS)],
-        is_token => [
-            column(Card, card::IS_TOKEN),
-            column(Permanent, permanent::IS_TOKEN),
-            column(Stack, stack::IS_COPY),
-        ],
+        power => [column(Card, card::POWER), column(Permanent, permanent::POWER), column(Stack, stack::POWER)],
+        toughness => [column(Card, card::TOUGHNESS), column(Permanent, permanent::TOUGHNESS), column(Stack, stack::TOUGHNESS)],
         is_legendary => [
             column(Card, card::IS_LEGENDARY),
             column(Permanent, permanent::IS_LEGENDARY),
@@ -2997,6 +2985,18 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
             Definition,
         ],
         // Face-down cards are foretold, and only their owner sees them.
+    }));
+    fields.extend(encoding!(CardData {
+        characteristics => [Rows("CharacteristicsData below")],
+        zone => [Columns(Card, card::ZONE_LIBRARY, 7)],
+        owner_id => [column(Card, card::IS_MINE), Side],
+        id => [Identity],
+        registry_key => [Rows("semantic_cards")],
+        is_token => [
+            column(Card, card::IS_TOKEN),
+            column(Permanent, permanent::IS_TOKEN),
+            column(Stack, stack::IS_COPY),
+        ],
         face_down => [column(Card, card::PERMISSION_FORETOLD)],
         cast_permission => [Rows("cast permission below")],
         x => [Columns(Card, card::HAS_X, 2), Columns(Stack, stack::HAS_X, 2)],
@@ -3092,8 +3092,6 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         is_summoning_sick => [column(Permanent, permanent::SUMMONING_SICK)],
         plus1_counters => [column(Permanent, permanent::PLUS_ONE_COUNTERS), Rows("Counter fact rows")],
         cant_be_blocked_this_turn => [column(Permanent, permanent::CANT_BE_BLOCKED_THIS_TURN)],
-        power => [column(Permanent, permanent::POWER)],
-        toughness => [column(Permanent, permanent::TOUGHNESS)],
         is_animated => [column(Permanent, permanent::ANIMATED)],
         has_exile_link => [column(Permanent, permanent::HAS_EXILE_LINK)],
         exile_if_dies_this_turn => [column(Permanent, permanent::EXILE_IF_DIES_THIS_TURN)],
@@ -3106,7 +3104,6 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
             Fact(FactKind::AddedSubtype),
             Columns(Facts, fact::ID_HIGH, 2),
         ],
-        keywords => [Rows("keywords below")],
         counters => [
             Fact(FactKind::Counter),
             Columns(Facts, fact::ID_HIGH, 2),
@@ -3123,7 +3120,10 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         effects => [Rows("shared-effect rows, ContinuousEffectData below")],
         timestamp => [column(Permanent, permanent::TIMESTAMP)],
         copy => [Fact(FactKind::Copy)],
-        card => [Identity, Rows("CardData fields: permanent characteristics columns")],
+        object_id => [Identity],
+        owner_id => [Side],
+        is_token => [column(Permanent, permanent::IS_TOKEN)],
+        characteristics => [Rows("CharacteristicsData below")],
     }));
     fields.extend(encoding!(CopyData {
         registry_key => [Join(Facts, fact::SOURCE_DEFINITION)],
@@ -3167,7 +3167,15 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
             Columns(Relation, relation::FLYING, KEYWORD_COUNT),
         ],
         kicked => [column(Stack, stack::KICKED), column(Relation, relation::KICKED)],
-        card => [Identity, Rows("CardData fields: stack spell columns")],
+        spell => [Identity, Rows("SpellData below")],
+    }));
+    fields.extend(encoding!(SpellData {
+        object_id => [Identity],
+        owner_id => [Side],
+        registry_key => [Join(Stack, stack::DEFINITION)],
+        is_copy => [column(Stack, stack::IS_COPY)],
+        has_announced_x => [column(Stack, stack::HAS_X)],
+        characteristics => [Rows("CharacteristicsData below")],
     }));
     fields.extend(encoding!(StackTargetData {
         kind => [column(Relation, relation::REFERENCE_PLAYER), Join(Relation, relation::REFERENCE)],
@@ -3369,17 +3377,12 @@ macro_rules! sources {
 
 fn card_sources() -> Vec<(&'static str, CardSource)> {
     use CardSource::*;
-    sources!(CardData {
-        zone => Printed("where the card is"),
-        owner_id => Printed("identity"),
-        id => Printed("identity"),
-        registry_key => Printed("identity: the definition index"),
+    sources!(CharacteristicsData {
         name => Layered,
         text_box => Printed("the printed text names the definition; lost abilities are \
             PermanentData.abilities_lost"),
         power => Layered,
         toughness => Layered,
-        is_token => Printed("token status is not a characteristic (CR 111.1)"),
         is_legendary => Layered,
         is_ally => Layered,
         is_lesson => Layered,
@@ -3388,10 +3391,7 @@ fn card_sources() -> Vec<(&'static str, CardSource)> {
         card_types => Layered,
         keywords => Layered,
         mana_cost => Printed("a cost paid when casting; a copy carries the copied cost"),
-        face_down => Printed("viewer state"),
-        cast_permission => Printed("a permission to play the card from exile"),
-        x => Printed("announced when cast"),
-        from_battlefield_this_turn => Printed("turn history of the graveyard object"),
+
     })
 }
 
@@ -4595,9 +4595,15 @@ fn announced_x_reaches_the_stack_row() {
         .stack_objects
         .iter()
         .enumerate()
-        .find(|(_, object)| object.card.as_ref().is_some_and(|card| card.id == id))
+        .find(|(_, object)| {
+            object
+                .spell
+                .as_ref()
+                .is_some_and(|spell| spell.object_id == id)
+        })
         .unwrap();
-    assert_eq!(spell.card.as_ref().unwrap().x, Some(3));
+    assert!(spell.spell.as_ref().unwrap().has_announced_x);
+    assert_eq!(spell.x, 3);
     assert!(listed_card_row(&observation, id).is_none());
     let encoded = encoded_default(&observation);
     let row = &encoded.stack[slot * STACK_DIM..(slot + 1) * STACK_DIM];

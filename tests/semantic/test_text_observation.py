@@ -483,7 +483,25 @@ _KEYWORDS = (
 # Every observed field and the LLM text that states it, or why none is needed.
 # A field added to the native observation fails here until it is listed.
 _TEXT_FIELDS: dict[type, dict[str, str]] = {
+    managym.ObservationCharacteristics: {
+        "name": "the object's alias and definition line",
+        "text_box": "Rules:",
+        "power": "power/toughness",
+        "toughness": "power/toughness",
+        "mana_cost": "cost",
+        "card_types": "type flags",
+        "keywords": "effective keywords or spell/card keywords",
+        "is_legendary": "legendary",
+        "is_ally": "Ally",
+        "is_lesson": "Lesson",
+        "ward_cost": "ward mana value",
+        "kicker_cost": "kicker mana value or the definition's kicker rule",
+    },
     managym.Permanent: {
+        "characteristics": "effective name, P/T, types, keywords, cost, ward and Rules",
+        "object_id": "the permanent's exact object alias",
+        "owner_id": "owner",
+        "is_token": "token",
         "card": "owner, cost, mana value, type flags, token, legendary, Ally, Lesson, ward and Rules",
         "id": "the permanent's alias",
         "registry_key": "[definition]",
@@ -522,6 +540,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "keyword_counter_timestamps": "keyword counter timestamps",
     },
     managym.Card: {
+        "characteristics": "name, P/T, types, keywords, cost, ward, kicker and Rules",
         "id": "the card's alias",
         "registry_key": "[definition]",
         "name": "the definition line",
@@ -545,6 +564,11 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "from_battlefield_this_turn": "put into the graveyard from the battlefield this turn",
     },
     managym.StackObject: {
+        "characteristics": "spell characteristics; absent for abilities",
+        "object_id": "the spell's exact object alias",
+        "owner_id": "Spell: owner",
+        "is_copy": "copy",
+        "announced_x": "X = (zero when the announced value is zero)",
         "stack_object_id": "S<n>",
         "kind": "spell/activated ability/triggered ability",
         "controller_id": "controller",
@@ -557,7 +581,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "x": "X =",
         "granted_keywords": "granted keywords",
         "kicked": "kicked",
-        "card": "Spell: owner, copy or token, power/toughness, cost, types, keywords and Rules",
+        "card": "Spell: owner, copy, power/toughness, cost, types, keywords and Rules",
     },
     managym.PlayerTurnHistory: {
         "attacked": "This turn: attacked",

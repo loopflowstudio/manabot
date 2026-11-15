@@ -2,12 +2,14 @@
 //! Handwritten maps emit lexical keys directly; derived nested records retain
 //! sorted Value boundaries. Exact bytes bind semantic and search-witness hashes.
 //! Canonical round-trip validation rejects unknown fields and missing facts.
+use super::observation::{CardTypeData, ContinuousEffectData, CopyData, KeywordData};
 use crate::{
     agent::{
         action::{ActionSpaceKind, ActionType},
         observation::{
-            ActionOption, ActionSpaceData, CardData, CastPermissionData, EventData, Observation,
-            StackObjectData, StackObjectKindData, StackTargetData, StackTargetKindData, TurnData,
+            ActionOption, ActionSpaceData, CardData, CastPermissionData, CharacteristicsData,
+            EventData, Observation, PermanentData, SpellData, StackObjectData, StackObjectKindData,
+            StackTargetData, StackTargetKindData, TurnData,
         },
     },
     flow::turn::{PhaseKind, StepKind},
@@ -17,6 +19,7 @@ use crate::{
     },
 };
 use serde::{ser::SerializeMap, Deserialize, Deserializer, Serialize, Serializer};
+use std::collections::BTreeMap;
 
 /// Emit the schema's canonical bytes without constructing its handwritten trees.
 /// Every map below writes keys lexically; these bytes bind SHA-256 semantic
@@ -136,7 +139,7 @@ impl Serialize for CardsJson<'_> {
 
 struct CardJson<'a>(&'a CardData);
 
-/// Nested card records (`PermanentData::card`) write the card list's bytes.
+/// Compatibility card records write the card list's frozen schema-8 bytes.
 impl Serialize for CardData {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         CardJson(self).serialize(serializer)
@@ -260,8 +263,9 @@ impl Serialize for StackObjectJson<'_> {
         let value = self.0;
         let mut map = serializer.serialize_map(None)?;
         map.serialize_entry("ability_index", &value.ability_index)?;
-        if let Some(card) = &value.card {
-            map.serialize_entry("card", &CardJson(card))?;
+        if let Some(spell) = &value.spell {
+            let card = spell.legacy_card(value.x);
+            map.serialize_entry("card", &CardJson(&card))?;
         }
         map.serialize_entry("chosen_mode", &value.chosen_mode)?;
         map.serialize_entry("controller_id", &value.controller_id)?;
@@ -415,25 +419,26 @@ pub fn parse(text: &str) -> Result<Observation, String> {
     if value != roundtrip || !observation.validate() {
         return Err("noncanonical viewer observation".into());
     }
-    Ok(upgrade_historical(observation))
+    upgrade_historical(observation)
 }
 
 /// A capture written before permanents and spells carried their card
 /// records lists them as cards: each side's battlefield card rows in
 /// permanent order, and stack spells' rows in stack order. Move them onto
 /// their permanents and spells, so every reader sees the current shape. A
-/// capture whose rows do not pair up stays as it is (`PermanentData::card`
-/// absent), which only the v9/v10 encoders read.
-fn upgrade_historical(mut observation: Observation) -> Observation {
+/// capture whose exact identities cannot be reconstructed is refused.
+fn upgrade_historical(mut observation: Observation) -> Result<Observation, String> {
     if !observation.historical() {
-        return observation;
+        return Ok(observation);
     }
-    let mut upgraded = observation.clone();
     for (cards, permanents) in [
-        (&mut upgraded.agent_cards, &mut upgraded.agent_permanents),
         (
-            &mut upgraded.opponent_cards,
-            &mut upgraded.opponent_permanents,
+            &mut observation.agent_cards,
+            &mut observation.agent_permanents,
+        ),
+        (
+            &mut observation.opponent_cards,
+            &mut observation.opponent_permanents,
         ),
     ] {
         let battlefield: Vec<CardData> = cards
@@ -447,34 +452,49 @@ fn upgrade_historical(mut observation: Observation) -> Observation {
                 .zip(permanents.iter())
                 .any(|(card, permanent)| card.registry_key != permanent.registry_key)
         {
-            return observation;
+            return Err("historical permanent identity cannot be reconstructed".into());
         }
         cards.retain(|card| card.zone != ZoneType::Battlefield);
         for (permanent, card) in permanents.iter_mut().zip(battlefield) {
-            permanent.card = Some(card);
+            if permanent.power != card.power
+                || permanent.toughness != card.toughness
+                || permanent.keywords != card.keywords
+            {
+                return Err("historical permanent characteristics disagree".into());
+            }
+            permanent.object_id = Some(card.id);
+            permanent.owner_id = card.owner_id;
+            permanent.is_token = card.is_token;
+            permanent.characteristics = card.characteristics;
         }
     }
-    for object in upgraded
+    for object in observation
         .stack_objects
         .iter_mut()
-        .filter(|object| object.kind == StackObjectKindData::Spell && object.card.is_none())
+        .filter(|object| object.kind == StackObjectKindData::Spell && object.spell.is_none())
     {
-        let found = [&mut upgraded.agent_cards, &mut upgraded.opponent_cards]
-            .into_iter()
-            .find_map(|cards| {
-                let slot = cards.iter().position(|card| {
-                    card.zone == ZoneType::Stack
-                        && card.registry_key == object.source_card_registry_key
-                })?;
-                Some(cards.remove(slot))
-            });
-        match found {
-            Some(card) => object.card = Some(card),
-            None => return observation,
+        let candidates: Vec<_> = observation
+            .agent_cards
+            .iter()
+            .chain(&observation.opponent_cards)
+            .filter(|card| {
+                card.zone == ZoneType::Stack && card.registry_key == object.source_card_registry_key
+            })
+            .collect();
+        if candidates.len() != 1 {
+            return Err("historical spell identity is missing or ambiguous".into());
         }
+        let id = candidates[0].id;
+        let cards = if observation.agent_cards.iter().any(|c| c.id == id) {
+            &mut observation.agent_cards
+        } else {
+            &mut observation.opponent_cards
+        };
+        let slot = cards.iter().position(|c| c.id == id).unwrap();
+        let card = cards.remove(slot);
+        object.spell = Some(SpellData::from_legacy_card(card));
     }
-    observation = upgraded;
-    observation
+    Ok(observation)
 }
 
 #[cfg(test)]
@@ -516,10 +536,10 @@ mod tests {
             .iter_mut()
             .chain(&mut historical.opponent_permanents)
         {
-            permanent.card = None;
+            permanent.object_id = None;
         }
         for object in &mut historical.stack_objects {
-            object.card = None;
+            object.spell = None;
         }
         assert!(historical.historical());
         let upgraded = parse(&historical.to_json()).unwrap();
@@ -578,6 +598,374 @@ mod tests {
                 "{}",
                 case.name
             );
+        }
+    }
+}
+
+// Frozen schema-8 boundary records. Live observations never store these.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct WireCardData {
+    #[serde(deserialize_with = "super::observation_json::zone")]
+    pub zone: ZoneType,
+    pub owner_id: i32,
+    pub id: i32,
+    pub registry_key: i32,
+    pub name: String,
+    pub text_box: String,
+    pub power: i32,
+    pub toughness: i32,
+    /// Set for an object that is no card: a token or a copy of a spell.
+    pub is_token: bool,
+    pub is_legendary: bool,
+    /// Subtype tags the current pool cares about.
+    pub is_ally: bool,
+    pub is_lesson: bool,
+    /// Ward cost (mana value; 0 = no ward).
+    pub ward_cost: i32,
+    /// Kicker cost (mana value; 0 = no kicker).
+    pub kicker_cost: i32,
+    pub card_types: CardTypeData,
+    pub keywords: KeywordData,
+    #[serde(deserialize_with = "super::observation_json::mana_cost")]
+    pub mana_cost: ManaCost,
+    /// Foretold and face down in exile; listed only for its owner.
+    #[serde(default)]
+    pub face_down: bool,
+    /// The permission to play this card from exile, when it has one.
+    #[serde(default)]
+    pub cast_permission: Option<CastPermissionData>,
+    /// The value of X announced for this spell on the stack (CR 107.3),
+    /// when its mana cost has X.
+    #[serde(default)]
+    pub x: Option<i32>,
+    /// A graveyard card that was put there from the battlefield this turn
+    /// (`TurnState::graveyard_from_battlefield`); policy input v10.
+    #[serde(default)]
+    pub from_battlefield_this_turn: bool,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct WirePermanentData {
+    /// Effective colors when a layer changes the copiable colors.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub colors: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub keyword_counter_timestamps: BTreeMap<String, i32>,
+    /// Transformations of this exact permanent; repeated flips still count.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub transforms: u32,
+    pub id: i32,
+    /// Definition of the backing card, in the match's bound content pack.
+    pub registry_key: i32,
+    pub controller_id: i32,
+    pub tapped: bool,
+    pub damage: i32,
+    pub is_summoning_sick: bool,
+    pub plus1_counters: i32,
+    pub cant_be_blocked_this_turn: bool,
+    /// Effective power/toughness — CDA base, static continuous effects,
+    /// until-EOT deltas, and +1/+1 counters all applied.
+    pub power: i32,
+    pub toughness: i32,
+    /// A creature only through an effect: earthbend (a land that's also a
+    /// 0/0 creature), crew, or another type-changing effect.
+    pub is_animated: bool,
+    /// This permanent holds cards in exile until it leaves (Jailer).
+    pub has_exile_link: bool,
+    pub exile_if_dies_this_turn: bool,
+    /// Declared as an attacker in the current combat. Omitted when false, so
+    /// observations retained before this field stay canonical.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub attacking: bool,
+    /// Exhaust abilities this object has activated; each can never be
+    /// activated again by this object (CR 702.177a).
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub exhausted_abilities: i32,
+    /// "Once each turn" abilities this object has used this turn: activated
+    /// abilities, once-each-turn triggers that fired and "do this only once
+    /// each turn" options taken.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub once_each_turn_used: i32,
+    /// Firebending granted until end of turn, summed over grants.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub granted_firebending: i32,
+    pub temp_subtypes: Vec<String>,
+    /// Effective keywords — printed keywords unioned with until-EOT grants
+    /// (Yip Yip! flying, Enter the Avatar State, ...): what the permanent can
+    /// actually do now. The battlefield card entry reads the same layered view.
+    pub keywords: KeywordData,
+    /// Counters other than +1/+1 by kind (CR 122.1; `CounterKind` names in
+    /// snake case), only the kinds present.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub counters: BTreeMap<String, i32>,
+    /// The permanent this Aura or Equipment is attached to (CR 301.5, 303.4).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attached_to: Option<i32>,
+    /// Name and creature types set by an effect (Honest Work); absent while
+    /// the printed ones apply.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub creature_types: Option<Vec<String>>,
+    /// A land only through an effect (a static land-type grant).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub is_granted_land: bool,
+    /// The attacking creature this one blocks (CR 509.1).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blocking: Option<i32>,
+    /// It has lost all abilities (CR 613.1f), until end of turn or while an
+    /// Aura sets its characteristics.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub abilities_lost: bool,
+    /// Activated abilities (indices in its ability list) whose limit is
+    /// spent: exhaust (CR 702.177a) or once each turn (CR 602.5b).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub used_abilities: Vec<usize>,
+    /// It was dealt damage this turn, whether or not that damage is still
+    /// marked.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub dealt_damage_this_turn: bool,
+    /// Continuous effects on this permanent, in timestamp order; the
+    /// effective values above already apply them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub effects: Vec<ContinuousEffectData>,
+    /// Its timestamp (CR 613.7d/e), the order its static abilities apply in
+    /// among the records; absent while it is `id`, the timestamp it entered
+    /// with (an attachment renews it).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timestamp: Option<i32>,
+    /// The copy effect that made it a copy; absent for an original.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub copy: Option<CopyData>,
+    /// Its object's card record on the battlefield: name, rules text, types,
+    /// token status, costs and ward, read from the same layered view as the
+    /// fields above (its power, toughness and keywords equal them). `id` is
+    /// the object's id, which actions on the object (sacrifice, payment and
+    /// selection choices) name. Absent only in historical captures, whose
+    /// card lists held battlefield objects.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub card: Option<CardData>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct WireStackObjectData {
+    /// Derived ability text; absent on spells and historical observations.
+    #[serde(default)]
+    pub description: Option<String>,
+    pub stack_object_id: i32,
+    #[serde(deserialize_with = "super::observation_json::stack_kind")]
+    pub kind: StackObjectKindData,
+    pub controller_id: i32,
+    pub source_card_registry_key: i32,
+    pub source_permanent_id: Option<i32>,
+    pub chosen_mode: Option<usize>,
+    pub ability_index: Option<i32>,
+    pub targets: Vec<StackTargetData>,
+    /// The announced value of X (CR 107.3); omitted when zero.
+    #[serde(default)]
+    pub x: i32,
+    /// Keywords a static grants this spell while on the stack (a Lesson's
+    /// lifelink); absent when none.
+    #[serde(default)]
+    pub granted_keywords: Option<KeywordData>,
+    /// Whether a spell's kicker cost was paid (CR 702.33).
+    #[serde(default)]
+    pub kicked: bool,
+    /// A spell's card record (zone stack, with its announced X); absent for
+    /// abilities and in historical captures, whose card lists held spells.
+    #[serde(default)]
+    pub card: Option<CardData>,
+}
+
+impl From<WireCardData> for CardData {
+    fn from(w: WireCardData) -> Self {
+        Self {
+            zone: w.zone,
+            owner_id: w.owner_id,
+            id: w.id,
+            registry_key: w.registry_key,
+            is_token: w.is_token,
+            face_down: w.face_down,
+            cast_permission: w.cast_permission,
+            x: w.x,
+            from_battlefield_this_turn: w.from_battlefield_this_turn,
+            characteristics: CharacteristicsData {
+                name: w.name,
+                text_box: w.text_box,
+                power: w.power,
+                toughness: w.toughness,
+                is_legendary: w.is_legendary,
+                is_ally: w.is_ally,
+                is_lesson: w.is_lesson,
+                ward_cost: w.ward_cost,
+                kicker_cost: w.kicker_cost,
+                card_types: w.card_types,
+                keywords: w.keywords,
+                mana_cost: w.mana_cost,
+            },
+        }
+    }
+}
+
+impl From<WirePermanentData> for PermanentData {
+    fn from(w: WirePermanentData) -> Self {
+        let card = w.card;
+        Self {
+            colors: w.colors,
+            keyword_counter_timestamps: w.keyword_counter_timestamps,
+            transforms: w.transforms,
+            id: w.id,
+            registry_key: w.registry_key,
+            controller_id: w.controller_id,
+            tapped: w.tapped,
+            damage: w.damage,
+            is_summoning_sick: w.is_summoning_sick,
+            plus1_counters: w.plus1_counters,
+            cant_be_blocked_this_turn: w.cant_be_blocked_this_turn,
+            is_animated: w.is_animated,
+            has_exile_link: w.has_exile_link,
+            exile_if_dies_this_turn: w.exile_if_dies_this_turn,
+            attacking: w.attacking,
+            exhausted_abilities: w.exhausted_abilities,
+            once_each_turn_used: w.once_each_turn_used,
+            granted_firebending: w.granted_firebending,
+            temp_subtypes: w.temp_subtypes,
+            counters: w.counters,
+            attached_to: w.attached_to,
+            name: w.name,
+            creature_types: w.creature_types,
+            is_granted_land: w.is_granted_land,
+            blocking: w.blocking,
+            abilities_lost: w.abilities_lost,
+            used_abilities: w.used_abilities,
+            dealt_damage_this_turn: w.dealt_damage_this_turn,
+            effects: w.effects,
+            timestamp: w.timestamp,
+            copy: w.copy,
+            object_id: card.as_ref().map(|c| c.id),
+            owner_id: card.as_ref().map_or(0, |c| c.owner_id),
+            is_token: card.as_ref().is_some_and(|c| c.is_token),
+            characteristics: card.map_or_else(
+                || CharacteristicsData {
+                    power: w.power,
+                    toughness: w.toughness,
+                    keywords: w.keywords,
+                    ..Default::default()
+                },
+                |c| c.characteristics,
+            ),
+        }
+    }
+}
+
+impl PermanentData {
+    pub(crate) fn legacy_card(&self) -> Option<CardData> {
+        Some(CardData {
+            zone: ZoneType::Battlefield,
+            owner_id: self.owner_id,
+            id: self.object_id?,
+            registry_key: self.registry_key,
+            is_token: self.is_token,
+            face_down: false,
+            cast_permission: None,
+            x: None,
+            from_battlefield_this_turn: false,
+            characteristics: self.characteristics.clone(),
+        })
+    }
+}
+
+impl Serialize for PermanentData {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        WirePermanentData {
+            colors: self.colors.clone(),
+            keyword_counter_timestamps: self.keyword_counter_timestamps.clone(),
+            transforms: self.transforms,
+            id: self.id,
+            registry_key: self.registry_key,
+            controller_id: self.controller_id,
+            tapped: self.tapped,
+            damage: self.damage,
+            is_summoning_sick: self.is_summoning_sick,
+            plus1_counters: self.plus1_counters,
+            cant_be_blocked_this_turn: self.cant_be_blocked_this_turn,
+            is_animated: self.is_animated,
+            has_exile_link: self.has_exile_link,
+            exile_if_dies_this_turn: self.exile_if_dies_this_turn,
+            attacking: self.attacking,
+            exhausted_abilities: self.exhausted_abilities,
+            once_each_turn_used: self.once_each_turn_used,
+            granted_firebending: self.granted_firebending,
+            temp_subtypes: self.temp_subtypes.clone(),
+            counters: self.counters.clone(),
+            attached_to: self.attached_to,
+            name: self.name.clone(),
+            creature_types: self.creature_types.clone(),
+            is_granted_land: self.is_granted_land,
+            blocking: self.blocking,
+            abilities_lost: self.abilities_lost,
+            used_abilities: self.used_abilities.clone(),
+            dealt_damage_this_turn: self.dealt_damage_this_turn,
+            effects: self.effects.clone(),
+            timestamp: self.timestamp,
+            copy: self.copy.clone(),
+            power: self.characteristics.power,
+            toughness: self.characteristics.toughness,
+            keywords: self.characteristics.keywords.clone(),
+            card: self.legacy_card(),
+        }
+        .serialize(serializer)
+    }
+}
+
+impl From<WireStackObjectData> for StackObjectData {
+    fn from(w: WireStackObjectData) -> Self {
+        Self {
+            description: w.description,
+            stack_object_id: w.stack_object_id,
+            kind: w.kind,
+            controller_id: w.controller_id,
+            source_card_registry_key: w.source_card_registry_key,
+            source_permanent_id: w.source_permanent_id,
+            chosen_mode: w.chosen_mode,
+            ability_index: w.ability_index,
+            targets: w.targets,
+            x: w.x,
+            granted_keywords: w.granted_keywords,
+            kicked: w.kicked,
+            spell: w.card.map(SpellData::from_legacy_card),
+        }
+    }
+}
+
+impl SpellData {
+    /// Schema 8 represents spell copies with the card record's token flag.
+    pub(crate) fn from_legacy_card(card: CardData) -> Self {
+        Self {
+            object_id: card.id,
+            owner_id: card.owner_id,
+            registry_key: card.registry_key,
+            is_copy: card.is_token,
+            has_announced_x: card.x.is_some(),
+            characteristics: card.characteristics,
+        }
+    }
+
+    pub(crate) fn legacy_card(&self, x: i32) -> CardData {
+        CardData {
+            zone: ZoneType::Stack,
+            owner_id: self.owner_id,
+            id: self.object_id,
+            registry_key: self.registry_key,
+            is_token: self.is_copy,
+            face_down: false,
+            cast_permission: None,
+            x: self.has_announced_x.then_some(x),
+            from_battlefield_this_turn: false,
+            characteristics: self.characteristics.clone(),
         }
     }
 }

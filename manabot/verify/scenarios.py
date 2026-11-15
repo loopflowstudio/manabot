@@ -49,34 +49,37 @@ def _card_name(raw: Any, object_id: int) -> str | None:
 
     for card in raw.agent_cards:
         if int(card.id) == object_id:
-            return str(card.name)
+            return str(card.characteristics.name)
     for card in raw.opponent_cards:
         if int(card.id) == object_id:
-            return str(card.name)
+            return str(card.characteristics.name)
     return None
 
 
-def battlefield_pairs(raw: Any, side: str) -> list[tuple[Any, Any]]:
-    """(CardData, PermanentData) pairs for one side's battlefield: each
-    permanent with its own card record."""
-
-    perms = raw.agent_permanents if side == "agent" else raw.opponent_permanents
-    return [(perm.card, perm) for perm in perms if perm.card is not None]
+def battlefield_permanents(
+    raw: managym.Observation, side: str
+) -> list[managym.Permanent]:
+    """Each permanent owns its effective characteristics and current state."""
+    return raw.agent_permanents if side == "agent" else raw.opponent_permanents
 
 
 def zone_names(raw: Any, side: str, zone: int) -> list[str]:
     cards = raw.agent_cards if side == "agent" else raw.opponent_cards
-    return [str(c.name) for c in cards if int(c.zone) == zone]
+    return [str(c.characteristics.name) for c in cards if int(c.zone) == zone]
 
 
 def stack_names(raw: Any) -> list[str]:
     """Names of spells on the stack, top first (both players' spells)."""
 
-    return [str(item.card.name) for item in raw.stack_objects if item.card is not None]
+    return [
+        str(item.characteristics.name)
+        for item in raw.stack_objects
+        if item.characteristics is not None
+    ]
 
 
 def hero_view(raw: Any) -> tuple[str, str]:
-    """(hero_side, villain_side) keys for battlefield_pairs/zone_names.
+    """(hero_side, villain_side) keys for battlefield_permanents/zone_names.
 
     The observation is from the decision-holder's perspective; the hero is
     always seat 0 in scenarios.
@@ -111,8 +114,8 @@ def pass_index(raw: Any) -> int:
     return len(actions) - 1
 
 
-def _count_creatures(pairs: list[tuple[Any, Any]]) -> int:
-    return sum(1 for card, _ in pairs if bool(card.card_types.is_creature))
+def _count_creatures(permanents: list[managym.Permanent]) -> int:
+    return sum(bool(p.characteristics.card_types.is_creature) for p in permanents)
 
 
 # -----------------------------------------------------------------------------
@@ -210,8 +213,8 @@ class CounterBombTracker:
 
     def observe_state(self, raw: Any) -> None:
         hero_side, villain_side = hero_view(raw)
-        battlefield = [c for c, _ in battlefield_pairs(raw, villain_side)]
-        if any(c.name == self.BOMB for c in battlefield):
+        battlefield = battlefield_permanents(raw, villain_side)
+        if any(p.characteristics.name == self.BOMB for p in battlefield):
             self.bomb_resolved = True
             self.finished = True
             return
@@ -244,7 +247,7 @@ class HoldWipeTracker:
         if action_casts(raw, action) == "Pyroclasm":
             hero_side, villain_side = hero_view(raw)
             self.cast_turn = int(raw.turn.turn_number)
-            self.wiped = _count_creatures(battlefield_pairs(raw, villain_side))
+            self.wiped = _count_creatures(battlefield_permanents(raw, villain_side))
             hero = raw.agent if hero_side == "agent" else raw.opponent
             self.hero_life_at_cast = int(hero.life)
             self.finished = True
@@ -297,12 +300,12 @@ class BoltThreatTracker:
             return "own_face"
         if focus == int(villain.id):
             return "villain_face"
-        for card, perm in battlefield_pairs(raw, villain_side):
+        for perm in battlefield_permanents(raw, villain_side):
             if int(perm.id) == focus:
-                return str(card.name)
-        for card, perm in battlefield_pairs(raw, hero_side):
+                return str(perm.characteristics.name)
+        for perm in battlefield_permanents(raw, hero_side):
             if int(perm.id) == focus:
-                return f"own:{card.name}"
+                return f"own:{perm.characteristics.name}"
         return "unknown"
 
     def observe_state(self, raw: Any) -> None:
@@ -310,7 +313,8 @@ class BoltThreatTracker:
             return
         _, villain_side = hero_view(raw)
         on_battlefield = any(
-            card.name == self.KEY for card, _ in battlefield_pairs(raw, villain_side)
+            perm.characteristics.name == self.KEY
+            for perm in battlefield_permanents(raw, villain_side)
         )
         if not on_battlefield:
             self.key_died = True
@@ -345,9 +349,9 @@ class RaceBlockTracker:
             focus = int(chosen.focus[0]) if chosen.focus else -1
             hero_side, _ = hero_view(raw)
             name = "unknown"
-            for card, perm in battlefield_pairs(raw, hero_side):
+            for perm in battlefield_permanents(raw, hero_side):
                 if int(perm.id) == focus:
-                    name = str(card.name)
+                    name = str(perm.characteristics.name)
                     break
             # Attacker spaces are [attack, decline] in that order.
             (self.attacked if action == 0 else self.declined).append(name)
@@ -403,7 +407,9 @@ class HoldQuenchTracker:
 
     def observe_state(self, raw: Any) -> None:
         _, villain_side = hero_view(raw)
-        battlefield = [c.name for c, _ in battlefield_pairs(raw, villain_side)]
+        battlefield = [
+            p.characteristics.name for p in battlefield_permanents(raw, villain_side)
+        ]
         if self.THREAT in battlefield:
             self.threat_resolved = True
             self.finished = True

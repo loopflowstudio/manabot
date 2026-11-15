@@ -407,7 +407,9 @@ def test_retained_professor_offer_completes_payment_and_replays_exactly() -> Non
         # The production wrapper skips forced payment and priority steps,
         # reaching the resolved Professor's player-visible Learn decision.
         # Directed native regressions exercise each explicit payment step.
-        assert any(p.card.name == "Gnarled Professor" for p in obs.agent_permanents)
+        assert any(
+            p.characteristics.name == "Gnarled Professor" for p in obs.agent_permanents
+        )
         decline = next(
             i
             for i, action in enumerate(obs.action_space.actions)

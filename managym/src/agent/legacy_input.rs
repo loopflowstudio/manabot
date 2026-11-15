@@ -35,18 +35,18 @@ pub fn view(obs: &Observation) -> Observation {
     let spells = obs
         .stack_objects
         .iter()
-        .filter_map(|object| object.card.as_ref());
+        .filter_map(|object| object.spell.as_ref().map(|s| s.legacy_card(object.x)));
     for spell in spells {
         if spell.owner_id == obs.agent.id {
-            legacy.agent_cards.push(spell.clone());
+            legacy.agent_cards.push(spell);
         } else {
-            legacy.opponent_cards.push(spell.clone());
+            legacy.opponent_cards.push(spell);
         }
     }
     let battlefield = |permanents: &[super::observation::PermanentData]| {
         permanents
             .iter()
-            .filter_map(|permanent| permanent.card.clone())
+            .filter_map(|permanent| permanent.legacy_card())
             .collect::<Vec<CardData>>()
     };
     legacy

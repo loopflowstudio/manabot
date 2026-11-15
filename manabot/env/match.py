@@ -202,19 +202,18 @@ class Reward:
 
     @staticmethod
     def _count_battlefield_lands(permanents: list[managym.Permanent]) -> int:
-        """Lands among a side's permanents, by their layered card records."""
+        """Lands among a side's permanents, by their effective characteristics."""
         return sum(
             1
             for permanent in permanents
-            if permanent.card is not None and bool(permanent.card.card_types.is_land)
+            if bool(permanent.characteristics.card_types.is_land)
         )
 
     @staticmethod
     def _count_battlefield_creatures(permanents: list[managym.Permanent]) -> int:
-        """Creatures among a side's permanents, by their layered card records."""
+        """Creatures among a side's permanents, by their effective characteristics."""
         return sum(
             1
             for permanent in permanents
-            if permanent.card is not None
-            and bool(permanent.card.card_types.is_creature)
+            if bool(permanent.characteristics.card_types.is_creature)
         )

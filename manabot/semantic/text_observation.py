@@ -461,21 +461,23 @@ class _Renderer:
         for index, card in enumerate(
             self.state.agent_cards + self.state.opponent_cards
         ):
-            self._alias(f"C{index + 1} ({card.name})", card.id)
+            self._alias(f"C{index + 1} ({card.characteristics.name})", card.id)
         for index, permanent in enumerate(
             self.state.agent_permanents + self.state.opponent_permanents
         ):
-            card = permanent.card
-            if card is None:
-                raise TextEncodingError("permanent without its card record")
+            card = permanent.characteristics
+            if permanent.object_id is None:
+                raise TextEncodingError("permanent without its object identity")
             label = f"P{index + 1} ({card.name})"
             self.names[permanent.id] = label
-            self._alias(label, card.id, permanent.id)
+            self._alias(label, permanent.object_id, permanent.id)
         for index, item in enumerate(self.state.stack_objects):
-            label = f"S{index + 1}" + (f" ({item.card.name})" if item.card else "")
+            label = f"S{index + 1}" + (
+                f" ({item.characteristics.name})" if item.characteristics else ""
+            )
             self.names[item.stack_object_id] = label
-            if item.card is not None:
-                self._alias(label, item.card.id)
+            if item.object_id is not None:
+                self._alias(label, item.object_id)
         for index, card in enumerate(self.state.agent_sideboard):
             self.names[card.candidate_id] = f"O{index + 1} ({card.name})"
 
@@ -850,8 +852,9 @@ class _Renderer:
         state = self.state
         lines: list[str] = []
         for card in state.agent_cards + state.opponent_cards:
-            optional = _type_flags(card.card_types)
-            if keywords := _keywords(card.keywords):
+            characteristics = card.characteristics
+            optional = _type_flags(characteristics.card_types)
+            if keywords := _keywords(characteristics.keywords):
                 optional += f"; keywords {keywords}"
             if card.face_down:
                 optional += "; foretold, face down (hidden from other players)"
@@ -862,7 +865,7 @@ class _Renderer:
             if card.cast_permission is not None:
                 optional += "; " + self._cast_permission(card.cast_permission)
             lines.append(
-                f"{self.name(card.id)} [{self.definition(card.registry_key)}]: owner {self.name(card.owner_id)}; zone {_enum(_ZONES, int(card.zone))}; card power/toughness {card.power}/{card.toughness}; cost {_mana(card.mana_cost)}; mana value {card.mana_cost.mana_value}{optional}; unlisted type and keyword flags false; token {_yes(card.is_token)}; legendary {_yes(card.is_legendary)}; Ally {_yes(card.is_ally)}; Lesson {_yes(card.is_lesson)}; ward mana value {card.ward_cost}; kicker mana value {card.kicker_cost}. Rules: {card.text_box or '(empty)'}"
+                f"{self.name(card.id)} [{self.definition(card.registry_key)}]: owner {self.name(card.owner_id)}; zone {_enum(_ZONES, int(card.zone))}; card power/toughness {characteristics.power}/{characteristics.toughness}; cost {_mana(characteristics.mana_cost)}; mana value {characteristics.mana_cost.mana_value}{optional}; unlisted type and keyword flags false; token {_yes(card.is_token)}; legendary {_yes(characteristics.is_legendary)}; Ally {_yes(characteristics.is_ally)}; Lesson {_yes(characteristics.is_lesson)}; ward mana value {characteristics.ward_cost}; kicker mana value {characteristics.kicker_cost}. Rules: {characteristics.text_box or '(empty)'}"
             )
         if not state.agent_cards and not state.opponent_cards:
             lines.append("Empty.")
@@ -901,6 +904,7 @@ class _Renderer:
         state = self.state
         lines: list[str] = []
         for permanent in state.agent_permanents + state.opponent_permanents:
+            characteristics = permanent.characteristics
             optional = ""
             if permanent.attacking:
                 optional += "; attacking"
@@ -921,15 +925,13 @@ class _Renderer:
                 optional += (
                     f"; firebending {permanent.granted_firebending} until end of turn"
                 )
-            if keywords := _keywords(permanent.keywords):
+            if keywords := _keywords(characteristics.keywords):
                 optional += f"; effective keywords {keywords}"
             optional += self._characteristics(permanent)
             if state.shared_effects is not None:
                 optional += f"; timestamp rank {self.timestamp_ranks[permanent.id if permanent.timestamp is None else permanent.timestamp]}"
-            card = permanent.card
-            assert card is not None
             lines.append(
-                f"{self.name(permanent.id)} [{self.definition(permanent.registry_key)}]: owner {self.name(card.owner_id)}; controller {self.name(permanent.controller_id)}; power/toughness {permanent.power}/{permanent.toughness}; damage {permanent.damage}; tapped {_yes(permanent.tapped)}; summoning sick {_yes(permanent.is_summoning_sick)}; +1/+1 counters {permanent.plus1_counters}; animated {_yes(permanent.is_animated)}; holds exile link {_yes(permanent.has_exile_link)}; cannot be blocked this turn {_yes(permanent.cant_be_blocked_this_turn)}; exile if dies this turn {_yes(permanent.exile_if_dies_this_turn)}{optional}; unlisted effective keywords false; cost {_mana(card.mana_cost)}; mana value {card.mana_cost.mana_value}{_type_flags(card.card_types)}; unlisted type flags false; token {_yes(card.is_token)}; legendary {_yes(card.is_legendary)}; Ally {_yes(card.is_ally)}; Lesson {_yes(card.is_lesson)}; ward mana value {card.ward_cost}. Rules: {card.text_box or '(empty)'}"
+                f"{self.name(permanent.id)} [{self.definition(permanent.registry_key)}]: owner {self.name(permanent.owner_id)}; controller {self.name(permanent.controller_id)}; power/toughness {characteristics.power}/{characteristics.toughness}; damage {permanent.damage}; tapped {_yes(permanent.tapped)}; summoning sick {_yes(permanent.is_summoning_sick)}; +1/+1 counters {permanent.plus1_counters}; animated {_yes(permanent.is_animated)}; holds exile link {_yes(permanent.has_exile_link)}; cannot be blocked this turn {_yes(permanent.cant_be_blocked_this_turn)}; exile if dies this turn {_yes(permanent.exile_if_dies_this_turn)}{optional}; unlisted effective keywords false; cost {_mana(characteristics.mana_cost)}; mana value {characteristics.mana_cost.mana_value}{_type_flags(characteristics.card_types)}; unlisted type flags false; token {_yes(permanent.is_token)}; legendary {_yes(characteristics.is_legendary)}; Ally {_yes(characteristics.is_ally)}; Lesson {_yes(characteristics.is_lesson)}; ward mana value {characteristics.ward_cost}. Rules: {characteristics.text_box or '(empty)'}"
             )
         if not state.agent_permanents and not state.opponent_permanents:
             lines.append("Empty.")
@@ -1163,10 +1165,10 @@ class _Renderer:
             if targets:
                 details.append("targets " + ", ".join(targets))
             spell = ""
-            if (card := item.card) is not None:
+            if (card := item.characteristics) is not None:
                 keywords = _keywords(card.keywords)
                 spell = (
-                    f" Spell: owner {self.name(card.owner_id)}; copy or token {_yes(card.is_token)}; "
+                    f" Spell: owner {self.name(item.owner_id)}; copy {_yes(item.is_copy)}; "
                     f"power/toughness {card.power}/{card.toughness}; cost {_mana(card.mana_cost)}; "
                     f"mana value {card.mana_cost.mana_value}{_type_flags(card.card_types)}"
                     f"{f'; keywords {keywords}' if keywords else ''}; unlisted type and keyword flags false; "

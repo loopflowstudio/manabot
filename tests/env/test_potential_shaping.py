@@ -12,8 +12,8 @@ Covers:
   symmetric start.
 """
 
+from collections.abc import Sequence
 from types import SimpleNamespace
-from typing import Any
 
 import torch
 
@@ -219,7 +219,9 @@ class TestVectorEnvPotential:
 # -----------------------------------------------------------------------------
 # Single-env Match.Reward path
 # -----------------------------------------------------------------------------
-def _stub_card(*, zone: int, is_land: bool = False, is_creature: bool = False):
+def _stub_card(
+    *, zone: int, is_land: bool = False, is_creature: bool = False
+) -> SimpleNamespace:
     return SimpleNamespace(
         zone=zone,
         card_types=SimpleNamespace(is_land=is_land, is_creature=is_creature),
@@ -230,15 +232,17 @@ def _stub_obs(
     *,
     agent_life: int = 20,
     opponent_life: int = 20,
-    agent_cards=(),
-    opponent_cards=(),
+    agent_cards: Sequence[SimpleNamespace] = (),
+    opponent_cards: Sequence[SimpleNamespace] = (),
     game_over: bool = False,
     won: bool = False,
-):
-    # A battlefield stub card is a permanent's card record; other cards are listed.
-    def permanents(cards: Any) -> list[SimpleNamespace]:
+) -> SimpleNamespace:
+    # Battlefield fixtures expose characteristics on their permanent.
+    def permanents(cards: Sequence[SimpleNamespace]) -> list[SimpleNamespace]:
         return [
-            SimpleNamespace(card=card) for card in cards if card.zone == BATTLEFIELD
+            SimpleNamespace(characteristics=card)
+            for card in cards
+            if card.zone == BATTLEFIELD
         ]
 
     return SimpleNamespace(

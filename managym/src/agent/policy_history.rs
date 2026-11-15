@@ -532,7 +532,7 @@ mod tests {
         // Identical public definitions instantiated in different physical slots.
         let first = root(ObjectId(0), ObjectId(40));
         let second = root(ObjectId(1), ObjectId(41));
-        let spell = |obs: &Observation| obs.stack_objects[0].card.as_ref().unwrap().id;
+        let spell = |obs: &Observation| obs.stack_objects[0].spell.as_ref().unwrap().object_id;
         assert_ne!(spell(&first), spell(&second));
         assert_eq!(rows(&first, 32), rows(&second, 32));
     }

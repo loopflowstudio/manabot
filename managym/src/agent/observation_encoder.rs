@@ -414,8 +414,7 @@ pub enum ObservationEncodeError {
     /// State the policy input has no columns or rows for; encoding it would
     /// hide a distinction the game makes.
     Unrepresentable(String),
-    /// A historical capture without permanent and spell card records, which
-    /// input v11 needs; only the v9/v10 layout reads it.
+    /// Missing permanent or spell identity, which input v11 requires.
     HistoricalObservation,
 }
 
@@ -433,7 +432,7 @@ impl fmt::Display for ObservationEncodeError {
             }
             Self::HistoricalObservation => write!(
                 f,
-                "policy input v11 requires permanent and spell card records; \
+                "policy input v11 requires permanent and spell identities; \
                  this historical observation encodes only as input v9/v10"
             ),
             Self::Capacity {
@@ -871,9 +870,9 @@ pub fn encode_into(
             .enumerate()
         {
             for (slot, permanent) in permanents.iter().enumerate() {
-                if let Some(card) = &permanent.card {
+                if let Some(id) = permanent.object_id {
                     let index = permanent_start + side * config.max_permanents_per_player + slot;
-                    object_to_index.insert(card.id, index as i32);
+                    object_to_index.insert(id, index as i32);
                 }
             }
         }
@@ -1420,7 +1419,8 @@ fn encode_permanent_features(
     out[permanent::ABILITIES_LOST] = bool_to_f32(permanent.abilities_lost);
     out[permanent::DEALT_DAMAGE_THIS_TURN] = bool_to_f32(permanent.dealt_damage_this_turn);
     // Input v11: the characteristics only a card row held in v9/v10.
-    if let (InputLayout::OneToken, Some(card)) = (layout, &permanent.card) {
+    if layout == InputLayout::OneToken {
+        let card = &permanent.characteristics;
         out[permanent::MANA_VALUE] = card.mana_cost.mana_value as f32 / 10.0;
         out[permanent::IS_LAND] = bool_to_f32(card.card_types.is_land);
         out[permanent::IS_CREATURE] = bool_to_f32(card.card_types.is_creature);
@@ -1429,7 +1429,7 @@ fn encode_permanent_features(
         out[permanent::IS_PLANESWALKER] = bool_to_f32(card.card_types.is_planeswalker);
         out[permanent::IS_BATTLE] = bool_to_f32(card.card_types.is_battle);
         out[permanent::IS_LEGENDARY] = bool_to_f32(card.is_legendary);
-        out[permanent::IS_TOKEN] = bool_to_f32(card.is_token);
+        out[permanent::IS_TOKEN] = bool_to_f32(permanent.is_token);
         out[permanent::IS_ALLY] = bool_to_f32(card.is_ally);
         out[permanent::IS_LESSON] = bool_to_f32(card.is_lesson);
         out[permanent::HAS_WARD] = bool_to_f32(card.ward_cost > 0);
@@ -1458,8 +1458,8 @@ fn encode_stack(
         out_valid[slot] = 1.0;
         let index = *current_object_index + slot as i32;
         object_to_index.insert(object.stack_object_id, index);
-        if let Some(card) = &object.card {
-            object_to_index.insert(card.id, index);
+        if let Some(card) = &object.spell {
+            object_to_index.insert(card.object_id, index);
         }
     }
     *current_object_index += rows as i32;
@@ -1474,15 +1474,15 @@ fn encode_stack_features(object: &StackObjectData, viewer_id: i32, out: &mut [f3
     }] = 1.0;
     // A spell's definition is its card's; an ability's is its source's.
     let definition = object
-        .card
+        .spell
         .as_ref()
         .map_or(object.source_card_registry_key, |card| card.registry_key);
     out[stack::DEFINITION] = (definition + 1) as f32;
     // stack::SOURCE is written once every object is indexed.
     out[stack::ABILITY] = object.ability_index.map_or(0.0, |index| (index + 1) as f32);
     out[stack::MODE] = object.chosen_mode.map_or(0.0, |mode| (mode + 1) as f32);
-    let x = match &object.card {
-        Some(card) => card.x,
+    let x = match &object.spell {
+        Some(card) => card.has_announced_x.then_some(object.x),
         None => (object.x != 0).then_some(object.x),
     };
     if let Some(x) = x {
@@ -1490,8 +1490,8 @@ fn encode_stack_features(object: &StackObjectData, viewer_id: i32, out: &mut [f3
         out[stack::X] = x as f32 / 10.0;
     }
     out[stack::KICKED] = bool_to_f32(object.kicked);
-    if let Some(card) = &object.card {
-        out[stack::IS_COPY] = bool_to_f32(card.is_token);
+    if let Some(card) = &object.spell {
+        out[stack::IS_COPY] = bool_to_f32(card.is_copy);
         out[stack::MANA_VALUE] = card.mana_cost.mana_value as f32 / 10.0;
         out[stack::POWER] = card.power as f32 / 10.0;
         out[stack::TOUGHNESS] = card.toughness as f32 / 10.0;
@@ -2092,7 +2092,10 @@ mod tests {
             agent_cards: vec![make_card(111, ZoneType::Hand, true, 2, 2, 1)],
             stack_objects: vec![],
             agent_permanents: vec![PermanentData {
-                card: Some(make_card(112, ZoneType::Battlefield, true, 3, 3, 2)),
+                object_id: Some(112),
+                owner_id: 10,
+                characteristics: make_card(112, ZoneType::Battlefield, true, 3, 3, 2)
+                    .characteristics,
                 ..make_permanent(333, true)
             }],
             opponent: PlayerData {
@@ -2124,7 +2127,10 @@ mod tests {
             },
             opponent_cards: vec![make_card(221, ZoneType::Hand, false, 1, 1, 1)],
             opponent_permanents: vec![PermanentData {
-                card: Some(make_card(445, ZoneType::Battlefield, false, 2, 2, 2)),
+                object_id: Some(445),
+                owner_id: 20,
+                characteristics: make_card(445, ZoneType::Battlefield, false, 2, 2, 2)
+                    .characteristics,
                 ..make_permanent(444, false)
             }],
             policy_history: Default::default(),
@@ -2214,46 +2220,48 @@ mod tests {
         mana_value: u8,
     ) -> CardData {
         CardData {
+            characteristics: crate::agent::observation::CharacteristicsData {
+                name: format!("Card {id}"),
+                text_box: String::new(),
+                power,
+                toughness,
+                is_legendary: false,
+                is_ally: false,
+                is_lesson: false,
+                ward_cost: 0,
+                kicker_cost: 0,
+                card_types: CardTypeData {
+                    is_castable: true,
+                    is_permanent: true,
+                    is_non_land_permanent: true,
+                    is_non_creature_permanent: false,
+                    is_spell: true,
+                    is_creature: true,
+                    is_land: false,
+                    is_planeswalker: false,
+                    is_enchantment: false,
+                    is_artifact: false,
+                    is_kindred: false,
+                    is_battle: false,
+                },
+                keywords: KeywordData::default(),
+                mana_cost: ManaCost {
+                    purpose: Default::default(),
+                    cost: [0; 7],
+                    mana_value,
+                    hybrid: Vec::new(),
+                    x: 0,
+                },
+            },
             zone,
             owner_id: if mine { 10 } else { 20 },
             id,
             registry_key: id,
-            name: format!("Card {id}"),
-            text_box: String::new(),
-            power,
-            toughness,
             is_token: false,
-            is_legendary: false,
-            is_ally: false,
-            is_lesson: false,
-            ward_cost: 0,
-            kicker_cost: 0,
             face_down: false,
             cast_permission: None,
             x: None,
             from_battlefield_this_turn: false,
-            card_types: CardTypeData {
-                is_castable: true,
-                is_permanent: true,
-                is_non_land_permanent: true,
-                is_non_creature_permanent: false,
-                is_spell: true,
-                is_creature: true,
-                is_land: false,
-                is_planeswalker: false,
-                is_enchantment: false,
-                is_artifact: false,
-                is_kindred: false,
-                is_battle: false,
-            },
-            keywords: KeywordData::default(),
-            mana_cost: ManaCost {
-                purpose: Default::default(),
-                cost: [0; 7],
-                mana_value,
-                hybrid: Vec::new(),
-                x: 0,
-            },
         }
     }
 
@@ -2269,8 +2277,11 @@ mod tests {
             is_summoning_sick: false,
             plus1_counters: 0,
             cant_be_blocked_this_turn: false,
-            power: 2,
-            toughness: 2,
+            characteristics: crate::agent::observation::CharacteristicsData {
+                power: 2,
+                toughness: 2,
+                ..Default::default()
+            },
             is_animated: false,
             has_exile_link: false,
             exile_if_dies_this_turn: false,
@@ -2360,7 +2371,9 @@ mod tests {
                 x: 0,
                 granted_keywords: None,
                 kicked: true,
-                card: Some(spell),
+                spell: Some(crate::agent::observation::SpellData::from_legacy_card(
+                    spell,
+                )),
             },
             StackObjectData {
                 description: None,
@@ -2375,7 +2388,7 @@ mod tests {
                 x: 0,
                 granted_keywords: None,
                 kicked: false,
-                card: None,
+                spell: None,
             },
         ];
         // Focus on the battlefield object's card id, the spell's card id,

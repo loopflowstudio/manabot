@@ -70,7 +70,7 @@ class PaymentMismatchEnv:
         ):
             raw = self.native.observation_for_player(frame["actor"])
             red = sum(raw.agent.mana) + sum(
-                not permanent.tapped and permanent.card.name == "Mountain"
+                not permanent.tapped and permanent.characteristics.name == "Mountain"
                 for permanent in raw.agent_permanents
             )
             assert _repaired_payment(red), (

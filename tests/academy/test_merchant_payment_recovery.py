@@ -61,7 +61,7 @@ def test_merchant_payment_reconnect_vector_and_fork(
                 assert frame.offers, "game ended before the payment fixture"
                 if (
                     sum(
-                        p.card is not None and p.card.name == "Food"
+                        p.characteristics.name == "Food"
                         for p in game.obs.agent_permanents
                     )
                     == 3
@@ -202,7 +202,7 @@ def test_merchant_payment_reconnect_vector_and_fork(
         assert sum(game.obs.agent.mana) == 1
         assert (
             sum(
-                p.card is not None and p.card.name == "Food" and p.tapped
+                p.characteristics.name == "Food" and p.tapped
                 for p in game.obs.agent_permanents
             )
             == 2

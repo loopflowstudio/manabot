@@ -20,9 +20,9 @@ Each is reversible before the PR lands.
 5. Framework backends (MLX, `manabot.policy.prepare`) stay v9-only;
    `require_supported` refuses v11 by name. A fresh default config therefore
    does not run on MLX until it is ported.
-6. Frozen regime files that omit `policy_input_version` now resolve to v11
-   when validated directly (the default moved); checkpoints go through
-   `from_checkpoint`, which keeps their bound version.
+6. Saved regime observation settings that omit `policy_input_version` retain
+   v9 through `TrainingRegime.read_saved_stages`; fresh configs default to v11.
+   Checkpoints go through `from_checkpoint`, keeping their bound version.
 7. Retained authored-match parity receipt regenerated: only
    `viewer_observation_sha256`/`viewer_state_sha256` (270 checkpoints × 3
    surfaces each) and the source manifest changed.
@@ -43,3 +43,8 @@ Each is reversible before the PR lands.
     row (Food activation, then a modal choice; 1 in ~12k observations). It
     happens identically in v10, whose encodings match main, so it predates
     this change; filed as a bug Task rather than fixed here.
+
+13. The characteristics aliases use removal release 0.4.0, matching this
+    Task's already reviewed v9/v10 deprecation. Frozen viewer JSON keeps
+    its old field names through boundary-only wire records; those are not
+    canonical live storage.

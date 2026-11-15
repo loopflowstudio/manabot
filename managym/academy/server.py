@@ -52,10 +52,12 @@ from managym.experience import (
 )
 from managym.experience_projection import (
     HERO_PLAYER_INDEX,
-    card_records,
     decision_surface_view,
     describe_actions,
     enum_name,
+    object_records,
+    observation_definition_id,
+    observation_object_id,
     offer_verb,
     redact_observation,
     serialize_observation,
@@ -387,10 +389,13 @@ class StudyAttempt:
 def _definition_ids_by_object(obs: managym.Observation) -> dict[int, int]:
     """Resolve live card, permanent, and stack identities to typed definitions."""
 
-    result = {int(card.id): int(card.registry_key) for card in card_records(obs)}
+    result = {
+        observation_object_id(card): observation_definition_id(card)
+        for card in object_records(obs)
+    }
     for permanent in (*obs.agent_permanents, *obs.opponent_permanents):
-        if permanent.card is not None:
-            result[int(permanent.id)] = int(permanent.card.registry_key)
+        if permanent.object_id is not None:
+            result[int(permanent.id)] = int(permanent.registry_key)
     for stack_object in obs.stack_objects:
         result[int(stack_object.stack_object_id)] = int(
             stack_object.source_card_registry_key
@@ -471,9 +476,9 @@ def _encountered_definition_ids(
             *observation.agent_permanents,
             *observation.opponent_permanents,
         ):
-            if permanent.card is not None:
+            if permanent.object_id is not None:
                 target[int(permanent.id)] = (
-                    int(permanent.card.registry_key),
+                    int(permanent.registry_key),
                     bool(permanent.tapped),
                 )
     for identity, (definition_id, was_tapped) in before_taps.items():

@@ -293,18 +293,40 @@ relation references, history contexts) names that row:
 | `agent_permanents`, `opponent_permanents` | a permanent, by controller, with its characteristics: mana value, six card types, legendary, token, Ally, Lesson and ward beside its state |
 | `stack` | a spell, activated ability or triggered ability, top first, one segment with `is_mine` for its controller; a spell's characteristics, an ability's index and source link, mode, X and kicker |
 
+The published observation exposes `card.characteristics` and
+`permanent.characteristics` as `ObservationCharacteristics`. Effective P/T,
+name, types, keywords and ward come from one layered projection on a permanent;
+rules text and mana cost describe its definition. This is a viewer projection,
+not the engine's full `Characteristics` type or dynamic rules text.
+
+```python
+permanent = obs.agent_permanents[0]
+name = permanent.characteristics.name
+power = permanent.characteristics.power
+is_token = permanent.is_token
+object_id = permanent.object_id  # selection, payment and history identity
+```
+
+A spell's `stack_object.characteristics` is present even for a copy;
+`object_id`, `owner_id`, `is_copy` and `announced_x` belong to the stack object.
+An ability has no spell characteristics and retains its captured source
+definition/reference after the source leaves. `Permanent.name` keeps its old
+override meaning (`None` while the printed name applies).
+
+The old Python `.card` accessors and flat characteristic getters are derived
+compatibility aliases, warn, and are removed in 0.4.0. Frozen viewer JSON
+keeps its existing fields and bytes; those wire records are normalized on read.
+Historical captures whose object identity is missing or ambiguous are refused.
+Academy's retained `base_power`/`base_toughness` fields still mean effective
+P/T, matching their existing serialized meaning.
+
 The object table is players, agent cards, opponent cards, agent permanents,
-opponent permanents, then the stack. Native `Observation` has the same shape:
-card lists hold only those cards, `Permanent.card` is a permanent's card record
-(its layered name, rules text, types and token status; `card.id` is the object
-id that sacrifice, payment and selection actions focus), and a spell's
-`StackObject.card` is its card record on the stack. The encoders index a
-battlefield object's card id and a spell's card id to its permanent or stack
-row, so those actions, a spell's costs and modes and history contexts all
-reach the row that holds the object's state. V11 carries v10's turn state
-(`player_turn_state`, `card_turn_state`) and refuses nothing a v10 encoder
-holds. A historical observation, whose card lists still hold battlefield
-objects and spells, encodes only as v9/v10.
+opponent permanents, then the stack. The encoders index a battlefield object's
+`object_id` and a spell's `object_id` to its permanent or stack row. Selection,
+payment, a spell's costs and modes, and history contexts reach the row that
+holds the object's state. V11 carries v10's turn state (`player_turn_state`,
+`card_turn_state`) and refuses nothing a v10 encoder holds. Unambiguous
+historical JSON is normalized to this observation shape before encoding.
 
 ### Deprecated inputs v9 and v10
 

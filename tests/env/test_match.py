@@ -71,7 +71,7 @@ def test_reward_correct_both_players(player_index):
     assert reward.compute(0.0, last_obs, lost_obs) == -3.0
 
 
-def test_reward_progress_shaping():
+def test_reward_progress_shaping() -> None:
     reward = Reward(
         RewardConfig(
             land_play_reward=1.0,
@@ -82,7 +82,7 @@ def test_reward_progress_shaping():
 
     def permanent(*, is_land: bool, is_creature: bool) -> SimpleNamespace:
         types = SimpleNamespace(is_land=is_land, is_creature=is_creature)
-        return SimpleNamespace(card=SimpleNamespace(card_types=types))
+        return SimpleNamespace(characteristics=SimpleNamespace(card_types=types))
 
     last_obs = SimpleNamespace(
         agent_permanents=[permanent(is_land=True, is_creature=False)],
@@ -104,7 +104,7 @@ def test_reward_progress_shaping():
     assert reward.compute(0.0, last_obs, new_obs) == 4.0
 
 
-def test_reward_progress_shaping_stacks_with_terminal_reward():
+def test_reward_progress_shaping_stacks_with_terminal_reward() -> None:
     reward = Reward(
         RewardConfig(
             win_reward=2.0,
@@ -120,7 +120,7 @@ def test_reward_progress_shaping_stacks_with_terminal_reward():
     new_obs = SimpleNamespace(
         agent_permanents=[
             SimpleNamespace(
-                card=SimpleNamespace(
+                characteristics=SimpleNamespace(
                     card_types=SimpleNamespace(is_land=True, is_creature=False)
                 )
             )

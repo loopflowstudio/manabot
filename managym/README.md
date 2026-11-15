@@ -361,8 +361,7 @@ immediate output decision. `Game::characteristics` derives battlefield grants;
 those granted mana abilities never become activated stack objects. Waterbend
 taps are cost payment, not tapping for mana. The view is the one reader of a
 battlefield permanent's characteristics, legendary and ward included: the
-legend rule reads its `is_legendary`, and every `CardData` field that states a
-characteristic reads it there (`tests/cards/observability.rs` classifies each
+legend rule reads its `is_legendary`, and every permanent observation characteristic reads it there (`tests/cards/observability.rs` classifies each
 field as layered or printed by definition).
 
 The cached raw layer board tracks discovered reads of mana pools and tapped

@@ -517,7 +517,7 @@ def test_first_64_legal_actions_preserve_membership_mapping_and_masks() -> None:
     }
     _, after, *_ = scalar.step_semantic_command(json.dumps(command))
     assert any(
-        permanent.card.id in selected.focus
+        permanent.object_id in selected.focus
         for permanent in after.agent_permanents + after.opponent_permanents
     )
 

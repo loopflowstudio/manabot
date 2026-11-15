@@ -60,10 +60,11 @@ from manabot.verify.scenarios import (
     Scenario,
     ScriptedVillain,
     action_casts,
-    battlefield_pairs,
+    battlefield_permanents,
     build_scenario_env,
     find_cast_action,
 )
+import managym
 
 # -----------------------------------------------------------------------------
 # Micro-format decks (instrument 2)
@@ -299,9 +300,9 @@ class BehaviorProbe:
                 self.counter_casts += 1
                 if first_window:
                     self.counter_casts_first_window += 1
-                stack = self._stack_cards(raw)
+                stack = self._stack_spells(raw)
                 if len(stack) == 1:
-                    self._record_countered(stack[0])
+                    self._record_countered(stack[0].characteristics)
                 else:
                     self._pending_counter = True
 
@@ -317,37 +318,40 @@ class BehaviorProbe:
             and int(raw.turn.phase) in (PHASE_PRECOMBAT, PHASE_POSTCOMBAT)
             and not list(raw.stack_objects)
             and any(
-                c.name == "Counterspell" and int(c.zone) == ZONE_HAND
+                c.characteristics.name == "Counterspell" and int(c.zone) == ZONE_HAND
                 for c in raw.agent_cards
             )
         ):
             untapped_lands = sum(
                 1
-                for card, perm in battlefield_pairs(raw, "agent")
-                if bool(card.card_types.is_land) and not bool(perm.tapped)
+                for perm in battlefield_permanents(raw, "agent")
+                if bool(perm.characteristics.card_types.is_land)
+                and not bool(perm.tapped)
             )
             creature_costs = [
-                int(c.mana_cost.mana_value)
+                int(c.characteristics.mana_cost.mana_value)
                 for index in range(len(raw.action_space.actions))
                 for c in raw.agent_cards
                 if (name := action_casts(raw, index)) is not None
-                and c.name == name
+                and c.characteristics.name == name
                 and int(c.zone) == ZONE_HAND
-                and bool(c.card_types.is_creature)
+                and bool(c.characteristics.card_types.is_creature)
             ]
             if creature_costs and untapped_lands - min(creature_costs) < 2:
                 self.hold_windows += 1
                 cast = action_casts(raw, action)
                 if cast is not None:
                     for c in raw.agent_cards:
-                        if c.name == cast and bool(c.card_types.is_creature):
+                        if c.characteristics.name == cast and bool(
+                            c.characteristics.card_types.is_creature
+                        ):
                             self.hold_breaks += 1
                             break
 
-    def _stack_cards(self, raw: Any) -> list[Any]:
-        return [item.card for item in raw.stack_objects if item.card is not None]
+    def _stack_spells(self, raw: managym.Observation) -> list[managym.StackObject]:
+        return [item for item in raw.stack_objects if item.characteristics is not None]
 
-    def _record_countered(self, card: Any) -> None:
+    def _record_countered(self, card: managym.ObservationCharacteristics) -> None:
         name = str(card.name)
         self.countered_names[name] = self.countered_names.get(name, 0) + 1
         self.countered_mana_values.append(int(card.mana_cost.mana_value))
@@ -355,18 +359,18 @@ class BehaviorProbe:
     def _classify_counter_target(self, raw: Any, action: int) -> None:
         chosen = raw.action_space.actions[action]
         focus = int(chosen.focus[0]) if chosen.focus else -1
-        for card in self._stack_cards(raw):
-            if int(card.id) == focus:
-                self._record_countered(card)
+        for card in self._stack_spells(raw):
+            if int(card.object_id) == focus:
+                self._record_countered(card.characteristics)
                 return
 
     def _classify_bolt_target(self, raw: Any, action: int) -> None:
         chosen = raw.action_space.actions[action]
         focus = int(chosen.focus[0]) if chosen.focus else -1
         villain_creatures = [
-            (card, perm)
-            for card, perm in battlefield_pairs(raw, "opponent")
-            if bool(card.card_types.is_creature)
+            perm
+            for perm in battlefield_permanents(raw, "opponent")
+            if bool(perm.characteristics.card_types.is_creature)
         ]
         # Target-quality is only meaningful when there was a real choice
         # among enemy creatures: bolt_biggest counts max-power picks among
@@ -378,13 +382,13 @@ class BehaviorProbe:
         if focus == int(raw.opponent.id):
             self.bolt_face += 1
             return
-        for card, perm in villain_creatures:
+        for perm in villain_creatures:
             if int(perm.id) == focus:
-                max_power = max(int(p.power) for _, p in villain_creatures)
-                if multi and int(perm.power) >= max_power:
+                max_power = max(int(p.characteristics.power) for p in villain_creatures)
+                if multi and int(perm.characteristics.power) >= max_power:
                     self.bolt_biggest += 1
                 return
-        for card, perm in battlefield_pairs(raw, "agent"):
+        for perm in battlefield_permanents(raw, "agent"):
             if int(perm.id) == focus:
                 self.bolt_own += 1
                 return

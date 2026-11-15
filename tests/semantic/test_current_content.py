@@ -180,7 +180,7 @@ def test_baseline_card_executes_shared_commands_and_forks_with_learning_and_acad
 
     for ordinal in range(12):
         view = env.observation_for_player(0)
-        names = [perm.card.name for perm in view.agent_permanents]
+        names = [perm.characteristics.name for perm in view.agent_permanents]
         if "Treetop Freedom Fighters" in names and "Ally" in names:
             break
         frame = DecisionFrame.from_json(env.semantic_decision_frame_json())

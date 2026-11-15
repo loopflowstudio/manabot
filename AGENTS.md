@@ -169,8 +169,10 @@ checkpoints or experiment evidence.
 - Main carries policy input v11, the fresh default
   (`ObservationConfig.policy_input_version`, always serialized): one row per
   game thing. Card rows hold cards outside the battlefield and stack;
-  `PermanentData.card` and a spell's `StackObjectData.card` are those objects'
-  card records, and permanent rows carry their characteristics; the `stack`
+  permanents own one effective `CharacteristicsData` projection plus object
+  identity and token status; spells own a `SpellData` projection, and abilities
+  carry only source references. Old Python `.card` and flat characteristic
+  getters derive from those records (removed in 0.4.0); the `stack`
   buffer holds every spell and ability. A battlefield object's or spell's card
   id indexes its permanent or stack row, so focus, relations and history name
   one row. V11 carries v10's `player_turn_state` and `card_turn_state`; a

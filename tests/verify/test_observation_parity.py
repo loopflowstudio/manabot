@@ -732,7 +732,9 @@ def test_merchant_tap_count_native_reference_and_text_parity() -> None:
         for _ in range(16):
             obs = env.observation_for_player(owner)
             if (
-                sum(perm.card.name == "Food" for perm in obs.agent_permanents)
+                sum(
+                    perm.characteristics.name == "Food" for perm in obs.agent_permanents
+                )
                 == food_count
                 and not obs.stack_objects
             ):

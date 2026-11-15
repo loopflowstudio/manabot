@@ -708,17 +708,40 @@ class CastPermission:
     waterbend: bool
     foretold: bool
 
+class ObservationCharacteristics:
+    """Viewer-safe characteristics. P/T and keywords are effective on the battlefield.
+
+    Rules text and mana cost describe the definition; this is not the full
+    layered rules view. Values are read-only snapshots of the native record.
+    """
+
+    name: str
+    text_box: str
+    power: int
+    toughness: int
+    is_legendary: bool
+    is_ally: bool
+    is_lesson: bool
+    ward_cost: int
+    kicker_cost: int
+    card_types: CardTypes
+    keywords: Keywords
+    mana_cost: ManaCost
+
 class Card:
-    """A card in any zone. On the battlefield every characteristic field
-    (name, power/toughness, card types, legendary, Ally, Lesson, ward,
-    keywords) reads the engine's layered characteristics; elsewhere the
-    printed card. Identity, token status and casting costs are printed."""
+    """A visible card outside the battlefield and stack.
+
+    Flat characteristic accessors are deprecated aliases, removed in 0.4.0.
+    """
+
+    characteristics: ObservationCharacteristics
 
     zone: ZoneEnum
     owner_id: int
     id: int
     registry_key: int
     name: str
+    text_box: str
     power: int
     toughness: int
     is_token: bool
@@ -790,6 +813,11 @@ class CopyEffect:
     exceptions: list[ContinuousEffect]
 
 class Permanent:
+    characteristics: ObservationCharacteristics
+    # Underlying object identity; live/normalized observations always have it.
+    object_id: int | None
+    owner_id: int
+    is_token: bool
     colors: list[str] | None
     keyword_counter_timestamps: dict[str, int]
     transforms: int
@@ -801,6 +829,7 @@ class Permanent:
     is_summoning_sick: bool
     plus1_counters: int
     cant_be_blocked_this_turn: bool
+    # Derived characteristic aliases warn; removed in 0.4.0.
     power: int
     toughness: int
     is_animated: bool
@@ -832,10 +861,9 @@ class Permanent:
     timestamp: int | None
     # The copy effect that made it a copy; None for an original.
     copy: CopyEffect | None
-    # Its object's card record on the battlefield: name, rules text, types,
-    # token status. `card.id` is the object id selection and payment actions
-    # focus. None only in historical captures.
-    card: Card | None
+    @property
+    @deprecated("use characteristics and object_id/owner_id/is_token; removed in 0.4.0")
+    def card(self) -> Card | None: ...
 
 class Turn:
     turn_number: int
@@ -870,6 +898,12 @@ class StackTarget:
     card_id: int | None
 
 class StackObject:
+    # Spells own characteristics; abilities own only their source reference.
+    characteristics: ObservationCharacteristics | None
+    object_id: int | None
+    owner_id: int | None
+    is_copy: bool | None
+    announced_x: int | None
     description: str | None
     stack_object_id: int
     kind: StackObjectKindEnum
@@ -885,9 +919,9 @@ class StackObject:
     granted_keywords: Keywords | None
     # Whether a spell's kicker cost was paid.
     kicked: bool
-    # A spell's card record (zone stack, announced X); None for abilities and
-    # historical captures.
-    card: Card | None
+    @property
+    @deprecated("use characteristics and object_id/owner_id/is_copy; removed in 0.4.0")
+    def card(self) -> Card | None: ...
 
 class EventData:
     event_type: EventTypeEnum

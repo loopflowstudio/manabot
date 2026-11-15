@@ -80,56 +80,75 @@ def _serialize_cast_permission(permission: managym.CastPermission) -> dict[str, 
     return terms
 
 
-def _serialize_card(card: managym.Card) -> dict[str, Any]:
-    face_down = {"face_down": True} if card.face_down else {}
-    permission = (
-        {"cast_permission": _serialize_cast_permission(card.cast_permission)}
-        if card.cast_permission is not None
-        else {}
-    )
-    x = {"x": int(card.x)} if card.x is not None else {}
+def _serialize_types(types: managym.CardTypes) -> dict[str, bool]:
+    """The effective type flags shared by card, permanent and spell frames."""
     return {
-        **face_down,
-        **permission,
-        **x,
-        "id": int(card.id),
-        "registry_key": int(card.registry_key),
-        "name": card.name,
-        "text_box": card.text_box,
-        "zone": enum_name(ZoneEnum, card.zone),
-        "owner_id": int(card.owner_id),
-        "power": int(card.power),
-        "toughness": int(card.toughness),
-        "mana_value": int(card.mana_cost.mana_value),
-        "types": {
-            "is_creature": bool(card.card_types.is_creature),
-            "is_land": bool(card.card_types.is_land),
-            "is_spell": bool(card.card_types.is_spell),
-            "is_artifact": bool(card.card_types.is_artifact),
-            "is_enchantment": bool(card.card_types.is_enchantment),
-            "is_planeswalker": bool(card.card_types.is_planeswalker),
-            "is_battle": bool(card.card_types.is_battle),
-        },
+        name: bool(getattr(types, name))
+        for name in (
+            "is_creature",
+            "is_land",
+            "is_spell",
+            "is_artifact",
+            "is_enchantment",
+            "is_planeswalker",
+            "is_battle",
+        )
+    }
+
+
+def _serialize_object(card: managym.Card | managym.StackObject) -> dict[str, Any]:
+    characteristics = card.characteristics
+    assert characteristics is not None
+    details: dict[str, Any] = {}
+    if isinstance(card, managym.StackObject):
+        identity, owner = card.object_id, card.owner_id
+        assert identity is not None and owner is not None
+        definition = card.source_card_registry_key
+        zone = "STACK"
+        announced_x = card.announced_x
+    else:
+        identity, owner = card.id, card.owner_id
+        definition = card.registry_key
+        zone = enum_name(ZoneEnum, card.zone)
+        announced_x = card.x
+        if card.face_down:
+            details["face_down"] = True
+        if card.cast_permission is not None:
+            details["cast_permission"] = _serialize_cast_permission(
+                card.cast_permission
+            )
+    if announced_x is not None:
+        details["x"] = int(announced_x)
+    return {
+        **details,
+        "id": int(identity),
+        "registry_key": int(definition),
+        "name": characteristics.name,
+        "text_box": characteristics.text_box,
+        "zone": zone,
+        "owner_id": int(owner),
+        "power": int(characteristics.power),
+        "toughness": int(characteristics.toughness),
+        "mana_value": int(characteristics.mana_cost.mana_value),
+        "types": _serialize_types(characteristics.card_types),
     }
 
 
 def _serialize_permanent(
     permanent: managym.Permanent,
-    card: managym.Card | None,
     *,
     include_details: bool = False,
 ) -> dict[str, Any]:
+    characteristics = permanent.characteristics
     details: dict[str, Any] = {}
-    if include_details and card is not None:
-        types = _serialize_card(card)["types"]
-        # Earthbend makes a land a creature without changing its printed card.
-        types["is_creature"] = bool(types["is_creature"] or permanent.is_animated)
-        details = {"types": types, "is_token": bool(card.is_token)}
+    if include_details:
+        types = _serialize_types(characteristics.card_types)
+        details = {"types": types, "is_token": bool(permanent.is_token)}
     return {
         **details,
         "id": int(permanent.id),
-        "name": permanent.name or (card.name if card else None),
-        "text_box": card.text_box if card else "",
+        "name": characteristics.name,
+        "text_box": characteristics.text_box,
         "exile_if_dies_this_turn": bool(permanent.exile_if_dies_this_turn),
         **{
             field: int(getattr(permanent, field))
@@ -150,15 +169,13 @@ def _serialize_permanent(
         "tapped": bool(permanent.tapped),
         "damage": int(permanent.damage),
         "summoning_sick": bool(permanent.is_summoning_sick),
-        # Effective P/T (statics, until-EOT buffs, +1/+1 counters) — what the
-        # SBA actually checks. `base_power` / `base_toughness` are the card
-        # row's values; on the battlefield the card row reads the layered
-        # characteristics too, so they equal the effective values there.
-        # Printed P/T is not in the projection.
-        "power": int(permanent.power),
-        "toughness": int(permanent.toughness),
-        "base_power": int(card.power) if card else None,
-        "base_toughness": int(card.toughness) if card else None,
+        # The retained base_* wire labels have always meant effective P/T.
+        # Derive both labels from the same projection; printed/layer-7 base
+        # P/T is not in this observation.
+        "power": int(characteristics.power),
+        "toughness": int(characteristics.toughness),
+        "base_power": int(characteristics.power),
+        "base_toughness": int(characteristics.toughness),
         "plus1_counters": int(permanent.plus1_counters),
         **_characteristics(permanent),
     }
@@ -224,19 +241,35 @@ def _effects(effects: list[managym.ContinuousEffect]) -> list[dict[str, Any]]:
     return out
 
 
-def card_records(obs: managym.Observation) -> list[managym.Card]:
-    """Every card record the viewer sees: listed cards, then permanents'
-    (agent side first) and stack spells' (top first)."""
+def object_records(
+    obs: managym.Observation,
+) -> list[managym.Card | managym.Permanent | managym.StackObject]:
+    """Every visible game thing, preserving distinct object identities."""
     return [
         *obs.agent_cards,
         *obs.opponent_cards,
-        *(
-            permanent.card
-            for permanent in (*obs.agent_permanents, *obs.opponent_permanents)
-            if permanent.card is not None
-        ),
-        *(item.card for item in obs.stack_objects if item.card is not None),
+        *obs.agent_permanents,
+        *obs.opponent_permanents,
+        *(item for item in obs.stack_objects if item.characteristics is not None),
     ]
+
+
+def observation_object_id(
+    item: managym.Card | managym.Permanent | managym.StackObject,
+) -> int:
+    identity = item.id if isinstance(item, managym.Card) else item.object_id
+    assert identity is not None
+    return int(identity)
+
+
+def observation_definition_id(
+    item: managym.Card | managym.Permanent | managym.StackObject,
+) -> int:
+    return int(
+        item.source_card_registry_key
+        if isinstance(item, managym.StackObject)
+        else item.registry_key
+    )
 
 
 def _serialize_player(
@@ -257,15 +290,15 @@ def _serialize_player(
     for card in cards:
         zone_name = enum_name(ZoneEnum, card.zone)
         if zone_name in grouped_cards:
-            grouped_cards[zone_name].append(_serialize_card(card))
+            grouped_cards[zone_name].append(_serialize_object(card))
     # The spells this player owns, top first.
     grouped_cards["STACK"].extend(
-        _serialize_card(item.card)
+        _serialize_object(item)
         for item in stack
-        if item.card is not None and int(item.card.owner_id) == int(player.id)
+        if item.characteristics is not None and int(item.owner_id) == int(player.id)
     )
     serialized_permanents = [
-        _serialize_permanent(permanent, permanent.card, include_details=include_details)
+        _serialize_permanent(permanent, include_details=include_details)
         for permanent in permanents
     ]
 
@@ -394,7 +427,7 @@ def serialize_observation(
     # existing chooser-inspection surface; opponent.hand remains redacted in
     # portable replay/Study projections. Ownership and original zone stay intact.
     inspected = [
-        _serialize_card(card)
+        _serialize_object(card)
         for card in obs.opponent_cards
         if int(card.zone) in (int(ZoneEnum.HAND), int(ZoneEnum.LIBRARY))
         or (card.cast_permission is not None and card.cast_permission.foretold)
@@ -422,7 +455,7 @@ def _definitions_known_to_viewer(observation: managym.Observation) -> set[int]:
         *(observation.agent.sideboard_counts or {}),
         *observation.agent.known_hand,
         *observation.opponent.known_hand,
-        *(card.registry_key for card in card_records(observation)),
+        *(observation_definition_id(card) for card in object_records(observation)),
         *(card.registry_key for card in observation.agent_sideboard),
         *(entry.source_card_registry_key for entry in observation.stack_objects),
     }
@@ -483,13 +516,18 @@ def _build_id_to_name(obs: managym.Observation) -> dict[int, str]:
         int(obs.agent.id): _player_label(obs.agent),
         int(obs.opponent.id): _player_label(obs.opponent),
     }
-    names.update({int(card.id): card.name for card in card_records(obs)})
+    names.update(
+        {
+            observation_object_id(card): card.characteristics.name
+            for card in object_records(obs)
+        }
+    )
     names.update({int(card.candidate_id): card.name for card in obs.agent_sideboard})
     names.update(
         {
-            int(permanent.id): permanent.card.name
+            int(permanent.id): permanent.characteristics.name
             for permanent in (*obs.agent_permanents, *obs.opponent_permanents)
-            if permanent.card is not None
+            if permanent.object_id is not None
         }
     )
     return names
