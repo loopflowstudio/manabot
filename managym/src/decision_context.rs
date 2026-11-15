@@ -120,9 +120,7 @@ impl Game {
                             ))
                         } else {
                             observation
-                                .agent_cards
-                                .iter()
-                                .chain(observation.opponent_cards.iter())
+                                .object_records()
                                 .find(|card| card.id == id.0 as i32)
                                 .and_then(|_| {
                                     self.state

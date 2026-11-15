@@ -31,10 +31,10 @@ use crate::{
         env::{Env, HandSnapshot, PreparedPossibleWorldMaterializer},
         observation::{
             ActionOption, ActionSpaceData, CardData, CardTypeData, CastPermissionData,
-            ContinuousEffectData, CopyData, EventData, EventEntityKind, EventType, KeywordData,
-            Observation, PermanentData, PlayerData, PooledManaClassData, RestrictedManaData,
-            SideboardCardData, StackObjectData, StackObjectKindData, StackTargetData,
-            StackTargetKindData, TurnData,
+            CharacteristicsData, ContinuousEffectData, CopyData, EventData, EventEntityKind,
+            EventType, KeywordData, Observation, PermanentData, PlayerData, PooledManaClassData,
+            RestrictedManaData, SideboardCardData, StackObjectData, StackObjectKindData,
+            StackTargetData, StackTargetKindData, TurnData,
         },
         observation_encoder::{ObservationEncoderConfig, ACTION_DIM},
         shared_effects,
@@ -239,10 +239,7 @@ fn encoded_to_dict<'py>(
             py,
             &np,
             &encoded.agent_permanents,
-            &[
-                config.max_permanents_per_player,
-                crate::agent::observation_encoder::PERMANENT_DIM,
-            ],
+            &[config.max_permanents_per_player, config.permanent_dim()],
         )?,
     )?;
     dict.set_item(
@@ -251,12 +248,27 @@ fn encoded_to_dict<'py>(
             py,
             &np,
             &encoded.opponent_permanents,
-            &[
-                config.max_permanents_per_player,
-                crate::agent::observation_encoder::PERMANENT_DIM,
-            ],
+            &[config.max_permanents_per_player, config.permanent_dim()],
         )?,
     )?;
+    if config.layout == crate::agent::observation_encoder::InputLayout::OneToken {
+        dict.set_item(
+            "stack",
+            to_numpy_array_f32(
+                py,
+                &np,
+                &encoded.stack,
+                &[
+                    config.max_stack_objects,
+                    crate::agent::observation_encoder::STACK_DIM,
+                ],
+            )?,
+        )?;
+        dict.set_item(
+            "stack_valid",
+            to_numpy_array_f32(py, &np, &encoded.stack_valid, &[config.max_stack_objects])?,
+        )?;
+    }
     dict.set_item(
         "actions",
         to_numpy_array_f32(py, &np, &encoded.actions, &[config.max_actions, ACTION_DIM])?,
@@ -1828,54 +1840,297 @@ impl From<PyManaCost> for ManaCost {
 }
 
 #[cfg(feature = "python")]
+#[pyclass(name = "ObservationCharacteristics", frozen)]
+#[derive(Clone)]
+pub struct PyObservationCharacteristics {
+    data: CharacteristicsData,
+}
+#[cfg(feature = "python")]
+#[pymethods]
+impl PyObservationCharacteristics {
+    #[getter]
+    fn name(&self) -> String {
+        self.data.name.clone()
+    }
+    #[getter]
+    fn text_box(&self) -> String {
+        self.data.text_box.clone()
+    }
+    #[getter]
+    fn power(&self) -> i32 {
+        self.data.power
+    }
+    #[getter]
+    fn toughness(&self) -> i32 {
+        self.data.toughness
+    }
+    #[getter]
+    fn is_legendary(&self) -> bool {
+        self.data.is_legendary
+    }
+    #[getter]
+    fn is_ally(&self) -> bool {
+        self.data.is_ally
+    }
+    #[getter]
+    fn is_lesson(&self) -> bool {
+        self.data.is_lesson
+    }
+    #[getter]
+    fn ward_cost(&self) -> i32 {
+        self.data.ward_cost
+    }
+    #[getter]
+    fn kicker_cost(&self) -> i32 {
+        self.data.kicker_cost
+    }
+    #[getter]
+    fn card_types(&self) -> PyCardTypes {
+        self.data.card_types.clone().into()
+    }
+    #[getter]
+    fn keywords(&self) -> PyKeywords {
+        self.data.keywords.clone().into()
+    }
+    #[getter]
+    fn mana_cost(&self) -> PyManaCost {
+        self.data.mana_cost.clone().into()
+    }
+}
+
+#[cfg(feature = "python")]
+fn warn_observation_alias(py: Python<'_>, old: &str, new: &str) -> PyResult<()> {
+    py.import_bound("warnings")?.call_method1(
+        "warn",
+        (
+            format!("{old} is deprecated; use {new}; removal in 0.4.0"),
+            py.get_type_bound::<pyo3::exceptions::PyDeprecationWarning>(),
+            // A native getter has no Python frame, so level 1 is the caller.
+            1,
+        ),
+    )?;
+    Ok(())
+}
+
+#[cfg(feature = "python")]
 #[pyclass(name = "Card")]
 #[derive(Clone)]
 pub struct PyCard {
-    #[pyo3(get, set)]
-    pub zone: ZoneEnum,
-    #[pyo3(get, set)]
-    pub owner_id: i32,
-    #[pyo3(get, set)]
-    pub id: i32,
-    #[pyo3(get, set)]
-    pub registry_key: i32,
-    #[pyo3(get, set)]
-    pub name: String,
-    #[pyo3(get)]
-    pub text_box: String,
-    #[pyo3(get, set)]
-    pub power: i32,
-    #[pyo3(get, set)]
-    pub toughness: i32,
-    #[pyo3(get, set)]
-    pub is_token: bool,
-    #[pyo3(get, set)]
-    pub is_legendary: bool,
-    #[pyo3(get, set)]
-    pub is_ally: bool,
-    #[pyo3(get, set)]
-    pub is_lesson: bool,
-    #[pyo3(get, set)]
-    pub ward_cost: i32,
-    #[pyo3(get, set)]
-    pub kicker_cost: i32,
-    #[pyo3(get, set)]
-    pub card_types: PyCardTypes,
-    #[pyo3(get, set)]
-    pub keywords: PyKeywords,
-    #[pyo3(get, set)]
-    pub mana_cost: PyManaCost,
-    /// Foretold and face down in exile (listed only for its owner).
-    #[pyo3(get, set)]
-    pub face_down: bool,
-    #[pyo3(get)]
-    pub cast_permission: Option<PyCastPermission>,
-    /// Announced X of a spell on the stack whose cost has X.
-    #[pyo3(get)]
-    pub x: Option<i32>,
-    /// A graveyard card put there from the battlefield this turn.
-    #[pyo3(get, set)]
-    pub from_battlefield_this_turn: bool,
+    pub data: CardData,
+}
+#[cfg(feature = "python")]
+#[pymethods]
+impl PyCard {
+    #[getter]
+    fn zone(&self) -> ZoneEnum {
+        self.data.zone.into()
+    }
+    #[setter]
+    fn set_zone(&mut self, value: ZoneEnum) {
+        self.data.zone = value.into();
+    }
+    #[getter]
+    fn owner_id(&self) -> i32 {
+        self.data.owner_id
+    }
+    #[setter]
+    fn set_owner_id(&mut self, value: i32) {
+        self.data.owner_id = value;
+    }
+    #[getter]
+    fn id(&self) -> i32 {
+        self.data.id
+    }
+    #[setter]
+    fn set_id(&mut self, value: i32) {
+        self.data.id = value;
+    }
+    #[getter]
+    fn registry_key(&self) -> i32 {
+        self.data.registry_key
+    }
+    #[setter]
+    fn set_registry_key(&mut self, value: i32) {
+        self.data.registry_key = value;
+    }
+    #[getter]
+    fn name(&self, py: Python<'_>) -> PyResult<String> {
+        warn_observation_alias(py, "name", "characteristics.name")?;
+        Ok(self.data.name.clone())
+    }
+    #[setter]
+    fn set_name(&mut self, py: Python<'_>, value: String) -> PyResult<()> {
+        warn_observation_alias(py, "name", "characteristics.name")?;
+        self.data.name = value;
+        Ok(())
+    }
+    #[getter]
+    fn text_box(&self, py: Python<'_>) -> PyResult<String> {
+        warn_observation_alias(py, "text_box", "characteristics.text_box")?;
+        Ok(self.data.text_box.clone())
+    }
+    #[setter]
+    fn set_text_box(&mut self, py: Python<'_>, value: String) -> PyResult<()> {
+        warn_observation_alias(py, "text_box", "characteristics.text_box")?;
+        self.data.text_box = value;
+        Ok(())
+    }
+    #[getter]
+    fn power(&self, py: Python<'_>) -> PyResult<i32> {
+        warn_observation_alias(py, "power", "characteristics.power")?;
+        Ok(self.data.power)
+    }
+    #[setter]
+    fn set_power(&mut self, py: Python<'_>, value: i32) -> PyResult<()> {
+        warn_observation_alias(py, "power", "characteristics.power")?;
+        self.data.power = value;
+        Ok(())
+    }
+    #[getter]
+    fn toughness(&self, py: Python<'_>) -> PyResult<i32> {
+        warn_observation_alias(py, "toughness", "characteristics.toughness")?;
+        Ok(self.data.toughness)
+    }
+    #[setter]
+    fn set_toughness(&mut self, py: Python<'_>, value: i32) -> PyResult<()> {
+        warn_observation_alias(py, "toughness", "characteristics.toughness")?;
+        self.data.toughness = value;
+        Ok(())
+    }
+    #[getter]
+    fn is_token(&self) -> bool {
+        self.data.is_token
+    }
+    #[setter]
+    fn set_is_token(&mut self, value: bool) {
+        self.data.is_token = value;
+    }
+    #[getter]
+    fn is_legendary(&self, py: Python<'_>) -> PyResult<bool> {
+        warn_observation_alias(py, "is_legendary", "characteristics.is_legendary")?;
+        Ok(self.data.is_legendary)
+    }
+    #[setter]
+    fn set_is_legendary(&mut self, py: Python<'_>, value: bool) -> PyResult<()> {
+        warn_observation_alias(py, "is_legendary", "characteristics.is_legendary")?;
+        self.data.is_legendary = value;
+        Ok(())
+    }
+    #[getter]
+    fn is_ally(&self, py: Python<'_>) -> PyResult<bool> {
+        warn_observation_alias(py, "is_ally", "characteristics.is_ally")?;
+        Ok(self.data.is_ally)
+    }
+    #[setter]
+    fn set_is_ally(&mut self, py: Python<'_>, value: bool) -> PyResult<()> {
+        warn_observation_alias(py, "is_ally", "characteristics.is_ally")?;
+        self.data.is_ally = value;
+        Ok(())
+    }
+    #[getter]
+    fn is_lesson(&self, py: Python<'_>) -> PyResult<bool> {
+        warn_observation_alias(py, "is_lesson", "characteristics.is_lesson")?;
+        Ok(self.data.is_lesson)
+    }
+    #[setter]
+    fn set_is_lesson(&mut self, py: Python<'_>, value: bool) -> PyResult<()> {
+        warn_observation_alias(py, "is_lesson", "characteristics.is_lesson")?;
+        self.data.is_lesson = value;
+        Ok(())
+    }
+    #[getter]
+    fn ward_cost(&self, py: Python<'_>) -> PyResult<i32> {
+        warn_observation_alias(py, "ward_cost", "characteristics.ward_cost")?;
+        Ok(self.data.ward_cost)
+    }
+    #[setter]
+    fn set_ward_cost(&mut self, py: Python<'_>, value: i32) -> PyResult<()> {
+        warn_observation_alias(py, "ward_cost", "characteristics.ward_cost")?;
+        self.data.ward_cost = value;
+        Ok(())
+    }
+    #[getter]
+    fn kicker_cost(&self, py: Python<'_>) -> PyResult<i32> {
+        warn_observation_alias(py, "kicker_cost", "characteristics.kicker_cost")?;
+        Ok(self.data.kicker_cost)
+    }
+    #[setter]
+    fn set_kicker_cost(&mut self, py: Python<'_>, value: i32) -> PyResult<()> {
+        warn_observation_alias(py, "kicker_cost", "characteristics.kicker_cost")?;
+        self.data.kicker_cost = value;
+        Ok(())
+    }
+    #[getter]
+    fn card_types(&self, py: Python<'_>) -> PyResult<PyCardTypes> {
+        warn_observation_alias(py, "card_types", "characteristics.card_types")?;
+        Ok(self.data.card_types.clone().into())
+    }
+    #[setter]
+    fn set_card_types(&mut self, py: Python<'_>, value: PyCardTypes) -> PyResult<()> {
+        warn_observation_alias(py, "card_types", "characteristics.card_types")?;
+        self.data.card_types = value.into();
+        Ok(())
+    }
+    #[getter]
+    fn keywords(&self, py: Python<'_>) -> PyResult<PyKeywords> {
+        warn_observation_alias(py, "keywords", "characteristics.keywords")?;
+        Ok(self.data.keywords.clone().into())
+    }
+    #[setter]
+    fn set_keywords(&mut self, py: Python<'_>, value: PyKeywords) -> PyResult<()> {
+        warn_observation_alias(py, "keywords", "characteristics.keywords")?;
+        self.data.keywords = value.into();
+        Ok(())
+    }
+    #[getter]
+    fn mana_cost(&self, py: Python<'_>) -> PyResult<PyManaCost> {
+        warn_observation_alias(py, "mana_cost", "characteristics.mana_cost")?;
+        Ok(self.data.mana_cost.clone().into())
+    }
+    #[setter]
+    fn set_mana_cost(&mut self, py: Python<'_>, value: PyManaCost) -> PyResult<()> {
+        warn_observation_alias(py, "mana_cost", "characteristics.mana_cost")?;
+        self.data.mana_cost = value.into();
+        Ok(())
+    }
+    #[getter]
+    fn face_down(&self) -> bool {
+        self.data.face_down
+    }
+    #[setter]
+    fn set_face_down(&mut self, value: bool) {
+        self.data.face_down = value;
+    }
+    #[getter]
+    fn cast_permission(&self) -> Option<PyCastPermission> {
+        self.data.cast_permission.clone().map(Into::into)
+    }
+    #[setter]
+    fn set_cast_permission(&mut self, value: Option<PyCastPermission>) {
+        self.data.cast_permission = value.map(Into::into);
+    }
+    #[getter]
+    fn x(&self) -> Option<i32> {
+        self.data.x
+    }
+    #[setter]
+    fn set_x(&mut self, value: Option<i32>) {
+        self.data.x = value;
+    }
+    #[getter]
+    fn from_battlefield_this_turn(&self) -> bool {
+        self.data.from_battlefield_this_turn
+    }
+    #[setter]
+    fn set_from_battlefield_this_turn(&mut self, value: bool) {
+        self.data.from_battlefield_this_turn = value;
+    }
+    #[getter]
+    fn characteristics(&self) -> PyObservationCharacteristics {
+        PyObservationCharacteristics {
+            data: self.data.characteristics.clone(),
+        }
+    }
 }
 
 /// A public permission to play an exiled card; see `CastPermissionData`.
@@ -1948,58 +2203,14 @@ impl From<PyCastPermission> for CastPermissionData {
 #[cfg(feature = "python")]
 impl From<CardData> for PyCard {
     fn from(value: CardData) -> Self {
-        Self {
-            zone: value.zone.into(),
-            owner_id: value.owner_id,
-            id: value.id,
-            registry_key: value.registry_key,
-            name: value.name,
-            text_box: value.text_box,
-            power: value.power,
-            toughness: value.toughness,
-            is_token: value.is_token,
-            is_legendary: value.is_legendary,
-            is_ally: value.is_ally,
-            is_lesson: value.is_lesson,
-            ward_cost: value.ward_cost,
-            kicker_cost: value.kicker_cost,
-            card_types: value.card_types.into(),
-            keywords: value.keywords.into(),
-            mana_cost: value.mana_cost.into(),
-            face_down: value.face_down,
-            cast_permission: value.cast_permission.map(Into::into),
-            x: value.x,
-            from_battlefield_this_turn: value.from_battlefield_this_turn,
-        }
+        Self { data: value }
     }
 }
 
 #[cfg(feature = "python")]
 impl From<PyCard> for CardData {
     fn from(value: PyCard) -> Self {
-        Self {
-            zone: value.zone.into(),
-            owner_id: value.owner_id,
-            id: value.id,
-            registry_key: value.registry_key,
-            name: value.name,
-            text_box: value.text_box,
-            power: value.power,
-            toughness: value.toughness,
-            is_token: value.is_token,
-            is_legendary: value.is_legendary,
-            is_ally: value.is_ally,
-            is_lesson: value.is_lesson,
-            ward_cost: value.ward_cost,
-            kicker_cost: value.kicker_cost,
-            card_types: value.card_types.into(),
-            keywords: value.keywords.into(),
-            mana_cost: value.mana_cost.into(),
-            face_down: value.face_down,
-            cast_permission: value.cast_permission.map(Into::into),
-            x: value.x,
-            from_battlefield_this_turn: value.from_battlefield_this_turn,
-        }
+        value.data
     }
 }
 
@@ -2029,168 +2240,356 @@ impl From<PyKeywords> for KeywordData {
 #[pyclass(name = "Permanent")]
 #[derive(Clone)]
 pub struct PyPermanent {
-    #[pyo3(get, set)]
-    pub colors: Option<Vec<String>>,
-    #[pyo3(get, set)]
-    pub keyword_counter_timestamps: BTreeMap<String, i32>,
-    #[pyo3(get, set)]
-    pub transforms: u32,
-    #[pyo3(get, set)]
-    pub id: i32,
-    #[pyo3(get, set)]
-    pub registry_key: i32,
-    #[pyo3(get, set)]
-    pub controller_id: i32,
-    #[pyo3(get, set)]
-    pub tapped: bool,
-    #[pyo3(get, set)]
-    pub damage: i32,
-    #[pyo3(get, set)]
-    pub is_summoning_sick: bool,
-    #[pyo3(get, set)]
-    pub plus1_counters: i32,
-    #[pyo3(get, set)]
-    pub cant_be_blocked_this_turn: bool,
-    #[pyo3(get, set)]
-    pub power: i32,
-    #[pyo3(get, set)]
-    pub toughness: i32,
-    #[pyo3(get, set)]
-    pub is_animated: bool,
-    #[pyo3(get, set)]
-    pub has_exile_link: bool,
-    #[pyo3(get, set)]
-    pub exile_if_dies_this_turn: bool,
-    #[pyo3(get, set)]
-    pub attacking: bool,
-    #[pyo3(get, set)]
-    pub exhausted_abilities: i32,
-    #[pyo3(get, set)]
-    pub once_each_turn_used: i32,
-    #[pyo3(get, set)]
-    pub granted_firebending: i32,
-    #[pyo3(get, set)]
-    pub temp_subtypes: Vec<String>,
-    /// Effective keywords (printed + until-EOT grants).
-    #[pyo3(get, set)]
-    pub keywords: PyKeywords,
-    /// Counters other than +1/+1 by kind (`stun`, `fire`, `double_strike`).
-    #[pyo3(get, set)]
-    pub counters: BTreeMap<String, i32>,
-    /// Permanent id this Aura or Equipment is attached to.
-    #[pyo3(get, set)]
-    pub attached_to: Option<i32>,
-    /// Name set by an effect; None while the printed name applies.
-    #[pyo3(get, set)]
-    pub name: Option<String>,
-    /// Creature types set by an effect; None while the printed ones apply.
-    #[pyo3(get, set)]
-    pub creature_types: Option<Vec<String>>,
-    #[pyo3(get, set)]
-    pub is_granted_land: bool,
-    /// The attacker this creature blocks.
-    #[pyo3(get, set)]
-    pub blocking: Option<i32>,
-    #[pyo3(get, set)]
-    pub abilities_lost: bool,
-    /// Activated abilities whose exhaust or once-each-turn limit is spent.
-    #[pyo3(get, set)]
-    pub used_abilities: Vec<usize>,
-    #[pyo3(get, set)]
-    pub dealt_damage_this_turn: bool,
-    /// Continuous effects on this permanent, in timestamp order.
-    #[pyo3(get, set)]
-    pub effects: Vec<PyContinuousEffect>,
-    /// Its timestamp (CR 613.7) when an attachment renewed it; None while
-    /// it is `id`.
-    #[pyo3(get, set)]
-    pub timestamp: Option<i32>,
-    /// The copy effect that made it a copy (CR 707.2); None for an original.
-    #[pyo3(get, set)]
-    pub copy: Option<PyCopyEffect>,
+    pub data: PermanentData,
+}
+#[cfg(feature = "python")]
+#[pymethods]
+impl PyPermanent {
+    #[getter]
+    fn colors(&self) -> Option<Vec<String>> {
+        self.data.colors.clone()
+    }
+    #[setter]
+    fn set_colors(&mut self, value: Option<Vec<String>>) {
+        self.data.colors = value;
+    }
+    #[getter]
+    fn keyword_counter_timestamps(&self) -> BTreeMap<String, i32> {
+        self.data.keyword_counter_timestamps.clone()
+    }
+    #[setter]
+    fn set_keyword_counter_timestamps(&mut self, value: BTreeMap<String, i32>) {
+        self.data.keyword_counter_timestamps = value;
+    }
+    #[getter]
+    fn transforms(&self) -> u32 {
+        self.data.transforms
+    }
+    #[setter]
+    fn set_transforms(&mut self, value: u32) {
+        self.data.transforms = value;
+    }
+    #[getter]
+    fn id(&self) -> i32 {
+        self.data.id
+    }
+    #[setter]
+    fn set_id(&mut self, value: i32) {
+        self.data.id = value;
+    }
+    #[getter]
+    fn registry_key(&self) -> i32 {
+        self.data.registry_key
+    }
+    #[setter]
+    fn set_registry_key(&mut self, value: i32) {
+        self.data.registry_key = value;
+    }
+    #[getter]
+    fn controller_id(&self) -> i32 {
+        self.data.controller_id
+    }
+    #[setter]
+    fn set_controller_id(&mut self, value: i32) {
+        self.data.controller_id = value;
+    }
+    #[getter]
+    fn tapped(&self) -> bool {
+        self.data.tapped
+    }
+    #[setter]
+    fn set_tapped(&mut self, value: bool) {
+        self.data.tapped = value;
+    }
+    #[getter]
+    fn damage(&self) -> i32 {
+        self.data.damage
+    }
+    #[setter]
+    fn set_damage(&mut self, value: i32) {
+        self.data.damage = value;
+    }
+    #[getter]
+    fn is_summoning_sick(&self) -> bool {
+        self.data.is_summoning_sick
+    }
+    #[setter]
+    fn set_is_summoning_sick(&mut self, value: bool) {
+        self.data.is_summoning_sick = value;
+    }
+    #[getter]
+    fn plus1_counters(&self) -> i32 {
+        self.data.plus1_counters
+    }
+    #[setter]
+    fn set_plus1_counters(&mut self, value: i32) {
+        self.data.plus1_counters = value;
+    }
+    #[getter]
+    fn cant_be_blocked_this_turn(&self) -> bool {
+        self.data.cant_be_blocked_this_turn
+    }
+    #[setter]
+    fn set_cant_be_blocked_this_turn(&mut self, value: bool) {
+        self.data.cant_be_blocked_this_turn = value;
+    }
+    #[getter]
+    fn power(&self, py: Python<'_>) -> PyResult<i32> {
+        warn_observation_alias(py, "power", "characteristics.power")?;
+        Ok(self.data.power)
+    }
+    #[setter]
+    fn set_power(&mut self, py: Python<'_>, value: i32) -> PyResult<()> {
+        warn_observation_alias(py, "power", "characteristics.power")?;
+        self.data.power = value;
+        Ok(())
+    }
+    #[getter]
+    fn toughness(&self, py: Python<'_>) -> PyResult<i32> {
+        warn_observation_alias(py, "toughness", "characteristics.toughness")?;
+        Ok(self.data.toughness)
+    }
+    #[setter]
+    fn set_toughness(&mut self, py: Python<'_>, value: i32) -> PyResult<()> {
+        warn_observation_alias(py, "toughness", "characteristics.toughness")?;
+        self.data.toughness = value;
+        Ok(())
+    }
+    #[getter]
+    fn is_animated(&self) -> bool {
+        self.data.is_animated
+    }
+    #[setter]
+    fn set_is_animated(&mut self, value: bool) {
+        self.data.is_animated = value;
+    }
+    #[getter]
+    fn has_exile_link(&self) -> bool {
+        self.data.has_exile_link
+    }
+    #[setter]
+    fn set_has_exile_link(&mut self, value: bool) {
+        self.data.has_exile_link = value;
+    }
+    #[getter]
+    fn exile_if_dies_this_turn(&self) -> bool {
+        self.data.exile_if_dies_this_turn
+    }
+    #[setter]
+    fn set_exile_if_dies_this_turn(&mut self, value: bool) {
+        self.data.exile_if_dies_this_turn = value;
+    }
+    #[getter]
+    fn attacking(&self) -> bool {
+        self.data.attacking
+    }
+    #[setter]
+    fn set_attacking(&mut self, value: bool) {
+        self.data.attacking = value;
+    }
+    #[getter]
+    fn exhausted_abilities(&self) -> i32 {
+        self.data.exhausted_abilities
+    }
+    #[setter]
+    fn set_exhausted_abilities(&mut self, value: i32) {
+        self.data.exhausted_abilities = value;
+    }
+    #[getter]
+    fn once_each_turn_used(&self) -> i32 {
+        self.data.once_each_turn_used
+    }
+    #[setter]
+    fn set_once_each_turn_used(&mut self, value: i32) {
+        self.data.once_each_turn_used = value;
+    }
+    #[getter]
+    fn granted_firebending(&self) -> i32 {
+        self.data.granted_firebending
+    }
+    #[setter]
+    fn set_granted_firebending(&mut self, value: i32) {
+        self.data.granted_firebending = value;
+    }
+    #[getter]
+    fn temp_subtypes(&self) -> Vec<String> {
+        self.data.temp_subtypes.clone()
+    }
+    #[setter]
+    fn set_temp_subtypes(&mut self, value: Vec<String>) {
+        self.data.temp_subtypes = value;
+    }
+    #[getter]
+    fn keywords(&self, py: Python<'_>) -> PyResult<PyKeywords> {
+        warn_observation_alias(py, "keywords", "characteristics.keywords")?;
+        Ok(self.data.keywords.clone().into())
+    }
+    #[setter]
+    fn set_keywords(&mut self, py: Python<'_>, value: PyKeywords) -> PyResult<()> {
+        warn_observation_alias(py, "keywords", "characteristics.keywords")?;
+        self.data.keywords = value.into();
+        Ok(())
+    }
+    #[getter]
+    fn counters(&self) -> BTreeMap<String, i32> {
+        self.data.counters.clone()
+    }
+    #[setter]
+    fn set_counters(&mut self, value: BTreeMap<String, i32>) {
+        self.data.counters = value;
+    }
+    #[getter]
+    fn attached_to(&self) -> Option<i32> {
+        self.data.attached_to
+    }
+    #[setter]
+    fn set_attached_to(&mut self, value: Option<i32>) {
+        self.data.attached_to = value;
+    }
+    #[getter]
+    fn name(&self) -> Option<String> {
+        self.data.name.clone()
+    }
+    #[setter]
+    fn set_name(&mut self, value: Option<String>) {
+        self.data.name = value;
+    }
+    #[getter]
+    fn creature_types(&self) -> Option<Vec<String>> {
+        self.data.creature_types.clone()
+    }
+    #[setter]
+    fn set_creature_types(&mut self, value: Option<Vec<String>>) {
+        self.data.creature_types = value;
+    }
+    #[getter]
+    fn is_granted_land(&self) -> bool {
+        self.data.is_granted_land
+    }
+    #[setter]
+    fn set_is_granted_land(&mut self, value: bool) {
+        self.data.is_granted_land = value;
+    }
+    #[getter]
+    fn blocking(&self) -> Option<i32> {
+        self.data.blocking
+    }
+    #[setter]
+    fn set_blocking(&mut self, value: Option<i32>) {
+        self.data.blocking = value;
+    }
+    #[getter]
+    fn abilities_lost(&self) -> bool {
+        self.data.abilities_lost
+    }
+    #[setter]
+    fn set_abilities_lost(&mut self, value: bool) {
+        self.data.abilities_lost = value;
+    }
+    #[getter]
+    fn used_abilities(&self) -> Vec<usize> {
+        self.data.used_abilities.clone()
+    }
+    #[setter]
+    fn set_used_abilities(&mut self, value: Vec<usize>) {
+        self.data.used_abilities = value;
+    }
+    #[getter]
+    fn dealt_damage_this_turn(&self) -> bool {
+        self.data.dealt_damage_this_turn
+    }
+    #[setter]
+    fn set_dealt_damage_this_turn(&mut self, value: bool) {
+        self.data.dealt_damage_this_turn = value;
+    }
+    #[getter]
+    fn effects(&self) -> Vec<PyContinuousEffect> {
+        self.data
+            .effects
+            .clone()
+            .into_iter()
+            .map(Into::into)
+            .collect()
+    }
+    #[setter]
+    fn set_effects(&mut self, value: Vec<PyContinuousEffect>) {
+        self.data.effects = value.into_iter().map(Into::into).collect();
+    }
+    #[getter]
+    fn timestamp(&self) -> Option<i32> {
+        self.data.timestamp
+    }
+    #[setter]
+    fn set_timestamp(&mut self, value: Option<i32>) {
+        self.data.timestamp = value;
+    }
+    #[getter]
+    fn copy(&self) -> Option<PyCopyEffect> {
+        self.data.copy.clone().map(Into::into)
+    }
+    #[setter]
+    fn set_copy(&mut self, value: Option<PyCopyEffect>) {
+        self.data.copy = value.map(Into::into);
+    }
+    #[getter]
+    fn characteristics(&self) -> PyObservationCharacteristics {
+        PyObservationCharacteristics {
+            data: self.data.characteristics.clone(),
+        }
+    }
+    #[getter]
+    fn object_id(&self) -> Option<i32> {
+        self.data.object_id
+    }
+    #[getter]
+    fn owner_id(&self) -> i32 {
+        self.data.owner_id
+    }
+    #[getter]
+    fn is_token(&self) -> bool {
+        self.data.is_token
+    }
+    #[getter]
+    fn card(&self, py: Python<'_>) -> PyResult<Option<PyCard>> {
+        warn_observation_alias(
+            py,
+            "Permanent.card",
+            "Permanent.characteristics and object_id/owner_id/is_token",
+        )?;
+        Ok(self.data.legacy_card().map(Into::into))
+    }
+    #[setter]
+    fn set_card(&mut self, py: Python<'_>, value: Option<PyCard>) -> PyResult<()> {
+        warn_observation_alias(
+            py,
+            "Permanent.card",
+            "Permanent.characteristics and object identity",
+        )?;
+        if let Some(value) = value {
+            let card = value.data;
+            self.data.object_id = Some(card.id);
+            self.data.owner_id = card.owner_id;
+            self.data.registry_key = card.registry_key;
+            self.data.is_token = card.is_token;
+            self.data.characteristics = card.characteristics;
+        } else {
+            self.data.object_id = None;
+        }
+        Ok(())
+    }
 }
 
 #[cfg(feature = "python")]
 impl From<PermanentData> for PyPermanent {
     fn from(value: PermanentData) -> Self {
-        Self {
-            colors: value.colors,
-            keyword_counter_timestamps: value.keyword_counter_timestamps,
-            id: value.id,
-            registry_key: value.registry_key,
-            controller_id: value.controller_id,
-            tapped: value.tapped,
-            damage: value.damage,
-            is_summoning_sick: value.is_summoning_sick,
-            plus1_counters: value.plus1_counters,
-            cant_be_blocked_this_turn: value.cant_be_blocked_this_turn,
-            power: value.power,
-            toughness: value.toughness,
-            is_animated: value.is_animated,
-            has_exile_link: value.has_exile_link,
-            exile_if_dies_this_turn: value.exile_if_dies_this_turn,
-            attacking: value.attacking,
-            transforms: value.transforms,
-            exhausted_abilities: value.exhausted_abilities,
-            once_each_turn_used: value.once_each_turn_used,
-            granted_firebending: value.granted_firebending,
-            temp_subtypes: value.temp_subtypes,
-            keywords: value.keywords.into(),
-            counters: value.counters,
-            attached_to: value.attached_to,
-            name: value.name,
-            creature_types: value.creature_types,
-            is_granted_land: value.is_granted_land,
-            blocking: value.blocking,
-            abilities_lost: value.abilities_lost,
-            used_abilities: value.used_abilities,
-            dealt_damage_this_turn: value.dealt_damage_this_turn,
-            effects: value.effects.into_iter().map(Into::into).collect(),
-            timestamp: value.timestamp,
-            copy: value.copy.map(Into::into),
-        }
+        Self { data: value }
     }
 }
 
 #[cfg(feature = "python")]
 impl From<PyPermanent> for PermanentData {
     fn from(value: PyPermanent) -> Self {
-        Self {
-            colors: value.colors,
-            keyword_counter_timestamps: value.keyword_counter_timestamps,
-            id: value.id,
-            registry_key: value.registry_key,
-            controller_id: value.controller_id,
-            tapped: value.tapped,
-            damage: value.damage,
-            is_summoning_sick: value.is_summoning_sick,
-            plus1_counters: value.plus1_counters,
-            cant_be_blocked_this_turn: value.cant_be_blocked_this_turn,
-            power: value.power,
-            toughness: value.toughness,
-            is_animated: value.is_animated,
-            has_exile_link: value.has_exile_link,
-            exile_if_dies_this_turn: value.exile_if_dies_this_turn,
-            attacking: value.attacking,
-            transforms: value.transforms,
-            exhausted_abilities: value.exhausted_abilities,
-            once_each_turn_used: value.once_each_turn_used,
-            granted_firebending: value.granted_firebending,
-            temp_subtypes: value.temp_subtypes,
-            keywords: value.keywords.into(),
-            counters: value.counters,
-            attached_to: value.attached_to,
-            name: value.name,
-            creature_types: value.creature_types,
-            is_granted_land: value.is_granted_land,
-            blocking: value.blocking,
-            abilities_lost: value.abilities_lost,
-            used_abilities: value.used_abilities,
-            dealt_damage_this_turn: value.dealt_damage_this_turn,
-            effects: value.effects.into_iter().map(Into::into).collect(),
-            timestamp: value.timestamp,
-            copy: value.copy.map(Into::into),
-        }
+        value.data
     }
 }
 
@@ -2434,71 +2833,181 @@ impl From<PyStackTarget> for StackTargetData {
 #[pyclass(name = "StackObject")]
 #[derive(Clone)]
 pub struct PyStackObject {
-    #[pyo3(get, set)]
-    pub description: Option<String>,
-    #[pyo3(get, set)]
-    pub stack_object_id: i32,
-    #[pyo3(get, set)]
-    pub kind: StackObjectKindEnum,
-    #[pyo3(get, set)]
-    pub controller_id: i32,
-    #[pyo3(get, set)]
-    pub source_card_registry_key: i32,
-    #[pyo3(get, set)]
-    pub source_permanent_id: Option<i32>,
-    #[pyo3(get, set)]
-    pub chosen_mode: Option<usize>,
-    #[pyo3(get, set)]
-    pub ability_index: Option<i32>,
-    #[pyo3(get, set)]
-    pub targets: Vec<PyStackTarget>,
-    /// The announced value of X (0 when none).
-    #[pyo3(get, set)]
-    pub x: i32,
-    /// Keywords a static grants this spell on the stack; None when none.
-    #[pyo3(get, set)]
-    pub granted_keywords: Option<PyKeywords>,
+    pub data: StackObjectData,
+}
+#[cfg(feature = "python")]
+#[pymethods]
+impl PyStackObject {
+    #[getter]
+    fn description(&self) -> Option<String> {
+        self.data.description.clone()
+    }
+    #[setter]
+    fn set_description(&mut self, value: Option<String>) {
+        self.data.description = value;
+    }
+    #[getter]
+    fn stack_object_id(&self) -> i32 {
+        self.data.stack_object_id
+    }
+    #[setter]
+    fn set_stack_object_id(&mut self, value: i32) {
+        self.data.stack_object_id = value;
+    }
+    #[getter]
+    fn kind(&self) -> StackObjectKindEnum {
+        self.data.kind.into()
+    }
+    #[setter]
+    fn set_kind(&mut self, value: StackObjectKindEnum) {
+        self.data.kind = value.into();
+    }
+    #[getter]
+    fn controller_id(&self) -> i32 {
+        self.data.controller_id
+    }
+    #[setter]
+    fn set_controller_id(&mut self, value: i32) {
+        self.data.controller_id = value;
+    }
+    #[getter]
+    fn source_card_registry_key(&self) -> i32 {
+        self.data.source_card_registry_key
+    }
+    #[setter]
+    fn set_source_card_registry_key(&mut self, value: i32) {
+        self.data.source_card_registry_key = value;
+    }
+    #[getter]
+    fn source_permanent_id(&self) -> Option<i32> {
+        self.data.source_permanent_id
+    }
+    #[setter]
+    fn set_source_permanent_id(&mut self, value: Option<i32>) {
+        self.data.source_permanent_id = value;
+    }
+    #[getter]
+    fn chosen_mode(&self) -> Option<usize> {
+        self.data.chosen_mode
+    }
+    #[setter]
+    fn set_chosen_mode(&mut self, value: Option<usize>) {
+        self.data.chosen_mode = value;
+    }
+    #[getter]
+    fn ability_index(&self) -> Option<i32> {
+        self.data.ability_index
+    }
+    #[setter]
+    fn set_ability_index(&mut self, value: Option<i32>) {
+        self.data.ability_index = value;
+    }
+    #[getter]
+    fn targets(&self) -> Vec<PyStackTarget> {
+        self.data
+            .targets
+            .clone()
+            .into_iter()
+            .map(Into::into)
+            .collect()
+    }
+    #[setter]
+    fn set_targets(&mut self, value: Vec<PyStackTarget>) {
+        self.data.targets = value.into_iter().map(Into::into).collect();
+    }
+    #[getter]
+    fn x(&self) -> i32 {
+        self.data.x
+    }
+    #[setter]
+    fn set_x(&mut self, value: i32) {
+        self.data.x = value;
+    }
+    #[getter]
+    fn granted_keywords(&self) -> Option<PyKeywords> {
+        self.data.granted_keywords.clone().map(Into::into)
+    }
+    #[setter]
+    fn set_granted_keywords(&mut self, value: Option<PyKeywords>) {
+        self.data.granted_keywords = value.map(Into::into);
+    }
+    #[getter]
+    fn kicked(&self) -> bool {
+        self.data.kicked
+    }
+    #[setter]
+    fn set_kicked(&mut self, value: bool) {
+        self.data.kicked = value;
+    }
+    #[getter]
+    fn characteristics(&self) -> Option<PyObservationCharacteristics> {
+        self.data
+            .spell
+            .as_ref()
+            .map(|s| PyObservationCharacteristics {
+                data: s.characteristics.clone(),
+            })
+    }
+    #[getter]
+    fn object_id(&self) -> Option<i32> {
+        self.data.spell.as_ref().map(|s| s.object_id)
+    }
+    #[getter]
+    fn owner_id(&self) -> Option<i32> {
+        self.data.spell.as_ref().map(|s| s.owner_id)
+    }
+    #[getter]
+    fn is_copy(&self) -> Option<bool> {
+        self.data.spell.as_ref().map(|s| s.is_copy)
+    }
+    #[getter]
+    fn announced_x(&self) -> Option<i32> {
+        self.data
+            .spell
+            .as_ref()
+            .and_then(|s| s.has_announced_x.then_some(self.data.x))
+    }
+    #[getter]
+    fn card(&self, py: Python<'_>) -> PyResult<Option<PyCard>> {
+        warn_observation_alias(
+            py,
+            "StackObject.card",
+            "StackObject.characteristics and object_id/owner_id/is_copy",
+        )?;
+        Ok(self
+            .data
+            .spell
+            .as_ref()
+            .map(|s| s.legacy_card(self.data.x).into()))
+    }
+    #[setter]
+    fn set_card(&mut self, py: Python<'_>, value: Option<PyCard>) -> PyResult<()> {
+        warn_observation_alias(
+            py,
+            "StackObject.card",
+            "StackObject.characteristics and object identity",
+        )?;
+        if let Some(card) = &value {
+            self.data.source_card_registry_key = card.data.registry_key;
+            self.data.x = card.data.x.unwrap_or(0);
+        }
+        self.data.spell =
+            value.map(|value| crate::agent::observation::SpellData::from_legacy_card(value.data));
+        Ok(())
+    }
 }
 
 #[cfg(feature = "python")]
 impl From<StackObjectData> for PyStackObject {
     fn from(value: StackObjectData) -> Self {
-        Self {
-            stack_object_id: value.stack_object_id,
-            description: value.description,
-            kind: value.kind.into(),
-            controller_id: value.controller_id,
-            source_card_registry_key: value.source_card_registry_key,
-            source_permanent_id: value.source_permanent_id,
-            chosen_mode: value.chosen_mode,
-            ability_index: value.ability_index,
-            targets: value.targets.into_iter().map(PyStackTarget::from).collect(),
-            x: value.x,
-            granted_keywords: value.granted_keywords.map(PyKeywords::from),
-        }
+        Self { data: value }
     }
 }
 
 #[cfg(feature = "python")]
 impl From<PyStackObject> for StackObjectData {
     fn from(value: PyStackObject) -> Self {
-        Self {
-            stack_object_id: value.stack_object_id,
-            description: value.description,
-            kind: value.kind.into(),
-            controller_id: value.controller_id,
-            source_card_registry_key: value.source_card_registry_key,
-            source_permanent_id: value.source_permanent_id,
-            chosen_mode: value.chosen_mode,
-            ability_index: value.ability_index,
-            targets: value
-                .targets
-                .into_iter()
-                .map(StackTargetData::from)
-                .collect(),
-            x: value.x,
-            granted_keywords: value.granted_keywords.map(KeywordData::from),
-        }
+        value.data
     }
 }
 
@@ -2728,15 +3237,49 @@ impl PyObservation {
         serde_json::to_string(&self.continuation).expect("continuation serializes")
     }
 
-    fn encode_policy_history(&self, capacity: usize, cards_per_player: usize) -> Vec<Vec<f32>> {
+    /// Public history v1 rows, whose contexts are the zero-based object-table
+    /// indexes `object_indexes` gives object ids (input v11's one row each).
+    fn encode_policy_history(
+        &self,
+        capacity: usize,
+        object_indexes: std::collections::HashMap<i32, i32>,
+    ) -> Vec<Vec<f32>> {
         crate::agent::policy_history::encode(
             &Observation::from(self.clone()),
             capacity,
-            cards_per_player,
+            &object_indexes,
         )
         .into_iter()
         .map(|row| row.to_vec())
         .collect()
+    }
+
+    /// Deprecated input v9/v10 rows (removed in 0.4.0): the observation with
+    /// battlefield objects and stack spells listed as cards again, and its
+    /// public history v1 rows over those card rows. Only the v9/v10 encoders
+    /// read them.
+    fn legacy_card_lists(&self) -> (Vec<PyCard>, Vec<PyCard>) {
+        let legacy = crate::agent::legacy_input::view(&Observation::from(self.clone()));
+        (
+            legacy.agent_cards.into_iter().map(PyCard::from).collect(),
+            legacy
+                .opponent_cards
+                .into_iter()
+                .map(PyCard::from)
+                .collect(),
+        )
+    }
+
+    fn encode_legacy_policy_history(
+        &self,
+        capacity: usize,
+        cards_per_player: usize,
+    ) -> Vec<Vec<f32>> {
+        let legacy = crate::agent::legacy_input::view(&Observation::from(self.clone()));
+        crate::agent::legacy_input::history(&legacy, capacity, cards_per_player)
+            .into_iter()
+            .map(|row| row.to_vec())
+            .collect()
     }
     fn validate(&self) -> bool {
         Observation::from(self.clone()).validate()
@@ -4834,6 +5377,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPlayer>()?;
     m.add_class::<PyTurn>()?;
     m.add_class::<PyCard>()?;
+    m.add_class::<PyObservationCharacteristics>()?;
     m.add_class::<PyCastPermission>()?;
     m.add_class::<PyRestrictedMana>()?;
     m.add_class::<PyPooledManaClass>()?;
