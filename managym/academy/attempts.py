@@ -312,6 +312,10 @@ class AttemptStore:
         origin = origin or os.getenv("ACADEMY_PLAY_RECORD_ORIGIN", "unknown")
         if origin not in ORIGINS:
             raise ValueError("Unknown game record origin.")
+        # Serialize the growing trace before taking the writer lock. Declaration
+        # candidates also use this boundary before publishing their native state.
+        world_json = json.dumps(world)
+        trace_json = json.dumps(trace)
         with self.connect() as db:
             exists = db.execute(
                 "SELECT 1 FROM attempts WHERE id=?", (attempt,)
@@ -336,8 +340,8 @@ class AttemptStore:
                     hex(config["seed"]),
                     trace["winner"] if ending == "game_over" else None,
                     revision,
-                    json.dumps(world),
-                    json.dumps(trace),
+                    world_json,
+                    trace_json,
                     RECORD_VERSION,
                     origin,
                     len(trace["events"]),

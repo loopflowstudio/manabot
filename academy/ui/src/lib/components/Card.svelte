@@ -14,6 +14,7 @@
     power?: number | null;
     toughness?: number | null;
     focused?: boolean;
+    planMarker?: string;
     clickable?: boolean;
     tapped?: boolean;
     dimmed?: boolean;
@@ -35,6 +36,7 @@
     power = null,
     toughness = null,
     focused = false,
+    planMarker = undefined,
     clickable = false,
     tapped = false,
     dimmed = false,
@@ -71,6 +73,7 @@
   const stateNotes = $derived(
     [
       copyDescription || null,
+      planMarker ?? null,
       ...temporarySubtypes.map((subtype) => `${subtype} until end of turn`),
       tapped ? 'tapped' : null,
       dimmed ? 'summoning sick' : null,
@@ -88,6 +91,7 @@
 
 <button
   data-object-id={objectId}
+  data-combat-plan={planMarker}
   data-narrated-seq={narrated}
   type="button"
   aria-label={accessibleName}
@@ -170,6 +174,11 @@
     <div class="bead pointer-events-none absolute right-1.5 top-1.5" aria-hidden="true">
       +{counters}/+{counters}
     </div>
+  {/if}
+
+  {#if planMarker}
+    <!-- Compact lanes shrink cards to 44px; the band must stay inside them. -->
+    <span class={`${size === 'normal' ? 'type-label px-1 py-1' : 'text-[10px] font-semibold leading-3 px-0.5 py-0.5'} border border-plains-ink bg-plains-wash text-plains-ink pointer-events-none absolute left-0 right-0 top-0 rounded-t-lg text-center [overflow-wrap:anywhere]`} aria-hidden="true">{planMarker}</span>
   {/if}
 
   {#if focused}

@@ -149,3 +149,29 @@ fn checked_in_schema_is_generated_from_the_rust_authority() {
     generated.push('\n');
     assert_eq!(CHECKED_IN_SCHEMA, generated);
 }
+
+#[test]
+fn combat_declaration_bundle_round_trips_and_requires_explicit_declines() {
+    let source: serde_json::Value = serde_json::from_str(include_str!(
+        "../../protocol/fixtures/combat-declaration.json"
+    ))
+    .unwrap();
+    let bundle: ProtocolV1ConformanceBundle = serde_json::from_value(source.clone()).unwrap();
+    assert_eq!(
+        bundle
+            .declaration_command
+            .as_ref()
+            .unwrap()
+            .plan
+            .assignments
+            .len(),
+        3
+    );
+    assert_eq!(serde_json::to_value(bundle).unwrap(), source);
+    let mut invalid = source;
+    invalid["declaration_command"]["plan"]["assignments"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("destination");
+    assert!(serde_json::from_value::<ProtocolV1ConformanceBundle>(invalid).is_err());
+}

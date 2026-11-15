@@ -301,16 +301,20 @@ impl Game {
     pub(crate) fn play_land(&mut self, player: PlayerId, card: CardId) -> Result<(), AgentError> {
         let card_ref = &self.state[self.state.object_of(card)];
         if !card_ref.types.is_land() {
-            return Err(AgentError("only land cards can be played".to_string()));
+            return Err(AgentError::Rules(
+                "only land cards can be played".to_string(),
+            ));
         }
         if card_ref.owner != player {
-            return Err(AgentError("card does not belong to player".to_string()));
+            return Err(AgentError::Rules(
+                "card does not belong to player".to_string(),
+            ));
         }
         if !self.may_play_from_zone(player, self.state.object_of(card)) {
-            return Err(AgentError("land is not in a permitted zone".into()));
+            return Err(AgentError::Rules("land is not in a permitted zone".into()));
         }
         if !self.can_play_land(player) {
-            return Err(AgentError("cannot play land now".to_string()));
+            return Err(AgentError::Rules("cannot play land now".to_string()));
         }
 
         // CR 305.2 — Track one normal land play per turn.
@@ -332,7 +336,7 @@ impl Game {
         card: CardId,
     ) -> Result<(), AgentError> {
         if self.pending_choice.is_some() {
-            return Err(AgentError("a choice is already pending".to_string()));
+            return Err(AgentError::Rules("a choice is already pending".to_string()));
         }
 
         let (is_land, owner, is_instant_speed) = {
@@ -345,27 +349,33 @@ impl Game {
         };
 
         if !self.may_play_from_zone(player, self.state.object_of(card)) {
-            return Err(AgentError("card is not in a permitted casting zone".into()));
+            return Err(AgentError::Rules(
+                "card is not in a permitted casting zone".into(),
+            ));
         }
         if is_land {
-            return Err(AgentError("land cards cannot be cast".to_string()));
+            return Err(AgentError::Rules("land cards cannot be cast".to_string()));
         }
         if owner != player
             && self
                 .exile_grant(player, self.state.object_of(card))
                 .is_none()
         {
-            return Err(AgentError("card does not belong to player".to_string()));
+            return Err(AgentError::Rules(
+                "card does not belong to player".to_string(),
+            ));
         }
         if self.state.priority.holder != player {
-            return Err(AgentError("player does not have priority".to_string()));
+            return Err(AgentError::Rules(
+                "player does not have priority".to_string(),
+            ));
         }
         if is_instant_speed {
             if !self.can_cast_instants(player) {
-                return Err(AgentError("cannot cast instant now".to_string()));
+                return Err(AgentError::Rules("cannot cast instant now".to_string()));
             }
         } else if !self.can_cast_sorceries(player) {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "cannot cast sorcery-speed spell now".to_string(),
             ));
         }
@@ -497,11 +507,11 @@ impl Game {
             cast,
         }) = self.pending_choice
         else {
-            return Err(AgentError("no X announcement is pending".into()));
+            return Err(AgentError::Rules("no X announcement is pending".into()));
         };
-        let x = u8::try_from(x).map_err(|_| AgentError("X is too large".into()))?;
+        let x = u8::try_from(x).map_err(|_| AgentError::Rules("X is too large".into()))?;
         if chooser != player || !self.legal_x_values(player, object, cast).contains(&x) {
-            return Err(AgentError("illegal value of X".into()));
+            return Err(AgentError::Rules("illegal value of X".into()));
         }
         self.pending_choice = None;
         self.begin_kicker_choice(player, object, CastChoices { x, ..cast })
@@ -565,10 +575,12 @@ impl Game {
             cast,
         }) = self.pending_choice
         else {
-            return Err(AgentError("no kicker choice is pending".to_string()));
+            return Err(AgentError::Rules("no kicker choice is pending".to_string()));
         };
         if chooser != player {
-            return Err(AgentError("wrong player for kicker choice".to_string()));
+            return Err(AgentError::Rules(
+                "wrong player for kicker choice".to_string(),
+            ));
         }
         self.pending_choice = None;
         let cast = CastChoices {
@@ -638,7 +650,7 @@ impl Game {
     ) -> Result<(), AgentError> {
         if self.state[object].spell_modes().is_some() {
             if self.legal_spell_modes(player, object).is_empty() {
-                return Err(AgentError("no legal spell mode".into()));
+                return Err(AgentError::Rules("no legal spell mode".into()));
             }
             self.pending_choice = Some(PendingChoice::SpellMode {
                 player,
@@ -661,10 +673,10 @@ impl Game {
             cast,
         }) = self.pending_choice
         else {
-            return Err(AgentError("no spell mode is pending".into()));
+            return Err(AgentError::Rules("no spell mode is pending".into()));
         };
         if chooser != player || !self.legal_spell_modes(player, object).contains(&mode) {
-            return Err(AgentError("illegal spell mode".into()));
+            return Err(AgentError::Rules("illegal spell mode".into()));
         }
         self.advance_target_selection(player, object, cast, Some(mode), TargetSelection::default())
     }
@@ -713,7 +725,7 @@ impl Game {
                     requirement_index += 1;
                     continue;
                 }
-                return Err(AgentError("no legal targets".to_string()));
+                return Err(AgentError::Rules("no legal targets".to_string()));
             }
             self.pending_choice = Some(PendingChoice::ChooseTargets {
                 player,
@@ -781,7 +793,7 @@ impl Game {
             legal_targets,
         }) = self.pending_choice.take()
         else {
-            return Err(AgentError("no target choice is pending".to_string()));
+            return Err(AgentError::Rules("no target choice is pending".to_string()));
         };
 
         if chooser != player {
@@ -795,7 +807,9 @@ impl Game {
                 chosen_req_indices,
                 legal_targets,
             });
-            return Err(AgentError("wrong player for target choice".to_string()));
+            return Err(AgentError::Rules(
+                "wrong player for target choice".to_string(),
+            ));
         }
         if !legal_targets.contains(&target) {
             self.pending_choice = Some(PendingChoice::ChooseTargets {
@@ -808,7 +822,7 @@ impl Game {
                 chosen_req_indices,
                 legal_targets,
             });
-            return Err(AgentError("target is not legal".to_string()));
+            return Err(AgentError::Rules("target is not legal".to_string()));
         }
 
         let mut chosen = chosen;
@@ -889,7 +903,7 @@ impl Game {
             legal_targets,
         }) = self.pending_choice.take()
         else {
-            return Err(AgentError("no target choice is pending".to_string()));
+            return Err(AgentError::Rules("no target choice is pending".to_string()));
         };
         if chooser != player {
             self.pending_choice = Some(PendingChoice::ChooseTargets {
@@ -902,7 +916,9 @@ impl Game {
                 chosen_req_indices,
                 legal_targets,
             });
-            return Err(AgentError("wrong player for target choice".to_string()));
+            return Err(AgentError::Rules(
+                "wrong player for target choice".to_string(),
+            ));
         }
 
         let requirements = self.state[object].target_requirements_for_mode(mode);
@@ -922,7 +938,7 @@ impl Game {
                 chosen_req_indices,
                 legal_targets,
             });
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "minimum number of targets not chosen".to_string(),
             ));
         }
@@ -1009,7 +1025,7 @@ impl Game {
             payment,
         }) = self.pending_choice.clone()
         else {
-            return Err(AgentError("no exile payment pending".into()));
+            return Err(AgentError::Rules("no exile payment pending".into()));
         };
         let Payment::Spell { object, .. } = payment.as_ref() else {
             unreachable!("an exile alternative pays for a spell");
@@ -1019,7 +1035,7 @@ impl Game {
                 .exile_alternative_cards(player, *object)
                 .contains(&card)
         {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "not a card this alternative cost can exile".into(),
             ));
         }
@@ -1087,18 +1103,22 @@ impl Game {
         ability_index: usize,
     ) -> Result<(), AgentError> {
         if self.state.priority.holder != player {
-            return Err(AgentError("player does not have priority".to_string()));
+            return Err(AgentError::Rules(
+                "player does not have priority".to_string(),
+            ));
         }
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
-            return Err(AgentError("source permanent does not exist".to_string()));
+            return Err(AgentError::Rules(
+                "source permanent does not exist".to_string(),
+            ));
         };
         if permanent.controller != player {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "source permanent is not controlled by player".to_string(),
             ));
         }
         if self.state.zones.zone_of(permanent.object) != Some(ZoneType::Battlefield) {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "source permanent must be on battlefield".to_string(),
             ));
         }
@@ -1109,16 +1129,16 @@ impl Game {
             .get(ability_index)
             .cloned()
         else {
-            return Err(AgentError("invalid ability index".to_string()));
+            return Err(AgentError::Rules("invalid ability index".to_string()));
         };
 
         if ability.zone != ActivationZone::Battlefield {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "ability does not function on the battlefield".into(),
             ));
         }
         if self.activations_prohibited(permanent_id) {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "its activated abilities can't be activated".into(),
             ));
         }
@@ -1127,17 +1147,17 @@ impl Game {
         }
         self.check_activation_terms(player, &ability)?;
         if permanent.activation_used(ability_index, &ability) {
-            return Err(AgentError("ability was already activated".into()));
+            return Err(AgentError::Rules("ability was already activated".into()));
         }
         if ability.tap_source && !self.permanent_can_tap(permanent_id) {
-            return Err(AgentError("source cannot tap".into()));
+            return Err(AgentError::Rules("source cannot tap".into()));
         }
         if ability.mana_cost.x > 0 {
             if self
                 .legal_activation_x_values(player, permanent_id, ability_index)
                 .is_empty()
             {
-                return Err(AgentError("no payable value of X".into()));
+                return Err(AgentError::Rules("no payable value of X".into()));
             }
             self.pending_choice = Some(PendingChoice::ActivationX {
                 player,
@@ -1152,7 +1172,7 @@ impl Game {
         }
         if let Some(power) = ability.crew {
             if self.crew_power_available(player, permanent_id) < power {
-                return Err(AgentError("not enough power to crew".into()));
+                return Err(AgentError::Rules("not enough power to crew".into()));
             }
             self.pending_choice = Some(PendingChoice::Crew {
                 player,
@@ -1199,15 +1219,15 @@ impl Game {
             ability_index,
         }) = self.pending_choice
         else {
-            return Err(AgentError("no value of X is pending".into()));
+            return Err(AgentError::Rules("no value of X is pending".into()));
         };
-        let x = u8::try_from(x).map_err(|_| AgentError("illegal value of X".into()))?;
+        let x = u8::try_from(x).map_err(|_| AgentError::Rules("illegal value of X".into()))?;
         if chooser != player
             || !self
                 .legal_activation_x_values(player, permanent, ability_index)
                 .contains(&x)
         {
-            return Err(AgentError("illegal value of X".into()));
+            return Err(AgentError::Rules("illegal value of X".into()));
         }
         self.pending_choice = None;
         self.begin_activation_payment(
@@ -1228,15 +1248,17 @@ impl Game {
         ability_index: usize,
     ) -> Result<(), AgentError> {
         if self.state.priority.holder != player {
-            return Err(AgentError("player does not have priority".to_string()));
+            return Err(AgentError::Rules(
+                "player does not have priority".to_string(),
+            ));
         }
         let card = self
             .state
             .card_of(object)
-            .ok_or_else(|| AgentError("activation source is not a card".into()))?;
+            .ok_or_else(|| AgentError::Rules("activation source is not a card".into()))?;
         let ability = self
             .card_ability_in_zone(player, card, ability_index)
-            .ok_or_else(|| AgentError("no ability of this card functions here".into()))?;
+            .ok_or_else(|| AgentError::Rules("no ability of this card functions here".into()))?;
         self.check_activation_terms(player, &ability)?;
         let source = ActivationSource::Card(card);
         if ability.target_spec().is_some() {
@@ -1252,16 +1274,18 @@ impl Game {
         ability: &ActivatedAbilityDefinition,
     ) -> Result<(), AgentError> {
         if ability.own_turn_only && self.active_player() != player {
-            return Err(AgentError("activation requires your turn".into()));
+            return Err(AgentError::Rules("activation requires your turn".into()));
         }
         if self.payable_life(player) < ability.life_cost as i32 {
-            return Err(AgentError("cannot pay life cost".into()));
+            return Err(AgentError::Rules("cannot pay life cost".into()));
         }
         if ability.sorcery_timing && !self.can_cast_sorceries(player) {
-            return Err(AgentError("activation requires sorcery timing".into()));
+            return Err(AgentError::Rules(
+                "activation requires sorcery timing".into(),
+            ));
         }
         if ability.before_attackers && !self.before_attackers_declared() {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "activation requires a time before attackers".into(),
             ));
         }
@@ -1352,7 +1376,7 @@ impl Game {
             "several activation clauses each name a fixed number of targets"
         );
         if !self.activation_targets_available(player, source, ability_index) {
-            return Err(AgentError("no legal ability targets".into()));
+            return Err(AgentError::Rules("no legal ability targets".into()));
         }
         self.pending_choice = Some(PendingChoice::ActivatedTarget {
             player,
@@ -1512,7 +1536,7 @@ impl Game {
             requirement,
         }) = self.pending_choice.clone()
         else {
-            return Err(AgentError("no activated target pending".into()));
+            return Err(AgentError::Rules("no activated target pending".into()));
         };
         Ok(ActivatedTargeting {
             player,
@@ -1535,12 +1559,12 @@ impl Game {
         let chooser = self.activation_target_chooser(player, source, ability_index, requirement);
         let clause = self
             .activation_target_requirement(source, ability_index, requirement)
-            .ok_or_else(|| AgentError("missing activation source".into()))?;
+            .ok_or_else(|| AgentError::Rules("missing activation source".into()))?;
         let count = self
             .activation_clause_chosen(source, ability_index, requirement, &chosen)
             .len();
         if chooser != actor || count < clause.min {
-            return Err(AgentError("target required".into()));
+            return Err(AgentError::Rules("target required".into()));
         }
         self.next_activation_clause(player, source, ability_index, requirement + 1, chosen)
     }
@@ -1563,11 +1587,11 @@ impl Game {
                 .activated_ability_targets(player, source, ability_index, requirement, &chosen)
                 .contains(&target)
         {
-            return Err(AgentError("illegal activated target".into()));
+            return Err(AgentError::Rules("illegal activated target".into()));
         }
         let clause = self
             .activation_target_requirement(source, ability_index, requirement)
-            .ok_or_else(|| AgentError("missing activation source".into()))?;
+            .ok_or_else(|| AgentError::Rules("missing activation source".into()))?;
         chosen.push(target);
         let count = self
             .activation_clause_chosen(source, ability_index, requirement, &chosen)
@@ -1652,7 +1676,7 @@ impl Game {
     ) -> Result<(), AgentError> {
         let ability = self
             .activation_ability(source, ability_index)
-            .ok_or_else(|| AgentError("missing source".into()))?;
+            .ok_or_else(|| AgentError::Rules("missing source".into()))?;
         if let Some(cost) = &ability.tap_cost {
             self.pending_choice = Some(PendingChoice::TapPayment {
                 player,
@@ -1701,17 +1725,17 @@ impl Game {
             remaining,
         }) = self.pending_choice.clone()
         else {
-            return Err(AgentError("no tap payment pending".into()));
+            return Err(AgentError::Rules("no tap payment pending".into()));
         };
         let ability = self
             .activation_ability(source, ability_index)
-            .ok_or_else(|| AgentError("missing source".into()))?;
+            .ok_or_else(|| AgentError::Rules("missing source".into()))?;
         let tapped = self
             .state
             .permanent_of(object)
             .filter(|id| self.tap_cost_candidates(player, &ability).contains(id));
         let (true, Some(tapped)) = (payer == player, tapped) else {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "tap cost must be an untapped permanent you control".into(),
             ));
         };
@@ -1722,7 +1746,7 @@ impl Game {
             x: 0,
         };
         if !self.tap_activation_payment_possible(player, &payment, remaining, Some(tapped)) {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "tap cost selection cannot complete the activation".into(),
             ));
         }
@@ -1752,7 +1776,7 @@ impl Game {
     ) -> Result<(), AgentError> {
         let ability = self
             .activation_ability(source, ability_index)
-            .ok_or_else(|| AgentError("missing source".into()))?;
+            .ok_or_else(|| AgentError::Rules("missing source".into()))?;
         if ability.discard_card {
             self.pending_choice = Some(PendingChoice::DiscardPayment {
                 player,
@@ -1807,7 +1831,7 @@ impl Game {
             targets,
         }) = self.pending_choice.clone()
         else {
-            return Err(AgentError("no discard payment pending".into()));
+            return Err(AgentError::Rules("no discard payment pending".into()));
         };
         if payer != player
             || !self
@@ -1815,11 +1839,13 @@ impl Game {
                 .zones
                 .contains(self.state.object_of(card), ZoneType::Hand, player)
         {
-            return Err(AgentError("discard cost must be a card in hand".into()));
+            return Err(AgentError::Rules(
+                "discard cost must be a card in hand".into(),
+            ));
         }
         let sacrifice = self
             .activation_ability(source, ability_index)
-            .ok_or_else(|| AgentError("missing source".into()))?
+            .ok_or_else(|| AgentError::Rules("missing source".into()))?
             .sacrifice;
         self.move_object(self.state.object_of(card), ZoneType::Graveyard);
         let payment = Payment::Activation {
@@ -1842,10 +1868,10 @@ impl Game {
             cost,
         }) = self.pending_choice.clone()
         else {
-            return Err(AgentError("no sacrifice payment pending".into()));
+            return Err(AgentError::Rules("no sacrifice payment pending".into()));
         };
         if player != chooser {
-            return Err(AgentError("wrong payer".into()));
+            return Err(AgentError::Rules("wrong payer".into()));
         }
         let selected = if let Some(object) = object {
             Some(
@@ -1856,12 +1882,12 @@ impl Game {
                             .as_ref()
                             .is_some_and(|p| p.object == object)
                     })
-                    .ok_or_else(|| AgentError("illegal sacrifice cost".into()))?,
+                    .ok_or_else(|| AgentError::Rules("illegal sacrifice cost".into()))?,
             )
         } else if cost.or_mana.is_some() {
             None
         } else {
-            return Err(AgentError("sacrifice required".into()));
+            return Err(AgentError::Rules("sacrifice required".into()));
         };
         let alternative = if selected.is_none() {
             cost.or_mana
@@ -1964,10 +1990,10 @@ impl Game {
             alternative,
         }) = self.pending_choice.clone()
         else {
-            return Err(AgentError("no mana payment pending".into()));
+            return Err(AgentError::Rules("no mana payment pending".into()));
         };
         if chooser != player {
-            return Err(AgentError("wrong payer".into()));
+            return Err(AgentError::Rules("wrong payer".into()));
         }
         self.commit_payment(player, *payment, sacrifice, alternative, 0)
     }
@@ -2031,7 +2057,7 @@ impl Game {
             } => {
                 let life = self
                     .activation_ability(source, ability_index)
-                    .ok_or_else(|| AgentError("missing activation source".into()))?
+                    .ok_or_else(|| AgentError::Rules("missing activation source".into()))?
                     .life_cost;
                 self.change_life(player, -(life as i32));
                 let (ability, cost) = match source {
@@ -2107,16 +2133,16 @@ impl Game {
             remaining_power,
         }) = self.pending_choice
         else {
-            return Err(AgentError("no crew payment is pending".into()));
+            return Err(AgentError::Rules("no crew payment is pending".into()));
         };
         if payer != player {
-            return Err(AgentError("wrong player for crew payment".into()));
+            return Err(AgentError::Rules("wrong player for crew payment".into()));
         }
         let crew = self
             .state
             .permanent_of(object)
             .filter(|id| self.crew_candidates(player, permanent).contains(id))
-            .ok_or_else(|| AgentError("creature cannot crew".into()))?;
+            .ok_or_else(|| AgentError::Rules("creature cannot crew".into()))?;
         let remaining_power = remaining_power - self.characteristics(crew).power;
         self.tap_permanent(crew, false);
         if remaining_power > 0 {
@@ -2256,19 +2282,25 @@ impl Game {
             tapped,
         }) = self.pending_choice.clone()
         else {
-            return Err(AgentError("no waterbend payment is pending".to_string()));
+            return Err(AgentError::Rules(
+                "no waterbend payment is pending".to_string(),
+            ));
         };
         if payer != player {
-            return Err(AgentError("wrong player for waterbend payment".to_string()));
+            return Err(AgentError::Rules(
+                "wrong player for waterbend payment".to_string(),
+            ));
         }
         if remaining_generic == 0 {
-            return Err(AgentError("waterbend cost is already paid".to_string()));
+            return Err(AgentError::Rules(
+                "waterbend cost is already paid".to_string(),
+            ));
         }
         if !self
             .waterbend_payment_candidates(player, &payment)
             .contains(&tap_permanent)
         {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "permanent cannot be tapped for waterbend".to_string(),
             ));
         }
@@ -2302,10 +2334,14 @@ impl Game {
             ..
         }) = self.pending_choice.clone()
         else {
-            return Err(AgentError("no waterbend payment is pending".to_string()));
+            return Err(AgentError::Rules(
+                "no waterbend payment is pending".to_string(),
+            ));
         };
         if payer != player {
-            return Err(AgentError("wrong player for waterbend payment".to_string()));
+            return Err(AgentError::Rules(
+                "wrong player for waterbend payment".to_string(),
+            ));
         }
         self.pending_choice = None;
         self.commit_payment(player, *payment, None, None, tapped)
@@ -2322,11 +2358,13 @@ impl Game {
         x: u8,
     ) -> Result<(ActivatedAbilityOnStack, Option<ProposedEvent>), AgentError> {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
-            return Err(AgentError("source permanent does not exist".to_string()));
+            return Err(AgentError::Rules(
+                "source permanent does not exist".to_string(),
+            ));
         };
         let source_object = self
             .permanent_object(permanent_id)
-            .ok_or_else(|| AgentError("missing activation source identity".into()))?;
+            .ok_or_else(|| AgentError::Rules("missing activation source identity".into()))?;
         let attached = permanent.attached_to;
         let source_transforms = permanent.transforms;
         let source_definition_id = self.state[source_object].definition_id;
@@ -2337,7 +2375,7 @@ impl Game {
             .get(ability_index)
             .cloned()
         else {
-            return Err(AgentError("invalid ability index".to_string()));
+            return Err(AgentError::Rules("invalid ability index".to_string()));
         };
 
         let program = !self.activation_catalog_program(
@@ -2350,7 +2388,7 @@ impl Game {
         );
         if ability.tap_source {
             if !self.permanent_can_tap(permanent_id) {
-                return Err(AgentError("source cannot pay tap cost".into()));
+                return Err(AgentError::Rules("source cannot pay tap cost".into()));
             }
             self.tap_permanent(permanent_id, false);
         }
@@ -2395,7 +2433,7 @@ impl Game {
     ) -> Result<(ActivatedAbilityOnStack, Option<ProposedEvent>), AgentError> {
         let ability = self
             .card_ability_in_zone(player, card, ability_index)
-            .ok_or_else(|| AgentError("activation source left its zone".into()))?;
+            .ok_or_else(|| AgentError::Rules("activation source left its zone".into()))?;
         let cost = ability.discard_source.then(|| {
             self.zone_move_proposal(
                 self.state.object_of(card),
@@ -2407,7 +2445,7 @@ impl Game {
         let source_object = self
             .state
             .live(self.state.object_of(card))
-            .ok_or_else(|| AgentError("missing activation source identity".into()))?;
+            .ok_or_else(|| AgentError::Rules("missing activation source identity".into()))?;
         let id = self.state.id_gen_mut().next_id();
         Ok((
             ActivatedAbilityOnStack {

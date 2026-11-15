@@ -3,6 +3,7 @@
 from collections.abc import Sequence
 from typing import Any
 
+from conformance.combat_planning import combat_config, configure_combat
 from manabot.verify.trigger_order import DECK, SEED, configure_root
 import managym
 from managym.academy import server
@@ -23,6 +24,16 @@ def new_game(
     fixture = (
         isinstance(raw_config, dict) and raw_config.get("trigger_order_fixture") is True
     )
+    combat = raw_config.get("combat_fixture") if isinstance(raw_config, dict) else None
+    if combat in ("attackers", "blockers"):
+        _new_game(self, combat_config())
+        assert self.env is not None
+        self.obs = configure_combat(
+            self.env, combat, count=24 if raw_config.get("dense") else 3
+        )
+        self.published_prompt = None
+        self.presentation.reset()
+        return self._wire_message()
     if not fixture:
         return _new_game(
             self, raw_config, continuation_fingerprint=continuation_fingerprint

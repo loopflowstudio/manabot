@@ -524,7 +524,8 @@ mod tests {
             ],
             111,
             false,
-        );
+        )
+        .expect("valid game setup");
         let objects: Vec<_> = game.state.zones.latest().collect();
         game.move_object(objects[0], ZoneType::Battlefield);
         game.move_object(objects[40], ZoneType::Battlefield);

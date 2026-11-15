@@ -18,7 +18,7 @@ use serde::Serialize;
 
 /// One consumed, nontrivial native choice. Focus is the shared action projection,
 /// not a claim that each focused card caused or benefited from the action.
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct ExposureChoice {
     pub revision: u64,
     pub actor: usize,
@@ -27,7 +27,7 @@ pub struct ExposureChoice {
     pub selected: usize,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct ExposureOption {
     pub action_type: ActionType,
     pub objects: Vec<CardSnapshot>,
@@ -35,7 +35,7 @@ pub struct ExposureOption {
 
 /// A completed effect frame, including untargeted and suspended resolutions.
 /// Completion does not assert an effect changed state or a strategy succeeded.
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct ExposureResolution {
     pub revision: u64,
     pub controller: usize,
@@ -44,13 +44,13 @@ pub struct ExposureResolution {
     pub definition: Option<u32>,
 }
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Clone, Debug, Default, Serialize)]
 pub struct ExposureCapture {
     pub choices: Vec<ExposureChoice>,
     pub resolutions: Vec<ExposureResolution>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct CardSnapshot {
     pub copy: usize,
     pub definition: u32,
@@ -61,7 +61,7 @@ pub struct CardSnapshot {
     pub origin: &'static str,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct CardMove {
     pub sequence: usize,
     #[serde(rename = "card")]
@@ -72,7 +72,7 @@ pub struct CardMove {
     pub turn: u32,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct CardCapture {
     pub version: u32,
     pub content_digest: String,
@@ -277,8 +277,8 @@ mod tests {
 
     #[test]
     fn capture_preserves_rules_and_excludes_forks() {
-        let plain = Game::new(configs(), 17, true);
-        let mut captured = Game::new_capturing(configs(), 17, true);
+        let plain = Game::new(configs(), 17, true).expect("valid game setup");
+        let mut captured = Game::new_capturing(configs(), 17, true).expect("valid game setup");
         assert_eq!(
             plain.state.deterministic_hash(),
             captured.state.deterministic_hash()
@@ -308,8 +308,78 @@ mod tests {
     }
 
     #[test]
+    fn declaration_transaction_preserves_capture_on_commit_and_rejection() {
+        use crate::agent::structured_offer::{ChoiceAnswer, ChoiceStep, OfferSubmission};
+        use crate::flow::turn::PhaseKind;
+
+        for reject in [false, true] {
+            let deck = BTreeMap::from([("Mountain".into(), 20), ("Gray Ogre".into(), 4)]);
+            let mut game = Game::new_capturing(
+                vec![
+                    PlayerConfig::new("a", deck.clone()),
+                    PlayerConfig::new("b", deck),
+                ],
+                17,
+                false,
+            )
+            .expect("valid game setup");
+            let attacker = game
+                .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
+                .unwrap();
+            game.state.turn.current_phase = PhaseKind::Combat as usize;
+            game.state.turn.current_step = 1; // Declare attackers.
+            game.state.turn.step_initialized = false;
+            game.tick().unwrap();
+            game.card_capture.as_mut().unwrap().exposure = Some(ExposureCapture::default());
+            let revision = game.semantic_decision_frame().unwrap().revision;
+            let offers = game.structured_attacker_offers().unwrap();
+            let offer = &offers.projection().offers[0];
+            let ChoiceStep::Select {
+                role, candidates, ..
+            } = &offer.choices[0];
+            let submission = OfferSubmission {
+                offer_id: offer.id,
+                answers: vec![ChoiceAnswer::Candidates {
+                    role: *role,
+                    candidates: candidates
+                        .initial
+                        .as_ref()
+                        .unwrap()
+                        .iter()
+                        .map(|c| c.id)
+                        .collect(),
+                }],
+            };
+            if reject {
+                game.state.permanents[attacker].as_mut().unwrap().tapped = true;
+            }
+            let before = serde_json::to_value(game.card_capture.as_ref().unwrap()).unwrap();
+            let result = game.apply_offer_submission(&offers, &submission);
+            let capture = game.card_capture.as_ref().expect("live capture survives");
+            if reject {
+                assert!(result.is_err());
+                assert_eq!(serde_json::to_value(capture).unwrap(), before);
+            } else {
+                result.unwrap();
+                assert_eq!(
+                    serde_json::to_value(&capture.initial).unwrap(),
+                    before["initial"]
+                );
+                assert_eq!(
+                    serde_json::to_value(&capture.moves).unwrap(),
+                    before["moves"]
+                );
+                let exposure = capture.exposure.as_ref().unwrap();
+                assert_eq!(exposure.choices.len(), 1);
+                assert_eq!(exposure.choices[0].revision, revision);
+            }
+            assert!(game.clone().card_capture.is_none());
+        }
+    }
+
+    #[test]
     fn selection_bounce_and_redraw_keep_distinct_causes() {
-        let mut game = Game::new_capturing(configs(), 18, true);
+        let mut game = Game::new_capturing(configs(), 18, true).expect("valid game setup");
         let object = game
             .state
             .zones
@@ -341,7 +411,8 @@ mod tests {
                 ],
                 17,
                 false,
-            );
+            )
+            .expect("valid game setup");
             game.scenario_force_card_in_hand(PlayerId(0), "Gray Ogre")
                 .unwrap();
             let object_id = *game
@@ -417,7 +488,7 @@ mod tests {
     #[test]
     fn exposure_capture_keeps_physical_identity_across_face_changes() {
         use std::sync::Arc;
-        let mut game = Game::new_capturing(configs(), 17, true);
+        let mut game = Game::new_capturing(configs(), 17, true).expect("valid game setup");
         let object = game.state.zones.zone_objects(ZoneType::Hand, PlayerId(0))[0];
         let before = snapshot(&game, object);
         // A controlled face switch uses two real definitions without asserting

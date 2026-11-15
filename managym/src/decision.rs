@@ -134,11 +134,13 @@ pub enum SemanticError {
     UnknownObjectCandidate,
     StaleObject,
     IllegalCommand(String),
+    Execution(crate::agent::action::AgentError),
 }
 
 impl std::fmt::Display for SemanticError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::Execution(error) => error.fmt(f),
             Self::GameOver => write!(f, "match is over"),
             Self::NoActiveDecision => write!(f, "no active decision to project"),
             Self::ViewerOutOfBounds(viewer) => {
@@ -162,6 +164,26 @@ impl std::fmt::Display for SemanticError {
             ),
             Self::StaleObject => write!(f, "stale_object: bound object is no longer current"),
             Self::IllegalCommand(message) => write!(f, "illegal command: {message}"),
+        }
+    }
+}
+
+impl From<crate::agent::structured_offer::StructuredOfferError> for SemanticError {
+    fn from(error: crate::agent::structured_offer::StructuredOfferError) -> Self {
+        match error {
+            crate::agent::structured_offer::StructuredOfferError::Execution(error) => {
+                Self::Execution(error)
+            }
+            other => Self::IllegalCommand(other.to_string()),
+        }
+    }
+}
+
+impl From<SemanticError> for crate::agent::action::AgentError {
+    fn from(error: SemanticError) -> Self {
+        match error {
+            SemanticError::Execution(error) => error,
+            other => Self::Rules(other.to_string()),
         }
     }
 }
@@ -251,7 +273,7 @@ impl Game {
                 | crate::agent::structured_offer::StructuredOfferError::GameOver => {
                     SemanticError::NoActiveDecision
                 }
-                other => SemanticError::IllegalCommand(other.to_string()),
+                other => SemanticError::from(other),
             })?;
         let projection = offers.projection();
         let projection_value = serde_json::to_value(projection).expect("projection serializes");
@@ -298,6 +320,7 @@ impl Game {
     /// `decision` is present only when `viewer` is the acting player, so a
     /// non-acting viewer never sees the actor's legal offers.
     pub fn semantic_observation(&self, viewer: PlayerId) -> Result<Observation, SemanticError> {
+        self.ensure_playable().map_err(SemanticError::Execution)?;
         self.semantic_observation_with_input(viewer)
             .map(|(observation, _)| observation)
     }
@@ -352,6 +375,7 @@ impl Game {
     /// no projection is retained across mutations. Fixed-viewer presentation
     /// events remain absent, exactly as in `semantic_observation`.
     pub fn semantic_viewer_state_hash(&self, viewer: PlayerId) -> Result<String, SemanticError> {
+        self.ensure_playable().map_err(SemanticError::Execution)?;
         let (_, viewer_state_json) = self.semantic_viewer_input(viewer)?;
         Ok(semantic_viewer_hash(&viewer_state_json))
     }
@@ -361,6 +385,7 @@ impl Game {
         &self,
         viewer: PlayerId,
     ) -> Result<(AgentObservation, String), SemanticError> {
+        self.ensure_playable().map_err(SemanticError::Execution)?;
         #[cfg(feature = "benchmark")]
         let projection_timer = crate::benchmark_search::Timer::new("semantic/viewer_projection");
         if viewer.0 >= self.state.players.len() {
@@ -388,8 +413,9 @@ impl Game {
 
     /// Validate one revision-bound Command against the current authority,
     /// apply it atomically, and return the fail-closed receipt plus the next
-    /// composite Observation for the command's actor. No mutation occurs on
-    /// any error path.
+    /// composite Observation for the command's actor. Rejected Commands do not
+    /// mutate gameplay. A progression failure quarantines the in-place stream;
+    /// declaration transactions discard that failed candidate instead.
     pub fn execute_semantic_command(
         &mut self,
         command: &Command,
@@ -402,6 +428,7 @@ impl Game {
         &mut self,
         command: &Command,
     ) -> Result<(SemanticTransition, AgentObservation, bool), SemanticError> {
+        self.ensure_playable().map_err(SemanticError::Execution)?;
         if self.is_game_over() {
             return Err(SemanticError::GameOver);
         }
@@ -419,7 +446,7 @@ impl Game {
                 | crate::agent::structured_offer::StructuredOfferError::GameOver => {
                     SemanticError::NoActiveDecision
                 }
-                other => SemanticError::IllegalCommand(other.to_string()),
+                other => SemanticError::from(other),
             })?;
         let projection = offers.projection();
         let actor = PlayerId(projection.actor as usize);
@@ -436,9 +463,7 @@ impl Game {
             answers: command.answers.clone(),
         };
 
-        let atomic = offers
-            .decode(&submission)
-            .map_err(|error| SemanticError::IllegalCommand(error.to_string()))?;
+        let atomic = offers.decode(&submission).map_err(SemanticError::from)?;
         for address in &command.object_preconditions {
             let object_ref = self
                 .semantic_object_candidates
@@ -460,7 +485,20 @@ impl Game {
         let before_revision = self.decision_epoch;
         let done = self
             .apply_atomic_command(&atomic)
-            .map_err(|error| SemanticError::IllegalCommand(error.to_string()))?;
+            .map_err(SemanticError::from)?;
+        self.finish_semantic_transition(command, before_revision, actor, public_commitment, done)
+    }
+
+    /// Materialize the same receipt for ordinary and transactional children.
+    /// The caller has already validated and executed the ordinary choice.
+    pub(crate) fn finish_semantic_transition(
+        &mut self,
+        command: &Command,
+        before_revision: u64,
+        actor: PlayerId,
+        public_commitment: Option<PublicCommitment>,
+        done: bool,
+    ) -> Result<(SemanticTransition, AgentObservation, bool), SemanticError> {
         let after_revision = self.decision_epoch;
 
         let events = self.take_observation_events();
@@ -535,7 +573,7 @@ mod tests {
     }
 
     fn first_game() -> Game {
-        Game::new(configs(), 11, true)
+        Game::new(configs(), 11, true).expect("valid game setup")
     }
 
     fn pass_command(frame: &DecisionFrame, id: &str) -> Command {

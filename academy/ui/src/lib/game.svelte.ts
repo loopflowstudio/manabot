@@ -14,11 +14,13 @@ import { defaultStops, loadStoredStops, saveStoredStops, sanitizeStops } from '.
 import type { RestoredReplayDecision } from './replay-index';
 import type {
   BranchRetryPayload,
+  DeclarationValidationEvent,
   TableCapability,
   TableSnapshot,
 } from './shared-table-protocol';
 import type {
   ActionOption,
+  CommandRejection,
   ConnectionState,
   DeckNames,
   Decklists,
@@ -118,6 +120,8 @@ export class GameStore {
   branchProjection = $state<Observation | null>(null);
   tableAnnouncement = $state('');
   protocolFrame = $state<ExperienceFrame | null>(null);
+  declarationValidation = $state<DeclarationValidationEvent | null>(null);
+  lastCommandRejection = $state<CommandRejection | null>(null);
   observation = $state<Observation | null>(null);
   actions = $state<ActionOption[]>([]);
   // ActionSpaceEnum name for the current decision (PRIORITY, SCRY, ...).
@@ -170,6 +174,8 @@ export class GameStore {
     const actor = hero
       ? (this.hasCapability('submit_live_command') ? 'Your decision' : "Pilot's decision")
       : "Opponent's decision";
+    const declaration = this.protocolFrame?.declaration;
+    if (declaration) return `${actor} — plan the remaining ${declaration.stage}, then confirm.`;
     return `${actor} — ${prompt.instruction || prompt.title}`;
   }
 
@@ -301,6 +307,7 @@ export class GameStore {
   }
 
   beginCommand(): void {
+    this.lastCommandRejection = null;
     this.commandPending = true;
   }
 
@@ -360,6 +367,8 @@ export class GameStore {
     sessionId?: string,
     resumeToken?: string,
   ): void {
+    this.declarationValidation = null;
+    this.lastCommandRejection = null;
     this.protocolFrame = frame;
     const actions = frame.offers.map((offer) => ({
       index: offer.id,
@@ -491,6 +500,8 @@ export class GameStore {
   }
 
   private resetMatchState(): void {
+    this.declarationValidation = null;
+    this.lastCommandRejection = null;
     this.protocolFrame = null;
     this.observation = null;
     this.actions = [];
