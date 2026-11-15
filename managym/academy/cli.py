@@ -94,6 +94,16 @@ def _earlier(ctx: typer.Context) -> _Shared:
     return ctx.obj if isinstance(ctx.obj, _Shared) else _Shared()
 
 
+def _search_json(search: str | None, mirror: str | None) -> str | None:
+    """Resolve the legacy option before either command starts serving."""
+    if mirror is None:
+        return search
+    typer.echo("--mirror is deprecated; use --search (removed in 0.4.0)", err=True)
+    if search is not None:
+        raise typer.BadParameter("Pass --search only; do not combine it with --mirror.")
+    return mirror
+
+
 @academy_app.callback()
 def _academy(
     ctx: typer.Context,
@@ -144,13 +154,7 @@ def play(
 ) -> None:
     from managym.academy import server
 
-    if mirror_json is not None:
-        typer.echo("--mirror is deprecated; use --search (removed in 0.4.0)", err=True)
-        if search_json is not None:
-            raise typer.BadParameter(
-                "Pass --search only; do not combine it with --mirror."
-            )
-        search_json = mirror_json
+    search_json = _search_json(search_json, mirror_json)
 
     def prepare(running: Academy) -> str:
         try:
@@ -201,13 +205,7 @@ def watch(
     no_open: bool | None = _NO_OPEN,
     policies: list[Path] | None = _POLICIES,
 ) -> None:
-    if mirror_json is not None:
-        typer.echo("--mirror is deprecated; use --search (removed in 0.4.0)", err=True)
-        if search_json is not None:
-            raise typer.BadParameter(
-                "Pass --search only; do not combine it with --mirror."
-            )
-        search_json = mirror_json
+    search_json = _search_json(search_json, mirror_json)
     if len(player) != 2:
         _report(
             AcademyLaunchError(
