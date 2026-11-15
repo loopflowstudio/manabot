@@ -167,6 +167,8 @@ fn execution_names(out: &mut Vec<RecordName>) {
             &["Scried", "Surveilled", "LibrarySearched"][..],
         ),
         ("LibraryEnd", &["Top", "Bottom"][..]),
+        // Supported stack-ability targeting has no printed card program yet.
+        ("TargetSpec", &["Ability"][..]),
         // Retained execution can refer to a spell already on the stack;
         // printed card programs do not supply this zone's token.
         ("ZoneType", &["Stack"][..]),
@@ -196,6 +198,9 @@ fn execution_names(out: &mut Vec<RecordName>) {
                 "PlaceTargetInLibrary",
                 "RestoreController",
                 "SelectTargetRequirement",
+                "HaveAbilitiesOf",
+                "ExileNamed",
+                "CounterAbility",
             ][..],
         ),
     ] {
@@ -226,6 +231,8 @@ fn execution_names(out: &mut Vec<RecordName>) {
         "amounts",
         "entry_counters",
         "combat",
+        "definition",
+        "name",
     ] {
         add(TokenKind::Field, field);
     }
@@ -283,10 +290,7 @@ mod tests {
                 proposed_event::{CounterProvenance, EventBinding, EventCause},
                 turn::Bending,
             },
-            state::{
-                ability::{Effect, LibraryEnd},
-                game_object::PlayerId,
-            },
+            state::{ability::LibraryEnd, game_object::PlayerId},
         };
         let pack = default_content_pack();
         let catalog = catalog_tokens(pack).unwrap();
@@ -296,34 +300,22 @@ mod tests {
             .zip(catalog.token_value)
             .chain(record_names().into_iter().filter_map(|entry| entry.token))
             .collect();
+        // Effect programs are covered by the cards crate's exhaustive witnesses.
         let mut tokens = rules_tokens(
             &[
-                Effect::PlaceTargetInLibrary {
-                    second_from_top: true,
+                GameEvent::Scried {
+                    player: PlayerId(0),
                 },
-                Effect::RestoreController(PlayerId(1)),
-                Effect::SelectTargetRequirement { index: 1 },
+                GameEvent::Surveilled {
+                    player: PlayerId(0),
+                },
+                GameEvent::LibrarySearched {
+                    player: PlayerId(0),
+                },
             ],
             pack,
         )
         .unwrap();
-        tokens.extend(
-            rules_tokens(
-                &[
-                    GameEvent::Scried {
-                        player: PlayerId(0),
-                    },
-                    GameEvent::Surveilled {
-                        player: PlayerId(0),
-                    },
-                    GameEvent::LibrarySearched {
-                        player: PlayerId(0),
-                    },
-                ],
-                pack,
-            )
-            .unwrap(),
-        );
         tokens.extend(
             rules_tokens(
                 &[
@@ -366,7 +358,7 @@ mod tests {
         tokens.extend(rules_tokens(&[LibraryEnd::Top, LibraryEnd::Bottom], pack).unwrap());
         for (kind, value) in tokens {
             assert!(
-                matches!(kind, 4 | 5 | 7) || known.contains(&(kind, value)),
+                matches!(kind, 4 | 5) || known.contains(&(kind, value)),
                 "unregistered runtime token: kind {kind}, value {value}"
             );
         }
