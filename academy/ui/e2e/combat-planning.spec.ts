@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import type { ExperienceFrame } from '../src/lib/types';
 
@@ -73,20 +74,31 @@ for (const [width, height, theme] of [[1280, 800, 'dark'], [1280, 800, 'light'],
     await creature.click();
     await page.getByRole('button', { name: 'Target Passive', exact: true }).click();
     await expect(page.getByTestId('combat-summary')).toContainText('1 planned');
+    await expect(creature).toHaveAccessibleName(/Planned attack/);
+    await expect(creature.getByText('Planned attack', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: /Select all eligible to attack/ }).click();
     await expect(page.getByTestId('combat-summary')).toContainText('3 planned');
+    await expect(page.getByTestId('game-board').locator('[data-combat-plan]')).toHaveCount(3);
     const assignments = page.getByTestId('combat-composer').getByRole('combobox');
     await assignments.first().selectOption('');
     await expect(page.getByTestId('combat-summary')).toContainText('2 planned');
+    await expect(page.getByTestId('game-board').locator('[data-combat-plan]')).toHaveCount(2);
     const modes = page.getByRole('group', { name: 'Table interaction mode' });
     await modes.getByRole('button', { name: 'Inspect', exact: true }).click();
     await expect(assignments.first()).toBeDisabled();
     await expect(page.getByTestId('combat-summary')).toContainText('2 planned');
+    await expect(page.getByTestId('game-board').locator('[data-combat-plan]')).toHaveCount(2);
     await modes.getByRole('button', { name: 'Play', exact: true }).click();
     await expect(page.getByTestId('combat-validation')).toHaveAttribute('data-status', 'valid');
     expect(await page.evaluate(() => window.__combatFrame!.revision)).toBe(before.revision);
     await expect(page.getByTestId('game-board').getByRole('button', { name: /^Gray Ogre/ }).first()).toBeInViewport({ ratio: 1 });
     await expect(creature).toBeInViewport({ ratio: 1 });
+    await page.getByText('History and settings', { exact: true }).click();
+    const context = page.getByTestId('decision-context');
+    await expect(context).toContainText('then confirm once');
+    await expect(context).not.toContainText('Choose each attack declaration');
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    await page.getByText('History and settings', { exact: true }).click();
     await page.screenshot({ path: info.outputPath(`combat-${width}-${theme}.png`) });
     const confirm = page.getByRole('button', { name: 'Confirm attackers', exact: true });
     await confirm.focus();
@@ -111,9 +123,17 @@ test('menace stays editable, dense choices remain reachable and reload discards 
   expect(menace).toBeTruthy();
   await assignments.first().selectOption(menace!);
   await expect(page.getByTestId('combat-validation')).toHaveAttribute('data-status', 'invalid');
+  await expect(page.getByTestId('combat-validation')).toContainText('Edit the assignments before confirming');
+  await expect(page.getByRole('button', { name: 'Retry validation' })).toHaveCount(0);
+  await expect(page.getByTestId('combat-composer').locator('details').filter({ hasText: 'Combat requirements' })).toHaveAttribute('open', '');
+  await expect(page.getByText('Boggart Brute needs at least two blockers if blocked.', { exact: true }).first()).toBeVisible();
+  await expect(page.getByTestId('game-board').getByRole('button', { name: /Planned block/ })).toHaveCount(1);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: info.outputPath('invalid-menace.png') });
   await expect(page.getByRole('button', { name: 'Confirm blockers' })).toBeDisabled();
   expect(await page.evaluate(() => window.__combatFrame!.revision)).toBe(before.revision);
   await assignments.nth(1).selectOption(menace!);
+  await expect(page.getByTestId('game-board').getByRole('button', { name: /Planned block/ })).toHaveCount(2);
   await expect(page.getByTestId('combat-validation')).toHaveAttribute('data-status', 'valid');
   const next = page.getByTestId('game-board').getByRole('button', { name: 'Next creatures', exact: true });
   for (let pageIndex = 0; pageIndex < 4; pageIndex++) await next.click();
@@ -125,6 +145,7 @@ test('menace stays editable, dense choices remain reachable and reload discards 
   await page.reload();
   await expect(page.getByTestId('combat-composer')).toBeVisible();
   await expect(page.getByTestId('combat-summary')).toContainText('0 planned');
+  await expect(page.getByTestId('game-board').locator('[data-combat-plan]')).toHaveCount(0);
   expect(await page.evaluate(() => window.__combatFrame!.revision)).toBe(before.revision);
 });
 
@@ -162,4 +183,47 @@ test('a lost committed reply recovers and retry returns the same child commitmen
   await expect.poll(() => page.evaluate(() => window.__combatOutcome)).toBe('duplicate');
   expect(await page.evaluate(() => window.__combatChildren)).toEqual(children);
   expect(await page.evaluate(() => window.__combatFrame!.frame_hash)).toBe(committed);
+});
+
+
+test('capacity keeps the draft without promising that an unchanged retry can validate it', async ({ page }) => {
+  await start(page, 'attackers');
+  await expect(page.getByTestId('combat-validation')).toHaveAttribute('data-status', 'valid');
+  await page.evaluate(() => { window.__delayCombatValidation = true; });
+  await page.getByRole('button', { name: /Select all eligible to attack/ }).click();
+  await expect.poll(() => page.evaluate(() => window.__heldCombatValidation.length)).toBe(1);
+  // Inject a bounded measurement rather than constructing an expensive solver state.
+  await page.evaluate(() => {
+    const response = JSON.parse(window.__heldCombatValidation[0]);
+    response.status = 'capacity';
+    response.message = 'combat_solver capacity exceeded';
+    response.capacity = { resource: 'combat_solver', limit: 65536, visited: 65537 };
+    window.__delayCombatValidation = false;
+    window.__combatSocket.dispatchEvent(new MessageEvent('message', { data: JSON.stringify(response) }));
+  });
+  await expect(page.getByTestId('combat-validation')).toHaveAttribute('data-status', 'capacity');
+  await expect(page.getByTestId('combat-validation')).toContainText('Legality is unknown');
+  await expect(page.getByTestId('combat-summary')).toContainText('3 planned');
+  await expect(page.getByRole('button', { name: 'Retry validation' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Confirm attackers' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Clear', exact: true }).click();
+  await expect(page.getByTestId('combat-validation')).toHaveAttribute('data-status', 'valid');
+  await expect(page.getByTestId('game-board').locator('[data-combat-plan]')).toHaveCount(0);
+});
+
+
+test('a validation request that could not be sent offers a working retry', async ({ page }) => {
+  await start(page, 'attackers');
+  await expect(page.getByTestId('combat-validation')).toHaveAttribute('data-status', 'valid');
+  // Hold only the transport readiness measurement; the authority remains live.
+  await page.evaluate(() => Object.defineProperty(window.__combatSocket, 'readyState', { configurable: true, value: WebSocket.CONNECTING }));
+  await page.getByRole('button', { name: /Select all eligible to attack/ }).click();
+  await expect(page.getByTestId('combat-validation')).toHaveAttribute('data-status', 'transport');
+  await expect(page.getByRole('button', { name: 'Confirm attackers' })).toBeDisabled();
+  await page.evaluate(() => Reflect.deleteProperty(window.__combatSocket, 'readyState'));
+  await page.getByRole('button', { name: 'Retry validation' }).click();
+  await expect(page.getByTestId('combat-validation')).toHaveAttribute('data-status', 'valid');
+  await expect(page.getByTestId('combat-summary')).toContainText('3 planned');
+  await expect(page.getByRole('button', { name: 'Retry validation' })).toHaveCount(0);
+  expect(await page.evaluate(() => window.__combatSent)).toBe(0);
 });

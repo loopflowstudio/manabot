@@ -31,10 +31,13 @@
     definitionNames?: Record<string, string>;
     opponent?: boolean;
     focusedIds?: Set<number>;
+    combatMarkers?: Map<number, string>;
     clickableTargets?: Map<number, number[]>;
     onSelectTarget?: (objectId: number) => void;
     onHoverTarget?: (objectId: number | null) => void;
     onPreviewCard?: (card: CardPreview | null) => void;
+    /** Fold the hand behind a disclosure while a combat declaration needs the room. */
+    compactHand?: boolean;
   }
 
   let {
@@ -44,11 +47,12 @@
     deckName = null,
     definitionNames = {},
     opponent = false,
-    focusedIds = new Set<number>(),
+    focusedIds = new Set<number>(), combatMarkers = new Map<number, string>(),
     clickableTargets = undefined,
     onSelectTarget = undefined,
     onHoverTarget = undefined,
     onPreviewCard = undefined,
+    compactHand = false,
   }: Props = $props();
 
   const label = $derived(identity.text);
@@ -245,7 +249,7 @@
         <Battlefield
           permanents={player.battlefield}
           {tablePermanents}
-          {focusedIds}
+          {focusedIds} {combatMarkers}
           {clickableTargets}
           {onSelectTarget}
           {onHoverTarget}
@@ -344,40 +348,51 @@
   </div>
 
   {#if !opponent}
+    {#if compactHand}
+      <details class="hand-staff hand-compact" data-testid="compact-hand">
+        <summary class="type-caption cursor-pointer">Hand ({player.hand.length}) · folded while planning combat</summary>
+        {@render handCards()}
+      </details>
+    {:else}
       <div class="hand-staff">
         {@render rubric(`Hand (${player.hand.length})`)}
-        <!-- svelte-ignore a11y_no_noninteractive_tabindex (keyboard access to horizontal hand scrolling) -->
-        <div role="region" aria-label={`${label} hand`} tabindex="0" class="hand-cards"
-          onfocusin={(event) => {
-            if (event.target instanceof HTMLElement) revealWithinScrollRegions(event.target);
-          }}>
-          {#if player.hand.length === 0}
-            <div class="type-caption px-1 py-1 text-ink-3">Empty hand</div>
-          {/if}
-          {#each player.hand as card}
-            <Card
-              objectId={card.id}
-              name={card.name}
-              copyDescription={copyLabel(player.hand, card.id)}
-              power={card.types.is_creature ? card.power : null}
-              toughness={card.types.is_creature ? card.toughness : null}
-              focused={focusedIds.has(card.id)}
-              clickable={onSelectTarget !== undefined}
-              onSelect={() => onSelectTarget?.(card.id)}
-              onHoverStart={() => {
-                onHoverTarget?.(clickableTargets?.has(card.id) ? card.id : null);
-                preview(card);
-              }}
-              onHoverEnd={() => {
-                onHoverTarget?.(null);
-                onPreviewCard?.(null);
-              }}
-            />
-          {/each}
-        </div>
+        {@render handCards()}
       </div>
+    {/if}
   {/if}
 </section>
+
+{#snippet handCards()}
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex (keyboard access to horizontal hand scrolling) -->
+  <div role="region" aria-label={`${label} hand`} tabindex="0" class="hand-cards"
+    onfocusin={(event) => {
+      if (event.target instanceof HTMLElement) revealWithinScrollRegions(event.target);
+    }}>
+    {#if player.hand.length === 0}
+      <div class="type-caption px-1 py-1 text-ink-3">Empty hand</div>
+    {/if}
+    {#each player.hand as card}
+      <Card
+        objectId={card.id}
+        name={card.name}
+        copyDescription={copyLabel(player.hand, card.id)}
+        power={card.types.is_creature ? card.power : null}
+        toughness={card.types.is_creature ? card.toughness : null}
+        focused={focusedIds.has(card.id)}
+        clickable={onSelectTarget !== undefined}
+        onSelect={() => onSelectTarget?.(card.id)}
+        onHoverStart={() => {
+          onHoverTarget?.(clickableTargets?.has(card.id) ? card.id : null);
+          preview(card);
+        }}
+        onHoverEnd={() => {
+          onHoverTarget?.(null);
+          onPreviewCard?.(null);
+        }}
+      />
+    {/each}
+  </div>
+{/snippet}
 
 <style>
   [data-narrated-seq] { outline: 2px solid var(--info); outline-offset: 2px; }
@@ -393,6 +408,7 @@
     .staves { display: flex; flex-direction: column; gap: .25rem; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 .25rem; }
     .empty-battlefield .staves { max-height: 64px; }
     .hand-staff { flex-shrink: 0; }
+    .hand-compact[open] { max-height: 45%; overflow-y: auto; overscroll-behavior: contain; }
     .staff { display: flex; flex-direction: column; flex: 1 0 auto; min-height: 0; }
     .staves > :global(:not(.staff)) { flex-shrink: 0; }
   }

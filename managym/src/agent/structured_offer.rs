@@ -1006,7 +1006,12 @@ impl Game {
             command,
             AtomicCommand::DeclareAttackers { .. } | AtomicCommand::DeclareBlockers { .. }
         ) {
-            return Ok(self.prepare_declaration(&command)?.commands);
+            return Ok(self
+                .prepare_declaration(&command)?
+                .children
+                .into_iter()
+                .map(|child| child.command)
+                .collect());
         }
         let mut fork = self.clone();
         let mut commands = Some(Vec::new());
@@ -2063,7 +2068,8 @@ impl Game {
         command: &AtomicCommand,
     ) -> Result<crate::flow::declaration::DeclarationTransaction, StructuredOfferError> {
         use crate::flow::declaration::{
-            DeclarationAssignments, DeclarationCollector, DeclarationStage, DeclarationTransaction,
+            DeclarationAssignments, DeclarationChild, DeclarationCollector, DeclarationStage,
+            DeclarationTransaction,
         };
 
         self.ensure_playable()
@@ -2089,10 +2095,7 @@ impl Game {
         let mut candidate = self.clone();
         candidate.card_capture = self.card_capture.clone();
         let mut collector = DeclarationCollector::new(stage);
-        let mut commands = Vec::new();
-        let mut transitions = Vec::new();
-        let mut roots = Vec::new();
-        let mut observations = Vec::new();
+        let mut children = Vec::new();
         // Preserve the positional API's accumulated event batch while each
         // child receipt consumes exactly the events scalar replay consumes.
         let mut events = Vec::new();
@@ -2118,7 +2121,7 @@ impl Game {
                 .map_err(StructuredOfferError::from)?;
             let offer = &frame.offers[index];
             let child = crate::decision::Command {
-                command_id: format!("compound-{}-{}", frame.revision, commands.len()),
+                command_id: format!("compound-{}-{}", frame.revision, children.len()),
                 expected_revision: frame.revision,
                 offer_id: offer.id.0,
                 answers: Vec::new(),
@@ -2126,7 +2129,6 @@ impl Game {
             };
             let mut root = candidate.clone();
             root.card_capture = candidate.card_capture.clone();
-            roots.push(root);
             done = candidate
                 .step_with_completion(index, Some(&mut collector))
                 .map_err(StructuredOfferError::Execution)?;
@@ -2140,9 +2142,12 @@ impl Game {
                     done,
                 )
                 .map_err(StructuredOfferError::from)?;
-            commands.push(child);
-            transitions.push(transition);
-            observations.push(observation);
+            children.push(DeclarationChild {
+                root,
+                command: child,
+                transition,
+                observation,
+            });
         }
         let completion = collector.completion.ok_or_else(|| {
             StructuredOfferError::Invariant("bound declaration did not complete".into())
@@ -2156,10 +2161,7 @@ impl Game {
         Ok(DeclarationTransaction {
             game: candidate,
             completion,
-            commands,
-            transitions,
-            roots,
-            observations,
+            children,
             done,
         })
     }
@@ -2350,19 +2352,8 @@ impl Game {
             | AtomicCommand::DeclarationSequence { .. } => {
                 unreachable!("declaration routed to canonical lowering")
             }
-            AtomicCommand::SearchAction { action, .. } => {
-                let offered = action_space.actions.iter().any(|legal| legal == action);
-                if !offered {
-                    return Err(StructuredOfferError::StaleOrIllegal(
-                        "search action is no longer offered".to_string(),
-                    ));
-                }
-                let action = action.clone();
-                self.current_action_space.take();
-                self.execute_action(&action)
-                    .map_err(StructuredOfferError::Execution)?;
-                self.finish_action_step()
-                    .map_err(StructuredOfferError::Execution)
+            AtomicCommand::SearchAction { .. } => {
+                unreachable!("search command routed to apply_search_action")
             }
         }
     }

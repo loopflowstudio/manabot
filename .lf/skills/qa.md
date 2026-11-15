@@ -91,6 +91,14 @@ publish, land or choose the next Graph step from here.
   (buttons are disabled while a Command is in flight, and `Pass Turn (F6)` in
   the panel is not an offer). Tapped lands show only in a `fullPage`
   screenshot, not in the board's text.
+  Combat declarations are not offers: they show `[data-testid=combat-composer]`
+  (whole plan, `data-testid=combat-validation` `data-status`, one Confirm), so
+  a game loop waiting only for `action-option` stalls at the first combat.
+  Specs use `confirmCombat` from `academy/ui/e2e/combat.ts`. Opponent select
+  values are `search-16`, `random`, `passive`, `policy` (not labels). For real
+  combat, import `16 Mountain\n10 Gray Ogre\n8 Boggart Brute\n6 Raging Goblin`
+  (menace via Boggart Brute) against Search 16. A `vite preview` server dies
+  when a later build replaces `.svelte-kit/output`; restart it after building.
 - Configured launch (`managym academy play|replay`, `managym.academy.launch.serve`):
   from a checkout first build the static SPA with
   `ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build`, then set

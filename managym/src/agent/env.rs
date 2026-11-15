@@ -162,16 +162,9 @@ pub struct PreparedDeclaration {
 }
 
 impl PreparedDeclaration {
-    pub fn commands(&self) -> &[SemanticCommand] {
-        &self.transaction.commands
-    }
-
-    pub fn transitions(&self) -> &[SemanticTransition] {
-        &self.transaction.transitions
-    }
-
-    pub fn observations(&self) -> &[Observation] {
-        &self.transaction.observations
+    /// Ordinary choices and their exact recording evidence, in execution order.
+    pub fn children(&self) -> &[crate::flow::declaration::DeclarationChild] {
+        &self.transaction.children
     }
 
     pub fn completion(&self) -> &crate::flow::declaration::DeclarationCompletion {
@@ -1132,24 +1125,24 @@ impl Env {
                 "wrong origin for declaration candidate".into(),
             ));
         }
-        if index >= prepared.transaction.roots.len() {
+        if index >= prepared.transaction.children.len() {
             return Err(AgentError::Rules(
                 "declaration child index out of range".into(),
             ));
         }
         let source = prepared
             .transaction
-            .roots
+            .children
             .get(index + usize::from(after))
-            .unwrap_or(&prepared.transaction.game);
+            .map_or(&prepared.transaction.game, |child| &child.root);
         let mut game = source.clone();
         game.card_capture = source.card_capture.clone();
-        if after && index + 1 == prepared.transaction.roots.len() {
+        if after && index + 1 == prepared.transaction.children.len() {
             game.take_observation_events();
         }
         let mut branch = self.branch_from_game(game);
         if let Some(previous) = index.checked_sub(usize::from(!after)) {
-            branch.remember_heuristic_events(&prepared.transaction.observations[previous]);
+            branch.remember_heuristic_events(&prepared.transaction.children[previous].observation);
         }
         Ok(branch)
     }
@@ -1170,8 +1163,8 @@ impl Env {
             return Err(AgentError::Rules("stale declaration candidate".into()));
         }
         prepared.transaction.game.take_observation_events();
-        if let Some(observation) = prepared.transaction.observations.last() {
-            self.remember_heuristic_events(observation);
+        if let Some(child) = prepared.transaction.children.last() {
+            self.remember_heuristic_events(&child.observation);
         }
         self.game = Some(prepared.transaction.game);
         Ok(())
@@ -2071,16 +2064,16 @@ mod content_pack_contract_tests {
         let prepared = env.prepare_declaration_plan(&plan).unwrap();
         assert_eq!(before, env.selected_witness().unwrap());
         let mut replay = env.fork().unwrap();
-        for (index, command) in prepared.transaction.commands.iter().enumerate() {
+        for (index, child) in prepared.transaction.children.iter().enumerate() {
             let root = env.declaration_child_env(&prepared, index, false).unwrap();
             assert_eq!(
                 root.selected_witness().unwrap(),
                 replay.selected_witness().unwrap()
             );
-            let transition = replay.step_semantic_command(command).unwrap().0;
+            let transition = replay.step_semantic_command(&child.command).unwrap().0;
             assert_eq!(
                 serde_json::to_value(transition).unwrap(),
-                serde_json::to_value(&prepared.transaction.transitions[index]).unwrap()
+                serde_json::to_value(&child.transition).unwrap()
             );
             let after = env.declaration_child_env(&prepared, index, true).unwrap();
             assert_eq!(

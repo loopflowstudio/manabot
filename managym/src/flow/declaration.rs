@@ -192,17 +192,22 @@ impl DeclarationCollector {
     }
 }
 
+/// One ordinary choice with its exact recording root and returned evidence.
+/// Keeping these together prevents recording from pairing different children.
+pub struct DeclarationChild {
+    pub root: Game,
+    pub command: Command,
+    pub transition: SemanticTransition,
+    pub observation: crate::agent::observation::Observation,
+}
+
 /// Prepared on a private live candidate; callers can stage recording before
 /// publishing `game`. Child transitions retain ordinary replay/fork authority.
 pub struct DeclarationTransaction {
     pub game: Game,
     pub completion: DeclarationCompletion,
-    pub commands: Vec<Command>,
-    pub transitions: Vec<SemanticTransition>,
-    /// Exact roots and returned observations of those children. Recording can
-    /// stage ordinary replay/Study rows without executing the choices again.
-    pub roots: Vec<Game>,
-    pub observations: Vec<crate::agent::observation::Observation>,
+    /// Stage ordinary replay/Study rows without executing the choices again.
+    pub children: Vec<DeclarationChild>,
     pub done: bool,
 }
 
@@ -211,10 +216,11 @@ impl DeclarationTransaction {
     /// or changing a declared object cannot change its recorded public address.
     pub fn commitment(&self) -> Result<DeclarationCommitment, AgentError> {
         use std::collections::BTreeMap;
-        let root = self
-            .roots
+        let root = &self
+            .children
             .first()
-            .ok_or_else(|| AgentError::Rules("declaration has no child root".into()))?;
+            .ok_or_else(|| AgentError::Rules("declaration has no child root".into()))?
+            .root;
         let actor = root
             .action_space()
             .and_then(|space| space.player)

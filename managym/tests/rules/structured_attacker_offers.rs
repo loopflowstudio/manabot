@@ -861,11 +861,11 @@ fn structured_attacker_completion_proves_empty_and_damage_declarations() {
             if selected { 18 } else { 20 }
         );
         let mut replay = root.clone();
-        for (child, transition) in transaction.commands.iter().zip(&transaction.transitions) {
-            let actual = replay.execute_semantic_command(child).unwrap();
+        for child in &transaction.children {
+            let actual = replay.execute_semantic_command(&child.command).unwrap();
             assert_eq!(
                 serde_json::to_value(actual).unwrap(),
-                serde_json::to_value(transition).unwrap()
+                serde_json::to_value(&child.transition).unwrap()
             );
         }
         transaction.game.take_observation_events();
@@ -966,7 +966,7 @@ fn structured_attacker_completion_returns_an_unanswered_trigger_decision() {
     let transaction = root
         .prepare_declaration(&offers.decode(&submission).unwrap())
         .unwrap();
-    assert_eq!(transaction.commands.len(), 1);
+    assert_eq!(transaction.children.len(), 1);
     assert_eq!(
         transaction.game.action_space().unwrap().kind,
         ActionSpaceKind::ChooseTarget

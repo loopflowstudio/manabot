@@ -2143,8 +2143,8 @@ impl PyCard {
     fn set_x(&mut self, value: Option<i32>) {
         self.data.x = value;
     }
-    #[getter]
-    fn from_battlefield_this_turn(&self) -> bool {
+    #[getter(from_battlefield_this_turn)]
+    fn get_from_battlefield_this_turn(&self) -> bool {
         self.data.from_battlefield_this_turn
     }
     #[setter]
@@ -3388,8 +3388,8 @@ impl PyPreparedDeclaration {
             .as_ref()
             .ok_or_else(|| PyAgentError::new_err("declaration candidate was consumed"))?;
         serde_json::to_string(&json!({
-            "commands": prepared.commands(),
-            "transitions": prepared.transitions(),
+            "commands": prepared.children().iter().map(|child| &child.command).collect::<Vec<_>>(),
+            "transitions": prepared.children().iter().map(|child| &child.transition).collect::<Vec<_>>(),
             "completion": prepared.transaction.commitment().map_err(map_agent_err)?,
             "done": prepared.transaction.done,
         }))
@@ -3425,11 +3425,11 @@ impl PyPreparedDeclaration {
             .prepared
             .as_ref()
             .ok_or_else(|| PyAgentError::new_err("declaration candidate was consumed"))?;
-        let observation = prepared
-            .transaction
-            .observations
+        let child = prepared
+            .children()
             .get(index)
             .ok_or_else(|| PyAgentError::new_err("declaration child index out of range"))?;
+        let observation = &child.observation;
         let env = self
             .source
             .lock()
@@ -3437,7 +3437,7 @@ impl PyPreparedDeclaration {
         let result = env
             .declaration_child_env(prepared, index, true)
             .map_err(map_agent_err)?;
-        let root = &prepared.transaction.roots[index];
+        let root = &child.root;
         let actor = root
             .action_space()
             .and_then(|space| space.player)
@@ -3451,7 +3451,7 @@ impl PyPreparedDeclaration {
         } else {
             0.0
         };
-        let transition = serde_json::to_string(&prepared.transaction.transitions[index])
+        let transition = serde_json::to_string(&child.transition)
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
         Ok(PyDeclarationChild {
             transition_json: transition,

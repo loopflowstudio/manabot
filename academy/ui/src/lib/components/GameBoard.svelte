@@ -17,6 +17,7 @@
   interface Props {
     observation: Observation;
     focusedIds?: Set<number>;
+    combatMarkers?: Map<number, string>;
     clickableTargets?: Map<number, number[]>;
     onSelectTarget?: (objectId: number) => void;
     onInspect?: () => void;
@@ -44,7 +45,7 @@
 
   let {
     observation,
-    focusedIds = new Set<number>(),
+    focusedIds = new Set<number>(), combatMarkers = new Map<number, string>(),
     clickableTargets = undefined,
     onSelectTarget = undefined,
     onInspect = undefined,
@@ -184,7 +185,7 @@
     {tablePermanents}
     deckName={deckNames?.villain ?? null}
     opponent={true}
-    {focusedIds}
+    {focusedIds} {combatMarkers}
     {clickableTargets}
     onSelectTarget={selectTarget}
     {onHoverTarget}
@@ -256,7 +257,8 @@
       player={observation.agent}
       {tablePermanents}
       deckName={deckNames?.hero ?? null}
-      {focusedIds}
+      compactHand={combatPlanning && workspace}
+      {focusedIds} {combatMarkers}
       {clickableTargets}
       onSelectTarget={selectTarget}
       {onHoverTarget}

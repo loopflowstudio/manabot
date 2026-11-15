@@ -92,3 +92,15 @@ export function selectCombatObject(draft: CombatDraft, projection: DeclarationPr
   }
   return draft;
 }
+
+/** Mark all editable assignments without moving choice focus or lane navigation. */
+export function combatPlanMarkers(draft: CombatDraft | null, projection: DeclarationProjection | null): Map<number, string> {
+  const markers = new Map<number, string>();
+  if (!draft || !projection) return markers;
+  for (const row of projection.subjects) {
+    if (!row.fixed && row.object.subject.kind === 'object' && assignmentFor(draft, row.object.subject.id)) {
+      markers.set(row.object.display_id, projection.stage === 'attackers' ? 'Planned attack' : 'Planned block');
+    }
+  }
+  return markers;
+}

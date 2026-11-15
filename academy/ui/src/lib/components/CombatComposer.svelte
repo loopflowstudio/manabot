@@ -121,7 +121,7 @@
   }
 </script>
 
-<section class="combat-composer min-h-0 flex flex-col gap-2" aria-label={projection.stage === 'attackers' ? 'Attack declaration plan' : 'Block declaration plan'} data-testid="combat-composer">
+<section class="combat-composer min-h-0 flex flex-col gap-2" aria-label={projection.stage === 'attackers' ? 'Attack declaration plan' : 'Block declaration plan'} data-testid="combat-composer" data-revision={frame.revision}>
   <h2 class="type-title text-display">Plan {projection.stage}</h2>
   <p class="type-annotation text-ink-2">Edit the whole remaining declaration, then confirm once.</p>
   <p class="type-caption" data-testid="combat-summary">{planned} planned / {editable} eligible · {fixed} already decided · {power} current power</p>
@@ -133,7 +133,7 @@
     <button class="btn btn-ghost btn-sm" disabled={!canEdit} onclick={() => onChange(clearCombatDraft(draft))}>Clear</button>
   </div>
   {#if projection.constraints.length > 0}
-    <details class="type-caption text-ink-2"><summary class="cursor-pointer">Combat requirements ({projection.constraints.length})</summary><ul class="space-y-1 py-2">{#each projection.constraints as constraint}<li>{constraint}</li>{/each}</ul></details>
+    <details open={current?.status === 'invalid'} class="type-caption text-ink-2"><summary class="cursor-pointer">Combat requirements ({projection.constraints.length})</summary><ul class="space-y-1 py-2">{#each projection.constraints as constraint}<li>{constraint}</li>{/each}</ul></details>
   {/if}
   <!-- svelte-ignore a11y_no_noninteractive_tabindex (keyboard access to all assignments in a bounded margin) -->
   <div bind:this={assignmentsRegion} class="combat-assignments min-h-0 overflow-auto" role="region" aria-label="Combat assignments" tabindex="0">
@@ -162,24 +162,31 @@
       {/each}
     </ul>
   </div>
-  <div class="combat-validation type-caption" role="status" aria-live="polite" aria-atomic="true" data-testid="combat-validation" data-status={current?.status ?? 'unavailable'}>
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex (keyboard scrolling of long rules responses) -->
+  <div class="combat-validation type-caption" tabindex="0" role="status" aria-live="polite" aria-atomic="true" data-testid="combat-validation" data-status={current?.status ?? 'unavailable'}>
     {#if !available}Combat view is unavailable. Recover the current declaration.
     {:else if gameStore.commandPending}Confirming the declaration…
     {:else if gameStore.connection !== 'connected'}Waiting for connection. Confirmation is unavailable.
     {:else if readOnly}Waiting for the pilot's declaration.
     {:else if inspect}Inspecting the native choices. Your unconfirmed draft is unchanged.
+    {:else if current?.status === 'invalid'}
+      <p>This plan is not legal. Edit the assignments before confirming.</p>
+      <details><summary class="cursor-pointer">Rules response</summary><p>{current.message}</p></details>
+    {:else if current?.status === 'capacity'}
+      <p>The rules engine reached a capacity limit. Legality is unknown and confirmation is unavailable. Your draft is preserved.</p>
+      <p>{current.message}</p>
     {:else}{current?.message ?? 'Waiting for rules validation.'}{/if}
   </div>
   <div class="flex flex-wrap items-center gap-2">
     <button class="btn btn-primary" disabled={!canConfirm} onclick={confirm}>Confirm {projection.stage}</button>
-    {#if canEdit && current && !['valid', 'pending', 'stale'].includes(current.status)}<button class="btn btn-ghost btn-sm" onclick={retryValidation}>Retry validation</button>{/if}
+    {#if canEdit && current?.status === 'transport'}<button class="btn btn-ghost btn-sm" onclick={retryValidation}>Retry validation</button>{/if}
   </div>
 </section>
 
 <style>
   .combat-assignments { flex: 1; max-height: 26rem; scrollbar-gutter: stable; }
   .combat-validation { max-height: 5rem; overflow: auto; }
-  .combat-validation[data-status='invalid'], .combat-validation[data-status='capacity'], .combat-validation[data-status='transport'] { color: var(--mountain-ink); background: var(--mountain-wash); padding: 8px; }
+  .combat-validation[data-status='invalid'], .combat-validation[data-status='capacity'], .combat-validation[data-status='transport'] { color: var(--error-text); background: var(--error-wash); padding: 8px; }
   .combat-subject { min-height: 32px; border-bottom: 1px solid transparent; }
   .combat-subject:hover:not(:disabled), .combat-subject[aria-pressed='true'] { border-color: var(--accent); }
   .combat-subject:active:not(:disabled) { background: var(--bg-muted); }

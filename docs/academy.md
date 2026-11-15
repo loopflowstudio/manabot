@@ -531,8 +531,11 @@ inspect the other, then choose **Confirm**. Only the confirmed declaration makes
 the creature attack and taps it if required. Editing or inspecting the plan
 spends nothing and leaves the game at the same decision.
 
-The board stays in view while you plan. The summary lists selected creatures,
-their destinations, counts and current power totals. Power is the creatures'
+The board stays in view while you plan. Drafted creatures carry a **Planned attack**
+or **Planned block** marker, also included in their accessible names. Clearing an
+assignment removes its marker; changing focus leaves the other markers in place.
+The summary lists selected creatures, their destinations, counts and current power
+totals. Power is the creatures'
 current power, not a prediction of damage or the opponent's remaining life.
 Copies with the same name remain separate selectable objects.
 
@@ -559,16 +562,21 @@ Copies with the same name remain separate selectable objects.
 The rules engine checks the whole declaration, including restrictions involving
 several creatures. For example, assigning only one blocker to an attacker with
 menace leaves an invalid draft visible with an explanation. Add another eligible
-blocker or change the plan before confirming. A creature's presence among the
-available choices does not mean every combination is legal. Academy never drops
+blocker or change the plan before confirming. Invalid plans open the native combat
+requirements for review; these describe the board’s restrictions rather than
+claiming to identify which restriction the draft violated. Open **Rules response**
+to read the engine's rejection. A creature's presence among the available choices
+does not mean every combination is legal. Academy never drops
 an invalid assignment or substitutes another plan to make confirmation succeed.
 
 **Confirm** waits for validation of the current draft and checks it again when
 submitted. While validation or submission is pending, wait for its result.
 A correctable rules rejection keeps your draft for editing and commits none of
 it. If validation reports a capacity limit, it cannot establish legality;
-confirmation remains unavailable. A connection or submission failure is shown
-separately from a rules rejection. Recover the connection and read the current
+confirmation remains unavailable. Invalid and capacity results keep your draft
+editable; retrying an unchanged plan does not resolve those results. **Retry
+validation** is offered when a validation request could not be sent.
+A connection or submission failure is shown separately from a rules rejection. Recover the connection and read the current
 declaration before trying again; a lost confirmation reply does not mean the
 declaration was cancelled.
 

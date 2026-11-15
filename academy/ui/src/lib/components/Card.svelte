@@ -14,6 +14,7 @@
     power?: number | null;
     toughness?: number | null;
     focused?: boolean;
+    planMarker?: string;
     clickable?: boolean;
     tapped?: boolean;
     dimmed?: boolean;
@@ -35,6 +36,7 @@
     power = null,
     toughness = null,
     focused = false,
+    planMarker = undefined,
     clickable = false,
     tapped = false,
     dimmed = false,
@@ -71,6 +73,7 @@
   const stateNotes = $derived(
     [
       copyDescription || null,
+      planMarker ?? null,
       ...temporarySubtypes.map((subtype) => `${subtype} until end of turn`),
       tapped ? 'tapped' : null,
       dimmed ? 'summoning sick' : null,
@@ -88,6 +91,7 @@
 
 <button
   data-object-id={objectId}
+  data-combat-plan={planMarker}
   data-narrated-seq={narrated}
   type="button"
   aria-label={accessibleName}
@@ -170,6 +174,10 @@
     <div class="bead pointer-events-none absolute right-1.5 top-1.5" aria-hidden="true">
       +{counters}/+{counters}
     </div>
+  {/if}
+
+  {#if planMarker}
+    <span class="type-label border border-plains-ink bg-plains-wash text-plains-ink pointer-events-none absolute left-0 right-0 top-0 rounded-t-lg px-1 py-1 text-center" aria-hidden="true">{planMarker}</span>
   {/if}
 
   {#if focused}

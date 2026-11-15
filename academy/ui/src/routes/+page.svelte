@@ -10,7 +10,7 @@
   import { offerFocus, offerTargets } from '$lib/offer-map';
   import DecisionSurface from '$lib/components/DecisionSurface.svelte';
   import CombatComposer from '$lib/components/CombatComposer.svelte';
-  import { combatFocus, combatKey, newCombatDraft, objectKey, selectCombatObject, type CombatDraft } from '$lib/combat-plan';
+  import { combatFocus, combatPlanMarkers, combatKey, newCombatDraft, objectKey, selectCombatObject, type CombatDraft } from '$lib/combat-plan';
   import DecisionContext from '$lib/components/DecisionContext.svelte';
   import DecisionAdvice from '$lib/components/DecisionAdvice.svelte';
   import DeckIdentity from '$lib/components/DeckIdentity.svelte';
@@ -211,6 +211,7 @@
   const combatProjection = $derived(!participantStudying && !gameStore.branchProjection ? tableFrame?.declaration ?? null : null);
   const combatScope = $derived(tableFrame ? combatKey(tableFrame, gameStore.updateSeq) : '');
   const boardFocus = $derived(new Set([...gameStore.focusIds, ...combatFocus(combatDraft, combatProjection)]));
+  const boardCombatMarkers = $derived(combatPlanMarkers(combatDraft, combatProjection));
   const combatSelected = $derived(combatProjection?.subjects.find(row => row.object.subject.kind === 'object' && objectKey(row.object.subject.id) === combatDraft?.active)?.object.display_id ?? null);
   const boardTargets = $derived.by(() => {
     if (!combatProjection) return clickableTargets;
@@ -567,6 +568,7 @@
       <GameBoard
         workspace
         combatPlanning={combatProjection !== null}
+        combatMarkers={boardCombatMarkers}
         playMode={tableMode === 'play' && !participantStudying}
         canSelectForPlay={liveInput}
         selectedId={combatProjection ? combatSelected : selection?.object ?? null}
@@ -638,7 +640,7 @@
           <div class="secondary-content space-y-4" tabindex="0" role="region" aria-label="History and settings">
             <PresentationHistory player={tablePresentation} observation={boardObservation} />
             {#if tableFrame && !gameStore.branchProjection}
-              <DecisionContext observation={tableFrame.projection} actor={tableFrame.prompt?.actor ?? null} />
+              <DecisionContext observation={tableFrame.projection} actor={tableFrame.prompt?.actor ?? null} declaration={combatProjection} />
             {/if}
 
             {#if adviceMetaState}
@@ -749,7 +751,8 @@
     .board-region :global([data-testid="game-board"]) { flex: 1; min-height: 0; }
     .choices-region { min-height: 0; overflow-y: auto; gap: .5rem; border-top: 0; border-left: 1px solid var(--border); padding: 0 .5rem 1rem 1rem; scrollbar-gutter: stable; }
     .choices-region > :global(*) { flex-shrink: 0; }
-    .combat-planning :global(.workspace-board .hero-area) { flex-basis: 3rem; }
+    /* Both seats' creatures share the board while combat is planned; the hand folds. */
+    .combat-planning :global(.workspace-board .hero-area) { flex-basis: 0; }
     .choices-region > :global(.combat-composer) { flex: 1; min-height: 0; }
     .choices-region > :global(.workspace-decision) { flex: 1; min-height: min-content; }
     .secondary-panels { flex-shrink: 1; min-height: 2rem; overflow-y: auto; overscroll-behavior: contain; }

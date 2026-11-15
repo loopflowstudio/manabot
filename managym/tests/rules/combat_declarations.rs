@@ -165,11 +165,11 @@ fn combat_declarations_two_menace_lures_offer_both_complete_alternatives() {
             .prepare_declaration(&offers.decode(&submit).unwrap())
             .unwrap();
         let mut replay = game.clone();
-        for (command, expected) in transaction.commands.iter().zip(&transaction.transitions) {
-            let actual = replay.execute_semantic_command(command).unwrap();
+        for child in &transaction.children {
+            let actual = replay.execute_semantic_command(&child.command).unwrap();
             assert_eq!(
                 serde_json::to_value(actual).unwrap(),
-                serde_json::to_value(expected).unwrap()
+                serde_json::to_value(&child.transition).unwrap()
             );
         }
         transaction.game.take_observation_events();
@@ -307,7 +307,7 @@ fn combat_declarations_dedicated_surface_binds_complete_plans_and_fixed_prefixes
     let mut incomplete = plan.clone();
     incomplete.assignments.pop();
     assert!(game.validate_declaration_plan(&incomplete).is_err());
-    game.execute_semantic_command(&transaction.commands[0])
+    game.execute_semantic_command(&transaction.children[0].command)
         .unwrap();
     assert!(
         game.validate_declaration_plan(&plan).is_err(),
@@ -342,5 +342,5 @@ fn combat_declarations_dedicated_surface_binds_complete_plans_and_fixed_prefixes
     };
     let actual = game.prepare_declaration_plan(&suffix).unwrap();
     assert_eq!(actual.completion, transaction.completion);
-    assert_eq!(actual.commands.len(), 1);
+    assert_eq!(actual.children.len(), 1);
 }
