@@ -366,6 +366,39 @@ another design iteration. No code changed or execution restarted in this pass.
 The review screen is `scratch/concept-review.html`. Keep the existing next
 demonstration: distinct same-definition tokens, sacrifice with a departed
 source, reconnect/stale rejection, copied-spell identity/X, and retained
-checkpoint admission. The recorded post-sync extension mismatch still limits
-validation claims; this read-only review does not supersede it. Learning
-improvement remains unproven, and MTG-353 retains broader compatibility design.
+checkpoint admission. Learning improvement remains unproven, and MTG-353 retains
+broader compatibility design. The later QA record below supersedes the earlier
+installed-extension mismatch for the scenarios it actually ran.
+
+## Conversation concept review after QA (2026-11-14)
+
+Read the implementation and QA at `c8cde7f381` while run `f3ae952d` was publishing.
+No further representation change or open product choice was found. The public
+API now expresses the domain distinctions directly: effective characteristics
+on cards/permanents/spells; token/copy status and object identity outside those
+characteristics; abilities with captured source provenance and no spell record.
+Deprecated accessors derive their values, and historical identity ambiguity is
+refused. Keep the interactive review boundary; this review neither advances it
+nor authorizes merging.
+
+Recorded QA (`scratch/qa.html`): 240 seeded games, 48,015 observations, 237 games
+finished and no invariant problems; a full Academy game with distinct Clue
+offers and reload restoring six pending offers; v9 checkpoint weights unchanged
+and two games completing after sim used the checkpoint's own input config.
+The departed-Clue source was inspected in LLM text. A browser screenshot of its
+ability after sacrifice was not captured because priority automation resolved
+it before capture. Tests recorded 44 focused passes plus five sim tests. These
+are the worker's recorded results, not reruns by this review. Host load made
+the QA timings unsuitable as performance evidence.
+
+One separate recovery mismatch remains: `manabot/sim/sim.py` catches policy
+errors, samples a random action and still records a game outcome. A completed
+game alone therefore cannot demonstrate model compatibility or strength; require
+zero inference errors for those claims. The representation correction does not
+require a decision about interactive fallback policy. Leave this pre-existing
+behavior visible as separate follow-up work; no Task was filed by concept-review.
+
+Review outcome for loop-or-next: nothing further to change in this Task's
+concepts and no open product choice. Publication, gate and the interactive
+demonstration retain their existing authority. `scratch/concept-review.html`
+shows the built API and the recovery/evidence limits.
