@@ -105,9 +105,9 @@ simulation retain pending Commands before execution. The same bounded replay com
 handles strict failures without enabling tolerance or process recovery; see the
 linked capture audit for boundaries and supervision limits.
 
-To diagnose a future training stall, opt into durable pending-call snapshots
+To diagnose a future training stall, opt into durable pending-call journals
 with `uv run manabot train --recipe local --training-game-logs --out .runs/journal-demo`.
-The private `game-journals/` directory retains rolling producer replay inputs
+The private `game-journals/` directory retains compacting producer replay journals
 and an active operation marker that distinguishes native work from inference
 and learning. Logging defaults off and can substantially reduce throughput;
 see [diagnosing stalled training](../docs/training.md#diagnosing-stalled-training)
