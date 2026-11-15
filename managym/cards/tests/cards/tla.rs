@@ -10306,6 +10306,38 @@ fn yue_reserves_her_tap_through_nested_mana_payment() {
     }
 }
 
+/// The retained stall's Rumble Arena filter loses one of the five available
+/// units. Its color choice cannot borrow the tap promised to Yue.
+#[test]
+fn yue_rejects_rumble_arena_filter_when_all_five_units_are_owed() {
+    let mut s =
+        five_color_unfunded_setup(&["Yue, the Moon Spirit", "Rumble Arena", "Knowledge Seeker"]);
+    let yue = s.force_permanent_on_battlefield(0, "Yue, the Moon Spirit");
+    clear_summoning_sickness(&mut s, yue);
+    let arena = s.force_permanent_on_battlefield(0, "Rumble Arena");
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    let mountain = s.force_permanent_on_battlefield(0, "Mountain");
+    let seekers: Vec<_> = (0..2)
+        .map(|_| s.force_permanent_on_battlefield(0, "Knowledge Seeker"))
+        .collect();
+    s.game_mut().skip_trivial = true;
+    activate(&mut s, yue, 0);
+    assert!(!s.action_space().actions.iter().any(|action| matches!(
+        action,
+        Action::ActivateAbility { permanent, ability_index: 0, .. } if *permanent == arena
+    )));
+    crate::support::play::command(
+        &mut s,
+        |action| matches!(action, Action::WaterbendTap { permanent, .. } if *permanent == seekers[0]),
+    );
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
+    for permanent in [yue, arena, forest, mountain, seekers[0], seekers[1]] {
+        assert!(tapped(&s, permanent));
+    }
+    assert_eq!(s.game().state.players[0].mana_pool, Mana::default());
+    assert!(s.game().state.stack_objects.is_empty());
+}
+
 /// Yue's ability offers only noncreature spells from hand; the chosen spell
 /// is cast for free after the ability finishes resolving.
 #[test]

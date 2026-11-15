@@ -3,6 +3,8 @@
 //! Source subsets supply modeled outputs; the existing payment authority checks
 //! affordability and native unit transitions produce exact pools and receipts.
 
+use std::sync::Arc;
+
 use super::{Mana, ManaCost, ManaSpent, Obligation, PaymentModel, SourcePolicy, SourceReservation};
 use std::collections::HashSet;
 
@@ -57,7 +59,7 @@ impl Outcomes {
     }
 }
 
-impl PaymentModel {
+impl PaymentModel<'_> {
     /// Enumerate fixed-source subsets, including deliberate surplus production.
     /// Equal fixed outputs collapse by capability; identity_outcomes separately
     /// exposes what that collapse loses. Activated abilities remain outside this
@@ -159,7 +161,8 @@ impl PaymentModel {
         // FixedOnly with no available sources asks the single payment authority
         // whether the selected pooled supply suffices, including restrictions.
         let pooled = PaymentModel {
-            sources: Vec::new(),
+            cache: None,
+            sources: Arc::new(Vec::new()),
             life: self.life,
         };
         if !pooled.payable(
@@ -183,6 +186,7 @@ impl PaymentModel {
             .collect();
         capabilities.sort();
         let mut after = PaymentModel {
+            cache: None,
             sources: self.sources.clone(),
             life: self.life,
         };
@@ -257,6 +261,7 @@ impl PaymentModel {
 mod tests {
     use crate::flow::mana::{tests::forests, Obligation, PaymentModel};
     use crate::state::mana::{Mana, ManaCost};
+    use std::sync::Arc;
 
     #[test]
     fn fixed_outcomes_collapse_equal_lands_but_retain_identity_and_cap() {
@@ -293,7 +298,8 @@ mod tests {
     #[test]
     fn fixed_outcomes_distinguish_pool_and_receipt_colors() {
         let model = PaymentModel {
-            sources: vec![],
+            cache: None,
+            sources: Arc::new(vec![]),
             life: 20,
         };
         let outcomes = model.fixed_outcomes(Mana::parse("RG"), &ManaCost::parse("1"), 100, &[]);
@@ -307,7 +313,7 @@ mod tests {
     #[test]
     fn non_redundant_outcomes_retain_indivisible_surplus_and_zero_cost_pool() {
         let mut model = forests(2);
-        for source in &mut model.sources {
+        for source in Arc::make_mut(&mut model.sources) {
             source.fixed = Some(Mana::parse("GG"));
         }
         let outcomes = model.fixed_outcomes(Mana::default(), &ManaCost::parse("G"), 1000, &[]);

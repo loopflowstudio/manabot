@@ -78,9 +78,11 @@ publish, land or choose the next Graph step from here.
   `PYTHONPATH` (print `managym.__file__` to confirm which loaded). Per game,
   hash `obs.toJSON()` at every decision and step `rng.randrange(len(
   obs.action_space.actions))`; equal digests mean equal offers, taps and
-  events. Use the authored setups (`managym.authored_deck_keys`) plus the TLA
-  pool corpus human builds (`experiments/data/mtg282/pools-v2/corpus.json`,
-  `PlayerConfig(name, pool["human_build"])`), which bring waterbend, Treasure
+  events. Use the authored setups (`managym.authored_deck_keys` of
+  `elemental-world-v2` and `ur-lessons-vs-gw-allies`; pack directory names are
+  refused) plus the TLA pool corpus human builds
+  (`experiments/data/mtg282/pools-v2/corpus.json`, fetched with `manabot.data
+  fetch` when absent; `PlayerConfig(name, pool["human_build"])`), which bring waterbend, Treasure
   and any-color sources the curated benchmark decks lack; 2,400 games took
   about two minutes per engine. A few games end in `PyAgentError` on `main`
   too; the error must match, not be absent. `maturin build` without
@@ -137,7 +139,9 @@ publish, land or choose the next Graph step from here.
   once with `cargo build --release --features benchmark --example bench_states
   --manifest-path managym/Cargo.toml`, then call
   `managym/target/release/examples/bench_states` directly (all 17 states ran
-  in about 11 s on an M-series laptop). Compare two commits by building the
+  in about 11 s on an M-series laptop). Forks carry the payment cache, so
+  check that a layer's `work` (`calls`, `cache_hits`) still shows the search
+  it claims to time rather than a hit warmed by preparation. Compare two commits by building the
   other one in a `/private/tmp` worktree with its own `CARGO_TARGET_DIR` and
   diffing each row's `work` field; the closing digest also moves whenever
   cards are added, so it is not a behavior check across a merge from main.

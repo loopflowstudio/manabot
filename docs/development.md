@@ -583,7 +583,7 @@ naming through rules actions; it is outside the measured region.
 
 | Layer | Measures | Work reported |
 |---|---|---|
-| `actions` | computing the legal action space at priority | payment plans, calls, states; actions offered |
+| `actions` | computing the legal action space at priority, with cached payment answers cleared | payment plans, calls, states; actions offered |
 | `step:cast`, `step:activate`, `step:attack`, `step:block`, `step:damage`, `step:choice` | one representative action of each kind, to the next decision | the same, plus trigger sources and matches |
 | `characteristics` | cold `Game::characteristics` for one permanent then `characteristics_many` for the board | board rebuilds, views, dependency probes |
 | `triggers` | matching one controlled entry event against the indexed trigger sources | sources examined, triggers found |
@@ -606,6 +606,12 @@ which hash the serialized game, card definition ids included, so adding cards or
 changing a rules type moves every state's digest without changing behavior;
 across such a change, compare the rows' `work` (witness digests included)
 instead.
+
+Use `--allocations` with the same state, size and layer arguments for a separate
+allocation diagnostic. It runs each operation once and reports `allocations`
+and `allocated_bytes` instead of `ms`; setup and root forks stay outside the
+counted region. These are allocation requests and traffic, not live heap size.
+Keep counting disabled for timing comparisons.
 
 The Python-side layers read the same states (the Rust harness prints their
 recipes with `--recipes`) and report time only:

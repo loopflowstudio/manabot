@@ -2,6 +2,8 @@
 //! catalog cards; checkpoints are reached by ordinary actions with trivial
 //! skipping enabled. Setup and restoration are outside each timed operation.
 //! JSON lines retain deterministic work beside the median of three timings.
+//! `--allocations` instead counts one operation per row, without timing it;
+//! setup and forks remain outside the counted region.
 use managym::{
     agent::{
         action::{Action, ActionSpaceKind},
@@ -559,6 +561,7 @@ fn run(
     checkpoint: &str,
     root: &Env,
     layers: &[String],
+    allocations: bool,
     digest: &mut blake3::Hasher,
 ) {
     let actor = root.current_agent_index().unwrap();
@@ -588,7 +591,9 @@ fn run(
         let mut times = Vec::new();
         let mut work = Value::Null;
         let mut clone_bytes = None;
-        for sample in 0..3 {
+        let samples = if allocations { 1 } else { 3 };
+        let mut traffic = None;
+        for sample in 0..samples {
             let mut env = root.fork().unwrap();
             let mut vector = VectorEnv::new(1, 7, true, OpponentPolicy::None);
             let buffer = std::cell::RefCell::new(encode(&obs, &config).unwrap());
@@ -601,8 +606,16 @@ fn run(
             if layer == "characteristics" {
                 let _ = &mut *env.benchmark_game_mut().state;
             }
+            // Cold payment attribution: preparation already answered these
+            // questions, and the fork carries their cached answers.
+            if layer == "actions" {
+                benchmark_payments::clear_cache(env.benchmark_game_mut());
+            }
             benchmark_layers::reset();
             benchmark_payments::reset();
+            if allocations {
+                benchmark_allocations::start();
+            }
             let start = Instant::now();
             let output = match layer {
                 "actions" => Output::Actions {
@@ -679,11 +692,15 @@ fn run(
                     Output::Steps { steps: 1 }
                 }
             };
-            times.push(start.elapsed().as_secs_f64() * 1000.0);
+            if allocations {
+                traffic = Some(benchmark_allocations::stop());
+            } else {
+                times.push(start.elapsed().as_secs_f64() * 1000.0);
+            }
             let output = serde_json::to_value(output).unwrap();
             let payment = benchmark_payments::snapshot();
             let counters = benchmark_layers::snapshot();
-            work = json!({"plans":payment.plans,"calls":payment.calls,"states":payment.states,"max_plan_calls":payment.max_plan_calls,"witness_digest":payment.witness_digest,
+            work = json!({"plans":payment.plans,"calls":payment.calls,"states":payment.states,"max_plan_calls":payment.max_plan_calls,"cache_hits":payment.cache_hits,"cache_misses":payment.cache_misses,"witness_digest":payment.witness_digest,
                 "boards":counters.boards,"source_plans":counters.source_plans,"comparisons":counters.comparisons,"trigger_sources":counters.trigger_sources,"triggers_found":counters.triggers_found});
             if sample == 0 {
                 digest.update(
@@ -718,7 +735,7 @@ fn run(
                     clone_bytes = Some(bytes);
                 }
             }
-            if sample == 2 {
+            if sample == samples - 1 {
                 work["output"] = match layer {
                     "search" => {
                         let mut summary = output.clone();
@@ -733,11 +750,15 @@ fn run(
         if let Some(bytes) = clone_bytes {
             work["allocated_bytes"] = json!(bytes);
         }
-        times.sort_by(f64::total_cmp);
-        println!(
-            "{}",
-            json!({"state":recipe.state,"size":recipe.size,"checkpoint":checkpoint,"layer":layer,"work":work,"ms":times[1]})
-        );
+        let mut row = json!({"state":recipe.state,"size":recipe.size,"checkpoint":checkpoint,"layer":layer,"work":work});
+        if let Some((count, bytes)) = traffic {
+            row["allocations"] = json!(count);
+            row["allocated_bytes"] = json!(bytes);
+        } else {
+            times.sort_by(f64::total_cmp);
+            row["ms"] = json!(times[1]);
+        }
+        println!("{row}");
     }
 }
 fn main() {
@@ -746,6 +767,7 @@ fn main() {
     let mut sizes: Option<Vec<usize>> = None;
     let mut layers = Vec::new();
     let mut recipes = false;
+    let mut allocations = false;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -756,6 +778,7 @@ fn main() {
                 return;
             }
             "--recipes" => recipes = true,
+            "--allocations" => allocations = true,
             "--sizes" | "--layers" => {
                 let option = &args[i];
                 i += 1;
@@ -821,7 +844,14 @@ fn main() {
                     );
                 } else {
                     digest.update(&serde_json::to_vec(&surface(&mut env)).unwrap());
-                    run(&recipe, &checkpoint, &env, &layers, &mut digest);
+                    run(
+                        &recipe,
+                        &checkpoint,
+                        &env,
+                        &layers,
+                        allocations,
+                        &mut digest,
+                    );
                 }
             }
         }

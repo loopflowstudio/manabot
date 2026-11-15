@@ -130,6 +130,7 @@ impl Game {
                 std::env::var("MANAGYM_EXPERIMENT_AUTOSPEND").as_deref() == Ok("1"),
             ),
             derived: Default::default(),
+            payment_cache: Default::default(),
             payment_sources: Default::default(),
             state: TrackedState::new(GameState {
                 objects,
