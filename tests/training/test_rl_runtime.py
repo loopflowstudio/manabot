@@ -57,7 +57,8 @@ def test_self_play_records_costs_and_reloads_distinct_raw_ema(
         )
         assert store.training_run(run.id).status == "completed"
     assert run.status == "completed"
-    assert sum(stage.games for stage in run.stages) > 0
+    if learning_seats == "both":
+        assert all(stage.games > 0 for stage in run.stages)
     updates = stage_rows(run, read_updates(tmp_path, [run]))
     for index, stage in enumerate(run.stages):
         first = updates[stage.id][0]
@@ -69,7 +70,11 @@ def test_self_play_records_costs_and_reloads_distinct_raw_ema(
         assert sum(outcomes.values()) == 2 * stage.games
         wins = sum(n for (_, kind), n in outcomes.items() if kind == "wins")
         assert wins == sum(n for (_, kind), n in outcomes.items() if kind == "losses")
-        assert {position for position, _ in outcomes} == {"play", "draw"}
+        # An exact-quota stage need not finish a game. Outcomes count only
+        # actual terminals, while complete-game stages guarantee both seats.
+        assert {position for position, _ in outcomes} == (
+            {"play", "draw"} if stage.games else set()
+        )
         if learning_seats == "one":
             assert stage.learner_transitions == 512
         else:

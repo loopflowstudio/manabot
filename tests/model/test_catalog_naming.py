@@ -54,20 +54,27 @@ def naming_trace() -> NamingTrace:
         frame = json.loads(env.semantic_decision_frame_json())
         if any(offer["label"].startswith("Names ") for offer in frame["offers"]):
             return NamingTrace(env, tuple(actions))
-        labels = ["Target Villain", "Play Swamp", "Play Plains"]
+        # Search offers carry public commitments and verbs; their fallback
+        # labels are enum names, unlike Academy's presentation labels.
+        # The opponent passes without developing sources: its irrelevant mana
+        # choices must not consume this naming witness's decision budget.
+        preferences: list[tuple[str, str | None]] = [("play_land", "Swamp")]
         if not cast:
-            labels.append("Cast The Rise of Sozin")
-        labels.extend(["Pass priority", "Decline"])
+            preferences.append(("cast", "The Rise of Sozin"))
+        preferences.extend(
+            [("pay_cost", None), ("pass_priority", None), ("decline", None)]
+        )
         offer = next(
             (
                 offer
-                for label in labels
+                for verb, card in preferences
                 for offer in frame["offers"]
-                if offer["label"] == label
+                if offer["verb"] == verb
+                and (card is None or offer["public_commitment"]["card"] == card)
             ),
             frame["offers"][0],
         )
-        cast |= offer["label"] == "Cast The Rise of Sozin"
+        cast |= offer["verb"] == "cast"
         actions.append(frame["offers"].index(offer))
         env.execute_semantic_command_json(
             json.dumps(

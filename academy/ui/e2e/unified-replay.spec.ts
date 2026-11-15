@@ -7,6 +7,12 @@ test('live Watch, archived playback and the final action share one resumable tim
   page.on('pageerror', error => errors.push(error.message));
   await page.setViewportSize({width: 1280, height: 800});
   await page.emulateMedia({reducedMotion: 'reduce', colorScheme: 'light'});
+  await page.route('**/api/watch', async route => {
+    await route.continue({ postData: JSON.stringify({
+      ...route.request().postDataJSON(), players: ['random', 'passive'],
+      hero_deck: 'replay-bolt', villain_deck: 'replay-plains', seed: 42,
+    }) });
+  });
   await page.goto('/replay?watch=1');
   await page.getByRole('combobox', {name: 'Seat 2', exact: true}).selectOption('random');
   await page.getByRole('button', {name: 'Start watching', exact: true}).click();
@@ -28,7 +34,7 @@ test('live Watch, archived playback and the final action share one resumable tim
   expect(new URL(page.url()).searchParams.get('position')).toBe(recordedKey);
   expect(produced).toHaveLength(0);
 
-  // Complete the same ordinary seeded game through its existing producer.
+  // Complete the authored Bolt/Plains matchup through its real producer.
   const terminal = await page.evaluate(async id => {
     const token = sessionStorage.getItem(`etude.watch.${id}`)!;
     const headers = {'content-type': 'application/json', 'x-etude-participant-token': token};

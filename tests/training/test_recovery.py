@@ -11,6 +11,7 @@ import torch
 
 from experiments.direct_self_play import direct_self_play
 from manabot.backends import resolve
+from manabot.infra.config import MatchConfig
 from manabot.training import execution
 from manabot.training.records import TrainingRun
 from manabot.training.regime import DampedPolicyLearning, TrainingRegime, TrainSelfPlay
@@ -65,6 +66,13 @@ def recipe() -> TrainingRegime:
     value = direct_self_play()
     value.world = managym.WORLD_VERSION
     value.id = f"test-{value.world}-{value.id}"
+    # Recovery compares exact learning state, not the curated decks' playing
+    # strength. Small decks bound full-game closure by library exhaustion.
+    value.match = MatchConfig(
+        hero_deck={"Mountain": 4, "Lightning Bolt": 4},
+        villain_deck={"Forest": 4, "Llanowar Elves": 4},
+    )
+    value.agent.world = managym.WORLD_SETUP
     value.stages = value.stages[:1]
     stage = value.stages[0]
     assert isinstance(stage, TrainSelfPlay)

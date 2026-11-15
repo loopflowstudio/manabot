@@ -150,6 +150,16 @@ async function installCombatAuthority(
   events: PresentationEvent[] = [],
   terminal = false,
 ): Promise<void> {
+  // This authority is entirely mocked, including its read-only preview API.
+  await page.route('**/api/sessions/combat-session/payment-preview', async route => {
+    await route.fulfill({ json: {
+      ...route.request().postDataJSON(), viewer: 0,
+      preview: { state: 'not_applicable', scope: null,
+        continuation: { ability_output: false, outer_payment: false },
+        explanation: 'Combat has no mana payment.', cost: null, sources: [],
+        pool_after_production: null, pool_after_spending: null },
+    } });
+  });
   let starts = 0;
   await page.routeWebSocket('**/ws/play', (socket) => {
     socket.onMessage((raw) => {

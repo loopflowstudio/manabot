@@ -65,7 +65,7 @@ def _collector(
 
 @pytest.mark.parametrize("recovery", ["exact", "current"])
 @pytest.mark.parametrize("learning_seats", ["one", "both"])
-def test_uniform_collector_recovers_changed_terminal_roots(
+def test_uniform_collector_recovers_exact_quotas_and_complete_games(
     recovery: str, learning_seats: Literal["one", "both"]
 ) -> None:
     torch.set_num_threads(1)
@@ -76,8 +76,11 @@ def test_uniform_collector_recovers_changed_terminal_roots(
     first = _collector(recovery, learning_seats=learning_seats)
     initial_pairs = first._env.current_matchup_indices()
     batch = first.collect(agent, 128)
-    assert first.stats.games > 0
-    assert first._env.current_matchup_indices() != initial_pairs
+    # Exact quotas can stop before any terminal; both-seat complete-game
+    # collection guarantees terminal roots and exercises their reassignment.
+    if learning_seats == "both":
+        assert first.stats.games > 0
+        assert first._env.current_matchup_indices() != initial_pairs
     for match, players in zip(
         first.stream_matches, first._env.current_player_configs(), strict=True
     ):

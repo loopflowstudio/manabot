@@ -1,7 +1,7 @@
 import { selectDeck } from './deck-selection';
 import { expect, test, type Page } from '@playwright/test';
 
-// Priority stops e2e: the same deal (seed 0, seeded random villain,
+// Priority stops e2e: the same small deal (seed 0, passive villain,
 // scripted deterministic hero) is played twice —
 // first with auto-pass disabled (the old surface-every-window behavior),
 // then with stops on main phases only. The stops run must need dramatically
@@ -17,7 +17,11 @@ test.beforeEach(async ({ page }) => {
     socket.onMessage(message => {
       if (typeof message !== 'string') { server.send(message); return; }
       const payload = JSON.parse(message);
-      if (payload.type === 'new_game') payload.config.seed = 0;
+      if (payload.type === 'new_game') payload.config = {
+        ...payload.config, seed: 0,
+        hero_deck: { Island: 4, Counterspell: 4 },
+        villain_deck: { Plains: 8 }, villain_type: 'passive',
+      };
       server.send(JSON.stringify(payload));
     });
   });
@@ -95,9 +99,8 @@ test('stops cut the inputs needed to finish a game, log keeps narrating', async 
     timeout: 15_000,
   });
   await page.getByTestId('opponent-select').selectOption('random');
-  // This spec's input-count contract was written for the INTERACTIVE_DECK
-  // mirror (hero holds Counterspell/Bolt, so the baseline surfaces priority
-  // at every step); pin the decks rather than inherit the UR/GW default.
+  // Counterspell keeps priority available; tiny decks finish by exhaustion
+  // independently of a random opponent's spell and mana choices.
   await selectDeck(page, 'hero', 'interactive');
   await selectDeck(page, 'villain', 'interactive');
 
@@ -121,10 +124,8 @@ test('stops cut the inputs needed to finish a game, log keeps narrating', async 
   await expect(page.getByTestId('action-option').first()).toBeVisible({ timeout: 15_000 });
   const stopsInputs = await playUntilGameOver(page);
 
-  // The hero holds instants (INTERACTIVE_DECK), so the baseline surfaces
-  // priority at every step of both turns; main-phase stops must remove the
-  // bulk of them. The deal is fixed, though priority automation can change
-  // the random opponent's sampling sequence.
+  // Held Counterspells expose priority at every step of both turns.
+  // Main-phase stops remove most of those otherwise deliberate inputs.
   console.log(
     `inputs to finish, same seed: baseline=${baselineInputs} stops=${stopsInputs}`,
   );

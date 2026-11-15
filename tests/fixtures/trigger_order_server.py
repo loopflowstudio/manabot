@@ -7,6 +7,11 @@ from payment_root import DECK as PAYMENT_DECK, configure_root as configure_payme
 from manabot.verify.trigger_order import DECK, SEED, configure_root
 from managym.academy import server
 
+# Small native Watch matchup for terminal-timeline coverage, independent of
+# the production default decks and an untrained policy's game length.
+server.NAMED_DECKS["replay-bolt"] = {"Mountain": 8, "Lightning Bolt": 32}
+server.NAMED_DECKS["replay-plains"] = {"Plains": 40}
+
 _new_game = server.GameSession.new_game
 
 
