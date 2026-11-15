@@ -19,6 +19,7 @@
     focusedIds?: Set<number>;
     clickableTargets?: Map<number, number[]>;
     onSelectTarget?: (objectId: number) => void;
+    onInspect?: () => void;
     onHoverTarget?: (objectId: number | null) => void;
     winner?: number | null;
     deckNames?: { hero: string; villain: string } | null;
@@ -45,6 +46,7 @@
     focusedIds = new Set<number>(),
     clickableTargets = undefined,
     onSelectTarget = undefined,
+    onInspect = undefined,
     onHoverTarget = undefined,
     winner = undefined,
     deckNames = null,
@@ -110,6 +112,7 @@
   }
 
   function inspectTarget(id: number): void {
+    onInspect?.();
     const players = [observation.agent, observation.opponent];
     const card = players.flatMap(player => [...player.hand, ...player.graveyard, ...player.exile, ...player.stack, ...player.battlefield, ...(player.inspected ?? [])]).find(card => card.id === id);
     inspectionButton = document.activeElement instanceof HTMLElement ? document.activeElement : null;

@@ -167,3 +167,58 @@ it('opens at the first permitted choice while retaining earlier opponent consequ
   expect(store.current?.key).toBe('exact-choice');
   expect(store.index?.positions[0].kind).toBe('consequences');
 });
+
+it('pause holds the board when a delayed next-position read finishes', async () => {
+  installApi();
+  const store = createReplayStore();
+  await store.open('trace-1');
+  const held = store.current;
+  let finish!: (response: Response) => void;
+  vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(resolve => finish = resolve)));
+  store.playing = true;
+  const next = store.next(true);
+  store.pause();
+  expect(store.busy).toBe(false);
+  finish(Response.json(current('after:0')));
+  await next;
+  expect(store.current).toBe(held);
+  expect(store.selected).toBe(0);
+  expect(store.playing).toBe(false);
+  vi.stubGlobal('fetch', vi.fn(async () => Response.json(current('after:0'))));
+  await store.next(true);
+  expect(store.current?.key).toBe('after:0');
+});
+
+it.each([false, true])('pause holds the reader while a pending producer saves (lost reply: %s)', async lostReply => {
+  installApi(true);
+  const store = createReplayStore();
+  await store.open('trace-1', 'latest');
+  const held = store.current;
+  let finish!: () => void;
+  let commands = 0;
+  const saved = {...index(true), revision: 92, positions: [...positions.slice(0, -1), {...positions[0], key: 'new-choice'}, {...positions[1], key: 'after:1'}, positions[2]]};
+  vi.stubGlobal('fetch', vi.fn(async (input: string, init: RequestInit) => {
+    if (init.method === 'POST') {
+      commands++;
+      await new Promise<void>(resolve => finish = resolve);
+      if (lostReply) throw new Error('Lost reply');
+      return Response.json({});
+    }
+    if (input.includes('/positions/')) return Response.json({...current('exact-choice'), key: 'new-choice'});
+    return Response.json(saved);
+  }));
+  store.playing = true;
+  const production = store.produce();
+  store.pause();
+  finish();
+  await production;
+  expect(store.index?.revision).toBe(92);
+  expect(store.current).toBe(held);
+  expect(store.selected).toBe(2);
+  expect(store.playing).toBe(false);
+  expect(store.producing).toBe(false);
+  expect(commands).toBe(1);
+  await store.next();
+  expect(store.current?.key).toBe('new-choice');
+  expect(commands).toBe(1);
+});

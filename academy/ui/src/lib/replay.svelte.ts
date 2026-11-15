@@ -2,7 +2,8 @@ import { recordFetch } from './records';
 import type { RecordedPosition, RecordingIndex } from './recording';
 
 /** One read cursor for all recordings; producing is an explicit edge capability.
- * Selection generations reject replies from earlier seeks and recordings.
+ * Selection generations reject reads after a seek or reader pause. A separate
+ * source generation lets a pending producer refresh only its own recording.
  */
 export class ReplayStore {
   index = $state<RecordingIndex | null>(null);
@@ -17,6 +18,7 @@ export class ReplayStore {
   nearSeat = $state(0);
   private generation = 0;
   private id = '';
+  private sourceGeneration = 0;
 
   async api<T>(path: string, body?: unknown): Promise<T> {
     const token = sessionStorage.getItem(`etude.watch.${this.id}`);
@@ -44,7 +46,8 @@ export class ReplayStore {
 
   async open(id: string, key?: string): Promise<void> {
     const generation = ++this.generation;
-    this.id = id; this.playing = false; this.busy = true; this.current = null; this.index = null; this.error = '';
+    ++this.sourceGeneration;
+    this.id = id; this.playing = false; this.busy = true; this.current = null; this.index = null; this.producing = false; this.error = '';
     try {
       const index = await this.readIndex(id);
       if (generation !== this.generation) return;
@@ -84,29 +87,46 @@ export class ReplayStore {
     if (!this.index?.can_produce || this.producing || this.busy || this.selected !== this.index.positions.length - 1) return;
     this.producing = true; this.error = '';
     const oldLength = this.index.positions.length;
+    const generation = this.generation;
+    const sourceGeneration = this.sourceGeneration;
+    const id = this.id;
     try {
       await this.api(`/api/watch/${encodeURIComponent(this.id)}/step`, {revision: this.index.revision});
-      this.index = await this.readIndex(this.id);
+      const index = await this.readIndex(id);
+      if (sourceGeneration !== this.sourceGeneration) return;
+      this.index = index;
       this.producing = false;
+      if (generation !== this.generation) return;
       // Latest was replaced by the newly appended choice, never revision - 1.
       await this.seek(Math.min(oldLength - 1, this.index.positions.length - 1), true);
     } catch (reason) {
+      if (sourceGeneration !== this.sourceGeneration) return;
       this.fail(reason);
       // A lost reply may already have committed. Read the head, never retry here.
-      try { this.index = await this.readIndex(this.id); }
+      try {
+        const index = await this.readIndex(id);
+        if (sourceGeneration === this.sourceGeneration) this.index = index;
+      }
       catch { /* Preserve the original failure and the retained board. */ }
+      if (sourceGeneration !== this.sourceGeneration) return;
       this.error += ' Refresh the saved head before explicitly continuing.';
-    } finally { this.producing = false; }
+    } finally { if (sourceGeneration === this.sourceGeneration) this.producing = false; }
   }
 
   async next(animate = false): Promise<void> {
     if (!this.index || this.busy || this.producing) return;
-    if (this.selected + 1 < this.index.positions.length) await this.seek(this.selected + 1, animate);
+    // A paused producer can replace the old latest marker with a saved choice.
+    if (this.current?.key !== this.index.positions[this.selected]?.key) await this.seek(this.selected, animate);
+    else if (this.selected + 1 < this.index.positions.length) await this.seek(this.selected + 1, animate);
     else if (this.index.can_produce) await this.produce();
     else this.playing = false;
   }
-  pause(): void { this.playing = false; }
-  cancelReads(): void { ++this.generation; this.playing = false; }
+  pause(): void {
+    ++this.generation;
+    this.playing = false;
+    this.busy = false;
+  }
+  cancelReads(): void { ++this.sourceGeneration; this.pause(); }
   private fail(reason: unknown): void { this.error = reason instanceof Error ? reason.message : String(reason); this.playing = false; }
 }
 export function createReplayStore(): ReplayStore { return new ReplayStore(); }

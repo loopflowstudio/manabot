@@ -708,6 +708,11 @@ to the control that opened it. A later copy with the same name cannot supply
 missing historical details. Older snapshots that cannot certify the same object
 appearance also close inspection.
 
+Opening card details or reading earlier history pauses replay. Close the details
+when ready, then press **Play** to resume. Returning to **Latest** does not start
+playback. A live decision already being produced may finish saving while you read;
+your selected board stays put.
+
 #### Continue a live Watch
 
 Open **Watch** (`/replay?watch=1`), select both seats, decks and a seed, then

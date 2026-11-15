@@ -245,6 +245,11 @@ open from Games in the same viewer. See the
 perspective, reload and recovery. Watch credentials stay in the tab's
 `sessionStorage`; saved position URLs carry no credentials.
 
+Opening card details or reading earlier history pauses replay. Close the details
+when ready, then press **Play** to resume. Returning to **Latest** does not start
+playback. A live decision already being produced may finish saving while you read;
+your selected board stays put.
+
 `watch.py` admits controllers and verified exported training games or evaluation
 traces through **Open a game file**; choose a game when a trace contains several.
 Import verifies the original receipt, Commands and state digests without invoking a player.
