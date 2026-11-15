@@ -1,5 +1,40 @@
 # Combat and mana decision shapes on the Small TLA model
 
+**Interrupted by stalls; one baseline continues.** On 2026-11-15 UTC, direct
+reads of the nodes' local TrainingRun files confirmed five jobs had stopped
+updating despite still being labelled running. They were cancelled after
+copying their available checkpoints and diagnostic artifacts. Baseline
+seed 26502 continues, last confirmed at 159 updates. No six-seed learning
+comparison is available.
+
+| Arm | Seed 26501 | Seed 26502 |
+| --- | --- | --- |
+| Baseline | cancelled after stall at 111 | running, last confirmed 159 |
+| Combat pick-then-done | cancelled after stall at 17 | cancelled after stall at 54 |
+| Manual mana taps | cancelled after stall at 17 | cancelled after stall at 40 |
+
+The control pods were provider-confirmed deleted at 05:22:09/05:22:11 UTC.
+The stalled baseline process was stopped separately; its healthy sibling
+was preserved. All five output directories are retained locally under
+`.runs/stalled-20261115/`. The supervisor only waited for terminal outcomes
+and did not detect these nonterminal stalls. Cause is not established; no
+card or deck has been excluded on suspicion alone.
+
+Diagnostic `bca62f5daf0f` (`mtg265-hang-diagnostic-20261115`) is now running
+on the freed slot of the remaining L4: same source b3b47e82d31b,combatseed 26501
+and 500-update damping horizon, with calibration-only tags and no scored
+milestones. The immutable job command exports PYTHONFAULTHANDLER=1, disables
+core files, and uses a 40-minute SIGABRT timeout with a 15-second kill grace
+to capture where execution stops. A timeout is an operational bound, not a
+learning result or proof of a specific card bug. Its USD2/2-hour job allowance
+is contained in the existing capped lease; no new GPU was acquired.
+
+The active `.runs/decision-shapes-watch.py` now includes both study cohorts
+and the diagnostic cohort before final cleanup. The investigation note is
+`scratch/decision-shapes-stalls.md`.
+
+## Restart placement history
+
 **Training restart, source `b3b47e82d31b`.** Baselines are in
 `mtg265-study-20261115`; combat and mana are in `mtg265-study-20261115-l4-48`.
 Repaired combat calibration `1fa799261cc9` completed two updates on seed
