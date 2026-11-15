@@ -1355,38 +1355,20 @@ class GameSession:
             self.accepted_commands.pop(next(iter(self.accepted_commands)))
 
         if committed is not None:
-            committed(self._committed_outcome(base_revision, batch_cursor, receipt))
+            committed(self._accepted_outcome(base_revision, batch_cursor, receipt))
             base_revision = self.revision
             batch_cursor = self.presentation.next_seq
         self._advance()
         self._last_presentation_cursor = batch_cursor
-        presentation = [
-            dict(event)
-            for event in self.presentation_events
-            if int(event["seq"]) >= batch_cursor
-        ]
-        frame = self._experience_frame()
-        transient = self._drain_surface_metadata()
+        return self._accepted_outcome(base_revision, batch_cursor, receipt)
 
-        return {
-            "type": "command_outcome",
-            "status": "accepted",
-            "update": {
-                "base_revision": base_revision,
-                "frame": frame,
-                "presentation": presentation,
-                "receipt": receipt,
-                **transient,
-            },
-        }
-
-    def _committed_outcome(
+    def _accepted_outcome(
         self, base_revision: int, cursor: int, receipt: dict[str, Any]
     ) -> dict[str, Any]:
-        """Hand immutable evidence to the transport before subsequent bot work.
+        """Publish events since the last boundary with the immutable receipt.
 
-        The worker pauses until delivery has been attempted. Synchronous callers
-        still receive the complete response after advance.
+        The same envelope serves early commitment and the settled response;
+        later frames never change the transition named by the receipt.
         """
         return {
             "type": "command_outcome",
@@ -1529,7 +1511,7 @@ class GameSession:
         command_id = raw.get("command_id")
         if not isinstance(command_id, str) or not command_id:
             raise ValueError("command_id must be a non-empty string.")
-        if isinstance(command_id, str) and command_id in self.accepted_commands:
+        if command_id in self.accepted_commands:
             return {
                 "type": "command_outcome",
                 "status": "duplicate",
@@ -1673,7 +1655,7 @@ class GameSession:
         self.env = live_env
         if committed is not None:
             committed(
-                self._committed_outcome(
+                self._accepted_outcome(
                     command.expected_revision,
                     batch_cursor,
                     receipt.model_dump(mode="json"),
@@ -1690,22 +1672,9 @@ class GameSession:
             if self.obs is not None and self.obs.game_over:
                 self._close_policies()
         self._last_presentation_cursor = batch_cursor
-        frame = self._experience_frame()
-        return {
-            "type": "command_outcome",
-            "status": "accepted",
-            "update": {
-                "base_revision": response_base,
-                "frame": frame,
-                "presentation": [
-                    dict(event)
-                    for event in self.presentation_events
-                    if int(event["seq"]) >= batch_cursor
-                ],
-                "receipt": receipt.model_dump(mode="json"),
-                **self._drain_surface_metadata(),
-            },
-        }
+        return self._accepted_outcome(
+            response_base, batch_cursor, receipt.model_dump(mode="json")
+        )
 
     def retry_mirror(self, match_id: str, expected_revision: int) -> dict[str, Any]:
         """Retry only the bound, uncommitted bot decision after a deadline."""
@@ -3257,7 +3226,7 @@ def _response_with_participant(
     watcher_invite: str | None = None,
 ) -> dict[str, Any]:
     payload = deepcopy(response)
-    payload["work"] = record.game.work.payload() or None
+    payload["work"] = record.game.work.payload()
     payload["mirror_retry"] = record.game.mirror_retry
     payload["mirror"] = (
         asdict(record.game.trace.config).get("mirror") if record.game.trace else None
@@ -3792,7 +3761,7 @@ async def play_socket(websocket: WebSocket) -> None:
                             await websocket.send_json(
                                 {
                                     **cached,
-                                    "work": record.game.work.payload() or None,
+                                    "work": record.game.work.payload(),
                                 }
                             )
                             continue
@@ -4667,7 +4636,7 @@ def watch_work(
     from .watch import record_for_watch
 
     record = record_for_watch(trace_id, x_etude_participant_token)
-    return {"work": record.game.work.payload() or None}
+    return {"work": record.game.work.payload()}
 
 
 @app.get("/api/watch/{trace_id}/decisions/{ordinal}")

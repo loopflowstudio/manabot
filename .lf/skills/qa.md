@@ -168,6 +168,15 @@ publish, land or choose the next Graph step from here.
   trace for a single commit: `attempts.trace_json` in
   `<ACADEMY_TRACES_DIR>/play.sqlite`, `events[].action_description` by turn.
   Forced children (one legal action) are skipped and absent from `events`.
+- Interruption and Watch checks: Rematch and Swap sides during a live game
+  open `window.confirm`, which Playwright dismisses unless a `dialog` handler
+  accepts it; a dismissed confirm looks like a dead button. For a backend
+  restart, SIGKILL the uvicorn listener (`lsof -ti tcp:<api> -sTCP:LISTEN`)
+  and its `uv` parent, start it again, and expect "Interrupted" with only New
+  game and the saved recording as paths forward. `vite preview` keeps serving
+  the old chunk names after a rebuild; restart it. Watch's frontier status is
+  the `Live frontier work` region (`getByRole('region', ...)`); Search 16
+  decisions finish too quickly to see it, Search 256 shows seconds elapsed.
 - First-time clone: copy tracked plus untracked non-ignored files
   (`git ls-files -co --exclude-standard`) to an empty `/tmp` directory and run
   `ACADEMY_CLEAN_API_PORT=… ACADEMY_CLEAN_FRONTEND_PORT=… ./scripts/verify-clean-machine`

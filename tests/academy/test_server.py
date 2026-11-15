@@ -13,6 +13,7 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 from jsonschema import Draft202012Validator
+import pytest
 
 from managym import experience_projection
 
@@ -74,7 +75,9 @@ def _offer(frame: dict, *, action_type: str, label: str | None = None) -> dict:
     )
 
 
-def test_protocol_v1_bolt_and_pass_offers_round_trip(monkeypatch, tmp_path):
+def test_protocol_v1_bolt_and_pass_offers_round_trip(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
     server.SESSION_REGISTRY.clear()
     config = {
@@ -166,9 +169,20 @@ def test_protocol_v1_bolt_and_pass_offers_round_trip(monkeypatch, tmp_path):
                         == live_bundle
                     )
                 websocket.send_json({"type": "command", "command": command})
+                # Commitment and later bot work are separate publications. The
+                # second batch must start exactly where the first one ended.
+                early = websocket.receive_json()
+                while early["type"] == "work_status":
+                    early = websocket.receive_json()
+                assert early["status"] == "accepted"
+                assert early["update"]["base_revision"] == frame["revision"]
                 outcome = settled_message(websocket)
                 assert outcome["status"] == "accepted"
-                assert outcome["update"]["base_revision"] == frame["revision"]
+                assert (
+                    outcome["update"]["base_revision"]
+                    == early["update"]["frame"]["revision"]
+                )
+                assert outcome["update"]["receipt"] == early["update"]["receipt"]
                 frame = outcome["update"]["frame"]
 
     record = next(iter(server.SESSION_REGISTRY.values()))

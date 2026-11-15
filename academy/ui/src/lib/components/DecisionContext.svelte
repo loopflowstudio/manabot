@@ -1,17 +1,19 @@
 <script lang="ts">
   import { stageLabel, subjectLabel } from '$lib/decision-labels';
   import type { DeclarationProjection, Observation } from '$lib/types';
-  let { observation, actor = null, declaration = null }: { observation: Observation; actor?: number | null; declaration?: DeclarationProjection | null } = $props();
+  let { observation, actor = null, declaration = null, interrupted = false }: { observation: Observation; actor?: number | null; declaration?: DeclarationProjection | null; interrupted?: boolean } = $props();
   const context = $derived(observation.decision_context);
 </script>
 
 <section aria-label="Decision context" class="space-y-3">
-  <h2 class="type-title text-display">Who decides · {context ? `Seat ${context.actor + 1}` : actor !== null ? `Seat ${actor + 1}` : observation.game_over ? 'Game over' : 'Decision details unavailable'}</h2>
+  <h2 class="type-title text-display">{interrupted ? 'Last recorded chooser' : 'Who decides'} · {context ? `Seat ${context.actor + 1}` : actor !== null ? `Seat ${actor + 1}` : observation.game_over ? 'Game over' : 'Decision details unavailable'}</h2>
   <div class="border-l-2 border-action pl-3" data-testid="decision-context">
     <h3 class="font-medium">What is happening</h3>
     {#if context}
       <p class="type-caption capitalize">{stageLabel(context.stage)}</p>
-      {#if declaration}
+      {#if interrupted}
+        <p class="type-caption">The live session is unavailable. This is the last recorded decision.</p>
+      {:else if declaration}
         <p class="type-caption">Plan the remaining {declaration.stage}, then confirm once. Draft edits are uncommitted; already committed assignments stay fixed.</p>
       {:else}
         <p class="type-caption">{context.instruction}</p>

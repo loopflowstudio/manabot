@@ -216,7 +216,7 @@
   const canSubmitLive = $derived(gameActive && pilotCanAct && !participantStudying
     && !gameStore.branchProjection && !gameStore.newGamePending && inputReady);
   const canPassTurn = $derived(canSubmitLive && tableFrame?.action_space === 'PRIORITY' && offers.length > 0);
-  const combatProjection = $derived(!participantStudying && !gameStore.branchProjection ? tableFrame?.declaration ?? null : null);
+  const combatProjection = $derived(!gameStore.resumeFailed && !participantStudying && !gameStore.branchProjection ? tableFrame?.declaration ?? null : null);
   const combatScope = $derived(tableFrame ? combatKey(tableFrame, gameStore.updateSeq) : '');
   const boardFocus = $derived(new Set([...gameStore.focusIds, ...combatFocus(combatDraft, combatProjection)]));
   const boardCombatMarkers = $derived(combatPlanMarkers(combatDraft, combatProjection));
@@ -520,10 +520,10 @@
             role="status"
             aria-live="polite"
             aria-atomic="true"
-            aria-label={`Connection status: ${gameStore.connection}`}
+            aria-label={gameStore.resumeFailed ? 'Session status: interrupted' : `Connection status: ${gameStore.connection}`}
             class="type-label uppercase text-ink-3"
           >
-            {gameStore.connection}
+            {gameStore.resumeFailed ? 'Interrupted' : gameStore.connection}
           </span>
         </div>
 
@@ -620,6 +620,7 @@
         {:else if tableFrame}
         <DecisionSurface
           workspace
+          interrupted={gameStore.resumeFailed}
           frame={tableFrame}
           navigationKey={String(gameStore.updateSeq)}
           selectedTargetId={gameStore.selectedTargetId}
@@ -641,7 +642,7 @@
           <div class="secondary-content space-y-4" tabindex="0" role="region" aria-label="History and settings">
             <PresentationHistory player={tablePresentation} observation={boardObservation} />
             {#if tableFrame && !gameStore.branchProjection}
-              <DecisionContext observation={tableFrame.projection} actor={tableFrame.prompt?.actor ?? null} declaration={combatProjection} />
+              <DecisionContext observation={tableFrame.projection} actor={tableFrame.prompt?.actor ?? null} declaration={combatProjection} interrupted={gameStore.resumeFailed} />
             {/if}
 
             <div class="border-t border-line pt-4">

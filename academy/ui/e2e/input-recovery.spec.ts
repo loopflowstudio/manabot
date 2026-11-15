@@ -152,7 +152,7 @@ for (const theme of ['light', 'dark'] as const) {
       expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem('etude.gui.resume')!).identity?.opponent?.name)).toContain('Independent');
       await stopChild(child);
       child = await childServer(port);
-      await page.reload();
+      // The live tab must recognize lost authority before any reload.
       await expect(page.getByRole('alert')).toContainText('Interrupted');
       expect(await retainedFrame(page)).toBeNull();
       await expect(page.locator('main')).toHaveAttribute('data-frame-revision', String(frame!.revision));
@@ -162,8 +162,14 @@ for (const theme of ['light', 'dark'] as const) {
       expect(snapshot.match_id).toBe(frame!.match_id);
       expect(snapshot.identity?.opponent?.name).toContain('Independent');
       expect(snapshot).not.toHaveProperty('resume_token');
-      for (let reload = 0; reload < 2; reload++) {
-        await page.reload();
+      for (let reload = 0; reload < 3; reload++) {
+        if (reload > 0) await page.reload();
+        await expect(page.getByTestId('connection-badge')).toHaveText('Interrupted');
+        await expect(page.getByTestId('decision-prompt')).toContainText('cannot be submitted');
+        await expect(page.getByTestId('legal-choice-count')).toContainText('recorded choices');
+        await expect(page.getByTestId('legal-choice-count')).not.toContainText('legal choices');
+        await expect(page.getByTestId('pass-turn')).toHaveCount(0);
+        await expect(page.getByRole('button', {name: 'Rematch', exact: true})).toHaveCount(0);
         await expect(page.getByRole('alert')).toContainText('Interrupted');
         await expect(page.locator('main')).toHaveAttribute('data-frame-revision', String(frame!.revision));
         await expect(page.getByTestId('action-option').first()).toBeDisabled();

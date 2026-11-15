@@ -155,7 +155,7 @@ class WatchSetupAttempt:
     def payload(self) -> dict[str, Any]:
         with self.lock:
             return {
-                "work": self.work.payload() or None,
+                "work": self.work.payload(),
                 "created": self.result,
                 "error": self.error,
             }

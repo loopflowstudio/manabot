@@ -341,7 +341,7 @@ export class GameSocketController {
   sendContinuation(intent: 'rematch' | 'swap_sides' | 'change_opponent', config: Record<string, unknown> = {}): void {
     const session = gameStore.playSession;
     const table = gameStore.table;
-    if (!session || !table?.attempt_id || gameStore.newGamePending) return;
+    if (!session || !table?.attempt_id || gameStore.newGamePending || gameStore.resumeFailed) return;
     const request: SharedTableRequest = {
       type: 'rematch', intent, config: {...config, player_token: playerToken()}, request_id: crypto.randomUUID(),
       attempt_id: table.attempt_id, setup_revision: session.revision,
@@ -356,39 +356,15 @@ export class GameSocketController {
   sendAction(offerId: number): boolean {
     const frame = gameStore.protocolFrame;
     const prompt = frame?.prompt;
-    if (!frame || !prompt || this.pendingCommand !== null || this.pendingResume || gameStore.resumeFailed || gameStore.work?.state === 'running') {
-      return false;
-    }
-    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
-      gameStore.setError('Connection changed. Recovering the latest game state.');
-      this.connect();
-      return false;
-    }
-
-    if (browser && !loadResumeCredentials()) {
-      gameStore.setError('This tab has no resume authority. Recover the table before choosing again.');
-      return false;
-    }
-    const request: PendingCommand = {
+    if (!frame || !prompt) return false;
+    return this.submitCommand({
       type: 'command',
-      ...(gameStore.table ? { grant_revision: gameStore.table.access.grant_revision } : {}),
       command: {
         command_id: crypto.randomUUID(), match_id: frame.match_id,
         expected_revision: frame.revision, prompt_id: prompt.id,
         offer_id: offerId, answers: [],
       },
-    };
-    this.pendingCommand = request;
-    try {
-      this.persistResumeState();
-    } catch {
-      this.pendingCommand = null;
-      gameStore.setError('Could not retain your submission in this tab. Free browser storage before trying again.');
-      return false;
-    }
-    gameStore.beginCommand();
-    this.socket.send(JSON.stringify(request));
-    return true;
+    });
   }
 
   validateDeclaration(plan: DeclarationPlan, requestId: string): boolean {
@@ -407,31 +383,40 @@ export class GameSocketController {
 
   sendDeclaration(plan: DeclarationPlan): string | null {
     const frame = gameStore.protocolFrame;
-    if (!frame?.declaration || !frame.prompt || this.pendingCommand !== null || this.pendingResume || gameStore.resumeFailed || gameStore.work?.state === 'running') return null;
-    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
-      gameStore.setError('Connection changed. Recovering the latest game state.');
-      this.connect();
-      return null;
-    }
+    if (!frame?.declaration || !frame.prompt) return null;
     const commandId = crypto.randomUUID();
-    if (browser && !loadResumeCredentials()) return null;
-    const request: PendingCommand = {
+    return this.submitCommand({
       type: 'declaration',
-      ...(gameStore.table ? { grant_revision: gameStore.table.access.grant_revision } : {}),
       command: {
         command_id: commandId, match_id: frame.match_id,
         expected_revision: frame.revision, prompt_id: frame.prompt.id, plan,
       },
-    };
+    }) ? commandId : null;
+  }
+
+  private submitCommand(request: PendingCommand): boolean {
+    if (this.pendingCommand || this.pendingResume || gameStore.resumeFailed || gameStore.work?.state === 'running') return false;
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      gameStore.setError('Connection changed. Recovering the latest game state.');
+      this.connect();
+      return false;
+    }
+    if (browser && !loadResumeCredentials()) {
+      gameStore.setError('This tab has no resume authority. Recover the table before choosing again.');
+      return false;
+    }
+    if (gameStore.table) request = {...request, grant_revision: gameStore.table.access.grant_revision};
+    // Every deliberate submission must retain its exact envelope before send.
+    // Recovery resends this envelope; it never creates another choice or ID.
     this.pendingCommand = request;
     try { this.persistResumeState(); } catch {
       this.pendingCommand = null;
       gameStore.setError('Could not retain your submission in this tab. Free browser storage before trying again.');
-      return null;
+      return false;
     }
     gameStore.beginCommand();
     this.socket.send(JSON.stringify(request));
-    return commandId;
+    return true;
   }
 
   recoverCurrentGame(): void {

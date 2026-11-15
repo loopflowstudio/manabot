@@ -78,6 +78,6 @@ class Work:
         if self.publish is not None:
             self.publish(status)
 
-    def payload(self) -> dict[str, str | int | float | None]:
+    def payload(self) -> dict[str, str | int | float | None] | None:
         status = self.read()
-        return asdict(status) if status is not None else {}
+        return asdict(status) if status is not None else None

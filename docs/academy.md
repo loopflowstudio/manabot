@@ -727,7 +727,9 @@ shows **Interrupted**, retaining the last known table and a recording link
 when available. Saved recordings preserve available evidence; they cannot
 restore the live game. A read-only snapshot of the last published table,
 opponent identity and interruption reason survives further reloads in the same
-tab. It contains no resume credential and cannot submit actions. Choose
+tab. The header reads **Interrupted** and the choices are labeled **Last recorded
+choices**; they do not invite live input, even when the server returns. The snapshot
+contains no resume credential and cannot submit actions. Choose
 **New game** explicitly to return to setup and retire that snapshot.
 Academy never silently deals a replacement or replays your submissions into
 a new game. Keep the original tab open for temporary connection failures:
