@@ -380,6 +380,16 @@ authored-match receipt, both parity receipts and the Academy fixtures were
 re-recorded with their Commands, state digests and outcomes unchanged. A
 checkpoint keeps the manifest of the revision that wrote it.
 
+Task f1a44c (same open world) makes hidden-card knowledge one native state:
+segments and bags per seat, read by observations, determinization and the
+possible-world space. Search worlds keep a library order its owner chose and
+cards a viewer saw return to a hidden zone. The policy input adds
+`knowledge_segments` `(2, 13, 3)`, `knowledge_bags` `(2, 60, 15)` and
+`unknown_cards` `(2,)`; `known_hand` is unchanged. Possible-world space is
+version 4. Earlier checkpoints are refused by buffer shape, and belief
+receipts recorded under space v3 are not recomputed. Games with no ordering,
+return or reveal keep their deals and state hashes.
+
 ## w16: one card authority (superseded by w17)
 
 Cards are typed Rust functions in the file of the set that first printed them

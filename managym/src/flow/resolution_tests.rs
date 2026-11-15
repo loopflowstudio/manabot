@@ -1985,6 +1985,54 @@ fn cost_effect_completion_retains_output_and_parent_payment_across_choices() {
     assert_eq!(game.state.deterministic_hash(), after_sacrifice);
 }
 
+/// A player who ordered the top of their own library knows that order until
+/// a draw, shuffle or move disturbs it: no sampled world may contradict it.
+#[test]
+fn own_ordered_library_top_survives_hidden_world_sampling() {
+    for player in [PlayerId(0), PlayerId(1)] {
+        let (mut game, _, _) = fixture(player);
+        stack(
+            &mut game,
+            Entry::Spell,
+            player,
+            vec![Effect::Surveil { count: 4 }],
+            vec![],
+            vec![],
+        );
+        game.resolve_top_of_stack();
+        game.publish_action_space(game.suspended_decision_action_space().unwrap());
+        checked_command(&mut game, Action::Decline { player });
+        while game.state.suspended_decision.is_some() {
+            let choice = game
+                .action_space()
+                .unwrap()
+                .actions
+                .iter()
+                .rev()
+                .find(|action| matches!(action, Action::SelectCard { .. }))
+                .cloned()
+                .expect("ordering offers a card");
+            checked_command(&mut game, choice);
+        }
+        let definitions = |game: &Game| -> Vec<_> {
+            game.library_top_objects(player, 4)
+                .into_iter()
+                .map(|object| game.state[object].definition_id)
+                .collect()
+        };
+        let known = definitions(&game);
+        for seed in 0..16 {
+            let mut sampled = game.clone();
+            sampled.determinize(player, seed).unwrap();
+            assert_eq!(
+                definitions(&sampled),
+                known,
+                "seed {seed} sampled a library top its owner knows is impossible"
+            );
+        }
+    }
+}
+
 #[test]
 fn retained_inspection_survives_nested_choices_and_hidden_world_sampling() {
     use crate::agent::observation::Observation;
@@ -3925,5 +3973,66 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
     }
     if let Ok(path) = std::env::var("EFFECT_EXECUTION_EVIDENCE") {
         std::fs::write(path, serde_json::to_string(&evidence).unwrap()).unwrap();
+    }
+}
+
+/// A secret choice from inspected positions reveals the count moved, not the
+/// position it came from. Knowledge hooks must consume that public scope,
+/// rather than the true object's index in the library.
+#[test]
+fn hidden_knowledge_private_selection_does_not_disclose_departing_position() {
+    use crate::{agent::observation::Observation, flow::decision::EffectFrame};
+
+    for player in [PlayerId(0), PlayerId(1)] {
+        let viewer = PlayerId(1 - player.0);
+        let (mut root, _, _) = fixture(player);
+        // Publicly place three cards on top before the private inspection.
+        // A knowledge implementation must retain these exact positions.
+        for name in ["Gray Ogre", "Lightning Bolt", "Mountain"] {
+            let object = root
+                .state
+                .zones
+                .zone_objects(ZoneType::Library, player)
+                .iter()
+                .copied()
+                .find(|object| root.state[*object].name == name)
+                .expect("fixture has each definition in the library");
+            let public = root.move_object(object, ZoneType::Graveyard);
+            root.move_object(public, ZoneType::Library);
+        }
+        root.run_frame(EffectFrame::new(
+            player,
+            vec![Effect::LookAndSelect {
+                random_order: false,
+                reveal: false,
+                to_battlefield: false,
+                look: 3.into(),
+                min_select: 1,
+                max_select: 2,
+                predicate: CardPredicate::default(),
+            }],
+        ));
+        root.publish_action_space(root.suspended_decision_action_space().unwrap());
+        let inspected = root.library_top_objects(player, 3);
+        let mut observations = Vec::new();
+        for selected in &inspected {
+            let mut branch = root.clone();
+            checked_command(
+                &mut branch,
+                Action::SelectCard {
+                    player,
+                    object: *selected,
+                },
+            );
+            assert!(branch.state.zones.contains(
+                branch.state.zones.successor(*selected).unwrap(),
+                ZoneType::Hand,
+                player,
+            ));
+            assert!(branch.state.suspended_decision.is_some());
+            observations.push(Observation::for_player(&branch, viewer).to_json());
+        }
+        assert_eq!(observations[0], observations[1]);
+        assert_eq!(observations[1], observations[2]);
     }
 }
