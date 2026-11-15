@@ -7,7 +7,7 @@ import random
 
 from etude.eval.match import Tables, evaluate
 from etude.eval.records import Match
-from etude.run.records import ArtifactRef
+from etude.records import ArtifactRef
 import pytest
 
 from experiments.elemental_grid import GameRow

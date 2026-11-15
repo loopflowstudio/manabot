@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 from etude.launch.records import Until
-from etude.run.storage import DirectoryStorage
+from etude.storage import DirectoryStorage
 import pytest
 
 from experiments.elemental_grid import DECKS, schedule

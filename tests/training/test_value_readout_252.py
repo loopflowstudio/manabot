@@ -3,15 +3,10 @@
 import json
 from pathlib import Path
 
-from etude.experiment import (
-    Checkpoint,
-    Checkpoints,
-    ExperimentState,
-    TrainingRun,
-    read_experiment,
-)
-from etude.jobs import evaluation_spec
-from etude.run.records import ArtifactRef
+from etude.declarations import read_experiment
+from etude.experiment import Checkpoint, TrainingRun
+from etude.jobs import Checkpoints, ExperimentState, evaluation_spec
+from etude.records import ArtifactRef
 import pytest
 import torch
 
@@ -149,7 +144,7 @@ def test_depth_runs_restore_the_learner_and_export_scored_updates(
         ("masked_mean", str(staged), (200, 250)),
         ("value_token", "", (20, 40, 75, 150, 200, 250)),
     ):
-        (run,) = value_readout_252.runs(
+        (run,) = value_readout_252.training_jobs(
             revision="HEAD",
             seeds="25201",
             arms=aggregation,
@@ -368,7 +363,8 @@ def test_the_discovered_evaluation_callback_stays_importable() -> None:
             _stored(parent, 20) for parent in value_readout_252.PARENTS.values()
         ),
     )
-    (job,) = experiment.eval(state)  # type: ignore[arg-type]
+    (declared,) = experiment.eval(state)  # type: ignore[arg-type]
+    job = declared.plain()
     callback = evaluation_spec(job).play
     assert callback.module == "experiments.learning_signal"
     assert callback.load(job.repo) is learning_signal.play_deal

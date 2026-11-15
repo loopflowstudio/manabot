@@ -19,7 +19,8 @@ from itertools import product
 from pathlib import Path
 
 from etude.eval.records import Inference, Seating
-from etude.experiment import ExperimentState, TrainingRun
+from etude.experiment import TrainingRun
+from etude.jobs import ExperimentState
 from etude.launch.records import Job, Run
 from etude.report import Curve, Matches, Ranking, Report, Score
 
@@ -30,8 +31,8 @@ from experiments.learning_signal import (
     SETUP_SECONDS,
     Conditions,
     benchmark_jobs,
+    build_training_jobs,
     scheduled_matchups,
-    training_runs,
 )
 from manabot.infra.runtime import regime_tag
 from manabot.recipes.builders import sampled_self_play
@@ -111,7 +112,7 @@ def require_single_axis(baseline: TrainingRegime, candidate: TrainingRegime) -> 
         raise ValueError("precision arm changes more than execution.precision")
 
 
-def runs(
+def training_jobs(
     revision: str,
     hours: float = HOURS,
     usd_per_run: float = USD_PER_RUN,
@@ -135,7 +136,7 @@ def runs(
         raise ValueError("the comparison needs at least two distinct shared seeds")
     reference, candidate = (arm(precision) for precision in ARMS)
     require_single_axis(reference, candidate)
-    return training_runs(
+    return build_training_jobs(
         tuple(
             regime
             for precision, regime in zip(ARMS, (reference, candidate), strict=True)
@@ -159,7 +160,7 @@ def arm_runs(state: ExperimentState, precision: Precision) -> list[TrainingRun]:
     return [run for run in state.runs if run.checkpoints.tagged(tag)]
 
 
-def eval(state: ExperimentState) -> list[Job]:
+def eval_jobs(state: ExperimentState) -> list[Job]:
     return benchmark_jobs(
         evaluation_matchups(state),
         EVALUATION,

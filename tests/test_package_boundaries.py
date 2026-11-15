@@ -551,7 +551,7 @@ _BACKEND_ENTRYPOINTS = {
     "manabot/recipes/local.py": {"run_local"},
     "manabot/recipes/baseline.py": {"run_baseline"},
     "manabot/experiment/runner.py": {"main"},
-    "manabot/experiment/job.py": {"run_worker"},
+    "manabot/experiment/job.py": {"run_worker", "train"},
     "manabot/experiment/study.py": {"main"},
     "manabot/experiment/attack_execution.py": {"main"},
     "manabot/experiment/evaluation_queue.py": {"main"},

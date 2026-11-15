@@ -8,16 +8,16 @@ Recipe: `experiments.batched_baseline.closure_comparison`.
     uv run etude report experiments/batch_closure.py --source r2://manabot/jobs --open
 """
 
-from etude.experiment import ExperimentState
+from etude.jobs import ExperimentState
 from etude.launch.records import Job, Run
 from etude.report import Report
 
 from experiments.batched_baseline import closure_comparison
 from experiments.learning_signal import (
     ALLIES_LESSONS,
+    build_training_jobs,
     evaluation_jobs,
     learning_report,
-    training_runs,
 )
 from manabot.training.regime import BatchClosure
 
@@ -32,7 +32,7 @@ ARMS: tuple[tuple[BatchClosure, float, float], ...] = (
 BASELINE = "batch-closure-exact-quota-v1"
 
 
-def runs(
+def training_jobs(
     revision: str,
     updates: int = UPDATES,
     seeds: tuple[int, ...] = SEEDS,
@@ -41,7 +41,7 @@ def runs(
     return [
         run
         for arm, hours, usd_per_run in ARMS
-        for run in training_runs(
+        for run in build_training_jobs(
             (closure_comparison(arm, updates),),
             updates=updates,
             revision=revision,
@@ -53,7 +53,7 @@ def runs(
     ]
 
 
-def eval(state: ExperimentState) -> list[Job]:
+def eval_jobs(state: ExperimentState) -> list[Job]:
     return evaluation_jobs(
         state, "batch-closure-v1", ALLIES_LESSONS, hours=0.5, usd=0.72
     )

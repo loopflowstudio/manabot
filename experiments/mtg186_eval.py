@@ -53,10 +53,10 @@ import tempfile
 import time
 from typing import Literal
 
-from etude.launch.client import default, queue_cohort, quote, status
+from etude.launch.client import default, queue, quote, status
 from etude.launch.records import Input, Job, Run
-from etude.run.listing import runs as stored_runs
-from etude.run.storage import storage_from_uri
+from etude.run import runs as stored_runs
+from etude.storage import storage_from_uri
 from etude.train.read import read
 from pydantic import BaseModel, ConfigDict
 
@@ -537,7 +537,7 @@ def _state() -> State:
 def collect(name: str, run: str) -> PairResult | None:
     """Copy a finished run's result here; None when it wrote none."""
     scheduler = default()
-    spec = PairJob.model_validate_json(scheduler.record(run).spec.config or "")
+    spec = PairJob.model_validate_json(scheduler.record(run).launch.spec.config or "")
     outputs = {o.name for o in scheduler.attempts(run)[-1].outputs}
     if f"{name}.json" not in outputs:
         return None
@@ -602,10 +602,10 @@ def follow(revision: str, every: float = 300) -> None:
             if committed_usd(len(state.runs) + 1) > CAP_USD:
                 raise SystemExit(f"{pairing.name} would exceed the ${CAP_USD} cap")
             runs = [Run(job=job(pairing, revision=commit))]
-            cohort = f"mtg186-pair-{pairing.name}"
-            priced = quote(runs, rent=RENT, cohort=cohort, max_usd=PAIRING_USD)
+
+            priced = quote(runs, rent=RENT)
             print(priced.model_dump_json(), flush=True)
-            [run] = queue_cohort(cohort, runs, rent=RENT, max_usd=PAIRING_USD)
+            [run] = queue(runs, rent=RENT)
             state.runs[pairing.name] = run
             STATE.parent.mkdir(parents=True, exist_ok=True)
             STATE.write_text(state.model_dump_json(indent=2) + "\n")

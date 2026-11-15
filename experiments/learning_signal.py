@@ -34,8 +34,8 @@ from etude.eval.records import (
     Model,
     Seating,
 )
-from etude.experiment import ExperimentState, TrainingRun
-from etude.jobs import evaluation
+from etude.experiment import TrainingRun
+from etude.jobs import EvalJob, ExperimentState
 from etude.launch.records import Job, Run
 from etude.report import Curve, Matches, Matrix, Ranking, Report, Score
 from pydantic import BaseModel, ConfigDict
@@ -47,7 +47,7 @@ from manabot.eval.admission import register_checkpoint
 from manabot.eval.benchmark import evaluation_tables
 from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.models import EvaluationKey
-from manabot.experiment.job import TOOLCHAIN_ENV, TrainingJob, machine_setup
+from manabot.experiment.job import TrainingJob, machine_setup
 from manabot.infra.artifacts import local_checkpoint_file
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
@@ -190,7 +190,7 @@ def _environment(design: Design) -> Environment:
     )
 
 
-def training_runs(
+def build_training_jobs(
     recipes: Iterable[TrainingRegime],
     *,
     updates: int,
@@ -279,21 +279,16 @@ def benchmark_jobs(
     benchmark = Benchmark(
         name=name, environment=_environment(design), seatings=matchups
     )
-    job = evaluation(
-        benchmark,
+    job = EvalJob(
+        tournament=benchmark,
         play=play_deal,
+        extras=("evaluation",),
         workers=EVALUATION_WORKERS,
         max_hours=hours,
         max_usd=Decimal(str(usd)),
         setup=machine_setup(" --extra evaluation"),
     )
-    # Etude's default command omits the extra holding its result writer (duckdb).
-    command = job.command.replace(
-        "uv run python",
-        f"{TOOLCHAIN_ENV}\nuv run --locked --extra evaluation python",
-        1,
-    )
-    return [job.model_copy(update={"command": command})]
+    return [job]
 
 
 # --------------------------------------------------------------------------- scoring
