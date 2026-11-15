@@ -140,7 +140,7 @@ function saveResumeCredentials(credentials: ResumeCredentials): void {
   if (!browser) {
     return;
   }
-  window.sessionStorage.setItem(RESUME_STORAGE_KEY, JSON.stringify({...credentials, ...(gameStore.playSession ? {play_session_id: gameStore.playSession.id} : {})}));
+  writeTabValue(RESUME_STORAGE_KEY, JSON.stringify({...credentials, ...(gameStore.playSession ? {play_session_id: gameStore.playSession.id} : {})}));
   rememberRecordCredential(credentials.resume_token);
 }
 
