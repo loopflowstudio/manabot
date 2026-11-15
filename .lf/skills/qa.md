@@ -180,6 +180,15 @@ publish, land or choose the next Graph step from here.
   match and checkpoint; with equal player and reset seeds, every evidence and
   encoder arm must pick identical Commands for a whole game (two 93-decision
   games per arm at 4 worlds × depth 20 took about 90 s).
+- Trained-policy Play/Watch/Search: train a checkpoint at this checkout
+  (`uv run manabot train --recipe local --device cpu --out .runs/<x>`, about
+  30 s) and register `{"provider": "manabot", "artifact": "<abs path>/self-play-raw.safetensors", "config": {}}`
+  with `managym academy --policy <file>.json play|watch`. A checkpoint trained
+  before syncing main can pass the picker yet fail Start with "Failed to load
+  the selected opponent." (catalog vocabulary grew); retrain rather than debug
+  it. Watch resume tokens live in that tab's storage, so reopen a live Watch
+  trace in the same browser context. A completed Play game's evidence opens
+  from `/replay?trace=<id>` (ids from `/api/traces`) via "Inspect bot search".
 - Model or training-path changes: `uv run manabot train --recipe local --device
   cpu --out .runs/<name>` writes `run.json` with per-phase
   seconds (`learning_seconds`, collection and forward splits) for an A/B. The
