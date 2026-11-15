@@ -33,21 +33,22 @@ import statistics
 from typing import Any, Callable
 
 import numpy as np
-import torch
 
-from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.env.opponents import RandomPolicy, build_opponent_policy
+from manabot.policy.protocol import BackendPolicy
+from manabot.training.state.backend import TrainingBackend
 from manabot.verify.games import (
     INTERACTIVE_DECK,
     STANDARD_DECK,
     winner_from_info_or_obs,
 )
 from manabot.verify.util import (
-    _tensor_observation,
+    VerificationConfig,
     build_verification_config,
+    select_agent_action,
     step_with_fallback,
     suppress_truncation_logs,
 )
@@ -92,21 +93,22 @@ class GameProfile:
     aborted: bool = False
 
 
-def _untrained_agent(observation_space: ObservationSpace, config, seed: int):
-    torch.manual_seed(seed)
-    agent = ActorCritic(observation_space, config.agent)
+def _untrained_agent(
+    observation_space: ObservationSpace,
+    config: VerificationConfig,
+    seed: int,
+    *,
+    backend: TrainingBackend,
+) -> BackendPolicy:
+    backend.seed(seed)
+    agent = backend.runtime.create_policy(observation_space, config.agent)
     agent.eval()
     return agent
 
 
-def _agent_policy(agent: ActorCritic) -> Callable[[ObservationBuffers], int]:
+def _agent_policy(agent: BackendPolicy) -> Callable[[ObservationBuffers], int]:
     def policy(obs: ObservationBuffers) -> int:
-        tensor_obs = _tensor_observation(agent, obs)
-        with torch.no_grad():
-            action, _, _, _ = agent.get_action_and_value(
-                tensor_obs, deterministic=False
-            )
-        return int(action.item())
+        return select_agent_action(agent, obs, deterministic=False)
 
     return policy
 
@@ -116,13 +118,17 @@ def build_hero_policy(
     observation_space: ObservationSpace,
     config,
     seed: int,
+    *,
+    backend: TrainingBackend,
 ) -> Callable[[dict[str, np.ndarray]], int]:
     """Hero policies: 'random' (uniform over valid) or 'untrained' (fresh ActorCritic)."""
 
     if name == "random":
         return RandomPolicy()
     if name == "untrained":
-        return _agent_policy(_untrained_agent(observation_space, config, seed))
+        return _agent_policy(
+            _untrained_agent(observation_space, config, seed, backend=backend)
+        )
     raise ValueError(f"Unsupported hero policy: {name}")
 
 
@@ -137,6 +143,7 @@ def play_profile_games(
     villain_deck: dict[str, int] | None = None,
     seat_balanced: bool = False,
     agent_seed: int | None = None,
+    backend: TrainingBackend,
 ) -> list[GameProfile]:
     """Play games and record the decision profile for each one.
 
@@ -170,6 +177,7 @@ def play_profile_games(
         observation_space,
         config,
         seed if agent_seed is None else agent_seed,
+        backend=backend,
     )
     villain_policy = build_opponent_policy(villain_policy_name)
     if villain_policy is None:
@@ -364,6 +372,7 @@ def run_matchup(
     deck: dict[str, int] | None = None,
     seat_balanced: bool = False,
     agent_seed: int | None = None,
+    backend: TrainingBackend,
 ) -> dict[str, Any]:
     profiles = play_profile_games(
         hero_policy_name=hero,
@@ -374,6 +383,7 @@ def run_matchup(
         villain_deck=deck,
         seat_balanced=seat_balanced,
         agent_seed=agent_seed,
+        backend=backend,
     )
     summary = summarize_profiles(profiles)
     return {
@@ -442,6 +452,10 @@ def _print_summary(label: str, summary: dict[str, Any]) -> None:
 
 
 def main() -> None:
+    from manabot.backends import resolve
+
+    backend = resolve("torch")
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--games-random",
@@ -496,6 +510,7 @@ def main() -> None:
                 seed=args.seed,
                 deck=deck,
                 seat_balanced=args.seat_balanced,
+                backend=backend,
             )
         )
     if args.games_untrained > 0:
@@ -513,6 +528,7 @@ def main() -> None:
                     deck=deck,
                     seat_balanced=args.seat_balanced,
                     agent_seed=agent_seed,
+                    backend=backend,
                 )
             )
     for matchup in matchups:

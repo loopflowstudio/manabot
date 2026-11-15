@@ -182,13 +182,14 @@ class PolicyStore:
         self.policies.clear()
 
 
-def _infer(
+def infer_requests(
     store: PolicyStore,
     requests: list[DecisionRequest],
     batch: str,
     *,
     witness: Callable[[np.ndarray, np.ndarray, list[int]], None] | None = None,
 ) -> list[DecisionReply]:
+    """Infer one admitted policy's batch; refuse expired or malformed requests."""
     perf = store.perf
     for request in requests:
         if request.deadline_unix <= time.time():
@@ -294,7 +295,7 @@ def _profiled_infer(
                 torch.cuda.Event(enable_timing=True),
             )
             begin.record()
-        replies = _infer(store, requests, batch)
+        replies = infer_requests(store, requests, batch)
         if execution.device == "cuda":
             end.record()
             end.synchronize()
@@ -460,7 +461,7 @@ def serve(
                     )
                     diagnostics += 1
                 else:
-                    replies = _infer(store, requests, batch)
+                    replies = infer_requests(store, requests, batch)
                 # Pools start lazily (CUDA, profiler); count after each batch
                 # and fail its requests, never attribute them to a player.
                 account_threads(SERVING_BUDGET, perf.counters)

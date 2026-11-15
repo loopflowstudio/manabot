@@ -33,12 +33,7 @@ import time
 from typing import Any, Literal, TypedDict
 
 import numpy as np
-import torch
 
-from manabot.backends.torch.arrays import array_fields
-from manabot.backends.torch.learner import forward_precision
-from manabot.backends.torch.policy import ActorCritic, PolicyInference
-from manabot.backends.torch.rl import NumericalError, policy_logs, require
 from manabot.env.failures import CapturedVector
 from manabot.env.match import Match, Reward
 from manabot.env.observation import (
@@ -50,14 +45,14 @@ from manabot.env.observation import (
 from manabot.infra.config import MatchConfig
 from manabot.infra.profiler import Profiler
 from manabot.policy.buckets import AXES
-from manabot.policy.prepare import Prepared
+from manabot.policy.protocol import BackendPolicy
 from manabot.sim.rollout import (
     BatchedSampler,
     RandomBatchController,
-    _allocate_buffers,
+    allocate_buffers,
 )
 from manabot.training.decks import UniformDecks, pair_match
-from manabot.training.learning import BatchClosure, Precision
+from manabot.training.learning import BatchClosure
 from manabot.training.rollout.actions import ACTION_FIELDS, ActionRows, PackedActions
 from manabot.training.rollout.adaptive import (
     AdaptiveConfig,
@@ -74,6 +69,7 @@ from manabot.training.rollout.matchups import (
     elemental_roster,
     stream_matches,
 )
+from manabot.training.rollout.numerics import CollectionScope, CollectionSession
 from manabot.training.rollout.producers import ShardedVectorEnv
 from manabot.training.rollout.self_play import SelfPlayCounter
 from manabot.training.state.game_errors import (
@@ -347,12 +343,12 @@ class Collector:
     reward: Reward
     num_envs: int
     opponent_mode: str
-    opponent_agent: ActorCritic | None
+    opponent_agent: BackendPolicy | None
     learning_seats: Literal["one", "both"]
     batch_closure: BatchClosure
     games_per_stream: int | None
-    device: torch.device
-    precision: Precision
+    # The backend session owns the device, precision and private sampling RNG.
+    numerics: CollectionSession
     game_errors: GameErrorPolicy | None
     #: Learner seat per stream: stream s seats the learner at s % 2, so
     #: half the streams have the learner on the play — seat-balanced.
@@ -369,7 +365,6 @@ class Collector:
     _buffers: dict[str, np.ndarray]
     _observation_keys: list[str]
     _observations: _ObservationRows
-    _self_rng: torch.Generator
     _record_attempt: RecordAttempt | None
     # The deck source's identity is fixed; every game attempt records it.
     _decks_digest: str | None
@@ -425,18 +420,17 @@ def open_collector(
     num_envs: int,
     seed: int = 0,
     opponent_mode: str = "random",
-    opponent_agent: ActorCritic | None = None,
+    numerics: CollectionSession,
+    opponent_agent: BackendPolicy | None = None,
     learning_seats: Literal["one", "both"] | None = None,
     batch_closure: BatchClosure = "complete-games",
     games_per_stream: int | None = None,
-    device: str = "cpu",
     root: str | None = None,
     matchup_curriculum: Curriculum = "fixed",
     deck_source: UniformDecks | None = None,
     workers: int = 1,
     game_errors: GameErrorPolicy | None = None,
     record_attempt: RecordAttempt | None = None,
-    precision: Precision = "float32",
     adaptive: AdaptiveConfig | None = None,
 ) -> Collector:
     """Start `num_envs` native streams at their first roots.
@@ -446,7 +440,9 @@ def open_collector(
     control, including in self-play. ``batch_closure`` says separately when a
     batch ends: after whole games, or at an exact one-seat quota that
     bootstraps its mid-game tail from the critic. `record_attempt` persists
-    each settled game when `game_errors` is set. The caller closes the
+    each settled game when `game_errors` is set. `numerics` is the backend's
+    collection session: it owns the device, precision and the private sampling
+    RNG for learner rows and current-self opponents. The caller closes the
     collector with `close_collector`.
     """
     if adaptive is not None and (
@@ -527,7 +523,7 @@ def open_collector(
             raise ValueError("unsupported training root")
         env = TargetPracticeVector(observation_space, match, num_envs, seed)
     try:
-        buffers = _allocate_buffers(observation_space, num_envs)
+        buffers = allocate_buffers(observation_space, num_envs)
         slots = num_envs * (2 if learning_seats == "both" else 1)
         observation_keys = [
             key for key in observation_space.shapes if key not in ACTION_FIELDS
@@ -542,8 +538,7 @@ def open_collector(
             learning_seats=learning_seats,
             batch_closure=batch_closure,
             games_per_stream=games_per_stream,
-            device=torch.device(device),
-            precision=precision,
+            numerics=numerics,
             game_errors=game_errors,
             learner_seat=np.arange(num_envs, dtype=np.int64) % 2,
             stream_matches=[match] * num_envs,
@@ -554,9 +549,6 @@ def open_collector(
             _buffers=buffers,
             _observation_keys=observation_keys,
             _observations=_ObservationRows(buffers, observation_keys, 0),
-            _self_rng=torch.Generator(device=torch.device(device)).manual_seed(
-                seed + 1
-            ),
             _record_attempt=record_attempt,
             _decks_digest=deck_source.digest if deck_source is not None else None,
             _uniform_roster=uniform_roster,
@@ -606,7 +598,10 @@ def open_collector(
             collector._opponent = RandomBatchController(seed=seed + 1)
         elif opponent_mode == "frozen":
             collector._opponent = BatchedSampler(
-                opponent_agent, deterministic=False, seed=seed + 1, device=device
+                opponent_agent,
+                deterministic=False,
+                seed=seed + 1,
+                device=numerics.device_name,
             )
         for row in range(num_envs):
             _expose(collector, row, "game_roots")
@@ -679,36 +674,11 @@ def _expose(collector: Collector, row: int, kind: ExposureKind, count: int = 1) 
 
 
 def _opponent_actions(
-    collector: Collector,
-    agent: ActorCritic,
-    rows: np.ndarray,
-    inference: PolicyInference,
+    collector: Collector, rows: np.ndarray, inference: CollectionScope
 ) -> np.ndarray:
     if collector.opponent_mode == "self":
-        obs = inference.prepare(_slice_obs_rows(collector, rows))
-        with torch.inference_mode():
-            with forward_precision(collector.precision, collector.device):
-                logits, _ = agent.forward(obs)
-            logits = logits.float()
-            probs = _policy_logs(logits, obs).exp()
-            actions = torch.multinomial(
-                probs, 1, generator=collector._self_rng
-            ).squeeze(-1)
-        return actions.cpu().numpy().astype(np.int64)
+        return inference.opponent_actions(_slice_obs_rows(collector, rows))
     return collector._opponent.select(collector._buffers, rows)
-
-
-def _policy_logs(logits: torch.Tensor, obs: Prepared[torch.Tensor]) -> torch.Tensor:
-    try:
-        return policy_logs(logits, obs.legal)
-    except NumericalError as error:
-        error.tensors.update(
-            {
-                f"observation/{key}": value.detach()
-                for key, value in array_fields(obs, torch.Tensor).items()
-            }
-        )
-        raise
 
 
 def _slice_obs_rows(collector: Collector, rows: np.ndarray) -> ObservationBuffers:
@@ -739,7 +709,7 @@ def _count_action_types(
 
 def collect(
     collector: Collector,
-    agent: ActorCritic,
+    agent: BackendPolicy,
     num_steps: int,
     *,
     deadline_monotonic: float | None = None,
@@ -758,10 +728,12 @@ def collect(
         raise ValueError("use collect_pair for two learning models")
     # No cache or prepared observation survives learning.
     # Both seats in self-play use this same unchanged behavior-policy scope.
-    with collector.profiler.track("Collection"), PolicyInference(agent) as inference:
+    with (
+        collector.profiler.track("Collection"),
+        collector.numerics.scope(agent) as inference,
+    ):
         batch = _collect(
             collector,
-            agent,
             num_steps,
             inference,
             deadline_monotonic=deadline_monotonic,
@@ -773,7 +745,7 @@ def collect(
 
 def collect_pair(
     collector: Collector,
-    agent: ActorCritic,
+    agent: BackendPolicy,
     num_steps: int,
     *,
     deadline_monotonic: float | None = None,
@@ -786,12 +758,11 @@ def collect_pair(
         raise ValueError("use self mode for a shared learning model")
     with (
         collector.profiler.track("Collection"),
-        PolicyInference(agent) as inference,
-        PolicyInference(collector.opponent_agent) as opponent_inference,
+        collector.numerics.scope(agent) as inference,
+        collector.numerics.scope(collector.opponent_agent) as opponent_inference,
     ):
         batches = _collect(
             collector,
-            agent,
             num_steps,
             inference,
             deadline_monotonic=deadline_monotonic,
@@ -804,24 +775,14 @@ def collect_pair(
 
 def _collect(
     collector: Collector,
-    agent: ActorCritic,
     num_steps: int,
-    inference: PolicyInference,
+    inference: CollectionScope,
     *,
     deadline_monotonic: float | None,
     check: Callable[[], None] | None,
-    opponent_inference: PolicyInference | None = None,
+    opponent_inference: CollectionScope | None = None,
 ) -> RolloutBatch | tuple[RolloutBatch, RolloutBatch]:
 
-    for scope in (inference, opponent_inference):
-        if scope is not None and (
-            scope.device.type != collector.device.type
-            or (
-                collector.device.index is not None
-                and scope.device.index != collector.device.index
-            )
-        ):
-            raise ValueError("collector and inference policy devices differ")
     if collector._needs_assignment or collector._results:
         raise ValueError("commit adaptive targets before the next collection")
     start = time.perf_counter()
@@ -910,7 +871,7 @@ def _collect(
             opp_rows = np.array([], dtype=np.int64)
         if len(learner_rows):
             actions[learner_rows] = _sample_learning_rows(
-                collector, agent, learner_rows, acting, inference
+                collector, learner_rows, acting, inference
             )
             _count_action_types(
                 collector,
@@ -922,19 +883,15 @@ def _collect(
         if len(opp_rows):
             with collector.profiler.track("Opponent policy"):
                 if collector.opponent_mode == "learning":
-                    assert (
-                        collector.opponent_agent is not None
-                        and opponent_inference is not None
-                    )
+                    assert opponent_inference is not None
                     opp_acts = _sample_learning_rows(
                         collector,
-                        collector.opponent_agent,
                         opp_rows,
                         acting,
                         opponent_inference,
                     )
                 else:
-                    opp_acts = _opponent_actions(collector, agent, opp_rows, inference)
+                    opp_acts = _opponent_actions(collector, opp_rows, inference)
             actions[opp_rows] = opp_acts
             if not both:
                 collector.stats.opponent_decisions += len(opp_rows)
@@ -1364,48 +1321,14 @@ def _settle_attempt(
 
 def _sample_learning_rows(
     collector: Collector,
-    agent: ActorCritic,
     rows: np.ndarray,
     acting: np.ndarray,
-    inference: PolicyInference,
+    inference: CollectionScope,
 ) -> np.ndarray:
-    with collector.profiler.track("Observation preparation"):
-        obs_t = inference.prepare(_slice_obs_rows(collector, rows))
-    with collector.profiler.track("Policy inference and action selection"):
-        with torch.no_grad():
-            outcomes: np.ndarray | None = None
-            with forward_precision(collector.precision, collector.device):
-                if agent.config.value_kind == "categorical_wdl":
-                    logits, value_t = agent.forward_distribution(obs_t)
-                else:
-                    logits, value_t = agent(obs_t)
-            logits, value_t = logits.float(), value_t.float()
-            if agent.config.value_kind == "categorical_wdl":
-                outcome_t = value_t.softmax(dim=-1)
-                value_t = outcome_t[:, 2] - outcome_t[:, 0]
-                outcomes = outcome_t.cpu().numpy()
-            logs = _policy_logs(logits, obs_t)
-            require(
-                torch.isfinite(value_t),
-                "nonfinite_collection_values",
-                values=value_t,
-                valid=obs_t.legal,
-            )
-            weights = logs.exp()
-            action_t = torch.multinomial(
-                weights, 1, generator=collector._self_rng
-            ).squeeze(-1)
-            logprob_t = logs.gather(-1, action_t[:, None]).squeeze(-1)
-            log_probabilities = logs.cpu().numpy()
-        acts = action_t.cpu().numpy().astype(np.int64)
-        logprobs = logprob_t.cpu().numpy()
-        values = value_t.view(-1).cpu().numpy()
+    sampled = inference.sample(_slice_obs_rows(collector, rows), collector.profiler)
+    acts, logprobs, values = sampled.actions, sampled.logprobs, sampled.values
+    outcomes, needs = sampled.outcomes, sampled.needs
     with collector.profiler.track("Rollout recording"):
-        needs = (
-            None
-            if obs_t.bucket_needs is None
-            else np.asarray(obs_t.bucket_needs, dtype=np.int64)
-        )
         first = collector._observations.append(rows, needs)
         packed = PackedActions.pack(
             {
@@ -1413,7 +1336,8 @@ def _sample_learning_rows(
                 for key in ACTION_FIELDS
                 if key in collector._buffers
             },
-            log_probabilities,
+            sampled.log_probabilities,
+            validator=collector.numerics,
         )
         for j, row in enumerate(rows):
             slot = (

@@ -123,7 +123,8 @@ def test_independent_adapter_search_plays_watches_and_retains_private_evidence(
         assert game.record_players[1].version == game.trace.config.opponent["sha256"]
         with pytest.raises(HTTPException) as refusal:
             inspect_watch(game.match_id, 0, None)
-        assert refusal.value.status_code == 409
+        assert refusal.value.status_code == 403
+        assert refusal.value.detail == "participant_credential_required"
 
         created = create_watch(
             WatchRequest(
@@ -363,6 +364,13 @@ def test_watch_latest_reconnect_preserves_timeout_history_and_explicit_retry(
             assert row["mirror_retry"] == game.mirror_retry
             assert row["mirror_retry"]["expected_revision"] == 3
             assert game.revision == 3 and game.env.state_digest() == original
+        index_url = f"/api/traces/{created['id']}/recording"
+        index = client.get(index_url, headers=headers)
+        assert index.status_code == 200
+        assert index.json()["mirror_retry"] == game.mirror_retry
+        assert index.json()["mirror"] == [asdict(MirrorSearch())] * 2
+        assert index.json()["can_produce"]
+        assert len(index.json()["positions"]) == 7
         assert client.get(f"{url}/decisions/-1").status_code == 403
         assert client.get(f"{url}/decisions/-2", headers=headers).status_code == 400
         stale = client.post(f"{url}/step", headers=headers, json={"revision": 2})

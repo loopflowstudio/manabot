@@ -37,6 +37,7 @@ from manabot.verify.llm_game import CheckpointOpponent, GameConfig, GameSummary,
 
 if TYPE_CHECKING:
     from manabot.llm.openrouter import OpenRouterSession
+    from manabot.policy.protocol import Backend
 
 
 class Game(BaseModel):
@@ -134,15 +135,22 @@ def play_game(
     match: Match,
     session: "InferenceSession | OpenRouterSession",
     opponent: CheckpointOpponent,
+    *,
+    backend: "Backend",
 ) -> Result:
-    """Play the match's one game and return its rows and record; see the module docstring."""
+    """Play the match's one game and return its rows and record; see the module docstring.
+
+    `backend` runs the seated checkpoint.
+    """
     if match.games != 1:
         raise ValueError("an LLM match is one game")
     game = Game.model_validate(match.config)
     index, _, _ = seated(match)
     with TemporaryDirectory() as scratch:
         record = Path(scratch) / match.key
-        summary = play(game.config(), record, session, opponent=opponent)
+        summary = play(
+            game.config(), record, session, opponent=opponent, backend=backend
+        )
         archive = _archive(record)
     return Result(
         tables=tables(game, summary, llm=index, record=archive), blobs=[archive]

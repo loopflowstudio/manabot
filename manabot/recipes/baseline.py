@@ -66,6 +66,8 @@ def evaluate(
     config: BaselineConfig, directory: Path, *, seed: int, seconds: float = 1680
 ) -> BaselineReport:
     """Evaluate the initial and endpoint policies on the nightly paired-deal cohort."""
+    from manabot.backends import resolve
+
     return report_recipe(
         directory,
         settings(config),
@@ -73,4 +75,5 @@ def evaluate(
         updates=config.updates,
         deals=BASELINE_DEALS,
         seconds=seconds,
+        backend=resolve("torch"),
     )

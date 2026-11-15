@@ -34,7 +34,7 @@ from manabot.infra.identity import StrictModel, file_sha256
 from manabot.sim.execution import EvalExecution
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.replay import read_trace, replay_prefix
-from manabot.sim.serving import PolicyStore, _infer
+from manabot.sim.serving import PolicyStore, infer_requests
 from manabot.sim.serving_protocol import DecisionRequest, PolicyAdmission, PolicyKey
 
 Variant = Literal["cold_scalar", "resident_only", "resident_catalog", "batched"]
@@ -248,7 +248,7 @@ def _numerical_worker(
                         for offset in range(0, len(requests), execution.max_batch_rows):
                             measured_actions.extend(
                                 reply.action
-                                for reply in _infer(
+                                for reply in infer_requests(
                                     store,
                                     requests[
                                         offset : offset + execution.max_batch_rows

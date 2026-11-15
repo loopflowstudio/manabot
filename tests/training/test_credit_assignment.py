@@ -14,6 +14,9 @@ import torch
 from torch import Tensor
 
 import manabot.backends.torch as torch_backend
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rollout import AdmittedRollout
@@ -30,7 +33,10 @@ from manabot.training.rollout.collection import (
     collect_pair,
     open_collector,
 )
-from manabot.training.updates.damped_policy import _targets, update_damped_iteration
+from manabot.training.updates.damped_policy import (
+    compute_targets,
+    update_damped_iteration,
+)
 
 Kind = Literal["scalar", "categorical_wdl"]
 Seats = Literal["one", "both"]
@@ -184,6 +190,7 @@ def collector_for(
         learning_seats=seats,
         batch_closure=closure,
         games_per_stream=games,
+        numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
     )
     collector._env = CreditGames(
         collector._buffers, swapped=swapped, draw=draw, truncated=truncated
@@ -228,7 +235,7 @@ def test_complete_game_targets_and_actual_loss_gradients(
     assert batch.actions.size == len(expected_ids)  # no trajectory padding
     trainer = Learner(agent, "cpu", minibatch_rows=collector.num_envs)
     rule = learning()
-    targets = _targets(
+    targets = compute_targets(
         torch_backend, trainer, AdmittedRollout(trainer.agent, batch), rule
     )
     torch.testing.assert_close(
@@ -307,7 +314,7 @@ def test_exact_quota_uses_same_player_paused_value_and_resamples(
     np.testing.assert_array_equal(batch.next_obs["agent_player"][:, 0, 0], [3, 30])
     assert not any(collector._pending) and not any(collector._streams)
     trainer = Learner(agent, "cpu", minibatch_rows=collector.num_envs)
-    targets = _targets(
+    targets = compute_targets(
         torch_backend,
         trainer,
         AdmittedRollout(trainer.agent, batch),
@@ -341,7 +348,7 @@ def test_draw_reset_has_no_previous_game_credit(seats: Seats) -> None:
     collector = collector_for(agent, seats, games=2)
     batch = collect(collector, agent, 1)
     trainer = Learner(agent, "cpu", minibatch_rows=collector.num_envs)
-    targets = _targets(
+    targets = compute_targets(
         torch_backend,
         trainer,
         AdmittedRollout(trainer.agent, batch),
@@ -380,7 +387,7 @@ def test_distinct_policies_use_their_own_predictions_and_never_each_others_gradi
     # Second model predicts the opposite signed values: .4,-.6,.6.
     # Its B win gives A4=1.6 and A2=-.6-.4+.5*1.6=-.2;
     # its stream-1 A loss gives A11=-1.6.
-    target = _targets(
+    target = compute_targets(
         torch_backend,
         trainers[1],
         AdmittedRollout(trainers[1].agent, b),
@@ -414,7 +421,7 @@ def test_filter_retains_negative_credit_and_critic_coverage(
     batch = collect(collector, agent, 1)
     trainer = Learner(agent, "cpu", minibatch_rows=collector.num_envs)
     rule = learning(min_advantage=0.6, filter_scope=scope)
-    targets = _targets(
+    targets = compute_targets(
         torch_backend, trainer, AdmittedRollout(trainer.agent, batch), rule
     )
     # Magnitude selection includes the losing player's -1.4, not just winners.
@@ -448,6 +455,7 @@ def test_off_policy_actions_never_enter_batch_or_receive_gradients(
         opponent_mode=mode,
         opponent_agent=opponent,
         games_per_stream=1,
+        numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
     )
     collector._env = CreditGames(collector._buffers)
     batch = collect(collector, agent, 1)

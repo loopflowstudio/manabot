@@ -21,6 +21,9 @@ from manabot.backends.torch._semantic_cards import (
     SemanticCardEncoder,
 )
 from manabot.backends.torch._shared_effects import SharedEffectEncoder
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import clipped_surrogate, float64_operand
@@ -208,9 +211,9 @@ def test_mps_w64_single_selected_row_without_program_facts(
         opponent_mode="self",
         learning_seats="one",
         batch_closure="exact-quota",
-        device="mps",
         workers=1,
         deck_source=plan.deck_source,
+        numerics=TorchCollectionSession(device="mps", seed=197, precision="float32"),
     )
     try:
         batch = collect(
@@ -219,7 +222,7 @@ def test_mps_w64_single_selected_row_without_program_facts(
     finally:
         close_collector(collector)
     assert batch.actions.shape == (1, 2)
-    original = damped_policy._targets
+    original = damped_policy.compute_targets
 
     def singleton(
         backend: ModuleType,
@@ -233,7 +236,7 @@ def test_mps_w64_single_selected_row_without_program_facts(
         selected.flatten()[0] = True
         return damped_policy.DampedTargets(targets.advantages, targets.values, selected)
 
-    monkeypatch.setattr(damped_policy, "_targets", singleton)
+    monkeypatch.setattr(damped_policy, "compute_targets", singleton)
     learner = Learner(agent, "mps", minibatch_rows=256)
     result = damped_policy.update_damped_iteration(
         torch_backend, learner, batch, stage.learning, 1

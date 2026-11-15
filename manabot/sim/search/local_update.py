@@ -29,8 +29,9 @@ from numpy.typing import NDArray
 from manabot.belief.checkpoint import load_belief_sampler
 from manabot.belief.likelihood import FrozenPolicyLikelihood, RulesProviderGap
 from manabot.belief.player import ExactRangePlayer, RangeSampling
+from manabot.belief.protocol import SamplerBackend
 from manabot.belief.range import BeliefState
-from manabot.belief.sampling_types import _digest
+from manabot.belief.sampling_types import sampling_digest
 from manabot.belief.state import (
     EmptyBeliefSupport,
     ViewerHistory,
@@ -48,7 +49,7 @@ from manabot.sim.search.local_update_receipt import (
     LocalSearchConfig,
     LocalUpdateReceipt,
     SamplerArtifact,
-    _validate_rollout_audit,
+    validate_rollout_audit,
 )
 from manabot.sim.search.rollout import Rollout
 from manabot.sim.search.rollout_receipt import RolloutReceipt
@@ -79,11 +80,11 @@ def local_search_source_sha256() -> str:
         "manabot/sim/search/sampling.py",
         "manabot/backends/torch/policy.py",
         "manabot/backends/torch/_facts.py",
-        "manabot/belief/sampling.py",
+        "manabot/backends/torch/belief.py",
         "manabot/belief/sampling_data.py",
         "manabot/belief/checkpoint.py",
     )
-    return _digest({path: file_sha256(root / path) for path in paths})
+    return sampling_digest({path: file_sha256(root / path) for path in paths})
 
 
 class LocalUpdateTeacher:
@@ -95,11 +96,14 @@ class LocalUpdateTeacher:
         sha256: str,
         config: LocalSearchConfig,
         *,
+        backend: SamplerBackend,
         sampler: SamplerArtifact | None = None,
         hand_sampler: SearchHandSampler | None = None,
         native_encoder: bool = True,
     ) -> None:
-        self.likelihood = FrozenPolicyLikelihood(checkpoint, expected_sha256=sha256)
+        self.likelihood = FrozenPolicyLikelihood(
+            checkpoint, expected_sha256=sha256, backend=backend
+        )
         self.agent = self.likelihood.agent
         if self.agent.belief_count_buckets:
             raise ValueError("local search requires an observation-only policy")
@@ -123,24 +127,28 @@ class LocalUpdateTeacher:
         self.sampler_artifact = sampler
         self._sampler_authority: SearchHandSampler | None = None
         if sampler is not None:
-            if sampler.policy_identity != sha256 or sampler.world_identity != _digest(
-                self.agent.world_binding
+            if (
+                sampler.policy_identity != sha256
+                or sampler.world_identity != sampling_digest(self.agent.world_binding)
             ):
                 raise ValueError(
                     "sampler generating policy or world differs from rollout policy"
                 )
             model = load_belief_sampler(
                 sampler.path,
+                codec=backend.belief,
                 expected_checkpoint_identity=sampler.sha256,
                 expected_dataset_identity=sampler.dataset_identity,
                 expected_schema_identity=sampler.schema_identity,
                 expected_policy_identity=sha256,
                 expected_world_identity=sampler.world_identity,
             )
-            model.requires_grad_(False)
+            backend.belief.freeze_sampler(model)
             self._sampler_authority = LearnedHandSampler(model, sampler.sha256)
         elif config.sampling == "compatible_prior":
-            self._sampler_authority = PhysicalHandSampler()
+            self._sampler_authority = PhysicalHandSampler(
+                backend.belief.PhysicalDistribution()
+            )
         self.hand_sampler = self._sampler_authority
         if hand_sampler is not None:
             if (
@@ -328,8 +336,8 @@ class LocalUpdateTeacher:
                 raise ValueError(
                     "injected sampler preparation differs from source root"
                 )
-            world_identity = _digest(constraints)
-            belief_digest = _digest(asdict(prepared))
+            world_identity = sampling_digest(constraints)
+            belief_digest = sampling_digest(asdict(prepared))
             belief_model = (
                 f"approximate-learned-hand/sha256:{self.hand_sampler.identity}"
                 if self.config.sampling == "learned"
@@ -471,7 +479,7 @@ class LocalUpdateTeacher:
         for row in rollouts:
             check()
             receipt = row.receipt(viewer)
-            _validate_rollout_audit(
+            validate_rollout_audit(
                 receipt.branch_audit_json,
                 receipt.canonical_commands,
                 full=full_evidence,

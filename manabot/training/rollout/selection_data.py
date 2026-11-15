@@ -6,18 +6,16 @@ outcomes enter only after the game ends. No gradients or policy updates occur.
 Rows are ordered by game, seat, then decision for same-viewer estimators.
 """
 
+from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
 import tempfile
-from typing import Literal
+from typing import TYPE_CHECKING, Literal, Protocol
 
+import numpy as np
 from pydantic import ConfigDict, Field, model_validator
-import torch
 
-from manabot.backends.torch.arrays import device_of, on_device
-from manabot.backends.torch.checkpoint import load_checkpoint, load_metadata
-from manabot.backends.torch.policy import ActorCritic
 from manabot.env.failures import ScalarCapture
 from manabot.env.match import Match
 from manabot.env.observation import ACTION_TYPE_DIM, ObservationSpace
@@ -25,10 +23,32 @@ from manabot.infra.config import MatchConfig
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.world import validate_agent_setup
-from manabot.policy.prepare import reference_distribution
+from manabot.policy.protocol import BackendPolicy
 from manabot.training.regime import SelectionGameSpec, Strict
 import managym
 from managym.decision import Command, DecisionFrame, Observation
+
+if TYPE_CHECKING:
+    from manabot.training.state.backend import TrainingBackend
+
+
+@dataclass(frozen=True)
+class SelectionPrediction:
+    action: int
+    value: float
+    probability: float
+    entropy: float
+    reference_kl: float
+
+
+class SelectionPredictor(Protocol):
+    """Frozen-policy numerics with an independently seeded game-local stream."""
+
+    def predict(
+        self,
+        encoded: dict[str, np.ndarray],
+        reference: Literal["uniform", "action_type_uniform"],
+    ) -> SelectionPrediction: ...
 
 
 class FrozenRecord(Strict):
@@ -84,15 +104,15 @@ class SelectionDataset(FrozenRecord):
         return self
 
 
-@torch.inference_mode()
 def collect_selection_game(
-    agent: ActorCritic,
+    agent: BackendPolicy,
     space: ObservationSpace,
     match: Match,
     spec: SelectionGameSpec,
     path: Path,
     *,
     reference: Literal["uniform", "action_type_uniform"],
+    predictor: SelectionPredictor,
     max_steps: int,
 ) -> SelectionGame:
     """Retain a replayable journal, including partial evidence on cap/failure.
@@ -109,7 +129,6 @@ def collect_selection_game(
     env = managym.Env(seed=spec.seed, skip_trivial=True)
     capture = ScalarCapture(spec.seed, True)
     raw, _ = capture.reset(env, match.to_rust())
-    generator = torch.Generator().manual_seed(spec.action_seed)
     rows: list[SelectionDecision] = []
     capture.context["receipt_path"] = str(path)
     with (
@@ -141,35 +160,18 @@ def collect_selection_game(
             encoded = space.encode(raw)
             if len(frame.offers) != int(encoded["actions_valid"].sum()):
                 raise ValueError("selection policy cannot encode every legal offer")
-            tensors = on_device(
-                agent.prepare(
-                    {key: value[None] for key, value in encoded.items()},
-                    inference=True,
-                ),
-                device_of(agent),
-            )
-            logits, value = agent(tensors)
-            probabilities = logits.softmax(-1)
-            action = int(torch.multinomial(probabilities[0], 1, generator=generator))
-            logs = probabilities.clamp_min(1e-12).log()
-            ref = torch.from_numpy(
-                reference_distribution(
-                    {k: encoded[k][None] for k in ("actions_valid", "actions")},
-                    reference,
-                )
-            )
+            prediction = predictor.predict(encoded, reference)
+            action = prediction.action
             row = SelectionDecision(
                 step=len(rows),
                 actor=actor,
                 observation_identity=observation.viewer_state_hash,
                 action=action,
                 action_type=int(encoded["actions"][action, :ACTION_TYPE_DIM].argmax()),
-                value=float(value.item()),
-                action_probability=float(probabilities[0, action]),
-                entropy=float(-(probabilities * logs).sum()),
-                reference_kl=float(
-                    (probabilities * (logs - ref.clamp_min(1e-12).log())).sum()
-                ),
+                value=prediction.value,
+                action_probability=prediction.probability,
+                entropy=prediction.entropy,
+                reference_kl=prediction.reference_kl,
             )
             command = Command(
                 f"selection-{spec.seed}-{row.step}",
@@ -249,12 +251,14 @@ def collect_selection(
     match: MatchConfig,
     reference: Literal["uniform", "action_type_uniform"] = "action_type_uniform",
     max_steps: int = 2000,
+    backend: "TrainingBackend",
 ) -> Path:
     """Freeze a policy's complete-game diagnostics, retaining partial replay journals.
 
     Population seeds and both assignments in each whole-game split are checked
     before play. Existing output must bind the same policy, population and inputs.
     Retained dataset keys `stage_id` and `policy_stage_id` name the output files.
+    `backend` loads the policy and makes each game's seeded predictor.
     """
     if len(population) < 4 or len({game.seed for game in population}) != len(
         population
@@ -286,11 +290,11 @@ def collect_selection(
         if saved.collection_sha256 != collection_digest:
             raise ValueError("selection output belongs to other collection inputs")
         return out
-    agent, space = load_checkpoint(str(policy))
+    agent, space = backend.load_policy(str(policy))
     out.parent.mkdir(parents=True, exist_ok=True)
     journals = Path(tempfile.mkdtemp(prefix=f"{out.stem}-games-", dir=out.parent))
     base_match = Match(match)
-    payload = load_metadata(policy)
+    payload = backend.metadata(str(policy))
     weights = payload.get("bc", {}).get("weights")
     if weights not in {"raw", "ema"}:
         raise ValueError("selection checkpoint must identify raw or EMA weights")
@@ -306,6 +310,7 @@ def collect_selection(
             spec,
             journal,
             reference=reference,
+            predictor=backend.collection.SelectionPredictor(agent, spec.action_seed),
             max_steps=max_steps,
         )
         if replay_selection_game(journal) != len(game.rows):

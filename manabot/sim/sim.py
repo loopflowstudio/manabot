@@ -15,6 +15,7 @@ from enum import Enum
 import logging
 import os
 from pathlib import Path
+import random
 import tempfile
 import threading
 import time
@@ -26,7 +27,6 @@ import numpy as np
 
 # Local imports
 from manabot.backends import resolve
-from manabot.backends.torch.random import seed_random
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
@@ -548,9 +548,13 @@ def run_simulation(
 ) -> None:
     """Run a simulation sweep for hero/villain model specs."""
     setGlobalLogLevel(getattr(logging, runtime_config.log_level.upper(), logging.INFO))
-    seed_random(
-        runtime_config.seed, torch_deterministic=runtime_config.torch_deterministic
-    )
+    random.seed(runtime_config.seed)
+    np.random.seed(runtime_config.seed)
+    if backend is not None:
+        backend.seed_training(
+            runtime_config.seed,
+            torch_deterministic=runtime_config.torch_deterministic,
+        )
     with track(
         experiment=runtime_config.name,
         clocks=[Step("games", "completed evaluation games")],

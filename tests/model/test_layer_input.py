@@ -15,6 +15,9 @@ from manabot.backends.torch.checkpoint import (
     load_checkpoint,
     save_checkpoint,
 )
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import (
@@ -61,6 +64,7 @@ def test_recipe_collector_and_evaluation_select_saved_input(tmp_path: Path) -> N
         opponent_mode="self",
         learning_seats="one",
         batch_closure="exact-quota",
+        numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
     )
     try:
         model = ActorCritic(space, recipe.model)

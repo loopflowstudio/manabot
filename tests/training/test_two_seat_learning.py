@@ -7,6 +7,9 @@ import pytest
 import torch
 
 import manabot.backends.torch as torch_backend
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import transition_gae
@@ -96,6 +99,7 @@ def _collector(
         opponent_agent=second,
         learning_seats=seats,
         games_per_stream=games,
+        numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
     )
     if scripted:
         collector._env = ScriptedGames(collector._buffers)
@@ -228,6 +232,7 @@ def test_off_policy_opponents_cannot_train_both_seats(mode: str) -> None:
             opponent_mode=mode,
             opponent_agent=agent,
             learning_seats="both",
+            numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
         )
 
 
@@ -306,6 +311,7 @@ def test_collector_defaults_follow_policy_ownership() -> None:
             num_envs=2,
             opponent_mode=mode,
             opponent_agent=_agent(),
+            numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
         )
         assert collector.learning_seats == seats
         close_collector(collector)

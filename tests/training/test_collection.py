@@ -4,6 +4,9 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
@@ -45,6 +48,7 @@ def _make_collector(
         learning_seats="one",
         batch_closure="exact-quota",
         opponent_agent=opponent_agent,
+        numerics=TorchCollectionSession(device="cpu", seed=seed, precision="float32"),
     )
 
 

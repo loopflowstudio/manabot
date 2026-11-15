@@ -2,7 +2,7 @@ import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 import MirrorControl from './MirrorControl.svelte';
 import MirrorThinking from './MirrorThinking.svelte';
-import { parseMirrors, type MirrorSearch } from '$lib/watch';
+import { parseMirrors, type MirrorSearch } from '$lib/mirror';
 
 const spec: MirrorSearch = { algorithm: 'local_update', belief: 'physical_deal',
   worlds: 4, depth: 2, alpha: 0.02, beta: 1, decision_seconds: 30 };

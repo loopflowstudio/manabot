@@ -8,6 +8,9 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.env.match import Match, Reward
 from manabot.env.observation import (
@@ -83,6 +86,7 @@ def _policy(
         num_envs=2,
         seed=91,
         opponent_mode="self",
+        numerics=TorchCollectionSession(device="cpu", seed=91, precision="float32"),
     )
     return PolicyFixture(
         agent, collector, collection._slice_obs_rows(collector, np.arange(2))
@@ -284,8 +288,8 @@ def test_prepared_collection_matches_reference() -> None:
     for key, value in _batch_tensors(actual).items():
         torch.testing.assert_close(value, _batch_tensors(expected)[key], atol=0, rtol=0)
     torch.testing.assert_close(
-        optimized.collector._self_rng.get_state(),
-        reference.collector._self_rng.get_state(),
+        optimized.collector.numerics.snapshot_rng(),
+        reference.collector.numerics.snapshot_rng(),
         atol=0,
         rtol=0,
     )

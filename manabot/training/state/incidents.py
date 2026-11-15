@@ -3,24 +3,21 @@
 These are debugging artifacts, never admitted policies or process-recovery
 snapshots. Keep a separate directory per failure, at most 32 MiB of evidence and
 512 MiB of model/Adam/EMA state. No environment variables or arbitrary locals.
+The backend's `TrainingState` captures and serializes its framework tensors.
 """
 
-from collections.abc import Mapping
 import json
 from pathlib import Path
-import random
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import numpy as np
-import torch
-from torch import Tensor
 
-from manabot.backends.torch.rl import NumericalError
 from manabot.model.world import checkpoint_source
+from manabot.policy.protocol import BackendPolicy
+from manabot.training.state.backend import NumericalIncident, TrainingState
+from manabot.training.updates.backend import Learner
 
 if TYPE_CHECKING:
-    from manabot.backends.torch.learner import Learner
-    from manabot.backends.torch.policy import ActorCritic
     from manabot.training.loops.self_play import Counts
     from manabot.training.rollout.collection import Collector, RolloutBatch
 
@@ -29,21 +26,11 @@ STATE_BYTES = 512 * 1024**2
 MAX_ROWS = 16
 
 
-def _tensor_bytes(value: object) -> int:
-    if isinstance(value, Tensor):
-        return value.numel() * value.element_size()
-    if isinstance(value, Mapping):
-        return sum(_tensor_bytes(v) for v in value.values())
-    if isinstance(value, (tuple, list)):
-        return sum(_tensor_bytes(v) for v in value)
-    return 0
-
-
 def save_incident(
     directory: Path,
-    error: NumericalError,
-    learner: "Learner",
-    ema: "ActorCritic | None",
+    error: NumericalIncident,
+    learner: Learner,
+    ema: BackendPolicy | None,
     counts: "Counts",
     collector: "Collector",
     batch: "RolloutBatch | None",
@@ -51,127 +38,31 @@ def save_incident(
     *,
     out: Path,
     settings_digest: str,
+    backend: TrainingState,
+    framework: dict[str, str | None],
 ) -> list[Path]:
     """Write unique terminal evidence; propagate capture errors to caller notes.
 
     RNG is captured at failure, not reconstructed at collection time. Exact
     offending rows and the full current learner/Adam are enough to inspect or
     repeat a failing loss; this is NOT a promise to replay an entire iteration.
+    `framework` names the framework versions the source record carries.
     """
     directory.mkdir(mode=0o700, parents=True, exist_ok=False)
-    tensors = dict(error.tensors)
-    batch_tensors: dict[str, Tensor] = {}
-    if batch is not None:
-        for name in (
-            "actions",
-            "logprobs",
-            "values",
-            "rewards",
-            "dones",
-        ):
-            batch_tensors[f"batch/{name}"] = torch.as_tensor(getattr(batch, name))
-        # Packed rows remain compact in incident artifacts. Offsets and slots
-        # are required to reconstruct original Commands and full distributions.
-        packed = batch.action_data
-        for name in ("offsets", "slots", "log_probabilities"):
-            batch_tensors[f"packed_actions/{name}"] = torch.as_tensor(
-                getattr(packed, name)
-            )
-        batch_tensors["packed_actions/capacity"] = torch.tensor(packed.capacity)
-        batch_tensors.update(
-            {
-                f"packed_actions/{key}": torch.as_tensor(value)
-                for key, value in packed.fields.items()
-            }
-        )
-        batch_tensors.update(
-            {
-                f"observation/{k}": torch.as_tensor(v)
-                for k, v in batch.ordered_obs().items()
-            }
-        )
-        batch_tensors.update(
-            {
-                f"next_observation/{k}": torch.as_tensor(v)
-                for k, v in batch.next_obs.items()
-            }
-        )
-    tensors.update(batch_tensors)
-    full_batch = _tensor_bytes(batch_tensors) <= EVIDENCE_BYTES // 2
-    evidence: dict[str, Tensor] = {}
-    shapes: dict[str, object] = {}
-    remaining = EVIDENCE_BYTES
-    failed = tensors.get("failed")
-    row_shape = failed.shape if failed is not None else None
-    row_indexes: Tensor | None = None
-    # Most invariants reduce actions last. Retain the offending row indexes,
-    # including a late row; never only save the first rows of a failed batch.
-    valid = tensors.get("valid")
-    if valid is not None:
-        row_shape = valid.shape[:-1]
-        if failed is not None and failed.shape == valid.shape:
-            failed = failed.any(-1)
-        if failed is not None and failed.shape == row_shape:
-            row_indexes = failed.flatten().nonzero().flatten()[:MAX_ROWS]
-        if row_indexes is None or not row_indexes.numel():
-            row_indexes = torch.arange(min(MAX_ROWS, valid.numel() // valid.shape[-1]))
-    for name, tensor in tensors.items():
-        finite = torch.isfinite(tensor)
-        finite_values = tensor[finite]
-        shapes[name] = {
-            "shape": list(tensor.shape),
-            "dtype": str(tensor.dtype),
-            "device": str(tensor.device),
-            "nonfinite_count": int((~finite).sum()),
-            "zero_count": int((tensor == 0).sum()),
-            "finite_min": float(finite_values.min()) if finite_values.numel() else None,
-            "finite_max": float(finite_values.max()) if finite_values.numel() else None,
-        }
-        if name in batch_tensors and full_batch:
-            sample = tensor
-        elif (
-            row_shape is not None
-            and row_indexes is not None
-            and tuple(tensor.shape[: len(row_shape)]) == tuple(row_shape)
-        ):
-            sample = tensor.reshape(-1, *tensor.shape[len(row_shape) :])[
-                row_indexes.to(tensor.device)
-            ]
-        else:
-            sample = tensor.flatten()[:2048]
-        needed = sample.numel() * sample.element_size()
-        if needed <= remaining:
-            evidence[name] = sample.detach().cpu().clone()
-            remaining -= needed
-        else:
-            shapes[name]["omitted"] = "evidence byte budget"
-    if row_indexes is not None:
-        evidence["row_indexes"] = row_indexes.cpu()
+    captured = backend.capture_incident(
+        error,
+        learner,
+        collector,
+        batch,
+        ema,
+        rng,
+        evidence_bytes=EVIDENCE_BYTES,
+        max_rows=MAX_ROWS,
+    )
     evidence_path = directory / "tensors.pt"
-    torch.save(evidence, evidence_path)
-    # torch optimizer/RNG state is a heterogeneous library boundary. Nothing
-    # from process locals, credentials or arbitrary objects enters this payload.
-    captured: dict[str, Any] = {
-        "model": learner.agent.state_dict(),
-        "gradients": {
-            name: p.grad
-            for name, p in learner.agent.named_parameters()
-            if p.grad is not None
-        },
-        "optimizer": learner.optimizer.state_dict(),
-        "ema": ema.state_dict() if ema is not None else None,
-        "torch_rng": torch.get_rng_state(),
-        "cuda_rng": {
-            str(device): torch.cuda.get_rng_state(device)
-            for device in {p.device for p in learner.agent.parameters() if p.is_cuda}
-        },
-        "collector_rng": collector._self_rng.get_state(),
-        "numpy_rng": rng.bit_generator.state,
-        "python_rng": random.getstate(),
-    }
-    if any(p.device.type == "mps" for p in learner.agent.parameters()):
-        captured["mps_rng"] = torch.mps.get_rng_state()
-    size = _tensor_bytes(captured)
+    with evidence_path.open("wb") as output:
+        backend.save(captured.evidence, output)
+    size = captured.state_tensor_bytes
     paths = [evidence_path]
     metadata = {
         "schema": 2,
@@ -182,20 +73,12 @@ def save_incident(
         "stage": "self-play",
         "iteration": counts.updates + 1,
         "completed_updates": counts.updates,
-        "source": {
-            **checkpoint_source(),
-            "torch": str(torch.__version__),
-            "cuda": torch.version.cuda,
-        },
-        "tensors": shapes,
+        "source": {**checkpoint_source(), **framework},
+        "tensors": captured.shapes,
         "state_tensor_bytes": size,
         "state_limit_bytes": STATE_BYTES,
         "evidence_limit_bytes": EVIDENCE_BYTES,
-        "full_batch_captured": bool(batch_tensors)
-        and all(
-            name in evidence and evidence[name].shape == value.shape
-            for name, value in batch_tensors.items()
-        ),
+        "full_batch_captured": captured.full_batch_captured,
         "sampling_contract": "masked-log-softmax-v1",
         "attempted_collection": collector.stats.to_dict(),
         "last_valid_exports": [
@@ -205,7 +88,8 @@ def save_incident(
     }
     if size <= STATE_BYTES:
         state_path = directory / "state.pt"
-        torch.save(captured, state_path)
+        with state_path.open("wb") as output:
+            backend.save(captured.state, output)
         paths.append(state_path)
         metadata["state"] = "captured at failure (may itself be invalid)"
     else:

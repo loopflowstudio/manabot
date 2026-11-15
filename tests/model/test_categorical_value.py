@@ -9,6 +9,9 @@ import torch
 import torch.nn.functional as F
 
 from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
@@ -47,6 +50,7 @@ def _collector(agent: ActorCritic) -> Collector:
         num_envs=2,
         seed=17,
         batch_closure="exact-quota",
+        numerics=TorchCollectionSession(device="cpu", seed=17, precision="float32"),
     )
 
 

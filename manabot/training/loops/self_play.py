@@ -259,9 +259,12 @@ def self_play_collector(
         record_attempt=record_attempt,
         matchup_curriculum=settings.matchup_curriculum,
         deck_source=settings.deck_source,
-        device=settings.device,
         workers=settings.workers,
-        precision=settings.precision,
+        numerics=torch_backend.collection.CollectionSession(
+            device=settings.device,
+            seed=seed + COLLECTION_SEED + start,
+            precision=settings.precision,
+        ),
     )
 
     collector.profiler.enabled = True
@@ -514,6 +517,8 @@ def step(
                 rng,
                 out=out,
                 settings_digest=learner_digest(settings),
+                backend=torch_backend.state,
+                framework={"torch": str(torch.__version__), "cuda": torch.version.cuda},
             )
         except Exception as capture_error:
             error.add_note(f"incident capture failed: {capture_error}")

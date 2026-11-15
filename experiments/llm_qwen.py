@@ -47,6 +47,7 @@ from etude.report import Matches, Matrix, Ranking, Report, Score
 from etude.spec import Variable
 
 from experiments.elemental_grid import DECKS, PACK
+from manabot.backends import resolve
 from manabot.llm.schema import InferenceConfig
 from manabot.llm.session import InferenceSession
 from manabot.llm.vllm_runtime import VLLMRuntime
@@ -110,7 +111,7 @@ def play(match: Match[Game]) -> Result:
     inference = InferenceConfig.model_validate(llm.config)
     served = partial(VLLMRuntime, identity_path=output() / "vllm-identity.json")
     with InferenceSession(inference, load_seconds=60, factory=served) as session:
-        return play_game(match, session, opponent)
+        return play_game(match, session, opponent, backend=resolve("torch"))
 
 
 def eval_jobs(state: ExperimentState) -> list[EvalJob]:

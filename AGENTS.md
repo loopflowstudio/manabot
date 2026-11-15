@@ -76,6 +76,8 @@ separate from deliberate human decisions.
 Academy resume credentials and the started-launch marker live in browser
 `sessionStorage`. Keep them scoped together; a launch must not resume another
 tab's or another launch's game.
+Game-file imports send original JSON source spans: JavaScript numeric parsing and
+re-encoding can round u64 identities and invalidate retained digests.
 Watch history is the selected acting viewer's recorded track strictly before
 that decision's `presentation_cursor`; spectator reveal never supplies history
 labels. Event emphasis stays separate from choice focus and lane navigation.
@@ -147,8 +149,8 @@ checkpoints or experiment evidence.
   `manabot.backends.*`. Only composition roots choose one: `experiments/`,
   `scripts/`, recipe entry points, the CLI and child-process entry points, `manabot/sim/policy_provider.py` and the
   backends' tests, by import or `manabot.backends.resolve("torch")`.
-  `tests/test_package_boundaries.py` lists the remaining exceptions by name;
-  that list only shrinks ([who chooses a backend](manabot/backends/README.md#who-chooses-a-backend)).
+  `tests/test_package_boundaries.py` enforces roots and named entry-point scopes
+  in mixed CLI/library modules ([who chooses a backend](manabot/backends/README.md#who-chooses-a-backend)).
 - Generic backend learning helpers (`rl`, `learner`, `arrays`) keep role-specific
   types under `TYPE_CHECKING`; importing their annotations at runtime must not
   pull in checkpoint, player, observation or training-configuration modules.
@@ -671,6 +673,9 @@ CLI subcommands import their execution runtime at the command boundary when
 needed to keep migration/help available without the training SDK.
 
 ### Etude training records
+
+Etude preserves a checkpoint's source suffix. Worker tests wait for a registered
+checkpoint through the SDK, rather than assuming the file ends in `.pt`.
 
 Training row tables belong under the metric run's `artifacts/`, named by their
 content digest, with `.partial` staging before atomic rename. Etude's tracker

@@ -12,6 +12,9 @@ from manabot.backends.torch.checkpoint import (
     load_checkpoint,
     save_checkpoint,
 )
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
@@ -52,7 +55,12 @@ def _agent(space: ObservationSpace, **kwargs: object) -> ActorCritic:
 
 def _collected(agent: ActorCritic) -> dict[str, torch.Tensor]:
     collector = open_collector(
-        agent.observation_space, _match(), Reward(RewardConfig()), num_envs=1, seed=111
+        agent.observation_space,
+        _match(),
+        Reward(RewardConfig()),
+        num_envs=1,
+        seed=111,
+        numerics=TorchCollectionSession(device="cpu", seed=111, precision="float32"),
     )
     batch = collect(collector, agent, 16)
     nonempty = np.flatnonzero(

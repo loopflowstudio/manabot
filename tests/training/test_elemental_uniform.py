@@ -8,7 +8,10 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.backends.torch.policy import ActorCritic, PolicyInference
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
@@ -21,6 +24,7 @@ from manabot.training.rollout.collection import (
     open_collector,
 )
 from manabot.training.rollout.matchups import elemental_roster
+from manabot.training.rollout.numerics import CollectionScope
 from manabot.training.state.game_errors import (
     GameAttempt,
     GameErrorPolicy,
@@ -51,6 +55,7 @@ def _collector(
         learning_seats=learning_seats,
         batch_closure="exact-quota" if learning_seats == "one" else "complete-games",
         matchup_curriculum="elemental-uniform",
+        numerics=TorchCollectionSession(device="cpu", seed=17402, precision="float32"),
     )
 
 
@@ -115,6 +120,9 @@ def test_uniform_draws_agree_across_producer_counts(workers: int) -> None:
             learning_seats="both",
             matchup_curriculum="elemental-uniform",
             workers=count,
+            numerics=TorchCollectionSession(
+                device="cpu", seed=17402, precision="float32"
+            ),
         )
         for count in (1, workers)
     ]
@@ -167,6 +175,9 @@ def test_uniform_256_stream_roots_and_full_roster_admission() -> None:
                 matchup_curriculum="elemental-uniform",
                 opponent_mode=mode,
                 root=root,
+                numerics=TorchCollectionSession(
+                    device="cpu", seed=0, precision="float32"
+                ),
             )
     native = managym.VectorEnv(num_envs=1, seed=174, player_policies=("agent", "agent"))
     with pytest.raises(RuntimeError, match="every exact Elemental"):
@@ -196,19 +207,19 @@ def test_uniform_crash_refill_retains_sampled_setups(
         matchup_curriculum="elemental-uniform",
         game_errors=policy,
         record_attempt=lambda state, row: append_attempt(ledger, state, row, {}),
+        numerics=TorchCollectionSession(device="cpu", seed=17402, precision="float32"),
     )
     original = collection._sample_learning_rows
     calls = 0
 
     def sample(
         collector: Collector,
-        agent: ActorCritic,
         rows: np.ndarray,
         acting: np.ndarray,
-        inference: PolicyInference,
+        inference: CollectionScope,
     ) -> np.ndarray:
         nonlocal calls
-        actions = original(collector, agent, rows, acting, inference)
+        actions = original(collector, rows, acting, inference)
         calls += 1
         if calls == 4:
             actions[0] = -1

@@ -3,12 +3,10 @@
 from dataclasses import FrozenInstanceError, replace
 import json
 
-from managym.decision import Observation, PublicCommitment
-from managym.possible_worlds import PossibleWorldSpace
 import numpy as np
 import pytest
 
-from manabot.belief.demo import _runtime_env
+from manabot.belief.demo import runtime_env
 from manabot.belief.encoding import belief_schema_from_engine
 from manabot.belief.population import (
     BehaviorPopulationProvenance,
@@ -24,6 +22,8 @@ from manabot.belief.population import (
 from manabot.belief.range import BeliefError
 from manabot.belief.state import ViewerHistory, ViewerHistoryEvent
 from manabot.recipes.belief import run_demo
+from managym.decision import Observation, PublicCommitment
+from managym.possible_worlds import PossibleWorldSpace
 from tests.belief.support import fixture_history, fixture_schema, fixture_space
 
 
@@ -179,7 +179,7 @@ def test_population_split_is_by_episode_and_provenance_is_not_packed() -> None:
 
 
 def test_supervision_matches_hand_and_rejects_another_revision() -> None:
-    env, _ = _runtime_env()
+    env, _ = runtime_env()
     engine = env._engine
     viewer = int(engine.current_agent_index())
     observation = Observation.from_json(engine.semantic_observation_json(viewer))

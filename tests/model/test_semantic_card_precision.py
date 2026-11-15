@@ -17,6 +17,9 @@ import torch
 from torch import nn
 
 from manabot.backends.torch._semantic_cards import SemanticCardEncoder
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.learner import forward_precision
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.env.match import Match, Reward
@@ -108,6 +111,7 @@ def test_cuda_semantic_policy_admission(declared: Literal["float32", "bf16"]) ->
         num_envs=2,
         seed=26400,
         opponent_mode="self",
+        numerics=TorchCollectionSession(device="cpu", seed=26400, precision="float32"),
     )
     try:
         host = collection._slice_obs_rows(collector, np.arange(2))

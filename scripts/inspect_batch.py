@@ -17,6 +17,9 @@ import numpy as np
 import torch
 
 import manabot.backends.torch as torch_backend
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rollout import AdmittedRollout
@@ -31,7 +34,10 @@ from manabot.training.rollout.collection import (
     collect,
     open_collector,
 )
-from manabot.training.updates.damped_policy import _targets, update_damped_iteration
+from manabot.training.updates.damped_policy import (
+    compute_targets,
+    update_damped_iteration,
+)
 
 STREAMS = 2
 
@@ -59,7 +65,7 @@ def _trajectories(ends: np.ndarray) -> list[range]:
 def _report(
     batch: RolloutBatch, learner: Learner, learning: DampedPolicyLearning, rows: int
 ) -> None:
-    targets = _targets(
+    targets = compute_targets(
         torch_backend, learner, AdmittedRollout(learner.agent, batch), learning
     )
     advantages = targets.advantages.flatten().numpy()
@@ -107,6 +113,9 @@ def main() -> None:
         num_envs=STREAMS,
         seed=args.seed,
         opponent_mode="self",
+        numerics=TorchCollectionSession(
+            device="cpu", seed=args.seed, precision="float32"
+        ),
     )
     learner = Learner(agent, "cpu", minibatch_rows=STREAMS)
     try:

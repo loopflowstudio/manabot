@@ -48,7 +48,7 @@ from manabot.sim.serving_protocol import (
     InferenceFailure,
     PolicyKey,
 )
-from manabot.sim.supervision import _failure, _infrastructure_failure
+from manabot.sim.supervision import failure_record, infrastructure_failure
 from manabot.sim.threads import GAME_BUDGET, ThreadBudgetExceeded, account_threads
 from managym.decision import Command, DecisionFrame
 from managym.experience import UNVERSIONED_CONTENT_HASH
@@ -117,7 +117,7 @@ def _census(game: dict[str, Any]) -> None:
     try:
         account_threads(GAME_BUDGET, game["worker_performance"]["counters"])
     except ThreadBudgetExceeded as exc:
-        _infrastructure_failure(game, str(exc))
+        infrastructure_failure(game, str(exc))
 
 
 def execute_game(
@@ -337,7 +337,7 @@ def execute_game(
                 )
             ):
                 game["integrity"]["truncations"] += 1
-                _failure(
+                failure_record(
                     game, "truncated", "environment or observation truncated", None
                 )
                 break
@@ -350,13 +350,13 @@ def execute_game(
                 )
                 break
         else:
-            _failure(game, "command_cap", "game exceeded its Command cap", None)
+            failure_record(game, "command_cap", "game exceeded its Command cap", None)
     except BaseException as exc:
         if not isinstance(exc, Exception) and type(exc).__name__ != "PanicException":
             raise
         game["failure_trace"] = traceback.format_exc()
         game["error_class"] = type(exc).__name__
-        _failure(
+        failure_record(
             game,
             "crash",
             f"{type(exc).__name__}: {exc}",

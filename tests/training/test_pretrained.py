@@ -6,6 +6,7 @@ from etude.train.tracking import track
 import pytest
 import torch
 
+from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.recipes.builders import gray_ogre_self_play
 from manabot.training.loops.self_play import CLOCKS, create, self_play
 
@@ -21,7 +22,7 @@ def test_pretrained_weights_start_with_fresh_optimizer_and_counts(
     ) as run:
         path = self_play(settings, run, updates=1)
     learner, _ = create(settings.model_copy(update={"pretrained": path}), seed=198)
-    saved = torch.load(path, weights_only=False)["model_state_dict"]
+    saved = load_checkpoint(path)[0].state_dict()
     for name, value in learner.agent.state_dict().items():
         torch.testing.assert_close(value, saved[name], rtol=0, atol=0)
     assert not learner.optimizer.state

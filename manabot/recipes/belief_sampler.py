@@ -22,6 +22,9 @@ class BeliefConfig(BaseModel):
 
 
 def train(config: BeliefConfig) -> None:
+    from manabot.backends import resolve
+
+    backend = resolve("torch")
     with track(clocks=["steps"], config=config) as run:
         policy = run.input("start")  # the policy run's final checkpoint
         histories = collect_belief(
@@ -30,9 +33,15 @@ def train(config: BeliefConfig) -> None:
             match=belief_policy.match(),
             games=config.games,
             seed=run.seed,
+            backend=backend,
             max_steps=config.max_steps,
         )
         sampler = train_belief(
-            histories, run.out / "belief.pt", config.sampler, seed=run.seed
+            histories,
+            run.out / "belief.pt",
+            config.sampler,
+            seed=run.seed,
+            backend=backend.belief_fit,
+            codec=backend.belief,
         )
         run.checkpoint(sampler, steps=config.sampler.steps)

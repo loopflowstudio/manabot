@@ -566,7 +566,7 @@ that record compound fields remain readable.
 
 ### Selection diagnostics
 
-`collect_selection(policy, out, population, match=...)` (`manabot.training.rollout.selection_data`)
+`collect_selection(policy, out, population, match=..., backend=resolve("torch"))` (`manabot.training.rollout.selection_data`)
 freezes a checkpoint's raw or EMA policy and collects a declared population
 with unique seeds and whole-game development/held-out splits; no weights
 change. It returns at once when `out` binds the same policy, population, match,
@@ -584,7 +584,8 @@ from:
 
 ```python
 histories = collect_belief(Path("inputs/producer-ema.safetensors"), run.out / "histories.json",
-                           match=match, games=256, seed=run.seed)
+                           match=match, games=256, seed=run.seed,
+                           backend=resolve("torch"))
 ```
 
 `load_checkpoint` refuses a checkpoint from another world or with other model

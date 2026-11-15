@@ -136,13 +136,13 @@ def read_updates(source: Path, records: Iterable[_Run]) -> dict[str, Updates]:
     """
     wanted = {Path(r.metrics_run).name for r in records if r.metrics_run}
     return {
-        run: _updates(read(source, experiment, run))
+        run: updates_from_run(read(source, experiment, run))
         for experiment, run in runs(source)
         if run in wanted
     }
 
 
-def _updates(data: RunData) -> Updates:
+def updates_from_run(data: RunData) -> Updates:
     """Each update's metrics, by `etude.train.read`'s rule on the updates clock.
 
     A later attempt's rows replace an earlier attempt's from the update it

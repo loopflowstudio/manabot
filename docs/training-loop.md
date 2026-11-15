@@ -79,7 +79,7 @@ of rows and `A` for padded legal offers.
 
 | Piece | What it does |
 | --- | --- |
-| `open_collector` (`manabot.training.rollout.collection`) | Opens native game streams as a `Collector`. `collect(collector, agent, decisions)` plays with `agent` and returns a `RolloutBatch`; `collect_pair(collector, agent, decisions)` returns one batch per model when `opponent_mode="learning"` and `opponent_agent` is a second learner. `close_collector(collector)` stops the streams. |
+| `open_collector` (`manabot.training.rollout.collection`) | Opens native game streams as a `Collector`; the required `numerics` session (`backend.collection.CollectionSession(device=..., seed=..., precision=...)`) owns the device, precision and private sampling RNG. `collect(collector, agent, decisions)` plays with `agent` and returns a `RolloutBatch`; `collect_pair(collector, agent, decisions)` returns one batch per model when `opponent_mode="learning"` and `opponent_agent` is a second learner. `close_collector(collector)` stops the streams. |
 | `RolloutBatch` | One update's rows, `[T,E]`. Complete games are packed into one column separated by end flags. `rewards`, `dones` (an end belongs to that row), `values` (critic at collection), `actions`, `logprobs` (behavior log likelihood of the chosen action), `next_obs` for bootstrapping an unfinished tail, and `outcome_probabilities` `[T,E,3]` for a categorical critic. `observations(indexes)` materializes flat rows as NumPy observation buffers and the full behavior distribution. |
 | `AdmittedRollout(agent, batch)` (`manabot.backends.torch.rollout`) | Checks a batch's policy input against `agent` once, so the model's forward does no validation. `admit_rows(indexes, chunk_rows)` admits the rows an update will train; `rows(indexes, device)` prepares learner rows on the host, independently of autograd mode, and returns the `Prepared` batch on `device` with an `ActionRows` whose `log_probabilities` `[B,A]` (NumPy) are the behavior log likelihoods a KL or ratio term reads, and raises `ValueError` for a row not admitted. `legal(prepared)` is those rows' legal-action input `[B,A]`. `minibatches(order, size, device)` returns the same learner preparation with one host batch prefetched. `next_observation(device)` returns inference-prepared bootstrap rows, one per column, independently of autograd mode. The batch must not change afterwards. |
 
@@ -132,7 +132,7 @@ None of these change the update; call them when you want the numbers.
 | Piece | Module | Records |
 | --- | --- | --- |
 | `batch_health(action_data, advantages, selected, *, actor_only)` | `manabot.training.updates.health` | A `NumericalHealth` record for the batch: legal-logit range, underflow, forced rows, zero advantages, rows each head trains on. Pass `batch.action_data`. |
-| `OptimizerHealth(health, iteration, profiler=None, *, backend=...)` | `manabot.training.updates.health` | The player's step recorder. Pass as `learner.step(loss, max_grad_norm, recorder=observer)` (or to torch's `gradient_step`) to count steps and rejections into the `batch_health` record and, on iteration 1 and every 25th, sample gradient norms (including the critic readout's) and the parameter change. With a profiler, backward and the optimizer step are timed. |
+| `OptimizerHealth(health, iteration, profiler=None, *, backend)` | `manabot.training.updates.health` | The player's step recorder. Pass as `learner.step(loss, max_grad_norm, recorder=observer)` (or to torch's `gradient_step`) to count steps and rejections into the `batch_health` record and, on iteration 1 and every 25th, sample gradient norms (including the critic readout's) and the parameter change. With a profiler, backward and the optimizer step are timed. |
 | `clip_fraction(log_ratio, clip)` | `backend.rl` | The fraction of rows whose likelihood ratio left `1 ± clip`, the record's `clip_fraction`. |
 | `selection_diagnostics(advantages, residuals, selected, ends, action_types)` | `manabot.training.updates.selection` | Advantage and residual quantiles by action type and distance to the game's end ([reading a run](learning.md#reading-a-run)). Every argument is `[T,E]` host rows (NumPy, or CPU tensors): `ends` is `batch.dones` and `action_types` is `batch.action_data.selected_types(batch.actions, ACTION_TYPE_DIM)` (`manabot.env.observation`). |
 
@@ -225,6 +225,7 @@ from pydantic import BaseModel, Field
 import torch
 
 from manabot.backends.torch import learner, rl
+from manabot.backends.torch.collection import CollectionSession
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rollout import AdmittedRollout
 from manabot.env.match import Match, Reward
@@ -270,6 +271,8 @@ def train(config: MinimalConfig) -> None:
             num_envs=config.streams,
             seed=run.seed + start,
             opponent_mode="self",  # one model plays and learns from both seats
+            # Torch numerics on the CPU; this session samples both seats' actions.
+            numerics=CollectionSession(device="cpu", seed=run.seed + start),
         )
         try:
             for update in run.steps("updates", to=config.updates):

@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 import torch
 
+from manabot.backends import resolve
 from manabot.belief.checkpoint import load_belief_sampler
 from manabot.belief.sampling_data import (
     SamplerDataset,
@@ -52,6 +53,7 @@ def test_fit_generalizes_public_history_and_reloads_bound_bytes(tmp_path: Path) 
         learning_rate=0.03,
         evaluation_samples=16,
         seed=7,
+        backend=resolve("torch").belief_fit,
     )
     assert result.optimizer_exposures == 400
     assert (
@@ -63,7 +65,9 @@ def test_fit_generalizes_public_history_and_reloads_bound_bytes(tmp_path: Path) 
     assert result.metrics.parameter_bytes > 0
     assert result.metrics.test.learned.peak_python_bytes > 0
     checkpoint = tmp_path / "belief.pt"
-    identity = save_belief_sampler(checkpoint, result, dataset)
+    identity = save_belief_sampler(
+        checkpoint, result, dataset, codec=resolve("torch").belief_fit
+    )
     bindings = {
         "expected_dataset_identity": dataset.identity,
         "expected_policy_identity": dataset.policy_identity,
@@ -71,7 +75,7 @@ def test_fit_generalizes_public_history_and_reloads_bound_bytes(tmp_path: Path) 
         "expected_schema_identity": dataset.schema.identity,
         "expected_checkpoint_identity": identity,
     }
-    loaded = load_belief_sampler(checkpoint, **bindings)
+    loaded = load_belief_sampler(checkpoint, **bindings, codec=resolve("torch").belief)
     rows = dataset.games[2].examples
     inputs = [row.inputs for row in rows]
     targets = torch.tensor([row.target_hand for row in rows])
@@ -83,12 +87,21 @@ def test_fit_generalizes_public_history_and_reloads_bound_bytes(tmp_path: Path) 
     )
     for key in bindings:
         with pytest.raises(ValueError, match="identity mismatch"):
-            load_belief_sampler(checkpoint, **{**bindings, key: "changed"})
+            load_belief_sampler(
+                checkpoint,
+                **{**bindings, key: "changed"},
+                codec=resolve("torch").belief,
+            )
     with pytest.raises(FileExistsError):
-        save_belief_sampler(checkpoint, result, dataset)
+        save_belief_sampler(
+            checkpoint, result, dataset, codec=resolve("torch").belief_fit
+        )
     with pytest.raises(ValueError, match="different dataset"):
         save_belief_sampler(
-            tmp_path / "wrong.pt", result, replace(dataset, policy_identity="foreign")
+            tmp_path / "wrong.pt",
+            result,
+            replace(dataset, policy_identity="foreign"),
+            codec=resolve("torch").belief_fit,
         )
 
 
@@ -117,6 +130,7 @@ def test_held_out_labels_do_not_change_fit_and_dropout_is_training_only() -> Non
         history_dropout=0.5,
         evaluation_samples=2,
         seed=4,
+        backend=resolve("torch").belief_fit,
     )
     second = fit_belief_sampler(
         changed,
@@ -126,14 +140,27 @@ def test_held_out_labels_do_not_change_fit_and_dropout_is_training_only() -> Non
         history_dropout=0.5,
         evaluation_samples=2,
         seed=4,
+        backend=resolve("torch").belief_fit,
     )
     for name, tensor in first.model.state_dict().items():
         torch.testing.assert_close(
             tensor, second.model.state_dict()[name], rtol=0, atol=0
         )
     first.model.train()
-    a = evaluate_sampler(first.model, dataset.games[2].examples, samples=4, seed=10)
-    b = evaluate_sampler(first.model, dataset.games[2].examples, samples=4, seed=10)
+    a = evaluate_sampler(
+        first.model,
+        dataset.games[2].examples,
+        samples=4,
+        seed=10,
+        backend=resolve("torch").belief_fit,
+    )
+    b = evaluate_sampler(
+        first.model,
+        dataset.games[2].examples,
+        samples=4,
+        seed=10,
+        backend=resolve("torch").belief_fit,
+    )
     assert a.learned.joint_nll == b.learned.joint_nll
     assert a.learned.inclusion_brier == b.learned.inclusion_brier
     assert first.model.training
@@ -144,7 +171,9 @@ def test_budget_callback_stops_before_fit() -> None:
         raise TimeoutError("bounded attempt exhausted")
 
     with pytest.raises(TimeoutError, match="bounded attempt"):
-        fit_belief_sampler(_dataset(), steps=100, check=expired)
+        fit_belief_sampler(
+            _dataset(), steps=100, check=expired, backend=resolve("torch").belief_fit
+        )
 
 
 def test_foreign_baiting_is_identified_and_safe_baseline_retained() -> None:
@@ -157,12 +186,15 @@ def test_foreign_baiting_is_identified_and_safe_baseline_retained() -> None:
         learning_rate=0.03,
         evaluation_samples=4,
         seed=7,
+        backend=resolve("torch").belief_fit,
     )
     # Synthetic adversarial policy reverses the training history/hand relation.
     bait = tuple(
         replace(row, target_hand=tuple(reversed(row.target_hand)))
         for row in dataset.games[2].examples
     )
-    metrics = evaluate_sampler(result.model, bait, samples=8)
+    metrics = evaluate_sampler(
+        result.model, bait, samples=8, backend=resolve("torch").belief_fit
+    )
     assert metrics.learned.joint_nll > metrics.physical_baseline.joint_nll
     assert metrics.physical_baseline.support_violations == 0

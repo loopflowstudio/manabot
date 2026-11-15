@@ -9,6 +9,9 @@ import pytest
 import torch
 
 import manabot.backends.torch as torch_backend
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.env.match import Match, Reward
@@ -43,6 +46,7 @@ def _policy(*, history: bool = True) -> tuple[ActorCritic, RolloutBatch]:
         num_envs=2,
         seed=91,
         opponent_mode="self",
+        numerics=TorchCollectionSession(device="cpu", seed=91, precision="float32"),
     )
     return agent, collect(collector, agent, 8)
 

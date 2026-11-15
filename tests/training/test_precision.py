@@ -9,6 +9,9 @@ import torch
 
 import manabot.backends.torch as torch_backend
 from manabot.backends.torch import learner as torch_learner
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
@@ -229,7 +232,7 @@ def test_bf16_wraps_exactly_the_policy_forwards_and_keeps_float32_outputs(
         return real(declared, device)
 
     for module in (
-        "manabot.training.rollout.collection",
+        "manabot.backends.torch.collection",
         "manabot.backends.torch.learner",
     ):
         monkeypatch.setattr(f"{module}.forward_precision", recorded)
@@ -240,7 +243,7 @@ def test_bf16_wraps_exactly_the_policy_forwards_and_keeps_float32_outputs(
         num_envs=2,
         opponent_mode="self",
         learning_seats="both",
-        precision="bf16",
+        numerics=TorchCollectionSession(device="cpu", seed=0, precision="bf16"),
     )
 
     batch = collect(collector, agent, 1)

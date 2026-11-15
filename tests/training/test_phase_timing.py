@@ -34,7 +34,11 @@ DAMPED_PHASES = {
 SURROGATE_PHASES = DAMPED_PHASES - {
     "Batch transfer and behavior checks",
     "Targets",
-} | {"Batch transfer, targets and behavior checks"}
+} | {
+    "Batch transfer, targets and behavior checks",
+    # PPO prepares the next host minibatch while the current one trains.
+    "Minibatches/Preparation wait and transfer",
+}
 
 
 def _rules() -> list[tuple[DampedPolicyLearning | Learning, set[str]]]:

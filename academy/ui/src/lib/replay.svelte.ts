@@ -1,90 +1,139 @@
-import { buildReplayFrames } from './replay';
-import type { ReplayFrame, Trace, TraceSummary } from './types';
+import { recordFetch } from './records';
+import type { RecordedPosition, RecordingIndex } from './recording';
 
+/** One read cursor for all recordings; producing is an explicit edge capability.
+ * Selection generations reject reads after a seek or reader pause. A separate
+ * source generation lets a pending producer refresh only its own recording.
+ */
 export class ReplayStore {
-  summaries = $state<TraceSummary[]>([]);
-  trace = $state<Trace | null>(null);
-  frames = $state<ReplayFrame[]>([]);
-  currentFrameIndex = $state(0);
+  index = $state<RecordingIndex | null>(null);
+  current = $state<RecordedPosition | null>(null);
+  selected = $state(0);
   playing = $state(false);
   speed = $state(1);
-  loadingList = $state(false);
-  loadingTrace = $state(false);
-  errorMessage = $state<string | null>(null);
+  busy = $state(false);
+  producing = $state(false);
+  error = $state('');
+  reveal = $state(false);
+  nearSeat = $state(0);
+  private generation = 0;
+  private id = '';
+  private sourceGeneration = 0;
 
-  setSummaries(summaries: TraceSummary[]): void {
-    this.summaries = summaries;
+  request(path: string, init: RequestInit = {}): Promise<Response> {
+    const token = sessionStorage.getItem(`etude.watch.${this.id}`);
+    const headers = new Headers(init.headers);
+    if (token) headers.set('x-etude-participant-token', token);
+    return recordFetch(path, {...init, headers});
   }
 
-  setLoadingList(next: boolean): void {
-    this.loadingList = next;
+  async api<T>(path: string, body?: unknown): Promise<T> {
+    const response = await this.request(path, {
+      headers: { 'content-type': 'application/json' },
+      ...(body === undefined ? {} : { method: 'POST', body: JSON.stringify(body) }),
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      if (typeof payload.detail?.message === 'string') throw new Error(payload.detail.message);
+      throw new Error(typeof payload.detail === 'string' ? payload.detail.replaceAll('_', ' ') : `Request failed (${response.status})`);
+    }
+    return response.json() as Promise<T>;
   }
 
-  setLoadingTrace(next: boolean): void {
-    this.loadingTrace = next;
+  private async readIndex(id: string): Promise<RecordingIndex> {
+    const index = await this.api<RecordingIndex>(`/api/traces/${encodeURIComponent(id)}/recording`);
+    while (index.next_offset !== null) {
+      const page = await this.api<RecordingIndex>(`/api/traces/${encodeURIComponent(id)}/recording?offset=${index.next_offset}`);
+      if (page.revision !== index.revision || page.total !== index.total) throw new Error('The recording changed while reading. Refresh to read the saved head.');
+      index.positions.push(...page.positions);
+      index.next_offset = page.next_offset;
+    }
+    return index;
   }
 
-  setError(message: string | null): void {
-    this.errorMessage = message;
+  async open(id: string, key?: string): Promise<void> {
+    const generation = ++this.generation;
+    ++this.sourceGeneration;
+    this.id = id; this.playing = false; this.busy = true; this.current = null; this.index = null; this.producing = false; this.error = '';
+    try {
+      const index = await this.readIndex(id);
+      if (generation !== this.generation) return;
+      this.index = index;
+      const selected = key ? index.positions.findIndex(position => position.key === key) : Math.max(0, index.positions.findIndex(position => position.kind === 'choice'));
+      if (selected < 0) { this.error = 'Saved position is unavailable. Select an available position.'; this.busy = false; return; }
+      await this.seek(selected);
+    } catch (reason) { if (generation === this.generation) this.fail(reason); }
+    finally { if (generation === this.generation) this.busy = false; }
   }
 
-  loadTrace(trace: Trace): void {
-    this.trace = trace;
-    this.frames = buildReplayFrames(trace);
-    this.currentFrameIndex = 0;
+  async seek(selected: number, animate = false): Promise<void> {
+    if (!this.index || this.producing) return;
+    if (!animate) this.playing = false;
+    const position = this.index.positions[selected];
+    if (!position) return;
+    const generation = ++this.generation;
+    this.busy = true; this.error = '';
+    try {
+      // Reveal is a per-choice capability. Consequences never borrow it.
+      const reveal = this.reveal && position.can_reveal;
+      let current = await this.api<RecordedPosition>(`/api/traces/${encodeURIComponent(this.id)}/positions/${encodeURIComponent(position.key)}?reveal=${reveal}`);
+      if (generation !== this.generation) return;
+      // A large transition can span history pages. Retain every ordered beat
+      // of this action before playback, with bounded requests and stale guards.
+      while (current.kind === 'consequences' && current.history_before !== null && (current.history[0]?.seq ?? current.cursor) > current.transition_start) {
+        const earlier = await this.api<RecordedPosition>(`/api/traces/${encodeURIComponent(this.id)}/positions/${encodeURIComponent(position.key)}?before=${current.history_before}`);
+        if (generation !== this.generation) return;
+        current = {...current, history: [...earlier.history, ...current.history], history_labels: [...earlier.history_labels, ...current.history_labels], history_before: earlier.history_before};
+      }
+      this.current = current; this.selected = selected;
+    } catch (reason) { if (generation === this.generation) this.fail(reason); }
+    finally { if (generation === this.generation) this.busy = false; }
+  }
+
+  async produce(): Promise<void> {
+    if (!this.index?.can_produce || this.producing || this.busy || this.selected !== this.index.positions.length - 1) return;
+    this.producing = true; this.error = '';
+    const oldLength = this.index.positions.length;
+    const generation = this.generation;
+    const sourceGeneration = this.sourceGeneration;
+    const id = this.id;
+    try {
+      await this.api(`/api/watch/${encodeURIComponent(this.id)}/step`, {revision: this.index.revision});
+      const index = await this.readIndex(id);
+      if (sourceGeneration !== this.sourceGeneration) return;
+      this.index = index;
+      this.producing = false;
+      if (generation !== this.generation) return;
+      // Latest was replaced by the newly appended choice, never revision - 1.
+      await this.seek(Math.min(oldLength - 1, this.index.positions.length - 1), true);
+    } catch (reason) {
+      if (sourceGeneration !== this.sourceGeneration) return;
+      this.fail(reason);
+      // A lost reply may already have committed. Read the head, never retry here.
+      try {
+        const index = await this.readIndex(id);
+        if (sourceGeneration === this.sourceGeneration) this.index = index;
+      }
+      catch { /* Preserve the original failure and the retained board. */ }
+      if (sourceGeneration !== this.sourceGeneration) return;
+      this.error += ' Refresh the saved head before explicitly continuing.';
+    } finally { if (sourceGeneration === this.sourceGeneration) this.producing = false; }
+  }
+
+  async next(animate = false): Promise<void> {
+    if (!this.index || this.busy || this.producing) return;
+    // A paused producer can replace the old latest marker with a saved choice.
+    if (this.current?.key !== this.index.positions[this.selected]?.key) await this.seek(this.selected, animate);
+    else if (this.selected + 1 < this.index.positions.length) await this.seek(this.selected + 1, animate);
+    else if (this.index.can_produce) await this.produce();
+    else this.playing = false;
+  }
+  pause(): void {
+    ++this.generation;
     this.playing = false;
-    this.errorMessage = null;
+    this.busy = false;
   }
-
-  setFrame(index: number): void {
-    if (this.frames.length === 0) {
-      this.currentFrameIndex = 0;
-      this.playing = false;
-      return;
-    }
-
-    const nextIndex = Math.max(0, Math.min(index, this.frames.length - 1));
-    this.currentFrameIndex = nextIndex;
-    if (nextIndex >= this.frames.length - 1) {
-      this.playing = false;
-    }
-  }
-
-  nextFrame(): void {
-    this.setFrame(this.currentFrameIndex + 1);
-  }
-
-  previousFrame(): void {
-    this.setFrame(this.currentFrameIndex - 1);
-  }
-
-  togglePlaying(): void {
-    if (this.frames.length <= 1) {
-      this.playing = false;
-      return;
-    }
-
-    if (this.currentFrameIndex >= this.frames.length - 1) {
-      this.playing = false;
-      return;
-    }
-
-    this.playing = !this.playing;
-  }
-
-  setSpeed(speed: number): void {
-    this.speed = speed;
-  }
-
-  tick(): void {
-    if (!this.playing) {
-      return;
-    }
-
-    this.nextFrame();
-  }
+  cancelReads(): void { ++this.sourceGeneration; this.pause(); }
+  private fail(reason: unknown): void { this.error = reason instanceof Error ? reason.message : String(reason); this.playing = false; }
 }
-
-export function createReplayStore(): ReplayStore {
-  return new ReplayStore();
-}
+export function createReplayStore(): ReplayStore { return new ReplayStore(); }

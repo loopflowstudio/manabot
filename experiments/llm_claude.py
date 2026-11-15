@@ -47,6 +47,7 @@ from etude.records import ArtifactRef
 from etude.report import Matches, Matrix, Ranking, Report, Score
 
 from experiments.elemental_grid import DECKS, PACK
+from manabot.backends import resolve
 from manabot.llm.budget import BudgetConfig, BudgetLedger
 from manabot.llm.openrouter import OpenRouterConfig, OpenRouterSession
 from manabot.verify.llm_match import (
@@ -116,7 +117,7 @@ def play(match: Match[Game]) -> Result:
     ledger.check_admission()
     inference = OpenRouterConfig.model_validate(llm.config)
     with OpenRouterSession(inference, budget=ledger, budget_owner=match.key) as session:
-        return play_game(match, session, opponent)
+        return play_game(match, session, opponent, backend=resolve("torch"))
 
 
 def eval_jobs(state: ExperimentState) -> list[EvalJob]:

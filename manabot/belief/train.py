@@ -5,8 +5,13 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field
 
 from manabot.belief.checkpoint import load_belief_sampler
+from manabot.belief.protocol import SamplerCodec
 from manabot.belief.sampling_data import read_dataset
-from manabot.belief.sampling_fit import fit_belief_sampler, save_belief_sampler
+from manabot.belief.sampling_fit import (
+    BeliefTrainer,
+    fit_belief_sampler,
+    save_belief_sampler,
+)
 
 
 class SamplerConfig(BaseModel):
@@ -23,14 +28,26 @@ class SamplerConfig(BaseModel):
 
 
 def train_belief(
-    histories: Path, out: Path, config: SamplerConfig, *, seed: int
+    histories: Path,
+    out: Path,
+    config: SamplerConfig,
+    *,
+    seed: int,
+    backend: BeliefTrainer,
+    codec: SamplerCodec,
 ) -> Path:
-    """Fit on `histories` and write the sampler to `out`; the policy is untouched."""
+    """Fit on `histories` and write the sampler to `out`; the policy is untouched.
+
+    `backend` fits and encodes the sampler; `codec` restores it for admission.
+    """
     dataset = read_dataset(histories)
-    result = fit_belief_sampler(dataset, **config.model_dump(), seed=seed)
-    identity = save_belief_sampler(out, result, dataset)
+    result = fit_belief_sampler(
+        dataset, **config.model_dump(), seed=seed, backend=backend
+    )
+    identity = save_belief_sampler(out, result, dataset, codec=backend)
     load_belief_sampler(
         out,
+        codec=codec,
         expected_dataset_identity=dataset.identity,
         expected_policy_identity=dataset.policy_identity,
         expected_schema_identity=dataset.schema.identity,

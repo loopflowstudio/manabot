@@ -12,6 +12,9 @@ import pytest
 import torch
 
 import manabot.backends.torch as torch_backend
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import transition_gae
@@ -241,6 +244,7 @@ def _tolerant_collector(
         batch_closure=closure,
         game_errors=ledger.policy,
         record_attempt=lambda state, row: append_attempt(ledger, state, row, {}),
+        numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
     )
 
 
@@ -411,6 +415,7 @@ def test_native_partial_vector_and_replay(workers: int) -> None:
         num_envs=3,
         opponent_mode="self",
         workers=workers,
+        numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
     )
     try:
         _assert_native_failure_replay(collector)

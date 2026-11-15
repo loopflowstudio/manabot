@@ -10,7 +10,7 @@ from etude.train.tracking import track
 import pytest
 
 from manabot.training.rollout.self_play import SelfPlayCounter, SelfPlayOutcome
-from manabot.training.update_metrics import OUTCOME_TABLE, _updates, metric_row
+from manabot.training.update_metrics import OUTCOME_TABLE, metric_row, updates_from_run
 
 
 def _outcomes(pairs: int = 2) -> list[SelfPlayOutcome]:
@@ -48,7 +48,7 @@ def test_outcome_tables_ship_and_read_from_relocated_run(tmp_path: Path) -> None
 
     data = read(destination, "outcome-tables", run.name)
     assert data.metrics() == ["loss"]
-    assert _updates(data) == {1: {"loss": 0.25, **_projected(outcomes)}}
+    assert updates_from_run(data) == {1: {"loss": 0.25, **_projected(outcomes)}}
 
 
 @pytest.mark.parametrize("missing_original_attempt", [False, True])
@@ -76,7 +76,7 @@ def test_update_selection_matches_sdk_with_clock_only_and_rewound_attempts(
             # Retained blocks can outlive their attempt metadata. Their wall
             # clock still orders them before later recorded attempts.
             data = data.model_copy(update={"writers": data.writers[1:]})
-        rows = {update: row["loss"] for update, row in _updates(data).items()}
+        rows = {update: row["loss"] for update, row in updates_from_run(data).items()}
         points = data.points("loss", "updates")
         assert rows == dict(zip(points.x, points.y, strict=True))
         return rows
@@ -101,7 +101,7 @@ def test_update_selection_matches_sdk_with_clock_only_and_rewound_attempts(
             )
         }
     )
-    assert _updates(legacy) == {1: {"loss": 1}, 2: {"loss": 2}}
+    assert updates_from_run(legacy) == {1: {"loss": 1}, 2: {"loss": 2}}
 
 
 def test_resume_selects_tables_and_preserves_historical_rows(tmp_path: Path) -> None:
@@ -123,7 +123,7 @@ def test_resume_selects_tables_and_preserves_historical_rows(tmp_path: Path) -> 
         resume=True,
     ) as resumed:
         resumed.log({"loss": 1.5}, updates=2)
-    assert _updates(read(tmp_path, "outcome-resume", run.name)) == {
+    assert updates_from_run(read(tmp_path, "outcome-resume", run.name)) == {
         1: historical,
         2: {"loss": 1.5},
     }
@@ -140,7 +140,7 @@ def test_resume_selects_tables_and_preserves_historical_rows(tmp_path: Path) -> 
         resumed.log({"loss": 2.0}, updates=2)
         resumed.log_table(OUTCOME_TABLE, outcomes, updates=2)
         resumed.log_table(OUTCOME_TABLE, [], updates=3)
-    assert _updates(read(tmp_path, "outcome-resume", run.name)) == {
+    assert updates_from_run(read(tmp_path, "outcome-resume", run.name)) == {
         1: historical,
         2: {"loss": 2.0, **_projected(outcomes)},
         3: {},
@@ -157,4 +157,4 @@ def test_retired_outcome_references_name_the_revision_that_reads_them(
     ) as run:
         run.log({"self_play_outcomes/table": "0" * 64, "loss": 0.5}, updates=1)
     with pytest.raises(ValueError, match="bf4e280f7"):
-        _updates(read(tmp_path, "outcome-retired", run.name))
+        updates_from_run(read(tmp_path, "outcome-retired", run.name))

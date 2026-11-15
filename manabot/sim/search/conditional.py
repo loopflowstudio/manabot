@@ -41,10 +41,10 @@ from manabot.sim.search.branch import (
 )
 from manabot.sim.search.puct import (
     LeafEvaluator,
+    Node,
     UniformRandomLeafEvaluator,
-    _mix_seed,
-    _Node,
-    _simulate,
+    mix_seed,
+    simulate,
 )
 from manabot.sim.search.runtime import DEFAULT_MAX_PLAYOUT_STEPS
 
@@ -517,7 +517,7 @@ def _search_one_condition(
     world_root_values: list[float] = []
 
     for slot, world_idx in enumerate(selected):
-        world_seed = _mix_seed(seed, slot)
+        world_seed = mix_seed(seed, slot)
         materialize = getattr(prior.world_space, "materialize_for_search", None)
         if materialize is None:
             raise ConditionalSearchError(
@@ -534,12 +534,12 @@ def _search_one_condition(
                 f"condition '{condition_id}' world {world_idx} changed root "
                 f"action count from {action_count} to {int(world.action_count())}"
             )
-        root = _Node.from_env(world, priors=root_priors.copy())
+        root = Node.from_env(world, priors=root_priors.copy())
         tree_nodes += 1
         world_value = 0.0
         for sim_idx in range(per_world[slot]):
-            rollout_seed = _mix_seed(world_seed, sim_idx + 1)
-            value, hit_cap, depth, added = _simulate(
+            rollout_seed = mix_seed(world_seed, sim_idx + 1)
+            value, hit_cap, depth, added = simulate(
                 root,
                 hero=hero,
                 c_puct=c_puct,
@@ -648,7 +648,7 @@ def conditional_determinized_puct(
     worlds : int
         Maximum number of worlds to search per condition.
     seed : int
-        Base seed. Paired across conditions via ``_mix_seed``.
+        Base seed. Paired across conditions via ``mix_seed``.
 
     Returns
     -------

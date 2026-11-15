@@ -8,6 +8,9 @@ import numpy as np
 from pydantic import ValidationError
 import pytest
 
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.env.match import Match, Reward
 from manabot.experiment.attacks import AttackPlan, AttackTarget
 from manabot.infra.config import MatchConfig, RewardConfig
@@ -172,6 +175,7 @@ def test_collector_rejects_exact_quota_with_whole_game_settings(
             opponent_mode="self",
             batch_closure="exact-quota",
             **fields,
+            numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
         )
 
 
@@ -197,6 +201,7 @@ def _one_seat(closure: BatchClosure) -> Collector:
         opponent_mode="self",
         learning_seats="one",
         batch_closure=closure,
+        numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
     )
     collector._env = ScriptedGames(collector._buffers)
     return collector

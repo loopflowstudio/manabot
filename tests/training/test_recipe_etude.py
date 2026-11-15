@@ -8,6 +8,7 @@ from etude.train.tracking import track
 import pytest
 
 from experiments import belief
+from manabot.backends.torch.checkpoint import BACKEND as TORCH
 from manabot.belief.sampling_data import read_dataset
 from manabot.recipes.belief_sampler import BeliefConfig, train
 from manabot.recipes.builders import gray_ogre_self_play
@@ -82,24 +83,35 @@ def test_selection_step_keeps_replayed_population_and_refuses_stale_output(
         for i in range(4)
     )
     target = tmp_path / "selection.json"
-    collect_selection(policy, target, population, match=root_match(settings))
+    collect_selection(
+        policy, target, population, match=root_match(settings), backend=TORCH
+    )
     dataset = SelectionDataset.model_validate_json(target.read_bytes())
     assert len(dataset.games) == 4 and all(game.rows for game in dataset.games)
     assert dataset.policy_sha256 == hashlib.sha256(policy.read_bytes()).hexdigest()
     assert len(list(tmp_path.glob("selection-games-*/*.jsonl"))) == 4
     before = target.read_bytes()
     assert (
-        collect_selection(policy, target, population, match=root_match(settings))
+        collect_selection(
+            policy, target, population, match=root_match(settings), backend=TORCH
+        )
         == target
     )
     assert target.read_bytes() == before
     with pytest.raises(ValueError, match="other collection inputs"):
         collect_selection(
-            policy, target, population, match=root_match(settings), reference="uniform"
+            policy,
+            target,
+            population,
+            match=root_match(settings),
+            reference="uniform",
+            backend=TORCH,
         )
     learner, _ = create(settings, seed=198)
     other = write_policy(
         learner.agent, settings, Counts(), tmp_path / "other.pt", "raw", seed=198
     )
     with pytest.raises(ValueError, match="another policy"):
-        collect_selection(other, target, population, match=root_match(settings))
+        collect_selection(
+            other, target, population, match=root_match(settings), backend=TORCH
+        )

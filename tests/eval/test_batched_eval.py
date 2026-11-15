@@ -41,9 +41,9 @@ from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import read_trace, replay_environment, replay_prefix
 from manabot.sim.serving import (
     PolicyStore,
-    _infer,
     _PendingRequest,
     _record_dispatch,
+    infer_requests,
 )
 from manabot.sim.serving_protocol import (
     DecisionRequest,
@@ -191,7 +191,7 @@ def test_residency_catalog_batching_parity_and_eviction(tmp_path: Path) -> None:
     store = PolicyStore(execution, perf, backend=TORCH_BACKEND)
     store.admit(PolicyAdmission(player, str(path), (selected_match(),)))
     requests = [request_for(player, execution, seed) for seed in (5, 7)]
-    replies = _infer(store, requests, "batch")
+    replies = infer_requests(store, requests, "batch")
     assert perf.counters["model_loads"] == 1
     assert perf.counters["catalog_builds"] == 1
     assert perf.counters["forward_calls"] == 1
@@ -323,9 +323,9 @@ def test_matchups_of_one_checkpoint_share_its_policy_and_batches(
         request_for(player, execution, 5),
         request_for(other, execution, 7, mirror),
     ]
-    mixed = _infer(store, requests, "mixed")
+    mixed = infer_requests(store, requests, "mixed")
     assert perf.counters["batch_rows/2"] == 1
-    single = [_infer(store, [request], "single")[0] for request in requests]
+    single = [infer_requests(store, [request], "single")[0] for request in requests]
     assert [r.action for r in mixed] == [r.action for r in single]
     assert perf.counters["model_loads"] == 1
     store.close()
@@ -490,7 +490,7 @@ def test_queue_boundary_excludes_cold_load_and_overlapping_requests(
     client, _ = Pipe()
     _record_dispatch(perf, [_PendingRequest(r, client, 3) for r in requests], "batch")
     try:
-        replies = _infer(store, requests, "batch")
+        replies = infer_requests(store, requests, "batch")
         assert len(replies) == 2
         receipt = perf.snapshot()
         measures = receipt["measurements"]

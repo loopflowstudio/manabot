@@ -7,6 +7,9 @@ import pytest
 import torch
 
 import manabot.backends.torch as torch_backend
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
@@ -57,6 +60,7 @@ def _collector(config: AdaptiveConfig, agent: ActorCritic) -> Collector:
         opponent_mode="self",
         learning_seats="both",
         adaptive=config,
+        numerics=TorchCollectionSession(device="cpu", seed=197, precision="float32"),
     )
 
 

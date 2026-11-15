@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 import torch
 
 from manabot.backends.torch import learner, rl
+from manabot.backends.torch.collection import CollectionSession
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rollout import AdmittedRollout
 from manabot.env.match import Match, Reward
@@ -53,6 +54,8 @@ def train(config: MinimalConfig) -> None:
             num_envs=config.streams,
             seed=run.seed + start,
             opponent_mode="self",  # one model plays and learns from both seats
+            # Torch numerics on the CPU; this session samples both seats' actions.
+            numerics=CollectionSession(device="cpu", seed=run.seed + start),
         )
         try:
             for update in run.steps("updates", to=config.updates):

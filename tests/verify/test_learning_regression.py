@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from manabot.backends import resolve
 from manabot.recipes.baseline import BaselineConfig, settings, train
 from manabot.verify.learning_regression import (
     BaselineReport,
@@ -134,6 +135,7 @@ def test_recipe_report_preserves_paired_deals_and_policy_inspection(
         updates=1,
         deals=(1_915_100_000, 1_915_100_001),
         seconds=90,
+        backend=resolve("torch"),
     )
     assert report.software == "passed", report.error
     assert report.learning.verdict == "inconclusive"
