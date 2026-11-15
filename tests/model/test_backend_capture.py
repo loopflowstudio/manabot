@@ -6,7 +6,8 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from manabot.backends.parity import backend, backend_module, minibatch_loss, minibatches
+from manabot.backends import resolve
+from manabot.backends.parity import minibatch_loss, minibatches
 from manabot.backends.torch.capture import capture
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.infra.config import MatchConfig, ModelConfig
@@ -70,15 +71,16 @@ def test_capture_replays_both_seat_update(tmp_path: Path) -> None:
         agent.config,
         space.encoder.config,
         {k: v.numpy() for k, v in agent.state_dict().items()},
+        parameter_names=dict(agent.named_parameters()),
     )
-    policy, learner = backend("torch").load(weights)
+    policy, learner = resolve("torch").load(weights)
     rows = 0
     for obs, targets, settings, recorded in minibatches(out, None):
         assert targets.actions.shape == targets.advantages.shape
         assert targets.value_targets.shape == targets.actions.shape
         assert len(targets.actions) <= 2
         loss = minibatch_loss(
-            backend_module("torch"),
+            resolve("torch"),
             policy,
             learner,
             policy.prepare(obs),

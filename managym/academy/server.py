@@ -658,13 +658,6 @@ def _select_opponent(sha256: Any) -> Opponent:
     return opponent
 
 
-def _deck_label(setup: dict) -> str:
-    for name, deck in NAMED_DECKS.items():
-        if deck == setup.get("deck"):
-            return DECK_DISPLAY_NAMES.get(name, name)
-    return "a custom deck"
-
-
 def _parse_game_config(config: Any) -> GameConfig:
     data = config or {}
     if not isinstance(data, dict):
@@ -3268,11 +3261,7 @@ def card_image(kind: Literal["art", "full"], slug: str) -> Response:
 
 @app.get("/api/opponents")
 async def get_opponents() -> dict[str, Any]:
-    # Reading checkpoints touches the filesystem and Torch; keep the loop free.
-    catalog = await asyncio.to_thread(opponent_catalog)
-    for entry in catalog["opponents"]:
-        entry["decks"] = [_deck_label(setup) for setup in entry.pop("setups")]
-    return catalog
+    return await asyncio.to_thread(opponent_catalog)
 
 
 def _record_owners(tokens: str | None) -> set[str]:

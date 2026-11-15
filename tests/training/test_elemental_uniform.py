@@ -11,11 +11,10 @@ import torch
 
 from experiments.ataraxos_move import ataraxos_move_scalar
 from manabot.backends.torch.checkpoint import load_checkpoint
-from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
-from manabot.model.inference import PolicyInference
 from manabot.model.world import checkpoint_world, validate_agent_setup
 from manabot.training.execution import execute_regime, validate_regime
 from manabot.training.regime import TrainingRegime, TrainSelfPlay

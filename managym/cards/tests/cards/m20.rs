@@ -1,5 +1,7 @@
 //! Tests for cards filed in `src/m20.rs`, in card order.
 
+use crate::support::game::move_card;
+use crate::support::inspect::{now, permanent_of, zone_of};
 use crate::support::{
     game::five_color_setup,
     play::{cast, settle, spend_colorless},
@@ -111,15 +113,16 @@ fn brought_back_returns_only_cards_put_into_the_graveyard_from_the_battlefield_t
     // The second Ogre leaves the battlefield and comes back to its owner's
     // graveyard by another route: graveyard to exile to graveyard is a new
     // object, so it no longer qualifies.
-    s.game_mut().move_object(left, ZoneType::Graveyard);
-    s.game_mut().move_object(left, ZoneType::Exile);
-    s.game_mut().move_object(left, ZoneType::Graveyard);
+    let left = move_card(&mut s, left, ZoneType::Graveyard);
+    let left = move_card(&mut s, left, ZoneType::Exile);
+    let left = move_card(&mut s, left, ZoneType::Graveyard);
     s.game_mut().scenario_refresh_priority().unwrap();
     cast(&mut s, "Brought Back");
     let offered = offered_targets(&s);
     let graveyard = |object| {
         s.game()
-            .current_object_ref(object)
+            .state
+            .live(now(&s, object))
             .map(Target::GraveyardCard)
     };
     assert!(offered.contains(&graveyard(died).unwrap()));
@@ -127,14 +130,11 @@ fn brought_back_returns_only_cards_put_into_the_graveyard_from_the_battlefield_t
     assert!(!offered.contains(&graveyard(left).unwrap()));
     assert!(s.choose_target(graveyard(died).unwrap()));
     settle(&mut s);
-    let returned = s.game().state.object_to_permanent[died].expect("returned");
+    let returned = permanent_of(&s, died).expect("returned");
     assert!(permanent(&s, returned).tapped);
     // A new object: no counters and no damage carried over.
     assert_eq!(permanent(&s, returned).counters.iter().count(), 0);
     for object in [milled, left] {
-        assert_eq!(
-            s.game().state.zones.zone_of(object),
-            Some(ZoneType::Graveyard)
-        );
+        assert_eq!(zone_of(&s, object), Some(ZoneType::Graveyard));
     }
 }

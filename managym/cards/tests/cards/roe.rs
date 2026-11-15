@@ -1,8 +1,10 @@
 //! Tests for cards filed in `src/roe.rs`, in card order.
 
+use crate::support::game::move_card;
+use crate::support::inspect::zone_of;
 use crate::support::{
     game::{five_color_setup, Scenario},
-    inspect::{can_cast, library_card, permanent_named},
+    inspect::{can_cast, library_card, now, permanent_named},
     play::{activate_named, cast, choose, enter_and_settle, settle, spend_named},
 };
 use managym::{
@@ -56,7 +58,7 @@ fn prism_payment_preserves_the_spells_required_green_mana() {
         assert!(s.game().state.stack_objects.iter().any(|object| matches!(
             object,
             managym::state::stack_object::StackObject::Spell(spell)
-                if s.game().state.objects[spell.object].name == "Gnarled Professor"
+                if s.game().state[spell.object].name == "Gnarled Professor"
         )));
     }
 }
@@ -71,6 +73,7 @@ fn prism_payment_preserves_required_blue_already_in_the_pool() {
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     s.set_player_mana_pool(0, "U");
     cast(&mut s, "Counterspell");
+    let professor = now(&s, professor);
     choose(&mut s, |a| {
         matches!(a, Action::ChooseTarget {
         target: managym::state::game_object::Target::StackSpell(id), ..
@@ -167,10 +170,7 @@ fn prism_upfront_payment_preserves_professors_second_green() {
         assert_eq!(s.action_space().actions.len(), 1);
         choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 4, .. }));
         choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
-        assert_eq!(
-            s.game().state.zones.zone_of(professor),
-            Some(ZoneType::Stack)
-        );
+        assert_eq!(zone_of(&s, professor), Some(ZoneType::Stack));
         settle(&mut s);
         assert!(!s
             .battlefield_permanents_named(0, "Gnarled Professor")
@@ -183,7 +183,13 @@ fn prism_payment_offers_execute_and_restore_without_mutating_sibling_forks() {
     use managym::{search_state::witness, Game};
 
     fn complete_every_offer(game: &mut Game, spell: ObjectId, depth: usize) {
-        if game.state.zones.zone_of(spell) == Some(ZoneType::Stack) {
+        if game
+            .state
+            .card_id(spell)
+            .map(|card| game.state.object_of(card))
+            .and_then(|object| game.state.zones.zone_of(object))
+            == Some(ZoneType::Stack)
+        {
             return;
         }
         assert!(
@@ -212,7 +218,7 @@ fn prism_payment_offers_execute_and_restore_without_mutating_sibling_forks() {
         }
         s.set_player_mana_pool(0, "0");
         let professor = library_card(&s, 0, "Gnarled Professor");
-        s.game_mut().move_object(professor, ZoneType::Hand);
+        let professor = move_card(&mut s, professor, ZoneType::Hand);
         s.game_mut().scenario_refresh_priority().unwrap();
         assert_eq!(can_cast(&s, professor), forests > 0);
         if forests == 0 {
@@ -242,10 +248,7 @@ fn prism_upfront_payment_can_preserve_mana_already_in_the_pool() {
     assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("G"));
     choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 4, .. }));
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
-    assert_eq!(
-        s.game().state.zones.zone_of(professor),
-        Some(ZoneType::Stack)
-    );
+    assert_eq!(zone_of(&s, professor), Some(ZoneType::Stack));
 }
 
 #[test]
@@ -259,7 +262,7 @@ fn prism_upfront_payment_search_preserves_a_required_pooled_white() {
     assert_eq!(s.action_space().actions.len(), 1);
     choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
-    assert_eq!(s.game().state.zones.zone_of(angel), Some(ZoneType::Stack));
+    assert_eq!(zone_of(&s, angel), Some(ZoneType::Stack));
 }
 
 // Exhaustive tiny-board proof: expected accounting below is printed-cost
@@ -285,7 +288,11 @@ fn nested_mana_every_offer_completes_replays_and_rolls_back() {
         assert!(*nodes <= 256, "tiny board node bound");
         assert!(prefix.len() <= 8, "one Treasure, one filter, one spell");
         let complete = if let Some(spell) = expected.spell {
-            game.state.zones.zone_of(spell) == Some(ZoneType::Stack)
+            game.state
+                .card_id(spell)
+                .map(|card| game.state.object_of(card))
+                .and_then(|object| game.state.zones.zone_of(object))
+                == Some(ZoneType::Stack)
         } else {
             game.state.suspended_decision.is_none()
         };
@@ -399,7 +406,7 @@ fn filters_require_a_real_seed_and_do_not_reuse_a_reserved_source() {
             .iter()
             .filter_map(|action| match action {
                 Action::ActivateAbility { permanent, .. }
-                    if s.game().state.objects[s.game().state.permanents[*permanent]
+                    if s.game().state[s.game().state.permanents[*permanent]
                         .as_ref()
                         .unwrap()
                         .object]
@@ -439,7 +446,7 @@ fn prism_pool_alternatives_keep_restrictions_and_expiring_mana_classes() {
         s.set_player_mana_pool(0, &format!("W{}", "U".repeat(blue)));
         s.game_mut().state.players[0].combat_mana_pool = Mana::parse("U");
         let angel = library_card(&s, 0, "Serra Angel");
-        s.game_mut().move_object(angel, ZoneType::Hand);
+        let angel = move_card(&mut s, angel, ZoneType::Hand);
         s.game_mut().scenario_refresh_priority().unwrap();
         // Five total mana is necessary: the filter conserves total mana.
         assert_eq!(can_cast(&s, angel), blue == 3);
@@ -500,7 +507,7 @@ fn nested_mana_nonmana_life_cost_is_reserved_and_paid_once() {
             .create_token("token.treasure", PlayerId(0), false);
         let treasure = permanent_named(&s, "Treasure");
         let source_object = s.game().state.permanents[treasure].as_ref().unwrap().object;
-        s.game_mut().state.objects[source_object].activated_abilities[0].life_cost = 2;
+        s.game_mut().state[source_object].activated_abilities[0].life_cost = 2;
         s.game_mut().state.players[0].life = life;
         s.set_player_mana_pool(0, "0");
         s.game_mut().scenario_refresh_priority().unwrap();
@@ -561,7 +568,7 @@ fn prism_upfront_pools_the_whole_fee_before_spending_any_unit() {
     let card = s.game().state.permanents[prism].as_ref().unwrap().object;
     // A two-mana filter fee distinguishes full-cost production from a
     // witness that spends one pooled unit before producing the rest.
-    s.game_mut().state.objects[card].activated_abilities[0].mana_cost =
+    s.game_mut().state[card].activated_abilities[0].mana_cost =
         managym::state::mana::ManaCost::parse("2");
     s.set_player_mana_pool(0, "U");
     activate_named(&mut s, "Prophetic Prism", 0);

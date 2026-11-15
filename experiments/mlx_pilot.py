@@ -37,6 +37,9 @@ from typing import Any
 
 import numpy as np
 
+from manabot.backends.torch.arrays import on_device
+from manabot.backends.torch.policy import PolicyInference
+
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -117,14 +120,9 @@ class TorchLearner:
     ) -> tuple[float, float]:
         torch = self.torch
         from manabot.backends.torch import rl
-        from manabot.model.admission import bind_admitted
-        from manabot.model.inference import transfer_admitted
         from manabot.training.updates.damped_policy import minibatch_objective
 
-        admitted, _ = transfer_admitted(
-            bind_admitted(self.agent, {k: torch.from_numpy(v) for k, v in obs.items()}),
-            self.device,
-        )
+        admitted = on_device(self.agent.prepare_admitted(obs), self.device)
 
         def tensor(value: np.ndarray) -> torch.Tensor:
             return torch.from_numpy(value).to(self.device)
@@ -135,7 +133,7 @@ class TorchLearner:
                 rl,
                 logits.float(),
                 values.float(),
-                rl.legal_mask(admitted["actions_valid"]),
+                admitted.legal,
                 actions=tensor(targets.actions),
                 advantages=tensor(targets.advantages),
                 value_targets=tensor(targets.value_targets),
@@ -190,9 +188,10 @@ def _agents(capture_dir: Path, width: int) -> tuple[Any, Any]:
     the same architecture at another width; and its MLX twin."""
     import torch
 
-    from manabot.backends.mlx.checkpoint import build
+    from manabot.backends.mlx.checkpoint import assemble
     from manabot.backends.torch.checkpoint import load_checkpoint
     from manabot.backends.torch.policy import ActorCritic
+    from manabot.policy.checkpoint import from_torch_state
 
     agent, space = load_checkpoint(str(capture_dir / "initial.pt"))
     if width != agent.config.hidden_dim:
@@ -203,7 +202,15 @@ def _agents(capture_dir: Path, width: int) -> tuple[Any, Any]:
     state = {k: v.detach().numpy().copy() for k, v in agent.state_dict().items()}
     # The pilot measured float32 at every width; pin it against the backend's
     # width default.
-    policy, _ = build(agent.config, space.encoder.config, state, precision="float32")
+    policy = assemble(
+        from_torch_state(
+            agent.config,
+            space.encoder.config,
+            state,
+            parameter_names=dict(agent.named_parameters()),
+        ),
+        precision="float32",
+    )
     return agent, policy
 
 
@@ -268,9 +275,7 @@ def _torch_inference(agent: Any, inference: Any, obs: dict[str, np.ndarray]) -> 
 
     tick = time.perf_counter()
     with torch.no_grad():
-        logits, _ = agent(
-            inference.prepare({k: torch.from_numpy(v) for k, v in obs.items()})
-        )
+        logits, _ = agent(inference.prepare(obs))
         logits.numpy()
     return time.perf_counter() - tick
 
@@ -279,12 +284,10 @@ def _torch_scope(agent: Any) -> tuple[Any, float]:
     """Open the collection scope and encode its catalog once, timed."""
     import torch
 
-    from manabot.model.inference import PolicyInference
-
     tick = time.perf_counter()
     inference = PolicyInference(agent).__enter__()
     with torch.no_grad():
-        inference.catalog()
+        inference.cache_programs()
     return inference, time.perf_counter() - tick
 
 

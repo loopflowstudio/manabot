@@ -14,7 +14,7 @@ use crate::{
     flow::game::Game,
     state::{
         effect::Affected,
-        game_object::{ObjectRef, PlayerId},
+        game_object::{ObjectId, PlayerId},
     },
 };
 
@@ -30,7 +30,7 @@ pub struct EffectObject {
 }
 
 impl EffectObject {
-    fn permanent(game: &Game, object: ObjectRef) -> Self {
+    fn permanent(game: &Game, object: ObjectId) -> Self {
         Self {
             object_id: game.lookup_current_permanent(object).ok().map(|id| {
                 game.state.permanents[id]
@@ -39,7 +39,7 @@ impl EffectObject {
                     .id
                     .0 as i32
             }),
-            incarnation: Some(object.incarnation.0),
+            incarnation: Some(object.generation()),
         }
     }
 
@@ -70,7 +70,7 @@ pub struct SharedEffectData {
 }
 
 /// Both viewers may see every resolved effect on a public permanent/player.
-/// Source-dependent expiry is derived from the native ObjectRef, never a name.
+/// Source-dependent expiry is derived from the native ObjectId, never a name.
 pub fn project(game: &Game) -> Vec<SharedEffectData> {
     let mut shared: Vec<SharedEffectData> = Vec::new();
     for (order, record) in game.state.effects.iter().enumerate() {

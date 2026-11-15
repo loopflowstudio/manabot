@@ -99,3 +99,13 @@ it('shows recorded model provenance without inventing missing fields', () => {
   expect(body).toContain('step: 0');
   expect(body).not.toContain('model:');
 });
+
+it('labels runtime identity as Policy ID and retains artifact roles', () => {
+  const runtime = { id: 'a'.repeat(64), provider: 'example', runner: 'runner-v2',
+    artifacts: { actor: 'b'.repeat(64) }, config: {}, supports_search: false };
+  const identity = playerIdentity({ name: 'Independent', kind: 'bot', digest: runtime.id, runtime });
+  const { body } = render(PlayerArea, { props: { identity, tablePermanents: [], player: player({}) } });
+  expect(body).toContain('Policy ID: ' + runtime.id);
+  expect(body).toContain('actor: ' + 'b'.repeat(64));
+  expect(body).not.toContain('SHA-256:');
+});

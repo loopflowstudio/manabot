@@ -4,7 +4,7 @@ import type { CheckpointProvenance, PolicyRuntimeIdentity, RecordedPlayer } from
 export interface PlayerIdentity {
   compact: string;
   full: string;
-  /** Checkpoint SHA-256 only; control bots and humans have none. */
+  /** Policy ID for registered runtimes, file SHA-256 for historical checkpoints. */
   digest: string | null;
   /** Compact name with the short digest: the one-line form for prose and labels. */
   text: string;
@@ -44,7 +44,7 @@ export function checkpointIdentity(checkpoint: { name: string; sha256: string; p
 }
 
 /**
- * A recorded player's `version` is the checkpoint SHA-256 only for a checkpoint;
+ * A recorded player's `version` is the runtime Policy ID or historical checkpoint SHA-256;
  * for control bots it hashes inference settings, so it is never shown as a digest.
  */
 export function recordedIdentity(

@@ -65,13 +65,21 @@ class PolicySpec:
 
 
 @dataclass(frozen=True)
+class PolicyDetail:
+    label: str
+    value: str
+
+
+@dataclass(frozen=True)
 class PolicyDescriptor:
     name: str
     provider: str
     runner: str
     artifacts: dict[str, str] = field(default_factory=dict)
     config: dict[str, JSONValue] = field(default_factory=dict)
-    metadata: dict[str, JSONValue] = field(default_factory=dict)
+    group: str | None = None
+    details: tuple[PolicyDetail, ...] = ()
+    alias: str | None = None
     incompatibility: str | None = None
     supports_search: bool = False
     contract_version: int = 1
@@ -91,7 +99,11 @@ class PolicyDescriptor:
         )
 
     def record(self) -> dict[str, JSONValue]:
-        return {**asdict(self), "id": self.id}
+        return {
+            **asdict(self),
+            "details": [asdict(detail) for detail in self.details],
+            "id": self.id,
+        }
 
 
 @dataclass(frozen=True)
@@ -146,6 +158,14 @@ class PolicyProvider(Protocol):
     def policy(self, spec: PolicySpec) -> PolicyFactory: ...
 
 
+class DiscoveringPolicyProvider(PolicyProvider, Protocol):
+    """Optional discovery: None reads ambient config; explicit configs are additive."""
+
+    def discover(
+        self, config: dict[str, JSONValue] | None
+    ) -> Sequence[PolicyFactory]: ...
+
+
 @dataclass(frozen=True)
 class PolicySource:
     provider: str
@@ -168,6 +188,7 @@ class PolicyRegistry:
         self.aliases: dict[str, str] = {}
         self._active_sessions: set[int] = set()
         self.discovery_errors: list[str] = []
+        self._discovered = False
 
     def register(
         self, policy: PolicyFactory | PolicySpec, *, name: str | None = None
@@ -185,6 +206,7 @@ class PolicyRegistry:
         key = descriptor.id
         self._factories.setdefault(key, policy)
         self._descriptors.setdefault(key, descriptor)
+        name = name if name is not None else descriptor.alias
         if name is not None:
             if name in self.aliases and self.aliases[name] != key:
                 raise ValueError(f"Policy alias {name!r} is already registered.")
@@ -192,6 +214,17 @@ class PolicyRegistry:
         return key
 
     def discover(self, sources: Sequence[PolicySource] = ()) -> None:
+        # Ambient discovery happens once per registry/server, even with sources.
+        if not self._discovered:
+            self._discovered = True
+            for name, provider in self.providers.items():
+                discover = getattr(provider, "discover", None)
+                if discover is not None:
+                    try:
+                        for policy in discover(None):
+                            self.register(policy)
+                    except (ImportError, OSError, ValueError) as exc:
+                        self.discovery_errors.append(f"{name}: {exc}")
         for source in sources:
             provider = self.providers.get(source.provider)
             if provider is None:
@@ -224,7 +257,7 @@ class PolicyRegistry:
         # Repeat description/admission at load: files and runner may have changed.
         if factory.describe().id != descriptor.id:
             raise ValueError(
-                "The selected policy changed; restore the pinned artifact and runner."
+                "The selected policy changed; restore the pinned artifact and runner, or restart Academy and explicitly reselect the policy."
             )
         factory.admit(setup)
         if descriptor.incompatibility:
@@ -252,7 +285,7 @@ class PolicyRegistry:
         try:
             if factory.describe().id != descriptor.id:
                 raise ValueError(
-                    "The selected policy changed while loading; restore the pinned artifact and runner."
+                    "The selected policy changed while loading; restore the pinned artifact and runner, or restart Academy and explicitly reselect the policy."
                 )
         except BaseException:
             session.close()

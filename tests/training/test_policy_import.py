@@ -28,6 +28,7 @@ from manabot.training.regime import (
 )
 from manabot.verify.store import VerifyStore
 import managym
+from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
 
 def reference(path: Path) -> ArtifactReference:
@@ -210,12 +211,12 @@ def test_rejects_and_persists_failed_admission(
     elif fault == "weight":
         stage.weights = "ema"
     elif fault in {"metadata", "ema_identity"}:
-        payload = torch.load(path, weights_only=False)
+        payload = read_checkpoint(path, weights_only=False)
         if fault == "metadata":
             payload["bc"]["run_id"] = "different-producer"
         else:
             payload["bc"]["averaging"]["rate"] = 0.2
-        torch.save(payload, path)
+        write_checkpoint(payload, path)
         stage.checkpoint = reference(path)
         source.stages[0].artifacts[stage.weights] = reference(path)
     elif fault == "cost":
@@ -265,9 +266,9 @@ def test_original_wire_digest_precedes_default_normalization(tmp_path: Path) -> 
     source["regime"]["observation"]["policy_history_version"] = 0
     source["regime_digest"] = canonical_sha256(source["regime"])
     path = Path(stage.checkpoint["path"])
-    payload = torch.load(path, weights_only=False)
+    payload = read_checkpoint(path, weights_only=False)
     payload["bc"]["regime_digest"] = source["regime_digest"]
-    torch.save(payload, path)
+    write_checkpoint(payload, path)
     stage.checkpoint = reference(path)
     source["stages"][0]["artifacts"]["raw"] = reference(path)
     atomic_json(export, source)

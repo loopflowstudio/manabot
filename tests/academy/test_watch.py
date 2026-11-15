@@ -352,11 +352,11 @@ def test_checkpoint_watch_refuses_incompatible_and_wrong_decks(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from fastapi import HTTPException
-    import torch
 
     from managym.academy.opponent import policy_registry
     from managym.policy import PolicySpec
     from tests.academy.test_play_modes import _write_tiny_checkpoint
+    from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
     checkpoint = tmp_path / "model.pt"
     _write_tiny_checkpoint(checkpoint)
@@ -371,9 +371,9 @@ def test_checkpoint_watch_refuses_incompatible_and_wrong_decks(
                 villain_deck="interactive",
             )
         )
-    data = torch.load(checkpoint, weights_only=True)
+    data = read_checkpoint(checkpoint, weights_only=True)
     data["world_binding"]["world"] = "w5"
-    torch.save(data, checkpoint)
+    write_checkpoint(data, checkpoint)
     digest = policy_registry().register(PolicySpec("manabot", str(checkpoint)))
     with pytest.raises(HTTPException, match="trained in w5"):
         create_watch(WatchRequest(players=[f"policy:{digest}", "random"]))

@@ -274,7 +274,8 @@ with serve(port=0) as academy:
 - `serve(..., policies={"challenger": PolicySpec(...)})` loads an installed provider.
   `sources=[PolicySource("manabot", {"runs_dir": "runs/elemental-a"})]` lets
   that provider discover a run root. Sources belong to this server; no environment
-  variables are rewritten.
+  variables are rewritten. Each installed provider also discovers its ambient
+  configuration once at server start, even when explicit sources are supplied.
 - `academy.replay(source, game=None)` takes a trace `Path` with the same
   `game` selection as the command line, or a recording id as `str`. An integer
   `game` selects only a position; strings can also select a digest prefix.
@@ -646,7 +647,9 @@ deleting the cache directory is safe.
 Every game you start is recorded as you play.
 
 - **Games** (`/games`) lists them, newest first, with filters for player, deck,
-  status, result and date. **My games** narrows the list to this browser.
+  status, result and date. **My games** narrows the list to this browser. A
+  trained bot appears under its
+  [short name and digest](#how-a-trained-opponent-is-named).
 - Opening a game shows it in **Replay** (`/replay`): step forward and back
   through each recorded decision, with the board, the legal actions offered
   and the action taken. While the server that played the game is still
@@ -732,6 +735,25 @@ the original admitted policy. The decision-advice panel reads
 fixtures from a checkout of this repository and is absent from an installed
 package.
 
+#### How a trained opponent is named
+
+Academy shows the first and last parts of a long checkpoint name, followed by
+its identity's first ten characters. For example, `run/checkpoints/step_8`
+appears as `run/…/step_8 · 7ac5d442da`. Human names are never shortened this way.
+
+The same compact identity appears at the table, in Games, Replay and Watch.
+Open **status and mana** on the player's bar with a mouse or Tab and Enter to
+read the full recorded name, identity, producer and available provenance.
+Registered policies also retain the runner, artifact digests and configuration.
+Their **Policy ID** binds that whole execution; historical checkpoint identities
+remain the checkpoint file's SHA-256. A runner change creates a different recorded
+player even with the same checkpoint. Artifact digests remain available separately
+for grouping recordings by weights. Missing provenance stays absent.
+
+Shortening is display only. Recordings, exported games and filter links keep
+the full name and identity. Search Games by either; the Bot version filter uses
+the full recorded identity.
+
 ### Play and watch a trained checkpoint
 
 Register a baseline checkpoint using a saved specification, `challenger.json`:
@@ -746,7 +768,7 @@ uv run --no-project managym academy --policy challenger.json watch \
 ```
 
 Watch opens at setup with both seats selected. Choose decks and press **Start**.
-Either seat can use a registered policy. **Registered policy**, **Provider / run**
+Either seat can use a registered policy. **Registered policy**, **Provider / group**
 and **Policy** are the same native selects in Play and Watch. They preserve an
 unavailable selection rather than substituting a newer model. Keyboard navigation
 uses the browser's select controls.
@@ -867,7 +889,9 @@ Implement the framework-free contracts in `managym.policy`. A factory exposes
 `load(*, seat, seed) -> PolicySession`. Pass it directly as
 `serve(policies={"my-bot": factory})`. Installed providers may also register
 in the `managym.bots` entry-point group and implement `policy(spec)` plus
-optional `discover(config)` returning factories. Multiple providers coexist.
+optional `DiscoveringPolicyProvider.discover(config | None)` returning factories.
+`None` means the provider's ambient configuration, called once at server start;
+explicit `sources=` are additional discovery calls. Multiple providers coexist.
 Academy does not import a training framework or know their artifact layouts.
 
 A session implements `observe(view)`, `choose(view)` and `close()`. The shared
@@ -883,7 +907,14 @@ before creating the existing bound Command; stale or illegal outputs commit noth
 Sessions close on replacement, completion, failed setup and server shutdown.
 
 The descriptor identity pins provider, adapter contract, runner/source, artifacts
-and semantic/runtime configuration. Display metadata may be absent. The browser
+and semantic/runtime configuration. Providers author optional `group` (defaults
+to the provider name), ordered `PolicyDetail(label, value)` lines and `alias` on
+`PolicyDescriptor`. Academy renders these labels and values verbatim; presentation
+never changes the Policy ID. Use a stable alias in launch code and saved-spec
+examples. When the browser remembers an older selection and exactly one policy
+matches its provider, artifacts and config with a different runner, it explains
+that change and offers **Reselect**. Nothing is selected automatically. Unknown
+or ambiguous old IDs stay unavailable. The browser
 selects that opaque identity and never submits an import path or model path.
 Recordings retain the complete descriptor and genuine outputs once. Finished
 replays need no policy reload, original checkpoint or installed provider.
@@ -925,7 +956,7 @@ and a message, and exits with status 2. From Python the same `code` and
 | A checkpoint is listed but disabled | It was trained in another world or on other card content; the row states the mismatch (for example `trained in w5, engine is w6`). Run it from the revision that wrote it. |
 | A checkpoint shows **not recorded** for its update | No `run.json` in the listed directories records those bytes. List the run directory rather than the file alone. A run that recorded no counts for its checkpoints stays **not recorded**. |
 | `The selected opponent checkpoint is unavailable.` | The file was moved or deleted after it was listed. Restore it or choose another; Academy does not pick a replacement. |
-| `The selected opponent checkpoint changed; restore the pinned artifact.` | The file at that path no longer has the listed SHA-256. Restore the original bytes, or restart Academy to list the new file as its own entry. |
+| `The selected policy changed; restore the pinned artifact and runner, or restart Academy and explicitly reselect the policy.` | The artifact or runner differs from the pinned Policy ID. Restore the original execution, or restart Academy and deliberately select the new entry. |
 | Earlier games are missing from **Games** | Academy was launched from another directory. Launch from the original one or pass its `--traces-dir`. |
 | `No matching distribution found for managym` | No wheel exists for this Python or platform. See [supported platforms](engine-python.md). |
 

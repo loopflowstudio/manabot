@@ -187,8 +187,8 @@ def runs(revision: str, extend_from: str = "") -> list[Run]:
 
 # A worker's final learner exports, beside its run record, under each attempt.
 _EXPORTS = {
-    "raw": "self-play-raw.pt",
-    "ema": "self-play-ema.pt",
+    "raw": "self-play-raw.safetensors",
+    "ema": "self-play-ema.safetensors",
     "optimizer": "self-play-optimizer.pt",
 }
 

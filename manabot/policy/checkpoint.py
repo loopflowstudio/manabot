@@ -21,7 +21,7 @@ This module reads and writes the file format with NumPy; it imports no array
 framework.
 """
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 import json
 from pathlib import Path
@@ -39,6 +39,8 @@ from manabot.env.observation import (
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.model.world import validate_checkpoint_world
 from manabot.policy.prepare import Layout, Tables
+
+type ParameterArrays = Mapping[str, np.ndarray]
 
 # GRUs of the policy (PyTorch `nn.GRU` modules) by parameter prefix.
 GRUS = (
@@ -58,6 +60,12 @@ _ATTENTION_LEAVES = {
 }
 # Checkpoint fields carried, JSON-encoded, in the container metadata.
 _METADATA_KEYS = ("hypers", "world_binding", "architecture", "source")
+_OPTIONAL_METADATA_KEYS = (
+    "bc",
+    "global_step",
+    "belief_schema_identity",
+    "belief_content_manifest_identity",
+)
 _BUFFER = "buffer/"
 
 
@@ -68,32 +76,6 @@ class NotAContainer(ValueError):
 
 class UnsupportedPolicy(ValueError):
     """The checkpoint enables something the framework backends do not implement."""
-
-
-def require_supported(model: ModelConfig, observation: ObservationConfig) -> None:
-    """Refuse configurations the host preparation and backends do not
-    implement, naming every one, rather than running them partially."""
-    reasons = []
-    if model.world is None or not model.catalog_records():
-        reasons.append("a catalog world with record_vocabulary='catalog' is required")
-    if observation.policy_input_version != 9:
-        reasons.append(f"policy_input_version={observation.policy_input_version}")
-    if model.belief_count_buckets:
-        reasons.append("belief inputs")
-    if model.recent_events:
-        reasons.append("policy history input (recent_events)")
-    if model.value_aggregation != "masked_mean":
-        reasons.append(f"value_aggregation={model.value_aggregation!r}")
-    if model.value_kind != "scalar":
-        reasons.append(f"value_kind={model.value_kind!r}")
-    if model.policy_film:
-        reasons.append("policy_film")
-    if not model.attention_on:
-        reasons.append("attention_on=False")
-    if reasons:
-        raise UnsupportedPolicy(
-            "the framework backends do not support " + "; ".join(reasons)
-        )
 
 
 # -- architecture --------------------------------------------------------------------
@@ -123,9 +105,6 @@ def layout(space: ObservationSpace) -> Layout:
     encoder = space.encoder
     joins = (PERMANENT_DEFINITION_INDEX, *PERMANENT_LINK_INDEXES)
     return Layout(
-        cards_per_player=encoder.cards_per_player,
-        perms_per_player=encoder.perms_per_player,
-        max_actions=encoder.max_actions,
         numeric_permanent_columns=tuple(
             c for c in range(encoder.permanent_dim) if c not in joins
         ),
@@ -182,7 +161,7 @@ class PolicyCheckpoint:
 
     model: ModelConfig
     space: ObservationSpace
-    parameters: Mapping[str, np.ndarray]
+    parameters: ParameterArrays
     buffers: Mapping[str, np.ndarray]
     metadata: Mapping[str, str]
 
@@ -218,28 +197,41 @@ def from_torch_state(
     observation: ObservationConfig,
     state: Mapping[str, np.ndarray],
     metadata: Mapping[str, str] | None = None,
+    *,
+    parameter_names: Iterable[str],
 ) -> PolicyCheckpoint:
     """The container contents of a PyTorch state dict (as NumPy arrays).
     Every tensor becomes one canonical parameter or one lookup buffer."""
-    require_supported(model, observation)
-    buffer_names = set(Tables.BUFFERS.values())
-    missing = sorted(buffer_names - set(state))
+    names = tuple(parameter_names)
+    missing = sorted(set(names) - set(state))
     if missing:
-        raise KeyError(f"checkpoint lacks lookup buffers {missing}")
-    parameters = {
-        name: np.ascontiguousarray(value, dtype=np.float32)
-        for name, value in canonical_parameters(
-            {k: v for k, v in state.items() if k not in buffer_names}
-        ).items()
-    }
-    if len(parameters) != len(state) - len(buffer_names):
-        raise KeyError("two torch tensors share a canonical name")
+        raise KeyError(f"checkpoint lacks parameters {missing}")
+    parameters: dict[str, np.ndarray] = {}
+    for name in names:
+        value = np.asarray(state[name])
+        if value.dtype != np.float32:
+            raise TypeError(f"parameter {name}: expected float32, got {value.dtype}")
+        key = canonical_name(name)
+        if key in parameters:
+            raise KeyError(f"two torch parameters share canonical name {key}")
+        parameters[key] = (
+            value if value.flags.c_contiguous else np.ascontiguousarray(value)
+        )
+    parameter_set = set(names)
+    meta = dict(metadata or {})
+    # Adam snapshots address parameters positionally. A safetensors header sorts
+    # tensor names, so preserve the writer's order explicitly for warm starts.
+    meta["parameter_names"] = json.dumps(names)
     return PolicyCheckpoint(
         model=model,
         space=ObservationSpace(observation),
         parameters=parameters,
-        buffers={name: np.asarray(state[name]) for name in buffer_names},
-        metadata=dict(metadata or {}),
+        buffers={
+            name: np.asarray(value)
+            for name, value in state.items()
+            if name not in parameter_set
+        },
+        metadata=meta,
     )
 
 
@@ -247,11 +239,19 @@ def from_torch_state(
 
 
 def checkpoint_metadata(
-    record: Mapping[str, Any], converted_from: Path
+    record: Mapping[str, Any], converted_from: Path | None = None
 ) -> dict[str, str]:
     """Container metadata of a PyTorch checkpoint record (`torch.load` output)."""
     metadata = {key: json.dumps(record.get(key), default=str) for key in _METADATA_KEYS}
-    metadata["converted_from"] = str(converted_from)
+    metadata.update(
+        {
+            key: json.dumps(record[key])
+            for key in _OPTIONAL_METADATA_KEYS
+            if key in record
+        }
+    )
+    if converted_from is not None:
+        metadata["converted_from"] = str(converted_from)
     return metadata
 
 
@@ -261,8 +261,35 @@ def write_container(path: Path, checkpoint: PolicyCheckpoint) -> None:
     write_safetensors(path, arrays, checkpoint.metadata)
 
 
+def read_metadata(path: str | Path) -> dict[str, Any]:
+    """Decode a container's JSON metadata without reading its tensor payload.
+
+    The four original binding records are required; optional records remain
+    absent on earlier containers. Legacy pickle files belong to a backend reader.
+    """
+    path = Path(path)
+    try:
+        with path.open("rb") as file:
+            (length,) = struct.unpack("<Q", file.read(8))
+            if length > path.stat().st_size - 8:
+                raise ValueError("truncated header")
+            header = json.loads(file.read(length))
+        metadata = header.get("__metadata__", {})
+        missing = [key for key in _METADATA_KEYS if key not in metadata]
+        if missing:
+            raise NotAContainer(f"{path} has no {', '.join(missing)} metadata")
+        return {
+            key: value if key == "converted_from" else json.loads(value)
+            for key, value in metadata.items()
+        }
+    except (struct.error, ValueError, KeyError, TypeError) as error:
+        if isinstance(error, NotAContainer):
+            raise
+        raise NotAContainer(f"{path} is not a policy checkpoint container") from error
+
+
 def read_container(path: str | Path) -> PolicyCheckpoint:
-    """Read a container, validating its world binding and supported features.
+    """Read a container, validating its world binding. Backend support is separate.
 
     Raises `NotAContainer` for a file that is not safetensors or lacks the
     container metadata; convert its PyTorch checkpoint again.
@@ -286,11 +313,14 @@ def read_container(path: str | Path) -> PolicyCheckpoint:
     )
     validate_checkpoint_world(meta, space)
     model = ModelConfig.from_checkpoint(hypers["agent_hypers"])
-    require_supported(model, space.encoder.config)
+    parameters = {k: v for k, v in arrays.items() if not k.startswith(_BUFFER)}
+    for name, value in parameters.items():
+        if value.dtype != np.float32:
+            raise TypeError(f"parameter {name}: expected float32, got {value.dtype}")
     return PolicyCheckpoint(
         model=model,
         space=space,
-        parameters={k: v for k, v in arrays.items() if not k.startswith(_BUFFER)},
+        parameters=parameters,
         buffers={
             k[len(_BUFFER) :]: v for k, v in arrays.items() if k.startswith(_BUFFER)
         },
@@ -321,7 +351,9 @@ def write_safetensors(
     blobs: list[bytes] = []
     offset = 0
     for name in sorted(arrays):
-        array = np.ascontiguousarray(arrays[name])
+        array = np.asarray(arrays[name])
+        if not array.flags.c_contiguous:
+            array = np.ascontiguousarray(array)
         code = _CODES.get(array.dtype)
         if code is None:
             raise TypeError(f"{name}: dtype {array.dtype} has no safetensors code")

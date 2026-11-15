@@ -54,3 +54,16 @@ it('names a missing bot extension only after the catalog answers', () => {
   expect(note(null)).toContain('No policies registered on this server.');
   expect(note('manabot')).toContain('No policies registered on this server.');
 });
+
+it('renders a third-party group and details without training terminology', () => {
+  const { body } = render(PlayerPicker, { props: {
+    value: 'policy:abc', trained: [{ sha256: 'abc', name: 'Language player',
+      producer: 'example', group: 'Text agents', available: true, reason: null,
+      details: [{ label: 'Context', value: '8192 tokens' }] }],
+  } });
+  expect(body).toContain('Text agents');
+  expect(body).toContain('Context: 8192 tokens');
+  expect(body).toContain('Policy ID: abc');
+  expect(body).not.toContain('transitions');
+  expect(body).not.toContain('update');
+});
