@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from contextlib import ExitStack
 from copy import deepcopy
 from dataclasses import asdict
+import json
 import math
 import os
 from pathlib import Path
@@ -65,6 +66,7 @@ from manabot.training.regime import (
     ImportPolicy,
     TrainBelief,
     TrainingRegime,
+    TrainRotisserie,
     TrainSelfPlay,
 )
 from manabot.training.rollout.collection import SeatRoutedCollector
@@ -74,11 +76,13 @@ from manabot.training.rollout.selection_data import (
     collect_selection_game,
     replay_selection_game,
 )
+from manabot.training.rotisserie import DraftUpdate, train_rotisserie
 from manabot.training.state.admission import admit_policy
 from manabot.training.state.game_errors import (
     GameAttempt,
     GameErrorLedger,
     GameErrorLimit,
+    GameErrorPolicy,
     GameErrorState,
 )
 from manabot.training.state.incidents import save_incident
@@ -1024,6 +1028,90 @@ def _execute_regime(
                 save_dataset(dataset, target)
                 record.artifacts["dataset"] = artifact(target)
                 record.export_seconds = time.perf_counter() - tick
+            elif isinstance(stage, TrainRotisserie):
+                if (
+                    file_sha256(stage.player["path"]) != stage.player["sha256"]
+                    or Path(stage.player["path"]).stat().st_size
+                    != stage.player["bytes"]
+                ):
+                    raise ValueError("frozen player differs from admitted bytes")
+                record.inputs["player"] = dict(stage.player)
+                tracker = RunContext(
+                    RuntimeConfig(
+                        seed=seed,
+                        runs_dir=out,
+                        name=stage.id,
+                        device="cpu",
+                        log_level="WARNING",
+                    ),
+                    experiment=experiment or stage.id,
+                    regime=regime.id,
+                    run=run.id,
+                    resolved_config={
+                        "regime": regime.model_dump(mode="json"),
+                        "identities": run.identities,
+                    },
+                )
+                run.metrics_run = str(tracker.run.files.root)
+                record.optimizer_updates = 0
+                draft_ledger = GameErrorLedger(
+                    out / f"{stage.id}-game-attempts.jsonl", GameErrorPolicy()
+                )
+                run.game_error_ledgers.append(str(draft_ledger.path))
+                run.game_errors = draft_ledger.state
+
+                def draft_progress(row: DraftUpdate) -> None:
+                    record.collection_seconds += row["collection_seconds"]
+                    record.learning_seconds += row["learning_seconds"]
+                    record.updates = row["update"]
+                    assert record.optimizer_updates is not None
+                    record.optimizer_updates += int(row["loss"] is not None)
+                    record.environment_decisions += row["environment_decisions"]
+                    record.learner_transitions += int(row["learner_decisions"])
+                    record.optimizer_exposures += int(row["gradient_decisions"])
+                    tracker.log_update(
+                        row,
+                        updates=record.updates,
+                        transitions=record.learner_transitions,
+                    )
+                    persist()
+
+                def draft_artifact(name: str, path: Path) -> None:
+                    record.artifacts[name] = artifact(path)
+                    if path.suffix == ".pt":
+                        tracker.checkpoint(path, transitions=record.learner_transitions)
+                    else:
+                        # This table is produced and schema-checked by the draft evaluator.
+                        rows = json.loads(path.read_text())
+                        if not isinstance(rows, list) or any(
+                            not isinstance(row, dict) for row in rows
+                        ):
+                            raise ValueError("invalid fixed-reference table")
+                        tracker.log_table(
+                            "fixed-reference",
+                            rows,
+                            updates=record.updates,
+                            transitions=record.learner_transitions,
+                        )
+                    persist()
+
+                try:
+                    train_rotisserie(
+                        stage,
+                        backend=torch_backend,
+                        seed=seed,
+                        out=out / stage.id / "drafts",
+                        check=check,
+                        remaining=remaining,
+                        progress=draft_progress,
+                        artifact=draft_artifact,
+                        ledger=draft_ledger,
+                    )
+                except BaseException:
+                    tracker.close("failed")
+                    raise
+                else:
+                    tracker.close()
             elif isinstance(stage, TrainBelief):
                 source = next(item for item in run.stages if item.id == stage.dataset)
                 dataset = read_dataset(Path(source.artifacts["dataset"]["path"]))

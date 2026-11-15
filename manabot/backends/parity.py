@@ -58,7 +58,7 @@ from manabot.policy.checkpoint import (
     canonical_parameters,
     from_torch_state,
 )
-from manabot.policy.prepare import Prepared, reference_distribution
+from manabot.policy.prepare import GamePrepared as Prepared, reference_distribution
 from manabot.policy.protocol import (
     Backend,
     BackendLearner,

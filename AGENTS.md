@@ -158,6 +158,9 @@ checkpoints or experiment evidence.
 
 ### Python typing
 
+- Native binding `TypedDict` declarations in `.pyi` files are typing-only; import
+  them under `TYPE_CHECKING`, since the extension does not export them at runtime.
+
 - Write fully typed Python: annotate parameters and return values on all
   functions and methods, including private helpers and tests; use `-> None`
   where appropriate. Type model fields and collections with their element

@@ -137,6 +137,59 @@ deck. Construction legality does not establish checkpoint compatibility or
 playing strength. Ordinary custom-game setup retains its existing construction
 rules; selecting Limited is explicit.
 
+## Public Rotisserie drafts
+
+`managym.format.Rotisserie` owns a public snake draft before construction:
+
+```python
+from managym.format import Rotisserie
+
+draft = Rotisserie("tla", "example-episode", seats=8, picks_per_seat=45)
+state = draft.observe()
+assert state["chooser"] == 0
+assert sum(state["remaining"]) == 664
+chosen_definition = state["legal"][0]  # Illustrative legal choice, not a strategy.
+draft.pick(state["episode_id"], state["revision"], 0, chosen_definition)
+```
+
+The complete TLA nonbasic inventory contains four copies per common, two per
+uncommon and one per rare/mythic. It excludes basics, tokens and bonus sheets.
+Printing membership includes the three TLA reprints defined under earlier sets;
+the bundled inventory is checked against authored definition identities before
+any draft begins. Unknown printing inventories fail without a partial supply.
+
+`observe()` returns an owned snapshot: initial and remaining supply, all seats'
+pools, revision and chooser, and one legal choice per available definition. Count
+rows use the same catalog axis as Limited arrays. The round is
+`revision // len(pools)`; even rounds pick ascending seats and odd rounds descend,
+so endpoint seats pick twice consecutively between rounds. A wrong episode,
+stale revision, wrong chooser or unavailable definition raises `ValueError` and
+changes nothing. Editing a returned snapshot cannot change the native draft.
+
+After 360 picks, `chooser` is `None`, `legal` is empty and each seat has 45 cards.
+`draft.pool(seat)` then returns its `CardPool` for `Limited.build`; it refuses
+while drafting remains in progress. Construction still uses the existing Limited
+rules and free basics. For the complete unscored draft/build demo and the planned
+reward comparison, see [TLA Rotisserie](../experiments/tla-rotisserie.md).
+
+## Learning public drafting and construction
+
+Preparation, training and evaluation share `manabot.drafting.collect_draft`,
+including its native choices, per-seat sampling, durable intents and completion
+receipt. `prepare` selects the uniform legal reference through that collector.
+
+`TrainRotisserie` in `manabot.training.regime` trains a separate random draft
+policy through the maintained executor and Learner. Both phases use shared
+`Prepared` inputs: `DraftPrepared` carries native card ids, exact legal masks,
+public supply and chooser-relative pools, position, and only the chooser's
+partial construction. `GamePrepared` retains the ordinary game input contract.
+
+Terminal signed rewards credit only the owning learner seat's picks and build
+additions. Incomplete reward bundles provide no gradient; other seats and the
+frozen game player never enter the draft optimizer. Draft artifacts have their
+own loader and bind catalog and printing identities. The [experiment guide](../experiments/tla-rotisserie.md)
+describes the controlled proof and the compatible-player requirement.
+
 ## The TLA pool corpus
 
 Restore the frozen corpus from the repository root:

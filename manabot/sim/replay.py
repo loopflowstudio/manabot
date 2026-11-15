@@ -301,6 +301,9 @@ def apply_game_event(
     if kind == "decision":
         game.pop("pending_decision", None)
         game["decisions"].append(value)
+    elif kind == "opening":
+        game["opening_value"] = value["value"]
+        game["opening_revision"] = value["revision"]
     elif kind == "initial":
         game["initial_state_digest"] = value
     elif kind == "identities":

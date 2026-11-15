@@ -4,9 +4,51 @@ build draws from. A native submodule: reach it as ``managym.format``.
 Array forms read and return NumPy arrays over the card axis: index ``i`` is
 ``card_def_id`` ``i``, with ``CARD_DEFINITION_COUNT`` entries."""
 
+from typing import Literal, TypedDict
+
 import numpy as np
 
 from . import CardPool, DeckIssue
+
+class SetPrinting(TypedDict):
+    card_def_id: int
+    key: str
+    definition_scryfall_id: str
+    oracle_id: str
+    name: str
+    set: str
+    scryfall_id: str
+    rarity: Literal["common", "uncommon", "rare", "mythic"]
+
+def set_printings(set: str) -> list[SetPrinting]:
+    """Complete checked nonbasic printing inventory. Uncurated sets raise ValueError."""
+
+class RotisserieObservation(TypedDict):
+    episode_id: str
+    set: str
+    printing_digest: str
+    revision: int
+    picks_per_seat: int
+    chooser: int | None
+    initial: list[int]
+    remaining: list[int]
+    pools: list[list[int]]
+    legal: list[int]
+
+class Rotisserie:
+    """One public shared-supply snake draft; count rows use the full catalog axis."""
+    def __init__(
+        self, set: str, episode_id: str, seats: int = 8, picks_per_seat: int = 45
+    ) -> None: ...
+    def observe(self) -> RotisserieObservation:
+        """Owned snapshot of every pool, supply and legal definition; chooser None ends drafting.
+
+        The round is revision // len(pools). Editing the snapshot cannot change the draft.
+        """
+    def pick(self, episode_id: str, revision: int, chooser: int, card_def_id: int) -> None:
+        """Commit one copy. Wrong episode/chooser, stale revision or unavailable card rejects atomically."""
+    def pool(self, seat: int) -> CardPool:
+        """Completed seat pool for Limited construction; rejects during drafting."""
 
 class Limited:
     """Limited rules: at least 40 cards, non-basics within pool counts, basics free."""

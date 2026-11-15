@@ -248,7 +248,8 @@ def test_native_worker_crash_and_timeout_are_retained(
         monkeypatch.setattr(Connection, "poll", poll_before_worker_exit)
     crashed = match.play_game(deepcopy(game), players, {}, 10000, 20)
     assert crashed["termination_reason"] == "crash", crashed
-    assert crashed["failed_player_id"] == players[0].player_id, crashed
+    assert crashed["failed_player_id"] is None, crashed
+    assert crashed["infrastructure_failure"]
     assert crashed["winner"] is None
     timed_out = match.play_game(deepcopy(game), players, {}, 10000, 0.001)
     assert timed_out["termination_reason"] == "timeout"

@@ -4618,12 +4618,18 @@ fn world_identity(py: Python<'_>) -> PyResult<PyObject> {
 }
 
 /// World pool rows for typed cards whose key prefix is one of `sets`, such as
-/// `["tla", "lea"]` for TLA cards with Alpha's basic lands.
+/// `["tla", "lea"]` for TLA cards with Alpha's basic lands. `printings=true`
+/// instead selects checked nonbasic printing membership; uncurated sets fail.
 #[cfg(feature = "python")]
-#[pyfunction]
-fn set_cards(py: Python<'_>, sets: Vec<String>) -> PyResult<PyObject> {
+#[pyfunction(signature = (sets, *, printings=false))]
+fn set_cards(py: Python<'_>, sets: Vec<String>, printings: bool) -> PyResult<PyObject> {
     let sets = sets.iter().map(String::as_str).collect::<Vec<_>>();
-    Ok(pool_rows(py, &crate::world::set_cards(&sets))?.into())
+    let rows = if printings {
+        crate::world::printed_set_cards(&sets).map_err(|e| PyValueError::new_err(e.to_string()))?
+    } else {
+        crate::world::set_cards(&sets)
+    };
+    Ok(pool_rows(py, &rows)?.into())
 }
 
 #[cfg(feature = "python")]

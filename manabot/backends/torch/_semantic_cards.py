@@ -18,7 +18,7 @@ from torch.nn import functional as F
 from manabot.policy.prepare import (
     NUMBER_TOKEN_KINDS,
     CatalogPrograms,
-    Prepared,
+    GamePrepared as Prepared,
     RecordNamespace,
     record_key,
 )

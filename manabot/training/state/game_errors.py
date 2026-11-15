@@ -36,6 +36,7 @@ import managym
 
 GameOutcome = Literal[
     "completed",
+    "opening_scored",
     "engine_error",
     "resource_limit",
     "truncated",
@@ -101,12 +102,14 @@ class GameAttempt(BaseModel):
 class GameErrorState(BaseModel):
     """Lifetime attempts plus the ordered rolling window of settled attempts.
 
-    attempted = completed + crashed + abandoned. Abandoned attempts and their
+    attempted = completed + opening_scored + crashed + abandoned. Opening scores
+    are successful observations, not completed games. Abandoned attempts and their
     samples are counted apart from errors, discards and replacement debt.
     """
 
     attempted: int = 0
     completed: int = 0
+    opening_scored: int = Field(default=0, exclude_if=lambda value: not value)
     crashed: int = 0
     abandoned: int = 0
     abandoned_samples: int = 0
@@ -133,8 +136,9 @@ class GameErrorState(BaseModel):
             self.abandoned += 1
             self.abandoned_samples += attempt.discarded_samples
             return
-        failed = attempt.outcome != "completed"
-        self.completed += int(not failed)
+        failed = attempt.outcome not in ("completed", "opening_scored")
+        self.completed += int(attempt.outcome == "completed")
+        self.opening_scored += int(attempt.outcome == "opening_scored")
         self.crashed += int(failed)
         self.discarded_samples += attempt.discarded_samples
         self.learned_samples += attempt.learned_samples
@@ -320,7 +324,7 @@ def main() -> None:
     )
     if evidence is None:
         attempt = GameAttempt.model_validate(entry["attempt"])
-        if attempt.outcome == "completed":
+        if attempt.outcome in ("completed", "opening_scored"):
             parser.error("select a failed attempt")
     identities = evidence.identities if evidence else entry["context"]["identities"]
     try:

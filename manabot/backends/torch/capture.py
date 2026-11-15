@@ -21,7 +21,7 @@ import torch
 
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.env.observation import ObservationBuffers
-from manabot.policy.prepare import Prepared
+from manabot.policy.prepare import GamePrepared as Prepared
 from manabot.training.execution import execute_regime
 from manabot.training.regime import TrainingRegime
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector

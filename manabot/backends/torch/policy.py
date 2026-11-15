@@ -49,7 +49,7 @@ from manabot.model.architecture import ArchitectureReceipt, architecture_receipt
 from manabot.policy import admission
 from manabot.policy.buckets import row_needs, sizes_of, trim_observation
 from manabot.policy.checkpoint import layout
-from manabot.policy.prepare import BeliefRows, Prepared, Tables, prepare
+from manabot.policy.prepare import BeliefRows, GamePrepared as Prepared, Tables, prepare
 from manabot.policy.protocol import InferenceResult
 import managym
 

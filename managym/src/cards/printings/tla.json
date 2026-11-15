@@ -1,0 +1,2538 @@
+{
+  "source": "https://api.scryfall.com",
+  "query": "set:tla -type:basic",
+  "unique": "cards",
+  "retrieved_at": "2026-11-15T02:34:34.527612+00:00",
+  "verification": "Paginated set search joined by oracle_id to exact authored printing IDs via /cards/collection; names agree. TLA first-printing IDs retained where present.",
+  "printings": [
+    {
+      "key": "eld.epic_downfall",
+      "definition_scryfall_id": "63da83fe-fa59-40cb-a42e-e1b14b650bc8",
+      "oracle_id": "ed5d6aba-0b8d-48b3-a84c-618f45fb67b1",
+      "name": "Epic Downfall",
+      "set": "tla",
+      "scryfall_id": "3b4a6804-04f5-4467-bb1c-9466a47bc55f",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "ptk.corrupt_court_official",
+      "definition_scryfall_id": "9d3ba2e3-e680-47cd-81c5-555deea7d00f",
+      "oracle_id": "ec84201d-757f-4a7a-b3a2-85ccd5ee81ae",
+      "name": "Corrupt Court Official",
+      "set": "tla",
+      "scryfall_id": "4692610e-d64c-438e-b5ad-0cf67fd57f1f",
+      "rarity": "common"
+    },
+    {
+      "key": "ths.lightning_strike",
+      "definition_scryfall_id": "bbb03f2e-2b92-4aa1-afae-301ed5d151d3",
+      "oracle_id": "f34b9bc4-7bfe-47fd-ba23-4eeeb46026eb",
+      "name": "Lightning Strike",
+      "set": "tla",
+      "scryfall_id": "5787b0e0-9469-4a6d-8b81-c992628e28c0",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.aang_at_the_crossroads",
+      "definition_scryfall_id": "fea89ca0-8070-4f28-9851-994314f9d248",
+      "oracle_id": "96e5d4a1-e59f-4140-823f-a17e15ee5d8d",
+      "name": "Aang, at the Crossroads // Aang, Destined Savior",
+      "set": "tla",
+      "scryfall_id": "fea89ca0-8070-4f28-9851-994314f9d248",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.aang_s_iceberg",
+      "definition_scryfall_id": "720fbd87-b1c1-4b3b-97a1-46b943b115e3",
+      "oracle_id": "646f9ad8-9d18-4b42-954a-e21a62e9f0e8",
+      "name": "Aang's Iceberg",
+      "set": "tla",
+      "scryfall_id": "720fbd87-b1c1-4b3b-97a1-46b943b115e3",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.aang_s_journey",
+      "definition_scryfall_id": "5e51f727-5a9b-4bc7-83a9-dbcf1c933e15",
+      "oracle_id": "ddf461b9-a205-4dc7-a9c3-c047b1ff709f",
+      "name": "Aang's Journey",
+      "set": "tla",
+      "scryfall_id": "5e51f727-5a9b-4bc7-83a9-dbcf1c933e15",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.aang_swift_savior",
+      "definition_scryfall_id": "82866a0e-485a-4f7e-8c49-f7d9ff3f4ad4",
+      "oracle_id": "cbf09050-39d0-463b-96db-9e22011ae0d8",
+      "name": "Aang, Swift Savior // Aang and La, Ocean's Fury",
+      "set": "tla",
+      "scryfall_id": "82866a0e-485a-4f7e-8c49-f7d9ff3f4ad4",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.aang_the_last_airbender",
+      "definition_scryfall_id": "245e008c-e073-443f-9592-6f628c0026ec",
+      "oracle_id": "70564c3a-858f-498e-8b92-acb3ca54ae7e",
+      "name": "Aang, the Last Airbender",
+      "set": "tla",
+      "scryfall_id": "245e008c-e073-443f-9592-6f628c0026ec",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.abandon_attachments",
+      "definition_scryfall_id": "74ca45a4-97ab-4255-9129-884e8b42b984",
+      "oracle_id": "82333385-631f-4abf-b159-bb367f1c6fd9",
+      "name": "Abandon Attachments",
+      "set": "tla",
+      "scryfall_id": "74ca45a4-97ab-4255-9129-884e8b42b984",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.abandoned_air_temple",
+      "definition_scryfall_id": "9c0433f9-8f1e-4a19-a83f-a41925f1b1a9",
+      "oracle_id": "9575d7ce-f26d-4b90-87a3-6329e9799572",
+      "name": "Abandoned Air Temple",
+      "set": "tla",
+      "scryfall_id": "9c0433f9-8f1e-4a19-a83f-a41925f1b1a9",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.accumulate_wisdom",
+      "definition_scryfall_id": "a6335319-6c92-40d4-ab2d-c06c79049c30",
+      "oracle_id": "a63eb744-71c4-447d-9372-c3a734f022c5",
+      "name": "Accumulate Wisdom",
+      "set": "tla",
+      "scryfall_id": "a6335319-6c92-40d4-ab2d-c06c79049c30",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.agna_qel_a",
+      "definition_scryfall_id": "6b885829-a323-4f7d-87c9-aa4615dcbe5c",
+      "oracle_id": "22d0a848-2126-48f0-9050-38daaf93b1d0",
+      "name": "Agna Qel'a",
+      "set": "tla",
+      "scryfall_id": "6b885829-a323-4f7d-87c9-aa4615dcbe5c",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.air_nomad_legacy",
+      "definition_scryfall_id": "10874416-fa4c-4aa3-b885-4351d011d208",
+      "oracle_id": "9e830359-ab92-4bfd-82b3-d9c67ac80cf7",
+      "name": "Air Nomad Legacy",
+      "set": "tla",
+      "scryfall_id": "10874416-fa4c-4aa3-b885-4351d011d208",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.airbender_ascension",
+      "definition_scryfall_id": "99a90d13-891c-45cc-b1d5-6080ebae5862",
+      "oracle_id": "c4d2fdf9-637d-4e97-ae33-45f2d27bf8cd",
+      "name": "Airbender Ascension",
+      "set": "tla",
+      "scryfall_id": "99a90d13-891c-45cc-b1d5-6080ebae5862",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.airbender_s_reversal",
+      "definition_scryfall_id": "6b7078e4-2892-4b5f-83ab-90369e0d6dba",
+      "oracle_id": "64e3791b-de99-4eed-af49-cbec218c28aa",
+      "name": "Airbender's Reversal",
+      "set": "tla",
+      "scryfall_id": "6b7078e4-2892-4b5f-83ab-90369e0d6dba",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.airbending_lesson",
+      "definition_scryfall_id": "e2bcd0a6-e94d-4a21-a334-a57459c1b8cc",
+      "oracle_id": "e101b744-9175-4aa5-bf80-d6944359e538",
+      "name": "Airbending Lesson",
+      "set": "tla",
+      "scryfall_id": "e2bcd0a6-e94d-4a21-a334-a57459c1b8cc",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.airship_engine_room",
+      "definition_scryfall_id": "0b98ba34-f251-4bd0-9d75-1d4445be5cfd",
+      "oracle_id": "01ed9139-293d-4477-a145-3c6fe59266c7",
+      "name": "Airship Engine Room",
+      "set": "tla",
+      "scryfall_id": "0b98ba34-f251-4bd0-9d75-1d4445be5cfd",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.allies_at_last",
+      "definition_scryfall_id": "11a77897-2aba-4a9b-bbe6-1768ca9f12cb",
+      "oracle_id": "c15e5e93-2eff-407d-ae75-437e36ef85ba",
+      "name": "Allies at Last",
+      "set": "tla",
+      "scryfall_id": "11a77897-2aba-4a9b-bbe6-1768ca9f12cb",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.appa_loyal_sky_bison",
+      "definition_scryfall_id": "a9b2a843-c6fe-4d19-801e-1538e4381ab0",
+      "oracle_id": "c6e28cf0-81c7-4f52-a29b-988cc6fd31ee",
+      "name": "Appa, Loyal Sky Bison",
+      "set": "tla",
+      "scryfall_id": "a9b2a843-c6fe-4d19-801e-1538e4381ab0",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.appa_steadfast_guardian",
+      "definition_scryfall_id": "829d91e9-4878-4e55-a262-ac0d55b65d4e",
+      "oracle_id": "03c141ca-11e4-4927-a6bd-980ee1203c73",
+      "name": "Appa, Steadfast Guardian",
+      "set": "tla",
+      "scryfall_id": "829d91e9-4878-4e55-a262-ac0d55b65d4e",
+      "rarity": "mythic"
+    },
+    {
+      "key": "tla.avatar_aang",
+      "definition_scryfall_id": "fe29e909-50e9-4f04-b1a3-2cc5d7e3efe8",
+      "oracle_id": "b4872bac-5822-4c35-9b73-38c4e3ffa477",
+      "name": "Avatar Aang // Aang, Master of Elements",
+      "set": "tla",
+      "scryfall_id": "fe29e909-50e9-4f04-b1a3-2cc5d7e3efe8",
+      "rarity": "mythic"
+    },
+    {
+      "key": "tla.avatar_destiny",
+      "definition_scryfall_id": "4d74da72-8443-4fce-9d64-d2041f6a3292",
+      "oracle_id": "ecb81888-589b-4486-a444-e0c26384854e",
+      "name": "Avatar Destiny",
+      "set": "tla",
+      "scryfall_id": "4d74da72-8443-4fce-9d64-d2041f6a3292",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.avatar_enthusiasts",
+      "definition_scryfall_id": "7292e5f2-d5a1-4e39-8f75-eba471819f04",
+      "oracle_id": "7b0d9d79-2e86-4079-8db3-500483c8807e",
+      "name": "Avatar Enthusiasts",
+      "set": "tla",
+      "scryfall_id": "7292e5f2-d5a1-4e39-8f75-eba471819f04",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.avatar_s_wrath",
+      "definition_scryfall_id": "4811072d-fac0-40dd-a5cf-9694d51b12cf",
+      "oracle_id": "e3431dae-969c-4896-9f9e-a80e7bec4bdf",
+      "name": "Avatar's Wrath",
+      "set": "tla",
+      "scryfall_id": "4811072d-fac0-40dd-a5cf-9694d51b12cf",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.azula_always_lies",
+      "definition_scryfall_id": "416b9207-a2af-44d1-9b87-4943f6e46d42",
+      "oracle_id": "f56c6c35-d09b-4bee-a685-98e9afed13d1",
+      "name": "Azula Always Lies",
+      "set": "tla",
+      "scryfall_id": "416b9207-a2af-44d1-9b87-4943f6e46d42",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.azula_cunning_usurper",
+      "definition_scryfall_id": "daf30e1c-436d-4f23-b1d2-570619a4b7f5",
+      "oracle_id": "7c9e351d-2e6c-4050-9c3d-b15bb9255a4d",
+      "name": "Azula, Cunning Usurper",
+      "set": "tla",
+      "scryfall_id": "daf30e1c-436d-4f23-b1d2-570619a4b7f5",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.azula_on_the_hunt",
+      "definition_scryfall_id": "1335a145-248a-4f1e-8760-9a5d531e14e3",
+      "oracle_id": "89f96032-5cba-404d-82b0-38d2be963e4b",
+      "name": "Azula, On the Hunt",
+      "set": "tla",
+      "scryfall_id": "1335a145-248a-4f1e-8760-9a5d531e14e3",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.ba_sing_se",
+      "definition_scryfall_id": "bdf3b2be-d0cd-4a3c-a10e-82d32c12d3bd",
+      "oracle_id": "de1ae205-ca5b-4d26-8194-ca85f1406e53",
+      "name": "Ba Sing Se",
+      "set": "tla",
+      "scryfall_id": "bdf3b2be-d0cd-4a3c-a10e-82d32c12d3bd",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.badgermole",
+      "definition_scryfall_id": "aabbd420-b7fc-496f-9168-bad823d51d9e",
+      "oracle_id": "2084a7f6-226b-4fb4-a30e-703f674d33b4",
+      "name": "Badgermole",
+      "set": "tla",
+      "scryfall_id": "aabbd420-b7fc-496f-9168-bad823d51d9e",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.badgermole_cub",
+      "definition_scryfall_id": "340c5799-4964-44dd-8c48-8f3f3aba5211",
+      "oracle_id": "2b0afb89-0944-4861-b9c3-e909e2ac215e",
+      "name": "Badgermole Cub",
+      "set": "tla",
+      "scryfall_id": "340c5799-4964-44dd-8c48-8f3f3aba5211",
+      "rarity": "mythic"
+    },
+    {
+      "key": "tla.barrels_of_blasting_jelly",
+      "definition_scryfall_id": "4fd83083-3779-41f0-90a0-a00e3270e4e6",
+      "oracle_id": "c6cd520c-106b-4ee5-bc02-6c5fbdbc78dd",
+      "name": "Barrels of Blasting Jelly",
+      "set": "tla",
+      "scryfall_id": "4fd83083-3779-41f0-90a0-a00e3270e4e6",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.beetle_headed_merchants",
+      "definition_scryfall_id": "c2eed79f-38c1-4aac-9525-d54cb114f17f",
+      "oracle_id": "0e6609b4-f359-4bf1-a06e-f4317a0e7b3c",
+      "name": "Beetle-Headed Merchants",
+      "set": "tla",
+      "scryfall_id": "c2eed79f-38c1-4aac-9525-d54cb114f17f",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.beifong_s_bounty_hunters",
+      "definition_scryfall_id": "4f88ec3a-44a7-4ae5-a68c-24294dabaeed",
+      "oracle_id": "8561b088-56b3-4732-82e9-8da1e3affd55",
+      "name": "Beifong's Bounty Hunters",
+      "set": "tla",
+      "scryfall_id": "4f88ec3a-44a7-4ae5-a68c-24294dabaeed",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.bender_s_waterskin",
+      "definition_scryfall_id": "6d4a1712-d19e-4475-9614-a0b1af4da610",
+      "oracle_id": "3bc46467-323f-4cbf-9d0a-f3d2ae3c3a34",
+      "name": "Bender's Waterskin",
+      "set": "tla",
+      "scryfall_id": "6d4a1712-d19e-4475-9614-a0b1af4da610",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.benevolent_river_spirit",
+      "definition_scryfall_id": "7ffb79cd-d170-4047-89c8-6e85188f30da",
+      "oracle_id": "12d91743-1ccb-4f2b-b2a9-1c2b34f7c8eb",
+      "name": "Benevolent River Spirit",
+      "set": "tla",
+      "scryfall_id": "7ffb79cd-d170-4047-89c8-6e85188f30da",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.bitter_work",
+      "definition_scryfall_id": "3e8de6a9-9859-4ed2-8ece-ef80a7209be9",
+      "oracle_id": "e9a24ed8-e844-4c50-b386-bc28da9989b1",
+      "name": "Bitter Work",
+      "set": "tla",
+      "scryfall_id": "3e8de6a9-9859-4ed2-8ece-ef80a7209be9",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.boar_q_pine",
+      "definition_scryfall_id": "087a445c-5f63-45d6-83e8-20d22650db20",
+      "oracle_id": "551e4356-5b1f-475c-a64b-9c50ea9b0368",
+      "name": "Boar-q-pine",
+      "set": "tla",
+      "scryfall_id": "087a445c-5f63-45d6-83e8-20d22650db20",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.boiling_rock_prison",
+      "definition_scryfall_id": "1c2e2220-54d1-4180-93a0-964e3b0ba8b8",
+      "oracle_id": "6caabc45-4644-4941-a2f3-f04ee7b50a89",
+      "name": "Boiling Rock Prison",
+      "set": "tla",
+      "scryfall_id": "1c2e2220-54d1-4180-93a0-964e3b0ba8b8",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.boiling_rock_rioter",
+      "definition_scryfall_id": "739653cc-35c8-4a66-95d8-3e80fa6114f0",
+      "oracle_id": "5193172c-9024-409e-bd9e-0387971d65fe",
+      "name": "Boiling Rock Rioter",
+      "set": "tla",
+      "scryfall_id": "739653cc-35c8-4a66-95d8-3e80fa6114f0",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.boomerang_basics",
+      "definition_scryfall_id": "17ab958a-abc6-472e-ad6a-97c731d89c74",
+      "oracle_id": "acd881eb-f3b4-4174-9fc2-e3c7c213886b",
+      "name": "Boomerang Basics",
+      "set": "tla",
+      "scryfall_id": "17ab958a-abc6-472e-ad6a-97c731d89c74",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.bumi_bash",
+      "definition_scryfall_id": "e8895479-26cb-4ee8-98ca-6d46c43f0dbd",
+      "oracle_id": "629f247c-1e64-4c32-8892-0716ed469d1c",
+      "name": "Bumi Bash",
+      "set": "tla",
+      "scryfall_id": "e8895479-26cb-4ee8-98ca-6d46c43f0dbd",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.bumi_king_of_three_trials",
+      "definition_scryfall_id": "a268697b-22b0-4e1b-a5b6-d9be95025e57",
+      "oracle_id": "f7493bcf-5c17-4562-a759-37082ec49ff8",
+      "name": "Bumi, King of Three Trials",
+      "set": "tla",
+      "scryfall_id": "a268697b-22b0-4e1b-a5b6-d9be95025e57",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.bumi_unleashed",
+      "definition_scryfall_id": "b20a5185-7e31-4fc9-be11-9423bfc389bf",
+      "oracle_id": "1fef13d8-5da2-46a6-91ed-7a31bd46e538",
+      "name": "Bumi, Unleashed",
+      "set": "tla",
+      "scryfall_id": "b20a5185-7e31-4fc9-be11-9423bfc389bf",
+      "rarity": "mythic"
+    },
+    {
+      "key": "tla.buzzard_wasp_colony",
+      "definition_scryfall_id": "42d83229-0555-4361-8964-4b525c825843",
+      "oracle_id": "29fd050c-dd1d-4e1b-b3cc-f7d8d18e4dcb",
+      "name": "Buzzard-Wasp Colony",
+      "set": "tla",
+      "scryfall_id": "42d83229-0555-4361-8964-4b525c825843",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.callous_inspector",
+      "definition_scryfall_id": "f22610e9-6b14-4914-bb67-bd6723bec9aa",
+      "oracle_id": "5d950fd4-8956-4b1a-ab0f-ab31bcffce4e",
+      "name": "Callous Inspector",
+      "set": "tla",
+      "scryfall_id": "f22610e9-6b14-4914-bb67-bd6723bec9aa",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.canyon_crawler",
+      "definition_scryfall_id": "30a30bfb-f0f3-425b-b37d-20079ee27046",
+      "oracle_id": "bac94fc9-808b-4dc9-b405-408dd2aa6194",
+      "name": "Canyon Crawler",
+      "set": "tla",
+      "scryfall_id": "30a30bfb-f0f3-425b-b37d-20079ee27046",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.cat_gator",
+      "definition_scryfall_id": "ec83a825-79e6-42a4-919c-3bc498ff4433",
+      "oracle_id": "349e6b9e-40a8-49bc-9cd3-4a22f5363fa5",
+      "name": "Cat-Gator",
+      "set": "tla",
+      "scryfall_id": "ec83a825-79e6-42a4-919c-3bc498ff4433",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.cat_owl",
+      "definition_scryfall_id": "d7df3391-dbe5-4eb4-85c1-037c5f3ea971",
+      "oracle_id": "ba6840a6-b6fd-4b91-ac1a-a61b7b15849a",
+      "name": "Cat-Owl",
+      "set": "tla",
+      "scryfall_id": "d7df3391-dbe5-4eb4-85c1-037c5f3ea971",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.combustion_man",
+      "definition_scryfall_id": "86f7399d-6876-4e85-ba34-ff1f97dc144a",
+      "oracle_id": "533b107c-fd66-45ef-b74e-e6bd9b75ea8f",
+      "name": "Combustion Man",
+      "set": "tla",
+      "scryfall_id": "86f7399d-6876-4e85-ba34-ff1f97dc144a",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.combustion_technique",
+      "definition_scryfall_id": "fdcca576-2ef2-44cc-9944-a92bd146444a",
+      "oracle_id": "522a04ff-cbfe-47b0-bd29-ef6fc27a6905",
+      "name": "Combustion Technique",
+      "set": "tla",
+      "scryfall_id": "fdcca576-2ef2-44cc-9944-a92bd146444a",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.compassionate_healer",
+      "definition_scryfall_id": "88d5f8fd-d4de-4e64-9b74-e53719ffbcdc",
+      "oracle_id": "6ef464bd-2ed0-4f99-af4a-ebf276f55384",
+      "name": "Compassionate Healer",
+      "set": "tla",
+      "scryfall_id": "88d5f8fd-d4de-4e64-9b74-e53719ffbcdc",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.crashing_wave",
+      "definition_scryfall_id": "9fd02eb4-1ef5-4a14-89a8-b25e720e8016",
+      "oracle_id": "c8d3936f-4c08-4ffe-83c9-7ed26fb8f9cd",
+      "name": "Crashing Wave",
+      "set": "tla",
+      "scryfall_id": "9fd02eb4-1ef5-4a14-89a8-b25e720e8016",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.crescent_island_temple",
+      "definition_scryfall_id": "04c85150-269e-4158-a1b9-bd11bc6b7d79",
+      "oracle_id": "2886f95e-c4e8-4770-b7de-40985f336cfb",
+      "name": "Crescent Island Temple",
+      "set": "tla",
+      "scryfall_id": "04c85150-269e-4158-a1b9-bd11bc6b7d79",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.cruel_administrator",
+      "definition_scryfall_id": "9d70707b-2e25-40b1-80a8-9a5492bca7e2",
+      "oracle_id": "24a691f3-88dc-47a5-b5cd-e02bb8026470",
+      "name": "Cruel Administrator",
+      "set": "tla",
+      "scryfall_id": "9d70707b-2e25-40b1-80a8-9a5492bca7e2",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.cunning_maneuver",
+      "definition_scryfall_id": "0ff7c993-ba29-43b0-9639-7c4bc0292fa2",
+      "oracle_id": "96335212-ec57-4beb-bab1-11c8eaa62119",
+      "name": "Cunning Maneuver",
+      "set": "tla",
+      "scryfall_id": "0ff7c993-ba29-43b0-9639-7c4bc0292fa2",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.curious_farm_animals",
+      "definition_scryfall_id": "2402d759-84b6-41d2-ad78-9333974e9222",
+      "oracle_id": "e451b5aa-5832-42b3-8d72-f67e126a529f",
+      "name": "Curious Farm Animals",
+      "set": "tla",
+      "scryfall_id": "2402d759-84b6-41d2-ad78-9333974e9222",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.cycle_of_renewal",
+      "definition_scryfall_id": "233f4a05-057b-48f4-8f56-8d4a060a40e4",
+      "oracle_id": "77eda626-5cef-496d-b291-cfa1ee6fc1fb",
+      "name": "Cycle of Renewal",
+      "set": "tla",
+      "scryfall_id": "233f4a05-057b-48f4-8f56-8d4a060a40e4",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.dai_li_agents",
+      "definition_scryfall_id": "9ddb8715-341b-400a-b6eb-f3f90518157c",
+      "oracle_id": "8c05e716-b6eb-4f95-866b-7e43a898ebe2",
+      "name": "Dai Li Agents",
+      "set": "tla",
+      "scryfall_id": "9ddb8715-341b-400a-b6eb-f3f90518157c",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.dai_li_indoctrination",
+      "definition_scryfall_id": "eca652b8-44f1-4bd9-b4bf-036eeead13aa",
+      "oracle_id": "5591efbc-1b2c-489a-b4f3-935c9b6bd71a",
+      "name": "Dai Li Indoctrination",
+      "set": "tla",
+      "scryfall_id": "eca652b8-44f1-4bd9-b4bf-036eeead13aa",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.day_of_black_sun",
+      "definition_scryfall_id": "d0e24797-3e45-4c2b-b4b0-1ef44d42eaee",
+      "oracle_id": "dc857129-533c-41d1-8e8b-1c0443030d69",
+      "name": "Day of Black Sun",
+      "set": "tla",
+      "scryfall_id": "d0e24797-3e45-4c2b-b4b0-1ef44d42eaee",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.deadly_precision",
+      "definition_scryfall_id": "4661daf6-d960-4278-8946-70948efaf99d",
+      "oracle_id": "d23ca3d2-0731-4df4-a3c6-69ddf0c58601",
+      "name": "Deadly Precision",
+      "set": "tla",
+      "scryfall_id": "4661daf6-d960-4278-8946-70948efaf99d",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.deserter_s_disciple",
+      "definition_scryfall_id": "14f2ed5a-042b-4cce-82ad-cfb4bd511d98",
+      "oracle_id": "73ca3132-d849-4cf9-beba-75ba09789332",
+      "name": "Deserter's Disciple",
+      "set": "tla",
+      "scryfall_id": "14f2ed5a-042b-4cce-82ad-cfb4bd511d98",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.destined_confrontation",
+      "definition_scryfall_id": "d4605cf7-03bc-4a7f-b50a-49b83b09b54d",
+      "oracle_id": "9703140f-36ee-4427-a390-c1dbdb9e4ee9",
+      "name": "Destined Confrontation",
+      "set": "tla",
+      "scryfall_id": "d4605cf7-03bc-4a7f-b50a-49b83b09b54d",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.diligent_zookeeper",
+      "definition_scryfall_id": "21f52564-9820-42dc-a08d-459d51afc397",
+      "oracle_id": "6a84a8a4-c8b0-45ce-af6f-605fcffc395b",
+      "name": "Diligent Zookeeper",
+      "set": "tla",
+      "scryfall_id": "21f52564-9820-42dc-a08d-459d51afc397",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.dragonfly_swarm",
+      "definition_scryfall_id": "16be5cc4-b15a-4c5e-8a6e-05c87b519127",
+      "oracle_id": "83abf1d0-04e4-49e5-bf63-59f77829ffd1",
+      "name": "Dragonfly Swarm",
+      "set": "tla",
+      "scryfall_id": "16be5cc4-b15a-4c5e-8a6e-05c87b519127",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.earth_kingdom_general",
+      "definition_scryfall_id": "8688fce5-74b1-41e1-a59a-05a3878a75cb",
+      "oracle_id": "e43c31ee-1bac-4f96-8b74-334b3238ab73",
+      "name": "Earth Kingdom General",
+      "set": "tla",
+      "scryfall_id": "8688fce5-74b1-41e1-a59a-05a3878a75cb",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.earth_kingdom_jailer",
+      "definition_scryfall_id": "9207362c-3605-4794-803f-ad1d0175fcca",
+      "oracle_id": "1b799c30-4a43-403d-b822-0555bd513913",
+      "name": "Earth Kingdom Jailer",
+      "set": "tla",
+      "scryfall_id": "9207362c-3605-4794-803f-ad1d0175fcca",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.earth_kingdom_protectors",
+      "definition_scryfall_id": "d263472e-1d75-4cb9-8f7b-986fa22bc841",
+      "oracle_id": "3bfb3913-808d-444b-97c3-a90af3bc585b",
+      "name": "Earth Kingdom Protectors",
+      "set": "tla",
+      "scryfall_id": "d263472e-1d75-4cb9-8f7b-986fa22bc841",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.earth_kingdom_soldier",
+      "definition_scryfall_id": "2d543d35-945a-4ffa-beb7-7c5d4f894f79",
+      "oracle_id": "4289f2d4-3db2-4dd1-9c18-af3f78309844",
+      "name": "Earth Kingdom Soldier",
+      "set": "tla",
+      "scryfall_id": "2d543d35-945a-4ffa-beb7-7c5d4f894f79",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.earth_kings_lieutenant",
+      "definition_scryfall_id": "4533d155-5c56-41a5-9d76-2d1414ac47c9",
+      "oracle_id": "9da9248d-1201-447f-b6c2-2b64af4f71c4",
+      "name": "Earth King's Lieutenant",
+      "set": "tla",
+      "scryfall_id": "4533d155-5c56-41a5-9d76-2d1414ac47c9",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.earth_rumble",
+      "definition_scryfall_id": "62730505-56f1-4043-a8b9-4fb7bc508b47",
+      "oracle_id": "f04a7763-5fba-42e5-a45a-b3dc2daba902",
+      "name": "Earth Rumble",
+      "set": "tla",
+      "scryfall_id": "62730505-56f1-4043-a8b9-4fb7bc508b47",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.earth_rumble_wrestlers",
+      "definition_scryfall_id": "74fca0b8-12e1-405f-b999-160d65fe0ade",
+      "oracle_id": "1de17747-27e8-40bb-b6f7-6d5402d4705c",
+      "name": "Earth Rumble Wrestlers",
+      "set": "tla",
+      "scryfall_id": "74fca0b8-12e1-405f-b999-160d65fe0ade",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.earth_village_ruffians",
+      "definition_scryfall_id": "56d4e0b7-232f-4953-84a3-e6f17781aa45",
+      "oracle_id": "0380e99c-18f9-4472-8223-bb208e5f0963",
+      "name": "Earth Village Ruffians",
+      "set": "tla",
+      "scryfall_id": "56d4e0b7-232f-4953-84a3-e6f17781aa45",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.earthbender_ascension",
+      "definition_scryfall_id": "590a58ab-5e98-4031-8aa6-ce396dc1429f",
+      "oracle_id": "f8966fd5-2926-4ba0-b7d6-cfea40cd4e05",
+      "name": "Earthbender Ascension",
+      "set": "tla",
+      "scryfall_id": "590a58ab-5e98-4031-8aa6-ce396dc1429f",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.earthbending_lesson",
+      "definition_scryfall_id": "eccd63b3-3a3a-4661-9d6e-fb8152429bdb",
+      "oracle_id": "5e113f0f-4469-4276-82e1-0a804f3de444",
+      "name": "Earthbending Lesson",
+      "set": "tla",
+      "scryfall_id": "eccd63b3-3a3a-4661-9d6e-fb8152429bdb",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.earthen_ally",
+      "definition_scryfall_id": "d7a0f2d9-efa4-4a53-a24b-36694457bd1c",
+      "oracle_id": "913bca28-faf9-42e6-a8c0-469cd9bc0208",
+      "name": "Earthen Ally",
+      "set": "tla",
+      "scryfall_id": "d7a0f2d9-efa4-4a53-a24b-36694457bd1c",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.elemental_teachings",
+      "definition_scryfall_id": "cac8ac35-6860-4839-ab85-93d409206c08",
+      "oracle_id": "7255705c-b788-4bb1-824a-9262f4a0864e",
+      "name": "Elemental Teachings",
+      "set": "tla",
+      "scryfall_id": "cac8ac35-6860-4839-ab85-93d409206c08",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.ember_island_production",
+      "definition_scryfall_id": "0f79a7fc-36b1-4397-8e67-6638379d3a38",
+      "oracle_id": "0b786547-67ed-49fa-9981-35c4c2175f62",
+      "name": "Ember Island Production",
+      "set": "tla",
+      "scryfall_id": "0f79a7fc-36b1-4397-8e67-6638379d3a38",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.energybending",
+      "definition_scryfall_id": "6c085441-e023-4032-89a0-d24ce5060ac3",
+      "oracle_id": "c4c1e49d-5f14-486c-acf2-1952512b12b2",
+      "name": "Energybending",
+      "set": "tla",
+      "scryfall_id": "6c085441-e023-4032-89a0-d24ce5060ac3",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.enter_the_avatar_state",
+      "definition_scryfall_id": "a8f3d2cb-d073-4df8-8769-49612628a377",
+      "oracle_id": "4e552be1-0702-4e18-822f-98611f8a8e70",
+      "name": "Enter the Avatar State",
+      "set": "tla",
+      "scryfall_id": "a8f3d2cb-d073-4df8-8769-49612628a377",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.fancy_footwork",
+      "definition_scryfall_id": "9c59f8c5-4063-4e5a-b684-fde175c4a981",
+      "oracle_id": "c5648a32-98b0-4625-aae1-ae56e0ef0197",
+      "name": "Fancy Footwork",
+      "set": "tla",
+      "scryfall_id": "9c59f8c5-4063-4e5a-b684-fde175c4a981",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.fatal_fissure",
+      "definition_scryfall_id": "3343933d-4425-4ede-8d92-876bd0c6df60",
+      "oracle_id": "202e45d6-8c7a-46db-85fb-634aa77b4097",
+      "name": "Fatal Fissure",
+      "set": "tla",
+      "scryfall_id": "3343933d-4425-4ede-8d92-876bd0c6df60",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.fated_firepower",
+      "definition_scryfall_id": "51352127-1f86-42e9-b4ca-2fd58b14e86b",
+      "oracle_id": "13daa21c-278d-45bd-9a6e-a77d6a558453",
+      "name": "Fated Firepower",
+      "set": "tla",
+      "scryfall_id": "51352127-1f86-42e9-b4ca-2fd58b14e86b",
+      "rarity": "mythic"
+    },
+    {
+      "key": "tla.fire_lord_azula",
+      "definition_scryfall_id": "bc6146bf-f0c6-4557-af6a-74c643d5fc01",
+      "oracle_id": "2631130e-63e2-43a3-914a-648e76722203",
+      "name": "Fire Lord Azula",
+      "set": "tla",
+      "scryfall_id": "bc6146bf-f0c6-4557-af6a-74c643d5fc01",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.fire_lord_zuko",
+      "definition_scryfall_id": "e62d3bcc-7bb4-42be-90a9-caf3c1caa29d",
+      "oracle_id": "a129423d-c886-4120-96f7-c2517ea7eb83",
+      "name": "Fire Lord Zuko",
+      "set": "tla",
+      "scryfall_id": "e62d3bcc-7bb4-42be-90a9-caf3c1caa29d",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.fire_nation_attacks",
+      "definition_scryfall_id": "9cc10845-8989-46ca-a57a-fd728fca0729",
+      "oracle_id": "399fba23-fc13-440b-ab67-192eede6ecab",
+      "name": "Fire Nation Attacks",
+      "set": "tla",
+      "scryfall_id": "9cc10845-8989-46ca-a57a-fd728fca0729",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.fire_nation_cadets",
+      "definition_scryfall_id": "1a3a862c-9c9a-41cd-94d1-2d0cff22a6cd",
+      "oracle_id": "5ebfa3f5-f80a-4845-bba7-75c4ddb88682",
+      "name": "Fire Nation Cadets",
+      "set": "tla",
+      "scryfall_id": "1a3a862c-9c9a-41cd-94d1-2d0cff22a6cd",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.fire_nation_engineer",
+      "definition_scryfall_id": "5daba108-277d-46c8-ac35-7610f4786813",
+      "oracle_id": "9a983666-376b-48a8-9f82-8d041d32ae93",
+      "name": "Fire Nation Engineer",
+      "set": "tla",
+      "scryfall_id": "5daba108-277d-46c8-ac35-7610f4786813",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.fire_nation_palace",
+      "definition_scryfall_id": "c91ac3f2-9fcd-4b41-a168-ae7f70b67d3c",
+      "oracle_id": "f2000fb8-39c6-4ad6-a020-5245faaa1eba",
+      "name": "Fire Nation Palace",
+      "set": "tla",
+      "scryfall_id": "c91ac3f2-9fcd-4b41-a168-ae7f70b67d3c",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.fire_nation_raider",
+      "definition_scryfall_id": "ede1bbdb-c726-46e3-aaf1-b8cf2be2c341",
+      "oracle_id": "b37e9bc5-6a2c-4f08-b856-3f8d0d16defb",
+      "name": "Fire Nation Raider",
+      "set": "tla",
+      "scryfall_id": "ede1bbdb-c726-46e3-aaf1-b8cf2be2c341",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.fire_nation_warship",
+      "definition_scryfall_id": "41ecc1de-353e-4131-b735-d2ce18c9c2d5",
+      "oracle_id": "987aab63-a889-400f-a3bd-feaef978b407",
+      "name": "Fire Nation Warship",
+      "set": "tla",
+      "scryfall_id": "41ecc1de-353e-4131-b735-d2ce18c9c2d5",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.fire_navy_trebuchet",
+      "definition_scryfall_id": "e58372cc-9a89-47a4-a0db-df5435e26cd3",
+      "oracle_id": "1f018a8c-6ceb-4d03-94a7-8713467c9cf5",
+      "name": "Fire Navy Trebuchet",
+      "set": "tla",
+      "scryfall_id": "e58372cc-9a89-47a4-a0db-df5435e26cd3",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.fire_sages",
+      "definition_scryfall_id": "71a9fa44-306f-417a-a9d9-991aff95025c",
+      "oracle_id": "08d1940a-ddc6-4b6d-b6c9-9d2aa470b906",
+      "name": "Fire Sages",
+      "set": "tla",
+      "scryfall_id": "71a9fa44-306f-417a-a9d9-991aff95025c",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.firebender_ascension",
+      "definition_scryfall_id": "2929b702-03c6-4cf0-a3f7-61b27f4803be",
+      "oracle_id": "96cc63af-69d1-4493-b241-0cb244a9e48a",
+      "name": "Firebender Ascension",
+      "set": "tla",
+      "scryfall_id": "2929b702-03c6-4cf0-a3f7-61b27f4803be",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.firebending_lesson",
+      "definition_scryfall_id": "fa940e68-010e-4b68-be8a-555d7068f7b4",
+      "oracle_id": "a9282f91-638e-414b-8b3d-9a99e30aec96",
+      "name": "Firebending Lesson",
+      "set": "tla",
+      "scryfall_id": "fa940e68-010e-4b68-be8a-555d7068f7b4",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.firebending_student",
+      "definition_scryfall_id": "3b366f59-16fe-43cb-888d-1f93ef8fd332",
+      "oracle_id": "1ad3be51-f68b-46d6-b58e-400b50e384f1",
+      "name": "Firebending Student",
+      "set": "tla",
+      "scryfall_id": "3b366f59-16fe-43cb-888d-1f93ef8fd332",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.first_time_flyer",
+      "definition_scryfall_id": "ea22d29d-3a62-4ae2-91d5-21a678be9b48",
+      "oracle_id": "cbbea4e2-4b36-4965-89b6-00d2a564f146",
+      "name": "First-Time Flyer",
+      "set": "tla",
+      "scryfall_id": "ea22d29d-3a62-4ae2-91d5-21a678be9b48",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.flexible_waterbender",
+      "definition_scryfall_id": "1447ebce-7e48-4b21-a39c-740920538bdd",
+      "oracle_id": "8cf88fa8-2f47-4125-a59d-9c2b2d4765a7",
+      "name": "Flexible Waterbender",
+      "set": "tla",
+      "scryfall_id": "1447ebce-7e48-4b21-a39c-740920538bdd",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.flopsie_bumi_s_buddy",
+      "definition_scryfall_id": "082f4abc-c09f-42cf-977f-060875dfd411",
+      "oracle_id": "a8966245-501c-47e4-8ce0-849dcb532eb2",
+      "name": "Flopsie, Bumi's Buddy",
+      "set": "tla",
+      "scryfall_id": "082f4abc-c09f-42cf-977f-060875dfd411",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.foggy_bottom_swamp",
+      "definition_scryfall_id": "226af626-873d-4bd2-b889-000f8316786f",
+      "oracle_id": "b56bb8cb-457e-4b85-9bf9-5e891e79f1dd",
+      "name": "Foggy Bottom Swamp",
+      "set": "tla",
+      "scryfall_id": "226af626-873d-4bd2-b889-000f8316786f",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.foggy_swamp_hunters",
+      "definition_scryfall_id": "3f6e5869-ca25-4b98-a844-8a498cb40aab",
+      "oracle_id": "1941cf7a-ad53-4bce-beea-104951619a30",
+      "name": "Foggy Swamp Hunters",
+      "set": "tla",
+      "scryfall_id": "3f6e5869-ca25-4b98-a844-8a498cb40aab",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.foggy_swamp_spirit_keeper",
+      "definition_scryfall_id": "cd624be9-e960-4485-a8a9-2d5f2dd51777",
+      "oracle_id": "faecfb8d-2f63-4b98-a842-b11448f0d538",
+      "name": "Foggy Swamp Spirit Keeper",
+      "set": "tla",
+      "scryfall_id": "cd624be9-e960-4485-a8a9-2d5f2dd51777",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.foggy_swamp_vinebender",
+      "definition_scryfall_id": "78a75317-94f7-47a4-b4da-5a027fa73248",
+      "oracle_id": "82fefb82-a436-488d-8ecd-594686117e34",
+      "name": "Foggy Swamp Vinebender",
+      "set": "tla",
+      "scryfall_id": "78a75317-94f7-47a4-b4da-5a027fa73248",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.foggy_swamp_visions",
+      "definition_scryfall_id": "3a46deaa-88f7-4eec-aa99-b85073847918",
+      "oracle_id": "16af0a22-833e-47c6-ac27-002702194595",
+      "name": "Foggy Swamp Visions",
+      "set": "tla",
+      "scryfall_id": "3a46deaa-88f7-4eec-aa99-b85073847918",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.forecasting_fortune_teller",
+      "definition_scryfall_id": "023e7ad4-6af0-4f29-a716-27a313974227",
+      "oracle_id": "a5a05edd-2a30-414b-b766-f0651d5783f5",
+      "name": "Forecasting Fortune Teller",
+      "set": "tla",
+      "scryfall_id": "023e7ad4-6af0-4f29-a716-27a313974227",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.gather_the_white_lotus",
+      "definition_scryfall_id": "96e2b3d0-f060-4f3c-9d12-a0444b202008",
+      "oracle_id": "db69c3c9-d809-4361-8055-8c2dd4c6dd67",
+      "name": "Gather the White Lotus",
+      "set": "tla",
+      "scryfall_id": "96e2b3d0-f060-4f3c-9d12-a0444b202008",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.geyser_leaper",
+      "definition_scryfall_id": "4d25428d-e5a5-43c4-8544-43120ed1c4d5",
+      "oracle_id": "dfdcb451-a597-46fe-893c-49e6dbda5f71",
+      "name": "Geyser Leaper",
+      "set": "tla",
+      "scryfall_id": "4d25428d-e5a5-43c4-8544-43120ed1c4d5",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.giant_koi",
+      "definition_scryfall_id": "3938ec1f-979c-48e5-bb13-bebace006a8f",
+      "oracle_id": "c93bb65a-a74a-499b-a538-65272079aab8",
+      "name": "Giant Koi",
+      "set": "tla",
+      "scryfall_id": "3938ec1f-979c-48e5-bb13-bebace006a8f",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.glider_kids",
+      "definition_scryfall_id": "0613afb5-4cee-4132-8adf-404767ed8d07",
+      "oracle_id": "ff5ce28b-25be-4136-a7b2-8f25c08a6455",
+      "name": "Glider Kids",
+      "set": "tla",
+      "scryfall_id": "0613afb5-4cee-4132-8adf-404767ed8d07",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.glider_staff",
+      "definition_scryfall_id": "7517f2eb-a24d-49f6-82bf-08de55d3789a",
+      "oracle_id": "823006a8-098c-457a-8546-77ae2457c459",
+      "name": "Glider Staff",
+      "set": "tla",
+      "scryfall_id": "7517f2eb-a24d-49f6-82bf-08de55d3789a",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.gran_gran",
+      "definition_scryfall_id": "fa434b41-e5f7-4989-865a-95db67b05cb1",
+      "oracle_id": "0259a9ed-0558-4183-b737-871ed5573c32",
+      "name": "Gran-Gran",
+      "set": "tla",
+      "scryfall_id": "fa434b41-e5f7-4989-865a-95db67b05cb1",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.great_divide_guide",
+      "definition_scryfall_id": "cc3063ec-5ea6-46c1-8331-c740cbaf6c76",
+      "oracle_id": "79e69a91-d580-47fb-be76-1e32c50d2fa0",
+      "name": "Great Divide Guide",
+      "set": "tla",
+      "scryfall_id": "cc3063ec-5ea6-46c1-8331-c740cbaf6c76",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.guru_pathik",
+      "definition_scryfall_id": "224a2241-0dce-4008-8d9c-86db40ec5f8b",
+      "oracle_id": "4dcd7b78-ce5a-43eb-a16d-3b9ea411795d",
+      "name": "Guru Pathik",
+      "set": "tla",
+      "scryfall_id": "224a2241-0dce-4008-8d9c-86db40ec5f8b",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.hakoda_selfless_commander",
+      "definition_scryfall_id": "9aef3ddb-9bb7-42c8-975b-b1917955a416",
+      "oracle_id": "de3a469a-e38b-456b-994d-abec1b010e42",
+      "name": "Hakoda, Selfless Commander",
+      "set": "tla",
+      "scryfall_id": "9aef3ddb-9bb7-42c8-975b-b1917955a416",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.hama_the_bloodbender",
+      "definition_scryfall_id": "6fa1197d-7b19-4d86-81e2-5c87de87757b",
+      "oracle_id": "ef80e174-78e8-412d-a6fe-89c7af746669",
+      "name": "Hama, the Bloodbender",
+      "set": "tla",
+      "scryfall_id": "6fa1197d-7b19-4d86-81e2-5c87de87757b",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.haru_hidden_talent",
+      "definition_scryfall_id": "9657a0c0-2c26-4331-8e62-f032265a01af",
+      "oracle_id": "7488ce54-37c6-475c-b327-59f52f2b1424",
+      "name": "Haru, Hidden Talent",
+      "set": "tla",
+      "scryfall_id": "9657a0c0-2c26-4331-8e62-f032265a01af",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.heartless_act",
+      "definition_scryfall_id": "b57c57a8-d72b-4c6c-a2db-a7ef61190f42",
+      "oracle_id": "3641d572-8335-4804-88ad-edf4dc67a8e4",
+      "name": "Heartless Act",
+      "set": "tla",
+      "scryfall_id": "b57c57a8-d72b-4c6c-a2db-a7ef61190f42",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.hei_bai_spirit_of_balance",
+      "definition_scryfall_id": "060d24e0-1567-41f1-ae8c-2d3b1834df3c",
+      "oracle_id": "8f709660-bb26-409f-9650-e5228ac8db7e",
+      "name": "Hei Bai, Spirit of Balance",
+      "set": "tla",
+      "scryfall_id": "060d24e0-1567-41f1-ae8c-2d3b1834df3c",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.hermitic_herbalist",
+      "definition_scryfall_id": "5d0ee441-a057-41b5-abb8-dc86864ac248",
+      "oracle_id": "9928773d-3f35-4b0e-965d-4233e04398fb",
+      "name": "Hermitic Herbalist",
+      "set": "tla",
+      "scryfall_id": "5d0ee441-a057-41b5-abb8-dc86864ac248",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.hog_monkey",
+      "definition_scryfall_id": "4f442970-5355-4abf-8684-17daaa8e469b",
+      "oracle_id": "e11591ee-7074-488e-8d2f-f8c89e385a55",
+      "name": "Hog-Monkey",
+      "set": "tla",
+      "scryfall_id": "4f442970-5355-4abf-8684-17daaa8e469b",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.honest_work",
+      "definition_scryfall_id": "57e0ccb0-22f0-4e4d-9a47-c4fec2c7f251",
+      "oracle_id": "12956c07-e679-471b-8dcb-2a2d15b0be55",
+      "name": "Honest Work",
+      "set": "tla",
+      "scryfall_id": "57e0ccb0-22f0-4e4d-9a47-c4fec2c7f251",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.how_to_start_a_riot",
+      "definition_scryfall_id": "23b3bf1e-ea85-47f5-8473-4d16615f68d7",
+      "oracle_id": "268d0056-0d3e-438a-ab17-625a6f5ec68a",
+      "name": "How to Start a Riot",
+      "set": "tla",
+      "scryfall_id": "23b3bf1e-ea85-47f5-8473-4d16615f68d7",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.iguana_parrot",
+      "definition_scryfall_id": "7faa3e3d-c08a-4908-85ef-1370d3f90815",
+      "oracle_id": "edd3a3ea-6bde-408c-8b16-85ed3cc312b2",
+      "name": "Iguana Parrot",
+      "set": "tla",
+      "scryfall_id": "7faa3e3d-c08a-4908-85ef-1370d3f90815",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.invasion_reinforcements",
+      "definition_scryfall_id": "b8845bba-d116-43cd-8ae0-e553f3324d66",
+      "oracle_id": "185316ff-6fb7-4b5c-8a60-3238674562a6",
+      "name": "Invasion Reinforcements",
+      "set": "tla",
+      "scryfall_id": "b8845bba-d116-43cd-8ae0-e553f3324d66",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.invasion_submersible",
+      "definition_scryfall_id": "af5299f5-1633-4c07-ade5-fd47e29ea4aa",
+      "oracle_id": "97369152-3b85-4cf1-aeb9-b3a8f1c37611",
+      "name": "Invasion Submersible",
+      "set": "tla",
+      "scryfall_id": "af5299f5-1633-4c07-ade5-fd47e29ea4aa",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.invasion_tactics",
+      "definition_scryfall_id": "27c6330d-49f6-4707-b4d4-d1411fa422eb",
+      "oracle_id": "eef63cb4-96de-4c9d-84aa-62a3b52a3c7f",
+      "name": "Invasion Tactics",
+      "set": "tla",
+      "scryfall_id": "27c6330d-49f6-4707-b4d4-d1411fa422eb",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.iroh_grand_lotus",
+      "definition_scryfall_id": "879b73d3-4552-4fdc-baee-c4d097ae9a4f",
+      "oracle_id": "ee8e6ef3-eb96-48bd-8619-8a9112b3d4f0",
+      "name": "Iroh, Grand Lotus",
+      "set": "tla",
+      "scryfall_id": "879b73d3-4552-4fdc-baee-c4d097ae9a4f",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.iroh_s_demonstration",
+      "definition_scryfall_id": "18d15fed-1f8f-4407-a221-a47ce75001a8",
+      "oracle_id": "8dd2e73a-d1b4-4d26-857f-9eb8e384c8ff",
+      "name": "Iroh's Demonstration",
+      "set": "tla",
+      "scryfall_id": "18d15fed-1f8f-4407-a221-a47ce75001a8",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.iroh_tea_master",
+      "definition_scryfall_id": "d1f5e10d-0a89-4129-9717-a921f20d3616",
+      "oracle_id": "87adda41-113b-4126-8978-25a258b31bdd",
+      "name": "Iroh, Tea Master",
+      "set": "tla",
+      "scryfall_id": "d1f5e10d-0a89-4129-9717-a921f20d3616",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.itll_quench_ya",
+      "definition_scryfall_id": "47c25e41-f43c-4447-81b5-b9631448bd29",
+      "oracle_id": "cb184995-700f-4900-994a-4ce7fd12f942",
+      "name": "It'll Quench Ya!",
+      "set": "tla",
+      "scryfall_id": "47c25e41-f43c-4447-81b5-b9631448bd29",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.jasmine_dragon_tea_shop",
+      "definition_scryfall_id": "da2c83d4-a95f-47ff-a08f-694eb78d6b9b",
+      "oracle_id": "d9a24444-289f-473f-9985-8df275257555",
+      "name": "Jasmine Dragon Tea Shop",
+      "set": "tla",
+      "scryfall_id": "da2c83d4-a95f-47ff-a08f-694eb78d6b9b",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.jeong_jeong_the_deserter",
+      "definition_scryfall_id": "a9f63d3b-bee5-48bc-8b04-d8b24b0bda6e",
+      "oracle_id": "2158c73d-421b-4c94-af06-dd89cb8d3126",
+      "name": "Jeong Jeong, the Deserter",
+      "set": "tla",
+      "scryfall_id": "a9f63d3b-bee5-48bc-8b04-d8b24b0bda6e",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.jeong_jeongs_deserters",
+      "definition_scryfall_id": "060966f9-5e56-4512-9ef3-2b216daf093c",
+      "oracle_id": "6a06d281-3ca2-498f-91d0-e13e7b0869f9",
+      "name": "Jeong Jeong's Deserters",
+      "set": "tla",
+      "scryfall_id": "060966f9-5e56-4512-9ef3-2b216daf093c",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.jet_freedom_fighter",
+      "definition_scryfall_id": "9202c044-15e4-4218-a94d-16287ba19d69",
+      "oracle_id": "77cd2246-6906-4dce-8580-4c9d2e68c477",
+      "name": "Jet, Freedom Fighter",
+      "set": "tla",
+      "scryfall_id": "9202c044-15e4-4218-a94d-16287ba19d69",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.jet_s_brainwashing",
+      "definition_scryfall_id": "b17e8bdb-4b91-4a9d-bfe1-8a55f0bd040b",
+      "oracle_id": "5cca85e0-43e8-4b97-a43b-1b8f23f541d1",
+      "name": "Jet's Brainwashing",
+      "set": "tla",
+      "scryfall_id": "b17e8bdb-4b91-4a9d-bfe1-8a55f0bd040b",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.joo_dee_one_of_many",
+      "definition_scryfall_id": "7ae1439f-a0c4-42c2-a4f3-8851defa981e",
+      "oracle_id": "4601ed7b-716e-4c89-b733-1eeabe8bf5a2",
+      "name": "Joo Dee, One of Many",
+      "set": "tla",
+      "scryfall_id": "7ae1439f-a0c4-42c2-a4f3-8851defa981e",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.june_bounty_hunter",
+      "definition_scryfall_id": "148bbaab-bc7b-46ab-8e18-ade69d71d847",
+      "oracle_id": "1779869a-5e54-4ab5-86b8-d4d20e2e1ba4",
+      "name": "June, Bounty Hunter",
+      "set": "tla",
+      "scryfall_id": "148bbaab-bc7b-46ab-8e18-ade69d71d847",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.katara_bending_prodigy",
+      "definition_scryfall_id": "e8372167-383f-4302-a8ea-b6bf495c870c",
+      "oracle_id": "55adde23-c818-40fe-9bba-123de93568a5",
+      "name": "Katara, Bending Prodigy",
+      "set": "tla",
+      "scryfall_id": "e8372167-383f-4302-a8ea-b6bf495c870c",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.katara_the_fearless",
+      "definition_scryfall_id": "b0a18f8b-7364-4375-b2e1-e2f15978517f",
+      "oracle_id": "0972d46e-423b-454e-87c7-a2d40fb6fb6d",
+      "name": "Katara, the Fearless",
+      "set": "tla",
+      "scryfall_id": "b0a18f8b-7364-4375-b2e1-e2f15978517f",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.katara_water_tribe_s_hope",
+      "definition_scryfall_id": "9ec03308-59a2-417a-938f-bdda75080e43",
+      "oracle_id": "234fb291-0b62-4092-9071-81311c71bd53",
+      "name": "Katara, Water Tribe's Hope",
+      "set": "tla",
+      "scryfall_id": "9ec03308-59a2-417a-938f-bdda75080e43",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.knowledge_seeker",
+      "definition_scryfall_id": "8554e862-f78a-42f5-b876-076aac6c9504",
+      "oracle_id": "bdc2d980-ca14-4040-a9a1-786d724dc65c",
+      "name": "Knowledge Seeker",
+      "set": "tla",
+      "scryfall_id": "8554e862-f78a-42f5-b876-076aac6c9504",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.koh_the_face_stealer",
+      "definition_scryfall_id": "28f6fa32-5058-4c29-9ba8-9d8f2057eb6d",
+      "oracle_id": "2bbb33e3-7d03-457c-92bb-b0c943615fa1",
+      "name": "Koh, the Face Stealer",
+      "set": "tla",
+      "scryfall_id": "28f6fa32-5058-4c29-9ba8-9d8f2057eb6d",
+      "rarity": "mythic"
+    },
+    {
+      "key": "tla.kyoshi_battle_fan",
+      "definition_scryfall_id": "257e6862-96fe-4312-aff2-509d0696843a",
+      "oracle_id": "849e54f9-7662-4186-859c-e4f52afbccac",
+      "name": "Kyoshi Battle Fan",
+      "set": "tla",
+      "scryfall_id": "257e6862-96fe-4312-aff2-509d0696843a",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.kyoshi_island_plaza",
+      "definition_scryfall_id": "9c25ea98-9823-4487-bf6b-ee29ce5a4ed8",
+      "oracle_id": "c0cdc333-6c5a-401c-9810-220d2027f2fe",
+      "name": "Kyoshi Island Plaza",
+      "set": "tla",
+      "scryfall_id": "9c25ea98-9823-4487-bf6b-ee29ce5a4ed8",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.kyoshi_village",
+      "definition_scryfall_id": "8d5f3008-2af8-4e81-8847-1c91f524e747",
+      "oracle_id": "da81b78b-89fd-4fc1-9395-b5b01b96be70",
+      "name": "Kyoshi Village",
+      "set": "tla",
+      "scryfall_id": "8d5f3008-2af8-4e81-8847-1c91f524e747",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.kyoshi_warriors",
+      "definition_scryfall_id": "211045e1-85c7-4088-b830-a2afa0fe520b",
+      "oracle_id": "b29abb09-75ea-431c-ab60-f2940d002e83",
+      "name": "Kyoshi Warriors",
+      "set": "tla",
+      "scryfall_id": "211045e1-85c7-4088-b830-a2afa0fe520b",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.leaves_from_the_vine",
+      "definition_scryfall_id": "b18995c2-efe3-46ca-8204-e2dc0e42f6e3",
+      "oracle_id": "7c4abd72-29b0-4c82-9e67-b481cf7e8775",
+      "name": "Leaves from the Vine",
+      "set": "tla",
+      "scryfall_id": "b18995c2-efe3-46ca-8204-e2dc0e42f6e3",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.lo_and_li_twin_tutors",
+      "definition_scryfall_id": "cba9260d-ef07-4429-99f9-6004cc1fea0f",
+      "oracle_id": "ad643992-eb9f-4a4a-9b74-a5aee2337f30",
+      "name": "Lo and Li, Twin Tutors",
+      "set": "tla",
+      "scryfall_id": "cba9260d-ef07-4429-99f9-6004cc1fea0f",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.long_feng_grand_secretariat",
+      "definition_scryfall_id": "a3eb92fe-bc59-4472-9028-f368bd015609",
+      "oracle_id": "9bf9fe83-b0df-4ef8-ac54-c0d223d4e410",
+      "name": "Long Feng, Grand Secretariat",
+      "set": "tla",
+      "scryfall_id": "a3eb92fe-bc59-4472-9028-f368bd015609",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.lost_days",
+      "definition_scryfall_id": "db8e88e3-0931-403f-90e7-3c22c0b61dac",
+      "oracle_id": "3bc47eae-cf6f-4b5e-96e1-94a4f307f474",
+      "name": "Lost Days",
+      "set": "tla",
+      "scryfall_id": "db8e88e3-0931-403f-90e7-3c22c0b61dac",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.mai_jaded_edge",
+      "definition_scryfall_id": "732e6bc9-0798-4c00-aea0-5ef4298b45f5",
+      "oracle_id": "b5029f21-e0d6-4f22-9afd-79452de26490",
+      "name": "Mai, Jaded Edge",
+      "set": "tla",
+      "scryfall_id": "732e6bc9-0798-4c00-aea0-5ef4298b45f5",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.mai_scornful_striker",
+      "definition_scryfall_id": "74dd4c0e-27b8-4c47-b7a6-a281413cd6b4",
+      "oracle_id": "953a2bd3-5bca-41fc-8785-66b2d7fa381a",
+      "name": "Mai, Scornful Striker",
+      "set": "tla",
+      "scryfall_id": "74dd4c0e-27b8-4c47-b7a6-a281413cd6b4",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.master_pakku",
+      "definition_scryfall_id": "91e30df5-63f7-4281-8d64-8d522d663652",
+      "oracle_id": "b1727c07-c829-4d64-a1c5-8b53c743888a",
+      "name": "Master Pakku",
+      "set": "tla",
+      "scryfall_id": "91e30df5-63f7-4281-8d64-8d522d663652",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.master_piandao",
+      "definition_scryfall_id": "3e4a042c-f2a6-45e7-9444-acd1ca838b87",
+      "oracle_id": "e294d9d2-df91-4410-85d3-8ffb13fb2285",
+      "name": "Master Piandao",
+      "set": "tla",
+      "scryfall_id": "3e4a042c-f2a6-45e7-9444-acd1ca838b87",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.meditation_pools",
+      "definition_scryfall_id": "cc078fc6-4470-473f-9e24-d2c470e09141",
+      "oracle_id": "66208129-20fb-4cb4-8f00-8d4574c9c653",
+      "name": "Meditation Pools",
+      "set": "tla",
+      "scryfall_id": "cc078fc6-4470-473f-9e24-d2c470e09141",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.merchant_of_many_hats",
+      "definition_scryfall_id": "752ffa24-93b6-4b33-bf10-7222357ac472",
+      "oracle_id": "23820b45-2f3a-4b6e-99ea-d84caccb7e37",
+      "name": "Merchant of Many Hats",
+      "set": "tla",
+      "scryfall_id": "752ffa24-93b6-4b33-bf10-7222357ac472",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.messenger_hawk",
+      "definition_scryfall_id": "6a2946c0-0a40-4cdb-92c8-af2bafecca09",
+      "oracle_id": "4029e884-8154-42b3-ae29-3cb98374a294",
+      "name": "Messenger Hawk",
+      "set": "tla",
+      "scryfall_id": "6a2946c0-0a40-4cdb-92c8-af2bafecca09",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.meteor_sword",
+      "definition_scryfall_id": "68b1c746-a4b8-4a45-9f0e-3962f0ae40e3",
+      "oracle_id": "181965fb-e685-4b1f-9bd6-3a33bed933b2",
+      "name": "Meteor Sword",
+      "set": "tla",
+      "scryfall_id": "68b1c746-a4b8-4a45-9f0e-3962f0ae40e3",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.misty_palms_oasis",
+      "definition_scryfall_id": "7cc29ddb-8f44-4493-985d-2fac35f9f34d",
+      "oracle_id": "dfd2c57a-4557-4df1-8f6f-da2cbd317f12",
+      "name": "Misty Palms Oasis",
+      "set": "tla",
+      "scryfall_id": "7cc29ddb-8f44-4493-985d-2fac35f9f34d",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.momo_friendly_flier",
+      "definition_scryfall_id": "c472ef84-a632-4ad7-853c-60588a7a4b12",
+      "oracle_id": "a3c56e71-0de6-447a-a9b4-0971f56c2362",
+      "name": "Momo, Friendly Flier",
+      "set": "tla",
+      "scryfall_id": "c472ef84-a632-4ad7-853c-60588a7a4b12",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.momo_playful_pet",
+      "definition_scryfall_id": "9350bf4a-fa12-4867-b31f-1f1394d99571",
+      "oracle_id": "85ee8ab6-8db5-45d7-85ae-64838771146a",
+      "name": "Momo, Playful Pet",
+      "set": "tla",
+      "scryfall_id": "9350bf4a-fa12-4867-b31f-1f1394d99571",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.mongoose_lizard",
+      "definition_scryfall_id": "7d40b9cb-82ef-44c5-8d3c-c8bb4ce9891c",
+      "oracle_id": "a9bae56c-9666-42e8-94ec-03b0a964b142",
+      "name": "Mongoose Lizard",
+      "set": "tla",
+      "scryfall_id": "7d40b9cb-82ef-44c5-8d3c-c8bb4ce9891c",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.north_pole_gates",
+      "definition_scryfall_id": "bcf7b9da-d35d-4338-b4d9-83e47dc058ee",
+      "oracle_id": "3fcd1432-66d0-40e1-85ef-b57a6fa94b7c",
+      "name": "North Pole Gates",
+      "set": "tla",
+      "scryfall_id": "bcf7b9da-d35d-4338-b4d9-83e47dc058ee",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.north_pole_patrol",
+      "definition_scryfall_id": "c2c0c138-5b61-4949-8431-4a6d458ead6a",
+      "oracle_id": "a1230e78-0bfa-489e-a1b9-3c227bceb6fb",
+      "name": "North Pole Patrol",
+      "set": "tla",
+      "scryfall_id": "c2c0c138-5b61-4949-8431-4a6d458ead6a",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.northern_air_temple",
+      "definition_scryfall_id": "06b7675e-e665-49cb-a8d9-7092a654d464",
+      "oracle_id": "28a2ad5b-d637-4634-8d4b-889e1fc88319",
+      "name": "Northern Air Temple",
+      "set": "tla",
+      "scryfall_id": "06b7675e-e665-49cb-a8d9-7092a654d464",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.obsessive_pursuit",
+      "definition_scryfall_id": "e837e29c-d241-43c8-8f45-05056e082b60",
+      "oracle_id": "7e7abb44-47b0-4d80-b8a1-36f0c1032aa3",
+      "name": "Obsessive Pursuit",
+      "set": "tla",
+      "scryfall_id": "e837e29c-d241-43c8-8f45-05056e082b60",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.octopus_form",
+      "definition_scryfall_id": "ce96a826-53a0-4029-bf34-46779d133b13",
+      "oracle_id": "6fec368d-374d-4318-861b-ff478ba51a3c",
+      "name": "Octopus Form",
+      "set": "tla",
+      "scryfall_id": "ce96a826-53a0-4029-bf34-46779d133b13",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.omashu_city",
+      "definition_scryfall_id": "c21e413b-96ed-4ded-b567-f1647074ce5f",
+      "oracle_id": "6f9a4bb2-5959-4a5c-83af-c2729e6673df",
+      "name": "Omashu City",
+      "set": "tla",
+      "scryfall_id": "c21e413b-96ed-4ded-b567-f1647074ce5f",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.origin_of_metalbending",
+      "definition_scryfall_id": "25749f9a-260d-4bdc-bd28-429c12faa4a5",
+      "oracle_id": "177113f8-1188-4e5e-8ad7-34a7bb8ca7f1",
+      "name": "Origin of Metalbending",
+      "set": "tla",
+      "scryfall_id": "25749f9a-260d-4bdc-bd28-429c12faa4a5",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.ostrich_horse",
+      "definition_scryfall_id": "5ca3fd45-9301-44ef-afc0-4d7999d66d36",
+      "oracle_id": "2b6cb199-1564-4214-b24f-624dc962c907",
+      "name": "Ostrich-Horse",
+      "set": "tla",
+      "scryfall_id": "5ca3fd45-9301-44ef-afc0-4d7999d66d36",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.otter_penguin",
+      "definition_scryfall_id": "480b6279-bb34-4b3f-a639-868b52af92b9",
+      "oracle_id": "e2171c48-a816-41b2-aa55-e0ba2503fd6a",
+      "name": "Otter-Penguin",
+      "set": "tla",
+      "scryfall_id": "480b6279-bb34-4b3f-a639-868b52af92b9",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.ozai_s_cruelty",
+      "definition_scryfall_id": "22cad680-d46a-4589-a633-b6ee9a78d61e",
+      "oracle_id": "aba5c046-2f8c-4749-b347-9a7d8cb1c865",
+      "name": "Ozai's Cruelty",
+      "set": "tla",
+      "scryfall_id": "22cad680-d46a-4589-a633-b6ee9a78d61e",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.ozai_the_phoenix_king",
+      "definition_scryfall_id": "a98b1550-4609-4a2f-9371-4afe1cdc613e",
+      "oracle_id": "7472af8e-2e93-43b2-bc32-a3741f6d7502",
+      "name": "Ozai, the Phoenix King",
+      "set": "tla",
+      "scryfall_id": "a98b1550-4609-4a2f-9371-4afe1cdc613e",
+      "rarity": "mythic"
+    },
+    {
+      "key": "tla.path_to_redemption",
+      "definition_scryfall_id": "f936d64a-0db4-49c1-8a57-6d99e012a555",
+      "oracle_id": "ac94860b-70b8-4624-9758-4bb024a56f60",
+      "name": "Path to Redemption",
+      "set": "tla",
+      "scryfall_id": "f936d64a-0db4-49c1-8a57-6d99e012a555",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.phoenix_fleet_airship",
+      "definition_scryfall_id": "b51d3259-c41c-4f64-9666-0a9e676c812f",
+      "oracle_id": "6ffe71c0-acb5-4ba9-8c2f-719330e1ea69",
+      "name": "Phoenix Fleet Airship",
+      "set": "tla",
+      "scryfall_id": "b51d3259-c41c-4f64-9666-0a9e676c812f",
+      "rarity": "mythic"
+    },
+    {
+      "key": "tla.pillar_launch",
+      "definition_scryfall_id": "f177e9cc-0c41-417d-9215-5ff23a1a0657",
+      "oracle_id": "a39c758d-82be-4d8c-bb3e-8ee8a6c6788b",
+      "name": "Pillar Launch",
+      "set": "tla",
+      "scryfall_id": "f177e9cc-0c41-417d-9215-5ff23a1a0657",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.pirate_peddlers",
+      "definition_scryfall_id": "5c998994-6c3b-4f34-9b31-babba2b17266",
+      "oracle_id": "4771a871-576e-4a14-92f0-b5b41c63d615",
+      "name": "Pirate Peddlers",
+      "set": "tla",
+      "scryfall_id": "5c998994-6c3b-4f34-9b31-babba2b17266",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.planetarium_of_wan_shi_tong",
+      "definition_scryfall_id": "0ebaf0bf-7aa2-469d-bdbb-0fbf6741eede",
+      "oracle_id": "f89d093d-c815-4df7-a348-2005aa227586",
+      "name": "Planetarium of Wan Shi Tong",
+      "set": "tla",
+      "scryfall_id": "0ebaf0bf-7aa2-469d-bdbb-0fbf6741eede",
+      "rarity": "mythic"
+    },
+    {
+      "key": "tla.platypus_bear",
+      "definition_scryfall_id": "7ebf742a-3995-4b22-9dc7-b05f57889683",
+      "oracle_id": "933e4e8a-01ea-4f58-8f5e-4f6c43f4e105",
+      "name": "Platypus-Bear",
+      "set": "tla",
+      "scryfall_id": "7ebf742a-3995-4b22-9dc7-b05f57889683",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.pretending_poxbearers",
+      "definition_scryfall_id": "d1af91a5-8681-4a05-910d-96f7a819bfaa",
+      "oracle_id": "fefef024-3a05-4221-bb74-419ee08716e5",
+      "name": "Pretending Poxbearers",
+      "set": "tla",
+      "scryfall_id": "d1af91a5-8681-4a05-910d-96f7a819bfaa",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.price_of_freedom",
+      "definition_scryfall_id": "9fbe94e9-a71d-4a31-9210-c599abe08e3f",
+      "oracle_id": "5e6faa98-cf55-430d-87ce-8085f68aa20a",
+      "name": "Price of Freedom",
+      "set": "tla",
+      "scryfall_id": "9fbe94e9-a71d-4a31-9210-c599abe08e3f",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.professor_zei_anthropologist",
+      "definition_scryfall_id": "27baccc0-7e25-4f39-be0d-31cd98ca0dc5",
+      "oracle_id": "59a10335-72df-44a5-a514-5bac392cd282",
+      "name": "Professor Zei, Anthropologist",
+      "set": "tla",
+      "scryfall_id": "27baccc0-7e25-4f39-be0d-31cd98ca0dc5",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.rabaroo_troop",
+      "definition_scryfall_id": "62a983b4-ac73-4949-9317-05a75a8ce164",
+      "oracle_id": "48252207-d345-455c-b655-c2027664e6a6",
+      "name": "Rabaroo Troop",
+      "set": "tla",
+      "scryfall_id": "62a983b4-ac73-4949-9317-05a75a8ce164",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.ran_and_shaw",
+      "definition_scryfall_id": "6436e2d0-989f-47e3-90bc-9cde82a2ddb4",
+      "oracle_id": "a728685f-8670-4db2-ae02-3cf74eb3c402",
+      "name": "Ran and Shaw",
+      "set": "tla",
+      "scryfall_id": "6436e2d0-989f-47e3-90bc-9cde82a2ddb4",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.raucous_audience",
+      "definition_scryfall_id": "ccd03ec3-0fae-48b2-9f04-9c57d2f94267",
+      "oracle_id": "5be6f245-31cf-4294-ace0-ca6ce3463fed",
+      "name": "Raucous Audience",
+      "set": "tla",
+      "scryfall_id": "ccd03ec3-0fae-48b2-9f04-9c57d2f94267",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.raven_eagle",
+      "definition_scryfall_id": "2262f24b-db6b-4f86-96d0-47a20fc015ab",
+      "oracle_id": "f75ac0a3-8795-48b4-91fd-4717900ef5b7",
+      "name": "Raven Eagle",
+      "set": "tla",
+      "scryfall_id": "2262f24b-db6b-4f86-96d0-47a20fc015ab",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.razor_rings",
+      "definition_scryfall_id": "b05cfee5-ee59-4df6-a5f6-d9ef0fa7f98a",
+      "oracle_id": "eb5afbd7-4d21-4449-9204-eeb4ebf6a72a",
+      "name": "Razor Rings",
+      "set": "tla",
+      "scryfall_id": "b05cfee5-ee59-4df6-a5f6-d9ef0fa7f98a",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.realm_of_koh",
+      "definition_scryfall_id": "061ac694-610c-479f-b038-a4ef5270d5d7",
+      "oracle_id": "bb9ce416-eef1-49e8-89a0-2b6837505070",
+      "name": "Realm of Koh",
+      "set": "tla",
+      "scryfall_id": "061ac694-610c-479f-b038-a4ef5270d5d7",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.rebellious_captives",
+      "definition_scryfall_id": "e64a4a8b-323c-4c8b-92af-1a3295799e65",
+      "oracle_id": "70401db7-edbc-402f-98ef-be74bd316273",
+      "name": "Rebellious Captives",
+      "set": "tla",
+      "scryfall_id": "e64a4a8b-323c-4c8b-92af-1a3295799e65",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.redirect_lightning",
+      "definition_scryfall_id": "2b5b14a7-1fdd-4efc-b197-cadfa7f7c860",
+      "oracle_id": "c62b5c22-e058-436f-9575-a01cb2112829",
+      "name": "Redirect Lightning",
+      "set": "tla",
+      "scryfall_id": "2b5b14a7-1fdd-4efc-b197-cadfa7f7c860",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.rockalanche",
+      "definition_scryfall_id": "52b213d3-6f68-43e6-91e9-435d8fe1f34c",
+      "oracle_id": "d1ecfad3-e79a-447b-a932-68ef728eaf1f",
+      "name": "Rockalanche",
+      "set": "tla",
+      "scryfall_id": "52b213d3-6f68-43e6-91e9-435d8fe1f34c",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.rocky_rebuke",
+      "definition_scryfall_id": "52fd910f-6d42-41f5-a4be-f375aa254ea2",
+      "oracle_id": "fd85db70-8616-42df-9dac-bad7923f88d7",
+      "name": "Rocky Rebuke",
+      "set": "tla",
+      "scryfall_id": "52fd910f-6d42-41f5-a4be-f375aa254ea2",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.rough_rhino_cavalry",
+      "definition_scryfall_id": "a8bc29cf-f6f8-4bb8-b722-f016b58b6d2d",
+      "oracle_id": "3ac94b28-4b0a-4121-99b9-9cd7dff7948c",
+      "name": "Rough Rhino Cavalry",
+      "set": "tla",
+      "scryfall_id": "a8bc29cf-f6f8-4bb8-b722-f016b58b6d2d",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.rowdy_snowballers",
+      "definition_scryfall_id": "17d71522-b133-4003-b787-0c742a2fd70e",
+      "oracle_id": "74224cce-c2ce-4456-8a97-3abbbb199385",
+      "name": "Rowdy Snowballers",
+      "set": "tla",
+      "scryfall_id": "17d71522-b133-4003-b787-0c742a2fd70e",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.ruinous_waterbending",
+      "definition_scryfall_id": "53161747-c82b-41e8-90ea-7791ea262a85",
+      "oracle_id": "7d3a0216-871b-4c1b-adb1-de99b832f577",
+      "name": "Ruinous Waterbending",
+      "set": "tla",
+      "scryfall_id": "53161747-c82b-41e8-90ea-7791ea262a85",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.rumble_arena",
+      "definition_scryfall_id": "3f5d2c38-663c-4f64-8cfc-c102462e82ef",
+      "oracle_id": "83f2470e-2114-4cd9-ab1a-21b76e9cdf63",
+      "name": "Rumble Arena",
+      "set": "tla",
+      "scryfall_id": "3f5d2c38-663c-4f64-8cfc-c102462e82ef",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.saber_tooth_moose_lion",
+      "definition_scryfall_id": "b15f302d-c451-4e79-a5af-75ee3ba4cadf",
+      "oracle_id": "7af493e3-15a1-42d6-a66c-82aacabe816f",
+      "name": "Saber-Tooth Moose-Lion",
+      "set": "tla",
+      "scryfall_id": "b15f302d-c451-4e79-a5af-75ee3ba4cadf",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.sandbender_scavengers",
+      "definition_scryfall_id": "9bfe0f7c-6dac-41d4-a013-109445158a5e",
+      "oracle_id": "0feacc7c-b93e-4322-bc8b-b3c19006128e",
+      "name": "Sandbender Scavengers",
+      "set": "tla",
+      "scryfall_id": "9bfe0f7c-6dac-41d4-a013-109445158a5e",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.sandbenders_storm",
+      "definition_scryfall_id": "b3bf4a25-4329-4318-870a-2b06aa620dc4",
+      "oracle_id": "dfc8b8de-be1d-4f7f-bb21-4761a0e7db4e",
+      "name": "Sandbenders' Storm",
+      "set": "tla",
+      "scryfall_id": "b3bf4a25-4329-4318-870a-2b06aa620dc4",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.secret_of_bloodbending",
+      "definition_scryfall_id": "9bb928ae-f636-4aee-9146-a7885e6a8976",
+      "oracle_id": "743fa824-18cb-4225-ba7b-5b0bbc3c8d41",
+      "name": "Secret of Bloodbending",
+      "set": "tla",
+      "scryfall_id": "9bb928ae-f636-4aee-9146-a7885e6a8976",
+      "rarity": "mythic"
+    },
+    {
+      "key": "tla.secret_tunnel",
+      "definition_scryfall_id": "2d39a0e1-6484-409c-ab05-5b276925a949",
+      "oracle_id": "632e2979-d88a-482e-9bb8-57b683c5310f",
+      "name": "Secret Tunnel",
+      "set": "tla",
+      "scryfall_id": "2d39a0e1-6484-409c-ab05-5b276925a949",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.seismic_sense",
+      "definition_scryfall_id": "a7b93c2a-c478-4734-8aca-03f3e9c11b20",
+      "oracle_id": "9d586c74-b1dd-4fcb-a24a-c703d250fa63",
+      "name": "Seismic Sense",
+      "set": "tla",
+      "scryfall_id": "a7b93c2a-c478-4734-8aca-03f3e9c11b20",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.serpent_of_the_pass",
+      "definition_scryfall_id": "87595843-15bc-48bb-8a81-3e6ad924ed44",
+      "oracle_id": "98e36c6e-a868-4679-a5b5-6f02097f560b",
+      "name": "Serpent of the Pass",
+      "set": "tla",
+      "scryfall_id": "87595843-15bc-48bb-8a81-3e6ad924ed44",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.serpents_pass",
+      "definition_scryfall_id": "ad87bff5-9b8c-44e4-a6d3-8cc71be9640a",
+      "oracle_id": "f715f701-a735-42ab-b31a-8e1bd04ac5ff",
+      "name": "Serpent's Pass",
+      "set": "tla",
+      "scryfall_id": "ad87bff5-9b8c-44e4-a6d3-8cc71be9640a",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.shared_roots",
+      "definition_scryfall_id": "e7847ba5-e85e-417f-96c0-aef2e6f83994",
+      "oracle_id": "9e0fd3bf-f47a-4f06-8ff1-73f6bf5d1e03",
+      "name": "Shared Roots",
+      "set": "tla",
+      "scryfall_id": "e7847ba5-e85e-417f-96c0-aef2e6f83994",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.sokka_bold_boomeranger",
+      "definition_scryfall_id": "4a1f1472-55b4-450d-8e4d-7297130a0cf3",
+      "oracle_id": "bdbec6d5-0f10-4114-b709-4402a44debdf",
+      "name": "Sokka, Bold Boomeranger",
+      "set": "tla",
+      "scryfall_id": "4a1f1472-55b4-450d-8e4d-7297130a0cf3",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.sokka_lateral_strategist",
+      "definition_scryfall_id": "1326c5db-4615-495f-8e30-376243d91352",
+      "oracle_id": "427f8ef9-12b3-4fa0-b303-28153566b6dc",
+      "name": "Sokka, Lateral Strategist",
+      "set": "tla",
+      "scryfall_id": "1326c5db-4615-495f-8e30-376243d91352",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.sokka_s_haiku",
+      "definition_scryfall_id": "004be4bc-ac3c-4026-8d36-f4687ab18c70",
+      "oracle_id": "87a97c72-143d-48a8-a1c5-3c44aa8e5a86",
+      "name": "Sokka's Haiku",
+      "set": "tla",
+      "scryfall_id": "004be4bc-ac3c-4026-8d36-f4687ab18c70",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.sokka_tenacious_tactician",
+      "definition_scryfall_id": "f0fa5897-1da7-488f-bb19-1632e969c050",
+      "oracle_id": "6b68acc2-b9d5-495b-8054-c04bae1349f1",
+      "name": "Sokka, Tenacious Tactician",
+      "set": "tla",
+      "scryfall_id": "f0fa5897-1da7-488f-bb19-1632e969c050",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.sold_out",
+      "definition_scryfall_id": "1affba6d-2cca-4cdf-8690-1e23ffbe8462",
+      "oracle_id": "6a69d4b1-72dd-4599-a16d-32299de5b0b9",
+      "name": "Sold Out",
+      "set": "tla",
+      "scryfall_id": "1affba6d-2cca-4cdf-8690-1e23ffbe8462",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.solstice_revelations",
+      "definition_scryfall_id": "f22ac19f-66fb-4d54-9f09-495a20a29577",
+      "oracle_id": "310c1280-dee8-426f-8440-6132a634a1e0",
+      "name": "Solstice Revelations",
+      "set": "tla",
+      "scryfall_id": "f22ac19f-66fb-4d54-9f09-495a20a29577",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.south_pole_voyager",
+      "definition_scryfall_id": "4b5ad895-be8d-476b-91ca-22fad7a3cc58",
+      "oracle_id": "c5173332-68ad-456e-ad85-dd7475464d94",
+      "name": "South Pole Voyager",
+      "set": "tla",
+      "scryfall_id": "4b5ad895-be8d-476b-91ca-22fad7a3cc58",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.southern_air_temple",
+      "definition_scryfall_id": "5c172f9b-2184-4736-9f90-74ce08596292",
+      "oracle_id": "987c1144-69f6-4441-b0a4-d23f931df81f",
+      "name": "Southern Air Temple",
+      "set": "tla",
+      "scryfall_id": "5c172f9b-2184-4736-9f90-74ce08596292",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.sozins_comet",
+      "definition_scryfall_id": "649e50e5-299b-4191-87a8-36e9378795be",
+      "oracle_id": "bc0da02c-2b85-4ddc-9ce0-63934dd14164",
+      "name": "Sozin's Comet",
+      "set": "tla",
+      "scryfall_id": "649e50e5-299b-4191-87a8-36e9378795be",
+      "rarity": "mythic"
+    },
+    {
+      "key": "tla.sparring_dummy",
+      "definition_scryfall_id": "520f5a03-ff5a-43ed-8f15-cf24596d60cd",
+      "oracle_id": "036b7b89-e49a-4560-9de9-1d4d71f3f666",
+      "name": "Sparring Dummy",
+      "set": "tla",
+      "scryfall_id": "520f5a03-ff5a-43ed-8f15-cf24596d60cd",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.spirit_water_revival",
+      "definition_scryfall_id": "0c019e76-c88e-4d1b-a546-0f4e462ef44a",
+      "oracle_id": "68979160-b5ce-4787-8a1e-1f40e614c3b0",
+      "name": "Spirit Water Revival",
+      "set": "tla",
+      "scryfall_id": "0c019e76-c88e-4d1b-a546-0f4e462ef44a",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.suki_courageous_rescuer",
+      "definition_scryfall_id": "33b97433-e16c-422e-a0ca-f6b1e98d8681",
+      "oracle_id": "70ea1a9d-ec52-4c11-8c4d-0d957e5491ad",
+      "name": "Suki, Courageous Rescuer",
+      "set": "tla",
+      "scryfall_id": "33b97433-e16c-422e-a0ca-f6b1e98d8681",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.suki_kyoshi_warrior",
+      "definition_scryfall_id": "3e311480-04f8-4b8f-938e-1cc6d06b9902",
+      "oracle_id": "9223488e-5206-4d43-90ef-387189dcee16",
+      "name": "Suki, Kyoshi Warrior",
+      "set": "tla",
+      "scryfall_id": "3e311480-04f8-4b8f-938e-1cc6d06b9902",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.sun_blessed_peak",
+      "definition_scryfall_id": "ae04c862-095f-41d2-8aef-21036d5a0cdc",
+      "oracle_id": "d188a397-c7d9-4f16-bc21-d9e1b5ffc951",
+      "name": "Sun-Blessed Peak",
+      "set": "tla",
+      "scryfall_id": "ae04c862-095f-41d2-8aef-21036d5a0cdc",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.sun_warriors",
+      "definition_scryfall_id": "e477d750-42d2-48c8-bc1f-8148d15d5f53",
+      "oracle_id": "513a2fca-fea4-434e-9b25-b0c0d7f322b2",
+      "name": "Sun Warriors",
+      "set": "tla",
+      "scryfall_id": "e477d750-42d2-48c8-bc1f-8148d15d5f53",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.swampsnare_trap",
+      "definition_scryfall_id": "6348b6bf-08a7-45f0-8b2d-2827ab89f21c",
+      "oracle_id": "fc532d1d-6cf5-4b59-afb3-325d0bc0db77",
+      "name": "Swampsnare Trap",
+      "set": "tla",
+      "scryfall_id": "6348b6bf-08a7-45f0-8b2d-2827ab89f21c",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.team_avatar",
+      "definition_scryfall_id": "a9a5f6f7-f04d-477f-b67f-fd01a5dcc0f5",
+      "oracle_id": "f95f7b0c-2dd6-46e1-ae02-f51d275e7120",
+      "name": "Team Avatar",
+      "set": "tla",
+      "scryfall_id": "a9a5f6f7-f04d-477f-b67f-fd01a5dcc0f5",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.teo_spirited_glider",
+      "definition_scryfall_id": "66906ed4-baac-4be0-9359-34f453d1a04a",
+      "oracle_id": "ea74940f-01de-4804-92ed-b273fddf6d62",
+      "name": "Teo, Spirited Glider",
+      "set": "tla",
+      "scryfall_id": "66906ed4-baac-4be0-9359-34f453d1a04a",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.the_boulder_ready_to_rumble",
+      "definition_scryfall_id": "ec27a466-5457-44c6-a842-1de7d3788d66",
+      "oracle_id": "d33ee141-a880-4368-a274-a6ae2f2c624b",
+      "name": "The Boulder, Ready to Rumble",
+      "set": "tla",
+      "scryfall_id": "ec27a466-5457-44c6-a842-1de7d3788d66",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.the_cave_of_two_lovers",
+      "definition_scryfall_id": "50bf5c8b-f218-46b7-843c-8d8083f02fd2",
+      "oracle_id": "c2df54f1-a2db-4de3-bc96-5c07f4594752",
+      "name": "The Cave of Two Lovers",
+      "set": "tla",
+      "scryfall_id": "50bf5c8b-f218-46b7-843c-8d8083f02fd2",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.the_earth_king",
+      "definition_scryfall_id": "a8d5dca6-381a-4361-b265-27de8d04335c",
+      "oracle_id": "d5770b0f-4493-42e9-a2d7-0e74a28da4ba",
+      "name": "The Earth King",
+      "set": "tla",
+      "scryfall_id": "a8d5dca6-381a-4361-b265-27de8d04335c",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.the_fire_nation_drill",
+      "definition_scryfall_id": "54d762f6-e131-480f-b294-10f5a63d9c98",
+      "oracle_id": "3d4b9d71-4275-4c18-a4dc-9aad234eb92c",
+      "name": "The Fire Nation Drill",
+      "set": "tla",
+      "scryfall_id": "54d762f6-e131-480f-b294-10f5a63d9c98",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.the_last_agni_kai",
+      "definition_scryfall_id": "61eaebc6-7575-48ed-b212-ff8b0c7ae694",
+      "oracle_id": "fd1998c0-c18e-4310-82de-b6320be5fe10",
+      "name": "The Last Agni Kai",
+      "set": "tla",
+      "scryfall_id": "61eaebc6-7575-48ed-b212-ff8b0c7ae694",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.the_legend_of_kuruk",
+      "definition_scryfall_id": "5e9a53d3-7f2f-4a9c-9516-0713da740478",
+      "oracle_id": "201b8936-18f4-4881-a1d4-c308cf3832bf",
+      "name": "The Legend of Kuruk // Avatar Kuruk",
+      "set": "tla",
+      "scryfall_id": "5e9a53d3-7f2f-4a9c-9516-0713da740478",
+      "rarity": "mythic"
+    },
+    {
+      "key": "tla.the_legend_of_kyoshi",
+      "definition_scryfall_id": "4887ce64-7c98-4bd7-95db-0c43ab71cc6e",
+      "oracle_id": "e41e8754-028c-4399-b530-de9e134d04b0",
+      "name": "The Legend of Kyoshi // Avatar Kyoshi",
+      "set": "tla",
+      "scryfall_id": "4887ce64-7c98-4bd7-95db-0c43ab71cc6e",
+      "rarity": "mythic"
+    },
+    {
+      "key": "tla.the_legend_of_roku",
+      "definition_scryfall_id": "95f2f5af-d405-4534-8683-5a9001f997b4",
+      "oracle_id": "2f26f270-26d9-46d3-957f-19f52d51eb03",
+      "name": "The Legend of Roku // Avatar Roku",
+      "set": "tla",
+      "scryfall_id": "95f2f5af-d405-4534-8683-5a9001f997b4",
+      "rarity": "mythic"
+    },
+    {
+      "key": "tla.the_legend_of_yangchen",
+      "definition_scryfall_id": "a60e8f23-90b2-4bc6-bd54-a95055556389",
+      "oracle_id": "521a63cf-5e83-4649-9800-c62b2fc474d6",
+      "name": "The Legend of Yangchen // Avatar Yangchen",
+      "set": "tla",
+      "scryfall_id": "a60e8f23-90b2-4bc6-bd54-a95055556389",
+      "rarity": "mythic"
+    },
+    {
+      "key": "tla.the_lion_turtle",
+      "definition_scryfall_id": "8491585c-81d0-48be-8ed0-832e42fad9c6",
+      "oracle_id": "fff728a1-56f5-4e97-91e2-19aba5772909",
+      "name": "The Lion-Turtle",
+      "set": "tla",
+      "scryfall_id": "8491585c-81d0-48be-8ed0-832e42fad9c6",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.the_mechanist_aerial_artisan",
+      "definition_scryfall_id": "b910851e-9332-4c83-a790-d379667cabfc",
+      "oracle_id": "bad27b43-7716-4ce1-82ba-2a6d437363e7",
+      "name": "The Mechanist, Aerial Artisan",
+      "set": "tla",
+      "scryfall_id": "b910851e-9332-4c83-a790-d379667cabfc",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.the_rise_of_sozin",
+      "definition_scryfall_id": "14eadf46-90c2-4376-8183-6a922a60174d",
+      "oracle_id": "9b0b217d-cc9d-4187-89cb-f13160ed2983",
+      "name": "The Rise of Sozin // Fire Lord Sozin",
+      "set": "tla",
+      "scryfall_id": "14eadf46-90c2-4376-8183-6a922a60174d",
+      "rarity": "mythic"
+    },
+    {
+      "key": "tla.the_spirit_oasis",
+      "definition_scryfall_id": "3a1b1329-531c-47ed-9802-c505501f8fd9",
+      "oracle_id": "b677a73c-f179-46bf-83ee-c2b05f9fca67",
+      "name": "The Spirit Oasis",
+      "set": "tla",
+      "scryfall_id": "3a1b1329-531c-47ed-9802-c505501f8fd9",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.the_unagi_of_kyoshi_island",
+      "definition_scryfall_id": "0ecd8b38-9ee5-41a5-9b93-21c33fc1a6ff",
+      "oracle_id": "be922360-ee9f-4cfb-bf10-d481c5de5cb1",
+      "name": "The Unagi of Kyoshi Island",
+      "set": "tla",
+      "scryfall_id": "0ecd8b38-9ee5-41a5-9b93-21c33fc1a6ff",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.the_walls_of_ba_sing_se",
+      "definition_scryfall_id": "24a14ac5-0b7e-4441-9963-782a7cda3f4a",
+      "oracle_id": "af7d7da5-aff5-48e1-901a-f81257a85f71",
+      "name": "The Walls of Ba Sing Se",
+      "set": "tla",
+      "scryfall_id": "24a14ac5-0b7e-4441-9963-782a7cda3f4a",
+      "rarity": "mythic"
+    },
+    {
+      "key": "tla.tiger_dillo",
+      "definition_scryfall_id": "067bd117-04e6-410e-89c4-6d431d627751",
+      "oracle_id": "b6e82d4f-4fbf-495c-bebd-982d2a855ad0",
+      "name": "Tiger-Dillo",
+      "set": "tla",
+      "scryfall_id": "067bd117-04e6-410e-89c4-6d431d627751",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.tiger_seal",
+      "definition_scryfall_id": "7aef2891-1269-4a1a-acea-0aa37ef544c4",
+      "oracle_id": "68f84643-c0f9-4d31-ba2e-38b65ab45d04",
+      "name": "Tiger-Seal",
+      "set": "tla",
+      "scryfall_id": "7aef2891-1269-4a1a-acea-0aa37ef544c4",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.tolls_of_war",
+      "definition_scryfall_id": "d822b9ad-a787-4355-88c2-07ae2bd3a78e",
+      "oracle_id": "5d1d9914-3ef2-45c5-b1cb-cb85d2f7394c",
+      "name": "Tolls of War",
+      "set": "tla",
+      "scryfall_id": "d822b9ad-a787-4355-88c2-07ae2bd3a78e",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.toph_hardheaded_teacher",
+      "definition_scryfall_id": "e3ba3395-39db-4330-9801-53def924f253",
+      "oracle_id": "8c1c0117-6fc0-43c5-a4c8-6472de6503d9",
+      "name": "Toph, Hardheaded Teacher",
+      "set": "tla",
+      "scryfall_id": "e3ba3395-39db-4330-9801-53def924f253",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.toph_the_blind_bandit",
+      "definition_scryfall_id": "ff68fa7b-8065-407b-a8b4-bfbb14f1c99c",
+      "oracle_id": "2ce20f43-9357-448f-bb40-7315feb08433",
+      "name": "Toph, the Blind Bandit",
+      "set": "tla",
+      "scryfall_id": "ff68fa7b-8065-407b-a8b4-bfbb14f1c99c",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.toph_the_first_metalbender",
+      "definition_scryfall_id": "70b6670f-a9fa-4d75-b0a7-c01b5071a514",
+      "oracle_id": "fbfef028-b10c-4ade-9503-d9af5b0c211b",
+      "name": "Toph, the First Metalbender",
+      "set": "tla",
+      "scryfall_id": "70b6670f-a9fa-4d75-b0a7-c01b5071a514",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.treetop_freedom_fighters",
+      "definition_scryfall_id": "a9394200-7ffc-440f-8b5f-c08b7930133c",
+      "oracle_id": "922176b8-7174-4248-92fb-b196ceb802c7",
+      "name": "Treetop Freedom Fighters",
+      "set": "tla",
+      "scryfall_id": "a9394200-7ffc-440f-8b5f-c08b7930133c",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.true_ancestry",
+      "definition_scryfall_id": "8c55b333-dc8b-4332-895b-eec5eb45543f",
+      "oracle_id": "26c2dd96-07e7-4294-9431-96d5aeff3761",
+      "name": "True Ancestry",
+      "set": "tla",
+      "scryfall_id": "8c55b333-dc8b-4332-895b-eec5eb45543f",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.trusty_boomerang",
+      "definition_scryfall_id": "df99a166-6d58-4d92-9037-2fdfbaf65629",
+      "oracle_id": "3c032e74-69c6-48ca-95d4-51aa3d894c14",
+      "name": "Trusty Boomerang",
+      "set": "tla",
+      "scryfall_id": "df99a166-6d58-4d92-9037-2fdfbaf65629",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.tundra_tank",
+      "definition_scryfall_id": "13c66fce-8f8e-4a98-8413-9f05aebf6e13",
+      "oracle_id": "2ded4b02-7aa4-46a1-b10f-8480eb942cd4",
+      "name": "Tundra Tank",
+      "set": "tla",
+      "scryfall_id": "13c66fce-8f8e-4a98-8413-9f05aebf6e13",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.turtle_duck",
+      "definition_scryfall_id": "aefcd734-3916-4c77-9d98-3ea2c2795658",
+      "oracle_id": "e93782e3-1b93-459a-a7de-06c3b6591e6f",
+      "name": "Turtle-Duck",
+      "set": "tla",
+      "scryfall_id": "aefcd734-3916-4c77-9d98-3ea2c2795658",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.twin_blades",
+      "definition_scryfall_id": "dc399ae0-36b5-4c92-9fe2-138caf8d7a86",
+      "oracle_id": "88b076a4-46ff-4a41-95a5-2821f4d8944d",
+      "name": "Twin Blades",
+      "set": "tla",
+      "scryfall_id": "dc399ae0-36b5-4c92-9fe2-138caf8d7a86",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.ty_lee_artful_acrobat",
+      "definition_scryfall_id": "dcd9df24-272b-4aa1-b05f-6ee6b3d3dfe7",
+      "oracle_id": "3726b9a0-67cb-4f45-ab50-62db50f93568",
+      "name": "Ty Lee, Artful Acrobat",
+      "set": "tla",
+      "scryfall_id": "dcd9df24-272b-4aa1-b05f-6ee6b3d3dfe7",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.ty_lee_chi_blocker",
+      "definition_scryfall_id": "308cc687-9cb2-4e3a-98db-c5ba2a7da115",
+      "oracle_id": "081ad4e3-cda3-41cc-890f-412611dc9ea0",
+      "name": "Ty Lee, Chi Blocker",
+      "set": "tla",
+      "scryfall_id": "308cc687-9cb2-4e3a-98db-c5ba2a7da115",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.uncle_iroh",
+      "definition_scryfall_id": "5c88672c-0eba-4e93-a0ec-30bbb1bb7661",
+      "oracle_id": "8a98ddac-7341-4118-b188-51d8d03afd1d",
+      "name": "Uncle Iroh",
+      "set": "tla",
+      "scryfall_id": "5c88672c-0eba-4e93-a0ec-30bbb1bb7661",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.united_front",
+      "definition_scryfall_id": "d347caf8-0c12-401f-9e33-9978cb347f89",
+      "oracle_id": "c23f260b-b7d3-4c25-a08a-dabdb99e1791",
+      "name": "United Front",
+      "set": "tla",
+      "scryfall_id": "d347caf8-0c12-401f-9e33-9978cb347f89",
+      "rarity": "mythic"
+    },
+    {
+      "key": "tla.unlucky_cabbage_merchant",
+      "definition_scryfall_id": "0a838009-b115-4497-b35d-682e41ead7db",
+      "oracle_id": "d8f7d4c8-bc50-4bcf-b930-797dcb3c2a21",
+      "name": "Unlucky Cabbage Merchant",
+      "set": "tla",
+      "scryfall_id": "0a838009-b115-4497-b35d-682e41ead7db",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.vengeful_villagers",
+      "definition_scryfall_id": "8cabb6ed-5c80-4dab-b96c-9d4d9fe72db7",
+      "oracle_id": "ad6442c2-7aa2-4c24-8133-f679a3499bde",
+      "name": "Vengeful Villagers",
+      "set": "tla",
+      "scryfall_id": "8cabb6ed-5c80-4dab-b96c-9d4d9fe72db7",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.vindictive_warden",
+      "definition_scryfall_id": "0f34de05-39a9-425f-a3b4-3a9d46c917ac",
+      "oracle_id": "43b339ec-4d7d-41ac-a5ab-96c6a6de00e2",
+      "name": "Vindictive Warden",
+      "set": "tla",
+      "scryfall_id": "0f34de05-39a9-425f-a3b4-3a9d46c917ac",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.walltop_sentries",
+      "definition_scryfall_id": "e55f1c63-58f6-4e2b-aaeb-f2d5faca47a2",
+      "oracle_id": "fb3a0910-a582-41ef-b5b9-3cda1f1cd5ce",
+      "name": "Walltop Sentries",
+      "set": "tla",
+      "scryfall_id": "e55f1c63-58f6-4e2b-aaeb-f2d5faca47a2",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.wan_shi_tong_librarian",
+      "definition_scryfall_id": "e20da6b5-1057-4a28-9e85-07de714e262f",
+      "oracle_id": "2bace3ea-7d28-4a1c-857a-d3c3a1c11b59",
+      "name": "Wan Shi Tong, Librarian",
+      "set": "tla",
+      "scryfall_id": "e20da6b5-1057-4a28-9e85-07de714e262f",
+      "rarity": "mythic"
+    },
+    {
+      "key": "tla.wandering_musicians",
+      "definition_scryfall_id": "3da81dbd-dc80-47ff-a33b-270d23a24e0a",
+      "oracle_id": "7166bf81-05c2-457d-a0bb-a175175b8e79",
+      "name": "Wandering Musicians",
+      "set": "tla",
+      "scryfall_id": "3da81dbd-dc80-47ff-a33b-270d23a24e0a",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.war_balloon",
+      "definition_scryfall_id": "6829b20d-c2fa-41a6-89ca-f21c522d8866",
+      "oracle_id": "021b495d-236f-4274-988d-2dfd7103c9ef",
+      "name": "War Balloon",
+      "set": "tla",
+      "scryfall_id": "6829b20d-c2fa-41a6-89ca-f21c522d8866",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.wartime_protestors",
+      "definition_scryfall_id": "bac81940-d717-49ff-83b2-16a22bb2c988",
+      "oracle_id": "6557813b-4ee7-4881-a37c-10c8ea097360",
+      "name": "Wartime Protestors",
+      "set": "tla",
+      "scryfall_id": "bac81940-d717-49ff-83b2-16a22bb2c988",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.water_tribe_captain",
+      "definition_scryfall_id": "0a0cdf97-1927-47c6-8ef1-29969e3567ee",
+      "oracle_id": "0c6c4921-c6cb-4b4b-ac9d-10ccc89a5d1d",
+      "name": "Water Tribe Captain",
+      "set": "tla",
+      "scryfall_id": "0a0cdf97-1927-47c6-8ef1-29969e3567ee",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.water_tribe_rallier",
+      "definition_scryfall_id": "4e744b6c-1c2f-451a-818a-5ee7785b5213",
+      "oracle_id": "64acb083-a0a3-46ec-9c93-b2ac36878703",
+      "name": "Water Tribe Rallier",
+      "set": "tla",
+      "scryfall_id": "4e744b6c-1c2f-451a-818a-5ee7785b5213",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.waterbender_ascension",
+      "definition_scryfall_id": "3f57e0f9-e232-489c-b991-d0d23f75d8dd",
+      "oracle_id": "aeddfdc2-149b-4703-ba57-8d844b25ef08",
+      "name": "Waterbender Ascension",
+      "set": "tla",
+      "scryfall_id": "3f57e0f9-e232-489c-b991-d0d23f75d8dd",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.waterbending_lesson",
+      "definition_scryfall_id": "4f81e3b5-a0a9-4764-8c2d-b499ce1740b4",
+      "oracle_id": "3d28886c-46bf-4d2e-a257-cb9016cc3573",
+      "name": "Waterbending Lesson",
+      "set": "tla",
+      "scryfall_id": "4f81e3b5-a0a9-4764-8c2d-b499ce1740b4",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.waterbending_scroll",
+      "definition_scryfall_id": "50d0be73-a2c8-44a0-9178-9949f342f6f9",
+      "oracle_id": "882d032b-db36-401a-8075-a9fabc90c53d",
+      "name": "Waterbending Scroll",
+      "set": "tla",
+      "scryfall_id": "50d0be73-a2c8-44a0-9178-9949f342f6f9",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.watery_grasp",
+      "definition_scryfall_id": "26bcff57-428e-4f30-a153-a778fbfc437d",
+      "oracle_id": "520b2799-66bd-40bf-9bc0-9cd3aed321f5",
+      "name": "Watery Grasp",
+      "set": "tla",
+      "scryfall_id": "26bcff57-428e-4f30-a153-a778fbfc437d",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.white_lotus_hideout",
+      "definition_scryfall_id": "24d1e22c-0d99-4ed5-94f0-fd055fd8e2be",
+      "oracle_id": "2cdbfda3-98fc-4108-b551-c7049168924e",
+      "name": "White Lotus Hideout",
+      "set": "tla",
+      "scryfall_id": "24d1e22c-0d99-4ed5-94f0-fd055fd8e2be",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.white_lotus_reinforcements",
+      "definition_scryfall_id": "4c7e3e2f-d7ac-4d40-ab84-cb7efe06a316",
+      "oracle_id": "c55a4b25-ccc4-49de-9f98-a829c547a64d",
+      "name": "White Lotus Reinforcements",
+      "set": "tla",
+      "scryfall_id": "4c7e3e2f-d7ac-4d40-ab84-cb7efe06a316",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.white_lotus_tile",
+      "definition_scryfall_id": "1d70f9ec-fdc1-4219-b89b-c030d712c1fc",
+      "oracle_id": "f8a5e009-45b7-4e62-a494-1579f5fc0ba6",
+      "name": "White Lotus Tile",
+      "set": "tla",
+      "scryfall_id": "1d70f9ec-fdc1-4219-b89b-c030d712c1fc",
+      "rarity": "mythic"
+    },
+    {
+      "key": "tla.wolfbat",
+      "definition_scryfall_id": "2ae83b4e-e5a4-4c98-8d16-eef3c71b8ff2",
+      "oracle_id": "adc47a25-daab-49c7-93a5-5bbf2bc20cf9",
+      "name": "Wolfbat",
+      "set": "tla",
+      "scryfall_id": "2ae83b4e-e5a4-4c98-8d16-eef3c71b8ff2",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.yip_yip",
+      "definition_scryfall_id": "43f4b10e-165b-4100-82f3-728e1b0c78ed",
+      "oracle_id": "5453550f-9136-4568-baf8-c3d20e33fbb6",
+      "name": "Yip Yip!",
+      "set": "tla",
+      "scryfall_id": "43f4b10e-165b-4100-82f3-728e1b0c78ed",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.yue_the_moon_spirit",
+      "definition_scryfall_id": "ecdac50f-c639-43fc-a03e-d488fac96ae2",
+      "oracle_id": "961f1883-2f97-4249-90f9-416279d7a9dd",
+      "name": "Yue, the Moon Spirit",
+      "set": "tla",
+      "scryfall_id": "ecdac50f-c639-43fc-a03e-d488fac96ae2",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.yuyan_archers",
+      "definition_scryfall_id": "99244462-a996-4a5b-91fb-947045647d6d",
+      "oracle_id": "63e5180f-16d0-4524-94bf-ecbf3c417814",
+      "name": "Yuyan Archers",
+      "set": "tla",
+      "scryfall_id": "99244462-a996-4a5b-91fb-947045647d6d",
+      "rarity": "common"
+    },
+    {
+      "key": "tla.zhao_ruthless_admiral",
+      "definition_scryfall_id": "3fd48a57-b0bb-4177-a0f3-bd317a179cbe",
+      "oracle_id": "d6b0198a-c1f2-4142-b5e2-8205adf14d0a",
+      "name": "Zhao, Ruthless Admiral",
+      "set": "tla",
+      "scryfall_id": "3fd48a57-b0bb-4177-a0f3-bd317a179cbe",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.zhao_the_moon_slayer",
+      "definition_scryfall_id": "f1015bf5-de98-41f3-b6b1-ed95f7465944",
+      "oracle_id": "94c64d41-d756-42b6-b0e7-0a351d64a68c",
+      "name": "Zhao, the Moon Slayer",
+      "set": "tla",
+      "scryfall_id": "f1015bf5-de98-41f3-b6b1-ed95f7465944",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.zuko_conflicted",
+      "definition_scryfall_id": "9d555cab-ec86-4f27-bca2-7d01f79c3f46",
+      "oracle_id": "b5fd82b9-77de-4358-9ce7-915cc809a889",
+      "name": "Zuko, Conflicted",
+      "set": "tla",
+      "scryfall_id": "9d555cab-ec86-4f27-bca2-7d01f79c3f46",
+      "rarity": "rare"
+    },
+    {
+      "key": "tla.zuko_exiled_prince",
+      "definition_scryfall_id": "6a73b372-9c0e-4a85-89d2-440163330687",
+      "oracle_id": "3231ce2e-d4f8-44fc-872d-aeafa59aed4b",
+      "name": "Zuko, Exiled Prince",
+      "set": "tla",
+      "scryfall_id": "6a73b372-9c0e-4a85-89d2-440163330687",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.zuko_s_conviction",
+      "definition_scryfall_id": "ad8933d6-cdc7-4d60-a78e-b43ffecfb136",
+      "oracle_id": "f034e8a3-82f7-4c70-93ea-0bf2688f66e1",
+      "name": "Zuko's Conviction",
+      "set": "tla",
+      "scryfall_id": "ad8933d6-cdc7-4d60-a78e-b43ffecfb136",
+      "rarity": "uncommon"
+    },
+    {
+      "key": "tla.zuko_s_exile",
+      "definition_scryfall_id": "9090b055-3406-4fed-a8c6-3f6353a9600e",
+      "oracle_id": "5cf18398-9552-415e-a61f-2c149e35ec3d",
+      "name": "Zuko's Exile",
+      "set": "tla",
+      "scryfall_id": "9090b055-3406-4fed-a8c6-3f6353a9600e",
+      "rarity": "common"
+    }
+  ]
+}

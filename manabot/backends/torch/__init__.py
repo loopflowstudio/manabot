@@ -8,7 +8,9 @@ as attributes (`backend.rl`, `backend.learner`, `backend.arrays`,
 import importlib
 from types import ModuleType
 
-_FILES = frozenset({"arrays", "checkpoint", "learner", "policy", "rl", "rollout"})
+_FILES = frozenset(
+    {"draft", "arrays", "checkpoint", "learner", "policy", "rl", "rollout"}
+)
 
 
 def __getattr__(name: str) -> ModuleType:

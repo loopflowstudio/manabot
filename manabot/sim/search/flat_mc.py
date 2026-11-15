@@ -32,8 +32,10 @@ from manabot.infra.config import (
     MatchConfig,
     RewardConfig,
 )
+from manabot.model.world import validate_agent_setup
 from manabot.policy.protocol import Backend, BackendPolicy
 from manabot.sim.anchors import RandomMatchupPlayer
+from manabot.sim.opening import opening_value
 from manabot.sim.search.runtime import DEFAULT_MAX_PLAYOUT_STEPS, SearchStats
 from manabot.verify.games import INTERACTIVE_DECK, winner_from_info_or_obs
 from managym.decision import Command, DecisionFrame
@@ -151,8 +153,16 @@ class AgentMatchupPlayer:
         self.deterministic = deterministic
         agent.eval()
 
+    def opening_value(self, env: Env, obs: ObservationBuffers) -> float:
+
+        validate_agent_setup(
+            self.agent,
+            env.match.to_rust(),
+            allow_deck_repetition=self.allow_deck_repetition,
+        )
+        return opening_value(self.agent, obs)
+
     def act(self, env: Env, obs: ObservationBuffers) -> int:
-        from manabot.model.world import validate_agent_setup
 
         validate_agent_setup(
             self.agent,

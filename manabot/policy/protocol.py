@@ -20,7 +20,7 @@ import numpy as np
 
 from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.policy.checkpoint import ParameterArrays, PolicyCheckpoint
-from manabot.policy.prepare import Prepared
+from manabot.policy.prepare import GamePrepared as Prepared
 
 Precision = Literal["float32", "bfloat16"]
 

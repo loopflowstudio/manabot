@@ -1273,6 +1273,14 @@ refuses an observation that needs that state; train on them with input v10
 `managym.set_cards(["tla"])` selects definitions by their first-printing set.
 Adding `"tle"` still excludes reprints defined under earlier sets. Admit the
 actual counted decklist against the world to include its bonus-sheet cards.
+For complete nonbasic TLA printing membership, use
+`managym.set_cards(["tla"], printings=True)`. This includes Corrupt Court Official,
+Epic Downfall and Lightning Strike under their original keys and first-printing
+ids. `managym.format.set_printings("tla")` supplies their separate TLA printing
+ids and rarities. Only TLA has a bundled complete printing inventory; requesting
+an uncurated set in printing mode raises `ValueError` rather than falling back
+to the prefix filter. Bibliographic metadata does not change card rules or
+learning tokens.
 
 For unknown names in `DeckImportError`, check spelling and the installed
 engine's definitions. Engine and checkpoint worlds must remain compatible;

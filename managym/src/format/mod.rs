@@ -2,3 +2,4 @@
 //! card eligibility and deck admission; they do not alter in-game decisions.
 
 pub mod limited;
+pub mod rotisserie;

@@ -20,6 +20,7 @@ pub mod decklist;
 mod fixtures;
 pub mod names;
 mod pool;
+pub mod printings;
 pub mod setups;
 pub mod tokens;
 

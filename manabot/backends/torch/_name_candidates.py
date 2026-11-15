@@ -18,7 +18,7 @@ from collections.abc import Sequence
 import torch
 from torch import nn
 
-from manabot.policy.prepare import Prepared
+from manabot.policy.prepare import GamePrepared as Prepared
 import managym
 
 

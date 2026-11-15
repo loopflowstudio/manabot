@@ -133,7 +133,10 @@ For building a deck before play, see [Limited deck building](../docs/deck-buildi
 build started from both reports the copies still available and when stopping
 is legal. The same rules read and write NumPy arrays over the card axis for
 batched builders.
-Format rules live in `src/format/` (`format::limited`); they build on the
+`format.Rotisserie` creates public shared-supply draft pools before construction;
+its TLA inventory uses checked printing membership and rarity, including reprints
+whose definitions live under earlier sets. See [public drafting](../docs/deck-building.md#public-rotisserie-drafts).
+Format rules live in `src/format/`; they build on the
 definitions, decklists and world admission in `src/cards/`.
 
 [Engine development principles](PRINCIPLES.md) records the lessons from
@@ -156,7 +159,8 @@ are in the [README](../README.md#contracts-the-code-enforces).
    and their tests, reached by the engine only through `managym_cards::catalog()` and `token_catalog()`;
    **`src/cards/`**: `ContentPack`, rules fixtures, authored setups, pool support and learning tokens
 5. **`src/format/`**: Format construction rules and card selection;
-   `limited.rs` adds Limited pool counts and deck size rules to world admission
+   `limited.rs` adds Limited pool counts and deck size rules to world admission;
+   `rotisserie.rs` owns shared supply, public pools and snake-order draft picks
 6. **`src/infra/`**: Logging and profiler infrastructure
 7. **`src/python/`**: PyO3 bindings and Rust→Python conversions
 

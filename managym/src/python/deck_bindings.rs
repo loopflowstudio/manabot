@@ -28,6 +28,8 @@ use crate::{
         basic_lands, basics, card_count, CardPool, Limited, LimitedBuild, DEFAULT_BUILD_CAP,
         LIMITED_MIN_CARDS,
     },
+    format::rotisserie::Rotisserie,
+    state::card::CardDefId,
     state::deck::Deck,
 };
 
@@ -587,6 +589,8 @@ pub fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     let format = PyModule::new_bound(py, "format")?;
     format.add_class::<Limited>()?;
     format.add_class::<LimitedBuild>()?;
+    format.add_class::<Rotisserie>()?;
+    format.add_function(wrap_pyfunction!(set_printings, &format)?)?;
     m.add_submodule(&format)?;
     m.add_class::<Deck>()?;
     m.add_class::<DeckIssue>()?;
@@ -599,4 +603,45 @@ pub fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(check_decks, m)?)?;
     m.add_function(wrap_pyfunction!(admit_decklists, m)?)?;
     Ok(())
+}
+
+#[pyfunction]
+fn set_printings(py: Python<'_>, set: &str) -> PyResult<PyObject> {
+    to_python(
+        py,
+        &crate::cards::printings::set_printings(set).map_err(value_error)?,
+    )
+}
+
+#[pymethods]
+impl Rotisserie {
+    #[new]
+    #[pyo3(signature = (set, episode_id, seats=8, picks_per_seat=45))]
+    fn py_new(set: &str, episode_id: &str, seats: usize, picks_per_seat: usize) -> PyResult<Self> {
+        Self::new(set, episode_id, seats, picks_per_seat).map_err(value_error)
+    }
+
+    /// An owned snapshot: every pool and legal definition is public. Editing
+    /// Python's returned containers cannot mutate native draft state.
+    #[pyo3(name = "observe")]
+    fn py_observe(&self, py: Python<'_>) -> PyResult<PyObject> {
+        to_python(py, &self.observe())
+    }
+
+    #[pyo3(name = "pick")]
+    fn py_pick(
+        &mut self,
+        episode_id: &str,
+        revision: usize,
+        chooser: usize,
+        card_def_id: u32,
+    ) -> PyResult<()> {
+        self.pick(episode_id, revision, chooser, CardDefId(card_def_id))
+            .map_err(value_error)
+    }
+
+    #[pyo3(name = "pool")]
+    fn py_pool(&self, seat: usize) -> PyResult<CardPool> {
+        self.pool(seat).map_err(value_error)
+    }
 }

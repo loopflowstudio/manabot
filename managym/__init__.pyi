@@ -63,8 +63,12 @@ class WorldIdentity(TypedDict):
 def world_identity() -> WorldIdentity:
     """The installed world's version and the digest of its cards."""
 
-def set_cards(sets: list[str]) -> list[PoolDefinition]:
-    """World pool rows for cards whose key prefix is in ``sets``."""
+def set_cards(sets: list[str], *, printings: bool = False) -> list[PoolDefinition]:
+    """World pool rows by first-printing prefix, or checked nonbasic printing membership.
+
+    ``printings=True`` requires a bundled complete inventory for every set;
+    currently TLA only. Rows retain their authored first-printing identity.
+    """
 
 def unsupported_cards(names: list[str]) -> list[str]:
     """Distinct names the current world does not support for deck entry."""

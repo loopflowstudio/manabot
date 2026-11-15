@@ -6,6 +6,9 @@ Run provenance lives in the verify store (`.runs/verify.sqlite`).
 The [Haiku versus MTG-183 evaluation](haiku-mtg183.md) reports a completed
 100-game hosted-model comparison, with full evidence in the experiment cache.
 
+For the public TLA drafting workflow and reward comparison, see
+[TLA Rotisserie: game rewards versus opening values](tla-rotisserie.md).
+
 Each experiment people run today is one module beside its report: its recipes,
 built from [`manabot.recipes.builders`](../manabot/recipes/builders.py), and
 anything only it needs to run and report. `manabot/` keeps the reusable

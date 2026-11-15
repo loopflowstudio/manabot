@@ -42,8 +42,8 @@ from manabot.infra.config import ModelConfig
 from manabot.policy import admission
 from manabot.policy.checkpoint import Dimensions
 from manabot.policy.prepare import (
+    GamePrepared as Prepared,
     Packed,
-    Prepared,
     Tables,
     prepare,
 )

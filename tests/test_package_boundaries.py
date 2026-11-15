@@ -451,7 +451,6 @@ def test_generic_learning_pieces_import_only_themselves() -> None:
     # Role-specific types appear only in annotations (under TYPE_CHECKING);
     # the runtime probe below holds both the learner and array transfer to that.
     assert violations == [
-        "manabot/backends/torch/learner.py: manabot.backends.torch.policy",
         "manabot/backends/torch/learner.py: manabot.policy.checkpoint",
         "manabot/backends/torch/learner.py: manabot.training.regime",
         "manabot/backends/torch/arrays.py: manabot.policy.prepare",

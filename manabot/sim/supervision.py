@@ -109,7 +109,6 @@ def supervise_game(
             journal = evidence_path.open("a")
             retain("game", game)
         process: ChildProcess | None = None
-        responsible = None
         try:
             client = None
             if inference is not None:
@@ -150,21 +149,16 @@ def supervise_game(
                     if process.is_alive():
                         continue
                     # Exit may race the timed poll. Drain queued phase/Command
-                    # events before deciding which player, if any, failed.
+                    # events before settling an unexplained exit.
                     if not receiver.poll():
-                        _failure(
-                            game,
-                            "crash",
-                            f"worker exited {process.exitcode}",
-                            responsible,
+                        _infrastructure_failure(
+                            game, f"worker exited {process.exitcode}"
                         )
                         return game
                 try:
                     kind, value = receiver.recv()
                 except EOFError:
-                    _failure(
-                        game, "crash", "worker exited without a result", responsible
-                    )
+                    _infrastructure_failure(game, "worker exited without a result")
                     return game
                 if kind == "inference_failure":
                     # A failed or late reply means the shared service cannot be
@@ -175,14 +169,12 @@ def supervise_game(
                 with perf.span("durable_evidence"):
                     retain(kind, value)
                 game = apply_game_event(game, kind, value)
-                if kind == "phase":
-                    responsible = value
-                elif kind == "pending":
+                if kind == "pending":
                     try:
                         receiver.send("retained")
                     except (BrokenPipeError, ConnectionResetError):
-                        _failure(
-                            game, "crash", "worker exited before acknowledgement", None
+                        _infrastructure_failure(
+                            game, "worker exited before acknowledgement"
                         )
                         return game
                 elif kind == "result":
