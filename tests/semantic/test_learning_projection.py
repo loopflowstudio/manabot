@@ -87,14 +87,24 @@ def _variant(name: str) -> tuple[int, int]:
     return (TOKEN_KINDS["variant"], token_value(name))
 
 
-def _fake_observation(card_ids: list[int], *, hidden_marker: str = "a"):
+def _fake_observation(
+    card_ids: list[int], *, hidden_marker: str = "a"
+) -> SimpleNamespace:
     return SimpleNamespace(
         agent_cards=[SimpleNamespace(registry_key=card_ids[0])],
         agent_sideboard=[],
         opponent_cards=[SimpleNamespace(registry_key=card_ids[1])],
+        agent=SimpleNamespace(id=1),
+        opponent=SimpleNamespace(id=2),
+        agent_permanents=[],
+        opponent_permanents=[],
         stack_objects=[
-            SimpleNamespace(kind=1, source_card_registry_key=card_ids[0]),
-            SimpleNamespace(kind=0, source_card_registry_key=card_ids[1]),
+            SimpleNamespace(
+                kind=1, source_card_registry_key=card_ids[0], characteristics=None
+            ),
+            SimpleNamespace(
+                kind=0, source_card_registry_key=card_ids[1], characteristics=None
+            ),
         ],
         continuation=[],
         # The projector must never inspect this private-state stand-in.
@@ -282,9 +292,13 @@ def test_projection_uses_only_viewer_objects_and_batches_with_stable_masks():
 
     empty = pack.project_observation(
         SimpleNamespace(
+            agent=SimpleNamespace(id=1),
+            opponent=SimpleNamespace(id=2),
             agent_cards=[],
             agent_sideboard=[],
             opponent_cards=[],
+            agent_permanents=[],
+            opponent_permanents=[],
             stack_objects=[],
             continuation=[],
         ),

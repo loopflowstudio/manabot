@@ -10,7 +10,7 @@ import torch
 
 from manabot.env.failures import CapturedVector, resolve_player_policies
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import PERMANENT_TYPES_INDEX, ObservationSpace
 import managym
 
 
@@ -44,14 +44,23 @@ class VectorEnv:
         )
         self._build_tensor_views()
 
-        self._battlefield_zone_index = int(managym.ZoneEnum.BATTLEFIELD)
-        self._card_land_index = self.observation_space.encoder.num_zones + 1 + 2 + 1
-        self._card_creature_index = self._card_land_index + 1
-        self._prev_obs_keys: Tuple[str, ...] = ("agent_cards", "opponent_player")
+        # Land and creature counts read the battlefield: input v11's permanent
+        # rows, or the deprecated v9/v10 battlefield card rows.
+        encoder = self.observation_space.encoder
+        self._battlefield_zone_index: int | None
+        if encoder.one_token:
+            self._board_keys = ("agent_permanents", "opponent_permanents")
+            self._battlefield_zone_index = None
+            self._land_index = PERMANENT_TYPES_INDEX
+        else:
+            self._board_keys = ("agent_cards", "opponent_cards")
+            self._battlefield_zone_index = int(managym.ZoneEnum.BATTLEFIELD)
+            self._land_index = encoder.num_zones + 1 + 2 + 1
+        self._creature_index = self._land_index + 1
+        self._prev_obs_keys: Tuple[str, ...] = (self._board_keys[0], "opponent_player")
         if self.reward.config.potential_enabled:
             self._prev_obs_keys = (
-                "agent_cards",
-                "opponent_cards",
+                *self._board_keys,
                 "agent_player",
                 "opponent_player",
             )
@@ -171,8 +180,8 @@ class VectorEnv:
         ):
             return None
 
-        prev_agent_cards = self._prev_obs["agent_cards"]
-        next_agent_cards = self._obs_tensors["agent_cards"]
+        prev_agent_cards = self._prev_obs[self._board_keys[0]]
+        next_agent_cards = self._obs_tensors[self._board_keys[0]]
         prev_opponent_player = self._prev_obs["opponent_player"]
         next_opponent_player = self._obs_tensors["opponent_player"]
 
@@ -181,20 +190,20 @@ class VectorEnv:
         if config.land_play_reward != 0.0:
             land_delta = self._battlefield_card_count(
                 next_agent_cards,
-                self._card_land_index,
+                self._land_index,
             ) - self._battlefield_card_count(
                 prev_agent_cards,
-                self._card_land_index,
+                self._land_index,
             )
             shaping += config.land_play_reward * torch.clamp(land_delta, min=0.0)
 
         if config.creature_play_reward != 0.0:
             creature_delta = self._battlefield_card_count(
                 next_agent_cards,
-                self._card_creature_index,
+                self._creature_index,
             ) - self._battlefield_card_count(
                 prev_agent_cards,
-                self._card_creature_index,
+                self._creature_index,
             )
             shaping += config.creature_play_reward * torch.clamp(
                 creature_delta, min=0.0
@@ -226,14 +235,14 @@ class VectorEnv:
             return None
 
         prev_phi = self._potential(
-            self._prev_obs["agent_cards"],
-            self._prev_obs["opponent_cards"],
+            self._prev_obs[self._board_keys[0]],
+            self._prev_obs[self._board_keys[1]],
             self._prev_obs["agent_player"],
             self._prev_obs["opponent_player"],
         )
         next_phi = self._potential(
-            self._obs_tensors["agent_cards"],
-            self._obs_tensors["opponent_cards"],
+            self._obs_tensors[self._board_keys[0]],
+            self._obs_tensors[self._board_keys[1]],
             self._obs_tensors["agent_player"],
             self._obs_tensors["opponent_player"],
         )
@@ -258,15 +267,13 @@ class VectorEnv:
 
         if config.potential_land_weight != 0.0:
             phi += config.potential_land_weight * (
-                self._battlefield_card_count(agent_cards, self._card_land_index)
-                - self._battlefield_card_count(opponent_cards, self._card_land_index)
+                self._battlefield_card_count(agent_cards, self._land_index)
+                - self._battlefield_card_count(opponent_cards, self._land_index)
             )
         if config.potential_creature_weight != 0.0:
             phi += config.potential_creature_weight * (
-                self._battlefield_card_count(agent_cards, self._card_creature_index)
-                - self._battlefield_card_count(
-                    opponent_cards, self._card_creature_index
-                )
+                self._battlefield_card_count(agent_cards, self._creature_index)
+                - self._battlefield_card_count(opponent_cards, self._creature_index)
             )
         if config.potential_life_weight != 0.0:
             phi += config.potential_life_weight * (
@@ -279,10 +286,12 @@ class VectorEnv:
         cards: torch.Tensor,
         type_feature_index: int,
     ) -> torch.Tensor:
+        """Valid battlefield rows of `cards` [B, rows, width] with the type flag."""
         valid = cards[..., -1] > 0.5
-        in_battlefield = cards[..., self._battlefield_zone_index] > 0.5
+        if self._battlefield_zone_index is not None:
+            valid = valid & (cards[..., self._battlefield_zone_index] > 0.5)
         matches_type = cards[..., type_feature_index] > 0.5
-        return (valid & in_battlefield & matches_type).float().sum(dim=1)
+        return (valid & matches_type).float().sum(dim=1)
 
     def reset(
         self, *, seed: Optional[int] = None, options: Optional[dict] = None

@@ -39,6 +39,9 @@ from manabot.backends.torch.arrays import array_fields, device_of, on_device, to
 from manabot.backends.torch.live_tokens import LiveTokens
 from manabot.backends.torch.rl import NumericalError
 from manabot.env.observation import (
+    STACK_DEFINITION_INDEX,
+    STACK_DIM,
+    STACK_SOURCE_INDEX,
     TURN_STATE_DIM,
     ObservationBuffers,
     ObservationSpace,
@@ -144,9 +147,11 @@ class ActorCritic(nn.Module):
             )
         player_dim = enc.player_dim
         card_dim = enc.card_dim
-        # Input v10 appends each seat's turn-state row to its player row and
+        # Inputs v10/v11 append each seat's turn-state row to its player row and
         # each card row's turn-state value to that card row.
-        if enc.config.policy_input_version == 10:
+        self.turn_state = enc.turn_state
+        self.stack_tokens = enc.one_token
+        if self.turn_state:
             player_dim += TURN_STATE_DIM
             card_dim += 1
         # Definition IDs and permanent links are categorical joins, never
@@ -340,6 +345,34 @@ class ActorCritic(nn.Module):
         self.bucketed_shapes = bucketed_shapes
         self.live_tokens = live_tokens
         self.name_candidates.bucketed = self.bucketed_shapes
+
+        # Input v11 stack rows, built after every v9/v10 parameter (except the
+        # value readout, built last) so those checkpoints keep their
+        # initialization and state-dict names. A row
+        # projects its numeric columns and adds its definition's program, as a
+        # permanent does; an ability's definition is its source's. Its source
+        # link (one-based object index) adds the source's pre-attention
+        # embedding through a zero-initialized layer, so the initial function
+        # ignores it.
+        self._numeric_stack_columns = [
+            column
+            for column in range(STACK_DIM)
+            if column not in (STACK_DEFINITION_INDEX, STACK_SOURCE_INDEX)
+        ]
+        self.stack_embedding: ProjectionLayer | None = None
+        self.stack_source: nn.Linear | None = None
+        if self.stack_tokens:
+            self.stack_embedding = ProjectionLayer(
+                len(self._numeric_stack_columns), embed_dim
+            )
+            self.stack_source = torch.nn.utils.skip_init(
+                nn.Linear, embed_dim, embed_dim
+            )
+            nn.init.zeros_(self.stack_source.weight)
+            nn.init.zeros_(self.stack_source.bias)
+            self.logger.info(
+                f"Stack embedding: ({len(self._numeric_stack_columns)} -> {embed_dim})"
+            )
 
         # Built last: every other parameter keeps the masked-mean arm's draws
         # under the same seed, so the two readouts start from one shared model.
@@ -797,12 +830,22 @@ class ActorCritic(nn.Module):
             permanent_definitions = self.semantic_cards.lookup(
                 definitions, obs.permanent_rows
             )
+            stack_definitions = (
+                None
+                if obs.stack_rows is None
+                else self.semantic_cards.lookup(definitions, obs.stack_rows)
+            )
         else:
             assert self.card_definitions is not None
             cards = self.card_definitions(obs.card_rows)
             enc_agent_cards = enc_agent_cards + cards[:, 0]
             enc_opp_cards = enc_opp_cards + cards[:, 1]
             permanent_definitions = self.card_definitions(obs.permanent_rows)
+            stack_definitions = (
+                None
+                if obs.stack_rows is None
+                else self.card_definitions(obs.stack_rows)
+            )
         # Keep the per-seat contiguous projection layout after biases train.
         enc_agent_perms = (
             self.perm_embedding(obs.permanents[:, 0].contiguous())
@@ -820,10 +863,16 @@ class ActorCritic(nn.Module):
             enc_agent_perms,
             enc_opp_perms,
         ]
+        if self.stack_tokens:
+            assert self.stack_embedding is not None and obs.stack is not None
+            assert stack_definitions is not None
+            parts.append(self.stack_embedding(obs.stack) + stack_definitions)
         if obs.belief is not None:
             rows, global_row = self._belief_rows(obs.belief)
             parts.extend((rows, global_row))
         objects = self._join_permanent_links(obs, torch.cat(parts, dim=1))
+        if self.stack_tokens:
+            objects = self._join_stack_sources(obs, objects)
         token_embedding = (
             self.semantic_cards.token_embedding
             if self.semantic_cards is not None and self.semantic_cards.records
@@ -853,6 +902,29 @@ class ActorCritic(nn.Module):
         objects = objects + shared_context.unsqueeze(1)
         return EmbeddedObservation(
             objects, obs.is_agent, obs.validity, shared_context, frame_context, programs
+        )
+
+    def _join_stack_sources(
+        self, obs: Prepared[torch.Tensor], objects: torch.Tensor
+    ) -> torch.Tensor:
+        """Add source embeddings to the host-prepared v11 stack rows."""
+        assert self.stack_source is not None and obs.stack is not None
+        assert obs.stack_targets is not None and obs.stack_mask is not None
+        start = 2 + 2 * obs.agent_cards.shape[1] + 2 * obs.permanents.shape[2]
+        count = obs.stack.shape[1]
+        sources = objects.flatten(0, 1)[obs.stack_targets].reshape(
+            objects.shape[0], count, objects.shape[2]
+        )
+        delta = self.stack_source(sources).masked_fill(
+            (obs.stack_mask == 0).unsqueeze(-1), 0
+        )
+        return torch.cat(
+            (
+                objects[:, :start],
+                objects[:, start : start + count] + delta.to(objects.dtype),
+                objects[:, start + count :],
+            ),
+            dim=1,
         )
 
     def _join_permanent_links(
