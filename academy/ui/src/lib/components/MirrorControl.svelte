@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { MirrorSearch } from '$lib/watch';
+  import type { MirrorSearch } from '$lib/mirror';
 
   interface Props {
     value: MirrorSearch | null;

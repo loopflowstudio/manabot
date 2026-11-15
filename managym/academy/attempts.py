@@ -11,6 +11,7 @@ from pathlib import Path
 import secrets
 import sqlite3
 import threading
+from typing import Any
 
 PROCESS_ID = secrets.token_hex(16)
 RECORD_VERSION = 2
@@ -343,10 +344,11 @@ class AttemptStore:
             trace["end_reason"] = "server_restart"
         return trace
 
-    def metadata(self, attempt: str) -> dict:
+    def metadata(self, attempt: str) -> dict[str, Any]:
         with self.connect() as db:
             row = db.execute(
-                "SELECT record_version,origin FROM attempts WHERE id=?", (attempt,)
+                "SELECT record_version,origin,revision,status,ending_reason FROM attempts WHERE id=?",
+                (attempt,),
             ).fetchone()
             if row is None:
                 return {}

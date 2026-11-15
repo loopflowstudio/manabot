@@ -79,8 +79,9 @@ artifact first if the evaluation ran remotely):
 uv run --no-project managym academy replay out/traces/<cell-id>.commands.jsonl.gz --game 3
 ```
 
-The browser opens in **Replay** on that game's first decision; use **Step
-decision**, **Previous decision** or **Play**. `--game` is the game's
+The browser opens in **Replay** at the first recorded choice or this tab's saved
+position; use **Next**, **Previous** or **Play** to follow choices, consequences
+and the result. `--game` is the game's
 position in the file, counted from 0, or the start of its trace digest; run
 the command without it to list the file's games. `managym academy replay
 <recording-id>` reopens a game from **Games**, with or without manabot, in the
