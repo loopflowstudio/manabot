@@ -256,8 +256,9 @@ def mirror_decision(
             raise MirrorSearchError(
                 "mirror_invalid_evaluation", "Policy rows differ from native offers."
             )
-        sums = np.zeros(len(base), dtype=np.float64)
-        counts = np.zeros(len(base), dtype=np.int64)
+        # Every supported action visits every world, or the whole search fails.
+        # Unsupported actions keep missing values rather than synthetic zeros.
+        sums = np.where(base > 0, 0.0, np.nan)
         for _ in range(spec.worlds):
             check()
             world_seed = int(rng.integers(0, 2**63))
@@ -328,16 +329,13 @@ def mirror_decision(
                     else:
                         signed = value if actor == viewer else -value
                     sums[action] += signed
-                    counts[action] += 1
                     evidence.append(
                         _RolloutEvidence(
                             world_seed, rollout_seed, action, ply + 1, signed, terminal
                         )
                     )
                     check()
-        values = np.divide(
-            sums, counts, out=np.full_like(sums, np.nan), where=counts > 0
-        )
+        values = sums / spec.worlds
         reference = np.full(len(base), 1 / len(base))
         try:
             target = regularized_update(
@@ -349,7 +347,7 @@ def mirror_decision(
 
     # Cleanup is inside the budget and must succeed before a proposal exists.
     check()
-    scores = [float(value) if counts[i] else None for i, value in enumerate(values)]
+    scores = [float(value) if base[i] > 0 else None for i, value in enumerate(values)]
     receipt = {
         "schema": "managym.mirror-search/v1",
         "policy": runner.base_descriptor.id,

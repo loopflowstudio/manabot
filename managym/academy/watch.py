@@ -65,17 +65,10 @@ def resolve_player(
     data.update(player_fields(kind))
     config = server._parse_game_config(data)
     policy = build_villain_policy(config, seat=seat)
-    recorded = asdict(config)
-    player = bot_player(recorded)
-    if (
-        config.opponent_checkpoint is not None
-        and config.opponent_checkpoint.get("schema") != "managym-policy-1"
-    ):
-        player = replace(
-            player, inference={**(player.inference or {}), **config.opponent_checkpoint}
-        )
     return policy, replace(
-        player, seat=seat, deck=request.hero_deck if seat == 0 else request.villain_deck
+        bot_player(asdict(config)),
+        seat=seat,
+        deck=request.hero_deck if seat == 0 else request.villain_deck,
     )
 
 

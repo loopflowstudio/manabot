@@ -31,6 +31,7 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import TypeAdapter, ValidationError
+from starlette.websockets import WebSocketState
 
 import managym
 from managym.academy.card_art import card_art
@@ -3133,6 +3134,11 @@ async def play_socket(websocket: WebSocket) -> None:
     try:
         while True:
             try:
+                # A failed send (the client left during a long Command, such as
+                # a searched bot reply) closes the application side; that is a
+                # disconnect, not a game error.
+                if websocket.application_state is not WebSocketState.CONNECTED:
+                    raise WebSocketDisconnect(code=1006)
                 request = await websocket.receive_json()
             except WebSocketDisconnect:
                 if attached_table_id is not None and attached_viewer_id is not None:
@@ -3159,14 +3165,18 @@ async def play_socket(websocket: WebSocket) -> None:
                     await _attach_participant_websocket(record, participant, websocket)
                     attached_table_id = record.session_id
                     attached_viewer_id = participant.viewer_id
-                    response = (
-                        record.game.current_message(presentation_cursor)
-                        if record.game.obs is not None
-                        else {"type": "table_snapshot"}
-                    )
-                    await _send_table_response(
-                        record, participant, response, broadcast=True
-                    )
+                    # A Command from the previous socket may still be advancing
+                    # the game (a searched bot reply takes seconds); snapshot
+                    # only after it commits, never from a half-applied step.
+                    async with record.lock:
+                        response = (
+                            record.game.current_message(presentation_cursor)
+                            if record.game.obs is not None
+                            else {"type": "table_snapshot"}
+                        )
+                        await _send_table_response(
+                            record, participant, response, broadcast=True
+                        )
                     continue
                 if isinstance(parsed, ResumeMessage):
                     presentation_cursor = _parse_presentation_cursor(
@@ -3178,14 +3188,18 @@ async def play_socket(websocket: WebSocket) -> None:
                     await _attach_participant_websocket(record, participant, websocket)
                     attached_table_id = record.session_id
                     attached_viewer_id = participant.viewer_id
-                    response = (
-                        record.game.current_message(presentation_cursor)
-                        if record.game.obs is not None
-                        else {"type": "table_snapshot"}
-                    )
-                    await _send_table_response(
-                        record, participant, response, broadcast=True
-                    )
+                    # A Command from the previous socket may still be advancing
+                    # the game (a searched bot reply takes seconds); snapshot
+                    # only after it commits, never from a half-applied step.
+                    async with record.lock:
+                        response = (
+                            record.game.current_message(presentation_cursor)
+                            if record.game.obs is not None
+                            else {"type": "table_snapshot"}
+                        )
+                        await _send_table_response(
+                            record, participant, response, broadcast=True
+                        )
                     continue
 
                 invite_token: str | None = None

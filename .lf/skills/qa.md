@@ -350,6 +350,22 @@ publish, land or choose the next Graph step from here.
   experiments/l4_step_profile.py job --smoke`. For `live` it took about 6
   minutes and 2.2 GB and runs every stage as a real child process.
 
+- Mirror search (search-capable policy in Play/Watch): `uv run manabot train
+  --recipe local --device cpu --out .runs/<x>` gives a compatible
+  `self-play-raw.safetensors` in about 90 s; save `{"provider": "manabot",
+  "artifact": "<abs path>", "config": {}}` as `<alias>.json` and launch `managym
+  academy --policy <alias>.json play --opponent <alias> --mirror
+  '{"worlds":1,"depth":1}' --seed 7` (or `watch --player <alias> --player
+  random --mirror '[{...},null]'`, then press Start watching). Seed 7 puts the
+  bot on the play. Set `OMP_NUM_THREADS=1` on loaded hosts: a 4×2 decision took
+  about 10 s single-threaded and hit the 30 s ceiling with default Torch threads
+  at load ~200. The default 16×20 budget does not finish in 30 s with this model
+  on a laptop. Retained evidence is in the attempts table's `trace_json`
+  (`events[].bot_decision.mirror`). To probe reconnect, click an offer that hands
+  priority to the bot and reload about 1.5 s later while the table shows
+  `Mirror search W×D· N s`; the game must stay `active` and resume at the
+  committed state. A reload before the first response has no resume
+  credentials and launches a new game by design.
 - Live Academy QA without fixtures: build first, then start the ordinary
   `managym.academy.server:app` with `ACADEMY_TRACES_DIR` pointing into an ignored
   `.runs/` directory and `ACADEMY_PLAY_RECORD_ORIGIN=automated_validation`.

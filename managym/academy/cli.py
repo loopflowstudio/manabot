@@ -206,7 +206,7 @@ def watch(
                     tuple[MirrorSearch | None, MirrorSearch | None]
                 ).validate_json(mirror_json)
                 if mirror_json
-                else None
+                else (None, None)
             )
         except ValueError as exc:
             raise AcademyLaunchError(
@@ -214,7 +214,7 @@ def watch(
             ) from exc
         return running.watch(
             players=(player[0], player[1]),
-            mirror=(mirrors[0], mirrors[1]) if mirrors else (None, None),
+            mirror=mirrors,
         ).url
 
     _run(
