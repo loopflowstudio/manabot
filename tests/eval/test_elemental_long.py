@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 from etude.launch.records import Until
-from etude.run.storage import DirectoryStorage
+from etude.storage import DirectoryStorage
 import pytest
 
 from experiments.elemental_grid import DECKS, schedule
@@ -27,6 +27,7 @@ from experiments.elemental_long import (
     stage_monitoring,
     stage_parent,
 )
+from manabot.backends import resolve
 from manabot.experiment.job import LearnerContinuation, StagedExport
 from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.training.execution import execute_regime
@@ -96,6 +97,7 @@ def _window(tmp_path: Path, checkpoint_updates: int | None = None) -> Path:
             tmp_path / "window",
             store,
             checkpoint_updates=checkpoint_updates,
+            backend=resolve("torch"),
         )
     return tmp_path / "window"
 

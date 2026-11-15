@@ -816,9 +816,9 @@ fn azula_has_the_opponent_exile_and_casts_with_any_mana() {
         .iter()
         .any(|p| p.id == permanent.id.0 as i32));
     assert!(observation
-        .agent_cards
+        .agent_permanents
         .iter()
-        .any(|c| c.id == id && c.zone == ZoneType::Battlefield));
+        .any(|p| p.object_id == Some(id)));
 
     // It dies into its owner's graveyard.
     s.set_player_mana_pool(0, "1R");
@@ -1507,9 +1507,9 @@ fn hama_casts_an_opponents_artifact_under_your_control() {
         let view = Observation::for_player(s.game(), viewer);
         assert!(view.validate());
         let mine = view
-            .agent_cards
+            .agent_permanents
             .iter()
-            .any(|object| object.zone == ZoneType::Battlefield && object.name == "Prophetic Prism");
+            .any(|permanent| permanent.characteristics.name == "Prophetic Prism");
         assert_eq!(mine, viewer == PlayerId(0));
     }
 }
@@ -4657,7 +4657,7 @@ fn observed(s: &Scenario, id: PermanentId) -> PermanentData {
 }
 
 fn observed_keywords(s: &Scenario, id: PermanentId) -> KeywordData {
-    observed(s, id).keywords
+    observed(s, id).characteristics.keywords
 }
 
 fn mark_damage(s: &mut Scenario, id: PermanentId, damage: i32) {
@@ -10084,9 +10084,7 @@ fn yip_yip_buffs_and_grants_flying_to_allies_only() {
     );
     assert!(!kyoshi_perm.keywords.hexproof);
     let kyoshi_card = obs
-        .agent_cards
-        .iter()
-        .chain(obs.opponent_cards.iter())
+        .object_records()
         .find(|object| object.name == "Kyoshi Warriors")
         .expect("Kyoshi Warriors card should be observable");
     assert!(

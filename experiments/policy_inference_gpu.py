@@ -14,6 +14,7 @@ from pathlib import Path
 import tarfile
 import time
 
+from etude.jobs import TrainingJob
 from etude.launch.records import Job
 from pydantic import BaseModel, Field
 
@@ -187,20 +188,24 @@ def run(config: Campaign) -> None:
         )
 
 
-def runs(native_artifact: str, native_source: str) -> Job:
+def training_jobs(native_artifact: str, native_source: str) -> Job:
     # Reuse the already verified Linux engine/checkpoint input contract, not the
     # Qwen command or environment setup. No language-model files are acquired.
-    job = inputs.runs(native_artifact, native_source)
-    return job.model_copy(
-        update={
-            "name": "mtg188-policy-v-policy-cuda",
-            "command": "uv run --no-sync python -m etude.call --function experiments.policy_inference_gpu:run",
-            "config": Campaign().model_dump_json(),
-            "setup": "sh scripts/policy-inference-setup.sh",
-            "cleanup": "uv run --no-sync python -m experiments.policy_inference_gpu --collect",
-            "max_hours": 1,
-            "max_usd": Decimal("1.00"),
-        }
+    job = inputs.training_jobs(native_artifact, native_source).plain()
+    return TrainingJob(
+        train=run,
+        config=Campaign(),
+        name="mtg188-policy-v-policy-cuda",
+        setup="sh scripts/policy-inference-setup.sh",
+        cleanup="uv run --no-sync python -m experiments.policy_inference_gpu --collect",
+        max_hours=1,
+        max_usd=Decimal("1.00"),
+        repo=job.repo,
+        revision=job.revision,
+        inputs=job.inputs,
+        environment=job.environment,
+        cleanup_seconds=job.cleanup_seconds,
+        max_attempts=job.max_attempts,
     )
 
 

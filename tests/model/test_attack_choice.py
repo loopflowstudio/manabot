@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends import resolve
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
@@ -122,5 +123,5 @@ def test_historical_recipe_resolves_but_cannot_execute(tmp_path: Path) -> None:
     out = tmp_path / "must-not-start"
     with VerifyStore(tmp_path / "store.sqlite") as store:
         with pytest.raises(ValueError, match="world differs from native runtime"):
-            execute_regime(recipe, 17, out, store)
+            execute_regime(recipe, 17, out, store, backend=resolve("torch"))
     assert not out.exists()

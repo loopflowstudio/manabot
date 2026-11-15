@@ -45,7 +45,7 @@ from etude.launch.records import Run, Variable
 import torch
 
 from experiments.elemental_variants import elemental_recipe, self_play_stage
-from experiments.learning_signal import training_runs
+from experiments.learning_signal import build_training_jobs
 from manabot.backends.torch.checkpoint import load_checkpoint, load_metadata
 from manabot.infra.identity import file_sha256
 from manabot.training.records import TrainingRun
@@ -137,7 +137,7 @@ LEGS: dict[str, Leg] = {
 }
 
 
-def runs(revision: str, leg: str, seeds: str = "") -> list[Run]:
+def training_jobs(revision: str, leg: str, seeds: str = "") -> list[Run]:
     """One leg's runs. `seeds`, comma-separated, picks some of the leg's seeds."""
     if leg not in LEGS:
         raise ValueError(f"unknown leg {leg!r}; choose from {sorted(LEGS)}")
@@ -147,7 +147,7 @@ def runs(revision: str, leg: str, seeds: str = "") -> list[Run]:
         raise ValueError(f"leg {leg} declares no seeds {sorted(unknown)}")
     regime = chosen.recipe()
     stage = self_play_stage(regime)
-    job = training_runs(
+    job = build_training_jobs(
         (regime,),
         updates=stage.updates,
         revision=revision,

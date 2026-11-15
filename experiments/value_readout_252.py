@@ -51,9 +51,10 @@ import json
 from pathlib import Path
 
 from etude.eval.records import Code, Inference, Seating
-from etude.experiment import Checkpoint, ExperimentState
+from etude.experiment import Checkpoint
+from etude.jobs import ExperimentState
 from etude.launch.records import Job, Run as EtudeRun
-from etude.run.storage import storage_from_uri
+from etude.storage import storage_from_uri
 import torch
 
 from experiments.elemental_long import stage_parent
@@ -63,7 +64,7 @@ from experiments.learning_signal import (
     SETUP_SECONDS,
     Conditions,
     benchmark_jobs,
-    training_runs,
+    build_training_jobs,
 )
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
@@ -256,7 +257,7 @@ def grid(seeds: Sequence[int], updates: int | None = None) -> list[Run]:
     ]
 
 
-def runs(
+def training_jobs(
     revision: str,
     seeds: str = SEEDS,
     updates: int = UPDATES,
@@ -321,7 +322,7 @@ def runs(
             )
             .runs(planned_run.seed)
         ]
-    return training_runs(
+    return build_training_jobs(
         (arm(aggregation, updates) for aggregation in ARMS),
         updates=updates,
         revision=revision,
@@ -397,7 +398,7 @@ def _fresh(regime: TrainingRegime, hours: float, recover_capacity: bool) -> Trai
     )
 
 
-def eval(state: ExperimentState) -> list[Job]:
+def eval_jobs(state: ExperimentState) -> list[Job]:
     return benchmark_jobs(
         evaluation_matchups(state),
         EVALUATION,

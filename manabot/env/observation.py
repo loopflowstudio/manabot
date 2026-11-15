@@ -22,6 +22,8 @@ from typing import Any, Dict, ItemsView, KeysView, List, Tuple, ValuesView
 import gymnasium as gym
 import numpy as np
 
+from manabot.env.legacy_input import LEGACY_PERMANENT_DIM, legacy_card_lists
+
 # Local imports
 from manabot.env.shared_effects import (
     DURATION_CODES,
@@ -105,7 +107,32 @@ PERMANENT_ABILITIES_LOST_INDEX = PERMANENT_BLOCKING_INDEX + 1
 # Rank of its timestamp among the observation's timestamps.
 PERMANENT_TIMESTAMP_INDEX = PERMANENT_ABILITIES_LOST_INDEX + 1
 PERMANENT_DEALT_DAMAGE_INDEX = PERMANENT_TIMESTAMP_INDEX + 1
-PERMANENT_DIM = PERMANENT_DEALT_DAMAGE_INDEX + 2
+# Input v11: the characteristics only a card row held before: mana value, six
+# card types, legendary, token, Ally, Lesson, ward flag and cost.
+PERMANENT_MANA_VALUE_INDEX = PERMANENT_DEALT_DAMAGE_INDEX + 1
+PERMANENT_TYPES_INDEX = PERMANENT_MANA_VALUE_INDEX + 1  # land..battle
+PERMANENT_LEGENDARY_INDEX = PERMANENT_TYPES_INDEX + 6
+PERMANENT_TOKEN_INDEX = PERMANENT_LEGENDARY_INDEX + 1
+PERMANENT_ALLY_INDEX = PERMANENT_TOKEN_INDEX + 1
+PERMANENT_LESSON_INDEX = PERMANENT_ALLY_INDEX + 1
+PERMANENT_WARD_INDEX = PERMANENT_LESSON_INDEX + 1  # flag, cost
+PERMANENT_DIM = PERMANENT_WARD_INDEX + 2 + 1
+# Input v11 stack rows, top first: one per spell or ability.
+STACK_IS_MINE_INDEX = 0
+STACK_KIND_INDEX = 1  # spell, activated ability, triggered ability
+STACK_DEFINITION_INDEX = 4
+STACK_SOURCE_INDEX = 5  # object index + 1 of an ability's source: a join
+STACK_ABILITY_INDEX = 6
+STACK_MODE_INDEX = 7
+STACK_X_INDEX = 8  # flag, value
+STACK_KICKED_INDEX = 10
+STACK_COPY_INDEX = 11
+STACK_MANA_VALUE_INDEX = 12
+STACK_POWER_INDEX = 13  # power, toughness
+STACK_TYPES_INDEX = 15  # land..battle
+STACK_LEGENDARY_INDEX = 21
+STACK_KEYWORDS_INDEX = 22  # 14 keywords, KeywordData order
+STACK_DIM = STACK_KEYWORDS_INDEX + 14 + 1
 # Fact rows: one open-vocabulary fact about a player or permanent, joined to
 # it like relation references. Ids are learning-token values split into 16-bit
 # halves (exact in float32).
@@ -175,6 +202,37 @@ def _decklist_rows(player: managym.Player) -> list[tuple[int, ...]]:
             row = rows.setdefault(int(definition), [int(definition) + 1, 0, 0, 0, 0])
             row[column] = int(count)
     return [tuple(rows[definition]) for definition in sorted(rows)]
+
+
+# `KeywordData` field order, the order of every keyword column block.
+KEYWORD_FIELDS = (
+    "flying",
+    "reach",
+    "haste",
+    "flash",
+    "vigilance",
+    "trample",
+    "first_strike",
+    "double_strike",
+    "deathtouch",
+    "lifelink",
+    "defender",
+    "menace",
+    "hexproof",
+    "indestructible",
+)
+
+
+def _types(types: managym.CardTypes) -> tuple[float, ...]:
+    """Land, creature, artifact, enchantment, planeswalker and battle flags."""
+    return (
+        float(types.is_land),
+        float(types.is_creature),
+        float(types.is_artifact),
+        float(types.is_enchantment),
+        float(types.is_planeswalker),
+        float(types.is_battle),
+    )
 
 
 def _split_id(ident: int) -> Tuple[float, float]:
@@ -261,9 +319,13 @@ class ObservationEncoder:
         # dealt damage this turn; validity is last. Counter kinds, effect-set
         # subtypes and characteristics and used abilities are fact rows;
         # continuous-effect records are shared-effect rows.
-        self.permanent_dim = PERMANENT_DIM
+        # Input v11 lists each game thing once; deprecated v9/v10 rows also
+        # list battlefield objects and spells as cards (`legacy_input`).
+        self.one_token = config.policy_input_version == 11
+        self.permanent_dim = PERMANENT_DIM if self.one_token else LEGACY_PERMANENT_DIM
+        self.max_stack_objects = config.max_stack_objects if self.one_token else 0
         self.event_dim = 12 if config.policy_history_version == 1 else 7
-        self.turn_state = config.policy_input_version == 10
+        self.turn_state = config.policy_input_version in (10, 11)
 
         # Preserve attack/decline independently of action family and focus.
         self.action_dim = (
@@ -300,6 +362,14 @@ class ObservationEncoder:
             "opponent_cards": (self.cards_per_player, self.card_dim),
             "agent_permanents": (self.perms_per_player, self.permanent_dim),
             "opponent_permanents": (self.perms_per_player, self.permanent_dim),
+            **(
+                {
+                    "stack": (self.max_stack_objects, STACK_DIM),
+                    "stack_valid": (self.max_stack_objects,),
+                }
+                if self.one_token
+                else {}
+            ),
             "name_candidates": (self.max_actions, self.name_dim),
             "actions": (self.max_actions, self.action_dim),
             "events": (self.max_events, self.event_dim),
@@ -334,14 +404,35 @@ class ObservationEncoder:
             len(obs.action_space.actions), self.max_actions, self.config.action_overflow
         )
         actions = obs.action_space.actions[:retained]
+        if self.one_token:
+            if any(
+                perm.object_id is None
+                for perm in (*obs.agent_permanents, *obs.opponent_permanents)
+            ) or any(
+                (item.kind == managym.StackObjectKindEnum.SPELL)
+                != (item.characteristics is not None)
+                for item in obs.stack_objects
+            ):
+                raise ValueError(
+                    "policy input v11 requires permanent and spell identities; "
+                    "this historical observation encodes only as input v9/v10"
+                )
+            agent_cards, opponent_cards = obs.agent_cards, obs.opponent_cards
+        else:
+            agent_cards, opponent_cards = legacy_card_lists(obs)
         for label, size, capacity in (
-            ("agent cards", len(obs.agent_cards), self.cards_per_player),
-            ("opponent cards", len(obs.opponent_cards), self.cards_per_player),
+            ("agent cards", len(agent_cards), self.cards_per_player),
+            ("opponent cards", len(opponent_cards), self.cards_per_player),
             ("agent permanents", len(obs.agent_permanents), self.perms_per_player),
             (
                 "opponent permanents",
                 len(obs.opponent_permanents),
                 self.perms_per_player,
+            ),
+            (
+                "stack",
+                len(obs.stack_objects) if self.one_token else 0,
+                self.max_stack_objects,
             ),
         ):
             if size > capacity:
@@ -387,8 +478,8 @@ class ObservationEncoder:
         ):
             out[key] = self._encode_player_features(player, obs.turn)[np.newaxis, ...]
         for key, cards, is_mine in (
-            ("agent_cards", obs.agent_cards, 1.0),
-            ("opponent_cards", obs.opponent_cards, 0.0),
+            ("agent_cards", agent_cards, 1.0),
+            ("opponent_cards", opponent_cards, 0.0),
         ):
             out[key] = self._encode_cards(
                 cards, is_mine=is_mine, viewer=obs.agent.id, turn=obs.turn.turn_number
@@ -396,7 +487,7 @@ class ObservationEncoder:
         # Outside copies occupy explicit rows after visible owner cards. They
         # have no zone bits; the outside marker identifies their location.
         for seat, (cards, player) in enumerate(
-            ((obs.agent_cards, obs.agent), (obs.opponent_cards, obs.opponent))
+            ((agent_cards, obs.agent), (opponent_cards, obs.opponent))
         ):
             if len(player.known_hand) > self.cards_per_player:
                 raise ValueError("known hand exceeds observation capacity")
@@ -424,7 +515,7 @@ class ObservationEncoder:
                 (2, self.cards_per_player), dtype=np.float32
             )
             for seat, (cards, player) in enumerate(
-                ((obs.agent_cards, obs.agent), (obs.opponent_cards, obs.opponent))
+                ((agent_cards, obs.agent), (opponent_cards, obs.opponent))
             ):
                 row = out["player_turn_state"][seat]
                 row[TURN_STATE_LIFE_LOST_INDEX] = player.turn_history.life_lost / 20.0
@@ -439,12 +530,12 @@ class ObservationEncoder:
                         card.from_battlefield_this_turn
                     )
         outside = obs.agent_sideboard
-        start = len(obs.agent_cards)
+        start = len(agent_cards)
         if start + len(outside) > self.cards_per_player:
             raise ValueError(
                 "observation capacity exceeded: agent_cards plus sideboard "
                 f"{start + len(outside)} > {self.cards_per_player} "
-                f"({_card_rows(obs.agent_cards, len(outside))})"
+                f"({_card_rows(agent_cards, len(outside))})"
             )
         for offset, card in enumerate(outside):
             out["semantic_cards"][0, start + offset] = card.registry_key + 1
@@ -458,6 +549,30 @@ class ObservationEncoder:
             ("opponent_permanents", obs.opponent_permanents, 0.0),
         ):
             out[key] = self._encode_perms(perms, is_mine=is_mine)
+        if self.one_token:
+            # A battlefield object or a spell is one token: its card id names
+            # its permanent or stack row.
+            start = 2 + 2 * self.cards_per_player
+            for side, perms in enumerate(
+                (obs.agent_permanents, obs.opponent_permanents)
+            ):
+                for slot, perm in enumerate(perms):
+                    self.object_to_index[perm.object_id] = (
+                        start + side * self.perms_per_player + slot
+                    )
+            out["stack"] = np.zeros(
+                (self.max_stack_objects, STACK_DIM), dtype=np.float32
+            )
+            for slot, item in enumerate(obs.stack_objects):
+                out["stack"][slot] = self._encode_stack_features(item, obs.agent.id)
+                self.object_to_index[item.stack_object_id] = (
+                    self.current_object_index + slot
+                )
+                if item.object_id is not None:
+                    self.object_to_index[item.object_id] = (
+                        self.current_object_index + slot
+                    )
+            self.current_object_index += self.max_stack_objects
         # Hosts may be listed after their attachments, so links follow indexing.
         ranks = _timestamp_ranks(obs)
         for key, perms in (
@@ -472,6 +587,13 @@ class ObservationEncoder:
                     if linked is not None:
                         out[key][row, column] = self.object_to_index.get(linked, -1) + 1
                 out[key][row, PERMANENT_TIMESTAMP_INDEX] = ranks[_timestamp(perm)]
+        if self.one_token:
+            for slot, item in enumerate(obs.stack_objects):
+                if item.source_permanent_id is not None:
+                    out["stack"][slot, STACK_SOURCE_INDEX] = (
+                        self.object_to_index.get(item.source_permanent_id, -1) + 1
+                    )
+            out["stack_valid"] = out["stack"][..., -1].astype(np.float32)
         out["facts"] = self._encode_facts(obs, ranks)
         out.update(encode_shared_effects(obs, self.object_to_index, ranks))
 
@@ -489,7 +611,13 @@ class ObservationEncoder:
         # Actionspace
         out.update(self._encode_actions(actions))
         if self.config.policy_history_version == 1:
-            rows = obs.encode_policy_history(self.max_events, self.cards_per_player)
+            rows = (
+                obs.encode_policy_history(self.max_events, self.object_to_index)
+                if self.one_token
+                else obs.encode_legacy_policy_history(
+                    self.max_events, self.cards_per_player
+                )
+            )
             out["events"] = np.zeros(
                 (self.max_events, self.event_dim), dtype=np.float32
             )
@@ -864,6 +992,7 @@ class ObservationEncoder:
     def _encode_card_features(
         self, card: managym.Card, is_mine: float, viewer: int, turn: int
     ) -> np.ndarray:
+        characteristics = card.characteristics
         arr = np.zeros(self.card_dim, dtype=np.float32)
         i = 0
         zone_val = int(card.zone) & 0xFF
@@ -872,65 +1001,65 @@ class ObservationEncoder:
         i += self.num_zones
         arr[i] = is_mine
         i += 1
-        arr[i] = float(card.power) / 10.0
+        arr[i] = float(characteristics.power) / 10.0
         i += 1
-        arr[i] = float(card.toughness) / 10.0
+        arr[i] = float(characteristics.toughness) / 10.0
         i += 1
-        arr[i] = float(card.mana_cost.mana_value) / 10.0
+        arr[i] = float(characteristics.mana_cost.mana_value) / 10.0
         i += 1
-        arr[i] = float(card.card_types.is_land)
+        arr[i] = float(characteristics.card_types.is_land)
         i += 1
-        arr[i] = float(card.card_types.is_creature)
+        arr[i] = float(characteristics.card_types.is_creature)
         i += 1
-        arr[i] = float(card.card_types.is_artifact)
+        arr[i] = float(characteristics.card_types.is_artifact)
         i += 1
-        arr[i] = float(card.card_types.is_enchantment)
+        arr[i] = float(characteristics.card_types.is_enchantment)
         i += 1
-        arr[i] = float(card.card_types.is_planeswalker)
+        arr[i] = float(characteristics.card_types.is_planeswalker)
         i += 1
-        arr[i] = float(card.card_types.is_battle)
+        arr[i] = float(characteristics.card_types.is_battle)
         i += 1
-        arr[i] = float(card.keywords.flying)
+        arr[i] = float(characteristics.keywords.flying)
         i += 1
-        arr[i] = float(card.keywords.reach)
+        arr[i] = float(characteristics.keywords.reach)
         i += 1
-        arr[i] = float(card.keywords.haste)
+        arr[i] = float(characteristics.keywords.haste)
         i += 1
-        arr[i] = float(card.keywords.vigilance)
+        arr[i] = float(characteristics.keywords.vigilance)
         i += 1
-        arr[i] = float(card.keywords.trample)
+        arr[i] = float(characteristics.keywords.trample)
         i += 1
-        arr[i] = float(card.keywords.first_strike)
+        arr[i] = float(characteristics.keywords.first_strike)
         i += 1
-        arr[i] = float(card.keywords.double_strike)
+        arr[i] = float(characteristics.keywords.double_strike)
         i += 1
-        arr[i] = float(card.keywords.deathtouch)
+        arr[i] = float(characteristics.keywords.deathtouch)
         i += 1
-        arr[i] = float(card.keywords.lifelink)
+        arr[i] = float(characteristics.keywords.lifelink)
         i += 1
-        arr[i] = float(card.keywords.defender)
+        arr[i] = float(characteristics.keywords.defender)
         i += 1
-        arr[i] = float(card.keywords.menace)
+        arr[i] = float(characteristics.keywords.menace)
         i += 1
-        arr[i] = float(card.keywords.flash)
+        arr[i] = float(characteristics.keywords.flash)
         i += 1
         arr[i] = float(card.is_token)
         i += 1
-        arr[i] = float(card.is_ally)
+        arr[i] = float(characteristics.is_ally)
         i += 1
-        arr[i] = float(card.is_lesson)
+        arr[i] = float(characteristics.is_lesson)
         i += 1
-        arr[i] = float(card.ward_cost > 0)
+        arr[i] = float(characteristics.ward_cost > 0)
         i += 1
-        arr[i] = float(card.ward_cost) / 10.0
+        arr[i] = float(characteristics.ward_cost) / 10.0
         i += 1
-        arr[i] = float(card.kicker_cost > 0)
+        arr[i] = float(characteristics.kicker_cost > 0)
         i += 1
-        arr[i] = float(card.kicker_cost) / 10.0
+        arr[i] = float(characteristics.kicker_cost) / 10.0
         i += 1
-        arr[i] = float(card.keywords.hexproof)
-        arr[38] = float(card.keywords.indestructible)
-        arr[39] = float(card.is_legendary)
+        arr[i] = float(characteristics.keywords.hexproof)
+        arr[38] = float(characteristics.keywords.indestructible)
+        arr[39] = float(characteristics.is_legendary)
         permission = card.cast_permission
         if permission is not None:
             base = CARD_PERMISSION_INDEX
@@ -975,6 +1104,7 @@ class ObservationEncoder:
     def _encode_permanent_features(
         self, perm: managym.Permanent, is_mine: float
     ) -> np.ndarray:
+        characteristics = perm.characteristics
         arr = np.zeros(self.permanent_dim, dtype=np.float32)
         arr[0] = is_mine
         arr[1] = float(perm.tapped)
@@ -982,27 +1112,27 @@ class ObservationEncoder:
         arr[3] = float(perm.is_summoning_sick)
         arr[4] = float(perm.plus1_counters) / 10.0
         arr[5] = float(perm.cant_be_blocked_this_turn)
-        arr[6] = float(perm.power) / 10.0
-        arr[7] = float(perm.toughness) / 10.0
+        arr[6] = float(characteristics.power) / 10.0
+        arr[7] = float(characteristics.toughness) / 10.0
         arr[8] = float(perm.is_animated)
         arr[9] = float(perm.has_exile_link)
         # Effective keywords (printed + until-EOT grants) — mirrors the Rust
         # encoder's permanent keyword block exactly.
-        arr[10] = float(perm.keywords.flying)
-        arr[11] = float(perm.keywords.reach)
-        arr[12] = float(perm.keywords.haste)
-        arr[13] = float(perm.keywords.flash)
-        arr[14] = float(perm.keywords.vigilance)
-        arr[15] = float(perm.keywords.trample)
-        arr[16] = float(perm.keywords.first_strike)
-        arr[17] = float(perm.keywords.double_strike)
-        arr[18] = float(perm.keywords.deathtouch)
-        arr[19] = float(perm.keywords.lifelink)
-        arr[20] = float(perm.keywords.defender)
-        arr[21] = float(perm.keywords.menace)
-        arr[22] = float(perm.keywords.hexproof)
+        arr[10] = float(characteristics.keywords.flying)
+        arr[11] = float(characteristics.keywords.reach)
+        arr[12] = float(characteristics.keywords.haste)
+        arr[13] = float(characteristics.keywords.flash)
+        arr[14] = float(characteristics.keywords.vigilance)
+        arr[15] = float(characteristics.keywords.trample)
+        arr[16] = float(characteristics.keywords.first_strike)
+        arr[17] = float(characteristics.keywords.double_strike)
+        arr[18] = float(characteristics.keywords.deathtouch)
+        arr[19] = float(characteristics.keywords.lifelink)
+        arr[20] = float(characteristics.keywords.defender)
+        arr[21] = float(characteristics.keywords.menace)
+        arr[22] = float(characteristics.keywords.hexproof)
         arr[23] = float(perm.exile_if_dies_this_turn)
-        arr[25] = float(perm.keywords.indestructible)
+        arr[25] = float(characteristics.keywords.indestructible)
         arr[26] = float("Avatar" in perm.temp_subtypes)
         arr[27] = float(perm.attacking)
         arr[PERMANENT_DEFINITION_INDEX] = perm.registry_key + 1
@@ -1014,7 +1144,54 @@ class ObservationEncoder:
         arr[PERMANENT_GRANTED_LAND_INDEX] = float(perm.is_granted_land)
         arr[PERMANENT_ABILITIES_LOST_INDEX] = float(perm.abilities_lost)
         arr[PERMANENT_DEALT_DAMAGE_INDEX] = float(perm.dealt_damage_this_turn)
+        if self.one_token:
+            card = characteristics
+            types = card.card_types
+            arr[PERMANENT_MANA_VALUE_INDEX] = card.mana_cost.mana_value / 10.0
+            arr[PERMANENT_TYPES_INDEX : PERMANENT_TYPES_INDEX + 6] = _types(types)
+            arr[PERMANENT_LEGENDARY_INDEX] = float(card.is_legendary)
+            arr[PERMANENT_TOKEN_INDEX] = float(perm.is_token)
+            arr[PERMANENT_ALLY_INDEX] = float(card.is_ally)
+            arr[PERMANENT_LESSON_INDEX] = float(card.is_lesson)
+            arr[PERMANENT_WARD_INDEX] = float(card.ward_cost > 0)
+            arr[PERMANENT_WARD_INDEX + 1] = card.ward_cost / 10.0
         # Set validity flag (permanent exists)
+        arr[-1] = 1.0
+        return arr
+
+    def _encode_stack_features(
+        self, item: managym.StackObject, viewer: int
+    ) -> np.ndarray:
+        """One input v11 stack row (native `encode_stack_features`)."""
+        arr = np.zeros(STACK_DIM, dtype=np.float32)
+        arr[STACK_IS_MINE_INDEX] = float(item.controller_id == viewer)
+        arr[STACK_KIND_INDEX + int(item.kind)] = 1.0
+        card = item.characteristics
+        # A spell's definition is its card's; an ability's is its source's.
+        definition = item.source_card_registry_key
+        arr[STACK_DEFINITION_INDEX] = definition + 1
+        if item.ability_index is not None:
+            arr[STACK_ABILITY_INDEX] = item.ability_index + 1
+        if item.chosen_mode is not None:
+            arr[STACK_MODE_INDEX] = item.chosen_mode + 1
+        x = item.announced_x if card is not None else (item.x if item.x != 0 else None)
+        if x is not None:
+            arr[STACK_X_INDEX] = 1.0
+            arr[STACK_X_INDEX + 1] = x / 10.0
+        arr[STACK_KICKED_INDEX] = float(item.kicked)
+        if card is not None:
+            arr[STACK_COPY_INDEX] = float(item.is_copy)
+            arr[STACK_MANA_VALUE_INDEX] = card.mana_cost.mana_value / 10.0
+            arr[STACK_POWER_INDEX] = card.power / 10.0
+            arr[STACK_POWER_INDEX + 1] = card.toughness / 10.0
+            arr[STACK_TYPES_INDEX : STACK_TYPES_INDEX + 6] = _types(card.card_types)
+            arr[STACK_LEGENDARY_INDEX] = float(card.is_legendary)
+            granted = item.granted_keywords
+            for offset, name in enumerate(KEYWORD_FIELDS):
+                arr[STACK_KEYWORDS_INDEX + offset] = float(
+                    getattr(card.keywords, name)
+                    or (granted is not None and getattr(granted, name))
+                )
         arr[-1] = 1.0
         return arr
 

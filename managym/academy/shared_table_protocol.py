@@ -130,6 +130,9 @@ class OpponentIdentity(ProtocolModel):
     name: str
     producer: str
     sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    base_sha256: str | None = Field(
+        default=None, pattern=r"^[a-f0-9]{64}$", exclude_if=lambda value: value is None
+    )
 
 
 class TableSnapshot(ProtocolModel):
@@ -201,6 +204,13 @@ class ActionMessage(ProtocolModel):
 class PassTurnMessage(ProtocolModel):
     type: Literal["pass_turn"]
     grant_revision: UInt64 | None = None
+
+
+class RetryMirrorMessage(ProtocolModel):
+    type: Literal["retry_mirror"]
+    grant_revision: UInt64 | None = None
+    match_id: str
+    expected_revision: UInt64
 
 
 class SetStopsMessage(ProtocolModel):
@@ -276,6 +286,7 @@ SharedTableRequest: TypeAlias = Annotated[
     | ValidateDeclarationMessage
     | ActionMessage
     | PassTurnMessage
+    | RetryMirrorMessage
     | SetStopsMessage
     | TransferPilotMessage
     | AuthorBeliefMessage
@@ -300,6 +311,7 @@ REQUEST_TYPES = (
     "validate_declaration",
     "action",
     "pass_turn",
+    "retry_mirror",
     "set_stops",
     "transfer_pilot",
     "author_belief",

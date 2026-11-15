@@ -3,13 +3,10 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 
 import numpy as np
 from pydantic import Field
-import torch
 
-from manabot.backends.torch.arrays import device_of, on_device
 from manabot.config.load import deep_merge
 from manabot.env.env import Env
 from manabot.env.observation import ActionEnum, ObservationBuffers
@@ -21,9 +18,7 @@ from manabot.infra.config import (
     RewardConfig,
 )
 from manabot.policy.prepare import Prepared
-
-if TYPE_CHECKING:
-    from manabot.backends.torch.policy import ActorCritic
+from manabot.policy.protocol import BackendPolicy
 
 
 class VerificationConfig(BaseConfig):
@@ -46,30 +41,22 @@ def build_verification_config(**overrides: object) -> VerificationConfig:
     return VerificationConfig.model_validate(merged)
 
 
-def _tensor_observation(
-    agent: ActorCritic, obs: ObservationBuffers
-) -> Prepared[torch.Tensor]:
-    """One encoded decision, admitted for `agent` on its device."""
-    return on_device(
-        agent.prepare(
-            {
-                key: np.asarray(value, dtype=np.float32)[None]
-                for key, value in obs.items()
-            },
-            inference=not torch.is_grad_enabled(),
-        ),
-        device_of(agent),
+def prepare_observation(
+    agent: BackendPolicy, obs: ObservationBuffers
+) -> Prepared[np.ndarray]:
+    """One encoded decision, admitted once with the inference input layout."""
+    return agent.prepare(
+        {key: np.asarray(value, dtype=np.float32)[None] for key, value in obs.items()},
+        inference=True,
     )
 
 
-def _select_agent_action(
-    agent: ActorCritic, obs: ObservationBuffers, deterministic: bool
+def select_agent_action(
+    agent: BackendPolicy, obs: ObservationBuffers, deterministic: bool
 ) -> int:
-    action, _, _, _ = agent.get_action_and_value(
-        _tensor_observation(agent, obs),
-        deterministic=deterministic,
+    return int(
+        agent.sample(prepare_observation(agent, obs), deterministic=deterministic)[0]
     )
-    return int(action.item())
 
 
 def _pass_priority_fallback(env: Env) -> int | None:

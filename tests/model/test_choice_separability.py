@@ -19,6 +19,7 @@ from manabot.env.observation import (
     ACTION_DECLARED_INDEX,
     ACTION_TYPE_DIM,
     PERMANENT_DEFINITION_INDEX,
+    PERMANENT_MANA_VALUE_INDEX,
     PERMANENT_TIMESTAMP_INDEX,
     ObservationSpace,
 )
@@ -277,10 +278,12 @@ def _remove_discriminant(
     elif case.name in {"look_select", "learn_discard"}:
         erased["semantic_cards"].zero_()
     elif case.name in {"block_target", "waterbend"}:
-        # Policy input v5 also orders permanents by timestamp (CR 613.7).
+        # Policy input v5 also orders permanents by timestamp (CR 613.7);
+        # input v11 permanent rows also hold the definition's characteristics.
         for key in ("agent_permanents", "opponent_permanents"):
             erased[key][..., PERMANENT_DEFINITION_INDEX] = 0
             erased[key][..., PERMANENT_TIMESTAMP_INDEX] = 0
+            erased[key][..., PERMANENT_MANA_VALUE_INDEX:-1] = 0
     elif case.name == "block_decline":
         erased["actions"][..., ACTION_DECLARED_INDEX] = 0
         erased["action_focus"][..., 1:] = -1
@@ -400,4 +403,6 @@ def test_shared_policy_can_learn_either_choice(
             tied, _ = restored(device_input(restored, _remove_discriminant(case, obs)))
             # Legal-row GEMMs can differ by float32 rounding across row tiles.
             # The behavioral requirement above remains >= 0.95 for either choice.
-            torch.testing.assert_close(tied[0, a], tied[0, b], atol=2e-6, rtol=1e-6)
+            torch.testing.assert_close(
+                tied[0, a], tied[0, b], atol=2e-6, rtol=1e-6, msg=case.name
+            )

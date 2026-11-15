@@ -49,7 +49,7 @@ SETUP_SECONDS = 900
 FINALIZATION_SECONDS = 300
 
 
-def runs(
+def training_jobs(
     revision: str,
     hours: float = 11.9,
     usd_per_run: float = 7.27,

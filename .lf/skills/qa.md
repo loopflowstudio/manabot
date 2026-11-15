@@ -80,7 +80,8 @@ publish, land or choose the next Graph step from here.
   obs.action_space.actions))`; equal digests mean equal offers, taps and
   events. Use the authored setups (`managym.authored_deck_keys`) plus the TLA
   pool corpus human builds (`experiments/data/mtg282/pools-v2/corpus.json`,
-  `PlayerConfig(name, pool["human_build"])`), which bring waterbend, Treasure
+  in the artifact store: fetch it with `manabot.data fetch` when a checkout
+  lacks it; `PlayerConfig(name, pool["human_build"])`), which bring waterbend, Treasure
   and any-color sources the curated benchmark decks lack; 2,400 games took
   about two minutes per engine. A few games end in `PyAgentError` on `main`
   too; the error must match, not be absent. `maturin build` without
@@ -179,6 +180,15 @@ publish, land or choose the next Graph step from here.
   match and checkpoint; with equal player and reset seeds, every evidence and
   encoder arm must pick identical Commands for a whole game (two 93-decision
   games per arm at 4 worlds × depth 20 took about 90 s).
+- Trained-policy Play/Watch/Search: train a checkpoint at this checkout
+  (`uv run manabot train --recipe local --device cpu --out .runs/<x>`, about
+  30 s) and register `{"provider": "manabot", "artifact": "<abs path>/self-play-raw.safetensors", "config": {}}`
+  with `managym academy --policy <file>.json play|watch`. A checkpoint trained
+  before syncing main can pass the picker yet fail Start with "Failed to load
+  the selected opponent." (catalog vocabulary grew); retrain rather than debug
+  it. Watch resume tokens live in that tab's storage, so reopen a live Watch
+  trace in the same browser context. A completed Play game's evidence opens
+  from `/replay?trace=<id>` (ids from `/api/traces`) via "Inspect bot search".
 - Model or training-path changes: `uv run manabot train --recipe local --device
   cpu --out .runs/<name>` writes `run.json` with per-phase
   seconds (`learning_seconds`, collection and forward splits) for an A/B. The
@@ -193,7 +203,10 @@ publish, land or choose the next Graph step from here.
   checkpoint's `world_binding["setups"]`, written as `N Name` lines with a
   `Sideboard` section, because the default sim match is refused. Fixed seeds
   make equal win, timeout and mean-step counts a check that every sampled
-  action matched. Ten games took about two minutes on a loaded laptop.
+  action matched. Ten games took about two minutes on a loaded laptop. Sim
+  logs a model failure as `Error getting action`, plays a random move and
+  still prints win rates: count those lines before trusting a result. The
+  regime's decks are `run.json` `regime.match` (`hero_deck`, `hero_sideboard`).
 - MLX backend (`manabot.backends.mlx`, Apple Silicon with the `mlx` extra only):
   run it on the Mac that owns the measurement, not on a shared laptop. The
   published `experiments/data/mlx_pilot/capture/initial.pt` is now refused by
@@ -262,6 +275,25 @@ publish, land or choose the next Graph step from here.
   (`zone`, `is_token`) at every decision. A token in the graveyard during a
   mana ability's color choice is correct: SBAs wait for priority. Academy's
   game end is a "Game Over" dialog with "Play Again".
+  Battlefield permanents are `agent_permanents`, with their own ids (the ones
+  activation offers focus) and an integer `registry_key`; join them to a name
+  through `agent_cards` rows that have the same `registry_key`.
+- Policy vocabulary/admission changes (`record_vocabulary.rs`, token kinds,
+  `manabot/policy/admission.py`): the consumer is training's catalog policy.
+  Script a directed `managym.Env` game that reaches the runtime program,
+  `space.encode` each decision at `ObservationConfig(policy_input_version=10)`
+  and pass it through `manabot.verify.record_coverage._embed` with a tiny
+  catalog `ActorCritic`, as `coverage_sweep` does. Find decisions carrying a
+  token by scanning encoded buffers for its u32 as adjacent 16-bit halves
+  (hi, lo). For Koh's `HaveAbilitiesOf`: Swamps plus Koh against Forests plus
+  Giant Spider, Koh cast once, always targeting with its ETB, the villain
+  playing randomly, and one Pay-1-life activation per turn. The choice
+  is a Modal decision only with two or more cards exiled with Koh (one is
+  skipped as forced). 3 of 6 games reached it (8 decisions, about 7 minutes at load ~110).
+  For the negative, build a mutated release wheel with
+  `-o /tmp/<dir>/wheels`, restore the source at once, unzip the wheel into
+  `/tmp/<dir>/site` and run with `PYTHONPATH=/tmp/<dir>/site` (print
+  `managym.__file__`); admission must then fail at the first such decision.
 - "No behavior change" engine claims: `git worktree add --detach /tmp/<x>
   <before>`, build it with `uv run --extra play maturin build --release -i .venv/bin/python -m
   /tmp/<x>/managym/Cargo.toml` (about 4-5 min), drop its `.so` into
@@ -283,9 +315,17 @@ publish, land or choose the next Graph step from here.
   manabot -o .runs/<dir>` builds in seconds; install it into a fresh `/tmp`
   venv with `uv pip install <wheel> --index-url https://pypi.org/simple
   --extra-index-url https://download.pytorch.org/whl/cpu --index-strategy
-  unsafe-best-match` (the matching `managym` comes from PyPI), then run user
-  scripts from `/tmp` with `<venv>/bin/python -I`. Outside a checkout,
-  `save_checkpoint` prints a harmless `fatal: not a git repository`.
+  unsafe-best-match`. If the checkout uses engine APIs newer than the same-version
+  PyPI wheel, supply the current engine wheel too: a version match alone does
+  not establish source compatibility. A wheel from `maturin develop` may contain
+  a `.pth` pointing back to the checkout; it is not an installed-wheel proof.
+  Use a release wheel from the build-and-verify procedure, then confirm both
+  packages' `__file__` paths are inside the fresh venv. Run user scripts from
+  `/tmp` with `uv run --no-project --python <venv>/bin/python python -I`.
+  Training CLI QA requires the staged manabot wheel from
+  `scripts/release/prepare.py`: its `.manabot-source.json` supplies verified
+  source provenance outside Git. A direct workspace wheel lacks that receipt
+  and training fails at `source_commit`; do not patch the installed files.
 - Training guide (`docs/training-loop.md`): run its example command verbatim
   (about 20 s on CPU), save and reload the policy as it says, call both
   maintained rules directly on a collected batch, and compare the tables'
@@ -311,6 +351,12 @@ publish, land or choose the next Graph step from here.
   check, then fails with "no committed recovery boundary". Resume with the same
   regime file, `--seed` and a new `--out`. `wall_seconds` counts the parent's
   time. macOS has no `timeout`; use the tool's own timeout.
+  For a public safe-pause proof, pass an existing `pause_path` to
+  `execute_regime(..., backend=resolve("torch"))`; catch `TrainingPaused` and
+  read the retained run from the store. It is recorded as `interrupted` with
+  a committed snapshot. Continue by ID through the CLI, then compare the
+  final `load_update(..., backend=resolve("torch").state)` payload against
+  uninterrupted execution, including Adam, EMA and collector sampling RNG.
 - TLA Limited decks (the MTG-282 pool corpus) overflow default observation
   capacities within a few dozen games; copy the `observation` block and the
   `game_errors` policy (`recover_capacity: true`) of
@@ -336,7 +382,15 @@ publish, land or choose the next Graph step from here.
 - Ctrl-C a run: start it with `subprocess.Popen(..., start_new_session=True,
   preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))` and
   `os.killpg(pid, SIGINT)`. A job started with `&` from a non-interactive shell
-  ignores SIGINT, so `pkill -INT` appears to hang.
+  ignores SIGINT, so `pkill -INT` appears to hang. When the child is `uv run`,
+  `killpg` delivers SIGINT twice (uv forwards it) and the server prints an
+  ignored `KeyboardInterrupt` at exit; signal only the Python child for a
+  clean shutdown.
+- Scripted Play against a searched opponent: one human Command runs the whole
+  opponent turn, so a 2×2 Mirror reply took 49 s (ten searched decisions) and
+  the waiting badge reached 170 s+. Do not treat a long badge as a hang; set
+  stall detectors above a full opponent turn, and confirm with the trace's
+  `events[].bot_decision.mirror.seconds` in the attempts table.
 - Experiment reports and figures: arrive as a new reader with
   `MANABOT_DATA_CACHE` set to an empty directory, then `doppler run --project
   manabot --config prd -- uv run --extra artifacts python -m manabot.data fetch
@@ -350,6 +404,27 @@ publish, land or choose the next Graph step from here.
   experiments/l4_step_profile.py job --smoke`. For `live` it took about 6
   minutes and 2.2 GB and runs every stage as a real child process.
 
+- Search (search-capable policy in Play/Watch): `uv run manabot train
+  --recipe local --device cpu --out .runs/<x>` gives a compatible
+  `self-play-raw.safetensors` in about 90 s; save `{"provider": "manabot",
+  "artifact": "<abs path>", "config": {}}` as `<alias>.json` and launch `uv run managym
+  academy --policy <alias>.json play --opponent <alias> --search
+  '{"worlds":1,"depth":1}' --seed 7` (or `watch --player <alias> --player
+  random --search '[{...},null]'`, then press Start watching). Seed 7 puts the
+  bot on the play. The initial budget is 1×1 with a 30 s ceiling. With the
+  provider's cached card catalog, full games at 1×1 (Watch, both seats) and
+  4×2 (Play) completed with median decisions near 0.5 s and 1 s at load ~150;
+  16×20 still exceeded 30 s. If one evaluation takes seconds, profile it:
+  re-encoding the card catalog per forward (`_encode_programs`, `torch.gru`)
+  means the session is not using `inference_scope()`. To time decisions
+  without a browser, drive `create_watch`/`step_watch` in-process as
+  `tests/academy/test_search_baseline.py` does. Retained evidence is in
+  the attempts table's `trace_json`
+  (`events[].bot_decision.mirror`). To probe reconnect, click an offer that hands
+  priority to the bot and reload about 1.5 s later while the table shows
+  `Search W×D· N s`; the game must stay `active` and resume at the
+  committed state. A reload before the first response has no resume
+  credentials and launches a new game by design.
 - Live Academy QA without fixtures: build first, then start the ordinary
   `managym.academy.server:app` with `ACADEMY_TRACES_DIR` pointing into an ignored
   `.runs/` directory and `ACADEMY_PLAY_RECORD_ORIGIN=automated_validation`.
@@ -363,6 +438,25 @@ publish, land or choose the next Graph step from here.
   completed result explicitly before checking Next frame. Playwright offline
   mode did not close an existing localhost WebSocket in the MTG-355 run; it
   alone does not prove disconnect/reconnect behavior.
+- Replay/Watch (one viewer for every recording): `/replay?watch=1`, pick seats
+  with the `Seat 1`/`Seat 2` comboboxes and `Deal seed`, press **Start
+  watching**, then drive the transport (`Play`/`Pause`/`Previous`/`Next`,
+  slider "Replay position", "Jump to turn and phase", Speed 16×). Random vs
+  Random at 16× reaches a result in about four minutes under load. Seed 7 on
+  the default decks fails Watch start with HTTP 500 (Task e2fbba). Use another
+  seed until that is fixed. For an imported evaluation, write a multi-game
+  trace with `play_cell(..., deal_seeds=(777, 778), legs=(0, 1))` into
+  `.runs/` (about 10 s) and pass its `.commands.jsonl.gz` to "Open a game
+  file". Then choose "Recorded game" and "Open selected game"; only
+  `/api/watch/import` may be POSTed. A Watch still producing is private to its
+  tab: a new browser context cannot open it. Measure fit at 1280×800 from
+  `.recording-viewer` scroll and `.hand-cards` bounds, not the page.
+  `PresentationStage` also carries `data-presentation-seq`, so count history
+  rows inside the "Recorded game events" list. The release Playwright config
+  serves the last static build through `vite preview`: rebuild with
+  `ACADEMY_STATIC_BUILD=1` after every UI edit before rerunning it. A release
+  spec can save a legacy JSON record into `test-results/release/traces/` to
+  read it through the real server instead of mocking endpoints.
 - For a genuine local connection interruption, put a TCP forwarder between the
   browser and the ordinary same-origin Academy CLI server. Stop its listener and
   destroy both sockets of every forwarded pair; observe disconnected/reconnecting

@@ -45,16 +45,18 @@
 //! power, then descending ID. Other equal combat rankings keep observation order.
 //!
 //! These are estimates, not exact combat search. Mana counts untapped lands,
-//! ignoring colors and other sources. Creature identity uses visible card
-//! definitions (or an animated permanent); without a definition, positive
-//! toughness counts as a creature. Modal bodies are opaque to spell ratings.
+//! ignoring colors and other sources. Creature identity reads the effective
+//! permanent types. Modal bodies are opaque to spell ratings.
 //! Combat assignments use the observation's attacker/blocker events and current
 //! permanent IDs, remembered for the turn. No hidden hand or library order is
 //! consulted.
 mod knowledge;
 use crate::agent::{
     action::{ActionSpaceKind as Space, ActionType as Action, AgentError},
-    observation::{ActionOption, CardData, EventType, KeywordData, Observation, PermanentData},
+    observation::{
+        ActionOption, CardData, CharacteristicsData, EventType, KeywordData, ObjectData,
+        Observation, PermanentData,
+    },
 };
 use crate::{flow::turn::StepKind, state::zone::ZoneType};
 use knowledge::{knowledge, Knowledge, Polarity, Spell};
@@ -63,26 +65,21 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 struct Board<'a> {
     raw: &'a Observation,
     actions: &'a [ActionOption],
-    cards: HashMap<i32, &'a CardData>,
-    by_key: HashMap<i32, &'a CardData>,
+    /// Every visible object by identity, borrowing its characteristics.
+    objects: HashMap<i32, ObjectData<'a>>,
     permanents: HashMap<i32, &'a PermanentData>,
 }
 impl<'a> Board<'a> {
     fn new(raw: &'a Observation, max_actions: Option<usize>) -> Self {
-        let cards = raw.agent_cards.iter().chain(&raw.opponent_cards);
+        let permanents = raw.agent_permanents.iter().chain(&raw.opponent_permanents);
+        let objects = raw.object_records();
         Self {
             raw,
             actions: &raw.action_space.actions[..max_actions
                 .unwrap_or(usize::MAX)
                 .min(raw.action_space.actions.len())],
-            cards: cards.clone().map(|c| (c.id, c)).collect(),
-            by_key: cards.map(|c| (c.registry_key, c)).collect(),
-            permanents: raw
-                .agent_permanents
-                .iter()
-                .chain(&raw.opponent_permanents)
-                .map(|p| (p.id, p))
-                .collect(),
+            objects: objects.map(|c| (c.id, c)).collect(),
+            permanents: permanents.map(|p| (p.id, p)).collect(),
         }
     }
     /// Keep observation order; callers collect only when ranking or reusing a side.
@@ -92,13 +89,8 @@ impl<'a> Board<'a> {
         } else {
             &self.raw.opponent_permanents
         };
-        side.iter().filter(|p| {
-            p.is_animated
-                || self
-                    .by_key
-                    .get(&p.registry_key)
-                    .map_or(p.toughness > 0, |c| c.card_types.is_creature)
-        })
+        side.iter()
+            .filter(|p| p.is_animated || p.characteristics.card_types.is_creature)
     }
     fn own(&self, p: &PermanentData) -> bool {
         p.controller_id == self.raw.agent.id
@@ -107,24 +99,16 @@ impl<'a> Board<'a> {
         self.raw.turn.active_player_id == self.raw.agent.id
     }
     fn mana_value(&self, p: &PermanentData) -> i32 {
-        self.by_key
-            .get(&p.registry_key)
-            .map_or(0, |c| c.mana_cost.mana_value as i32)
+        p.characteristics.mana_cost.mana_value as i32
     }
     fn lands(&self, untapped: bool) -> i32 {
         self.raw
             .agent_permanents
             .iter()
-            .filter(|p| {
-                (!untapped || !p.tapped)
-                    && self
-                        .by_key
-                        .get(&p.registry_key)
-                        .is_some_and(|c| c.card_types.is_land)
-            })
+            .filter(|p| (!untapped || !p.tapped) && p.characteristics.card_types.is_land)
             .count() as i32
     }
-    fn can_kick(&self, c: &CardData) -> bool {
+    fn can_kick(&self, c: &CharacteristicsData) -> bool {
         c.kicker_cost > 0 && self.lands(true) >= c.mana_cost.mana_value as i32 + c.kicker_cost
     }
     fn hand(&self) -> impl Iterator<Item = &'a CardData> {
@@ -153,7 +137,7 @@ impl<'a> Board<'a> {
             .enumerate()
             .filter(|(_, a)| a.action_type != Action::DeclineChoice)
             .filter_map(|(i, a)| {
-                let card = self.cards.get(a.focus.first()?)?;
+                let card = self.objects.get(a.focus.first()?)?;
                 let rank = if card.card_types.is_land {
                     land_rank
                 } else {
@@ -305,8 +289,8 @@ impl Heuristic {
         let mut activations = vec![];
         for (i, a) in b.actions.iter().enumerate() {
             if a.action_type == Action::PriorityCastSpell && a.focus.len() == 1 {
-                if let Some(c) = b.cards.get(&a.focus[0]) {
-                    casts.push((-(c.mana_cost.mana_value as i32), i, *c));
+                if let Some(c) = b.objects.get(&a.focus[0]) {
+                    casts.push((-(c.mana_cost.mana_value as i32), i, c.characteristics));
                 }
             } else if a.action_type == Action::PriorityActivateAbility {
                 if let Some(id) = a.focus.first() {
@@ -354,11 +338,11 @@ impl Heuristic {
     ) -> Option<usize> {
         actions.iter().find_map(|(i, id)| {
             let p = b.permanents.get(id)?;
-            let c = b.by_key.get(&p.registry_key)?;
+            let c = &p.characteristics;
             knowledge(&c.name).filter(|k| matches(k)).map(|_| *i)
         })
     }
-    fn timely(&self, b: &Board<'_>, c: &CardData) -> bool {
+    fn timely(&self, b: &Board<'_>, c: &CharacteristicsData) -> bool {
         let Some(k) = knowledge(&c.name) else {
             return true;
         };
@@ -373,7 +357,7 @@ impl Heuristic {
         }
         !b.own_turn() && b.raw.turn.step == StepKind::End
     }
-    fn worth_casting(&self, b: &Board<'_>, c: &CardData) -> bool {
+    fn worth_casting(&self, b: &Board<'_>, c: &CharacteristicsData) -> bool {
         let Some(s) = knowledge(&c.name)
             .and_then(|k| k.spell.as_ref())
             .filter(|s| s.polarity.is_some())
@@ -395,7 +379,7 @@ impl Heuristic {
     fn pay(&mut self, b: &Board<'_>) -> Option<usize> {
         if b.raw.action_space.focus.len() == 1 {
             if let Some(c) = b
-                .cards
+                .objects
                 .get(&b.raw.action_space.focus[0])
                 .filter(|c| c.kicker_cost > 0 && c.owner_id == b.raw.agent.id)
             {
@@ -507,7 +491,7 @@ impl Heuristic {
             .action_space
             .focus
             .iter()
-            .find_map(|id| b.cards.get(id))?;
+            .find_map(|id| b.objects.get(id))?;
         let spell = knowledge(&source.name)?.spell.as_ref()?;
         let polarity = spell.polarity?;
         let damage = b.damage(spell, self.kicked.get(&source.id).copied().unwrap_or(false));
@@ -535,7 +519,7 @@ impl Heuristic {
                 b.permanents
                     .get(&id)
                     .map(|p| p.controller_id)
-                    .or_else(|| b.cards.get(&id).map(|c| c.owner_id))
+                    .or_else(|| b.objects.get(&id).map(|c| c.owner_id))
                     .map(|c| c == b.raw.agent.id)
             };
             if own != Some(polarity == Polarity::Beneficial) {
@@ -559,7 +543,7 @@ impl Heuristic {
                         b.mana_value(p),
                     ]
                 }
-            } else if b.cards.contains_key(&id) {
+            } else if b.objects.contains_key(&id) {
                 vec![3]
             } else {
                 vec![if damage >= b.raw.opponent.life { 4 } else { 1 }]

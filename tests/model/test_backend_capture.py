@@ -10,7 +10,7 @@ from manabot.backends import resolve
 from manabot.backends.parity import minibatch_loss, minibatches
 from manabot.backends.torch.capture import capture
 from manabot.backends.torch.checkpoint import load_checkpoint
-from manabot.infra.config import MatchConfig, ModelConfig
+from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.policy.checkpoint import from_torch_state
 from manabot.training.regime import (
     DampedPolicyLearning,
@@ -29,6 +29,8 @@ def test_capture_replays_both_seat_update(tmp_path: Path) -> None:
             hero_deck={"Mountain": 8, "Gray Ogre": 8},
             villain_deck={"Forest": 8, "Llanowar Elves": 8},
         ),
+        # The framework container implements input v9 only.
+        observation=ObservationConfig(policy_input_version=9),
         agent=ModelConfig(
             hidden_dim=8,
             num_attention_heads=2,

@@ -2,15 +2,15 @@
 
 import random
 
-from managym.experience_projection import describe_actions, serialize_observation
 import numpy as np
 import pytest
 
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import PERMANENT_DIM, ObservationSpace
 from manabot.infra.config import MatchConfig, RewardConfig
 import managym
+from managym.experience_projection import describe_actions, serialize_observation
 
 
 def candidate_match():
@@ -48,7 +48,7 @@ def test_match_config_candidate_finishes_with_complete_native_and_python_encodin
     if reverse:
         match = match.swapped()
     space = ObservationSpace()
-    assert space.encoder.permanent_dim == 38
+    assert space.encoder.permanent_dim == PERMANENT_DIM
     env = Env(match, space, Reward(RewardConfig()), seed=seed)
     obs, _ = env.reset(seed=seed)
     assert env.content_pack_manifest()["world_version"] == managym.WORLD_VERSION

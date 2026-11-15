@@ -15,6 +15,7 @@ export const SHARED_TABLE_REQUEST_TYPES = [
   'validate_declaration',
   'action',
   'pass_turn',
+  'retry_mirror',
   'set_stops',
   'transfer_pilot',
   'author_belief',
@@ -92,7 +93,7 @@ export interface TableSnapshot {
   beliefs: BeliefScenario[];
   decisions: TableDecisionSummary[];
   opponent_label: string | null;
-  opponent?: { bot_id?: string | null; name: string; producer: string; sha256: string } | null;
+  opponent?: { bot_id?: string | null; name: string; producer: string; sha256: string; base_sha256?: string | null } | null;
   attempt_id?: string | null;
   watcher_invite: string | null;
 }
@@ -121,6 +122,7 @@ export type SharedTableRequest =
   | ({ type: 'validate_declaration'; grant_revision?: number | null; request_id: string; command: DeclarationCommand })
   | ({ type: 'action'; grant_revision?: number | null; index: number })
   | ({ type: 'pass_turn'; grant_revision?: number | null })
+  | ({ type: 'retry_mirror'; grant_revision?: number | null; match_id: string; expected_revision: number })
   | ({
       type: 'set_stops';
       grant_revision?: number | null;

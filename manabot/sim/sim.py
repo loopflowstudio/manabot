@@ -17,7 +17,7 @@ import time
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from etude.train.records import CheckpointRecord, Step
-from etude.train.run import track
+from etude.train.tracking import track
 import numpy as np
 
 # Local imports
@@ -26,7 +26,7 @@ from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.artifacts import fetch_etude_checkpoint
-from manabot.infra.config import RuntimeConfig, SimulationConfig
+from manabot.infra.config import ObservationConfig, RuntimeConfig, SimulationConfig
 from manabot.infra.log import getLogger, setGlobalLogLevel
 from manabot.infra.runtime import seed_random
 from manabot.model.world import validate_agent_setup
@@ -413,6 +413,22 @@ def determine_outcome(
 # -----------------------------------------------------------------------------
 
 
+def _shared_observation_config(*players: Player) -> ObservationConfig | None:
+    """The one policy input every model player reads; the default when none does.
+
+    Both seats are encoded with one space, so models bound to different inputs
+    cannot meet in one game.
+    """
+    configs = [
+        player.agent.observation_space.encoder.config
+        for player in players
+        if isinstance(player, ModelPlayer)
+    ]
+    if any(config != configs[0] for config in configs):
+        raise ValueError("players have different observation ABIs")
+    return configs[0] if configs else None
+
+
 def simulate_models(
     hero_player: Player,
     villain_player: Player,
@@ -427,6 +443,7 @@ def simulate_models(
     for player in (hero_player, villain_player):
         if isinstance(player, ModelPlayer):
             validate_agent_setup(player.agent, player_configs)
+    observation_config = _shared_observation_config(hero_player, villain_player)
 
     # Determine number of threads (capped by games and CPU cores)
     num_threads = min(sim_config.num_threads, sim_config.num_games)
@@ -444,11 +461,22 @@ def simulate_models(
     # Start timing
     start_time = time.time()
 
+    failures: list[BaseException] = []
+    stopped = threading.Event()
+
     # Worker function that runs games until target count is reached
-    def worker_thread(thread_id):
+    def worker_thread(thread_id: int) -> None:
+        try:
+            run_worker(thread_id)
+        except BaseException as error:
+            with completed_lock:
+                failures.append(error)
+            stopped.set()
+
+    def run_worker(thread_id: int) -> None:
         # Create environment for this thread
         match = Match(sim_config.match)
-        observation_space = ObservationSpace()
+        observation_space = ObservationSpace(observation_config)
         reward = Reward(sim_config.reward)
         env = Env(
             match,
@@ -461,43 +489,43 @@ def simulate_models(
         nonlocal completed_games
         thread_games = 0
 
-        while True:
-            # Check if we've completed enough games
-            with completed_lock:
-                if completed_games >= sim_config.num_games:
-                    break
-                completed_games += 1
+        try:
+            while not stopped.is_set():
+                # Check if we've completed enough games
+                with completed_lock:
+                    if completed_games >= sim_config.num_games:
+                        break
+                    completed_games += 1
 
-            # Simulate a single game
-            outcome, steps, duration, profiler_data, behavior_data = _simulate_game(
-                env, hero_player, villain_player, sim_config.max_steps
-            )
+                # Simulate a single game
+                outcome, steps, duration, profiler_data, behavior_data = _simulate_game(
+                    env, hero_player, villain_player, sim_config.max_steps
+                )
 
-            # Record game with minimal metadata
-            metadata = {
-                "thread_id": thread_id,
-            }
+                # Record game with minimal metadata
+                metadata = {
+                    "thread_id": thread_id,
+                }
 
-            stats.record_game(
-                outcome=outcome,
-                steps=steps,
-                duration=duration,
-                metadata=metadata,
-                profiler_info=profiler_data,
-                behavior_info=behavior_data,
-            )
+                stats.record_game(
+                    outcome=outcome,
+                    steps=steps,
+                    duration=duration,
+                    metadata=metadata,
+                    profiler_info=profiler_data,
+                    behavior_info=behavior_data,
+                )
 
-            # Update thread counter
-            thread_games += 1
+                # Update thread counter
+                thread_games += 1
 
-            # Log progress occasionally
-            if thread_games % 5 == 0:
-                logger.info(f"Thread {thread_id}: Completed {thread_games} games")
+                # Log progress occasionally
+                if thread_games % 5 == 0:
+                    logger.info(f"Thread {thread_id}: Completed {thread_games} games")
 
-        # Clean up
-        info = env.info()
-        logger.info(f"Thread {thread_id} info: {info}")
-        env.close()
+        finally:
+            env.close()
+
         logger.info(f"Thread {thread_id} completed {thread_games} games")
 
     # Create and start worker threads
@@ -536,6 +564,9 @@ def simulate_models(
     # Wait for all threads to complete
     for thread in threads:
         thread.join()
+
+    if failures:
+        raise failures[0]
 
     # End timing
     total_time = time.time() - start_time
@@ -602,30 +633,12 @@ def _simulate_game(
         # Select the appropriate player
         player = hero_player if active_player_index == 0 else villain_player
 
-        # Get action from player
-        try:
-            action = player.get_action(obs)
-        except Exception as e:
-            logger.error(f"Error getting action: {e}")
-            # Fallback to random action if model fails
-            valid_actions = np.where(obs["actions_valid"] > 0)[0]
-            if len(valid_actions) == 0:
-                logger.error("No valid actions available")
-                break
-            action = int(np.random.choice(valid_actions))
-
-        # Step environment
-        try:
-            new_obs, reward, terminated, truncated, info = env.step(action)
-            done = terminated or truncated
-            last_info = info
-            turn_count += 1
-
-            # Update observation for next step
-            obs = new_obs
-        except Exception as e:
-            logger.error(f"Error in environment step: {e}")
-            break
+        action = player.get_action(obs)
+        new_obs, reward, terminated, truncated, info = env.step(action)
+        done = terminated or truncated
+        last_info = info
+        turn_count += 1
+        obs = new_obs
 
     # Calculate duration
     if not done:
@@ -679,7 +692,9 @@ def run_simulation(
     """Run a simulation sweep for hero/villain model specs."""
     setGlobalLogLevel(getattr(logging, runtime_config.log_level.upper(), logging.INFO))
     seed_random(
-        runtime_config.seed, torch_deterministic=runtime_config.torch_deterministic
+        runtime_config.seed,
+        backend=backend,
+        torch_deterministic=runtime_config.torch_deterministic,
     )
     with track(
         experiment=runtime_config.name,

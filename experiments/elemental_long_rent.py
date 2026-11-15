@@ -51,7 +51,7 @@ from typing import Any, Literal
 from etude.eval.match import evaluate
 from etude.eval.records import Match, Model
 from etude.launch.records import Input, Job, Run
-from etude.run.storage import run_directory
+from etude.storage import run_directory
 from pydantic import BaseModel, ConfigDict
 
 from experiments.elemental_grid import ENDPOINT, endpoint_environment
@@ -489,7 +489,7 @@ def launch(
     Batches take pending units newest first; `fixed` units instead go to every
     batch, which plays the same games under each compute contract.
     """
-    from etude.launch.client import queue_cohort, quote
+    from etude.launch.client import queue, quote
     from etude.launch.errors import LauncherError
 
     ledger = _ledger()
@@ -552,13 +552,12 @@ def launch(
         print(f"{batch.run}: {games} games, {batch.units[0]} … {batch.units[-1]}")
     if not runs:
         raise SystemExit("nothing pending")
-    cohort = f"mtg183-rent-{int(time.time())}"
     try:
-        print(quote(runs, rent=rent, cohort=cohort, max_usd=usd * len(runs)))
+        print(quote(runs, rent=rent))
     except LauncherError as unavailable:
         # Queued runs wait for a machine; the cap still bounds what they spend.
         print(f"queueing to wait: {unavailable}")
-    ids = queue_cohort(cohort, runs, rent=rent, max_usd=usd * len(runs))
+    ids = queue(runs, rent=rent)
     for run_id, batch in zip(ids, frozen, strict=True):
         ledger.launched[run_id] = batch
         ledger.max_usd[run_id] = usd

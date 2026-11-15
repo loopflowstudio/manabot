@@ -54,6 +54,7 @@ from numpy.typing import NDArray
 from pydantic import TypeAdapter
 import torch
 
+from manabot.backends import resolve
 from manabot.backends.torch.checkpoint import save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.state import ViewerHistory
@@ -471,6 +472,7 @@ def compare_arms(
                     depth=20, decision_seconds=120, rollout_evidence=mode
                 ),
                 native_encoder=encoder == "on",
+                backend=resolve("torch"),
             )
             for mode, encoder in arms
         }
@@ -652,7 +654,9 @@ def main() -> None:
             before = reference(checkpoint, digest, _reference_config(config))
         teachers = {
             "before": before,
-            "after": LocalUpdateTeacher(checkpoint, digest, config),
+            "after": LocalUpdateTeacher(
+                checkpoint, digest, config, backend=resolve("torch")
+            ),
         }
         for teacher in teachers.values():
             validate_agent_setup(teacher.agent, match.to_rust())

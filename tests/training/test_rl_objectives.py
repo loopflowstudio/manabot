@@ -12,6 +12,7 @@ import manabot.backends.torch as torch_backend
 from manabot.backends.torch import rollout as learner_module
 from manabot.backends.torch.learner import Learner, update_ema
 from manabot.backends.torch.rl import selected_rows, transition_gae
+import manabot.backends.torch.rollout as torch_rollout
 from manabot.policy.prepare import reference_distribution
 from manabot.training.regime import Learning, Schedule
 from manabot.training.rollout.actions import ActionRows, PackedActions
@@ -114,7 +115,7 @@ def fixture() -> tuple[Learner, RolloutBatch]:
         values=values.detach().numpy().copy(),
         next_obs={k: v[:1] for k, v in obs.items()},
         next_done=np.array([True]),
-        action_data=PackedActions.pack(obs, logs),
+        action_data=PackedActions.pack(obs, logs, validator=torch_rollout),
     )
     trainer = Learner(agent, "cpu", minibatch_rows=1)
 

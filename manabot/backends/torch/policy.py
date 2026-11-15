@@ -38,7 +38,11 @@ from manabot.backends.torch._shared_effects import SharedEffectEncoder
 from manabot.backends.torch.arrays import array_fields, device_of, on_device, to_numpy
 from manabot.backends.torch.live_tokens import LiveTokens
 from manabot.backends.torch.rl import NumericalError
+from manabot.belief.range import BeliefError
 from manabot.env.observation import (
+    STACK_DEFINITION_INDEX,
+    STACK_DIM,
+    STACK_SOURCE_INDEX,
     TURN_STATE_DIM,
     ObservationBuffers,
     ObservationSpace,
@@ -52,6 +56,9 @@ from manabot.policy.checkpoint import layout
 from manabot.policy.prepare import BeliefRows, Prepared, Tables, prepare
 from manabot.policy.protocol import InferenceResult
 import managym
+
+if TYPE_CHECKING:
+    from manabot.belief.encoding import BeliefEncodingSchema
 
 if TYPE_CHECKING:
     from manabot.belief.encoding import BeliefCheckpointBinding
@@ -144,9 +151,11 @@ class ActorCritic(nn.Module):
             )
         player_dim = enc.player_dim
         card_dim = enc.card_dim
-        # Input v10 appends each seat's turn-state row to its player row and
+        # Inputs v10/v11 append each seat's turn-state row to its player row and
         # each card row's turn-state value to that card row.
-        if enc.config.policy_input_version == 10:
+        self.turn_state = enc.turn_state
+        self.stack_tokens = enc.one_token
+        if self.turn_state:
             player_dim += TURN_STATE_DIM
             card_dim += 1
         # Definition IDs and permanent links are categorical joins, never
@@ -341,6 +350,34 @@ class ActorCritic(nn.Module):
         self.live_tokens = live_tokens
         self.name_candidates.bucketed = self.bucketed_shapes
 
+        # Input v11 stack rows, built after every v9/v10 parameter (except the
+        # value readout, built last) so those checkpoints keep their
+        # initialization and state-dict names. A row
+        # projects its numeric columns and adds its definition's program, as a
+        # permanent does; an ability's definition is its source's. Its source
+        # link (one-based object index) adds the source's pre-attention
+        # embedding through a zero-initialized layer, so the initial function
+        # ignores it.
+        self._numeric_stack_columns = [
+            column
+            for column in range(STACK_DIM)
+            if column not in (STACK_DEFINITION_INDEX, STACK_SOURCE_INDEX)
+        ]
+        self.stack_embedding: ProjectionLayer | None = None
+        self.stack_source: nn.Linear | None = None
+        if self.stack_tokens:
+            self.stack_embedding = ProjectionLayer(
+                len(self._numeric_stack_columns), embed_dim
+            )
+            self.stack_source = torch.nn.utils.skip_init(
+                nn.Linear, embed_dim, embed_dim
+            )
+            nn.init.zeros_(self.stack_source.weight)
+            nn.init.zeros_(self.stack_source.bias)
+            self.logger.info(
+                f"Stack embedding: ({len(self._numeric_stack_columns)} -> {embed_dim})"
+            )
+
         # Built last: every other parameter keeps the masked-mean arm's draws
         # under the same seed, so the two readouts start from one shared model.
         self.value_readout = (
@@ -357,6 +394,32 @@ class ActorCritic(nn.Module):
         self._spec_cache: tuple[object, admission.Spec] | None = None
         self._program_cache: torch.Tensor | None = None
         self._cache_versions: tuple[tuple[int, int], ...] = ()
+
+    def admit_belief(self, belief_schema: "BeliefEncodingSchema") -> None:
+        """Admit a host belief vocabulary against this policy's input embeddings."""
+        if self.belief_count_buckets != belief_schema.count_buckets:
+            raise BeliefError("ActorCritic and belief encoding count buckets differ")
+        if self.belief_card_embedding is None:
+            raise BeliefError(
+                "Manabot requires an ActorCritic with belief input enabled"
+            )
+        maximum_card_id = max(row.card_def_id for row in belief_schema.rows)
+        if maximum_card_id >= self.belief_card_embedding.num_embeddings:
+            raise BeliefError("belief schema exceeds the ActorCritic card vocabulary")
+        if self.belief_owner_embedding is None:
+            raise BeliefError("Manabot requires an ActorCritic owner-role vocabulary")
+        maximum_owner_id = max(row.owner_role_id for row in belief_schema.rows)
+        if maximum_owner_id >= self.belief_owner_embedding.num_embeddings:
+            raise BeliefError(
+                "belief schema exceeds the ActorCritic owner-role vocabulary"
+            )
+        if self.belief_zone_embedding is None:
+            raise BeliefError("Manabot requires an ActorCritic hidden-zone vocabulary")
+        maximum_zone_id = max(row.hidden_zone_id for row in belief_schema.rows)
+        if maximum_zone_id >= self.belief_zone_embedding.num_embeddings:
+            raise BeliefError(
+                "belief schema exceeds the ActorCritic hidden-zone vocabulary"
+            )
 
     def _binding(self) -> str:
         return admission.binding(self.config, self.observation_space)
@@ -455,12 +518,30 @@ class ActorCritic(nn.Module):
             else tuple(tuple(map(int, row)) for row in needs),
         )
 
+    def _evaluate_outputs(
+        self, batch: Prepared[np.ndarray]
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        modes = [(module, module.training) for module in self.modules()]
+        self.eval()
+        try:
+            return self(on_device(batch, device_of(self)))
+        finally:
+            for module, training in modes:
+                module.training = training
+
     @torch.no_grad()
     def evaluate(self, batch: Prepared[np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
-        """Run an admitted host batch without gradients and return NumPy outputs."""
-        self.eval()
-        logits, values = self(on_device(batch, device_of(self)))
+        """Run one admitted batch, preserving the caller's module modes."""
+        logits, values = self._evaluate_outputs(batch)
         return to_numpy(logits), to_numpy(values)
+
+    @torch.no_grad()
+    def evaluate_probabilities(
+        self, batch: Prepared[np.ndarray]
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Normalize on the policy device before transferring outputs to the host."""
+        logits, values = self._evaluate_outputs(batch)
+        return to_numpy(torch.softmax(logits, dim=-1)), to_numpy(values)
 
     @property
     def device_type(self) -> str:
@@ -797,12 +878,22 @@ class ActorCritic(nn.Module):
             permanent_definitions = self.semantic_cards.lookup(
                 definitions, obs.permanent_rows
             )
+            stack_definitions = (
+                None
+                if obs.stack_rows is None
+                else self.semantic_cards.lookup(definitions, obs.stack_rows)
+            )
         else:
             assert self.card_definitions is not None
             cards = self.card_definitions(obs.card_rows)
             enc_agent_cards = enc_agent_cards + cards[:, 0]
             enc_opp_cards = enc_opp_cards + cards[:, 1]
             permanent_definitions = self.card_definitions(obs.permanent_rows)
+            stack_definitions = (
+                None
+                if obs.stack_rows is None
+                else self.card_definitions(obs.stack_rows)
+            )
         # Keep the per-seat contiguous projection layout after biases train.
         enc_agent_perms = (
             self.perm_embedding(obs.permanents[:, 0].contiguous())
@@ -820,10 +911,16 @@ class ActorCritic(nn.Module):
             enc_agent_perms,
             enc_opp_perms,
         ]
+        if self.stack_tokens:
+            assert self.stack_embedding is not None and obs.stack is not None
+            assert stack_definitions is not None
+            parts.append(self.stack_embedding(obs.stack) + stack_definitions)
         if obs.belief is not None:
             rows, global_row = self._belief_rows(obs.belief)
             parts.extend((rows, global_row))
         objects = self._join_permanent_links(obs, torch.cat(parts, dim=1))
+        if self.stack_tokens:
+            objects = self._join_stack_sources(obs, objects)
         token_embedding = (
             self.semantic_cards.token_embedding
             if self.semantic_cards is not None and self.semantic_cards.records
@@ -853,6 +950,29 @@ class ActorCritic(nn.Module):
         objects = objects + shared_context.unsqueeze(1)
         return EmbeddedObservation(
             objects, obs.is_agent, obs.validity, shared_context, frame_context, programs
+        )
+
+    def _join_stack_sources(
+        self, obs: Prepared[torch.Tensor], objects: torch.Tensor
+    ) -> torch.Tensor:
+        """Add source embeddings to the host-prepared v11 stack rows."""
+        assert self.stack_source is not None and obs.stack is not None
+        assert obs.stack_targets is not None and obs.stack_mask is not None
+        start = 2 + 2 * obs.agent_cards.shape[1] + 2 * obs.permanents.shape[2]
+        count = obs.stack.shape[1]
+        sources = objects.flatten(0, 1)[obs.stack_targets].reshape(
+            objects.shape[0], count, objects.shape[2]
+        )
+        delta = self.stack_source(sources).masked_fill(
+            (obs.stack_mask == 0).unsqueeze(-1), 0
+        )
+        return torch.cat(
+            (
+                objects[:, :start],
+                objects[:, start : start + count] + delta.to(objects.dtype),
+                objects[:, start + count :],
+            ),
+            dim=1,
         )
 
     def _join_permanent_links(

@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends import resolve
 from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND
 from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.likelihood import (
@@ -135,7 +136,9 @@ def test_frozen_likelihood_fails_closed_on_checkpoint_hash(tmp_path: Path) -> No
     checkpoint.write_bytes(b"not the registered model")
 
     with pytest.raises(ValueError, match="SHA-256 mismatch"):
-        FrozenPolicyLikelihood(checkpoint, expected_sha256="0" * 64)
+        FrozenPolicyLikelihood(
+            checkpoint, expected_sha256="0" * 64, backend=resolve("torch")
+        )
 
 
 def test_belief_and_prior_use_identical_canonical_search_path() -> None:

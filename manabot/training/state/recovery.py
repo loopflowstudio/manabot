@@ -20,11 +20,9 @@ import time
 from typing import Any, Literal
 
 import numpy as np
-import torch
 
-from manabot.backends.torch.learner import Learner
-from manabot.backends.torch.policy import ActorCritic
 from manabot.infra.identity import file_sha256
+from manabot.policy.protocol import BackendPolicy
 from manabot.training.clock import boot_identity
 from manabot.training.records import StageRecord, TrainingRun
 from manabot.training.rollout.collection import (
@@ -32,6 +30,8 @@ from manabot.training.rollout.collection import (
     CollectorStats,
     SeatRoutedCollector,
 )
+from manabot.training.state.backend import TrainingState
+from manabot.training.updates.backend import Learner
 
 
 class TrainingPaused(KeyboardInterrupt):
@@ -46,14 +46,14 @@ class UpdateSnapshot:
     completed_stages: list[StageRecord]
     collector_before: CollectorStats
     record: StageRecord
-    learner: dict[str, torch.Tensor]
-    ema: dict[str, torch.Tensor] | None
+    learner: dict[str, Any]
+    ema: dict[str, Any] | None
     # torch/NumPy optimizer and RNG serialization boundaries own nested schemas.
     optimizer: dict[str, Any]
     minibatch_rng: dict[str, Any]
     python_rng: tuple[Any, ...]
     numpy_rng: tuple[Any, ...]
-    torch_rng: torch.Tensor
+    torch_rng: object
     collector: CollectorSnapshot
     regime_digest: str
     seed: int
@@ -64,12 +64,14 @@ def save_update(
     path: Path,
     learner: Learner,
     collector: SeatRoutedCollector,
-    ema: ActorCritic | None,
+    ema: BackendPolicy | None,
     rng: np.random.Generator,
     iteration: int,
     record: StageRecord,
     run: TrainingRun,
     collector_before: CollectorStats,
+    *,
+    backend: TrainingState,
 ) -> None:
     """Publish immutable bytes before the store advertises their digest."""
     # Stage records at the exact snapshot boundary, including immutable
@@ -80,13 +82,13 @@ def save_update(
         completed_stages=deepcopy(run.stages[:-1]),
         collector_before=deepcopy(collector_before),
         record=record.model_copy(deep=True),
-        learner=deepcopy(learner.agent.state_dict()),
-        ema=deepcopy(ema.state_dict()) if ema is not None else None,
-        optimizer=deepcopy(learner.optimizer.state_dict()),
+        learner=deepcopy(backend.policy_state(learner.agent)),
+        ema=deepcopy(backend.policy_state(ema)) if ema is not None else None,
+        optimizer=deepcopy(backend.optimizer_state(learner)),
         minibatch_rng=deepcopy(rng.bit_generator.state),
         python_rng=random.getstate(),
         numpy_rng=np.random.get_state(),
-        torch_rng=torch.get_rng_state(),
+        torch_rng=backend.framework_rng(),
         collector=collector.snapshot(),
         regime_digest=run.regime_digest,
         seed=run.seed,
@@ -96,9 +98,9 @@ def save_update(
     with temporary.open("xb") as stream:
         if path.suffix == ".gz":
             with gzip.GzipFile(fileobj=stream, mode="wb", mtime=0) as compressed:
-                torch.save(state, compressed)
+                backend.save(state, compressed)
         else:
-            torch.save(state, stream)
+            backend.save(state, stream)
         stream.flush()
         os.fsync(stream.fileno())
     # Hard link publishes without ever replacing a previous checkpoint.
@@ -128,7 +130,7 @@ def admit_recovery_identities(
         raise ValueError("recovery runtime/source identity mismatch")
 
 
-def load_update(parent: TrainingRun) -> UpdateSnapshot:
+def load_update(parent: TrainingRun, *, backend: TrainingState) -> UpdateSnapshot:
     """Load only the latest artifact registered in the canonical local store."""
     artifact = parent.recovery_artifact
     if artifact is None:
@@ -137,7 +139,7 @@ def load_update(parent: TrainingRun) -> UpdateSnapshot:
     if file_sha256(path) != artifact["sha256"]:
         raise ValueError("recovery artifact digest mismatch")
     with gzip.open(path, "rb") if path.suffix == ".gz" else path.open("rb") as stream:
-        state = torch.load(stream, map_location="cpu", weights_only=False)
+        state = backend.load(stream)
     if (
         not isinstance(state, UpdateSnapshot)
         or getattr(state, "format_version", None) != 4
@@ -164,20 +166,22 @@ def load_update(parent: TrainingRun) -> UpdateSnapshot:
 def restore_learning(
     state: UpdateSnapshot,
     learner: Learner,
-    ema: ActorCritic | None,
+    ema: BackendPolicy | None,
     rng: np.random.Generator,
+    *,
+    backend: TrainingState,
 ) -> None:
     """Restore RNG last: construction and replay must not perturb training."""
-    learner.agent.load_state_dict(state.learner)
-    learner.optimizer.load_state_dict(state.optimizer)
+    backend.restore_policy(learner.agent, state.learner)
+    backend.restore_optimizer(learner, state.optimizer)
     if (ema is None) != (state.ema is None):
         raise ValueError("recovery EMA contract mismatch")
     if ema is not None:
-        ema.load_state_dict(state.ema)
+        backend.restore_policy(ema, state.ema)
     rng.bit_generator.state = state.minibatch_rng
     random.setstate(state.python_rng)
     np.random.set_state(state.numpy_rng)
-    torch.set_rng_state(state.torch_rng)
+    backend.restore_rng(state.torch_rng)
 
 
 @contextmanager

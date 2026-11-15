@@ -134,7 +134,7 @@ class MonitorResult(Strict):
 
     def validate_cohort(self) -> None:
         """Recompute completeness and paired-deal intervals from retained rows."""
-        _summarize(self)
+        summarize(self)
 
     @model_validator(mode="after")
     def purpose_matches_protocol(self) -> "MonitorResult":
@@ -145,7 +145,7 @@ class MonitorResult(Strict):
         return self
 
 
-def _request(
+def evaluation_request(
     result: MonitorResult, seeds: tuple[int, ...] | None = None
 ) -> EvaluationRequest:
     return EvaluationRequest(
@@ -164,9 +164,9 @@ def _request(
     )
 
 
-def _summarize(result: MonitorResult) -> None:
+def summarize(result: MonitorResult) -> None:
     summary = EvaluationResult(
-        request=_request(result), rows=result.rows, error=result.error
+        request=evaluation_request(result), rows=result.rows, error=result.error
     )
     summary.validate_cohort()
     result.status = summary.status
@@ -191,7 +191,7 @@ def import_saved_rows(
     result.imported = True
     result.source_rows_path = str(rows_path.resolve())
     result.source_rows_sha256 = file_sha256(rows_path)
-    _summarize(result)
+    summarize(result)
     output_dir.mkdir(parents=True, exist_ok=False)
     atomic_json(output_dir / "monitor.json", result.model_dump(mode="json"))
     return result

@@ -79,8 +79,9 @@ artifact first if the evaluation ran remotely):
 uv run --no-project managym academy replay out/traces/<cell-id>.commands.jsonl.gz --game 3
 ```
 
-The browser opens in **Replay** on that game's first decision; use **Step
-decision**, **Previous decision** or **Play**. `--game` is the game's
+The browser opens in **Replay** at the first recorded choice or this tab's saved
+position; use **Next**, **Previous** or **Play** to follow choices, consequences
+and the result. `--game` is the game's
 position in the file, counted from 0, or the start of its trace digest; run
 the command without it to list the file's games. `managym academy replay
 <recording-id>` reopens a game from **Games**, with or without manabot, in the
@@ -363,8 +364,7 @@ immediate output decision. `Game::characteristics` derives battlefield grants;
 those granted mana abilities never become activated stack objects. Waterbend
 taps are cost payment, not tapping for mana. The view is the one reader of a
 battlefield permanent's characteristics, legendary and ward included: the
-legend rule reads its `is_legendary`, and every `CardData` field that states a
-characteristic reads it there (`tests/cards/observability.rs` classifies each
+legend rule reads its `is_legendary`, and every permanent observation characteristic reads it there (`tests/cards/observability.rs` classifies each
 field as layered or printed by definition).
 
 The cached raw layer board tracks discovered reads of mana pools and tapped

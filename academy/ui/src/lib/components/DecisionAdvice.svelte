@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { BotDecision } from '$lib/watch';
+  import type { BotDecision } from '$lib/recording';
   import { onMount } from 'svelte';
 
   import type { AdviceScenarioSummary } from '$lib/advice';
@@ -95,21 +95,32 @@
 
   <div class="space-y-4 pt-3">
     {#if mode === 'watch'}
-      <p class="type-caption">Recorded at the acting bot's decision. Chosen offers are marked ✓.</p>
+      <p class="type-caption">Recorded at this decision. Chosen offers are marked ✓.</p>
       <p>Value: {recorded?.value?.toFixed(4) ?? 'Unavailable'} {recorded?.value_semantic ?? ''}</p>
       {#if recorded?.unavailable}<p class="type-caption text-ink-2">{recorded.unavailable}</p>{/if}
       <table class="w-full text-left type-caption">
-        <thead><tr><th>Legal action</th><th>Policy</th><th>Search score</th></tr></thead>
+        <thead><tr><th>Legal action</th>{#if recorded?.mirror}<th>Raw policy</th><th>Search values</th><th>Updated policy</th>{:else}<th>Policy</th><th>Search score</th>{/if}</tr></thead>
         <tbody>{#each offers as offer, index}
           <tr class:bg-panel-muted={offer.id === chosenOffer}>
             <td class="py-2">{offer.id === chosenOffer ? '✓ ' : ''}{offer.label}</td>
-            <td>{recorded?.probabilities[index] === undefined ? 'Unavailable' : `${(recorded.probabilities[index] * 100).toFixed(2)}%`}</td>
+            {#if recorded?.mirror}<td>{recorded.mirror.prior[index] === undefined ? 'Unavailable' : `${(recorded.mirror.prior[index] * 100).toFixed(2)}%`}</td>{/if}
+            {#if !recorded?.mirror}<td>{recorded?.probabilities[index] === undefined ? 'Unavailable' : `${(recorded.probabilities[index] * 100).toFixed(2)}%`}</td>{/if}
             <td>{recorded?.search_scores[index]?.toFixed(4) ?? 'Unavailable'}</td>
+            {#if recorded?.mirror}<td>{recorded.probabilities[index] === undefined ? 'Unavailable' : `${(recorded.probabilities[index] * 100).toFixed(2)}%`}</td>{/if}
           </tr>
         {/each}</tbody>
       </table>
       {#if recorded?.belief}
         <p class="type-caption">Belief: {recorded.belief.model} · {recorded.belief.sampled_worlds} sampled worlds · condition mass {recorded.belief.condition_mass.toFixed(4)}</p>
+      {/if}
+      {#if recorded?.mirror}
+        <p class="type-caption">Action priors come from the policy; uniform belief samples hidden worlds.</p>
+        <p class="type-caption">Search: {recorded.mirror.worlds} worlds × depth {recorded.mirror.depth} · {recorded.mirror.rollouts} rollouts · {recorded.mirror.seconds.toFixed(3)} s of {recorded.mirror.decision_seconds} s · α {recorded.mirror.alpha}, β {recorded.mirror.beta}</p>
+        <p class="type-caption">Uniform belief (physical deal): hidden cards are sampled with copy counts and public knowledge.</p>
+        <details class="type-caption"><summary>Search identity</summary>
+          <p>Seed: {recorded.mirror.seed}</p>
+          <p class="break-all">Receipt SHA-256: {recorded.mirror.receipt_sha256}</p>
+        </details>
       {/if}
       {#if recorded?.factors?.length}
         <details><summary>Recorded compound sequence factors</summary>

@@ -1,4 +1,5 @@
 import { playerToken } from './records';
+import type { SearchConfig, PendingSearch } from './search';
 import {
   loadStoredDeckSelection,
   saveStoredDeckSelection,
@@ -80,6 +81,9 @@ export class GameStore {
   gameOver = $state(false);
   winner = $state<number | null>(null);
   errorMessage = $state<string | null>(null);
+  searchRetry = $state<PendingSearch | null>(null);
+  searchConfig = $state<SearchConfig | null>(null);
+  activeSearchConfig = $state<SearchConfig | null>(null);
   connection = $state<ConnectionState>('disconnected');
   focusIds = $state<Set<number>>(new Set());
   sessionId = $state<string | null>(null);
@@ -132,7 +136,7 @@ export class GameStore {
     if (!table) return;
     const previousRole = this.table?.access.role;
     if (table.opponent && table.attempt_id !== this.table?.attempt_id) {
-      this.opponentChoice = policyChoice(table.opponent.sha256);
+      this.opponentChoice = policyChoice(table.opponent.base_sha256 ?? table.opponent.sha256);
     }
     this.table = table;
     if (previousRole && previousRole !== table.access.role) {
@@ -211,6 +215,7 @@ export class GameStore {
       stop_on_stack: this.stops.stop_on_stack,
       auto_pass: this.stops.auto_pass,
       decklists: this.decklists,
+      mirror: this.searchConfig,
     };
   }
 

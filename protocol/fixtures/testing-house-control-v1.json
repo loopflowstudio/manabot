@@ -388,6 +388,12 @@
       "type": "pass_turn"
     },
     {
+      "expected_revision": 0,
+      "grant_revision": 1,
+      "match_id": "table-match",
+      "type": "retry_mirror"
+    },
+    {
       "auto_pass": true,
       "grant_revision": 1,
       "stop_on_stack": true,

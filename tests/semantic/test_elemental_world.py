@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends import resolve
 from manabot.backends.torch.checkpoint import (
     BACKEND as TORCH_BACKEND,
     load_checkpoint,
@@ -204,7 +205,9 @@ def test_selected_world_runs_ordinary_ppo_and_reloads_its_roster(
         ],
     )
     with VerifyStore(tmp_path / "runs.sqlite") as store:
-        run = execute_regime(recipe, 164, tmp_path / "run", store)
+        run = execute_regime(
+            recipe, 164, tmp_path / "run", store, backend=resolve("torch")
+        )
     assert run.status == "completed", run.error
     stage = run.stages[0]
     assert stage.learner_transitions == 32
@@ -412,7 +415,7 @@ def test_retained_professor_offer_completes_payment_and_replays_exactly() -> Non
         # reaching the resolved Professor's player-visible Learn decision.
         # Directed native regressions exercise each explicit payment step.
         assert any(
-            c.name == "Gnarled Professor" and c.zone == 2 for c in obs.agent_cards
+            p.characteristics.name == "Gnarled Professor" for p in obs.agent_permanents
         )
         decline = next(
             i

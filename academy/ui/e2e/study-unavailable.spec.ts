@@ -3,14 +3,14 @@ import { expect, test } from '@playwright/test';
 import {
   collectStudyConsoleErrors,
   createCompletedStudyTrace,
-  openFirstStudyDecision,
+  openPriorityStudyDecision,
 } from './study-helpers';
 
 test('normal Study runtime keeps evidence sealed and returns exactly', async ({ page }) => {
   test.setTimeout(180_000);
   const consoleErrors = collectStudyConsoleErrors(page);
   const traceId = await createCompletedStudyTrace(page);
-  const decision = await openFirstStudyDecision(page, traceId);
+  const decision = await openPriorityStudyDecision(page, traceId);
   const recordedBoard = await page.getByTestId('game-board').innerHTML();
 
   await expect(page.getByTestId('study-return')).toBeVisible();

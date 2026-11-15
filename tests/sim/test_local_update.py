@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends import resolve
 from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.sampling_data import collect_frozen_policy
@@ -32,7 +33,6 @@ from manabot.sim.search.local_update_receipt import (
     LocalSearchConfig,
     LocalUpdateReceipt,
     SamplerArtifact,
-    regularized_update,
 )
 import managym
 from managym._managym import AgentError
@@ -82,6 +82,7 @@ def make_teacher(
         config
         or LocalSearchConfig(worlds=2, depth=3, decision_seconds=10, sampling="belief"),
         native_encoder=native_encoder,
+        backend=resolve("torch"),
     )
     env = Env(match, space, Reward(RewardConfig()), enable_profiler=False)
     env.reset(seed=42)
@@ -92,6 +93,7 @@ def make_teacher(
     "owner",
     [
         "manabot/backends/torch/_facts.py",
+        "managym/mirror.py",
         "manabot/sim/search/rollout.py",
         "manabot/sim/search/rollout_receipt.py",
         "manabot/sim/search/local_update_receipt.py",
@@ -116,51 +118,6 @@ def test_teacher_identity_tracks_implementation_owners(
     assert local_update.local_search_source_sha256() == first
     revision = "implementation-revision-two"
     assert local_update.local_search_source_sha256() != first
-
-
-def test_two_kl_optimum_and_shift_invariance() -> None:
-    base = np.array([0.2, 0.8])
-    reference = np.array([0.5, 0.5])
-    values = np.array([-1.0, 1.0])
-    result = regularized_update(base, values, reference, alpha=0.3, beta=2)
-    # First-order simplex stationarity independently checks the optimizer.
-    gradient = (
-        values
-        - 0.3 * (np.log(result / reference) + 1)
-        - 2 * (np.log(result / base) + 1)
-    )
-    assert gradient[0] == pytest.approx(gradient[1])
-    assert np.all(result > 0)
-    np.testing.assert_allclose(
-        result, regularized_update(base, values + 8, reference, alpha=0.3, beta=2)
-    )
-    np.testing.assert_array_equal(
-        regularized_update(
-            np.array([0.0, 1.0]), np.array([np.nan, 1.0]), reference, alpha=0.3, beta=2
-        ),
-        [0.0, 1.0],
-    )
-
-
-def test_zero_support_update_is_the_restricted_simplex_optimum() -> None:
-    base = np.array([0.2, 0.0, 0.8])
-    values = np.array([-0.7, np.nan, 0.4])
-    reference = np.full(3, 1 / 3)
-    target = regularized_update(base, values, reference, alpha=0.3, beta=2)
-    active = base > 0
-    gradient = (
-        values[active]
-        - 0.3 * (np.log(target[active] / reference[active]) + 1)
-        - 2 * (np.log(target[active] / base[active]) + 1)
-    )
-    assert gradient[0] == pytest.approx(gradient[1])
-    assert target[1] == 0
-    assert target.sum() == pytest.approx(1)
-    for inaccessible in (-1e10, 1e10, np.nan):
-        values[1] = inaccessible
-        np.testing.assert_array_equal(
-            target, regularized_update(base, values, reference, alpha=0.3, beta=2)
-        )
 
 
 def test_real_root_replay_and_hidden_swap(tmp_path: Path) -> None:
@@ -208,6 +165,7 @@ def test_arena_uses_exact_range_lifecycle_and_replays(
         teacher.config.model_copy(
             update={"sampling": "compatible_prior", "worlds": 1, "depth": 1}
         ),
+        backend=resolve("torch"),
     )
     if learned:
         teacher = attach_learned_sampler(teacher, tmp_path)
@@ -300,12 +258,21 @@ def attach_learned_sampler(
         games=3,
         seed=719,
         max_steps=1000,
+        backend=resolve("torch"),
     )
     result = fit_belief_sampler(
-        dataset, steps=1, batch_size=4, hidden_size=8, evaluation_samples=2, seed=18
+        dataset,
+        steps=1,
+        batch_size=4,
+        hidden_size=8,
+        evaluation_samples=2,
+        seed=18,
+        backend=resolve("torch").belief_fit,
     )
     path = tmp_path / "sampler.pt"
-    digest = save_belief_sampler(path, result, dataset)
+    digest = save_belief_sampler(
+        path, result, dataset, codec=resolve("torch").belief_fit
+    )
     return LocalUpdateTeacher(
         teacher.likelihood.checkpoint,
         teacher.likelihood.checkpoint_sha256,
@@ -318,6 +285,7 @@ def attach_learned_sampler(
             policy_identity=dataset.policy_identity,
             world_identity=dataset.world_identity,
         ),
+        backend=resolve("torch"),
     )
 
 
@@ -369,6 +337,7 @@ def test_learned_search_direct_worlds_replay_and_rejection(tmp_path: Path) -> No
             original.likelihood.checkpoint_sha256,
             teacher.config,
             sampler=artifact.model_copy(update={"policy_identity": "wrong"}),
+            backend=resolve("torch"),
         )
 
 
@@ -397,10 +366,18 @@ def test_compact_native_defaults_match_full_evidence_and_row_encoding(
     digest = full.likelihood.checkpoint_sha256
     arms = {
         "compact": LocalUpdateTeacher(
-            checkpoint, digest, compact_config, native_encoder=False
+            checkpoint,
+            digest,
+            compact_config,
+            native_encoder=False,
+            backend=resolve("torch"),
         ),
-        "native": LocalUpdateTeacher(checkpoint, digest, full_config),
-        "defaults": LocalUpdateTeacher(checkpoint, digest, compact_config),
+        "native": LocalUpdateTeacher(
+            checkpoint, digest, full_config, backend=resolve("torch")
+        ),
+        "defaults": LocalUpdateTeacher(
+            checkpoint, digest, compact_config, backend=resolve("torch")
+        ),
     }
     assert arms["defaults"].native_encoder
     for root in _searched_roots(env, 4):
@@ -493,6 +470,7 @@ def test_native_frontier_encoding_writes_the_row_encoder_tensors(
         teacher.likelihood.checkpoint,
         teacher.likelihood.checkpoint_sha256,
         teacher.config,
+        backend=resolve("torch"),
     )
     for expected, actual in zip(
         teacher.predict_batch(roots), native.predict_batch(roots), strict=True

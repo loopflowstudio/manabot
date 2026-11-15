@@ -7,6 +7,7 @@ import pytest
 import torch
 
 from experiments.direct_self_play import direct_self_play
+from manabot.backends import resolve
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.training.execution import execute_regime
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
@@ -51,7 +52,9 @@ def test_self_play_records_costs_and_reloads_distinct_raw_ema(
     if empty_second:
         recipe.stages[1].learning.min_advantage = 100
     with VerifyStore(tmp_path / "runs.sqlite") as store:
-        run = execute_regime(recipe, 197, tmp_path / "run", store)
+        run = execute_regime(
+            recipe, 197, tmp_path / "run", store, backend=resolve("torch")
+        )
         assert store.training_run(run.id).status == "completed"
     assert run.status == "completed"
     assert sum(stage.games for stage in run.stages) > 0

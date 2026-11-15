@@ -15,9 +15,7 @@ from typing import Any, Literal
 
 import numpy as np
 from pydantic import Field
-import torch
 
-from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.eval.match import play_cell
 from manabot.eval.models import EvaluationKey
 from manabot.experiment.attacks import AttackPlan
@@ -30,6 +28,7 @@ from manabot.sim.registration import PlayerRegistration
 from manabot.training.execution import execute_regime
 from manabot.training.records import TrainingRun
 from manabot.training.regime import Strict
+from manabot.training.state.backend import TrainingBackend
 from manabot.verify.scenario_validation import validate_scenarios
 from manabot.verify.store import VerifyStore
 
@@ -56,8 +55,10 @@ class AttackResult(Strict):
     error: str | None = None
 
 
-def _player(path: Path, name: str, seed: int, run: TrainingRun) -> PlayerRegistration:
-    agent, _ = load_checkpoint(str(path))
+def _player(
+    path: Path, name: str, seed: int, run: TrainingRun, *, backend: TrainingBackend
+) -> PlayerRegistration:
+    agent, _ = backend.load_policy(str(path))
     identity = run.identities
     return PlayerRegistration(
         player_id=name,
@@ -79,7 +80,7 @@ def _player(path: Path, name: str, seed: int, run: TrainingRun) -> PlayerRegistr
         matchup_sha256=authored_matchup_sha256(identity, "attack arena"),
         checkpoint_sha256=file_sha256(path),
         checkpoint_bytes=path.stat().st_size,
-        parameter_count=sum(p.numel() for p in agent.parameters()),
+        parameter_count=agent.parameter_count,
         training_seed=seed,
         artifact_id=f"attack/{file_sha256(path)}",
         player_seed_derivation_id="arena-pair-deal-player-v1",
@@ -133,7 +134,9 @@ def _report(plan: AttackPlan, result: AttackResult, out: Path) -> None:
     (out / "report.md").write_text("\n".join(lines) + "\n")
 
 
-def execute_attack_plan(plan: AttackPlan, out: Path) -> AttackResult:
+def execute_attack_plan(
+    plan: AttackPlan, out: Path, *, backend: TrainingBackend
+) -> AttackResult:
     """Fresh output only; alarm requires a POSIX main-thread caller.
 
     Legacy arena dictionaries are persisted intact at this boundary. Scores are
@@ -149,7 +152,7 @@ def execute_attack_plan(plan: AttackPlan, out: Path) -> AttackResult:
     atomic_json(out / "plan.json", plan.model_dump(mode="json"))
     result = AttackResult(plan_digest=canonical_sha256(plan.model_dump(mode="json")))
     start = time.perf_counter()
-    previous_threads = torch.get_num_threads()
+    previous_threads = backend.runtime.threads()
     previous_handler = signal.getsignal(signal.SIGALRM)
 
     def timeout(_signum: int, _frame: Any) -> None:
@@ -163,7 +166,7 @@ def execute_attack_plan(plan: AttackPlan, out: Path) -> AttackResult:
 
     signal.signal(signal.SIGALRM, timeout)
     signal.setitimer(signal.ITIMER_REAL, plan.total_seconds)
-    torch.set_num_threads(1)
+    backend.runtime.configure(1, "float32", "cpu")
     evaluation_spent = 0.0
     try:
         save()
@@ -182,13 +185,16 @@ def execute_attack_plan(plan: AttackPlan, out: Path) -> AttackResult:
                     run_dir = out / f"{target.id}-{seed}"
                     result.run_paths.append(str(run_dir))
                     save()
-                    run = execute_regime(plan.regime_for(target), seed, run_dir, store)
+                    run = execute_regime(
+                        plan.regime_for(target), seed, run_dir, store, backend=backend
+                    )
                     result.runs.append(run.id)
                     target_player = _player(
                         Path(target.policy.path),
                         f"target-{target.id}",
                         target.producer_seeds[0],
                         run,
+                        backend=backend,
                     )
                     key = EvaluationKey(
                         world=run.regime.world,
@@ -223,7 +229,11 @@ def execute_attack_plan(plan: AttackPlan, out: Path) -> AttackResult:
                         cell = out / f"arena-{target.id}-{seed}-{updates}"
                         cell.mkdir()
                         attacker = _player(
-                            path, f"attacker-{seed}-{updates}", seed, run
+                            path,
+                            f"attacker-{seed}-{updates}",
+                            seed,
+                            run,
+                            backend=backend,
                         )
                         atomic_json(
                             cell / "registrations.json",
@@ -300,17 +310,23 @@ def execute_attack_plan(plan: AttackPlan, out: Path) -> AttackResult:
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0)
         signal.signal(signal.SIGALRM, previous_handler)
-        torch.set_num_threads(previous_threads)
+        backend.runtime.configure(previous_threads, "float32", "cpu")
         save()
 
 
 def main() -> None:
     """`python -m manabot.experiment.attack_execution --plan PLAN --out DIR`."""
+    from manabot.backends import resolve
+
     parser = argparse.ArgumentParser(description="Execute a frozen-policy attack plan.")
     parser.add_argument("--plan", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
-    execute_attack_plan(AttackPlan.model_validate_json(args.plan.read_text()), args.out)
+    execute_attack_plan(
+        AttackPlan.model_validate_json(args.plan.read_text()),
+        args.out,
+        backend=resolve("torch"),
+    )
 
 
 if __name__ == "__main__":

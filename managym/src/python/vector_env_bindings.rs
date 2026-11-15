@@ -50,6 +50,8 @@ struct ObservationBuffers {
     decklists: Option<Py<PyAny>>,
     player_turn_state: Option<Py<PyAny>>,
     card_turn_state: Option<Py<PyAny>>,
+    stack: Option<Py<PyAny>>,
+    stack_valid: Option<Py<PyAny>>,
     agent_player: Py<PyAny>,
     opponent_player: Py<PyAny>,
     agent_cards: Py<PyAny>,
@@ -585,6 +587,32 @@ pub(super) fn input_buffer_config(
             ))
         }
     };
+    // Input v11 is the one-token layout: a stack buffer and the turn state.
+    // Without a stack buffer the buffers are the deprecated v9/v10 rows.
+    if buffers.contains("stack")? {
+        let [rows, width] = shape("stack")?;
+        if width != crate::agent::observation_encoder::STACK_DIM || !config.turn_state {
+            return Err(PyValueError::new_err(format!(
+                "policy input v11 requires stack of shape [capacity, {}] and the turn-state buffers",
+                crate::agent::observation_encoder::STACK_DIM
+            )));
+        }
+        config.max_stack_objects = rows;
+    } else {
+        config.layout = crate::agent::observation_encoder::InputLayout::Legacy;
+    }
+    let permanent_width = shape("agent_permanents")?[1];
+    if permanent_width != config.permanent_dim() {
+        return Err(PyValueError::new_err(format!(
+            "agent_permanents width {permanent_width} does not match the {} layout's {}",
+            if config.layout == crate::agent::observation_encoder::InputLayout::OneToken {
+                "v11"
+            } else {
+                "v9/v10"
+            },
+            config.permanent_dim()
+        )));
+    }
     Ok(config)
 }
 
@@ -665,6 +693,23 @@ fn read_observation_buffers(
         } else {
             None
         },
+        stack: if c.stack_rows() > 0 {
+            required(
+                "stack",
+                &[
+                    n,
+                    c.max_stack_objects,
+                    crate::agent::observation_encoder::STACK_DIM,
+                ],
+            )?
+        } else {
+            None
+        },
+        stack_valid: if c.stack_rows() > 0 {
+            required("stack_valid", &[n, c.max_stack_objects])?
+        } else {
+            None
+        },
         decklists: required(
             "decklists",
             &[
@@ -720,22 +765,14 @@ fn read_observation_buffers(
         agent_permanents: require_numpy_array(
             buffers,
             "agent_permanents",
-            &[
-                n,
-                c.max_permanents_per_player,
-                crate::agent::observation_encoder::PERMANENT_DIM,
-            ],
+            &[n, c.max_permanents_per_player, c.permanent_dim()],
             "float32",
         )?
         .unbind(),
         opponent_permanents: require_numpy_array(
             buffers,
             "opponent_permanents",
-            &[
-                n,
-                c.max_permanents_per_player,
-                crate::agent::observation_encoder::PERMANENT_DIM,
-            ],
+            &[n, c.max_permanents_per_player, c.permanent_dim()],
             "float32",
         )?
         .unbind(),
@@ -1193,6 +1230,8 @@ struct SendObservationFieldSlices {
     decklists: Option<SendSlice<f32>>,
     player_turn_state: Option<SendSlice<f32>>,
     card_turn_state: Option<SendSlice<f32>>,
+    stack: Option<SendSlice<f32>>,
+    stack_valid: Option<SendSlice<f32>>,
     agent_player: SendSlice<f32>,
     opponent_player: SendSlice<f32>,
     agent_cards: SendSlice<f32>,
@@ -1357,6 +1396,28 @@ impl SendObservationFieldSlices {
                     slice::from_raw_parts_mut(
                         buffer.row_ptr(env_index, config.card_turn_state_len())?,
                         config.card_turn_state_len(),
+                    )
+                }
+            } else {
+                &mut []
+            },
+            stack: if let Some(buffer) = self.stack {
+                // SAFETY: the registered buffer is partitioned into disjoint rows.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(env_index, config.stack_len())?,
+                        config.stack_len(),
+                    )
+                }
+            } else {
+                &mut []
+            },
+            stack_valid: if let Some(buffer) = self.stack_valid {
+                // SAFETY: the registered buffer is partitioned into disjoint rows.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(env_index, config.stack_rows())?,
+                        config.stack_rows(),
                     )
                 }
             } else {
@@ -1572,6 +1633,16 @@ fn with_observation_field_slices<R>(
         .as_ref()
         .map(|array| typed_numpy_buffer::<f32>(py, array, "card_turn_state"))
         .transpose()?;
+    let stack_buffer = buffers
+        .stack
+        .as_ref()
+        .map(|array| typed_numpy_buffer::<f32>(py, array, "stack"))
+        .transpose()?;
+    let stack_valid_buffer = buffers
+        .stack_valid
+        .as_ref()
+        .map(|array| typed_numpy_buffer::<f32>(py, array, "stack_valid"))
+        .transpose()?;
     let agent_player_buffer = typed_numpy_buffer::<f32>(py, &buffers.agent_player, "agent_player")?;
     let opponent_player_buffer =
         typed_numpy_buffer::<f32>(py, &buffers.opponent_player, "opponent_player")?;
@@ -1643,6 +1714,14 @@ fn with_observation_field_slices<R>(
         card_turn_state: card_turn_state_buffer
             .as_ref()
             .map(|buffer| send_slice_from_buffer(py, buffer, "card_turn_state"))
+            .transpose()?,
+        stack: stack_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "stack"))
+            .transpose()?,
+        stack_valid: stack_valid_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "stack_valid"))
             .transpose()?,
         semantic_cards: send_slice_from_buffer(py, &semantic_cards_buffer, "semantic_cards")?,
         agent_player: send_slice_from_buffer(py, &agent_player_buffer, "agent_player")?,

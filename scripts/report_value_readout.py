@@ -26,7 +26,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from experiments.value_readout_252 import DEEPER, DEEPER_THIRDS, FINALS, PARENTS, THIRDS
-from manabot.training.update_metrics import MetricRow, _updates
+from manabot.training.update_metrics import MetricRow, updates_from_run
 
 EVALUATIONS = (
     "value-readout-252-v1-0b4f3fc61213",
@@ -216,7 +216,7 @@ def training_summary(
     ):
         for (arm, seed), run in table.items():
             key = (f"{arm}_depth4" if deep else arm, seed)
-            rows = _updates(read(source, "value_readout_252", run))
+            rows = updates_from_run(read(source, "value_readout_252", run))
             selected = {
                 update: {name: row[name] for name in keep if name in row}
                 for update, row in rows.items()

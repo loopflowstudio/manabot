@@ -22,10 +22,10 @@ import json
 from pathlib import Path
 from typing import cast
 
+from etude.block_file import parse, select
 from etude.eval.query import statsdb
 from etude.experiment import observe
-from etude.run.block_file import parse, select
-from etude.run.storage import Storage, storage_from_uri
+from etude.storage import Storage, storage_from_uri
 from etude.train.block import decode, rows
 import matplotlib.pyplot as plt
 import numpy as np

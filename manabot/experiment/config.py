@@ -395,7 +395,7 @@ class Experiment:
         Pure: nothing is submitted. `experiment` is the stem of the experiment
         file that returns these runs from its `runs()`, so `etude eval` and
         `etude report` find them. Queue or launch the result with
-        `etude.launch.client.queue_cohort`, or with `etude launch FILE`.
+        `etude.launch.client.queue`, or with `etude launch FILE`.
         """
         if self.schedule is not None and self.jobs:
             raise ValueError("choose local schedule or launched runs")

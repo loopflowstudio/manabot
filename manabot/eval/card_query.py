@@ -28,11 +28,11 @@ from pathlib import Path
 from typing import Literal
 
 import duckdb
+from etude.errors import EtudeError
 from etude.eval.query import REPLICATES, Estimate, estimate, read_blobs, statsdb
 from etude.eval.records import Match, TournamentRun, assemble
-from etude.run.errors import EtudeError
-from etude.run.listing import as_storage, run_folders
-from etude.run.storage import Storage
+from etude.run import as_storage, run_folders
+from etude.storage import Storage
 import numpy as np
 import numpy.typing as npt
 

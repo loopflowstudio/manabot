@@ -4,6 +4,8 @@
   import type { PolicyRuntimeIdentity } from '$lib/types';
   import { policyChoice, type PlayerChoice } from '$lib/game.svelte';
   import type { Decklists, TrainedOpponent } from '$lib/types';
+  import type { SearchConfig } from '$lib/search';
+  import SearchControl from './SearchControl.svelte';
 
   interface Props {
     value?: PlayerChoice;
@@ -16,10 +18,12 @@
     label?: string;
     referencePlayers?: string[];
     onChange?: (value: PlayerChoice) => void;
+    search?: SearchConfig | null;
+    onSearchChange?: (value: SearchConfig | null) => void;
   }
   let { value = 'search-64', trained = [], extension = undefined, catalogError = null,
     setup, decklists = 'open', disabled = false, label = 'Opponent', referencePlayers,
-    onChange }: Props = $props();
+    onChange, search = null, onSearchChange }: Props = $props();
   const uid = $props.id();
   const selected = $derived(trained.find(entry => policyChoice(entry.sha256) === value));
   const custom = $derived(value.startsWith('policy:'));
@@ -115,7 +119,7 @@
       Policy ID: {selected.sha256} · {selected.producer}
       {#each selected.details as detail}{' · '}{detail.label}: {detail.value}{/each}
       {#if !selected.available}{' · '}{selected.reason}{/if}
-      {#if !selected.supports_search}{' · '}Mirror search unavailable: this policy does not advertise compatible search evaluation.{/if}
+      {#if !selected.supports_search}{' · '}Search unavailable: {selected.search_reason ?? 'this policy does not advertise compatible search evaluation.'}{/if}
 
     {:else if replacement}The runner changed since this was selected. Reselect the policy to use the current runner.
     {:else if custom && value !== 'policy:'}The selected policy is no longer available.
@@ -137,3 +141,8 @@
     </details>
   {/if}
 </div>
+{#if onSearchChange && (custom || search !== null)}
+  <SearchControl value={search} supported={selected?.supports_search === true && decklists === 'open'}
+    reason={decklists === 'closed' ? 'Search requires open decklists.' : selected?.search_reason}
+    label={`${label} search`} {disabled} onChange={value => onSearchChange?.(value)} />
+{/if}

@@ -1,7 +1,8 @@
 """Configured launch reaches the existing game and replay authorities."""
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 import copy
+from dataclasses import asdict
 import gzip
 import json
 from pathlib import Path
@@ -15,7 +16,7 @@ from fastapi.testclient import TestClient
 import pytest
 from websockets.sync.client import ClientConnection, connect
 
-from managym.academy import extensions, server
+from managym.academy import cli, extensions, server
 from managym.academy.launch import (
     Academy,
     AcademyLaunchError,
@@ -23,6 +24,9 @@ from managym.academy.launch import (
     read_games,
     serve,
 )
+from managym.academy.opponent import policy_registry
+from managym.search import SearchConfig
+from tests.academy.test_policy_search_play import SearchFactory
 
 
 @pytest.fixture
@@ -566,3 +570,121 @@ def test_watch_launch_registers_policy_spec_without_starting(
     assert configured["opponent_sha256"] == key
     with pytest.raises(AcademyLaunchError):
         academy.watch(players=(tmp_path / "missing.json", "random"))
+
+
+def test_launch_uses_the_same_explicit_search_spec_for_play_and_watch(
+    academy: Academy,
+) -> None:
+    key = policy_registry().register(SearchFactory(), name="search-launch")
+    search = SearchConfig(worlds=4, depth=2)
+    configured = server.LAUNCH_CONFIGS[
+        _launch_id(academy.new_game(opponent="search-launch", search=search).url)
+    ]
+    assert configured["opponent_sha256"] == key
+    assert configured["mirror"] == asdict(search)
+    query = parse_qs(
+        urlparse(
+            academy.watch(
+                players=("search-launch", "random"), search=(search, None)
+            ).url
+        ).query
+    )
+    assert json.loads(query["search"][0]) == [asdict(search), None]
+    assert query["seat1"] == [f"policy:{key}"]
+    with pytest.raises(AcademyLaunchError, match="open decklists"):
+        academy.new_game(opponent="search-launch", search=search, decklists="closed")
+    with pytest.raises(AcademyLaunchError, match="search-capable policy"):
+        academy.watch(players=("random", "random"), search=(search, None))
+
+
+@pytest.mark.parametrize("option", ["--search", "--mirror"])
+def test_cli_search_specs_reach_the_shared_python_launch_api(
+    academy: Academy,
+    monkeypatch: pytest.MonkeyPatch,
+    option: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    policy_registry().register(SearchFactory(), name="search-cli")
+    targets: list[str] = []
+
+    def run(shared: cli._Shared, prepare: Callable[[Academy], str]) -> None:
+        targets.append(prepare(academy))
+
+    monkeypatch.setattr(cli, "_run", run)
+    assert (
+        cli.main(
+            [
+                "academy",
+                "play",
+                "--opponent",
+                "search-cli",
+                option,
+                '{"worlds":4,"depth":2}',
+            ]
+        )
+        == 0
+    )
+    config = server.LAUNCH_CONFIGS[_launch_id(targets[-1])]
+    assert config["mirror"] == asdict(SearchConfig(worlds=4, depth=2))
+    assert (
+        cli.main(
+            [
+                "academy",
+                "watch",
+                "--player",
+                "search-cli",
+                "--player",
+                "random",
+                option,
+                '[{"worlds":4,"depth":2},null]',
+            ]
+        )
+        == 0
+    )
+    query = parse_qs(urlparse(targets[-1]).query)
+    assert json.loads(query["search"][0]) == [config["mirror"], None]
+    assert ("removed in 0.4.0" in capsys.readouterr().err) == (option == "--mirror")
+
+
+def test_legacy_search_launch_keywords_warn_and_preserve_wire_config(
+    academy: Academy,
+) -> None:
+    policy_registry().register(SearchFactory(), name="legacy-search")
+    spec = SearchConfig(worlds=2)
+    with pytest.warns(DeprecationWarning, match="removed in 0.4.0"):
+        legacy = academy.new_game(opponent="legacy-search", mirror=spec)
+    current = academy.new_game(opponent="legacy-search", search=spec)
+    old_config = server.LAUNCH_CONFIGS[_launch_id(legacy.url)]
+    new_config = server.LAUNCH_CONFIGS[_launch_id(current.url)]
+    assert old_config["mirror"] == new_config["mirror"] == asdict(spec)
+    with pytest.warns(DeprecationWarning, match="removed in 0.4.0"):
+        old_watch = academy.watch(
+            players=("legacy-search", "random"), mirror=(spec, None)
+        )
+    assert (
+        old_watch.url
+        == academy.watch(players=("legacy-search", "random"), search=(spec, None)).url
+    )
+    with pytest.warns(DeprecationWarning), pytest.raises(ValueError, match="combine"):
+        academy.new_game(opponent="legacy-search", search=spec, mirror=spec)
+
+
+def test_registry_legacy_search_keyword_warns_and_configures_same_runner(
+    academy: Academy,
+) -> None:
+    registry = policy_registry()
+    key = registry.register(SearchFactory())
+    setup = server._parse_game_config({"villain_type": "random"}).to_rust()
+    spec = SearchConfig()
+    with pytest.warns(DeprecationWarning, match="removed in 0.4.0"):
+        runner = registry.load(key, setup, seat=0, seed=7, mirror=spec)
+    try:
+        assert runner.search == spec
+        assert "+ search 1×1" in runner.descriptor.name
+        with (
+            pytest.warns(DeprecationWarning),
+            pytest.raises(ValueError, match="combine"),
+        ):
+            registry.load(key, setup, seat=0, seed=7, search=spec, mirror=spec)
+    finally:
+        runner.close()

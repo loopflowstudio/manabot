@@ -29,6 +29,7 @@ import type {
 const LAUNCH_STORAGE_KEY = 'academy.launch';
 
 function applyLaunchSetup(setup: LaunchSetup): void {
+  gameStore.searchConfig = setup.mirror ?? null;
   const decks = sanitizeDeckSelection({ hero: setup.hero_deck, villain: setup.villain_deck });
   if (decks) { gameStore.setHeroDeck(decks.hero); gameStore.setVillainDeck(decks.villain); }
   gameStore.deckImport = setup.deck_import ?? null;
@@ -54,7 +55,7 @@ const VALID_SERVER_TYPES = new Set([
   'declaration_validation',
 ]);
 
-type TableServerMessage = ServerMessage | SharedTableControlEvent;
+type TableServerMessage = (ServerMessage | SharedTableControlEvent) & Pick<ServerMessage, 'mirror_retry' | 'mirror'>;
 
 interface ResumeCredentials {
   session_id: string;
@@ -349,6 +350,16 @@ export class GameSocketController {
     }
   }
 
+  sendRetrySearch(): void {
+    const pending = gameStore.searchRetry;
+    if (!pending || gameStore.commandPending) return;
+    gameStore.beginCommand();
+    this.send({ type: 'retry_mirror', match_id: pending.match_id,
+      expected_revision: pending.expected_revision,
+      ...(gameStore.table ? { grant_revision: gameStore.table.access.grant_revision } : {}),
+    });
+  }
+
   sendSetStops(): void {
     const stops = gameStore.stops;
     this.send({
@@ -475,6 +486,14 @@ export class GameSocketController {
       gameStore.newGamePending = false;
       gameStore.setError('Received invalid server payload.');
       return;
+    }
+    if ('mirror_retry' in message) gameStore.searchRetry = message.mirror_retry ?? null;
+    if ('mirror' in message) {
+      const search = message.mirror ?? null;
+      gameStore.activeSearchConfig = search;
+      if (!gameStore.observation || this.pendingResume || message.table?.attempt_id !== gameStore.table?.attempt_id) {
+        gameStore.searchConfig = search;
+      }
     }
 
     if ('launch_setup' in message && message.launch_setup) applyLaunchSetup(message.launch_setup);
@@ -848,6 +867,10 @@ export function sendSetStops(): void {
 
 export function sendPassTurn(): boolean {
   return controller.sendPassTurn();
+}
+
+export function sendRetrySearch(): void {
+  controller.sendRetrySearch();
 }
 
 export function sendTransferPilot(targetViewerId: string): void {

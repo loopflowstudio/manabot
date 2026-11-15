@@ -20,15 +20,14 @@ import time
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
-import torch
 
-from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.env.match import Match
 from manabot.infra.artifacts import verify_file
 from manabot.infra.config import MatchConfig
 from manabot.llm.schema import DecisionInput, InferenceConfig, SelectionResult
 from manabot.llm.session import InferenceSession
 from manabot.model.world import validate_agent_setup
+from manabot.policy.protocol import Backend
 from manabot.semantic.text_observation import (
     TextDecision,
     capture_text_decision,
@@ -38,7 +37,7 @@ from manabot.semantic.text_observation import (
 from manabot.verify.llm_opponent import (
     CheckpointOpponent as ConfiguredCheckpointOpponent,
 )
-from manabot.verify.util import _tensor_observation
+from manabot.verify.util import select_agent_action
 import managym
 from managym.decision import DecisionFrame, apply_semantic_command
 
@@ -127,10 +126,11 @@ class CheckpointOpponent:
     offer space must fit the checkpoint encoder; truncation fails closed.
     """
 
-    def __init__(self, path: Path, sha256: str, size: int) -> None:
+    def __init__(self, path: Path, sha256: str, size: int, *, backend: Backend) -> None:
         started = time.monotonic()
         verify_file(path, sha256, size)
-        self.agent, self.space = load_checkpoint(str(path))
+        self.backend = backend
+        self.agent, self.space = backend.load_policy(str(path))
         if self.agent.belief_count_buckets:
             raise ValueError("this comparison requires the flat stateless checkpoint")
         self.agent.eval()
@@ -139,7 +139,7 @@ class CheckpointOpponent:
 
     def admit(self, players: list[managym.PlayerConfig], seed: int) -> None:
         validate_agent_setup(self.agent, players, allow_deck_repetition=True)
-        torch.manual_seed(seed)
+        self.backend.seed(seed)
 
     def choose(self, env: managym.Env, decision: TextDecision) -> PolicyChoice:
         started = time.monotonic()
@@ -159,10 +159,7 @@ class CheckpointOpponent:
         encoded = self.space.encode(raw)
         encoding_seconds = time.monotonic() - started
         started = time.monotonic()
-        tensors = _tensor_observation(self.agent, encoded)
-        with torch.inference_mode():
-            action, _, _, _ = self.agent.get_action_and_value(tensors)
-        index = int(action.item())
+        index = select_agent_action(self.agent, encoded, deterministic=False)
         inference_seconds = time.monotonic() - started
         if index < 0 or index >= len(encoded["actions_valid"]):
             raise ValueError("policy returned an invalid action index")
@@ -176,7 +173,7 @@ class CheckpointOpponent:
         return PolicyChoice(choices[0].reference, encoding_seconds, inference_seconds)
 
 
-def _write(path: Path, payload: str) -> None:
+def write_payload(path: Path, payload: str) -> None:
     temporary = path.with_suffix(path.suffix + ".pending")
     temporary.write_text(payload + "\n")
     temporary.replace(path)
@@ -271,6 +268,7 @@ def play(
     *,
     progress_path: Path | None = None,
     opponent: CheckpointOpponent | None = None,
+    backend: Backend,
 ) -> GameSummary:
     """Run once; failures never reset the game or retry uncertain execution.
 
@@ -278,7 +276,7 @@ def play(
     Native trivial-decision skipping is declared and identical for both seats.
     """
     out.mkdir(parents=True, exist_ok=False)
-    _write(out / "config.json", config.model_dump_json(indent=2))
+    write_payload(out / "config.json", config.model_dump_json(indent=2))
     started = time.monotonic()
     observations: dict[str, float] = {}
 
@@ -294,7 +292,7 @@ def play(
 
     def retain(path: Path, payload: str) -> None:
         with observe("evidence_write"):
-            _write(path, payload)
+            write_payload(path, payload)
 
     env: managym.Env | None = None
     replay: managym.Env | None = None
@@ -322,7 +320,10 @@ def play(
         configured_opponent = None
         if config.opponent_checkpoint is not None:
             configured_opponent = ConfiguredCheckpointOpponent(
-                config.opponent_checkpoint, players, config.opponent_seed
+                config.opponent_checkpoint,
+                players,
+                config.opponent_seed,
+                backend=backend,
             )
             retain(
                 out / "opponent.json",
@@ -477,7 +478,7 @@ def play(
     return summary
 
 
-def run(config: GameConfig) -> None:
+def run(config: GameConfig, *, backend: Backend) -> None:
     """Etude entry point; setup has acquired bytes, so inference is offline."""
     os.environ["HF_HUB_OFFLINE"] = "1"
     inference = InferenceConfig.model_validate_json(config.inference.read_text())
@@ -509,6 +510,7 @@ def run(config: GameConfig) -> None:
                 out.parent / "game-record",
                 session,
                 progress_path=out / "progress.json",
+                backend=backend,
             )
     finally:
         sampler.terminate()
@@ -524,6 +526,10 @@ def run(config: GameConfig) -> None:
 
 
 def main() -> None:
+    from manabot.backends import resolve
+
+    backend = resolve("torch")
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--config", type=Path)
@@ -549,15 +555,15 @@ def main() -> None:
                 args.openrouter.read_text()
             )
             with OpenRouterSession(inference) as session:
-                summary = play(config, args.out, session)
+                summary = play(config, args.out, session, backend=backend)
         else:
-            summary = play(config, args.out, None)
+            summary = play(config, args.out, None, backend=backend)
         print(summary.model_dump_json(indent=2))
         if not summary.completed:
             raise SystemExit(1)
     else:
         os.environ["ETUDE_OUTPUT_DIR"] = str(args.out)
-        run(config)
+        run(config, backend=backend)
 
 
 if __name__ == "__main__":

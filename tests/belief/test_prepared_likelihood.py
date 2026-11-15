@@ -8,7 +8,6 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.belief import likelihood as likelihood_module
 from manabot.belief.likelihood import FrozenPolicyLikelihood, _matching_offer_indexes
 from manabot.belief.range import BeliefState
 import managym
@@ -178,34 +177,12 @@ class _FakeAgent:
     ) -> dict[str, np.ndarray]:
         return obs
 
-    def forward(
-        self, tensors: dict[str, torch.Tensor]
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        row = tensors["row"].squeeze(-1)
+    def evaluate_probabilities(
+        self, batch: dict[str, np.ndarray]
+    ) -> tuple[np.ndarray, np.ndarray]:
+        row = torch.from_numpy(batch["row"]).squeeze(-1)
         logits = torch.stack((torch.zeros_like(row), row + 1.0), dim=-1)
-        return logits, torch.zeros_like(row)
-
-
-@pytest.fixture(autouse=True)
-def _synthetic_policy_input(monkeypatch: pytest.MonkeyPatch) -> None:
-    move = likelihood_module.on_device
-    device_of = likelihood_module.device_of
-
-    def device_input(batch: object, device: torch.device) -> object:
-        return (
-            {key: torch.as_tensor(value, device=device) for key, value in batch.items()}
-            if isinstance(batch, dict)
-            else move(batch, device)
-        )
-
-    monkeypatch.setattr(likelihood_module, "on_device", device_input)
-    monkeypatch.setattr(
-        likelihood_module,
-        "device_of",
-        lambda agent: (
-            torch.device("cpu") if isinstance(agent, _FakeAgent) else device_of(agent)
-        ),
-    )
+        return torch.softmax(logits, dim=-1).numpy(), torch.zeros_like(row).numpy()
 
 
 def test_frozen_likelihood_uses_one_prepared_handle_and_releases_each_batch() -> None:

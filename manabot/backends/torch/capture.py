@@ -19,6 +19,7 @@ from typing import Any
 import numpy as np
 import torch
 
+from manabot.backends import resolve
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.env.observation import ObservationBuffers
 from manabot.policy.prepare import Prepared
@@ -146,6 +147,7 @@ def capture(out: Path, regime: TrainingRegime, seed: int, *, experiment: str) ->
                 store,
                 experiment=experiment,
                 training_exposure=False,
+                backend=resolve("torch"),
             )
     finally:
         PolicyInference.prepare = original_prepare  # type: ignore[method-assign]

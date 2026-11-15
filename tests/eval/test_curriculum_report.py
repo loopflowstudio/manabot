@@ -23,8 +23,8 @@ from etude.eval.records import (
     digest,
 )
 from etude.eval.tournament import hold
-from etude.run.records import ArtifactRef
-from etude.run.storage import DirectoryStorage, Storage
+from etude.records import ArtifactRef
+from etude.storage import DirectoryStorage, Storage
 import pytest
 
 from experiments import curriculum_report
@@ -324,7 +324,11 @@ def test_curriculum_reader_preserves_retained_025_players_and_native_seats(
     match = next(
         record.match
         for path in (root / "matches").glob("*.json")
-        if (record := MatchRecord.model_validate_json(path.read_bytes()))
+        if (
+            record := MatchRecord.model_validate_json(
+                path.read_bytes(), context={"experiment": "mtg183-elemental-eval"}
+            )
+        )
         and record.match.players[0].name == "u000000"
         and isinstance(record.match.players[1], Code)
     )
