@@ -133,11 +133,12 @@ def main() -> None:
         ]
     )
     assert not registry.discovery_errors, registry.discovery_errors
+    checkpoint_sha256 = file_sha256(checkpoint_path)
     checkpoints = [
         descriptor
         for descriptor in registry.descriptors()
         if descriptor.provider == "manabot"
-        and descriptor.artifacts.get("actor") == file_sha256(checkpoint_path)
+        and descriptor.artifacts.get("actor") == checkpoint_sha256
     ]
     assert len(checkpoints) == 1, checkpoints
     assert checkpoints[0].incompatibility is None, checkpoints[0]
