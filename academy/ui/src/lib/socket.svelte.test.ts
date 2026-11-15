@@ -493,6 +493,29 @@ it('draft validation never completes an outstanding submission or changes the fr
   expect(gameStore.declarationValidation).toBeNull();
 });
 
+it('ends a watcher wait when a newer setup stage fails without replacing authority', () => {
+  const controller = new GameSocketController();
+  gameStore.prepareForNewGame();
+  gameStore.applyFrame(frameAt(43), 'table-1', 'token');
+  gameStore.newGamePending = false;
+  const frame = gameStore.protocolFrame;
+  const work = {scope: 'match' as const, setup_id: null, loading_seat: null, operation_id: 'advance', sequence: 1, kind: 'advance' as const, started_at: 1,
+    match_id: frame!.match_id, revision: 43, chooser: null, state: 'running' as const};
+  deliver(controller, {type: 'work_status', session_id: 'table-1', work});
+  const loading = {scope: 'setup' as const, setup_id: 'next-game', loading_seat: null, operation_id: 'load', sequence: 2, kind: 'load' as const, started_at: 2,
+    match_id: null, revision: null, chooser: null, state: 'running' as const};
+  deliver(controller, {type: 'work_status', session_id: 'table-1', work: loading});
+  expect(gameStore.work?.operation_id).toBe('advance');
+  deliver(controller, {type: 'work_status', session_id: 'other-table', work: {...loading, state: 'failed'}});
+  expect(gameStore.work?.state).toBe('running');
+  deliver(controller, {type: 'work_status', session_id: 'table-1', work: {...loading, state: 'failed'}});
+  deliver(controller, {type: 'work_status', session_id: 'table-1', work});
+  expect(gameStore.work?.state).toBe('failed');
+  expect(gameStore.protocolFrame).toBe(frame);
+  expect(gameStore.submissionAccepted).toBe(false);
+  gameStore.work = null;
+});
+
 it('ignores work from another table, revision or earlier operation', () => {
   gameStore.prepareForNewGame();
   gameStore.applyFrame(frameAt(43), 'table-1', 'credential');

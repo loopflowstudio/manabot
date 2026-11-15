@@ -559,10 +559,17 @@ export class GameSocketController {
     if (message.type === 'work_status') {
       const work = message.work;
       if (gameStore.resumeFailed || (gameStore.sessionId && message.session_id !== gameStore.sessionId)) return;
+      if (gameStore.work && work.sequence < gameStore.work.sequence) return;
+      // A failed new-game load can finish in setup scope while other viewers
+      // still show its initial match-scoped advance. End that table-wide wait
+      // without treating terminal work as a new frame or submission receipt.
+      if (work.state !== 'running') {
+        gameStore.work = work;
+        return;
+      }
       if (work.scope === 'setup' && !gameStore.newGamePending) return;
       if (!gameStore.newGamePending && work.match_id && work.match_id !== gameStore.protocolFrame?.match_id) return;
       if (!gameStore.newGamePending && work.revision !== null && work.revision < (gameStore.protocolFrame?.revision ?? 0)) return;
-      if (gameStore.work && work.sequence < gameStore.work.sequence) return;
       if (gameStore.work?.operation_id === work.operation_id && gameStore.work.state !== 'running' && work.state === 'running') return;
       gameStore.work = work;
       return;
