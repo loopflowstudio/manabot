@@ -291,6 +291,7 @@ jobs:
           path: |
             academy/ui/test-results/release
             academy/ui/test-results/policy
+            academy/ui/test-results/mirror
           if-no-files-found: warn
 
   clean-machine-play:

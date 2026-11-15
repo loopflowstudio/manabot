@@ -1,6 +1,7 @@
 """A current-world, untrained smoke checkpoint exercises the real provider."""
 
 from dataclasses import asdict
+import math
 from pathlib import Path
 from typing import cast
 
@@ -141,8 +142,11 @@ def test_baseline_session_encodes_the_card_catalog_once_per_loaded_policy(
     assert agent._program_cache is None
 
 
+@pytest.mark.parametrize(
+    "estimate", [-1.0149, 1.0149, float("nan"), float("inf"), -float("inf")]
+)
 def test_baseline_session_projects_signed_outcome_estimates_onto_their_range(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, estimate: float
 ) -> None:
     """A scalar head declared signed_outcome can overshoot; search must not
     fail the decision (and end a Play game) on a -1.01 estimate."""
@@ -151,9 +155,20 @@ def test_baseline_session_projects_signed_outcome_estimates_onto_their_range(
     session = BaselineSession(PolicySpec("manabot", str(path)), seed=0)
     monkeypatch.setattr(
         "manabot.backends.torch.bot.evaluate_observation",
-        lambda scope, space, observation: ((1.0,), -1.0149),
+        lambda scope, space, observation: ((1.0,), estimate),
     )
     view = PolicyView(cast(managym.Observation, None), 1, "binding", ("0",))
-    value = session.evaluate(view).value
-    assert (value.value, value.seat, value.semantic) == (-1.0, 1, "signed_outcome")
-    session.close()
+    try:
+        if not math.isfinite(estimate):
+            with pytest.raises(ValueError, match="nonfinite value estimate"):
+                session.evaluate(view)
+        else:
+            value = session.evaluate(view).value
+            expected = -1.0 if estimate < 0 else 1.0
+            assert (value.value, value.seat, value.semantic) == (
+                expected,
+                1,
+                "signed_outcome",
+            )
+    finally:
+        session.close()

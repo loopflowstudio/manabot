@@ -13,6 +13,7 @@ from dataclasses import dataclass
 import hashlib
 from importlib.metadata import version
 import json
+import math
 import os
 from pathlib import Path
 import random
@@ -243,6 +244,8 @@ class BaselineSession:
             self._scope, self.space, view.observation
         )
         semantic = self.agent.value_semantic or "undeclared critic units"
+        if not math.isfinite(value):
+            raise ValueError("Policy returned a nonfinite value estimate.")
         if semantic == "signed_outcome":
             # A scalar head regressed on signed outcomes can overshoot its
             # targets; an expected outcome lies in [-1, 1], so project the
