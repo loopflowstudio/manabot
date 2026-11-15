@@ -49,8 +49,8 @@ from manabot.sim.search.local_update_receipt import (
     LocalSearchConfig,
     LocalUpdateReceipt,
     SamplerArtifact,
-    validate_rollout_audit,
     regularized_update,
+    validate_rollout_audit,
 )
 from manabot.sim.search.rollout import Rollout
 from manabot.sim.search.rollout_receipt import RolloutReceipt
