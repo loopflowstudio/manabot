@@ -206,7 +206,7 @@ def test_fact_capacity_checkpoint_contract(tmp_path: Path) -> None:
     config = ObservationConfig()
     serialized = config.model_dump(mode="json")
     assert serialized["max_facts"] == 512
-    assert serialized["policy_input_version"] == 9
+    assert serialized["policy_input_version"] == 11
     assert ObservationConfig.from_checkpoint(serialized) == config
     space = ObservationSpace(config)
     assert space.shapes["facts"] == (512, 12)

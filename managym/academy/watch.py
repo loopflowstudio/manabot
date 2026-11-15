@@ -4,14 +4,17 @@ Controllers advance exactly one Command; inspection exposes only one acting
 view. The mixed canonical record and retained roots remain server-private.
 """
 
+from contextlib import ExitStack
 from dataclasses import asdict, replace
 import logging
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
-from managym.bots import BotPolicy, choose_bot
+from managym.bots import BotPolicy
+from managym.mirror_search import MirrorSearch, MirrorSearchError
+from managym.policy import PolicyRunner
 
 from . import server
 from .attempts import AttemptStore, RecordedPlayer, bot_player
@@ -41,6 +44,10 @@ class WatchRequest(BaseModel):
     villain_deck: str = "gw_allies"
     seed: int = Field(default=0, ge=0, lt=2**64)
     villain_sims: int = Field(default=16, ge=1, le=4096)
+    mirror: list[MirrorSearch | None] | None = Field(
+        default=None, min_length=2, max_length=2
+    )
+    decklists: Literal["open", "closed"] = "open"
 
 
 def resolve_player(
@@ -51,14 +58,13 @@ def resolve_player(
         ("policy:", "search-")
     ):
         kind = f"policy:{policy_registry().descriptor(kind).id}"
-    config = server._parse_game_config(
-        {
-            **request.model_dump(),
-            "seed": (request.seed + seat) % 2**64,
-            **player_fields(kind),
-        }
-    )
-    return build_villain_policy(config, seat=seat), replace(
+    data = {**request.model_dump(), "seed": (request.seed + seat) % 2**64}
+    mirror = request.mirror[seat] if request.mirror else None
+    data["mirror"] = asdict(mirror) if mirror is not None else None
+    data.update(player_fields(kind))
+    config = server._parse_game_config(data)
+    policy = build_villain_policy(config, seat=seat)
+    return policy, replace(
         bot_player(asdict(config)),
         seat=seat,
         deck=request.hero_deck if seat == 0 else request.villain_deck,
@@ -68,38 +74,52 @@ def resolve_player(
 def create_watch(
     request: WatchRequest, recorded_players: list[RecordedPlayer] | None = None
 ) -> WatchCreated:
-    seats: list[tuple[BotPolicy, RecordedPlayer]] = []
-    try:
-        for seat, kind in enumerate(request.players):
-            seats.append(resolve_player(kind, request, seat))
-    except BaseException as error:
-        server.close_policies(policy for policy, _ in seats)
-        if isinstance(error, (ValueError, OSError, ImportError)):
-            raise HTTPException(400, str(error)) from error
-        raise
-    token = server.secrets.token_urlsafe(32)
-    game = server.GameSession(watch_mode=True)
-    game.attempt_owner = server.participant_id(token)
-    game.record_players = [player for _, player in seats]
-    if recorded_players is not None:
-        game.record_players = recorded_players
-    try:
-        game.new_game(
-            {**request.model_dump(), "villain_type": "random", "auto_pass": False}
+    with ExitStack() as candidates:
+        seats: list[tuple[BotPolicy, RecordedPlayer]] = []
+        try:
+            for seat, kind in enumerate(request.players):
+                policy, player = resolve_player(kind, request, seat)
+                seats.append((policy, player))
+                if isinstance(policy, PolicyRunner):
+                    candidates.callback(policy.close)
+        except (ValueError, OSError, ImportError, MirrorSearchError) as error:
+            detail = (
+                {"code": error.reason, "message": str(error)}
+                if isinstance(error, MirrorSearchError)
+                else str(error)
+            )
+            raise HTTPException(400, detail) from error
+        token = server.secrets.token_urlsafe(32)
+        game = server.GameSession(watch_mode=True)
+        game.attempt_owner = server.participant_id(token)
+        game.record_players = (
+            recorded_players
+            if recorded_players is not None
+            else [player for _, player in seats]
         )
-        game.watch_policies = (seats[0][0], seats[1][0])
-        game._observe_policies()
-    except BaseException:
-        server.close_policies(policy for policy, _ in seats)
-        game.close("setup_failed")
-        raise
-    record = server.SessionRecord(game.match_id, token, game)
+        try:
+            game.new_game(
+                {
+                    **request.model_dump(exclude={"mirror"}),
+                    "villain_type": "random",
+                    "auto_pass": False,
+                }
+            )
+            game.watch_policies = (seats[0][0], seats[1][0])
+            game._observe_policies()
+            record = server.SessionRecord(game.match_id, token, game)
+            assert game.trace is not None
+            game.trace.config.opponent = {
+                "name": " vs ".join(player.name for _, player in seats),
+                "kind": "watch",
+            }
+            game.trace.config.watch_players = request.players
+            game._persist_attempt()
+        except BaseException:
+            game.close("setup_failed")
+            raise
+        candidates.pop_all()
     server.SESSION_REGISTRY[game.match_id] = record
-    assert game.trace is not None
-    # Persist bot seat identities, avoiding a fictional human in shared history.
-    game.trace.config.opponent = {"name": " vs ".join(request.players), "kind": "watch"}
-    game.trace.config.watch_players = request.players
-    game._persist_attempt()
     return {"id": game.match_id, "token": token, "finished": False}
 
 
@@ -128,7 +148,9 @@ def step_watch(trace_id: str, token: str | None, expected_revision: int) -> Watc
     assert context is not None
     assert game.watch_policies is not None
     try:
-        game._bot_decision = choose_bot(game.watch_policies[seat], game.env, game.obs)
+        decision = game._choose_bot(game.watch_policies[seat])
+    except MirrorSearchError:
+        raise
     except ValueError as exc:
         # Nothing was committed; the pending decision stays for an explicit retry.
         raise HTTPException(
@@ -143,7 +165,7 @@ def step_watch(trace_id: str, token: str | None, expected_revision: int) -> Watc
     offer_id = next(
         key
         for key, index in context.action_by_offer.items()
-        if index == game._bot_decision.action
+        if index == decision.action
     )
     command = game._authority_command(context, offer_id, "policy")
     game._apply_bound_command(context, command, source="policy")
@@ -160,16 +182,33 @@ def inspect_watch(
     if access is not None and not access["replay"]:
         raise HTTPException(403, "participant_credential_required")
     recording, metadata = server._recording_read(trace_id)
-    if not recording.watch:
-        raise HTTPException(409, "not_a_bot_watch")
     payload = recording.payload
     finished = payload.get("end_reason") == "game_over" and bool(
         payload["final_observation"].get("game_over")
     )
-    if not finished:
-        record_for_watch(trace_id, token)
+    if not recording.watch and not recording.completed_mirror:
+        raise HTTPException(409, "not_a_bot_watch")
+    record = None if finished else record_for_watch(trace_id, token)
+    identities = metadata.get("players", [])
+    mirrors = server._recorded_mirrors(identities)
+    watched = payload["config"].get("watch_players")
     replay = recording.replay
+    if ordinal == -1:
+        ordinal = max(0, len(replay.decisions) - 1) if replay else 0
     if replay is None or ordinal < 0 or ordinal >= len(replay.decisions):
+        if record is not None and (replay is None or not replay.decisions):
+            pending = record.game.mirror_retry
+            raise HTTPException(
+                409,
+                {
+                    "code": pending["code"] if pending else "watch_pending",
+                    "message": pending["message"]
+                    if pending
+                    else "No decision recorded yet. Continue the pending bot decision explicitly.",
+                    "revision": record.game.revision,
+                    "mirror": mirrors,
+                },
+            )
         raise HTTPException(404, "decision_not_found")
     key = DecisionAddressV2.from_decision(replay, replay.decisions[ordinal]).serialize()
     position = recording.read(
@@ -187,8 +226,12 @@ def inspect_watch(
         "revealed": reveal,
         "revision": replay.decisions[ordinal].revision,
         "winner": payload.get("winner"),
-        "players": payload["config"]["watch_players"],
-        "source_kind": opponent.get(
+        "players": watched or [identity["name"] for identity in identities],
+        "mirror": mirrors,
+        "mirror_retry": record.game.mirror_retry if record is not None else None,
+        "source_kind": "play"
+        if not watched
+        else opponent.get(
             "source_kind", "evaluation" if opponent.get("kind") == "arena" else None
         ),
         "identities": metadata.get("players", []),

@@ -1,3 +1,4 @@
+import type { MirrorSearch, PendingMirror } from './mirror';
 import type { AddressedReplayDecision } from './replay-index';
 import type { Observation, PresentationEvent, PresentationLabels, RecordedPlayer, TraceConfig } from './types';
 
@@ -10,6 +11,19 @@ export interface BotDecision {
   unavailable: string | null;
   factors: {chosen: number; probabilities: number[]; value: number}[];
   belief: {model: string; digest: string; condition_mass: number; sampled_worlds: number} | null;
+  mirror?: {
+    algorithm: string;
+    worlds: number;
+    depth: number;
+    alpha: number;
+    beta: number;
+    rollouts: number;
+    decision_seconds: number;
+    seconds: number;
+    seed: string;
+    prior: number[];
+    receipt_sha256: string;
+  } | null;
 }
 
 export interface Position {
@@ -30,6 +44,8 @@ export interface RecordingIndex {
   revision: number | null;
   status: 'finished' | 'waiting' | 'interrupted';
   can_produce: boolean;
+  mirror?: (MirrorSearch | null)[];
+  mirror_retry?: PendingMirror | null;
   can_study: boolean;
   winner: number | null;
   players: RecordedPlayer[];

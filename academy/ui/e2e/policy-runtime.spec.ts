@@ -81,6 +81,8 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(page.getByTestId('position-counter')).toHaveText('Position 2 / 3');
     await page.reload();
     await expect(page.getByTestId('position-counter')).toHaveText('Position 2 / 3');
+    await page.getByRole('button', { name: 'Previous', exact: true }).click();
+    await expect(page.getByTestId('position-counter')).toHaveText('Position 1 / 3');
     await page.screenshot({ path: fileURLToPath(new URL(`../test-results/policy/watch-${theme}.png`, import.meta.url)) });
     const status = page.locator('details.player-status').first();
     await status.locator('summary').click();

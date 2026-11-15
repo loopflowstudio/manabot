@@ -544,12 +544,11 @@ fn observation_encodes_counters_tokens_and_type_tags() {
     assert_eq!(me.graveyard_lessons, 1);
     assert_eq!(them.graveyard_lessons, 0);
 
-    let all_cards = obs.agent_cards.iter().chain(obs.opponent_cards.iter());
+    let all_cards = obs.object_records();
     let token_card = all_cards
         .clone()
         .find(|object| object.name == "Ally")
         .expect("token card should be observable");
-    assert!(token_card.is_token);
     assert!(token_card.is_ally);
     assert!(!token_card.is_lesson);
 
@@ -558,7 +557,6 @@ fn observation_encodes_counters_tokens_and_type_tags() {
         .find(|object| object.name == "Lightning Bolt")
         .expect("graveyard lesson should be observable");
     assert!(lesson_card.is_lesson);
-    assert!(!lesson_card.is_token);
 
     let token_perm = obs
         .agent_permanents
@@ -566,5 +564,6 @@ fn observation_encodes_counters_tokens_and_type_tags() {
         .chain(obs.opponent_permanents.iter())
         .find(|perm| perm.plus1_counters == 3)
         .expect("counter count should be observable");
+    assert!(token_perm.is_token);
     assert!(!token_perm.cant_be_blocked_this_turn);
 }

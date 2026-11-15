@@ -27,6 +27,8 @@ from manabot.env.observation import (
     PERMANENT_LINK_INDEXES,
     RELATION_ROWS,
     RELATION_VALID_INDEX,
+    STACK_DEFINITION_INDEX,
+    STACK_SOURCE_INDEX,
     ObservationBuffers,
     ObservationSpace,
 )
@@ -80,6 +82,10 @@ def legal_mask(mask: np.ndarray) -> np.ndarray:
 def check(obs: ObservationBuffers, spec: Spec, legal: np.ndarray) -> None:
     """Admit raw rows before masking or trimming; legal-mask errors belong to the backend."""
     lookup = spec.tables.definition_rows
+    if spec.space.encoder.one_token and any(
+        key not in obs for key in ("stack", "stack_valid")
+    ):
+        raise ValueError("policy input v11 requires stack and stack_valid")
     size = spec.definition_count if lookup is None else len(lookup)
     ids = [
         obs["semantic_cards"],
@@ -93,6 +99,8 @@ def check(obs: ObservationBuffers, spec: Spec, legal: np.ndarray) -> None:
     ]
     if lookup is not None:
         ids.extend((obs["known_hand"][..., 0], obs["decklists"][..., 0]))
+    if spec.space.encoder.one_token:
+        ids.append(obs["stack"][..., STACK_DEFINITION_INDEX])
     for values in ids:
         definition_ids(values, size, lookup)
     keys = (
@@ -103,12 +111,20 @@ def check(obs: ObservationBuffers, spec: Spec, legal: np.ndarray) -> None:
         "agent_permanents",
         "opponent_permanents",
     )
+    if spec.space.encoder.one_token:
+        keys = (*keys, "stack")
     objects = sum(obs[k].shape[1] for k in keys)
     validity = np.concatenate([obs[k + "_valid"] for k in keys], 1)
     if spec.model.belief_count_buckets:
         beliefs(obs, spec.model)
         objects += obs["belief_card_def_ids"].shape[1] + 1
     permanent_links(obs, objects)
+    if spec.space.encoder.one_token:
+        sources = obs["stack"][..., STACK_SOURCE_INDEX]
+        if not (
+            (sources == np.floor(sources)) & (sources >= 0) & (sources <= objects)
+        ).all():
+            raise ValueError("invalid stack source object reference")
     catalog = None
     if spec.model.catalog_records():
         assert lookup is not None

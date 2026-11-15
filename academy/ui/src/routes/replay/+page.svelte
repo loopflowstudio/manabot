@@ -4,6 +4,7 @@
   import { tick, untrack } from 'svelte';
   import { offerFocus } from '$lib/offer-map';
   import { recordFetch } from '$lib/records';
+  import MirrorThinking from '$lib/components/MirrorThinking.svelte';
   import WatchSetup from '$lib/components/WatchSetup.svelte';
   import Feedback from '$lib/components/Feedback.svelte';
   import GameBoard from '$lib/components/GameBoard.svelte';
@@ -359,11 +360,16 @@
     <button class="btn btn-secondary" disabled={inStudy || studyStore.busy || replayStore.producing} onclick={() => { if (index) void replayStore.open(index.id, selectedKey); else void loadList(); }}>Refresh saved head</button>
     {#if index}
       <div class="recording-heading flex flex-wrap items-baseline gap-x-3">
-        <h2 class="type-title">The Score{index.source_kind ? ` · ${index.source_kind === 'training' ? 'Training game' : 'Evaluation game'}` : ''}</h2>
+        <h2 class="type-title">The Score{index.source_kind ? ` · ${index.source_kind === 'play' ? 'Recorded Play game' : index.source_kind === 'training' ? 'Training game' : 'Evaluation game'}` : ''}</h2>
         <p role="status">{replayStore.producing ? 'Producing a decision…' : replayStore.busy ? 'Reading saved recording…' : index.status === 'finished' ? `Finished · ${index.winner === null ? 'Draw' : `Seat ${index.winner + 1} wins`}` : index.status === 'waiting' ? index.watch ? atLiveEdge ? 'Waiting at the live edge' : 'Live Watch · reading saved recording' : 'Live game · saved recording only' : 'Interrupted · saved recording only'}</p>
       </div>
     {/if}
+    {#if index?.source_kind === 'play'}
+      <button class="btn btn-secondary" disabled={inStudy || studyStore.busy} onclick={() => seek(index!.positions.findIndex(position => position.kind === 'choice' && position.actor === 1))}>Inspect bot search</button>
+    {/if}
     {#if listError}<p role="alert">{listError}</p>{/if}
+    <MirrorThinking active={replayStore.producing && !!index?.mirror?.some(spec => spec !== null)} budget={index?.mirror?.map((spec, seat) => spec ? `Seat ${seat + 1} mirror ${spec.worlds}×${spec.depth}` : '').filter(Boolean).join(' · ') ?? ''} />
+    {#if index?.mirror_retry && !replayStore.error}<p role="alert">{index.mirror_retry.message}</p>{/if}
     {#if replayStore.error}<p role="alert">{replayStore.error}</p>{/if}
     {#if studyStore.errorMessage}<p role="alert">{studyStore.errorMessage}</p>{/if}
   </header>
@@ -415,14 +421,14 @@
             {:else if current.decision}
               <DecisionSurface frame={current.decision.frame} readOnly chosenOffer={current.decision.offer_id} />
               <DecisionAdvice mode="watch" frame={current.decision.frame} offers={current.decision.frame.offers} recorded={current.outputs} chosenOffer={current.decision.offer_id} scenarios={[]} selectedScenarioId="" evidence={null} deltas={null} status="ok" reason={null} advisorId="" computeId="" onSelectScenario={() => {}} />
-              <button class="btn btn-secondary mt-3" disabled={!index.can_study || studyStore.busy || replayStore.busy} onclick={event => void openStudyDecision(event.currentTarget)} bind:this={studyButton}>Try another line</button>
+              <button class="btn btn-secondary mt-3" disabled={!index.can_study || studyStore.busy || replayStore.busy || !!index.mirror_retry} onclick={event => void openStudyDecision(event.currentTarget)} bind:this={studyButton}>Try another line</button>
               {#if !index.can_study}<p class="type-caption">Study requires retained rules state and this game's participant credential.</p>{/if}
             {:else}<p class="type-caption mt-3">{current.kind === 'choice' ? 'Legal offers and Study not recorded.' : 'No decision at this position. Select a choice to inspect its offers and evidence.'}</p>{/if}
           {/if}
 
         </aside>
         <section class="recording-viewer min-w-0" aria-label="Recording viewer">
-          <div class="replay-transport mb-2 border-b border-line bg-panel pb-2"><Timeline selected={replayStore.selected} total={index.positions.length} playing={replayStore.playing} speed={replayStore.speed} disabled={inStudy || studyStore.busy} producing={replayStore.producing} busy={replayStore.busy} canProduce={index.can_produce}
+          <div class="replay-transport mb-2 border-b border-line bg-panel pb-2"><Timeline selected={replayStore.selected} total={index.positions.length} playing={replayStore.playing} speed={replayStore.speed} disabled={inStudy || studyStore.busy} producing={replayStore.producing} busy={replayStore.busy} canProduce={index.can_produce} retrySearch={index.mirror_retry?.code === 'mirror_deadline_exceeded'}
             onPrevious={() => seek(Math.max(0, replayStore.selected - 1))} onNext={() => { replayStore.pause(); void replayStore.next(); }} onTogglePlaying={() => { if (replayStore.playing) replayStore.pause(); else replayStore.playing = true; }} onScrub={seek} onSpeedChange={speed => replayStore.speed = speed} /></div>
           {#if current}
             {#if current.description}<p class="type-annotation mb-2">{current.description}</p>{/if}

@@ -211,6 +211,21 @@ The browser renders provider-authored groups and detail lines and precise unavai
 missing training counts remain "not recorded". Optional advice/import capabilities
 are separate from policy loading.
 
+An optional `MirrorSearch` per bot composes an admitted policy with the
+framework-free `managym.mirror_search` owner in Play, Watch and launch APIs
+([Mirror search](../../docs/academy.md#mirror-search)). Its initial budget is one
+world at depth one, with a 30-second ceiling; explicit larger budgets are retained.
+Native physical-deal sampling and bound Commands remain authoritative; the two-KL numerical update
+has one implementation in `managym.mirror`. Full legal probabilities, compatible
+signed values and isolated current-view forks are mandatory. Deadline failure
+retains the live decision for an explicit, match/revision-bound pilot retry.
+Budget checks bracket synchronous provider calls; an in-flight call returns
+before its overdue result is rejected, and no overdue action is accepted.
+`BotDecision.mirror` retains prior probabilities, budget, timing, hexadecimal seed
+and receipt digest; model outputs stay out of an opponent's live/viewer export.
+Completed Play games expose retained actor-view evidence through Replay's
+**Inspect bot search** link without loading a provider.
+
 Replacement admission must keep the old GameSession authority intact until the
 new environment resets successfully. Invalid native deck setup can raise
 PyO3's `PanicException` (a direct `BaseException`, with no importable Python
@@ -248,7 +263,10 @@ perspective, reload and recovery. Watch credentials stay in the tab's
 Opening card details or reading earlier history pauses replay. Close the details
 when ready, then press **Play** to resume. Returning to **Latest** does not start
 playback. A live decision already being produced may finish saving while you read;
-your selected board stays put.
+your selected board stays put. A pending mirror-search timeout is
+retained across reload and shown with its message. At the live edge, **Retry
+search** explicitly retries that decision; browsing saved positions never retries
+it. The exact selected position remains selected after reload.
 
 `watch.py` admits controllers and verified exported training games or evaluation
 traces through **Open a game file**; choose a game when a trace contains several.

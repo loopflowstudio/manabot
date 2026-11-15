@@ -6,12 +6,14 @@
   import type { PlayerChoice } from '$lib/game.svelte';
   import type { OpponentCatalog, TrainedOpponent } from '$lib/types';
   import type { DeckChoice } from '$lib/decks';
+  import { parseMirrors, type MirrorSearch } from '$lib/mirror';
   import { recordFetch } from '$lib/records';
   let { onOpen, disabled = false }: { onOpen: (id: string) => void; disabled?: boolean } = $props();
   let players = $state<PlayerChoice[]>(['random', 'search-16']);
   let hero = $state<DeckChoice>('ur_lessons');
   let villain = $state<DeckChoice>('gw_allies');
   let seed = $state('42');
+  let mirrors = $state<(MirrorSearch | null)[]>([null, null]);
   let busy = $state(false);
   let error = $state('');
   let ready = $state(false);
@@ -25,6 +27,7 @@
     const response = await recordFetch(url, { method: body === undefined ? 'GET' : 'POST', headers: {'content-type': 'application/json'}, ...(body === undefined ? {} : { body }) });
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
+      if (typeof payload.detail?.message === 'string') throw new Error(payload.detail.message);
       throw new Error(typeof payload.detail === 'string' ? payload.detail.replaceAll('_', ' ') : `Request failed (${response.status})`);
     }
     return response.json() as Promise<T>;
@@ -38,9 +41,14 @@
       const saved = JSON.parse(localStorage.getItem('etude.watch.setup') ?? 'null');
       if (saved && Array.isArray(saved.players) && saved.players.length === 2 && saved.players.every((p: unknown) => typeof p === 'string')) {
         players = saved.players; hero = saved.hero; villain = saved.villain; seed = saved.seed;
+        if (saved.mirror) mirrors = parseMirrors(saved.mirror);
       }
     } catch { /* Invalid preferences do not select a game. */ }
     const params = new URLSearchParams(location.search);
+    if (params.has('mirror')) {
+      try { mirrors = parseMirrors(JSON.parse(params.get('mirror')!)); }
+      catch (reason) { fail(reason); }
+    }
     players = players.map((player, seat) => (params.get(`seat${seat + 1}`) ?? player) as PlayerChoice);
   });
   function fail(reason: unknown): void { error = reason instanceof Error ? reason.message : String(reason); }
@@ -54,8 +62,8 @@
     if (busy) return;
     busy = true; error = '';
     try {
-      const result = await api<{id: string; token: string}>('/api/watch', JSON.stringify({ players, hero_deck: hero, villain_deck: villain, seed, villain_sims: 16 }));
-      localStorage.setItem('etude.watch.setup', JSON.stringify({players, hero, villain, seed}));
+      const result = await api<{id: string; token: string}>('/api/watch', JSON.stringify({ players, hero_deck: hero, villain_deck: villain, seed, villain_sims: 16, mirror: mirrors }));
+      localStorage.setItem('etude.watch.setup', JSON.stringify({players, hero, villain, seed, mirror: mirrors}));
       open(result);
     } catch (reason) { fail(reason); }
     finally { busy = false; }
@@ -93,7 +101,8 @@
         {#each [0, 1] as seat}
           <PlayerPicker label={`Seat ${seat + 1}`} value={players[seat]} {trained} {extension} {catalogError}
             setup={{hero_deck: hero, villain_deck: villain}}
-            referencePlayers={choices} onChange={value => players[seat] = value} />
+            referencePlayers={choices} onChange={value => players[seat] = value}
+            mirror={mirrors[seat]} onMirrorChange={value => mirrors[seat] = value} />
         {/each}
         <DeckSelector {hero} {villain} heroLabel="Seat 1 deck" villainLabel="Seat 2 deck" onHeroChange={v => hero = v} onVillainChange={v => villain = v} />
         <label class="flex flex-col gap-2 type-label">Deal seed<input class="w-32 rounded border border-line bg-field p-2" bind:value={seed} inputmode="numeric" /></label>

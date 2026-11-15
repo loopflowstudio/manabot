@@ -39,6 +39,11 @@ class Recording:
         self.id = trace_id
         self.payload = payload
         self.watch = bool(payload["config"].get("watch_players"))
+        self.completed_mirror = bool(
+            payload["config"].get("mirror") is not None
+            and payload.get("end_reason") == "game_over"
+            and payload["final_observation"].get("game_over")
+        )
         # Historical formats need no new schema, but must still have a board
         # the shared renderer can read. Reject malformed records at this boundary.
         for observation in [
@@ -91,7 +96,7 @@ class Recording:
             self.track_revisions[0] = [event.to_revision for event in events]
         for i, event in enumerate(payload["events"]):
             row = decisions.get(i)
-            if row and (self.watch or row.viewer == 0):
+            if row and (self.watch or self.completed_mirror or row.viewer == 0):
                 self.positions.append(
                     Position(
                         DecisionAddressV2.from_decision(self.replay, row).serialize(),

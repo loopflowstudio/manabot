@@ -34,6 +34,7 @@ export class ReplayStore {
     });
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
+      if (typeof payload.detail?.message === 'string') throw new Error(payload.detail.message);
       throw new Error(typeof payload.detail === 'string' ? payload.detail.replaceAll('_', ' ') : `Request failed (${response.status})`);
     }
     return response.json() as Promise<T>;

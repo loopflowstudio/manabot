@@ -15,6 +15,7 @@ from pydantic import (
 from manabot.infra.config import (
     BF16_MIN_HIDDEN_DIM,
     COMPOUND_DECISIONS_REMOVED,
+    SAVED_POLICY_INPUT_VERSION,
     MatchConfig,
     ModelConfig,
     ObservationConfig,
@@ -762,7 +763,8 @@ class TrainingRegime(Strict):
     def read_saved_stages(cls, value: object) -> object:
         """Resolve what saved stages omit; never relabel frozen evidence.
 
-        Schema 1 omitted the one-seat choice, and no saved stage declared its
+        Saved observation settings without a policy input read v9. Schema 1
+        omitted the one-seat choice, and no saved stage declared its
         batch closure. Saved execution omissions mean float32 precision and
         disabled layouts, never `auto`. Stage instances are new authoring
         and keep their defaults. Retired `train_compound` stages fail with the
@@ -773,6 +775,16 @@ class TrainingRegime(Strict):
             for stage in value.get("stages") or ()
         ):
             raise ValueError(COMPOUND_DECISIONS_REMOVED)
+        if isinstance(value, dict) and isinstance(value.get("observation"), dict):
+            # Saved observation settings that omit the policy input were read
+            # as v9 until v11 became the fresh default; they keep reading v9.
+            value = {
+                **value,
+                "observation": {
+                    "policy_input_version": SAVED_POLICY_INPUT_VERSION,
+                    **value["observation"],
+                },
+            }
         if isinstance(value, dict) and isinstance(value.get("stages"), list):
             one_seat = value.get("schema_version") == 1
             return {
