@@ -27,7 +27,6 @@ from managym.academy.launch import (
     _path_or_name,
     serve,
 )
-from managym.policy import PolicySpec
 
 DEFAULT_URL = "http://127.0.0.1:8000"
 GUIDE_URL = "https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#running-academy"
@@ -59,7 +58,6 @@ class _Shared:
     port: int | None = None
     traces_dir: Path | None = None
     no_open: bool | None = None
-    policies: list[Path] | None = None
 
     def over(self, earlier: "_Shared") -> "_Shared":
         return _Shared(
@@ -69,7 +67,6 @@ class _Shared:
             if self.traces_dir is not None
             else earlier.traces_dir,
             no_open=self.no_open if self.no_open is not None else earlier.no_open,
-            policies=[*(earlier.policies or []), *(self.policies or [])],
         )
 
 
@@ -79,11 +76,6 @@ _TRACES_DIR = typer.Option(
     None,
     "--traces-dir",
     help="Where games are saved (default ACADEMY_TRACES_DIR or ./academy/traces)",
-)
-_POLICIES = typer.Option(
-    None,
-    "--policy",
-    help="Saved policy specification JSON (repeatable; alias is its file stem)",
 )
 _NO_OPEN = typer.Option(None, "--no-open", help="Do not open a browser window")
 
@@ -99,9 +91,8 @@ def _academy(
     port: int | None = _PORT,
     traces_dir: Path | None = _TRACES_DIR,
     no_open: bool | None = _NO_OPEN,
-    policies: list[Path] | None = _POLICIES,
 ) -> None:
-    shared = _Shared(host, port, traces_dir, no_open, policies)
+    shared = _Shared(host, port, traces_dir, no_open)
     if ctx.invoked_subcommand is None:
         _run(shared, lambda running: running.url)
     ctx.obj = shared
@@ -118,7 +109,7 @@ def play(
     ),
     opponent: str = typer.Option(
         "search",
-        help="search, random, passive, registered policy name or ID",
+        help="search, random, passive, or a catalog checkpoint's 64-character digest",
     ),
     sims: int = typer.Option(64, help="Simulated playouts per decision for search"),
     seed: int | None = typer.Option(
@@ -132,7 +123,6 @@ def play(
     port: int | None = _PORT,
     traces_dir: Path | None = _TRACES_DIR,
     no_open: bool | None = _NO_OPEN,
-    policies: list[Path] | None = _POLICIES,
 ) -> None:
     from managym.academy import server
 
@@ -148,41 +138,7 @@ def play(
             decklists=decklists,
         ).url
 
-    _run(
-        _Shared(host, port, traces_dir, no_open, policies).over(_earlier(ctx)),
-        prepare,
-    )
-
-
-@academy_app.command(help="Choose two players in Watch setup")
-def watch(
-    ctx: typer.Context,
-    player: list[str] = typer.Option(
-        ...,
-        "--player",
-        help="Seat player (exactly twice): random, search-N or registered policy",
-    ),
-    host: str | None = _HOST,
-    port: int | None = _PORT,
-    traces_dir: Path | None = _TRACES_DIR,
-    no_open: bool | None = _NO_OPEN,
-    policies: list[Path] | None = _POLICIES,
-) -> None:
-    if len(player) != 2:
-        _report(
-            AcademyLaunchError(
-                "setup.invalid", "watch requires exactly two --player values."
-            )
-        )
-        raise typer.Exit(2)
-
-    def prepare(running: Academy) -> str:
-        return running.watch(players=(player[0], player[1])).url
-
-    _run(
-        _Shared(host, port, traces_dir, no_open, policies).over(_earlier(ctx)),
-        prepare,
-    )
+    _run(_Shared(host, port, traces_dir, no_open).over(_earlier(ctx)), prepare)
 
 
 @academy_app.command(help="Open a game file or recording")
@@ -199,15 +155,11 @@ def replay(
     port: int | None = _PORT,
     traces_dir: Path | None = _TRACES_DIR,
     no_open: bool | None = _NO_OPEN,
-    policies: list[Path] | None = _POLICIES,
 ) -> None:
     def prepare(running: Academy) -> str:
         return running.replay(_path_or_name(source, _TRACE_SUFFIXES), game=game).url
 
-    _run(
-        _Shared(host, port, traces_dir, no_open, policies).over(_earlier(ctx)),
-        prepare,
-    )
+    _run(_Shared(host, port, traces_dir, no_open).over(_earlier(ctx)), prepare)
 
 
 def _run(shared: _Shared, prepare: _Prepare) -> None:
@@ -217,9 +169,6 @@ def _run(shared: _Shared, prepare: _Prepare) -> None:
             host=shared.host or "127.0.0.1",
             port=8000 if shared.port is None else shared.port,
             traces_dir=shared.traces_dir,
-            policies={
-                path.stem: PolicySpec.read(path) for path in shared.policies or []
-            },
         ) as running:
             target = prepare(running)
             ready = {
@@ -232,13 +181,8 @@ def _run(shared: _Shared, prepare: _Prepare) -> None:
             if not shared.no_open:
                 running.open(target)
             running.wait()
-    except (OSError, ImportError, ValueError) as exc:
-        error = (
-            exc
-            if isinstance(exc, AcademyLaunchError)
-            else AcademyLaunchError("policy.unavailable", str(exc))
-        )
-        _report(error)
+    except AcademyLaunchError as exc:
+        _report(exc)
         raise typer.Exit(2) from exc
     raise typer.Exit(0)
 

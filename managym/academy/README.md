@@ -51,15 +51,14 @@ pending choice with the same legal offers and permitted information.
 - **`card_art.py`**: Scryfall art and credits, fetched on first view into a
   local cache and served from `/api/card-art/`
 - **`villain.py`**: opponent policies for the hero to face
-- **`opponent.py`**: the server-scoped registered policy catalog
-  (`GET /api/opponents`), chosen by exact Policy ID and verified before play
+- **`opponent.py`**: trained opponents — the checkpoint catalog
+  (`GET /api/opponents`), chosen by exact SHA-256 and verified before play
 
-Academy never imports manabot or Torch, eagerly or lazily. Direct Python factories
-and installed `managym.bots` providers supply playing policies, including manabot's
-trained, greedy and heuristic players. Optional historical replay/advice uses the
-separate `managym.academy.bots` group; when several such extensions are installed,
-the first by entry-point name supplies those legacy capabilities. Built-in play
-and finished replay work without a provider. Study validates the existing
+Academy never imports manabot or Torch, eagerly or lazily. Trained opponents,
+greedy and heuristic Watch players and game file import come from the one
+`managym.academy.bots` entry point that manabot declares; without it those
+features report that they need manabot, and play, replay and Study are
+unaffected. Study validates the existing
 `ed2` address against the pre-command frame, and validates the played Command
 against its landmark separately. Retained `erd1` addresses still bind the
 recorded offer and Command.
@@ -190,26 +189,24 @@ uv run uvicorn managym.academy.server:app --port 8000
 The [local challenger workflow](../../docs/academy.md#playing-a-trained-challenger)
 covers the built same-origin server, feedback, and read-only SQL.
 
-Play and both Watch seats use the same registered policy picker and
-`managym.policy` registry/session lifecycle
-([provider and Python contract](../../docs/academy.md#play-and-watch-a-trained-checkpoint)).
-Direct factories need no manifest. Optional `PolicySpec` values name installed
-providers in `managym.bots`; multiple providers coexist. `serve(policies=...,
-sources=...)` scopes sources to the server without rewriting environment variables.
-Providers also discover their ambient configuration once per server start; explicit
-sources add to that discovery.
-The CLI accepts repeatable `--policy <spec.json>` and uses each file stem as an alias.
-
-manabot owns checkpoint/run/Tournament discovery, bound-setup admission and
-training metadata; Academy never interprets its run directories. Its Qwen
-provider loads local fine-tuned safetensors with the tokenizer and advertises no
-search support. Action-only policies retain no fabricated probabilities or value.
-One-use decision bindings and complete legal-set validation precede native bound
-Commands. The descriptor pins artifact, runner, config and provider identity in
-existing recordings; old checkpoint records and finished replays need no loader.
-The browser renders provider-authored groups and detail lines and precise unavailable reasons;
-missing training counts remain "not recorded". Optional advice/import capabilities
-are separate from policy loading.
+Any trained checkpoint is selectable from the Opponent menu. The table
+lists every policy checkpoint under `MANABOT_RUNS_DIR` (default `./.runs`)
+and in `ACADEMY_PLAY_CHECKPOINTS` — policy files (`.safetensors`, or `.pt`
+from earlier revisions), run directories and
+Tournament files, separated by `:` — with world, model shape, training step
+and producer. manabot's `manabot.model.catalog` reads each file's metadata
+header (Torch's weights-only loader for a `.pt`) and checks each world binding against the running engine;
+an incompatible checkpoint stays listed, disabled, with the mismatch (for
+example `trained in w5, engine is w6`), and the server refuses it with the same
+sentence. The browser sends only a digest; the server re-hashes the bytes,
+checks the selected decks against the checkpoint's binding (either seat), and
+records the exact checkpoint identity as the trace's `opponent_checkpoint`;
+viewer traces omit its server path. Recorded names and digests are never
+rewritten: the browser derives the short form it displays
+(`academy/ui/src/lib/player-identity.ts`,
+[how a trained opponent is named](../../docs/academy.md#how-a-trained-opponent-is-named)).
+Listing needs manabot; an install without it lists no trained opponents and
+says so.
 
 Replacement admission must keep the old GameSession authority intact until the
 new environment resets successfully. Invalid native deck setup can raise
@@ -217,12 +214,7 @@ PyO3's `PanicException` (a direct `BaseException`, with no importable Python
 class); contain that failure only at disposable-environment construction, while
 letting process interrupts escape. Do not broaden gameplay error suppression.
 
-Focused runtime checks: `uv run --extra dev pytest tests/academy/test_policy_runtime.py tests/academy/test_checkpoint_catalog.py tests/academy/test_watch.py -q`.
-For shared picker or runtime changes, `npm --prefix academy/ui run test:e2e:policy`
-builds the static SPA and checks Play retry/reload, both Watch seats, explicit
-runner reselection and replay in both themes. Installed-wheel CI also checks the
-provider-free picker; keep its expectations aligned with the shared menu.
-The end-to-end browser
+Tests: `uv run --extra dev pytest tests/academy`. The end-to-end browser
 proofs (launch, offline reload, accessibility, release prompts) are under
 [academy/ui/e2e/](../../academy/ui/e2e/) and documented in
 [docs/development.md#clean-machine-play-proof](../../docs/development.md#clean-machine-play-proof) and
@@ -230,10 +222,8 @@ proofs (launch, offline reload, accessibility, release prompts) are under
 
 ## Watch and recorded bot decisions
 
-Open **Watch** (`/replay?watch=1`) to select both seats, decks and a deal seed;
-`managym academy watch --player X --player Y` opens it with the seats selected
-(`&seat1=…&seat2=…`) and leaves Start to the person. Trained checkpoints, in
-one seat or both, and the random, greedy, heuristic and search anchors use
+Open **Watch** (`/replay?watch=1`) to select both seats, decks and a deal seed.
+The configured checkpoint and random, greedy, heuristic and search anchors use
 GameSession's normal Command authority. Step advances one native decision;
 Play/Pause and speed control that same operation. Previous decisions read saved
 outputs without rerunning the policy. Completed watched games open from Games

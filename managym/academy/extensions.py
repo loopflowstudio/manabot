@@ -1,15 +1,44 @@
 """Optional bot capabilities, discovered from installed distributions.
 
-Optional replay/advice extensions answer in engine types and the shapes
+The single provider answers in engine types (managym.bots) and the shapes
 declared here; Academy has no training imports.
 Installing manabot adds its entry point without application configuration.
 """
 
+from collections.abc import Sequence
 from functools import cache
 from importlib.metadata import entry_points
-from typing import Any, Protocol, runtime_checkable
+from pathlib import Path
+from typing import Any, Literal, Protocol, runtime_checkable
 
-from managym.bots import VerifiedArena
+import managym
+from managym.bots import BotPolicy, VerifiedArena
+
+
+class CheckpointSummary(Protocol):
+    """Catalog metadata for one trained checkpoint."""
+
+    path: Path
+    sha256: str
+    label: str
+    source: Literal["path", "runs", "tournament"]
+    producer: str
+    world: str | None
+    model: str
+    parameters: int
+    step: int | None
+    setups: tuple[managym.Deck, ...]
+    incompatibility: str | None
+
+    @property
+    def compatible(self) -> bool: ...
+
+
+class UnavailableEntry(Protocol):
+    sha256: str
+    label: str
+    producer: str
+    reason: str
 
 
 class CheckpointRegistration(Protocol):
@@ -26,17 +55,33 @@ class CheckpointRegistration(Protocol):
 @runtime_checkable
 class BotExtension(Protocol):
     name: str
+    # Additional player kinds; Academy owns the native players.
+    watch_players: tuple[str, ...]
 
+    def discover(
+        self, paths: list[Path], runs_dir: Path
+    ) -> tuple[Sequence[CheckpointSummary], Sequence[UnavailableEntry]]: ...
+    def checkpoint_policy(
+        self,
+        path: str,
+        *,
+        deterministic: bool,
+        player_configs: Sequence[managym.PlayerConfig],
+    ) -> BotPolicy: ...
+    def watch_policy(self, kind: str) -> BotPolicy: ...
     def checkpoint_registration(self, seed: int) -> CheckpointRegistration: ...
     def verify_arena(self, record: dict[str, Any]) -> VerifiedArena: ...
 
 
 @cache
 def bot_extension() -> BotExtension | None:
-    providers = sorted(entry_points(group="managym.academy.bots"), key=lambda p: p.name)
+    providers = list(entry_points(group="managym.academy.bots"))
+    if len(providers) > 1:
+        raise RuntimeError(
+            "Multiple Academy bot extensions: " + ", ".join(p.name for p in providers)
+        )
     if not providers:
         return None
-    # These legacy capabilities are selected separately from playing policies.
     provider = providers[0].load()
     if not isinstance(provider, BotExtension):
         raise TypeError(f"Invalid Academy bot extension: {providers[0].name}")

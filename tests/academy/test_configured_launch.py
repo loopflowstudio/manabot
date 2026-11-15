@@ -543,26 +543,3 @@ def test_a_training_receipt_offered_as_a_game_names_the_export_step(
         rejected = client.post("/api/watch/import", json=receipt)
         assert rejected.status_code == 400
         assert "manabot export-game" in rejected.json()["detail"]
-
-
-def test_watch_launch_registers_policy_spec_without_starting(
-    academy: Academy, tmp_path: Path
-) -> None:
-    from managym.academy.opponent import policy_registry
-    from tests.academy.test_play_modes import _write_tiny_checkpoint
-
-    path = tmp_path / "model.pt"
-    _write_tiny_checkpoint(path)
-    spec = tmp_path / "challenger.json"
-    spec.write_text(json.dumps({"provider": "manabot", "artifact": str(path)}))
-    before = set(server.SESSION_REGISTRY)
-    launched = academy.watch(players=(spec, "random"))
-    query = parse_qs(urlparse(launched.url).query)
-    key = query["seat1"][0].removeprefix("policy:")
-    assert policy_registry().descriptor(key).artifacts["actor"]
-    assert query["seat2"] == ["random"]
-    assert set(server.SESSION_REGISTRY) == before
-    configured = server.LAUNCH_CONFIGS[_launch_id(academy.new_game(opponent=spec).url)]
-    assert configured["opponent_sha256"] == key
-    with pytest.raises(AcademyLaunchError):
-        academy.watch(players=(tmp_path / "missing.json", "random"))

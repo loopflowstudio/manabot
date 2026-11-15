@@ -8,7 +8,7 @@ operation chooses a game action.
 
 from __future__ import annotations
 
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Collection
 from dataclasses import dataclass, field
 import errno
 import gzip
@@ -22,8 +22,6 @@ import time
 from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import urlencode
 import webbrowser
-
-from managym.policy import PolicyFactory, PolicySource, PolicySpec
 
 if TYPE_CHECKING:
     import uvicorn
@@ -259,9 +257,6 @@ class Academy:
         server.LAUNCH_CONFIGS.clear()
         self._listener.close()
         self._closed = True
-        from managym.academy.opponent import set_policy_registry
-
-        set_policy_registry(None)
         _ACTIVE_LOCK.release()
 
     def new_game(
@@ -269,7 +264,7 @@ class Academy:
         *,
         deck: str | Path = "ur_lessons",
         opponent_deck: str | Path = "gw_allies",
-        opponent: str | Path = "search",
+        opponent: str = "search",
         sims: int = 64,
         seed: int | None = None,
         decklists: Literal["open", "closed"] = "open",
@@ -277,7 +272,6 @@ class Academy:
         self._require_open()
         import managym
         from managym.academy import server
-        from managym.academy.villain import player_fields
 
         seats = (
             ("hero", deck, "your deck"),
@@ -291,15 +285,21 @@ class Academy:
                     f"bundled names: {', '.join(sorted(server.NAMED_DECKS))}."
                     + _file_hint(selected, _DECK_SUFFIXES),
                 )
-        opponent = self._player(opponent, "opponent.unavailable")
-        checkpoint = opponent.startswith("policy:")
+        checkpoint = _is_sha256(opponent)
         imported = isinstance(deck, Path) or isinstance(opponent_deck, Path)
         config: dict[str, Any] = {
+            "villain_type": "checkpoint" if checkpoint else opponent,
             "villain_sims": sims,
             "seed": seed,
             "decklists": decklists,
-            **player_fields(opponent),
         }
+        if checkpoint:
+            config["opponent_sha256"] = opponent
+            if imported:
+                raise AcademyLaunchError(
+                    "setup.invalid",
+                    "Checkpoint opponents do not accept imported decklists.",
+                )
         if imported:
             config["deck_import"] = {
                 seat: _deck_file(selected, label) for seat, selected, label in seats
@@ -320,39 +320,6 @@ class Academy:
         launch_id = secrets.token_hex(16)
         server.LAUNCH_CONFIGS[launch_id] = config
         return Launched(f"{self.url}/?{urlencode({'launch': launch_id})}")
-
-    def _player(self, value: str | Path, code: str) -> str:
-        from managym.academy.opponent import policy_registry
-
-        try:
-            registry = policy_registry()
-            if isinstance(value, Path):
-                return f"policy:{registry.register(PolicySpec.read(value))}"
-            key = value.removeprefix("policy:")
-            if (
-                key in registry.aliases
-                or value.startswith("policy:")
-                or _is_sha256(key)
-            ):
-                return f"policy:{registry.descriptor(key).id}"
-            if value.startswith("search-"):
-                if not 1 <= int(value[7:]) <= 4096:
-                    raise ValueError("Search playout count must be between 1 and 4096.")
-            elif value not in ("random", "search", "passive"):
-                raise ValueError(
-                    f"Player {value!r} is unavailable. Register a policy object or specification first."
-                )
-            return value
-        except (OSError, ValueError, ImportError) as error:
-            raise AcademyLaunchError(code, str(error)) from error
-
-    def watch(self, *, players: tuple[str | Path, str | Path]) -> Launched:
-        """Open Watch setup with exact seats selected, without starting a game."""
-        self._require_open()
-        seats = [self._player(player, "player.unavailable") for player in players]
-        return Launched(
-            f"{self.url}/replay?{urlencode({'watch': '1', 'seat1': seats[0], 'seat2': seats[1]})}"
-        )
 
     def replay(self, source: str | Path, game: int | str | None = None) -> Launched:
         self._require_open()
@@ -425,8 +392,6 @@ def serve(
     host: str = "127.0.0.1",
     port: int = 8000,
     traces_dir: Path | None = None,
-    policies: Mapping[str, PolicyFactory | PolicySpec] | None = None,
-    sources: Sequence[PolicySource] = (),
 ) -> Academy:
     """Start the site without opening a browser; the caller must close the server."""
     if not 0 <= port <= 65535:
@@ -466,17 +431,10 @@ def serve(
             .resolve()
         )
         from managym.academy import server, trace
-        from managym.academy.opponent import policy_registry, set_policy_registry
+        from managym.academy.extensions import bot_extension
 
         trace.TRACES_DIR = traces
-        set_policy_registry(None)
-        registry = policy_registry()
-        try:
-            registry.discover(sources)
-            for name, policy in (policies or {}).items():
-                registry.register(policy, name=name)
-        except (ImportError, OSError, ValueError) as exc:
-            raise AcademyLaunchError("policy.unavailable", str(exc)) from exc
+        bot_extension()
         # Keep the hosted app and its routes; replace only this launcher's mount.
         server.app.router.routes[:] = [
             route

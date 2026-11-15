@@ -11,9 +11,6 @@
   import DecisionSurface from './DecisionSurface.svelte';
   import DecisionContext from './DecisionContext.svelte';
   import DeckSelector from './DeckSelector.svelte';
-  import PlayerPicker from './PlayerPicker.svelte';
-  import type { PlayerChoice } from '$lib/game.svelte';
-  import type { OpponentCatalog, TrainedOpponent } from '$lib/types';
   import DecisionAdvice from './DecisionAdvice.svelte';
   import StudyPanel from './StudyPanel.svelte';
   import type { DeckChoice } from '$lib/decks';
@@ -23,7 +20,7 @@
   import type { StudyRetryResponse } from '$lib/study-runtime';
   import { rememberRecordCredential, recordFetch } from '$lib/records';
 
-  let players = $state<PlayerChoice[]>(['random', 'search-16']);
+  let players = $state(['random', 'search']);
   let hero = $state<DeckChoice>('ur_lessons');
   let villain = $state<DeckChoice>('gw_allies');
   let seed = $state('42');
@@ -47,8 +44,6 @@
   let importedGames = $state<unknown[]>([]);
   let selectedGame = $state(0);
   let choices = $state(['random', 'search']);
-  let trained = $state<TrainedOpponent[]>([]);
-  let catalogError = $state<string | null>(null);
   let extension = $state<string | null | undefined>(undefined);
 
   async function api<T>(url: string, body?: unknown): Promise<T> {
@@ -58,29 +53,19 @@
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
     if (!response.ok) {
-      const payload = await response.json().catch(() => ({}));
+      const payload = await response.json();
       throw new Error(typeof payload.detail === 'string' ? payload.detail.replaceAll('_', ' ') : `Request failed (${response.status})`);
     }
     return response.json() as Promise<T>;
   }
 
   onMount(() => {
-    void api<OpponentCatalog>('/api/opponents').then(catalog => {
-      choices = catalog.watch_players ?? ["random", "search"];
-      trained = catalog.opponents;
-      catalogError = catalog.catalog_error ?? null;
+    void api<{extension: string | null; watch_players: string[]}>('/api/opponents').then(catalog => {
+      choices = catalog.watch_players;
       extension = catalog.extension;
       ready = true;
     }).catch(fail);
-    const params = new URLSearchParams(location.search);
-    try {
-      const saved = JSON.parse(localStorage.getItem('etude.watch.setup') ?? 'null');
-      if (saved && Array.isArray(saved.players) && saved.players.length === 2 && saved.players.every((p: unknown) => typeof p === 'string')) {
-        players = saved.players; hero = saved.hero; villain = saved.villain; seed = saved.seed;
-      }
-    } catch { /* Ignore invalid browser preferences. */ }
-    players = players.map((player, seat) => (params.get(`seat${seat + 1}`) ?? player) as PlayerChoice);
-    const selected = params.get('trace');
+    const selected = new URLSearchParams(location.search).get('trace');
     if (selected) {
       id = selected;
       token = localStorage.getItem(`etude.watch.${id}`) ?? '';
@@ -88,10 +73,6 @@
       void inspect(0).catch(fail).finally(() => busy = false);
     }
   });
-
-  function playerName(seat: number): string {
-    return current?.identities?.find(p => p.seat === seat)?.name ?? current?.players[seat] ?? players[seat];
-  }
 
   function fail(reason: unknown): void {
     error = reason instanceof Error ? reason.message : String(reason);
@@ -119,7 +100,6 @@
       const next = await api<{id: string; token: string}>('/api/watch', {
         players, hero_deck: hero, villain_deck: villain, seed, villain_sims: 16,
       });
-      localStorage.setItem('etude.watch.setup', JSON.stringify({players, hero, villain, seed}));
       id = next.id; token = next.token; revision = 0; current = null; count = 0; finished = false;
       localStorage.setItem(`etude.watch.${id}`, token);
       rememberRecordCredential(token);
@@ -237,7 +217,7 @@
   }
   function watchIdentity(seat: number): PlayerIdentity {
     const recorded = current?.identities.find(player => player.seat === seat);
-    return recorded ? recordedIdentity(recorded) : playerIdentity({ name: playerName(seat) });
+    return recorded ? recordedIdentity(recorded) : playerIdentity({ name: `Seat ${seat + 1} · ${current?.players[seat] ?? 'Bot'}` });
   }
 </script>
 
@@ -246,7 +226,7 @@
     <h1 class="type-title text-display">{finished ? 'Replay' : 'Watch two bots'}</h1>
     {#if current}
       {#if current.source_kind}<p class="type-label mt-2 text-ink-2">{current.source_kind === 'training' ? 'Training game' : 'Evaluation game'}</p>{/if}
-      <p class="type-annotation mt-2 text-ink-2">Seat 1: {playerName(0)} · Seat 2: {playerName(1)}</p>
+      <p class="type-annotation mt-2 text-ink-2">Seat 1: {current.players[0]} · Seat 2: {current.players[1]}</p>
     {/if}
     <p class="type-annotation mt-2 text-ink-2">Start with the acting bot's view; Show both hands opens spectator analysis. Each bot chooses using only its own information.</p>
     <details open={!id} class="mt-4">
@@ -254,9 +234,11 @@
       <fieldset disabled={!ready || busy || restored !== null} class="mt-6 flex flex-wrap items-end gap-4 border-b border-line pb-6">
         <legend class="sr-only">Bot matchup</legend>
         {#each [0, 1] as seat}
-          <PlayerPicker label={`Seat ${seat + 1}`} value={players[seat]} {trained} {extension} {catalogError}
-            setup={{hero_deck: hero, villain_deck: villain}}
-            referencePlayers={choices} onChange={value => players[seat] = value} />
+          <label class="flex flex-col gap-2 type-label">Seat {seat + 1}
+            <select bind:value={players[seat]} class="rounded border border-line bg-field p-2">
+              {#each choices as choice}<option value={choice}>{choice}</option>{/each}
+            </select>
+          </label>
         {/each}
         <DeckSelector {hero} {villain} heroLabel="Seat 1 deck" villainLabel="Seat 2 deck" onHeroChange={v => hero = v} onVillainChange={v => villain = v} />
         <label class="flex flex-col gap-2 type-label">Deal seed<input class="w-32 rounded border border-line bg-field p-2" bind:value={seed} inputmode="numeric" /></label>

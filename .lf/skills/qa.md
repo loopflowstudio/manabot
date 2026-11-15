@@ -436,22 +436,3 @@ publish, land or choose the next Graph step from here.
   have no resumed game. Initial automatic history may precede a launch's received
   tail; compare that tail exactly to the saved source and the full saved prefix
   to Replay, retaining explicit unavailable-prefix labels.
-- Registered policies (`managym.policy`, Play/Watch pickers): for a no-manabot
-  user, `uv run --no-sync --extra play maturin build --release -i .venv/bin/python
-  -m managym/Cargo.toml -o .runs/<dir>` takes seconds when the Rust is cached;
-  `uv pip install '<wheel>[academy]'` into a fresh `/tmp` venv, confirm
-  `find_spec('manabot')` is None, set `ACADEMY_FRONTEND_BUILD`, and install a
-  tiny third-party provider package written from `docs/academy.md` (its
-  `managym.bots` entry point names a provider instance). Drive `--policy
-  <spec.json>`, `serve(policies={...})` with direct factories, and a factory whose
-  session returns a stale binding: Play must end with the named reason and not
-  redeal its launch; Watch must answer 422 and keep the pending decision. Reopen
-  replays after uninstalling the provider. Ambient manabot discovery registers
-  `.runs` checkpoints first and the registry keeps the first factory per Policy
-  ID, so a live artifact-swap check needs `MANABOT_RUNS_DIR` pointed at an
-  empty directory. Watch setup persists only on **Start watching**; for a real
-  runner-change check, start a Watch in a persistent Playwright profile, append a
-  comment to any `manabot/*.py`, restart, expect **Reselect**, then restore the
-  file. A checkpoint bound to other decks is refused at Start, not disabled, and
-  mixing an Elemental roster deck with the default `ur_lessons`/`gw_allies`
-  fails before any policy admission.

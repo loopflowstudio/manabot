@@ -140,39 +140,11 @@ describe('GameSocketController offline gameplay', () => {
     deliver(controller, { type: 'observation', data: recovery.frame.projection,
       actions: [], recovery } as ServerMessage);
     const before = gameStore.protocolFrame;
-    controller.sendNewGame({ villain_type: 'policy', opponent_sha256: 'missing' });
+    controller.sendNewGame({ villain_type: 'checkpoint', opponent_sha256: 'missing' });
     expect(gameStore.protocolFrame).toEqual(before);
     deliver(controller, { type: 'error', message: 'The selected opponent is unavailable.' });
     expect(gameStore.protocolFrame).toEqual(before);
     expect(gameStore.errorMessage).toContain('unavailable');
-  });
-  it('keeps the exact refused launch policy and decks for a deliberate retry', () => {
-    const controller = new GameSocketController();
-    deliver(controller, { type: 'error', message: 'Policy changed; restart and reselect.',
-      launch: 'refused', launch_setup: { villain_type: 'policy', opponent_sha256: 'exact-id',
-        hero_deck: 'gw_allies', villain_deck: 'ur_lessons', decklists: 'closed' } });
-    expect(gameStore.opponentChoice).toBe('policy:exact-id');
-    expect(gameStore.decks).toEqual({ hero: 'gw_allies', villain: 'ur_lessons' });
-    controller.sendNewGame(gameStore.newGameConfig());
-    const queue = (controller as unknown as { outboundQueue: ClientMessage[] }).outboundQueue;
-    expect(queue.at(-1)).toMatchObject({ type: 'new_game', config: {
-      villain_type: 'policy', opponent_sha256: 'exact-id', decklists: 'closed',
-    } });
-  });
-  it('keeps the reason and does not redeal a launch the server ended', () => {
-    const controller = new GameSocketController();
-    const internals = controller as unknown as { launchId: string | null; outboundQueue: ClientMessage[] };
-    const recovery = structuredClone(boltProtocolFixture.recovery);
-    deliver(controller, { type: 'observation', data: recovery.frame.projection,
-      actions: [], recovery } as ServerMessage);
-    internals.launchId = 'launch-1';
-    internals.outboundQueue.length = 0;
-    const reason = 'The opponent could not continue this game: Policy returned a stale decision binding.';
-    deliver(controller, { type: 'error', message: reason, session_ended: true });
-    expect(gameStore.errorMessage).toBe(reason);
-    expect(gameStore.protocolFrame).toBeNull();
-    expect(internals.launchId).toBeNull();
-    expect(internals.outboundQueue.filter(message => message.type === 'new_game')).toHaveLength(0);
   });
   it('does not queue offer commands or F6 against a future recovered frame', () => {
     gameStore.prepareForNewGame();

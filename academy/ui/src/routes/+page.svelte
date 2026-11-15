@@ -19,12 +19,12 @@
   import Feedback from '$lib/components/Feedback.svelte';
   import GameLog from '$lib/components/GameLog.svelte';
   import PresentationHistory from '$lib/components/PresentationHistory.svelte';
-  import PlayerPicker from '$lib/components/PlayerPicker.svelte';
+  import OpponentSelector from '$lib/components/OpponentSelector.svelte';
   import DecklistsSelector from '$lib/components/DecklistsSelector.svelte';
   import StopsPanel from '$lib/components/StopsPanel.svelte';
   import SharedTablePanel from '$lib/components/SharedTablePanel.svelte';
   import { fetchAdviceMeta, postAdvice, type AdviceMeta, type AdviceResponse } from '$lib/advice';
-  import { policyChoice, gameStore } from '$lib/game.svelte';
+  import { checkpointChoice, gameStore } from '$lib/game.svelte';
   import { sanitizeDeckSelection } from '$lib/decks';
   import { presentationPlayer, studyPresentationPlayer } from '$lib/presentation.svelte';
   import {
@@ -88,7 +88,7 @@
         gameStore.setVillainDeck(decks.villain);
       }
       const opponent = params.get('opponent');
-      if (opponent && /^[a-f0-9]{64}$/.test(opponent)) gameStore.setOpponentChoice(policyChoice(opponent));
+      if (opponent && /^[a-f0-9]{64}$/.test(opponent)) gameStore.setOpponentChoice(checkpointChoice(opponent));
     }
     learnDemo = demoName === 'learn';
     if (demoName) gameStore.setOpponentChoice(learnDemo ? 'random' : 'passive');
@@ -296,7 +296,9 @@
   };
   const opponentIdentity = $derived(gameStore.table?.opponent
     ? checkpointIdentity(gameStore.table.opponent)
-    : playerIdentity({ name: gameStore.table?.opponent_label ?? OPPONENT_LABELS[gameStore.opponentChoice] ?? 'Opponent' }));
+    : playerIdentity({
+        name: gameStore.table?.opponent_label ?? OPPONENT_LABELS[gameStore.opponentChoice] ?? 'Opponent',
+      }));
 
   function syncStopsToServer(): void {
     if (gameActive && gameStore.hasCapability('configure_match')) {
@@ -432,13 +434,12 @@
       {#if learnDemo}<p class="type-caption">Learn demo · UR Lessons vs Random GW Allies. Automated checked setup; New Game repeats it.</p>
       {:else if demoName}<p class="type-caption" data-testid="demo-origin">Precision demo · custom stress decks · automated checked setup. Choose actions from the legal choices below. New Game repeats setup.</p>{/if}
       {#if !demoName && (!gameStore.observation || gameStore.gameOver || showSetup) && gameStore.hasCapability('configure_match')}
-        <PlayerPicker
+        <OpponentSelector
           value={gameStore.opponentChoice}
           trained={trainedOpponents}
           {catalogError}
           extension={botExtension}
           decklists={gameStore.decklists}
-          setup={{hero_deck: gameStore.decks.hero, villain_deck: gameStore.decks.villain, ...(gameStore.deckImport ? {deck_import: gameStore.deckImport} : {})}}
           onChange={(value) => gameStore.setOpponentChoice(value)}
         />
       {/if}

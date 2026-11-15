@@ -42,9 +42,9 @@ class GameConfig:
     villain_checkpoint: str | None = None  # checkpoint: path to .pt file
     villain_deterministic: bool = False  # checkpoint: argmax instead of sampling
     opponent: dict[str, str] | None = None
-    # Historical checkpoint provenance, or a managym-policy-1 descriptor with
-    # complete provider/runner/config/artifact identity. Read without a loader.
-    opponent_checkpoint: dict[str, Any] | None = None
+    # Exact trained-opponent identity: digest, source, world, model shape,
+    # training step, checkpoint path and inference setting.
+    opponent_checkpoint: dict[str, str | int | bool | None] | None = None
     # Priority-stop configuration at game start (MTGO-style auto-pass).
     # ``stops`` maps "my"/"opponent" to the stop step names that surface;
     # None means the server defaults. set_stops updates the live session,

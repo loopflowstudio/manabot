@@ -1,10 +1,10 @@
 /** Display-only player identity. Recorded names, versions and filter values stay intact. */
-import type { CheckpointProvenance, PolicyRuntimeIdentity, RecordedPlayer } from './types';
+import type { CheckpointProvenance, RecordedPlayer } from './types';
 
 export interface PlayerIdentity {
   compact: string;
   full: string;
-  /** Policy ID for registered runtimes, file SHA-256 for historical checkpoints. */
+  /** Checkpoint SHA-256 only; control bots and humans have none. */
   digest: string | null;
   /** Compact name with the short digest: the one-line form for prose and labels. */
   text: string;
@@ -12,7 +12,6 @@ export interface PlayerIdentity {
   description: string;
   producer?: string;
   provenance?: CheckpointProvenance;
-  runtime?: PolicyRuntimeIdentity;
 }
 
 /** The ten-hex prefix every page shows for a recorded hash. */
@@ -26,7 +25,6 @@ export function playerIdentity(player: {
   digest?: string | null;
   producer?: string;
   provenance?: CheckpointProvenance;
-  runtime?: PolicyRuntimeIdentity;
 }): PlayerIdentity {
   const digest = player.digest ?? null;
   const parts = player.name.split('/');
@@ -35,7 +33,7 @@ export function playerIdentity(player: {
   return { compact, full: player.name, digest,
     text: compact + (digest ? ` · ${shortHash(digest)}` : ''),
     description: player.name + (digest ? ` · ${digest}` : ''),
-    producer: player.producer, provenance: player.provenance, runtime: player.runtime };
+    producer: player.producer, provenance: player.provenance };
 }
 
 /** A checkpoint as the catalog, a table snapshot or a trace's `opponent` names it. */
@@ -44,12 +42,12 @@ export function checkpointIdentity(checkpoint: { name: string; sha256: string; p
 }
 
 /**
- * A recorded player's `version` is the runtime Policy ID or historical checkpoint SHA-256;
+ * A recorded player's `version` is the checkpoint SHA-256 only for a checkpoint;
  * for control bots it hashes inference settings, so it is never shown as a digest.
  */
 export function recordedIdentity(
-  player: Pick<RecordedPlayer, 'name' | 'kind' | 'version' | 'player_id'> & { inference?: (Record<string, unknown> & { runtime?: PolicyRuntimeIdentity }) | null },
+  player: Pick<RecordedPlayer, 'name' | 'kind' | 'version' | 'player_id'> & { inference?: Record<string, unknown> | null },
 ): PlayerIdentity {
-  const checkpoint = ['checkpoint', 'policy'].includes(String(player.inference?.policy)) || player.player_id.startsWith('checkpoint:') || player.player_id.startsWith('policy:');
-  return playerIdentity({ name: player.name, kind: player.kind, digest: checkpoint ? player.version : null, runtime: player.inference?.runtime });
+  const checkpoint = player.inference?.policy === 'checkpoint' || player.player_id.startsWith('checkpoint:');
+  return playerIdentity({ name: player.name, kind: player.kind, digest: checkpoint ? player.version : null });
 }

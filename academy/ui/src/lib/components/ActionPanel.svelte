@@ -263,7 +263,7 @@
               <CardImage name={previewNames[action.focus[0]]} className="h-full w-full" />
             </div>
           {/if}
-          <div class="font-medium">{action.label}{#if chosenOffer === action.id}{' · '}Chosen action{/if}</div>
+          <div class="font-medium">{action.label}{#if chosenOffer === action.id} · Chosen action{/if}</div>
           {#if action.subjects?.length}<div id={`offer-subjects-${action.id}`} class="type-caption mt-1 text-ink-2">{action.subjects.map(subject => `${subject.role === 'source' ? 'From' : subject.role === 'target' ? 'Target' : 'Choice'}: ${describeSubject(subject.object)}`).join('; ')}</div>{/if}
         </button>
       {/each}

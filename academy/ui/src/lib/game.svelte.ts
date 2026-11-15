@@ -27,31 +27,28 @@ import type {
   StopSide,
 } from './types';
 
-// Registered policies are chosen by complete execution identity: `policy:<id>`.
-export type PlayerChoice =
+// Trained opponents are chosen by exact checkpoint digest: `checkpoint:<sha256>`.
+export type OpponentChoice =
   | `search-${number}`
   | 'random'
   | 'passive'
-  | 'search'
-  | 'greedy'
-  | 'heuristic'
-  | `policy:${string}`;
+  | `checkpoint:${string}`;
 
-export function policyChoice(sha256: string): PlayerChoice {
-  return `policy:${sha256}`;
+export function checkpointChoice(sha256: string): OpponentChoice {
+  return `checkpoint:${sha256}`;
 }
 
 // Search opponents sample hidden cards from the opponent's decklists, so the
 // server refuses them in closed-decklist games.
-export function isSearchChoice(choice: PlayerChoice): boolean {
+export function isSearchChoice(choice: OpponentChoice): boolean {
   return choice.startsWith('search-');
 }
 
-export function buildOpponentConfig(choice: PlayerChoice): OpponentConfig {
-  if (choice.startsWith('policy:')) {
+export function buildOpponentConfig(choice: OpponentChoice): OpponentConfig {
+  if (choice.startsWith('checkpoint:')) {
     return {
-      villain_type: 'policy',
-      opponent_sha256: choice.slice('policy:'.length),
+      villain_type: 'checkpoint',
+      opponent_sha256: choice.slice('checkpoint:'.length),
     };
   }
   if (choice === 'random' || choice === 'passive') {
@@ -82,7 +79,7 @@ export class GameStore {
   resumeToken = $state<string | null>(null);
   resumeFailed = $state(false);
   selectedTargetId = $state<number | null>(null);
-  opponentChoice = $state<PlayerChoice>('search-64');
+  opponentChoice = $state<OpponentChoice>('search-64');
   decklists = $state<Decklists>('open');
   // Deck pickers (named decks; gui/server.py NAMED_DECKS). Loaded from
   // localStorage and sent with new_game.
@@ -126,7 +123,7 @@ export class GameStore {
     if (!table) return;
     const previousRole = this.table?.access.role;
     if (table.opponent && table.attempt_id !== this.table?.attempt_id) {
-      this.opponentChoice = policyChoice(table.opponent.sha256);
+      this.opponentChoice = checkpointChoice(table.opponent.sha256);
     }
     this.table = table;
     if (previousRole && previousRole !== table.access.role) {
@@ -173,7 +170,7 @@ export class GameStore {
     this.errorMessage = message;
   }
 
-  setOpponentChoice(next: PlayerChoice): void {
+  setOpponentChoice(next: OpponentChoice): void {
     this.opponentChoice = next;
   }
 

@@ -143,7 +143,11 @@ def choose_bot(
         if not isinstance(retained, BotDecision) or retained.action != action:
             raise ValueError("Bot outputs do not describe the selected action")
         return retained
-    probabilities = [1.0 / count] * count if isinstance(policy, RandomPolicy) else []
+    probabilities = (
+        [1.0 / count] * count
+        if isinstance(policy, RandomPolicy)
+        else [float(index == action) for index in range(count)]
+    )
     return BotDecision(
         action=action,
         probabilities=probabilities,

@@ -116,29 +116,12 @@ def main() -> None:
     assert extension is not None and extension.name == "manabot", (
         "Installed Academy bot entry point is missing"
     )
-    from managym.policy import PolicyRegistry, PolicySource
-
-    registry = PolicyRegistry()
-    assert "manabot" in registry.providers and "qwen" in registry.providers
-    registry.discover(
-        [
-            PolicySource(
-                "manabot",
-                {
-                    "paths": [str(checkpoint_path)],
-                    "runs_dir": str(output / "no-other-runs"),
-                },
-            )
-        ]
+    assert extension.watch_players == ("greedy", "heuristic")
+    checkpoints, missing = extension.discover(
+        [checkpoint_path], runs_dir=output / "no-other-runs"
     )
-    # Ambient reference players coexist with the explicitly discovered artifact.
-    [descriptor] = [
-        descriptor
-        for descriptor in registry.descriptors()
-        if descriptor.artifacts.get("actor") == file_sha256(checkpoint_path)
-    ]
-    assert descriptor.incompatibility is None
-    assert descriptor.artifacts["actor"]
+    assert not missing, missing
+    assert len(checkpoints) == 1 and checkpoints[0].compatible, checkpoints
     print(
         f"release smoke passed: Python {sys.version.split()[0]}, manabot {version('manabot')}, "
         f"torch {torch.__version__}, etude-sdk {version('etude-sdk')}, Academy bot extension"
