@@ -13,6 +13,7 @@ from manabot.env.match import Match
 from manabot.env.observation import DECKLIST_DIM, ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.managym.experience_projection import serialize_observation
+from manabot.policy.prepare import Prepared
 from manabot.semantic.text_observation import capture_text_decision
 from manabot.sim.registration import (
     OBSERVATION_ONLY_KINDS,
@@ -159,7 +160,17 @@ def test_unseen_opponent_list_does_not_change_observation_or_prepared(
         )
         return env
 
-    left, right = game("Island", "closed"), game("Mountain", "closed")
+    def prepared(obs: managym.Observation) -> Prepared[np.ndarray]:
+        return policy.prepare({k: v[None] for k, v in space.encode(obs).items()})
+
+    def assert_same_view(a: managym.Observation, b: managym.Observation) -> None:
+        assert a.toJSON() == b.toJSON()
+        buffers = [space.encode(obs) for obs in (a, b)]
+        for key, value in buffers[0].items():
+            np.testing.assert_array_equal(value, buffers[1][key], err_msg=key)
+        np.testing.assert_equal(asdict(prepared(a)), asdict(prepared(b)))
+
+    # Open control: the substitution is visible everywhere it could leak.
     opened = [
         game(land, "open").observation_for_player(viewer)
         for land in ("Island", "Mountain")
@@ -168,21 +179,12 @@ def test_unseen_opponent_list_does_not_change_observation_or_prepared(
     assert not np.array_equal(
         space.encode(opened[0])["decklists"], space.encode(opened[1])["decklists"]
     )
-    open_prepared = [
-        policy.prepare({key: value[None] for key, value in space.encode(obs).items()})
-        for obs in opened
-    ]
-    assert not np.array_equal(open_prepared[0].deck_rows, open_prepared[1].deck_rows)
-    reset = [env.observation_for_player(viewer) for env in (left, right)]
-    assert reset[0].toJSON() == reset[1].toJSON()
-    reset_buffers = [space.encode(obs) for obs in reset]
-    for key, value in reset_buffers[0].items():
-        np.testing.assert_array_equal(value, reset_buffers[1][key], err_msg=key)
-    reset_prepared = [
-        asdict(policy.prepare({key: value[None] for key, value in row.items()}))
-        for row in reset_buffers
-    ]
-    np.testing.assert_equal(reset_prepared[0], reset_prepared[1])
+    assert not np.array_equal(
+        prepared(opened[0]).deck_rows, prepared(opened[1]).deck_rows
+    )
+
+    left, right = game("Island", "closed"), game("Mountain", "closed")
+    assert_same_view(*(env.observation_for_player(viewer) for env in (left, right)))
     decisions = 0
     # All-land decks have identical action ordering until the opponent plays a
     # land. Equal sizes preserve shuffle RNG and the viewer's private cards.
@@ -191,18 +193,7 @@ def test_unseen_opponent_list_does_not_change_observation_or_prepared(
         if a.opponent_permanents:
             break
         if left.current_agent_index() == viewer:
-            assert a.toJSON() == b.toJSON()
-            encoded = [space.encode(obs) for obs in (a, b)]
-            for key in encoded[0]:
-                np.testing.assert_array_equal(
-                    encoded[0][key], encoded[1][key], err_msg=key
-                )
-            prepared = [
-                asdict(policy.prepare({k: v[None] for k, v in row.items()}))
-                for row in encoded
-            ]
-
-            np.testing.assert_equal(prepared[0], prepared[1])
+            assert_same_view(a, b)
             decisions += 1
         index = 0
         if left.current_agent_index() != viewer and decisions == 0:
