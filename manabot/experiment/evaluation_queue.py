@@ -20,9 +20,7 @@ import time
 from typing import Callable, Literal
 
 from pydantic import Field, model_validator
-import torch
 
-from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND
 from manabot.eval.monitor import MonitorProtocol, MonitorResult
 from manabot.experiment.checkpoint_evaluation import (
     Checkpoint,
@@ -490,6 +488,9 @@ class CheckpointQueue:
 
 
 def main() -> None:
+    from manabot.backends import resolve
+
+    backend = resolve("torch")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--job", type=Path, required=True)
     args = parser.parse_args()
@@ -504,7 +505,7 @@ def main() -> None:
         allowance_seconds=job.allowance_seconds,
         deadline_unix=job.deadline_unix,
     )
-    torch.set_num_threads(1)
+    backend.runtime.configure(1, "float32", "cpu")
     result = evaluate_checkpoint(
         job.run,
         job.checkpoint.artifact,
@@ -512,7 +513,7 @@ def main() -> None:
         args.job.parent / "evaluation",
         protocol=job.protocol,
         concurrent_activity="campaign learner may overlap; one evaluator CPU thread; no contention correction",
-        backend=TORCH_BACKEND,
+        backend=backend,
     )
     if result.status != "completed":
         raise SystemExit(1)

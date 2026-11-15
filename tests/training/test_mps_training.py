@@ -15,6 +15,7 @@ from typer.testing import CliRunner
 from experiments import training_throughput_packing as packing
 from experiments.tla_frontier import frozen
 from manabot import cli
+from manabot.backends import resolve
 import manabot.backends.torch as torch_backend
 from manabot.backends.torch import (
     _facts as fact_encoder,
@@ -25,6 +26,9 @@ from manabot.backends.torch._semantic_cards import (
     SemanticCardEncoder,
 )
 from manabot.backends.torch._shared_effects import SharedEffectEncoder
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import clipped_surrogate, float64_operand
@@ -123,6 +127,7 @@ def test_unavailable_mps_fails_without_fallback(
                 197,
                 tmp_path / "unavailable",
                 store,
+                backend=resolve("torch"),
             )
 
 
@@ -168,6 +173,7 @@ def test_old_torch_mps_stage_fails_before_training(
                 197,
                 tmp_path / "old-torch",
                 store,
+                backend=resolve("torch"),
             )
     assert not (tmp_path / "old-torch" / "checkpoints").exists()
 
@@ -292,7 +298,9 @@ def test_mps_one_update_and_export(
 
     monkeypatch.setattr(execution, "update_damped_iteration", update)
     with VerifyStore(tmp_path / "runs.sqlite") as store:
-        run = execution.execute_regime(plan, 197, tmp_path / "mps", store)
+        run = execution.execute_regime(
+            plan, 197, tmp_path / "mps", store, backend=resolve("torch")
+        )
     assert run.status == "completed", run.error
     record = run.stages[0]
     assert record.actual_device is not None
@@ -363,7 +371,9 @@ def test_mps_wide_model_trains_one_bf16_update_by_default(
 
     monkeypatch.setattr(execution, "update_damped_iteration", update)
     with VerifyStore(tmp_path / "runs.sqlite") as store:
-        run = execution.execute_regime(plan, 197, tmp_path / "mps-wide", store)
+        run = execution.execute_regime(
+            plan, 197, tmp_path / "mps-wide", store, backend=resolve("torch")
+        )
     assert run.status == "completed", run.error
     assert len(observed) == 1
     assert observed[0]["numerical"]["rejected_steps"] == 0
@@ -494,9 +504,9 @@ def test_mps_w64_single_selected_row_without_program_facts(
         opponent_mode="self",
         learning_seats="one",
         batch_closure="exact-quota",
-        device="mps",
         workers=1,
         deck_source=plan.deck_source,
+        numerics=TorchCollectionSession(device="mps", seed=197, precision="float32"),
     )
     try:
         batch = collector.collect(agent, 1, deadline_monotonic=time.perf_counter() + 40)

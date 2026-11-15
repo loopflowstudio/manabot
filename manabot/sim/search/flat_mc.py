@@ -235,6 +235,7 @@ def make_player(
             if spec.get("sampler")
             else None,
             native_encoder=bool(spec.get("native_encoder", True)),
+            backend=backend,
         )
         return LocalUpdatePlayer(teacher, seed=seed), teacher.space
     if kind == "search":
@@ -351,6 +352,7 @@ def make_player(
         likelihood = FrozenPolicyLikelihood(
             spec["checkpoint"],
             expected_sha256=str(spec["checkpoint_sha256"]),
+            backend=backend,
             batch_size=int(spec.get("likelihood_batch_size", 256)),
             device=str(spec.get("device", "cpu")),
             counterfactual_seed=int(spec.get("counterfactual_seed", 0)),

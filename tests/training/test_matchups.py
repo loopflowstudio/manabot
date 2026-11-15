@@ -6,6 +6,9 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
@@ -76,6 +79,9 @@ def test_native_mixed_collector_replays_terminal_resets() -> None:
             opponent_mode="self",
             recovery_max_microsteps=100000,
             matchup_curriculum="mirrors-balanced",
+            numerics=TorchCollectionSession(
+                device="cpu", seed=1250, precision="float32"
+            ),
         )
 
     first = collector()

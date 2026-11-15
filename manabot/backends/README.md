@@ -106,9 +106,55 @@ is not installed raises `ImportError` naming the extra; an unknown name raises
 `ValueError` listing the backends.
 
 `tests/test_package_boundaries.py` refuses an import of `manabot.backends.*`
-anywhere else. The modules that still import the torch backend directly
-(belief models, verification, the executor, optimizer persistence) are listed
-there by name; the list is compared exactly, so it can shrink and never grow.
+anywhere else. In a module that contains both reusable functions and a CLI,
+choose the backend inside `main()` or the child entry point and pass it to the
+reusable functions. Having a CLI in the same file does not make its library
+functions composition roots.
+
+### Collection, belief and recovery
+
+Pass the selected backend through training execution, monitoring and
+verification. A caller that only runs inference takes a `BackendPolicy`; a
+caller that collects, learns or persists training state also needs the
+capabilities for that work. These arguments are required: helpers do not
+default to Torch or resolve a backend themselves. The role contracts are
+`TrainingBackend` and `TrainingState` in `training/state/backend.py`, the
+collector session in `training/rollout/numerics.py`, and the inference-only
+`SamplerBackend` in `belief/protocol.py`.
+
+The collector receives a numerical session that owns policy inference,
+precision and sampling. Native game streams, seat routing and complete-game
+accounting stay in the collector. Rollout records contain NumPy arrays;
+packing validates them through the injected numerical capability. Torch
+collection uses its private generator seeded at `seed + 1`, shared by learner
+actions and current-self opponent actions. Recovery restores that generator's
+state to continue the same action stream.
+
+Belief inference uses host observations and the policy's admission and
+evaluation methods. Search receives a hand sampler; the selected backend
+owns its physical or learned sampling arithmetic, random stream and learned
+state. Verification uses the policy for inference and injected learner
+capabilities for gradient diagnostics. Each forward reads a `Prepared` batch
+from host preparation; inference probes use `inference=True`.
+
+Health reporting keeps step and rejection counters on the host, with tensor
+measurements supplied by the learner. Importing `training.updates.ppo`,
+`training.updates.damped_policy`, any `training.rollout` module or
+`sim.search.sampling` does not import Torch. Executing an operation still
+requires a backend that implements its capabilities. Unsupported operations
+refuse explicitly before collection or recovery; they do not fall back to
+Torch. MLX supports policy inference and the scalar damped update; it does
+not support PPO, belief training or full regime execution and recovery.
+
+A policy checkpoint supplies weights for play. Exact training continuation
+also needs the admitted optimizer, EMA, collector and RNG snapshot. State
+serialization and optimizer validation belong to the selected backend;
+world, source, artifact digest and stage-lineage admission still apply before
+execution. Torch recovery retains its format-4 update snapshots, including
+the historical `torch_rng` field, and restores framework RNG last. Those
+files and incident evidence remain framework-specific; passing a different
+backend does not convert them. Use the original admitted source and backend
+to resume a retained run.
 
 ## Algorithms are written once
 
@@ -215,9 +261,7 @@ documents them. A backend never carries its own copy of an update's loss:
   categorical checkpoint; it also lacks `standardized_advantages` and
   `selected_rows`, which only PPO calls.
 - `OptimizerHealth` counts steps and rejections on every backend; its sampled
-  gradient and parameter detail reads torch modules and is absent on MLX.
-  Health reporting and rollout storage still import torch, so running the MLX
-  update currently requires torch installed too.
+  gradient and parameter detail comes from the learner and is absent on MLX.
 - The PPO update calls torch tensor methods (`.float()`, `.flatten()`,
   `.detach()`) and torch's `get_value`; only the damped update runs on MLX.
 

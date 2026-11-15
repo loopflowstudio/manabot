@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 
+from manabot.backends import resolve
 from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.agent import AgentMemory
 from manabot.belief.demo import _runtime_env, run_demo
@@ -85,7 +86,7 @@ def test_world_space_mismatch_fails_before_inference() -> None:
 
 
 def test_keystone_demo_changes_belief_tokens_and_hides_actual_truth() -> None:
-    evidence = run_demo()
+    evidence = run_demo(backend=resolve("torch"))
 
     assert evidence["checkpoint_schema_bound"] is True
     assert evidence["generated_override_byte_identical"] is True

@@ -11,6 +11,9 @@ from experiments import training_throughput_packing as packing
 from experiments.batched_baseline import batched_baseline
 import manabot.backends.torch as torch_backend
 from manabot.backends.torch import learner as torch_learner
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
@@ -255,7 +258,7 @@ def test_bf16_wraps_exactly_the_policy_forwards_and_keeps_float32_outputs(
         opponent_mode="self",
         learning_seats="both",
         recovery_max_microsteps=10_000,
-        precision="bf16",
+        numerics=TorchCollectionSession(device="cpu", seed=0, precision="bf16"),
     )
 
     batch = collector.collect(agent, 1)

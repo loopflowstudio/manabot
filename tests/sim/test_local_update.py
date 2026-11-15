@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends import resolve
 from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.sampling_data import collect_frozen_policy
@@ -82,6 +83,7 @@ def make_teacher(
         config
         or LocalSearchConfig(worlds=2, depth=3, decision_seconds=10, sampling="belief"),
         native_encoder=native_encoder,
+        backend=resolve("torch"),
     )
     env = Env(match, space, Reward(RewardConfig()), enable_profiler=False)
     env.reset(seed=42)
@@ -208,6 +210,7 @@ def test_arena_uses_exact_range_lifecycle_and_replays(
         teacher.config.model_copy(
             update={"sampling": "compatible_prior", "worlds": 1, "depth": 1}
         ),
+        backend=resolve("torch"),
     )
     if learned:
         teacher = attach_learned_sampler(teacher, tmp_path)
@@ -300,12 +303,21 @@ def attach_learned_sampler(
         games=3,
         seed=719,
         max_steps=1000,
+        backend=resolve("torch"),
     )
     result = fit_belief_sampler(
-        dataset, steps=1, batch_size=4, hidden_size=8, evaluation_samples=2, seed=18
+        dataset,
+        steps=1,
+        batch_size=4,
+        hidden_size=8,
+        evaluation_samples=2,
+        seed=18,
+        backend=resolve("torch").belief_fit,
     )
     path = tmp_path / "sampler.pt"
-    digest = save_belief_sampler(path, result, dataset)
+    digest = save_belief_sampler(
+        path, result, dataset, codec=resolve("torch").belief_fit
+    )
     return LocalUpdateTeacher(
         teacher.likelihood.checkpoint,
         teacher.likelihood.checkpoint_sha256,
@@ -318,6 +330,7 @@ def attach_learned_sampler(
             policy_identity=dataset.policy_identity,
             world_identity=dataset.world_identity,
         ),
+        backend=resolve("torch"),
     )
 
 
@@ -369,6 +382,7 @@ def test_learned_search_direct_worlds_replay_and_rejection(tmp_path: Path) -> No
             original.likelihood.checkpoint_sha256,
             teacher.config,
             sampler=artifact.model_copy(update={"policy_identity": "wrong"}),
+            backend=resolve("torch"),
         )
 
 
@@ -397,10 +411,18 @@ def test_compact_native_defaults_match_full_evidence_and_row_encoding(
     digest = full.likelihood.checkpoint_sha256
     arms = {
         "compact": LocalUpdateTeacher(
-            checkpoint, digest, compact_config, native_encoder=False
+            checkpoint,
+            digest,
+            compact_config,
+            native_encoder=False,
+            backend=resolve("torch"),
         ),
-        "native": LocalUpdateTeacher(checkpoint, digest, full_config),
-        "defaults": LocalUpdateTeacher(checkpoint, digest, compact_config),
+        "native": LocalUpdateTeacher(
+            checkpoint, digest, full_config, backend=resolve("torch")
+        ),
+        "defaults": LocalUpdateTeacher(
+            checkpoint, digest, compact_config, backend=resolve("torch")
+        ),
     }
     assert arms["defaults"].native_encoder
     for root in _searched_roots(env, 4):
@@ -493,6 +515,7 @@ def test_native_frontier_encoding_writes_the_row_encoder_tensors(
         teacher.likelihood.checkpoint,
         teacher.likelihood.checkpoint_sha256,
         teacher.config,
+        backend=resolve("torch"),
     )
     for expected, actual in zip(
         teacher.predict_batch(roots), native.predict_batch(roots), strict=True

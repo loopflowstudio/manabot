@@ -8,6 +8,9 @@ import torch
 
 from manabot.backends.torch._facts import FactEncoder
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
@@ -55,6 +58,7 @@ def test_capacity_export_and_real_legal_policy(
         num_envs=2,
         seed=102,
         batch_closure="exact-quota",
+        numerics=TorchCollectionSession(device="cpu", seed=102, precision="float32"),
     )
     batch = collector.collect(agent, 2)
     obs = device_input(

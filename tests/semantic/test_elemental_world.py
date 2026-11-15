@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends import resolve
 from manabot.backends.torch.checkpoint import (
     BACKEND as TORCH_BACKEND,
     load_checkpoint,
@@ -204,7 +205,9 @@ def test_selected_world_runs_ordinary_ppo_and_reloads_its_roster(
         ],
     )
     with VerifyStore(tmp_path / "runs.sqlite") as store:
-        run = execute_regime(recipe, 164, tmp_path / "run", store)
+        run = execute_regime(
+            recipe, 164, tmp_path / "run", store, backend=resolve("torch")
+        )
     assert run.status == "completed", run.error
     stage = run.stages[0]
     assert stage.learner_transitions == 32

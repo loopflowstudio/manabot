@@ -95,7 +95,9 @@ def fixture_decision() -> tuple[ViewerDecision, BeliefEncodingSchema]:
     space = fixture_space(history)
     return (
         ViewerDecision(
-            observation=fixture_torch_observation(),
+            observation={
+                key: value.numpy() for key, value in fixture_torch_observation().items()
+            },
             world_space=space,
             viewer_history=history,
             legal_commands=(

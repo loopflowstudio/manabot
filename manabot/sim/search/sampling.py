@@ -9,20 +9,12 @@ possible worlds. The physical baseline ignores behavioral history deliberately.
 import json
 from typing import Callable, Literal, Protocol
 
-import torch
-
-from manabot.belief.sampling import (
-    AutoregressiveBeliefSampler,
-    physical_deal_log_prob,
-    sample_physical_deal,
-)
 from manabot.belief.sampling_data import public_sampler_input
-from manabot.belief.sampling_types import SamplerInput, _digest
+from manabot.belief.sampling_types import SamplerInput, SamplerSchema, _digest
 from manabot.belief.state import ViewerHistory
 from manabot.sim.search.sampling_receipt import (
     PHYSICAL_SAMPLER_IDENTITY,
     HandBatch,
-    HandSample,
     PreparedHands,
 )
 import managym
@@ -50,46 +42,32 @@ class SearchHandSampler(Protocol):
     ) -> HandBatch: ...
 
 
+class HandDistribution(Protocol):
+    def sample_hands(
+        self,
+        prepared: PreparedHands,
+        *,
+        count: int,
+        seed: int,
+        check: Callable[[], None],
+    ) -> HandBatch: ...
+
+
+class LearnedDistribution(HandDistribution, Protocol):
+    schema: SamplerSchema
+
+
 def _batch(
     sampler: SearchHandSampler,
+    distribution: HandDistribution,
     prepared: PreparedHands,
     count: int,
     seed: int,
     check: Callable[[], None],
-    model: AutoregressiveBeliefSampler | None = None,
 ) -> HandBatch:
     if prepared.distribution_identity != sampler.identity or count < 1:
         raise ValueError("sampler preparation identity or count differs")
-    generator = torch.Generator().manual_seed(seed)
-    samples: list[HandSample] = []
-    with torch.inference_mode():
-        for _ in range(count):
-            check()
-            rows = [prepared.inputs]
-            hand = (
-                sample_physical_deal(rows, generator=generator)
-                if model is None
-                else model.sample(rows, generator=generator)
-            )
-            probability = (
-                physical_deal_log_prob(rows, hand)
-                if model is None
-                else model.log_prob(rows, hand)
-            )
-            samples.append(
-                HandSample(
-                    tuple(
-                        (name, int(n))
-                        for name, n in zip(
-                            prepared.card_names, hand[0].tolist(), strict=True
-                        )
-                        if n
-                    ),
-                    float(probability[0]),
-                )
-            )
-            check()
-    return HandBatch(prepared, seed, tuple(samples))
+    return distribution.sample_hands(prepared, count=count, seed=seed, check=check)
 
 
 class PhysicalHandSampler:
@@ -97,6 +75,9 @@ class PhysicalHandSampler:
 
     kind: Literal["compatible_prior"] = "compatible_prior"
     identity = PHYSICAL_SAMPLER_IDENTITY
+
+    def __init__(self, distribution: HandDistribution) -> None:
+        self.distribution = distribution
 
     def prepare(self, engine: managym.Env, history: ViewerHistory) -> PreparedHands:
         observation = Observation.from_json(
@@ -128,7 +109,7 @@ class PhysicalHandSampler:
         seed: int,
         check: Callable[[], None],
     ) -> HandBatch:
-        return _batch(self, prepared, count, seed, check)
+        return _batch(self, self.distribution, prepared, count, seed, check)
 
 
 class LearnedHandSampler:
@@ -136,7 +117,7 @@ class LearnedHandSampler:
 
     kind: Literal["learned"] = "learned"
 
-    def __init__(self, model: AutoregressiveBeliefSampler, identity: str) -> None:
+    def __init__(self, model: LearnedDistribution, identity: str) -> None:
         self.model = model
         self.identity = identity
 
@@ -158,4 +139,4 @@ class LearnedHandSampler:
         seed: int,
         check: Callable[[], None],
     ) -> HandBatch:
-        return _batch(self, prepared, count, seed, check, self.model)
+        return _batch(self, self.model, prepared, count, seed, check)

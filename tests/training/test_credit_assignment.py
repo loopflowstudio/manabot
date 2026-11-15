@@ -14,6 +14,9 @@ import torch
 from torch import Tensor
 
 import manabot.backends.torch as torch_backend
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rollout import AdmittedRollout
@@ -178,6 +181,7 @@ def collector_for(
         learning_seats=seats,
         batch_closure=closure,
         games_per_stream=games,
+        numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
     )
     collector._env = CreditGames(
         collector._buffers, swapped=swapped, draw=draw, truncated=truncated
@@ -442,6 +446,7 @@ def test_off_policy_actions_never_enter_batch_or_receive_gradients(
         opponent_mode=mode,
         opponent_agent=opponent,
         games_per_stream=1,
+        numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
     )
     collector._env = CreditGames(collector._buffers)
     batch = collector.collect(agent, 1)

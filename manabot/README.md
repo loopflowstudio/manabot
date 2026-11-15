@@ -670,9 +670,11 @@ with those packages blocked.
   trimming, host preparation of the `Prepared` batch every backend's forward
   reads, the safetensors checkpoint container and the backend Protocols.
   It imports no array framework ([policy contract](policy/README.md)).
-- `backends/<framework>/`: one folder per array framework with the same files
+- `backends/<framework>/`: one folder per array framework with the same core files
   (`policy.py`, `rl.py`, `learner.py`, `rollout.py`, `arrays.py`,
   `checkpoint.py`);
+  Optional collection, belief, state and diagnostic capabilities live beside
+  those files and load on access.
   `backends/torch/` is the reference and `backends/parity.py` checks the others
   against it ([backends](backends/README.md)).
   `backends.torch.checkpoint.save_checkpoint` and `load_checkpoint` own policy
@@ -695,7 +697,7 @@ with those packages blocked.
   policy update (`damped_policy.py`, the default), the PPO control (`ppo.py`)
   and their host-side pieces: numerical health and selection diagnostics.
   Each takes a backend object or module as its first argument and does its array math
-  through it; recipe entry points pass `manabot.backends.torch`
+  through it; recipe entry points select and pass a backend
   ([training loops](../docs/training-loop.md#the-updates-we-maintain)).
 - `training/loops/`: a loop keeps playing and updating until it is done; a
   one-page example (`minimal.py`).

@@ -679,7 +679,9 @@ def run_simulation(
     """Run a simulation sweep for hero/villain model specs."""
     setGlobalLogLevel(getattr(logging, runtime_config.log_level.upper(), logging.INFO))
     seed_random(
-        runtime_config.seed, torch_deterministic=runtime_config.torch_deterministic
+        runtime_config.seed,
+        backend=backend,
+        torch_deterministic=runtime_config.torch_deterministic,
     )
     with track(
         experiment=runtime_config.name,

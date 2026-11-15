@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 import torch
 
+from manabot.backends import resolve
 from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
@@ -155,8 +156,8 @@ def test_frozen_policy_checks_use_ordinary_checkpoint_without_training(
                 obs=fixture.observation,
                 successors=("a", "b"),
             )
-            a = inspect_policy(path, [case], 0)
-            b = inspect_policy(path, [case], 0)
+            a = inspect_policy(path, [case], 0, backend=resolve("torch"))
+            b = inspect_policy(path, [case], 0, backend=resolve("torch"))
             assert a == b
             assert a.maximum_invariance_error < 1e-4
             assert family_changes(a, b)[0].mean_absolute_log_odds_change == 0

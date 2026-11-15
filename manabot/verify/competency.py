@@ -40,7 +40,6 @@ from typing import Any
 
 import numpy as np
 
-from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
@@ -50,6 +49,7 @@ from manabot.sim.search.flat_mc import (
     spec_name,
     wilson_interval,
 )
+from manabot.training.state.backend import TrainingBackend
 from manabot.verify.scenarios import (
     PHASE_POSTCOMBAT,
     PHASE_PRECOMBAT,
@@ -144,15 +144,16 @@ def run_scenario_once(
 
 
 def _scenario_worker(args: dict[str, Any]) -> list[dict[str, Any]]:
-    import torch
+    from manabot.backends import resolve
 
-    torch.set_num_threads(1)
+    backend = resolve("torch")
+    backend.runtime.configure(1, "float32", "cpu")
     scenario = SCENARIOS[args["scenario"]]
     results = []
     for run_index in range(args["num_runs"]):
         seed = args["base_seed"] + args["run_offset"] + run_index
         player, obs_space = make_player(
-            args["spec"], seed=seed * 2 + 1, backend=TORCH_BACKEND
+            args["spec"], seed=seed * 2 + 1, backend=backend
         )
         results.append(run_scenario_once(scenario, player, obs_space, seed=seed))
     return results
@@ -418,6 +419,7 @@ def play_probed_games(
     hero_spec: dict[str, Any],
     villain_spec: dict[str, Any],
     *,
+    backend: TrainingBackend,
     hero_deck: dict[str, int],
     villain_deck: dict[str, int],
     num_games: int,
@@ -433,10 +435,10 @@ def play_probed_games(
     from manabot.verify.games import winner_from_info_or_obs
 
     hero_player, hero_obs_space = make_player(
-        hero_spec, seed=seed * 2 + 1, backend=TORCH_BACKEND
+        hero_spec, seed=seed * 2 + 1, backend=backend
     )
     villain_player, villain_obs_space = make_player(
-        villain_spec, seed=seed * 2 + 2, backend=TORCH_BACKEND
+        villain_spec, seed=seed * 2 + 2, backend=backend
     )
     obs_space = hero_obs_space or villain_obs_space or ObservationSpace()
 
@@ -503,9 +505,10 @@ def play_probed_games(
 
 
 def _micro_worker(args: dict[str, Any]) -> dict[str, Any]:
-    import torch
+    from manabot.backends import resolve
 
-    torch.set_num_threads(1)
+    backend = resolve("torch")
+    backend.runtime.configure(1, "float32", "cpu")
     return play_probed_games(
         args["hero_spec"],
         args["villain_spec"],
@@ -514,6 +517,7 @@ def _micro_worker(args: dict[str, Any]) -> dict[str, Any]:
         num_games=args["num_games"],
         seed=args["seed"],
         game_offset=args["game_offset"],
+        backend=backend,
     )
 
 

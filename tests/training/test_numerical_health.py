@@ -17,7 +17,11 @@ import torch
 from torch import Tensor
 
 from experiments.ataraxos_move import ataraxos_move_scalar
+from manabot.backends import resolve
 import manabot.backends.torch as torch_backend
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.learner import Learner, gradient_step
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import (
@@ -30,6 +34,7 @@ from manabot.backends.torch.rl import (
     policy_logs,
     selected_moves,
 )
+import manabot.backends.torch.rollout as torch_rollout
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
@@ -193,8 +198,10 @@ def test_behavior_logs_admit_subnormal_and_underflowed_alternatives(gap: float) 
     # exponentials differed by one subnormal spacing (5046 vs 5047).
     logits = torch.tensor([[0.0, -6.0, -15.0, -93.0, -gap]])
     logs = policy_logs(logits, torch.ones_like(logits, dtype=torch.bool)).numpy()
-    packed = PackedActions.pack({"actions_valid": np.ones_like(logs)}, logs)
-    packed.check(np.array([0]), logs[:, 0])
+    packed = PackedActions.pack(
+        {"actions_valid": np.ones_like(logs)}, logs, validator=torch_rollout
+    )
+    packed.check(np.array([0]), logs[:, 0], validator=torch_rollout)
     health = batch_health(packed, np.ones(1), np.ones(1, dtype=bool), actor_only=False)
     weights = np.exp(logs)
     assert health["legal_probability_min"] == float(weights.min())
@@ -236,7 +243,7 @@ def test_known_learning_and_ineffective_controls(mode: str) -> None:
         model.parameters(), lr=0 if mode == "zero_rate" else 0.05
     )
     health = _health()
-    observer = OptimizerHealth(health, iteration=1)
+    observer = OptimizerHealth(health, iteration=1, backend=torch_backend)
     before_rng = torch.get_rng_state().clone()
     valid = torch.ones((2, 2), device=DEVICE, dtype=torch.bool)
     initial = model.weight.detach().clone()
@@ -298,7 +305,13 @@ def test_missing_and_frozen_components_and_unsampled_cadence() -> None:
     optimizer = torch.optim.Adam(model.parameters())
     health = _health()
     loss = model[0](torch.ones((1, 1), device=DEVICE)).square().mean()
-    gradient_step(loss, model, optimizer, 0.01, recorder=OptimizerHealth(health, 1))
+    gradient_step(
+        loss,
+        model,
+        optimizer,
+        0.01,
+        recorder=OptimizerHealth(health, 1, backend=torch_backend),
+    )
     assert health["gradient_missing_tensors"] == 1
     assert health["frozen_parameter_tensors"] == 1
     assert health["gradient_norm_after"] <= 0.010001
@@ -308,7 +321,7 @@ def test_missing_and_frozen_components_and_unsampled_cadence() -> None:
         model,
         optimizer,
         1.0,
-        recorder=OptimizerHealth(health, 2),
+        recorder=OptimizerHealth(health, 2, backend=torch_backend),
     )
     assert health["sampled_steps"] == 0 and "parameter_delta_l2" not in health
 
@@ -327,7 +340,7 @@ def test_critic_readout_norm_excludes_the_shared_value_token(
         Reward(RewardConfig()),
         num_envs=1,
         seed=29,
-        device=DEVICE,
+        numerics=TorchCollectionSession(device=DEVICE, seed=29, precision="float32"),
     )
     batch = collector.collect(agent, 1)
     obs = device_input(
@@ -353,7 +366,7 @@ def test_critic_readout_norm_excludes_the_shared_value_token(
             agent,
             optimizer,
             1e9,
-            recorder=OptimizerHealth(health, iteration=1),
+            recorder=OptimizerHealth(health, iteration=1, backend=torch_backend),
         )
         return health
 
@@ -396,7 +409,7 @@ def test_extreme_real_collector_to_learner() -> None:
         # closure waits for whole games, which this extreme policy can stall.
         learning_seats="one",
         batch_closure="exact-quota",
-        device=DEVICE,
+        numerics=TorchCollectionSession(device=DEVICE, seed=0, precision="float32"),
     )
     batch = collector.collect(agent, 4)
     assert np.isfinite(batch.action_data.log_probabilities).all()
@@ -529,7 +542,9 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
         monkeypatch.setattr(execution, "save_incident", failed_capture)
     with VerifyStore(tmp_path / "training.sqlite") as store:
         with pytest.raises(NumericalError, match="nonfinite_behavior_logs"):
-            execution.execute_regime(recipe, 123, tmp_path / "run", store)
+            execution.execute_regime(
+                recipe, 123, tmp_path / "run", store, backend=resolve("torch")
+            )
     if fault == "telemetry":
         assert (
             "nonfinite_behavior_logs"
@@ -577,7 +592,7 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
     assert run["selected_artifact"] is None
     initial_path = Path(record["artifacts"]["initial_raw"]["path"])
     assert initial_content is not None and initial_path.read_bytes() == initial_content
-    initial_agent, _ = execution.load_checkpoint(str(initial_path))
+    initial_agent, _ = resolve("torch").load_policy(str(initial_path))
     assert all(
         torch.isfinite(value).all() for value in initial_agent.state_dict().values()
     )
@@ -613,7 +628,13 @@ def test_nonfinite_gradient_rejects_before_adam() -> None:
     health = _health()
     loss = model.weight.sqrt().sum()  # finite loss, infinite derivative at zero
     with pytest.raises(NumericalError, match="nonfinite_gradients") as caught:
-        gradient_step(loss, model, optimizer, 1.0, recorder=OptimizerHealth(health, 1))
+        gradient_step(
+            loss,
+            model,
+            optimizer,
+            1.0,
+            recorder=OptimizerHealth(health, 1, backend=torch_backend),
+        )
     assert caught.value.health["rejected_steps"] == 1
     assert not optimizer.state
     assert torch.isfinite(model.weight).all()
@@ -630,7 +651,11 @@ def test_optimizer_health_preserves_exact_updates_and_device_rng() -> None:
     for iteration in (1, 2, 25):
         loss = model(torch.ones((4, 2), device=DEVICE)).square().mean()
         gradient_step(
-            loss, model, optimizer, 0.5, recorder=OptimizerHealth(_health(), iteration)
+            loss,
+            model,
+            optimizer,
+            0.5,
+            recorder=OptimizerHealth(_health(), iteration, backend=torch_backend),
         )
         baseline.zero_grad(set_to_none=True)
         control(torch.ones((4, 2), device=DEVICE)).square().mean().backward()

@@ -8,7 +8,8 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.belief.sampling import AutoregressiveBeliefSampler
+from manabot.backends import resolve
+from manabot.backends.torch.belief import AutoregressiveBeliefSampler
 from manabot.belief.sampling_types import SamplerSchema, _digest
 from manabot.belief.state import ViewerHistory
 from manabot.env.observation import ObservationSpace
@@ -86,7 +87,10 @@ def test_direct_search_lifecycle_and_receipt(
             update={"sampling": "learned" if learned else "compatible_prior"}
         ),
         sampler=artifact,
-        hand_sampler=None if learned else PhysicalHandSampler(),
+        hand_sampler=None
+        if learned
+        else PhysicalHandSampler(resolve("torch").belief.PhysicalDistribution()),
+        backend=resolve("torch"),
     )
 
     def forbidden(*args: object, **kwargs: object) -> None:
@@ -157,7 +161,8 @@ def test_injected_sampler_is_checked_before_execution(tmp_path: Path) -> None:
         original.likelihood.checkpoint,
         original.likelihood.checkpoint_sha256,
         original.config.model_copy(update={"sampling": "compatible_prior"}),
-        hand_sampler=InvalidSampler(),
+        hand_sampler=InvalidSampler(resolve("torch").belief.PhysicalDistribution()),
+        backend=resolve("torch"),
     )
     history = ViewerHistory.from_observation(
         Observation.from_json(
@@ -182,7 +187,7 @@ def test_physical_draw_prefix_and_tiny_exact_reference(tmp_path: Path) -> None:
     history = ViewerHistory.from_observation(
         Observation.from_json(env._engine.semantic_observation_json(viewer))
     )
-    sampler = PhysicalHandSampler()
+    sampler = PhysicalHandSampler(resolve("torch").belief.PhysicalDistribution())
     prepared = sampler.prepare(env._engine, history)
 
     def check() -> None:
@@ -213,6 +218,7 @@ def test_learned_arena_replay_without_fitting(
             teacher.likelihood.checkpoint_sha256,
             teacher.config.model_copy(update={"sampling": "learned"}),
             sampler=saved_sampler(teacher, directory / "saved-sampler.pt"),
+            backend=resolve("torch"),
         )
 
     monkeypatch.setattr(fixtures, "attach_learned_sampler", attach)
@@ -221,6 +227,7 @@ def test_learned_arena_replay_without_fitting(
 
 class ExpiringSampler(PhysicalHandSampler):
     def __init__(self, clock: list[float]) -> None:
+        super().__init__(resolve("torch").belief.PhysicalDistribution())
         self.clock = clock
 
     def sample(
@@ -246,6 +253,7 @@ def test_deadline_after_injected_sampling(
         original.likelihood.checkpoint_sha256,
         original.config.model_copy(update={"sampling": "compatible_prior"}),
         hand_sampler=ExpiringSampler(clock),
+        backend=resolve("torch"),
     )
     history = ViewerHistory.from_observation(
         Observation.from_json(

@@ -22,6 +22,7 @@ from etude.launch.records import Job
 from pydantic import BaseModel, Field
 
 from experiments.elemental_grid import DECKS, PACK
+from manabot.backends import resolve
 from manabot.infra.artifacts import StoredArtifact, split_bucket_uri
 from manabot.infra.config import MatchConfig
 from manabot.verify.llm_game import GameConfig, GameSummary, _write
@@ -128,6 +129,7 @@ def worker(config: Campaign, out: Path) -> None:
         Path(os.environ["ETUDE_INPUTS_DIR"]) / "checkpoint.pt",
         CHECKPOINT_SHA256,
         CHECKPOINT_BYTES,
+        backend=resolve("torch"),
     )
     inference = InferenceConfig.model_validate_json(INFERENCE.read_text())
     results: list[GameResult] = []
@@ -164,6 +166,7 @@ def worker(config: Campaign, out: Path) -> None:
                     session,
                     opponent=opponent,
                     progress_path=out / "progress.json",
+                    backend=resolve("torch"),
                 )
             except Exception as error:
                 summary = GameSummary(

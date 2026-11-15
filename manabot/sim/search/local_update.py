@@ -26,9 +26,9 @@ from typing import Callable, Sequence
 import numpy as np
 from numpy.typing import NDArray
 
-from manabot.belief.checkpoint import load_belief_sampler
 from manabot.belief.likelihood import FrozenPolicyLikelihood, RulesProviderGap
 from manabot.belief.player import ExactRangePlayer, RangeSampling
+from manabot.belief.protocol import SamplerBackend
 from manabot.belief.range import BeliefState
 from manabot.belief.sampling_types import _digest
 from manabot.belief.state import (
@@ -78,7 +78,7 @@ def local_search_source_sha256() -> str:
         "manabot/sim/search/sampling.py",
         "manabot/backends/torch/policy.py",
         "manabot/backends/torch/_facts.py",
-        "manabot/belief/sampling.py",
+        "manabot/backends/torch/belief.py",
         "manabot/belief/sampling_data.py",
         "manabot/belief/checkpoint.py",
     )
@@ -94,11 +94,14 @@ class LocalUpdateTeacher:
         sha256: str,
         config: LocalSearchConfig,
         *,
+        backend: SamplerBackend,
         sampler: SamplerArtifact | None = None,
         hand_sampler: SearchHandSampler | None = None,
         native_encoder: bool = True,
     ) -> None:
-        self.likelihood = FrozenPolicyLikelihood(checkpoint, expected_sha256=sha256)
+        self.likelihood = FrozenPolicyLikelihood(
+            checkpoint, expected_sha256=sha256, backend=backend
+        )
         self.agent = self.likelihood.agent
         if self.agent.belief_count_buckets:
             raise ValueError("local search requires an observation-only policy")
@@ -128,7 +131,7 @@ class LocalUpdateTeacher:
                 raise ValueError(
                     "sampler generating policy or world differs from rollout policy"
                 )
-            model = load_belief_sampler(
+            model = backend.belief.load_belief_sampler(
                 sampler.path,
                 expected_checkpoint_identity=sampler.sha256,
                 expected_dataset_identity=sampler.dataset_identity,
@@ -136,10 +139,12 @@ class LocalUpdateTeacher:
                 expected_policy_identity=sha256,
                 expected_world_identity=sampler.world_identity,
             )
-            model.requires_grad_(False)
+            backend.belief.freeze_sampler(model)
             self._sampler_authority = LearnedHandSampler(model, sampler.sha256)
         elif config.sampling == "compatible_prior":
-            self._sampler_authority = PhysicalHandSampler()
+            self._sampler_authority = PhysicalHandSampler(
+                backend.belief.PhysicalDistribution()
+            )
         self.hand_sampler = self._sampler_authority
         if hand_sampler is not None:
             if (

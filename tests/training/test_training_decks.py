@@ -18,6 +18,9 @@ from manabot.backends.torch.checkpoint import (
     load_checkpoint,
     save_checkpoint,
 )
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.env.failures import CaptureScope, FailureEvidence, capture_scope
 from manabot.env.match import Match, Reward
@@ -84,6 +87,7 @@ def _collector(
         deck_source=decks,
         recovery_max_microsteps=1000 if recovery == "exact" else None,
         recovery_max_game_microsteps=1000 if recovery == "current" else None,
+        numerics=TorchCollectionSession(device="cpu", seed=17402, precision="float32"),
     )
 
 
@@ -246,6 +250,9 @@ def test_sampled_decks_agree_across_producer_counts(
             games_per_stream=2,
             deck_source=decks,
             workers=count,
+            numerics=TorchCollectionSession(
+                device="cpu", seed=17402, precision="float32"
+            ),
         )
         for count in (1, workers)
     ]
@@ -408,6 +415,7 @@ def test_failure_records_actual_sampled_decks(
         deck_source=decks,
         game_errors=policy,
         record_attempt=lambda row: ledger.record(row, {}),
+        numerics=TorchCollectionSession(device="cpu", seed=17402, precision="float32"),
     )
     original = collector._sample_learning_rows
     calls = 0

@@ -23,6 +23,7 @@ from etude.launch.records import Job
 from pydantic import Field, TypeAdapter
 
 from experiments import qwen_mtg183 as original
+from manabot.backends import resolve
 from manabot.llm.schema import InferenceConfig, RuntimeIdentity
 from manabot.sim.child import ChildProcess
 from manabot.verify.llm_game import GameSummary, _write
@@ -137,6 +138,7 @@ def _play_game(
             Path(os.environ["ETUDE_INPUTS_DIR"]) / "checkpoint.pt",
             original.CHECKPOINT_SHA256,
             original.CHECKPOINT_BYTES,
+            backend=resolve("torch"),
         )
         factory = partial(VLLMRuntime, identity_path=out / "vllm-identity.json")
         with InferenceSession(inference, load_seconds=60, factory=factory) as session:
@@ -151,6 +153,7 @@ def _play_game(
                 record,
                 session,
                 opponent=opponent,
+                backend=resolve("torch"),
             )
             _write(
                 record / "actor-startup.json",

@@ -18,9 +18,7 @@ import random
 import tempfile
 from typing import Literal, cast
 
-import torch
-
-from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.belief.protocol import SamplerBackend
 from manabot.belief.sampling_types import SamplerInput, SamplerSchema, _digest
 from manabot.belief.state import ViewerHistory
 from manabot.env.env import Env
@@ -246,6 +244,7 @@ def public_sampler_input(
 def collect_frozen_policy(
     *,
     checkpoint: Path,
+    backend: SamplerBackend,
     match_config: MatchConfig,
     games: int,
     seed: int,
@@ -261,7 +260,7 @@ def collect_frozen_policy(
     if games < 3 or max_steps < 1:
         raise ValueError("three-way whole-game split requires at least three games")
     policy_identity = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
-    agent, obs_space = load_checkpoint(str(checkpoint))
+    agent, obs_space = backend.load_policy(str(checkpoint))
     if agent.belief_count_buckets:
         raise ValueError(
             "frozen sampler collection requires an observation-only behavior policy"
@@ -281,8 +280,7 @@ def collect_frozen_policy(
         split_by_game[index] = "test"
     schema: SamplerSchema | None = None
     records: list[SamplerGame] = []
-    with torch.random.fork_rng(), torch.inference_mode():
-        torch.manual_seed(seed)
+    with backend.seeded_inference(seed):
         for game_index in range(games):
             if check is not None:
                 check()

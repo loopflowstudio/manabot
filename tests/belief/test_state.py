@@ -5,6 +5,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
+from manabot.backends import resolve
 from manabot.belief import (
     HAND_ZONE_ID,
     LIBRARY_ZONE_ID,
@@ -175,7 +176,7 @@ def test_native_projection_preserves_canonical_receipt_bytes() -> None:
 
     env, _ = _runtime_env()
     viewer = int(env.last_raw_obs.agent.player_index)
-    schema, _ = _schema_and_agent(env._engine, viewer)
+    schema, _ = _schema_and_agent(env._engine, viewer, backend=resolve("torch"))
     space = PossibleWorldSpace.from_engine(env._engine, viewer)
     history = ViewerHistory.from_observation(
         Observation.from_json(env._engine.semantic_observation_json(viewer))

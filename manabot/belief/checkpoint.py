@@ -1,31 +1,40 @@
 """Admit frozen belief samplers by exact bytes, schema, behavior and world."""
 
 import hashlib
-import io
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
-import torch
-
-from manabot.belief.sampling import AutoregressiveBeliefSampler
 from manabot.belief.sampling_types import SamplerSchema
+from manabot.sim.search.sampling import LearnedDistribution
+
+
+class SamplerCodec(Protocol):
+    def decode_sampler(self, data: bytes) -> Any: ...
+    def restore_sampler(
+        self,
+        schema: SamplerSchema,
+        hidden_size: int,
+        history_dropout: float,
+        state: Any,
+    ) -> LearnedDistribution: ...
 
 
 def load_belief_sampler(
     path: Path,
     *,
+    codec: SamplerCodec,
     expected_dataset_identity: str,
     expected_policy_identity: str,
     expected_schema_identity: str,
     expected_world_identity: str,
     expected_checkpoint_identity: str,
-) -> AutoregressiveBeliefSampler:
+) -> LearnedDistribution:
     """Reject mismatched bytes or semantic bindings before admitting parameters."""
     data = path.read_bytes()
     if hashlib.sha256(data).hexdigest() != expected_checkpoint_identity:
         raise ValueError("sampler checkpoint byte identity mismatch")
     # Torch's weights-only decoder is an untyped serialization boundary.
-    payload: Any = torch.load(io.BytesIO(data), map_location="cpu", weights_only=True)
+    payload: Any = codec.decode_sampler(data)
     if (
         not isinstance(payload, dict)
         or payload.get("format") != "manabot.autoregressive-belief-sampler/v1"
@@ -46,9 +55,9 @@ def load_belief_sampler(
     schema = SamplerSchema(**schema_payload)
     if schema.identity != expected_schema_identity:
         raise ValueError("sampler checkpoint schema contents mismatch")
-    model = AutoregressiveBeliefSampler(
-        schema, payload["hidden_size"], payload["history_dropout"]
+    return codec.restore_sampler(
+        schema,
+        payload["hidden_size"],
+        payload["history_dropout"],
+        payload["state_dict"],
     )
-    model.load_state_dict(payload["state_dict"], strict=True)
-    model.eval()
-    return model

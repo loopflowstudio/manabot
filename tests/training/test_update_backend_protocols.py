@@ -20,6 +20,9 @@ import torch
 from manabot.backends import resolve
 from manabot.backends.parity import BACKENDS, installed_backends
 from manabot.backends.torch.arrays import array_fields, on_device
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rollout import AdmittedRollout as TorchRollout
 from manabot.env.match import Match, Reward
@@ -28,6 +31,7 @@ from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.policy.checkpoint import PolicyCheckpoint, from_torch_state
 from manabot.policy.protocol import Backend
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from manabot.training.state.backend import TrainingRuntime, TrainingState
 from manabot.training.updates.backend import (
     AdmittedRollout,
     Arrays,
@@ -39,6 +43,7 @@ from manabot.training.updates.backend import (
     PPOLearner,
     UpdateBackend,
     categorical_rl,
+    ppo_rl,
 )
 import managym
 
@@ -109,7 +114,9 @@ def _violations(value: object, protocol: type, path: str) -> list[str]:
             if not (isinstance(actual, type) and issubclass(actual, Exception)):
                 found.append(f"{where}: not an exception type")
         elif isinstance(declared, property):
-            returned = get_type_hints(declared.fget).get("return")
+            returned = get_type_hints(
+                declared.fget, localns={"RolloutBatch": RolloutBatch}
+            ).get("return")
             if isinstance(returned, type) and getattr(returned, "_is_protocol", False):
                 found += _violations(actual, returned, where)
         elif callable(declared):
@@ -145,7 +152,7 @@ def captured() -> tuple[PolicyCheckpoint, RolloutBatch]:
         opponent_mode="self",
         learning_seats="one",
         batch_closure="exact-quota",
-        device="cpu",
+        numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
     )
     batch = collector.collect(agent, 2)
     return from_torch_state(
@@ -200,6 +207,7 @@ def test_torch_provides_what_ppo_calls(
         == []
     )
     assert categorical_rl(module.rl) is module.rl
+    assert ppo_rl(module.rl) is module.rl
 
 
 @pytest.mark.parametrize("grad_enabled", [True, False])
@@ -289,6 +297,8 @@ def test_a_backend_without_a_categorical_critic_is_refused() -> None:
     assert not isinstance(module.rl, CategoricalRL)
     with pytest.raises(TypeError, match="no categorical critic"):
         categorical_rl(module.rl)
+    with pytest.raises(TypeError, match="no PPO update"):
+        ppo_rl(module.rl)
 
 
 def test_the_conformance_check_sees_a_wrong_signature() -> None:
@@ -312,5 +322,14 @@ def test_the_conformance_check_sees_a_wrong_signature() -> None:
     ]
     assert _violations(_Wrong(), LearnerFile, "wrong") == [
         "wrong.check_objective: missing",
+        "wrong.critic_gradient_norms: missing",
+        "wrong.gradient_health: missing",
         "wrong.no_grad: requires 'enabled', which the protocol does not pass",
+        "wrong.parameter_health: missing",
     ]
+
+
+def test_torch_execution_state_capabilities_match_their_contracts() -> None:
+    backend = resolve("torch")
+    assert _violations(backend.state, TrainingState, "state") == []
+    assert _violations(backend.runtime, TrainingRuntime, "runtime") == []

@@ -17,6 +17,9 @@ import numpy as np
 import torch
 
 import manabot.backends.torch as torch_backend
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rollout import AdmittedRollout
@@ -102,6 +105,9 @@ def main() -> None:
         num_envs=STREAMS,
         seed=args.seed,
         opponent_mode="self",
+        numerics=TorchCollectionSession(
+            device="cpu", seed=args.seed, precision="float32"
+        ),
     )
     learner = Learner(agent, "cpu", minibatch_rows=STREAMS)
     try:

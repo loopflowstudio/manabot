@@ -30,6 +30,9 @@ from manabot.backends.parity import (
     Report,
     installed_backends,
 )
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import PERMANENT_ATTACHED_INDEX, ObservationSpace
@@ -87,7 +90,7 @@ def captured() -> tuple[PolicyCheckpoint, RolloutBatch]:
         opponent_mode="self",
         learning_seats="one",
         batch_closure="exact-quota",
-        device="cpu",
+        numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
     )
     batch = collector.collect(agent, 6)
     return from_torch_state(

@@ -193,7 +193,11 @@ def update_damped_iteration(
     categorical = learner.agent.config.value_kind == "categorical_wdl"
     track = learner.profiler.track
     with track("Batch transfer and behavior checks"):
-        batch.action_data.check(batch.actions, batch.logprobs)
+        batch.action_data.check(
+            batch.actions,
+            batch.logprobs,
+            validator=backend.rollout,
+        )
         admitted = backend.rollout.AdmittedRollout(learner.agent, batch)
         actions = to_device(batch.actions, device)
     with track("Targets"):

@@ -600,6 +600,9 @@ the stack, as the source's frame before the output choice (CR 605.3b).
 
 ### Etude training records
 
+Etude preserves a checkpoint's source suffix. Worker tests wait for a registered
+checkpoint through the SDK, rather than assuming the file ends in `.pt`.
+
 Training row tables belong under the metric run's `artifacts/`, named by their
 content digest, with `.partial` staging before atomic rename. Etude's tracker
 and launcher courier carry these immutable author artifacts before metric

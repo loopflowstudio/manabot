@@ -52,6 +52,8 @@ from etude.launch.records import Job, Run
 from pydantic import BaseModel, ConfigDict
 import torch
 
+from manabot.backends import resolve
+import manabot.backends.torch as torch_backend
 from manabot.backends.torch.arrays import device_of, on_device, to_numpy
 from manabot.backends.torch.policy import PolicyInference
 from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
@@ -215,6 +217,7 @@ def capture(folder: Path, probe: Probe) -> dict[str, object]:
             folder / "run",
             store,
             training_exposure=False,
+            backend=resolve("torch"),
         )
     if run.status != "completed":
         raise RuntimeError(f"capture update {run.status}: {run.error}")
@@ -606,7 +609,9 @@ def run_arm(
         health = NumericalHealth(
             optimizer_steps=0, skipped_steps=0, rejected_steps=0, sampled_steps=1
         )
-        observer = OptimizerHealth(learner.agent, learner.optimizer, health, 2)
+        observer = OptimizerHealth(
+            learner.agent, learner.optimizer, health, 2, backend=torch_backend
+        )
         steps: list[dict[str, float]] = []
         for epoch in range(probe.epochs):
             for index in _order(arm, epoch, len(minibatches)):
