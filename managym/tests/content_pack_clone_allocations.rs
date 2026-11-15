@@ -9,7 +9,7 @@ use managym::benchmark_allocations;
 use managym::{match_fixtures::build_fixture, Game};
 use serde::Serialize;
 
-const FIXTURE_ID: &str = "interactive-heavy-80-w4-v1";
+const FIXTURE_ID: &str = "interactive-heavy-80-w17-mana-v1";
 const WARMUP_CLONE_COUNT: usize = 64;
 const MEASURED_CLONE_COUNT: usize = 1_024;
 const SYNTHETIC_TEXT_BYTES: usize = 64 * 1_024;

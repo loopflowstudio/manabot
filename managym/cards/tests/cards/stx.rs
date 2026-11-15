@@ -38,10 +38,12 @@ fn divide_by_zero_bounces_spell_from_stack() {
     s.force_card_in_hand(1, "Gray Ogre");
     s.advance_to_active_step(1, StepKind::Main);
     cast_only(&mut s); // P1 casts Gray Ogre
+    assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority();
     cast_only(&mut s); // P0 responds with Divide by Zero
     let ogre = stack_spell_card(&s, "Gray Ogre");
     assert!(s.choose_target(Target::StackSpell(now(&s, ogre))));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority();
     s.pass_priority();
 
@@ -74,6 +76,7 @@ fn divide_by_zero_bounces_permanent_but_not_lands() {
     assert_eq!(space.kind, ActionSpaceKind::ChooseTarget);
     assert_eq!(space.actions.len(), 1, "only the Gray Ogre is targetable");
     assert!(s.choose_target(Target::Permanent(ogre)));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority();
     s.pass_priority();
     assert_eq!(s.battlefield_permanents_named(1, "Gray Ogre").len(), 0);
@@ -339,6 +342,7 @@ fn igneous_inspiration_deals_three_then_learns() {
     s.advance_to_active_step(0, StepKind::Main);
     cast_only(&mut s);
     assert!(s.choose_target(Target::Player(PlayerId(1))));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority();
     s.pass_priority();
     s.assert_life(1, 17);
@@ -625,6 +629,7 @@ fn ward_setup(seed: u64, p1_mountains: usize) -> (Scenario, PermanentId) {
     s.advance_to_active_step(1, StepKind::Main);
     cast_only(&mut s); // P1 casts Lightning Bolt
     s.choose_target_named("Waterfall Aerialist");
+    assert!(s.take_action_by_type(ActionType::PayCost));
     // Ward trigger goes on the stack above the bolt; let it resolve.
     s.pass_priority();
     s.pass_priority();
@@ -684,6 +689,7 @@ fn ward_does_not_trigger_for_controllers_own_spell() {
     s.advance_to_active_step(0, StepKind::Main);
     cast_only(&mut s);
     s.choose_target_named("Waterfall Aerialist");
+    assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority();
     s.pass_priority();
     // No ward pay-or-not; the bolt resolved directly and killed the 3/1.

@@ -124,6 +124,7 @@ fn a_mana_tap_can_precede_a_distinct_sacrifice_cost() {
                 &mut s,
                 |a| matches!(a, Action::SelectCard { object, .. } if *object == elves_card),
             );
+            choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
             // Tap and sacrifice are different costs: G plus pooled B pays 1B,
             // then the still-present tapped creature pays the sacrifice.
             assert!(s.game().state.permanents[elves].is_none());

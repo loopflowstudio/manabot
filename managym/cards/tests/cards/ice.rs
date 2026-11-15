@@ -43,6 +43,7 @@ fn pyroclasm_kills_small_creatures_on_both_sides() {
 
     s.force_card_in_hand(0, "Pyroclasm");
     assert!(s.take_action_by_type(ActionType::PriorityCastSpell));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority();
     s.pass_priority();
 

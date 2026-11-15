@@ -29,6 +29,7 @@ fn cast_llanowar_elves(
     assert!(s.take_action_by_type(ActionType::PriorityPlayLand));
     let _ = s.drain_events();
     assert!(s.take_action_by_type(ActionType::PriorityCastSpell));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     let elf = s
         .game()
         .state
@@ -79,6 +80,7 @@ fn cast_manowar_to_trigger(seed: u64) -> Vec<GameEvent> {
     }
 
     assert!(s.take_action_by_type(ActionType::PriorityCastSpell));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority();
     s.pass_priority();
     let _ = s.drain_events();

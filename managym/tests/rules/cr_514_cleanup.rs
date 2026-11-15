@@ -27,6 +27,7 @@ fn setup_damaged_creature_before_cleanup() -> (Scenario, managym::state::game_ob
     s.advance_to_active_step(0, StepKind::Main);
     s.force_card_in_hand(0, "Gray Ogre");
     assert!(s.take_action_by_type(ActionType::PriorityCastSpell));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority();
     s.pass_priority();
 

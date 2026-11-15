@@ -100,6 +100,7 @@ fn cr_704_5g_lethal_damage_destroys_creature() {
     s.force_card_in_hand(0, "Llanowar Elves");
     assert!(s.take_action_by_type(ActionType::PriorityPlayLand));
     assert!(s.take_action_by_type(ActionType::PriorityCastSpell));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority();
     s.pass_priority();
 

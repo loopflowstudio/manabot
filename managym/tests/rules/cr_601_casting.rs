@@ -38,6 +38,7 @@ fn cr_601_2i_spell_moves_from_stack_to_battlefield_on_resolution() {
 
     assert!(s.take_action_by_type(ActionType::PriorityPlayLand));
     assert!(s.take_action_by_type(ActionType::PriorityCastSpell));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     assert_eq!(s.zone_size(0, ZoneType::Stack), 1);
 
     s.pass_priority();
@@ -92,6 +93,7 @@ fn cr_601_sorcery_cannot_respond() {
     s.force_card_in_hand(0, "Llanowar Elves");
     assert!(s.take_action_by_type(ActionType::PriorityPlayLand));
     assert!(s.take_action_by_type(ActionType::PriorityCastSpell));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority();
 
     assert_eq!(s.action_space().player, Some(PlayerId(1)));

@@ -195,6 +195,19 @@ fn structured_offer_bolt_cast_is_atomic_and_legacy_equivalent() {
         .expect("atomic cast should apply"));
     legacy_cast_at_player(&mut legacy, *object, PlayerId(1));
 
+    // Both declarations stop at the same shared payment decision. Manual
+    // source activations remain available until payment is committed.
+    assert_equivalent_surface(&structured, &legacy);
+    for game in [&mut structured, &mut legacy] {
+        let pay = game
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .position(|action| matches!(action, Action::PayCost { .. }))
+            .expect("spell payment");
+        game.step(pay).unwrap();
+    }
     assert!(structured.pending_choice.is_none());
     let Some(StackObject::Spell(spell)) = structured.state.stack_objects.last() else {
         panic!("Bolt should be on the stack")
@@ -694,13 +707,13 @@ fn structured_compound_waterbend_effects_or_competing_mana_stay_sequential() {
         );
         scenario.advance_to_active_step(0, StepKind::Main);
         scenario.force_permanent_on_battlefield(0, "Water Tribe Rallier");
-        scenario.force_permanent_on_battlefield(0, excluded);
+        let excluded_source = scenario.force_permanent_on_battlefield(0, excluded);
+        crate::support::game::clear_summoning_sickness(&mut scenario, excluded_source);
         for _ in 0..4 {
             scenario.force_permanent_on_battlefield(0, "Gray Ogre");
         }
         scenario.game_mut().scenario_refresh_priority().unwrap();
-        assert!(scenario
-            .take_action_by_type(managym::agent::action::ActionType::PriorityActivateAbility));
+        crate::support::play::activate_named(&mut scenario, "Water Tribe Rallier", 0);
         let root = scenario.game();
         let offers = root.compound_offers().unwrap();
         assert_eq!(

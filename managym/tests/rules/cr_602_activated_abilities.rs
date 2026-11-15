@@ -7,7 +7,7 @@ use managym::{
     state::zone::ZoneType,
 };
 
-use crate::support::{game::*, inspect::pt_modifications};
+use crate::support::{game::*, inspect::pt_modifications, play::activate_named};
 
 fn setup_shivan_with_mountains(seed: u64, mountain_count: usize) -> Scenario {
     let mut s = Scenario::new(
@@ -53,7 +53,8 @@ fn cr_602_cannot_activate_without_available_red_mana() {
 #[test]
 fn cr_602_activation_uses_stack_and_resolves_after_passes() {
     let mut s = setup_shivan_with_mountains(60203, 1);
-    assert!(s.take_action_by_type(ActionType::PriorityActivateAbility));
+    activate_named(&mut s, "Shivan Dragon", 0);
+    assert!(s.take_action_by_type(ActionType::PayCost));
     assert_eq!(s.game().state.stack_objects.len(), 1);
     assert_eq!(s.zone_size(0, ZoneType::Stack), 0);
 
@@ -70,8 +71,10 @@ fn cr_602_activation_uses_stack_and_resolves_after_passes() {
 #[test]
 fn cr_602_multiple_activations_stack_and_accumulate() {
     let mut s = setup_shivan_with_mountains(60204, 2);
-    assert!(s.take_action_by_type(ActionType::PriorityActivateAbility));
-    assert!(s.take_action_by_type(ActionType::PriorityActivateAbility));
+    activate_named(&mut s, "Shivan Dragon", 0);
+    assert!(s.take_action_by_type(ActionType::PayCost));
+    activate_named(&mut s, "Shivan Dragon", 0);
+    assert!(s.take_action_by_type(ActionType::PayCost));
 
     let observation = Observation::new(s.game(), &[]);
     assert_eq!(observation.stack_objects.len(), 2);
@@ -100,7 +103,8 @@ fn cr_602_shivan_buff_expires_in_cleanup() {
     let mut s = setup_shivan_with_mountains(60205, 1);
     let shivan = s.battlefield_permanents_named(0, "Shivan Dragon")[0];
 
-    assert!(s.take_action_by_type(ActionType::PriorityActivateAbility));
+    activate_named(&mut s, "Shivan Dragon", 0);
+    assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority();
     s.pass_priority();
     assert_eq!(pt_modifications(&s, shivan).0, 1);
@@ -113,7 +117,8 @@ fn cr_602_shivan_buff_expires_in_cleanup() {
 #[test]
 fn cr_602_source_leaves_before_resolution_no_effect() {
     let mut s = setup_shivan_with_mountains(60206, 1);
-    assert!(s.take_action_by_type(ActionType::PriorityActivateAbility));
+    activate_named(&mut s, "Shivan Dragon", 0);
+    assert!(s.take_action_by_type(ActionType::PayCost));
 
     let shivan = s.battlefield_permanents_named(0, "Shivan Dragon")[0];
     let shivan_card = s.game().state.permanents[shivan]
@@ -152,7 +157,8 @@ fn cr_602_observation_exposes_stack_object_metadata_for_ability() {
     let shivan_registry_key = s.game().state[shivan_card].registry_key.0 as i32;
     let controller_id = s.game().state.players[0].id.0 as i32;
 
-    assert!(s.take_action_by_type(ActionType::PriorityActivateAbility));
+    activate_named(&mut s, "Shivan Dragon", 0);
+    assert!(s.take_action_by_type(ActionType::PayCost));
     let observation = Observation::new(s.game(), &[]);
 
     assert_eq!(observation.stack_objects.len(), 1);
@@ -216,6 +222,7 @@ fn cr_602_policy_preserves_ability_index_and_resolution() {
             obs.action_space.actions[indices[1]].focus
         );
         s.step_action(indices[chosen]);
+        assert!(s.take_action_by_type(ActionType::PayCost));
         s.pass_priority();
         s.pass_priority();
         assert_eq!(

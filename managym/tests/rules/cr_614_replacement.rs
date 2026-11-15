@@ -44,6 +44,7 @@ fn resolve_bolt_with_drivers(
 
     assert!(s.take_action_by_type(ActionType::PriorityCastSpell));
     assert!(s.choose_target(Target::Player(target)));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority();
     s.pass_priority();
 

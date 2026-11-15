@@ -182,27 +182,16 @@ fn prism_upfront_payment_preserves_professors_second_green() {
 fn prism_payment_offers_execute_and_restore_without_mutating_sibling_forks() {
     use managym::{search_state::witness, Game};
 
-    fn complete_every_offer(game: &mut Game, spell: ObjectId, depth: usize) {
-        if game
-            .state
-            .card_id(spell)
-            .map(|card| game.state.object_of(card))
-            .and_then(|object| game.state.zones.zone_of(object))
-            == Some(ZoneType::Stack)
-        {
-            return;
-        }
-        assert!(
-            depth > 0,
-            "payment must complete within its three decisions"
-        );
+    // Manual production is a deliberate action and need not complete the cast.
+    // Exercise each current offer independently, then restore the exact fork.
+    fn execute_and_restore_every_offer(game: &mut Game) {
         let root = witness(game);
         let actions = game.action_space().unwrap().actions.clone();
         assert!(!actions.is_empty());
         for action_index in 0..actions.len() {
             let mark = game.clone();
             game.step(action_index).unwrap();
-            complete_every_offer(game, spell, depth - 1);
+            assert_ne!(witness(game).authority.hash, root.authority.hash);
             *game = mark;
             assert_eq!(witness(game), root);
         }
@@ -230,7 +219,7 @@ fn prism_payment_offers_execute_and_restore_without_mutating_sibling_forks() {
         );
         let root = witness(s.game());
         let mut branch = s.game().clone();
-        complete_every_offer(&mut branch, professor, 3);
+        execute_and_restore_every_offer(&mut branch);
         assert_eq!(witness(s.game()), root);
         assert_eq!(witness(&branch), root);
     }

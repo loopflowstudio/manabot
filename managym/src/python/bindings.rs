@@ -2117,8 +2117,8 @@ impl PyCard {
     fn set_x(&mut self, value: Option<i32>) {
         self.data.x = value;
     }
-    #[getter]
-    fn from_battlefield_this_turn(&self) -> bool {
+    #[getter(from_battlefield_this_turn)]
+    fn get_from_battlefield_this_turn(&self) -> bool {
         self.data.from_battlefield_this_turn
     }
     #[setter]

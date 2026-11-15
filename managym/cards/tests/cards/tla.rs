@@ -394,6 +394,7 @@ fn airbending_lesson_exiles_and_owner_recasts_for_two() {
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(can_cast(&s, ogre_card));
     cast_card(&mut s, ogre_card);
+    assert!(s.take_action_by_type(ActionType::PayCost));
     assert_eq!(s.game().state.players[1].mana_pool.total(), 0);
     settle(&mut s);
     assert_eq!(s.battlefield_permanents_named(1, "Gray Ogre").len(), 1);
@@ -508,6 +509,7 @@ fn allies_at_last_affinity_and_two_attackers() {
     let space = s.action_space().clone();
     assert_eq!(space.actions.len(), 1);
     assert!(s.choose_target(Target::Permanent(ogre)));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     // Affinity was applied: the cast succeeded on a single forest.
     assert_eq!(s.game().state.stack_objects.len(), 1);
 
@@ -541,6 +543,7 @@ fn allies_at_last_up_to_zero_attackers_is_legal() {
     // Decline immediately: zero attackers chosen.
     assert!(s.take_action_by_type(ActionType::DeclineChoice));
     assert!(s.choose_target(Target::Permanent(ogre)));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority();
     s.pass_priority();
     // Nothing happened; the Ogre survives.
@@ -839,6 +842,7 @@ fn badgermole_cub_earthbends_and_adds_green_when_a_creature_taps_for_mana() {
     let mut s = five_color_setup(&["Badgermole Cub", "Hermitic Herbalist"]);
     let forest = s.force_permanent_on_battlefield(0, "Forest");
     cast(&mut s, "Badgermole Cub");
+    assert!(s.take_action_by_type(ActionType::PayCost));
     // The generic pip is an explicit spending choice from this mixed pool.
     assert_choice_contract(&s);
     spend_named(&mut s, |label| label.contains("{C}"));
@@ -1067,6 +1071,7 @@ fn earth_village_ruffians_earthbends_two_when_it_dies() {
     let swamp = s.force_permanent_on_battlefield(0, "Swamp");
     cast(&mut s, "Lightning Strike");
     assert!(s.choose_target(Target::Permanent(ruffians)));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.game().state.permanents[ruffians].is_none());
@@ -2018,6 +2023,7 @@ fn seismic_sense_looks_at_cards_equal_to_your_lands_and_takes_a_creature_or_land
     put_on_top(&mut s, ogre);
     put_on_top(&mut s, strike);
     cast(&mut s, "Seismic Sense");
+    assert!(s.take_action_by_type(ActionType::PayCost));
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     let selectable: Vec<_> = s
         .action_space()
@@ -2177,6 +2183,7 @@ fn solstice_revelations_casts_cheap_spells_free_and_keeps_the_rest() {
     on_top(&mut s, strike);
     s.force_permanent_on_battlefield(0, "Mountain");
     let solstice = cast(&mut s, "Solstice Revelations");
+    assert!(s.take_action_by_type(ActionType::PayCost));
     spend_colorless(&mut s);
     resolve_top(&mut s);
     assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
@@ -2198,6 +2205,7 @@ fn solstice_revelations_casts_cheap_spells_free_and_keeps_the_rest() {
     s.set_player_mana_pool(0, "6R");
     on_top(&mut s, strike);
     cast_card(&mut s, solstice);
+    assert!(s.take_action_by_type(ActionType::PayCost));
     resolve_top(&mut s);
     choose(&mut s, |a| matches!(a, Action::Decline { .. }));
     assert_eq!(zone_of(&s, strike), Some(ZoneType::Hand));
@@ -2405,6 +2413,7 @@ fn animated_land_dies_and_returns_tapped_as_plain_land() {
     s.pass_priority();
     cast_only(&mut s);
     assert!(s.choose_target(Target::Permanent(land)));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority();
     s.pass_priority(); // bolt resolves, land dies -> delayed trigger fires
     s.pass_priority();
@@ -2541,6 +2550,7 @@ fn cat_gator_uses_swamps_and_lifelink_on_its_enter_trigger() {
     s.force_permanent_on_battlefield(0, "Swamp");
     s.force_permanent_on_battlefield(0, "Swamp");
     cast(&mut s, "Cat-Gator");
+    assert!(s.take_action_by_type(ActionType::PayCost));
     spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Player(PlayerId(1))));
@@ -2554,6 +2564,7 @@ fn announced_enter_trigger_keeps_its_controller_when_its_source_changes_control(
     let mut s = five_color_setup(&["Cat-Gator"]);
     s.force_permanent_on_battlefield(0, "Swamp");
     cast(&mut s, "Cat-Gator");
+    assert!(s.take_action_by_type(ActionType::PayCost));
     spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Player(PlayerId(1))));
@@ -2628,6 +2639,7 @@ fn combustion(lessons: usize) -> (Scenario, ObjectId, PermanentId) {
     set_counters(&mut s, victim, CounterKind::PlusOnePlusOne, 5);
     let spell = cast_owned(&mut s, "Combustion Technique");
     assert!(s.choose_target(Target::Permanent(victim)));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     resolve_top(&mut s);
     (s, spell, victim)
 }
@@ -2661,6 +2673,7 @@ fn combustion_lethal_damage_exiles_without_a_graveyard_move() {
     let object = card_of(&s, victim);
     cast_owned(&mut s, "Combustion Technique");
     assert!(s.choose_target(Target::Permanent(victim)));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     resolve_top(&mut s);
     assert_eq!(zone_of(&s, object), Some(ZoneType::Exile));
 }
@@ -2697,6 +2710,7 @@ fn combustion_is_an_owned_learn_candidate() {
         put_onto_battlefield(&mut s, 0, "Island");
     }
     cast_owned(&mut s, "Pop Quiz");
+    assert!(s.take_action_by_type(ActionType::PayCost));
     resolve_top(&mut s);
     assert_eq!(s.action_space().kind, ActionSpaceKind::Learn);
     let (index, object) = s
@@ -2725,6 +2739,7 @@ fn combustion_invalid_target_does_not_damage_or_mark_new_incarnation() {
     let gran = put_onto_battlefield(&mut s, 1, "Gran-Gran");
     let spell = cast_owned(&mut s, "Combustion Technique");
     assert!(s.choose_target(Target::Permanent(gran)));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     let object = card_of(&s, gran);
     let object = move_card(&mut s, object, ZoneType::Hand);
     let object = move_card(&mut s, object, ZoneType::Battlefield);
@@ -2746,6 +2761,7 @@ fn combustion_replacement_is_hashed_visible_and_rolls_back_with_its_damage() {
     set_counters(&mut s, gran, CounterKind::PlusOnePlusOne, 3);
     cast_owned(&mut s, "Combustion Technique");
     assert!(s.choose_target(Target::Permanent(gran)));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority();
     let root = witness(s.game());
     let mut branch = s.game().clone();
@@ -2884,6 +2900,7 @@ fn cycle_sacrifices_during_resolution_and_searches_two_distinct_basics() {
     let mut s = five_color_setup(&["Cycle of Renewal"]);
     let sacrificed = play_and_settle(&mut s, "Forest");
     cast(&mut s, "Cycle of Renewal");
+    assert!(s.take_action_by_type(ActionType::PayCost));
     spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     select_card(&mut s, sacrificed);
@@ -2904,6 +2921,7 @@ fn dai_li_targets_same_land_twice_then_drains_for_creatures_with_counters() {
     let mut s = five_color_setup(&["Dai Li Agents"]);
     let land = s.force_permanent_on_battlefield(0, "Forest");
     cast(&mut s, "Dai Li Agents");
+    assert!(s.take_action_by_type(ActionType::PayCost));
     spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Permanent(land)));
@@ -3295,6 +3313,7 @@ fn jailer_killed_in_response_exiles_nothing() {
     s.pass_priority();
     cast_only(&mut s);
     assert!(s.choose_target(Target::Permanent(jailer)));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority();
     s.pass_priority(); // bolt resolves, Jailer dies
     s.pass_priority();
@@ -3556,6 +3575,7 @@ fn avatar_state_grants_keywords_and_hexproof_blocks_opponent_targeting() {
 
     cast_only(&mut s);
     assert!(s.choose_target(Target::Permanent(kyoshi)));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority();
     s.pass_priority();
 
@@ -3594,6 +3614,7 @@ fn avatar_state_grants_keywords_and_hexproof_blocks_opponent_targeting() {
     );
     // Bolt the controller instead to unwind the pending choice.
     assert!(s.choose_target(Target::Player(PlayerId(0))));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority();
     s.pass_priority();
     s.assert_life(0, 17);
@@ -3633,6 +3654,7 @@ fn fancy_footwork_untaps_and_buffs_one_or_two_targets() {
     assert!(s.choose_target(Target::Permanent(w1)));
     // Min 1 met; the second target is optional but we take it.
     assert!(s.choose_target(Target::Permanent(w2)));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority();
     s.pass_priority();
 
@@ -3754,7 +3776,8 @@ fn cadets_pump_ability_buffs_until_end_of_turn() {
     let (mut s, cadets) = cadets_scenario(343, false);
     force_lands(&mut s, 0, "Mountain", 2);
     s.advance_to_active_step(0, StepKind::Main);
-    assert!(s.take_action_by_type(ActionType::PriorityActivateAbility));
+    activate(&mut s, cadets, 0);
+    assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority();
     s.pass_priority(); // ability resolves
     assert_eq!(s.game().characteristics(cadets).pt(), (2, 2));
@@ -3942,7 +3965,8 @@ fn fortune_teller_clue_sacrifices_to_draw_and_ceases_to_exist() {
     // "{2}, Sacrifice this token: Draw a card."
     let hand_before = s.zone_size(0, ZoneType::Hand);
     s.assert_action_available(ActionType::PriorityActivateAbility);
-    assert!(s.take_action_by_type(ActionType::PriorityActivateAbility));
+    activate(&mut s, clues[0], 0);
+    assert!(s.take_action_by_type(ActionType::PayCost));
     // The sacrifice is paid on activation: the Clue is already gone.
     assert!(s.battlefield_permanents_named(0, "Clue").is_empty());
     s.pass_priority();
@@ -3961,6 +3985,7 @@ fn gather_creates_per_plains_and_scry_can_reverse_top_cards_privately() {
     s.force_permanent_on_battlefield(0, "Plains");
     let objects = pin_top(&mut s, &["Island", "Forest"]);
     cast(&mut s, "Gather the White Lotus");
+    assert!(s.take_action_by_type(ActionType::PayCost));
     spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::Scry);
     assert_eq!(s.battlefield_permanents_named(0, "Ally").len(), 2);
@@ -4554,6 +4579,7 @@ fn ba_sing_se_earthbends_only_at_sorcery_timing() {
     s.set_player_mana_pool(0, "2GUU");
 
     cast(&mut s, "Abandon Attachments");
+    assert!(s.take_action_by_type(ActionType::PayCost));
     spend_colorless(&mut s);
     assert_eq!(s.action_space().player, Some(PlayerId(0)));
     assert!(
@@ -4735,6 +4761,7 @@ fn badgermole_earthbends_and_grants_trample_to_countered_creatures() {
     add_counters(&mut s, stunned, CounterKind::Stun, 1);
     s.set_player_mana_pool(0, "4G");
     let object = cast(&mut s, "Badgermole");
+    assert!(s.take_action_by_type(ActionType::PayCost));
     for _ in 0..4 {
         if s.choose_target(Target::Permanent(forest)) {
             break;
@@ -5857,6 +5884,7 @@ fn energybending_lets_your_lands_tap_for_any_color_this_turn() {
 
     s.set_player_mana_pool(0, "2");
     cast(&mut s, "Energybending");
+    assert!(s.take_action_by_type(ActionType::PayCost));
     settle(&mut s);
     assert_eq!(
         s.game().state.zones.size(ZoneType::Hand, PlayerId(0)),
@@ -7002,6 +7030,7 @@ fn ally_entry_context_buffs_the_entering_ally_and_haru_earthbends() {
     s.force_permanent_on_battlefield(0, "Haru, Hidden Talent");
     let land = s.force_permanent_on_battlefield(0, "Forest");
     cast(&mut s, "Pretending Poxbearers");
+    assert!(s.take_action_by_type(ActionType::PayCost));
     spend_named(&mut s, |label| label == "Spend {W} (expires at step end)");
     spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
@@ -7268,11 +7297,13 @@ fn quench_setup(seed: u64, p1_mountains: usize) -> Scenario {
     s.advance_to_active_step(1, StepKind::Main);
     // P1 casts Gray Ogre, then passes; P0 responds with the counter.
     cast_only(&mut s);
+    assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority(); // P1 passes
     cast_only(&mut s); // P0 casts It'll Quench Ya!
     assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
     let ogre = stack_spell_card(&s, "Gray Ogre");
     assert!(s.choose_target(Target::StackSpell(now(&s, ogre))));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority();
     s.pass_priority(); // It'll Quench Ya! resolves -> pay-or-not for P1
     s
@@ -8995,6 +9026,7 @@ fn toph_enters_earthbends_and_counts_counters_on_lands() {
     let mut s = five_color_setup(&["Toph, the Blind Bandit"]);
     let land = s.force_permanent_on_battlefield(0, "Forest");
     cast(&mut s, "Toph, the Blind Bandit");
+    assert!(s.take_action_by_type(ActionType::PayCost));
     spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Permanent(land)));
@@ -9479,7 +9511,7 @@ fn waterbend_taps_do_not_trigger_badgermole_cub() {
     clear_hand(&mut s, 0);
     s.advance_to_active_step(0, StepKind::Main);
 
-    assert!(s.take_action_by_type(ActionType::PriorityActivateAbility));
+    activate(&mut s, rallier, 0);
     assert_eq!(s.action_space().kind, ActionSpaceKind::Waterbend);
     // Two creature taps pay {2} without producing mana.
     assert!(s.choose_waterbend_tap(rallier));
@@ -10032,6 +10064,7 @@ fn layers_compose_counters_anthem_and_until_eot() {
 
     cast_only(&mut s);
     assert!(s.choose_target(Target::Permanent(kyoshi)));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority();
     s.pass_priority();
 
@@ -10065,6 +10098,7 @@ fn yip_yip_buffs_and_grants_flying_to_allies_only() {
     // On the Ally: +2/+2 and flying.
     cast_only(&mut s);
     assert!(s.choose_target(Target::Permanent(kyoshi)));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority();
     s.pass_priority();
     assert_eq!(s.game().characteristics(kyoshi).pt(), (5, 5));
@@ -10098,6 +10132,7 @@ fn yip_yip_buffs_and_grants_flying_to_allies_only() {
     // On the non-Ally: +2/+2 but no flying.
     cast_only(&mut s);
     assert!(s.choose_target(Target::Permanent(penguin)));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority();
     s.pass_priority();
     assert_eq!(s.game().characteristics(penguin).pt(), (4, 3));
@@ -10208,6 +10243,7 @@ fn zuko_exiles_the_top_card_and_may_play_it_this_turn() {
     let mountain = library_card(&s, 0, "Mountain");
     put_on_top(&mut s, mountain);
     activate(&mut s, zuko, 0);
+    spend_colorless(&mut s);
     settle(&mut s);
     assert_eq!(zone_of(&s, mountain), Some(ZoneType::Exile));
     let mountain = now(&s, mountain);
@@ -10220,6 +10256,8 @@ fn zuko_exiles_the_top_card_and_may_play_it_this_turn() {
     let ogre = library_card(&s, 0, "Gray Ogre");
     put_on_top(&mut s, ogre);
     activate(&mut s, zuko, 0);
+    assert!(s.take_action_by_type(ActionType::PayCost));
+    spend_colorless(&mut s);
     settle(&mut s);
     // The played Mountain supplies {R}: {1} more is short of {2}{R}.
     s.set_player_mana_pool(0, "1");
@@ -11391,6 +11429,7 @@ fn appa_airbends_any_number_and_makes_an_ally_for_casts_from_exile() {
     let forest = s.force_permanent_on_battlefield(0, "Forest");
     let ogre_cards = ogres.map(|ogre| card_of(&s, ogre));
     cast(&mut s, "Appa, Steadfast Guardian");
+    assert!(s.take_action_by_type(ActionType::PayCost));
     spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     let offered = offered_targets(&s);
@@ -11535,6 +11574,7 @@ fn wan_shi_tong_rejects_unpayable_x_without_changing_state() {
     for x in values {
         *s.game_mut() = root.clone();
         choose_mode(&mut s, x);
+        assert!(s.take_action_by_type(ActionType::PayCost));
         settle(&mut s);
         let wan = permanent_of(&s, object).unwrap();
         assert_eq!(counters(&s, wan), x as i32);
@@ -11956,6 +11996,7 @@ fn earth_kingdom_general_gains_that_much_life_once_each_turn() {
     let guru = s.force_permanent_on_battlefield(0, "Guru Pathik");
     s.set_player_mana_pool(0, "G");
     cast(&mut s, "Seismic Sense");
+    assert!(s.take_action_by_type(ActionType::PayCost));
     assert!(s.choose_target(Target::Permanent(forest)));
     settle(&mut s);
     assert_eq!(counters(&s, forest), 3);
@@ -12874,6 +12915,7 @@ fn toph_hardheaded_teacher_rebuys_a_spell_and_earthbends_on_each_cast() {
     let forest = s.force_permanent_on_battlefield(0, "Forest");
     let toph = permanent_named(&s, "Toph, Hardheaded Teacher");
     cast(&mut s, "Gray Ogre");
+    assert!(s.take_action_by_type(ActionType::PayCost));
     spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Permanent(forest)));
@@ -12881,6 +12923,7 @@ fn toph_hardheaded_teacher_rebuys_a_spell_and_earthbends_on_each_cast() {
     assert_eq!(counters(&s, forest), 1, "not a Lesson");
     cast(&mut s, "Yip Yip!");
     assert!(s.choose_target(Target::Permanent(toph)));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Permanent(forest)));
     settle(&mut s);
@@ -12943,6 +12986,7 @@ fn earth_rumble_earthbends_then_your_creature_fights_theirs() {
     let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
     cast(&mut s, "Earth Rumble");
     assert!(s.choose_target(Target::Permanent(forest)));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Permanent(wurm)));
@@ -13249,6 +13293,7 @@ fn zhao_taps_nonbasic_lands_and_makes_them_mountains_once_he_conquers() {
     s.set_player_mana_pool(0, "7");
     s.game_mut().scenario_refresh_priority().unwrap();
     activate(&mut s, zhao, 0);
+    assert!(s.take_action_by_type(ActionType::PayCost));
     settle(&mut s);
     assert_eq!(counters_of(&s, zhao, CounterKind::Conqueror), 1);
     assert!(s.game().characteristics(temple).abilities_lost);
@@ -13264,16 +13309,23 @@ fn zhao_taps_nonbasic_lands_and_makes_them_mountains_once_he_conquers() {
         choose(&mut s, |a| matches!(a, Action::Decline { .. }));
     }
     assert!(s.choose_target(Target::Permanent(zhao)));
-    assert_eq!(
-        s.action_space().actions,
-        vec![Action::ActivateAbility {
-            player: PlayerId(0),
-            permanent: temple,
-            ability_index: 0,
-        }],
-        "only the Mountain's {{T}}: Add {{R}} pays"
-    );
-    s.step_action(0);
+    // The Forests can still be activated deliberately; only the temple's
+    // red output completes this payment. Choose its exact indexed ability.
+    assert!(s
+        .action_space()
+        .actions
+        .iter()
+        .any(|action| matches!(action,
+            Action::ActivateAbility { permanent, ability_index: 0, .. } if *permanent == temple
+        )));
+    assert!(s
+        .action_space()
+        .actions
+        .iter()
+        .any(|action| matches!(action,
+            Action::TapForMana { permanent, .. } if *permanent == forest
+        )));
+    activate(&mut s, temple, 0);
     assert!(tapped(&s, temple), "paid with the Mountain");
     assert!(
         !s.game().characteristics(forest).abilities_lost,
@@ -13564,6 +13616,7 @@ fn the_cave_of_two_lovers_is_sacrificed_only_after_its_final_chapter_resolves() 
     let mut s = five_color_setup(&["The Cave of Two Lovers", "Mountain"]);
     let land = s.force_permanent_on_battlefield(0, "Mountain");
     let cave_card = cast(&mut s, "The Cave of Two Lovers");
+    assert!(s.take_action_by_type(ActionType::PayCost));
     spend_colorless(&mut s);
     resolve_top(&mut s);
     settle(&mut s);
@@ -14015,6 +14068,7 @@ fn bumi_unleashed_adds_a_land_creature_only_combat_phase() {
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     clear_summoning_sickness(&mut s, ogre);
     let bumi_card = cast(&mut s, "Bumi, Unleashed");
+    assert!(s.take_action_by_type(ActionType::PayCost));
     spend_colorless(&mut s);
     resolve_top(&mut s);
     assert!(s.choose_target(Target::Permanent(land)));
@@ -14075,6 +14129,7 @@ fn aang_at_the_crossroads_finds_a_creature_and_transforms_at_the_next_upkeep() {
     let land = s.force_permanent_on_battlefield(0, "Forest");
     let top = pin_top(&mut s, &["Gray Ogre", "Craw Wurm"]);
     let aang_card = cast(&mut s, "Aang, at the Crossroads");
+    assert!(s.take_action_by_type(ActionType::PayCost));
     spend_colorless(&mut s);
     resolve_top(&mut s);
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
@@ -15061,6 +15116,7 @@ fn cat_gator_any_target_removes_loyalty_or_defense_and_gains_life() {
         set_counters(&mut s, victim, counter, 5);
         force_lands(&mut s, 0, "Swamp", 2);
         cast(&mut s, "Cat-Gator");
+        assert!(s.take_action_by_type(ActionType::PayCost));
         spend_colorless(&mut s);
         pass_until(&mut s, ActionSpaceKind::ChooseTarget);
         assert!(s.choose_target(Target::Permanent(victim)));

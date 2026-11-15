@@ -68,6 +68,7 @@ fn modal_mode_one_gains_life() {
         .iter()
         .all(|action| action.action_type() == ActionType::ChooseMode));
     s.step_action(0);
+    assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority();
     s.pass_priority();
     s.assert_life(0, 23);
@@ -78,6 +79,7 @@ fn modal_mode_two_draws_a_card() {
     let mut s = crossroads_setup(112);
     assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
     s.step_action(1);
+    assert!(s.take_action_by_type(ActionType::PayCost));
     let hand_before = hand(&s, 0).len();
     s.pass_priority();
     s.pass_priority();

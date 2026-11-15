@@ -56,6 +56,7 @@ fn bastion_uses_a_sacrificed_lands_last_known_creature_type() {
     source.change_counters(CounterKind::PlusOnePlusOne, 1);
     let object = source.object;
     cast(&mut s, "Cycle of Renewal");
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     select_card(&mut s, object);

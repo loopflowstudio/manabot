@@ -24,6 +24,7 @@ fn proft_etb_draw_and_combat_counts_at_resolution() {
     let gran = put_onto_battlefield(&mut s, 0, "Gran-Gran");
     s.game_mut().state.turn.history[0].cards_drawn = 1;
     let object = cast_owned(&mut s, "Proft's Eidetic Memory");
+    assert!(s.take_action_by_type(managym::agent::action::ActionType::PayCost));
     let before = s.zone_size(0, ZoneType::Hand);
     resolve_top(&mut s); // permanent enters, ETB on stack
     assert_eq!(zone_of(&s, object), Some(ZoneType::Battlefield));

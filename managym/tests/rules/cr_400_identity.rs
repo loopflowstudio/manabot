@@ -575,6 +575,7 @@ fn cr_400_7_permanent_spell_and_copy_mint_distinct_appearances() {
         });
     let roster_size = s.game().state.cards.len();
     cast(&mut s, "Gray Ogre");
+    assert!(s.take_action_by_type(managym::agent::action::ActionType::PayCost));
     spend_colorless(&mut s);
     // CR 400.7g: the spell is a new object once payment puts it on the stack.
     let original = crate::support::inspect::stack_spell_card(&s, "Gray Ogre");

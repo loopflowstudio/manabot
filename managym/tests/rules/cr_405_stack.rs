@@ -31,8 +31,10 @@ fn cr_405_1_lifo_resolution() {
 
     assert!(s.take_action_by_type(ActionType::PriorityCastSpell));
     assert!(s.choose_target(Target::Player(PlayerId(1))));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     assert!(s.take_action_by_type(ActionType::PriorityCastSpell));
     assert!(s.choose_target(Target::Player(PlayerId(1))));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     assert_eq!(s.zone_size(0, ZoneType::Stack), 2);
 
     s.pass_priority();
@@ -61,6 +63,7 @@ fn cr_405_5_priority_after_resolution() {
     assert!(s.take_action_by_type(ActionType::PriorityPlayLand));
     assert!(s.take_action_by_type(ActionType::PriorityCastSpell));
     assert!(s.choose_target(Target::Player(PlayerId(1))));
+    assert!(s.take_action_by_type(ActionType::PayCost));
 
     s.pass_priority();
     s.pass_priority();
@@ -94,6 +97,7 @@ fn cr_405_counterspell_targets_stack_object() {
     s.advance_to_active_step(0, StepKind::Main);
     assert!(s.take_action_by_type(ActionType::PriorityCastSpell));
     assert!(s.choose_target(Target::Player(PlayerId(1))));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority();
 
     assert!(s.take_action_by_type(ActionType::PriorityCastSpell));
@@ -108,4 +112,5 @@ fn cr_405_counterspell_targets_stack_object() {
         })
         .expect("bolt should be on stack");
     assert!(s.choose_target(Target::StackSpell(now(&s, bolt_card))));
+    assert!(s.take_action_by_type(ActionType::PayCost));
 }

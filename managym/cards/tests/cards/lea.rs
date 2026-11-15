@@ -36,6 +36,7 @@ fn ancestral_recall_draws_three() {
     s.force_card_in_hand(0, "Ancestral Recall");
     assert!(s.take_action_by_type(ActionType::PriorityPlayLand));
     assert!(s.take_action_by_type(ActionType::PriorityCastSpell));
+    assert!(s.take_action_by_type(ActionType::PayCost));
 
     // Spell is on the stack; snapshot zone sizes before resolution.
     s.assert_zone_size(0, ZoneType::Stack, 1);
@@ -81,6 +82,7 @@ fn ancestral_recall_decking_loses_game() {
     }
 
     assert!(s.take_action_by_type(ActionType::PriorityCastSpell));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority();
     s.pass_priority();
 
@@ -106,6 +108,7 @@ fn counterspell_counters_ancestral_recall() {
     s.force_card_in_hand(1, "Counterspell");
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(s.take_action_by_type(ActionType::PriorityCastSpell));
+    assert!(s.take_action_by_type(ActionType::PayCost));
     let hand_before = s.zone_size(0, ZoneType::Hand);
     let library_before = s.zone_size(0, ZoneType::Library);
     s.pass_priority();
@@ -122,6 +125,7 @@ fn counterspell_counters_ancestral_recall() {
         })
         .expect("recall should be on stack");
     assert!(s.choose_target(Target::StackSpell(now(&s, recall_card))));
+    assert!(s.take_action_by_type(ActionType::PayCost));
 
     s.pass_priority();
     s.pass_priority();
@@ -167,6 +171,7 @@ fn an_announced_tap_cannot_be_used_to_fund_itself() {
         );
         if !tap_source {
             activate_named(&mut s, "Llanowar Elves", 0);
+            assert!(s.take_action_by_type(ActionType::PayCost));
             assert!(s.game().state.permanents[elves].is_none());
             assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
             assert_eq!(

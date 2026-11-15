@@ -63,6 +63,7 @@ fn cast_manowar_and_reach_target_choice(s: &mut Scenario) {
     }
 
     assert!(s.take_action_by_type(managym::agent::action::ActionType::PriorityCastSpell));
+    assert!(s.take_action_by_type(managym::agent::action::ActionType::PayCost));
     s.pass_priority();
     s.pass_priority();
 
