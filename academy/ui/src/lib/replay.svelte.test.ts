@@ -1,8 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { buildReplayFrames, replayLogEntries } from './replay';
 import { createReplayStore } from './replay.svelte';
-import type { Observation, Trace } from './types';
+import type { Observation } from './types';
 
 function makeObservation(turnNumber: number, gameOver = false): Observation {
   return {
@@ -48,83 +47,178 @@ function makeObservation(turnNumber: number, gameOver = false): Observation {
   };
 }
 
-function makeTrace(): Trace {
-  return {
-    id: 'trace-1',
-    config: {
-      hero_deck: { Mountain: 12 },
-      villain_deck: { Forest: 12 },
-      villain_type: 'passive',
-      seed: 1,
-    },
-    events: [
-      {
-        actor: 'hero',
-        observation: makeObservation(1),
-        actions: [],
-        action: 0,
-        action_description: 'Play land: Mountain',
-        reward: 0,
-      },
-      {
-        actor: 'villain',
-        observation: makeObservation(2),
-        actions: [],
-        action: 0,
-        action_description: 'Pass priority',
-        reward: 0,
-      },
-    ],
-    final_observation: makeObservation(3, true),
-    winner: 0,
-    end_reason: 'game_over',
-    timestamp: '2026-03-06T12:00:00+00:00',
-  };
+import { orientBoard } from './recording';
+import type { RecordedPosition, RecordingIndex } from './recording';
+
+const positions: RecordingIndex['positions'] = [
+  {key: 'exact-choice', kind: 'choice', turn: 1, phase: 'MAIN', step: 'PRIORITY', actor: 1, automatic: false, can_reveal: false},
+  {key: 'after:0', kind: 'consequences', turn: 2, phase: 'COMBAT', step: 'DAMAGE', actor: null, automatic: false, can_reveal: false},
+  {key: 'latest', kind: 'state', turn: 2, phase: 'COMBAT', step: 'DAMAGE', actor: null, automatic: false, can_reveal: false},
+];
+function index(canProduce = false): RecordingIndex {
+  return {id: 'trace-1', positions: [...positions], total: 3, next_offset: null, revision: 91, status: canProduce ? 'waiting' : 'finished', can_produce: canProduce, can_study: true, winner: 0, players: [], source_kind: null, watch: true, can_feedback: false};
 }
+function current(key: string): RecordedPosition {
+  return {description: null, note_key: key, ...positions.find(position => position.key === key)!, observation: makeObservation(2, key === 'latest'), decision: null, outputs: null, viewer: 0, revealed: false, can_reveal: false, history: [], history_labels: [], history_before: null, cursor: 0, transition_start: 0, consequences_recorded: true};
+}
+function installApi(live = false): string[] {
+  const calls: string[] = [];
+  vi.stubGlobal('sessionStorage', {getItem: () => null});
+  vi.stubGlobal('localStorage', {getItem: () => null, setItem: () => {}});
+  vi.stubGlobal('fetch', vi.fn(async (input: string, init: RequestInit) => {
+    calls.push(`${init.method ?? 'GET'} ${input}`);
+    if (input.includes('/positions/')) return Response.json(current(decodeURIComponent(input.split('/positions/')[1].split('?')[0])));
+    return Response.json(index(live));
+  }));
+  return calls;
+}
+afterEach(() => vi.unstubAllGlobals());
 
-describe('buildReplayFrames', () => {
-  it('labels forced actions for either seat as automation in the replay log', () => {
-    const trace = makeTrace();
-    trace.events[0].auto = true;
-    trace.events[0].action_description = 'Choose red';
-    trace.events[1].auto = true;
-    expect(replayLogEntries(trace)).toEqual([
-      { id: 'replay-0', actor: 'system', text: 'Auto: Hero: Choose red' },
-      { id: 'replay-1', actor: 'system', text: 'Auto: Villain: Pass priority' },
-    ]);
-    trace.events[0].auto = false;
-    expect(replayLogEntries(trace)[0]).toEqual({
-      id: 'replay-0', actor: 'hero', text: 'Hero: Choose red',
-    });
+describe('ReplayStore', () => {
+  it('walks choice, consequences and terminal board using only recorded reads', async () => {
+    const calls = installApi();
+    const store = createReplayStore();
+    await store.open('trace-1');
+    expect(store.current?.key).toBe('exact-choice');
+    await store.next();
+    expect(store.current?.kind).toBe('consequences');
+    await store.next();
+    expect(store.current?.observation.game_over).toBe(true);
+    expect(calls.every(call => call.startsWith('GET'))).toBe(true);
   });
-
-  it('pairs annotations with the post-action board state', () => {
-    const frames = buildReplayFrames(makeTrace());
-
-    expect(frames).toHaveLength(3);
-    expect(frames[0].observation.turn.turn_number).toBe(1);
-    expect(frames[1].actionDescription).toBe('Play land: Mountain');
-    expect(frames[1].presentation).toEqual([]);
-    expect(frames[1].observation.turn.turn_number).toBe(2);
-    expect(frames[2].actionDescription).toBe('Pass priority');
-    expect(frames[2].observation.game_over).toBe(true);
+  it('restores a nonzero key and rejects an unavailable saved position visibly', async () => {
+    installApi();
+    const store = createReplayStore();
+    await store.open('trace-1', 'after:0');
+    expect(store.selected).toBe(1);
+    await store.open('trace-1', 'removed');
+    expect(store.current).toBeNull();
+    expect(store.error).toContain('unavailable');
+  });
+  it('ignores an earlier seek reply that arrives after the later seek', async () => {
+    installApi();
+    const store = createReplayStore();
+    await store.open('trace-1');
+    let finish: (response: Response) => void = () => {};
+    vi.stubGlobal('fetch', vi.fn((input: string) => input.includes('after:0') || input.includes('after%3A0')
+      ? new Promise<Response>(resolve => finish = resolve)
+      : Promise.resolve(Response.json(current('latest')))));
+    const earlier = store.seek(1);
+    await store.seek(2);
+    finish(Response.json(current('after:0')));
+    await earlier;
+    expect(store.current?.key).toBe('latest');
+    expect(store.busy).toBe(false);
+  });
+  it('uses the persisted revision for explicit continuation and never retries a lost reply', async () => {
+    const calls = installApi(true);
+    const store = createReplayStore();
+    await store.open('trace-1', 'latest');
+    const bodies: unknown[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (input: string, init: RequestInit) => {
+      calls.push(`${init.method ?? 'GET'} ${input}`);
+      if (init.method === 'POST') { bodies.push(JSON.parse(init.body as string)); throw new Error('Lost reply'); }
+      return Response.json(index(true));
+    }));
+    await store.produce();
+    expect(bodies).toEqual([{revision: 91}]);
+    expect(store.playing).toBe(false);
+    expect(store.error).toContain('Refresh');
+    expect(calls.filter(call => call.startsWith('POST'))).toHaveLength(1);
+  });
+  it('keeps physical seating independent of the acting information view', () => {
+    const observation = makeObservation(1);
+    const oriented = orientBoard(observation, 1);
+    expect(oriented.agent).toBe(observation.opponent);
+    expect(oriented.opponent).toBe(observation.agent);
+    expect(observation.agent.player_index).toBe(0);
+    expect(oriented.opponent.hand).toEqual(observation.agent.hand);
   });
 });
 
-describe('ReplayStore', () => {
-  it('steps through frames and auto-pauses at the end', () => {
-    const store = createReplayStore();
-    store.loadTrace(makeTrace());
+it('loads every beat of a transition spanning several bounded history pages', async () => {
+  installApi();
+  const store = createReplayStore();
+  await store.open('trace-1');
+  const beforeValues: (string | null)[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+    const before = new URL(input, 'https://academy.test').searchParams.get('before');
+    beforeValues.push(before);
+    const end = before === null ? 205 : Number(before);
+    const start = Math.max(0, end - 100);
+    return Response.json({...current('after:0'), cursor: 205, transition_start: 0,
+      history: Array.from({length: end - start}, (_, i) => ({seq: start + i, from_revision: 90, to_revision: 91, caused_by: null, group: 0, importance: 'ambient', suggested_ms: 100, sound: null, kind: {kind: 'turn_started', player: 0, turn_number: 1}})),
+      history_labels: Array.from({length: end - start}, () => ({objects: {}, players: {}, stacks: {}})), history_before: start || null,
+    });
+  }));
+  await store.seek(1);
+  expect(store.current?.history.map(event => event.seq)).toEqual(Array.from({length: 205}, (_, i) => i));
+  expect(beforeValues).toEqual([null, '105', '5']);
+});
 
-    store.togglePlaying();
-    expect(store.playing).toBe(true);
+it('opens at the first permitted choice while retaining earlier opponent consequences', async () => {
+  installApi();
+  vi.stubGlobal('fetch', vi.fn(async (input: string) => input.includes('/positions/')
+    ? Response.json(current('exact-choice'))
+    : Response.json({...index(), positions: [positions[1], positions[0], positions[2]]})));
+  const store = createReplayStore();
+  await store.open('trace-1');
+  expect(store.selected).toBe(1);
+  expect(store.current?.key).toBe('exact-choice');
+  expect(store.index?.positions[0].kind).toBe('consequences');
+});
 
-    store.tick();
-    expect(store.currentFrameIndex).toBe(1);
-    expect(store.playing).toBe(true);
+it('pause holds the board when a delayed next-position read finishes', async () => {
+  installApi();
+  const store = createReplayStore();
+  await store.open('trace-1');
+  const held = store.current;
+  let finish!: (response: Response) => void;
+  vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(resolve => finish = resolve)));
+  store.playing = true;
+  const next = store.next(true);
+  store.pause();
+  expect(store.busy).toBe(false);
+  finish(Response.json(current('after:0')));
+  await next;
+  expect(store.current).toBe(held);
+  expect(store.selected).toBe(0);
+  expect(store.playing).toBe(false);
+  vi.stubGlobal('fetch', vi.fn(async () => Response.json(current('after:0'))));
+  await store.next(true);
+  expect(store.current?.key).toBe('after:0');
+});
 
-    store.tick();
-    expect(store.currentFrameIndex).toBe(2);
-    expect(store.playing).toBe(false);
-  });
+it.each([false, true])('pause holds the reader while a pending producer saves (lost reply: %s)', async lostReply => {
+  installApi(true);
+  const store = createReplayStore();
+  await store.open('trace-1', 'latest');
+  const held = store.current;
+  let finish!: () => void;
+  let commands = 0;
+  const saved = {...index(true), revision: 92, positions: [...positions.slice(0, -1), {...positions[0], key: 'new-choice'}, {...positions[1], key: 'after:1'}, positions[2]]};
+  vi.stubGlobal('fetch', vi.fn(async (input: string, init: RequestInit) => {
+    if (init.method === 'POST') {
+      commands++;
+      await new Promise<void>(resolve => finish = resolve);
+      if (lostReply) throw new Error('Lost reply');
+      return Response.json({});
+    }
+    if (input.includes('/positions/')) return Response.json({...current('exact-choice'), key: 'new-choice'});
+    return Response.json(saved);
+  }));
+  store.playing = true;
+  const production = store.produce();
+  store.pause();
+  finish();
+  await production;
+  expect(store.index?.revision).toBe(92);
+  expect(store.current).toBe(held);
+  expect(store.selected).toBe(2);
+  expect(store.playing).toBe(false);
+  expect(store.producing).toBe(false);
+  expect(commands).toBe(1);
+  await store.next();
+  expect(store.current?.key).toBe('new-choice');
+  expect(commands).toBe(1);
 });

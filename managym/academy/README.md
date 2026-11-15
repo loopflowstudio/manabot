@@ -249,13 +249,24 @@ Open **Watch** (`/replay?watch=1`) to select both seats, decks and a deal seed;
 `managym academy watch --player X --player Y` opens it with the seats selected
 (`&seat1=…&seat2=…`) and leaves Start to the person. Trained checkpoints, in
 one seat or both, and the random, greedy, heuristic and search anchors use
-GameSession's normal Command authority. Step advances one native decision;
-Play/Pause and speed control that same operation. Previous decisions read saved
-outputs without rerunning the policy. Completed watched games open from Games
-in this same table. Reloading retains the watch credential in the browser and
-opens the latest recorded decision, including any pending search retry and its
-message. A `decision` URL parameter opens that historical decision instead.
-Inspection never retries the pending search; **Retry search** does so explicitly.
+GameSession's normal Command authority. Live production is separate from
+recorded playback. The shared replay viewer walks choices, recorded
+consequences and result/latest-state positions for
+human games, Watch and imported games. At a live Watch's latest position,
+Continue requests one decision and Play can continue production. Browsing
+earlier positions reads saved data without rerunning a policy. Completed games
+open from Games in the same viewer. See the
+[replay guide](../../docs/academy.md#inspect-a-replay) for navigation, speed,
+perspective, reload and recovery. Watch credentials stay in the tab's
+`sessionStorage`; saved position URLs carry no credentials.
+
+Opening card details or reading earlier history pauses replay. Close the details
+when ready, then press **Play** to resume. Returning to **Latest** does not start
+playback. A live decision already being produced may finish saving while you read;
+your selected board stays put. A pending mirror-search timeout is
+retained across reload and shown with its message. At the live edge, **Retry
+search** explicitly retries that decision; browsing saved positions never retries
+it. The exact selected position remains selected after reload.
 
 `watch.py` admits controllers and verified exported training games or evaluation
 traces through **Open a game file**; choose a game when a trace contains several.
@@ -277,10 +288,16 @@ conditional root-sequence factors and values; these remain labeled separately
 from native microchoice marginals. Anchors without critics have no value estimate. Watch's acting-view
 inspection endpoint never returns the full mixed canonical replay. The separate
 private analysis observation supplies **Show both hands**, available explicitly
-for bot spectators, including during active watches. Active inspection requires
-the watch credential; completed inspection remains shared. The default
-is the acting bot's view. Ordinary trace reads always strip the analysis
-snapshot, and bot inputs and decision evidence retain their acting-view scope.
+for authorized bot spectators, including during active watches. Every read,
+including completed inspection, follows the recording's participant/shared
+access rules; finishing does not make a private recording public. Active Watch
+inspection also requires its watch credential. Choices default to the acting
+bot's view, independently of the stable seat-0 table orientation. Consequence
+and result boards use the authorized recorded seat-0 view where actor-private
+post-action snapshots are absent, with the perspective explicitly labeled.
+Unavailable views stay unavailable. Ordinary trace reads always strip the
+analysis snapshot, and bot inputs, decision evidence and acting-view history
+retain their acting-view scope.
 
 **Try another line** uses retained Study roots from either acting seat, executes
 one exact semantic Command on an isolated branch, and returns to the recorded

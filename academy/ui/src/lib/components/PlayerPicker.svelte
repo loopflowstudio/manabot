@@ -4,7 +4,7 @@
   import type { PolicyRuntimeIdentity } from '$lib/types';
   import { policyChoice, type PlayerChoice } from '$lib/game.svelte';
   import type { Decklists, TrainedOpponent } from '$lib/types';
-  import type { MirrorSearch } from '$lib/watch';
+  import type { MirrorSearch } from '$lib/mirror';
   import MirrorControl from './MirrorControl.svelte';
 
   interface Props {

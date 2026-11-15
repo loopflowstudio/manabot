@@ -48,9 +48,11 @@ test('installed Academy plays and opens its recorded decisions', async ({ page }
   await expect(select).toBeVisible();
   await select.selectOption({ index: 1 });
   await expect(page.getByTestId('game-board')).toBeVisible();
-  await expect(page.getByText(/^Frame 1 \/ \d+$/)).toBeVisible();
-  await page.getByRole('button', { name: 'Next frame', exact: true }).click();
-  await expect(page.getByText(/^Frame 2 \/ \d+$/)).toBeVisible();
+  const counter = page.getByTestId('position-counter');
+  await expect(counter).toBeVisible();
+  const initialPosition = Number(/Position (\d+)/.exec(await counter.innerText())![1]);
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(counter).toHaveText(new RegExp(`Position ${initialPosition + 1} / \\d+`));
   await page.getByRole('link', { name: 'Watch', exact: true }).first().click();
   await expect(page.getByRole('button', { name: 'Start watching' })).toBeEnabled();
   for (const seat of ['Seat 1', 'Seat 2']) {

@@ -91,6 +91,12 @@ export class PresentationPlayer {
     this.playing = this.remaining > 0;
   }
 
+  /** The replay transport chooses which retained transition to narrate. */
+  playRecordedFrom(seq: number): void {
+    this.pending = this.events.flatMap((event, index) => event.seq >= seq ? [index] : []);
+    this.playing = false;
+  }
+
   private append(events: readonly PresentationEvent[], labels: PresentationLabels): void {
     const incoming = copyPresentationEvents($state.snapshot(events));
     const last = this.events.at(-1);

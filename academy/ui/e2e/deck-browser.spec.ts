@@ -13,7 +13,7 @@ test('Watch uses the same browser to assign both bot seats', async ({ page }) =>
   await page.getByRole('button', { name: 'Start watching', exact: true }).click();
   expect((await started).postDataJSON()).toMatchObject({ hero_deck: 'elemental_bg', villain_deck: 'elemental_ug' });
   await expect(page.getByTestId('game-board')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Step decision', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeEnabled();
 });
 
 test('browse every exact deck and Lesson pool, choose both seats, and keep a running game intact', async ({ page }, testInfo) => {
