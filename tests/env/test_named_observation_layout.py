@@ -21,12 +21,15 @@ def board() -> tuple[managym.Env, managym.Observation]:
 
 
 @pytest.mark.parametrize(
-    "history,input_version", [(0, 9), (1, 9), (1, 10)], ids=["raw", "v9", "v10"]
+    "history,input_version",
+    [(0, 9), (1, 9), (1, 10), (0, 11), (1, 11)],
+    ids=["raw", "v9", "v10", "v11-raw", "v11"],
 )
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 def test_named_layout_matches_native_buffers_and_python_values(
     board: tuple[managym.Env, managym.Observation],
     history: Literal[0, 1],
-    input_version: Literal[9, 10],
+    input_version: Literal[9, 10, 11],
 ) -> None:
     env, obs = board
     config = ObservationConfig(
@@ -38,7 +41,9 @@ def test_named_layout_matches_native_buffers_and_python_values(
     )
     space = ObservationSpace(config)
     layout = managym.observation_layout(
-        policy_history=history == 1, turn_state=input_version == 10
+        policy_history=history == 1,
+        turn_state=input_version >= 10,
+        legacy=input_version < 11,
     )
     native = space.encoder.allocate()
     env.encode_observation_into(obs, native)
@@ -60,7 +65,7 @@ def test_named_layout_matches_native_buffers_and_python_values(
         else:
             assert "element" in metadata and "feature" not in metadata["axes"]
         np.testing.assert_array_equal(array, reference[key], err_msg=key)
-    if history == 0 and input_version == 9:
+    if history == 0 and input_version == 11:
         scalar = env.encode_observation(obs)
         assert scalar.keys() == layout.keys()
         for key, array in scalar.items():
@@ -93,13 +98,18 @@ def test_named_layout_describes_tagged_rows_and_history() -> None:
     assert raw["events"]["columns"]["source_id"]["kind"] == "id"
     assert history["events"]["columns"]["source_context"]["kind"] == "reference"
     assert history.keys() == raw.keys()
+    assert raw["agent_permanents"]["columns"]["valid"]["index"] == 50
+    assert raw["stack"]["columns"]["source"]["kind"] == "reference"
+    legacy = managym.observation_layout(legacy=True)
+    assert legacy["agent_permanents"]["columns"]["valid"]["index"] == 37
+    assert raw.keys() - legacy.keys() == {"stack", "stack_valid"}
     assert not raw["action_focus"]["columns"]
     assert raw["action_focus"]["element"]["kind"] == "reference"
 
 
 def test_named_layout_names_v10_turn_state() -> None:
-    v9 = managym.observation_layout(policy_history=True)
-    v10 = managym.observation_layout(policy_history=True, turn_state=True)
+    v9 = managym.observation_layout(policy_history=True, turn_state=False, legacy=True)
+    v10 = managym.observation_layout(policy_history=True, legacy=True)
     assert v10.keys() - v9.keys() == {"player_turn_state", "card_turn_state"}
     player = v10["player_turn_state"]
     assert player["shape"] == [2, 8]

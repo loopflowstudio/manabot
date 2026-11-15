@@ -12,6 +12,7 @@ Covers:
   symmetric start.
 """
 
+from collections.abc import Sequence
 from types import SimpleNamespace
 
 import torch
@@ -47,11 +48,14 @@ def first_valid_actions(obs: dict[str, torch.Tensor]) -> torch.Tensor:
 # VectorEnv path
 # -----------------------------------------------------------------------------
 class TestVectorEnvPotential:
-    def _blank_tensors(self, env: VectorEnv):
+    def _blank_tensors(self, env: VectorEnv) -> tuple[torch.Tensor, torch.Tensor]:
+        """Blank board rows (input v11 permanents) and player rows."""
         encoder = env.observation_space.encoder
-        cards = torch.zeros((env.num_envs, encoder.cards_per_player, encoder.card_dim))
+        board = torch.zeros(
+            (env.num_envs, encoder.perms_per_player, encoder.permanent_dim)
+        )
         players = torch.zeros((env.num_envs, 1, encoder.player_dim))
-        return cards, players
+        return board, players
 
     def _add_card(
         self,
@@ -65,11 +69,13 @@ class TestVectorEnvPotential:
         env_ref: VectorEnv | None = None,
     ) -> None:
         assert env_ref is not None
-        cards[env_index, slot, zone] = 1.0
+        # Input v11 board rows are permanents; a card elsewhere has no row.
+        if zone != BATTLEFIELD:
+            return
         if is_land:
-            cards[env_index, slot, env_ref._card_land_index] = 1.0
+            cards[env_index, slot, env_ref._land_index] = 1.0
         if is_creature:
-            cards[env_index, slot, env_ref._card_creature_index] = 1.0
+            cards[env_index, slot, env_ref._creature_index] = 1.0
         cards[env_index, slot, -1] = 1.0  # validity
 
     def test_potential_sign_conventions(self):
@@ -192,8 +198,8 @@ class TestVectorEnvPotential:
             done = terminated | truncated
             if bool(done.any()):
                 prev_phi = env._potential(
-                    prev_obs["agent_cards"],
-                    prev_obs["opponent_cards"],
+                    prev_obs[env._board_keys[0]],
+                    prev_obs[env._board_keys[1]],
                     prev_obs["agent_player"],
                     prev_obs["opponent_player"],
                 )
@@ -213,7 +219,9 @@ class TestVectorEnvPotential:
 # -----------------------------------------------------------------------------
 # Single-env Match.Reward path
 # -----------------------------------------------------------------------------
-def _stub_card(*, zone: int, is_land: bool = False, is_creature: bool = False):
+def _stub_card(
+    *, zone: int, is_land: bool = False, is_creature: bool = False
+) -> SimpleNamespace:
     return SimpleNamespace(
         zone=zone,
         card_types=SimpleNamespace(is_land=is_land, is_creature=is_creature),
@@ -224,16 +232,26 @@ def _stub_obs(
     *,
     agent_life: int = 20,
     opponent_life: int = 20,
-    agent_cards=(),
-    opponent_cards=(),
+    agent_cards: Sequence[SimpleNamespace] = (),
+    opponent_cards: Sequence[SimpleNamespace] = (),
     game_over: bool = False,
     won: bool = False,
-):
+) -> SimpleNamespace:
+    # Battlefield fixtures expose characteristics on their permanent.
+    def permanents(cards: Sequence[SimpleNamespace]) -> list[SimpleNamespace]:
+        return [
+            SimpleNamespace(characteristics=card)
+            for card in cards
+            if card.zone == BATTLEFIELD
+        ]
+
     return SimpleNamespace(
         agent=SimpleNamespace(life=agent_life),
         opponent=SimpleNamespace(life=opponent_life),
-        agent_cards=list(agent_cards),
-        opponent_cards=list(opponent_cards),
+        agent_cards=[card for card in agent_cards if card.zone != BATTLEFIELD],
+        opponent_cards=[card for card in opponent_cards if card.zone != BATTLEFIELD],
+        agent_permanents=permanents(agent_cards),
+        opponent_permanents=permanents(opponent_cards),
         game_over=game_over,
         won=won,
     )

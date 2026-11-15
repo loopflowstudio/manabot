@@ -46,6 +46,10 @@ from manabot.env.observation import (
     FACT_VALUE_INDEX,
     PERMANENT_DEFINITION_INDEX,
     RELATION_VALID_INDEX,
+    STACK_DEFINITION_INDEX,
+    STACK_DIM,
+    STACK_IS_MINE_INDEX,
+    STACK_SOURCE_INDEX,
     ObservationBuffers,
 )
 from manabot.env.shared_effects import DETAIL_DIM, EFFECT_ROWS, MEMBER_DIM
@@ -455,6 +459,11 @@ class Prepared[A]:
     # A serving scope may bound this batch's lifetime without changing its rows.
     guard: Callable[[object], None] | None = None
     bucket_needs: tuple[tuple[int, ...], ...] | None = None
+    # Input v11 appends one shared stack segment before optional belief rows.
+    stack: A | None = None
+    stack_rows: A | None = None
+    stack_targets: A | None = None
+    stack_mask: A | None = None
 
 
 def prepare(
@@ -482,6 +491,9 @@ def prepare(
     if inference and not bucketed:
         facts = facts[:, (facts[..., FACT_VALID_INDEX] == 1).any(0)]
     validity = np.concatenate([obs[key] for key in OBJECT_VALIDITY_KEYS], 1)
+    stack = obs.get("stack")
+    if stack is not None:
+        validity = np.concatenate((validity, obs["stack_valid"]), 1)
     belief = _belief(obs)
     if belief is not None:
         validity = np.concatenate(
@@ -567,6 +579,8 @@ def prepare(
         np.repeat([True, False, True, False, True, False], [1, 1, c, c, p, p]),
         (batch, 2 + 2 * c + 2 * p),
     )
+    if stack is not None:
+        ownership = np.concatenate((ownership, stack[..., STACK_IS_MINE_INDEX] > 0), 1)
     if belief is not None:
         ownership = np.concatenate(
             (ownership, belief.owners == 0, np.zeros((batch, 1), bool)), 1
@@ -589,6 +603,27 @@ def prepare(
         deck_rows=tables.rows(decklists[..., 0]),
         deck_counts=(decklists[..., 1:] / f32(60)).astype(f32),
         permanent_rows=tables.rows(permanents[..., PERMANENT_DEFINITION_INDEX]),
+        stack=stack[
+            ...,
+            [
+                c
+                for c in range(STACK_DIM)
+                if c not in (STACK_DEFINITION_INDEX, STACK_SOURCE_INDEX)
+            ],
+        ].astype(f32)
+        if stack is not None
+        else None,
+        stack_rows=tables.rows(stack[..., STACK_DEFINITION_INDEX])
+        if stack is not None
+        else None,
+        stack_targets=(
+            base + (stack[..., STACK_SOURCE_INDEX].astype(np.int64) - 1).clip(min=0)
+        ).reshape(-1)
+        if stack is not None
+        else None,
+        stack_mask=(stack[..., STACK_SOURCE_INDEX] > 0).astype(f32)
+        if stack is not None
+        else None,
         link_targets=tuple(link_targets),
         link_masks=tuple(link_masks),
         facts=_facts(facts, tables, objects),
@@ -651,6 +686,8 @@ def _referenced_definitions(
         references.extend(
             obs["events"][..., col][obs["events_valid"] == 1] for col in (2, 7)
         )
+    if "stack" in obs:
+        references.append(obs["stack"][..., STACK_DEFINITION_INDEX])
     if tables.catalog_records:
         references.extend(
             (

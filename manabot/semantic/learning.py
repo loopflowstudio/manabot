@@ -406,6 +406,7 @@ class BoundSemanticPack:
         catalog rows by definition identity (key, else printed name), so rows
         never depend on ID allocation.
         """
+
         import managym  # Native only on this path; historical readers stay pure.
 
         manifest = _mapping(manifest, "content_pack_manifest")
@@ -557,14 +558,45 @@ class BoundSemanticPack:
         slots: list[int] = []
         identity_ids: list[int] = []
 
+        # Frozen card-role names cover every visible object on a side: cards,
+        # spells it owns (top first) and the permanents it controls. The
+        # schema's roles are a world-binding input, so permanents and spells
+        # keep the card role and slot order they had as card rows.
+        def side_definitions(cards: Any, owner: int, permanents: Any) -> list[int]:
+            return [
+                *(int(card.registry_key) for card in cards),
+                *(
+                    int(item.source_card_registry_key)
+                    for item in observation.stack_objects
+                    if item.characteristics is not None and item.owner_id == owner
+                ),
+                *(int(permanent.registry_key) for permanent in permanents),
+            ]
+
         for role_name, cards in (
-            ("agent_card", observation.agent_cards),
-            ("agent_sideboard", observation.agent_sideboard),
-            ("opponent_card", observation.opponent_cards),
+            (
+                "agent_card",
+                side_definitions(
+                    observation.agent_cards,
+                    observation.agent.id,
+                    observation.agent_permanents,
+                ),
+            ),
+            (
+                "agent_sideboard",
+                [int(card.registry_key) for card in observation.agent_sideboard],
+            ),
+            (
+                "opponent_card",
+                side_definitions(
+                    observation.opponent_cards,
+                    observation.opponent.id,
+                    observation.opponent_permanents,
+                ),
+            ),
         ):
             role = self.schema.object_roles[role_name]
-            for slot, card in enumerate(cards):
-                card_def_id = int(card.registry_key)
+            for slot, card_def_id in enumerate(cards):
                 definition_rows.append(self.definition_row(card_def_id))
                 roles.append(role)
                 slots.append(slot)
@@ -572,7 +604,7 @@ class BoundSemanticPack:
 
         stack_role = self.schema.object_roles["stack_ability"]
         for slot, stack_object in enumerate(observation.stack_objects):
-            if int(stack_object.kind) == 0:  # spell already appears in visible cards
+            if int(stack_object.kind) == 0:  # a spell has its card role above
                 continue
             card_def_id = int(stack_object.source_card_registry_key)
             definition_rows.append(self.definition_row(card_def_id))

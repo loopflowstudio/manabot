@@ -181,16 +181,25 @@ checkpoints or experiment evidence.
   so a layout change refuses older checkpoints, naming that revision and the
   buffers that differ. Do not bump the input version for a layout change or add
   a loading path for an older layout.
-- Main carries policy input v9, the fresh default, and explicit v10
-  (`ObservationConfig.policy_input_version`); it is always serialized. V10 is
-  v9 plus the `player_turn_state` and `card_turn_state` buffers, whose
-  presence selects it natively; a v9 encoder refuses an observation that needs
-  them (`managym.input_v10_state`) before writing buffers. A checkpoint,
+- Main carries policy input v11, the fresh default
+  (`ObservationConfig.policy_input_version`, always serialized): one row per
+  game thing. Card rows hold cards outside the battlefield and stack;
+  permanents own one effective `CharacteristicsData` projection plus object
+  identity and token status; spells own a `SpellData` projection, and abilities
+  carry only source references. Old Python `.card` and flat characteristic
+  getters derive from those records (removed in 0.4.0); the `stack`
+  buffer holds every spell and ability. A battlefield object's or spell's card
+  id indexes its permanent or stack row, so focus, relations and history name
+  one row. V11 carries v10's `player_turn_state` and `card_turn_state`; a
+  turn-state-free encoder refuses an observation that needs them
+  (`managym.input_v10_state`) before writing buffers. Inputs v9 and v10 are a
+  deprecated fork for earlier checkpoints (`agent/legacy_input.rs`,
+  `manabot/env/legacy_input.py`, `InputLayout::Legacy`; removed in 0.4.0,
+  MTG-353 owns portability across worlds); never extend it. A checkpoint,
   replay or saved configuration bound to any other version, or omitting it,
   raises `UnsupportedPolicyInput`, which names the revision to run it from
-  (`ac601834d` is the last revision supporting v1-v8). The v10 turn-state
-  append is the only version branch in the encoders and the model; add no
-  others, and a new layout replaces these at a world freeze.
+  (`ac601834d` is the last revision supporting v1-v8). Add no other version
+  branch; a new layout replaces these at a world freeze.
 - Open-ended vocabularies (counter kinds, added subtypes, set names, used
   abilities, continuous-effect records, copy effects and their exceptions) are
   fact rows, never columns. Active effects are shared records: `effects`
