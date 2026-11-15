@@ -311,6 +311,23 @@ publish, land or choose the next Graph step from here.
   `-o /tmp/<dir>/wheels`, restore the source at once, unzip the wheel into
   `/tmp/<dir>/site` and run with `PYTHONPATH=/tmp/<dir>/site` (print
   `managym.__file__`); admission must then fail at the first such decision.
+- Policy history changes (`agent/policy_history.rs`, `events` rows): history
+  needs input v11 (v9/v10 refuse it). Encode both seats' views per decision
+  with `ObservationConfig(policy_history_version=1, max_cards_per_player=128)`,
+  compare with `env.encode_observation_into`, and embed the actor's rows
+  through a `ModelConfig(..., recent_events=True)` catalog policy. Privacy
+  check on viewer rows: status 3 never names a definition, and an opponent's
+  Draw or library/hand move names one only after a Reveal of it earlier in the
+  game (the Reveal can already be evicted from the 32-row window). Authored,
+  Elemental and 16 TLA pool builds, two seeds each, took about a minute.
+  `capture_text_decision(env, history_capacity=32)` renders the LLM view; some
+  TLA positions fail at capacity 0 on `main` too ("unresolved visible object
+  reference", "unsupported continuation stage"). Train a history policy from
+  `local_smoke(steps=3, device="cpu")` with `agent.recent_events=True` (about
+  7 s); for the returning user, run the same regime with `main`'s checkout on
+  `PYTHONPATH` (`manabot.cli.main` from a `/tmp` script) and `manabot sim` it
+  on the branch: a layout change must refuse naming `events` and the revision.
+  Both sim seats must share one observation ABI.
 - "No behavior change" engine claims: `git worktree add --detach /tmp/<x>
   <before>`, build it with `uv run --extra play maturin build --release -i .venv/bin/python -m
   /tmp/<x>/managym/Cargo.toml` (about 4-5 min), drop its `.so` into

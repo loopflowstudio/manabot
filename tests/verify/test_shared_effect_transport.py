@@ -135,7 +135,7 @@ def test_source_dependent_shared_transport_has_exact_public_join() -> None:
 
 
 def _history(env: managym.Env, viewer: int) -> np.ndarray:
-    """The viewer's valid public history v1 rows."""
+    """The viewer's valid policy history rows."""
     encoded = ObservationEncoder(ObservationConfig(policy_history_version=1)).encode(
         env.observation_for_player(viewer)
     )

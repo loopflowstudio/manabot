@@ -386,7 +386,7 @@ class BeliefRows[A]:
 
 @dataclass(frozen=True)
 class EventRows[A]:
-    """Public history joins and integer ages; log1p stays in the backend."""
+    """Policy history joins and integer ages; log1p stays in the backend."""
 
     kinds: A
     amounts: A

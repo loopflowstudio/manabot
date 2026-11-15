@@ -73,7 +73,7 @@ SEAT_KEYS: dict[str, tuple[str, ...]] = {
 # Read only at legal rows, which `actions_valid` bounds; its padding is -1.
 _UNMEASURED_KEYS = ("action_focus",)
 # Column positions come from the native layout by name, so a moved or added
-# column cannot silently shift what is remapped. Policy history v1 is the
+# column cannot silently shift what is remapped. Policy history is the
 # event layout whose context columns are object references.
 _LAYOUT = observation_layout(policy_history=True)
 

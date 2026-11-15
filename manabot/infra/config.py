@@ -287,7 +287,7 @@ class ModelConfig(BaseConfig):
     this Python type changes neither field meanings nor ordinary reload admission.
     """
 
-    # Public identity/history v1; false preserves historical receipt bytes.
+    # Viewer policy history v1; false preserves historical receipt bytes.
     recent_events: bool = Field(default=False, exclude_if=lambda value: not value)
     # The semantic vocabulary the model reads: the world's one catalog. Fresh
     # recipes write "world"; older labels in `FROZEN_VOCABULARY_LABELS` are

@@ -586,7 +586,7 @@ fn fact_row_kind(kind: FactKind) -> &'static str {
 }
 
 /// Every array `encode` writes, keyed by its buffer name, without allocating
-/// game buffers. `policy_history` selects the public history rows of `events`;
+/// game buffers. `policy_history` selects the viewer policy history rows of `events`;
 /// `turn_state` adds the turn-state buffers, as
 /// `ObservationEncoderConfig::turn_state` does; `layout` selects input v11's
 /// one-token rows or the deprecated v9/v10 rows.

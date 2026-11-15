@@ -1,5 +1,5 @@
 //! Atomic, representation-neutral input for one acting decision. Capture v5
-//! combines schema-8 observations with native continuation, content and public-history
+//! combines schema-8 observations with native continuation, content and policy-history
 //! authorities. The digest covers every serialized fact, excluding itself.
 
 use std::collections::{BTreeMap, BTreeSet};

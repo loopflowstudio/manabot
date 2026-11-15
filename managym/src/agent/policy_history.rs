@@ -563,17 +563,6 @@ pub fn encode(
     capacity: usize,
     object_to_index: &HashMap<i32, i32>,
 ) -> Vec<[f32; HISTORY_DIM]> {
-    encode_rows(obs, capacity, |id| {
-        object_to_index.get(&id).map(|index| *index as usize)
-    })
-}
-
-/// Rows whose object contexts `context` resolves from an object id.
-pub(crate) fn encode_rows(
-    obs: &Observation,
-    capacity: usize,
-    context: impl Fn(i32) -> Option<usize>,
-) -> Vec<[f32; HISTORY_DIM]> {
     let reference = |value: &HistoryReference| -> [f32; 5] {
         let role = |owner: PlayerId| {
             if owner.0 as i32 == obs.turn.agent_player_id {
@@ -592,7 +581,7 @@ pub(crate) fn encode_rows(
                 context_id,
                 ..
             } => {
-                let context = context_id.and_then(&context);
+                let context = context_id.and_then(|id| object_to_index.get(&id).copied());
                 [
                     definition.map(|id| (id + 1) as f32).unwrap_or(0.0),
                     role(*owner),

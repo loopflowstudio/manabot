@@ -459,11 +459,11 @@ def recent_events(
         raise ValueError("event validity must be binary")
     rows = np.where(valid.astype(bool)[..., None], events, 0)
     if not np.isfinite(rows).all():
-        raise ValueError("public history must be finite")
+        raise ValueError("policy history must be finite")
 
     def categorical(values: np.ndarray, size: int) -> None:
         if not ((values == np.floor(values)) & (values >= 0) & (values < size)).all():
-            raise ValueError("invalid public history categorical field")
+            raise ValueError("invalid policy history categorical field")
 
     categorical(rows[..., HISTORY_COLUMNS["kind"]], 11)
     categorical(rows[..., HISTORY_COLUMNS["from_zone"]], 8)

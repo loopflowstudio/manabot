@@ -34,7 +34,7 @@ def observation_layout(
     """Column names, value encodings and fixed extents of each encoded array.
 
     Keys match `encode_observation` and the vector env buffers; a None extent
-    is a caller-selected capacity. `policy_history` selects the public history
+    is a caller-selected capacity. `policy_history` selects the viewer policy history
     rows of `events` instead of raw events; `turn_state` adds
     `player_turn_state` and `card_turn_state` (inputs v10 and v11); `legacy`
     selects the deprecated v9/v10 object rows (removed in 0.4.0) instead of
