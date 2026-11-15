@@ -21,8 +21,26 @@ NATIVE_WATCH_PLAYERS = ("random", "search")
 MAX_SEARCH_SIMS = 4096
 
 
-def build_villain_policy(config: "GameConfig") -> BotPolicy:
-    """Build a bot policy from a parsed GameConfig."""
+def player_fields(choice: str) -> dict[str, str | int]:
+    """Game-config fields for `policy:<id>`, `search-<playouts>` or a native name."""
+    if choice.startswith("policy:"):
+        return {
+            "villain_type": "policy",
+            "opponent_sha256": choice.removeprefix("policy:"),
+        }
+    if choice.startswith("search-"):
+        try:
+            return {
+                "villain_type": "search",
+                "villain_sims": int(choice.removeprefix("search-")),
+            }
+        except ValueError as error:
+            raise ValueError("Invalid search playout count.") from error
+    return {"villain_type": choice}
+
+
+def build_villain_policy(config: "GameConfig", *, seat: int = 1) -> BotPolicy:
+    """Build the policy for one seat from a parsed GameConfig."""
     seed = config.seed if config.seed is not None else 0
     villain_type = config.villain_type
     search = config.search[1] if config.search else None
@@ -42,7 +60,7 @@ def build_villain_policy(config: "GameConfig") -> BotPolicy:
         return policy_registry().load(
             config.opponent.get("base_sha256", config.opponent["sha256"]),
             config.to_rust(),
-            seat=1,
+            seat=seat,
             seed=seed,
             search=search,
         )

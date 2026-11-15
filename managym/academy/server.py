@@ -6,6 +6,7 @@ FastAPI server for interactive managym play over WebSocket.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterable
 from contextlib import ExitStack, suppress
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field, replace
@@ -17,6 +18,7 @@ from pathlib import Path
 import secrets
 import sqlite3
 from typing import Any, Callable, Literal, TypedDict
+import warnings
 
 from fastapi import (
     FastAPI,
@@ -88,6 +90,7 @@ from .opponent import (
     Opponent,
     catalog_opponent,
     opponent_catalog,
+    policy_registry,
 )
 from .presentation import PresentationProjector
 from .replay_index import (
@@ -665,8 +668,6 @@ def _parse_game_config(config: Any) -> GameConfig:
 
     villain_type = data.get("villain_type", "search")
     if villain_type == "checkpoint":
-        import warnings
-
         warnings.warn(
             "checkpoint player names are deprecated; use registered policies (removed in 0.4.0)",
             DeprecationWarning,
@@ -773,8 +774,6 @@ def _parse_game_config(config: Any) -> GameConfig:
                 raise ValueError(f"{seat}_sideboard must match the named deck setup")
             sideboards[seat] = sideboard
 
-    villain_checkpoint: str | None = None
-    villain_deterministic = False
     opponent: Opponent | None = None
     if villain_type == "policy":
         opponent = _select_opponent(data.get("opponent_sha256"))
@@ -803,8 +802,6 @@ def _parse_game_config(config: Any) -> GameConfig:
         seed=seed,
         seed_was_requested=seed_value is not None,
         villain_sims=villain_sims,
-        villain_checkpoint=villain_checkpoint,
-        villain_deterministic=villain_deterministic,
         opponent=opponent.identity(opponent_search) if opponent is not None else None,
         opponent_checkpoint=opponent.record(opponent_search)
         if opponent is not None
@@ -816,10 +813,28 @@ def _parse_game_config(config: Any) -> GameConfig:
         search=search,
     )
     if opponent is not None:
-        from .opponent import policy_registry
-
         policy_registry().admit(opponent.descriptor.id, parsed.to_rust())
     return parsed
+
+
+def observe_policies(
+    policies: Iterable[BotPolicy | None], env: managym.Env, obs: managym.Observation
+) -> None:
+    """Show each registered policy its own seat's view of the current state."""
+    for policy in policies:
+        if isinstance(policy, PolicyRunner):
+            policy.observe(
+                obs
+                if int(obs.agent.player_index) == policy.seat
+                else env.observation_for_player(policy.seat)
+            )
+
+
+def close_policies(policies: Iterable[BotPolicy | None]) -> None:
+    with ExitStack() as resources:
+        for policy in policies:
+            if isinstance(policy, PolicyRunner):
+                resources.callback(policy.close)
 
 
 class PendingSearch(TypedDict):
@@ -971,12 +986,7 @@ class GameSession:
                 # priority-stop automation still records its Commands here.
                 env = managym.Env(seed=seed)
                 obs, _ = env.reset(config.to_rust())
-                if isinstance(policy, PolicyRunner):
-                    policy.observe(
-                        obs
-                        if int(obs.agent.player_index) == policy.seat
-                        else env.observation_for_player(policy.seat)
-                    )
+                observe_policies((policy,), env, obs)
             except BaseException as exc:
                 # PyO3's PanicException derives directly from BaseException and has
                 # no importable Python class. A failed disposable replacement must
@@ -2423,23 +2433,13 @@ class GameSession:
         self._study_attempts = {}
 
     def _observe_policies(self) -> None:
-        if self.env is None or self.obs is None:
-            return
-        policies = self.watch_policies or (self.villain_policy,)
-        for policy in policies:
-            if isinstance(policy, PolicyRunner):
-                observation = (
-                    self.obs
-                    if int(self.obs.agent.player_index) == policy.seat
-                    else self.env.observation_for_player(policy.seat)
-                )
-                policy.observe(observation)
+        if self.env is not None and self.obs is not None:
+            observe_policies(
+                self.watch_policies or (self.villain_policy,), self.env, self.obs
+            )
 
     def _close_policies(self) -> None:
-        with ExitStack() as resources:
-            for policy in (self.villain_policy, *(self.watch_policies or ())):
-                if isinstance(policy, PolicyRunner):
-                    resources.callback(policy.close)
+        close_policies((self.villain_policy, *(self.watch_policies or ())))
 
     def close(self, end_reason: str) -> None:
         try:

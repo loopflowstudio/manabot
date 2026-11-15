@@ -15,7 +15,7 @@
 		"test:e2e:study": "playwright test --config playwright.study.config.ts",
 		"test:e2e:release": "npm run build && playwright test --config playwright.release.config.ts",
 		"test:e2e:policy": "ACADEMY_STATIC_BUILD=1 vite build && playwright test --config playwright.policy.config.ts",
-        "test:e2e:mirror": "playwright test --config playwright.mirror.config.ts"
+		"test:e2e:mirror": "playwright test --config playwright.mirror.config.ts"
 	},
 	"devDependencies": {
 		"@axe-core/playwright": "^4.12.1",

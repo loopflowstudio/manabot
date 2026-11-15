@@ -22,7 +22,7 @@ from .launch import refuse_training_receipt
 from .opponent import policy_registry
 from .replay_index import DecisionAddressV2, load_canonical_replay
 from .trace import load_trace
-from .villain import NATIVE_WATCH_PLAYERS, build_villain_policy
+from .villain import NATIVE_WATCH_PLAYERS, build_villain_policy, player_fields
 
 
 class WatchCreated(TypedDict):
@@ -63,29 +63,9 @@ def resolve_player(
     data["search"] = [None, asdict(search) if search is not None else None]
     if search is not None and not kind.startswith("policy:"):
         raise ValueError("Mirror search requires a registered search-capable policy.")
-    if kind.startswith("policy:"):
-        data.update(villain_type="policy", opponent_sha256=kind.removeprefix("policy:"))
-    elif kind.startswith("search-"):
-        try:
-            data.update(
-                villain_type="search", villain_sims=int(kind.removeprefix("search-"))
-            )
-        except ValueError as error:
-            raise ValueError("Invalid search playout count.") from error
-    else:
-        data["villain_type"] = kind
+    data.update(player_fields(kind))
     config = server._parse_game_config(data)
-    if kind.startswith("policy:"):
-        assert config.opponent is not None
-        policy = policy_registry().load(
-            config.opponent.get("base_sha256", config.opponent["sha256"]),
-            config.to_rust(),
-            seat=seat,
-            seed=request.seed + seat,
-            search=search,
-        )
-    else:
-        policy = build_villain_policy(config)
+    policy = build_villain_policy(config, seat=seat)
     recorded = asdict(config)
     player = bot_player(recorded)
     if (

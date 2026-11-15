@@ -4,6 +4,9 @@ from dataclasses import asdict
 import json
 import os
 from pathlib import Path
+import signal
+import threading
+from types import FrameType
 
 from managym.academy import server
 from managym.academy.launch import serve
@@ -46,6 +49,14 @@ def main() -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     checkpoint = output.parent / "untrained-smoke.pt"
     write_search_checkpoint(checkpoint)
+    shutdown = threading.Event()
+
+    def request_shutdown(signum: int, frame: FrameType | None) -> None:
+        shutdown.set()
+
+    # A supervisor may forward SIGINT twice. Keep later signals from interrupting
+    # retained-record persistence while the context closes the real server.
+    signal.signal(signal.SIGINT, request_shutdown)
     with serve(
         port=int(os.environ["ACADEMY_MIRROR_PORT"]),
         traces_dir=output.parent / "traces",
@@ -89,7 +100,7 @@ def main() -> None:
             )
         )
         print("ACADEMY_MIRROR_READY", flush=True)
-        academy.wait()
+        shutdown.wait()
 
 
 if __name__ == "__main__":
