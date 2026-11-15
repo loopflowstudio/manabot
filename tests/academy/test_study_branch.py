@@ -242,9 +242,11 @@ def test_projected_object_incarnation_cannot_replace_native_binding(tmp_path):
     returned = branch.return_to_recorded()
 
     moved = next(
-        card for card in observation.agent_cards if card.id == expected_ref["entity"]
+        item
+        for item in observation.stack_objects
+        if item.characteristics is not None and item.object_id == expected_ref["entity"]
     )
-    assert int(moved.zone) == int(managym.ZoneEnum.STACK)
+    assert moved.kind == managym.StackObjectKindEnum.SPELL
     assert expected_ref["incarnation"] >= 0
     assert returned.execution.accepted_commands == 1
     assert returned.execution.fallback_commands == 0

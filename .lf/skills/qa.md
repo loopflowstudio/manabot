@@ -80,7 +80,8 @@ publish, land or choose the next Graph step from here.
   obs.action_space.actions))`; equal digests mean equal offers, taps and
   events. Use the authored setups (`managym.authored_deck_keys`) plus the TLA
   pool corpus human builds (`experiments/data/mtg282/pools-v2/corpus.json`,
-  `PlayerConfig(name, pool["human_build"])`), which bring waterbend, Treasure
+  in the artifact store: fetch it with `manabot.data fetch` when a checkout
+  lacks it; `PlayerConfig(name, pool["human_build"])`), which bring waterbend, Treasure
   and any-color sources the curated benchmark decks lack; 2,400 games took
   about two minutes per engine. A few games end in `PyAgentError` on `main`
   too; the error must match, not be absent. `maturin build` without
@@ -193,7 +194,10 @@ publish, land or choose the next Graph step from here.
   checkpoint's `world_binding["setups"]`, written as `N Name` lines with a
   `Sideboard` section, because the default sim match is refused. Fixed seeds
   make equal win, timeout and mean-step counts a check that every sampled
-  action matched. Ten games took about two minutes on a loaded laptop.
+  action matched. Ten games took about two minutes on a loaded laptop. Sim
+  logs a model failure as `Error getting action`, plays a random move and
+  still prints win rates: count those lines before trusting a result. The
+  regime's decks are `run.json` `regime.match` (`hero_deck`, `hero_sideboard`).
 - MLX backend (`manabot.backends.mlx`, Apple Silicon with the `mlx` extra only):
   run it on the Mac that owns the measurement, not on a shared laptop. The
   published `experiments/data/mlx_pilot/capture/initial.pt` is now refused by

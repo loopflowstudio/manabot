@@ -230,6 +230,10 @@ class TestObservationEncoder:
             "agent_permanents_valid",
             "opponent_permanents",
             "opponent_permanents_valid",
+            "stack",
+            "stack_valid",
+            "player_turn_state",
+            "card_turn_state",
             # Actions
             "actions",
             "actions_valid",

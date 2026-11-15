@@ -27,7 +27,7 @@ from manabot.verify.scenarios import (
     Scenario,
     ScriptedVillain,
     action_casts,
-    battlefield_pairs,
+    battlefield_permanents,
     build_scenario_env,
     find_cast_action,
     hero_view,
@@ -79,19 +79,22 @@ class _Hero:
             card: str | None = None
             stack = stack_names(raw)
             _, villain = hero_view(raw)
-            enemies = battlefield_pairs(raw, villain)
+            enemies = battlefield_permanents(raw, villain)
             if self.name.startswith("s1"):
                 if not self.reference or "Shivan Dragon" in stack:
                     card = "Counterspell"
             elif self.name.startswith("s2"):
                 if (
                     not self.reference
-                    or sum(bool(c.card_types.is_creature) for c, _ in enemies) >= 4
+                    or sum(
+                        bool(p.characteristics.card_types.is_creature) for p in enemies
+                    )
+                    >= 4
                 ):
                     card = "Pyroclasm"
             elif self.name.startswith("s3"):
                 if not self.reference or any(
-                    c.name == "Earth King's Lieutenant" for c, _ in enemies
+                    p.characteristics.name == "Earth King's Lieutenant" for p in enemies
                 ):
                     card = "Lightning Bolt"
             elif self.name.startswith("s5"):
@@ -110,8 +113,8 @@ class _Hero:
             )
             ids = {
                 int(p.id)
-                for c, p in battlefield_pairs(raw, villain)
-                if c.name == target
+                for p in battlefield_permanents(raw, villain)
+                if p.characteristics.name == target
             }
             for index, action in enumerate(actions):
                 if action.focus and int(action.focus[0]) in ids:
@@ -123,8 +126,8 @@ class _Hero:
                 focus = int(actions[0].focus[0]) if actions[0].focus else -1
                 hero, _ = hero_view(raw)
                 flying = any(
-                    c.name == "Wind Drake" and int(p.id) == focus
-                    for c, p in battlefield_pairs(raw, hero)
+                    p.characteristics.name == "Wind Drake" and int(p.id) == focus
+                    for p in battlefield_permanents(raw, hero)
                 )
                 return 0 if flying else len(actions) - 1
             return len(actions) - 1
@@ -147,7 +150,9 @@ def _outcome(
 ) -> tuple[bool, str] | None:
     """Check actual resolution; cast intent alone never establishes removal."""
     _, villain = hero_view(raw)
-    board = Counter(str(c.name) for c, _ in battlefield_pairs(raw, villain))
+    board = Counter(
+        str(p.characteristics.name) for p in battlefield_permanents(raw, villain)
+    )
     grave = Counter(zone_names(raw, villain, ZONE_GRAVEYARD))
     if scenario.name.startswith("s1"):
         if grave["Shivan Dragon"]:
@@ -203,9 +208,15 @@ def _run_line(
             or int(raw.opponent.life) != scenario.villain_life
             or Counter(zone_names(raw, "agent", int(managym.ZoneEnum.HAND)))
             != Counter(scenario.hero_hand)
-            or Counter(str(c.name) for c, _ in battlefield_pairs(raw, "agent"))
+            or Counter(
+                str(p.characteristics.name)
+                for p in battlefield_permanents(raw, "agent")
+            )
             != Counter(scenario.hero_battlefield)
-            or Counter(str(c.name) for c, _ in battlefield_pairs(raw, "opponent"))
+            or Counter(
+                str(p.characteristics.name)
+                for p in battlefield_permanents(raw, "opponent")
+            )
             != Counter(scenario.villain_battlefield)
         ):
             raise ValueError(
@@ -235,8 +246,8 @@ def _run_line(
                     cast = spell
                     _, side = hero_view(raw)
                     creatures_at_cast = sum(
-                        bool(c.card_types.is_creature)
-                        for c, _ in battlefield_pairs(raw, side)
+                        bool(p.characteristics.card_types.is_creature)
+                        for p in battlefield_permanents(raw, side)
                     )
             env.step(action)
             steps += 1

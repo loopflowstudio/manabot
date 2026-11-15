@@ -33,7 +33,7 @@ from manabot.verify.scenarios import (
     SCENARIOS,
     ScriptedVillain,
     action_casts,
-    battlefield_pairs,
+    battlefield_permanents,
     build_scenario_env,
     hero_view,
 )
@@ -152,8 +152,8 @@ def score_checkpoint(
                     cast = spell
                     _, side = hero_view(raw)
                     creatures_at_cast = sum(
-                        bool(card.card_types.is_creature)
-                        for card, _ in battlefield_pairs(raw, side)
+                        bool(perm.characteristics.card_types.is_creature)
+                        for perm in battlefield_permanents(raw, side)
                     )
             row = decision_row(env, frame, action)
             row["player_id"] = game["seat_players"][actor]
