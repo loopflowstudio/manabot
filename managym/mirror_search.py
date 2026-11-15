@@ -80,7 +80,7 @@ def search_unavailable(runner: PolicyRunner) -> str | None:
 
 def descriptor_search_unavailable(descriptor: PolicyDescriptor) -> str | None:
     if not descriptor.supports_search:
-        reason = descriptor.metadata.get("search_reason")
+        reason = descriptor.search_reason
         if isinstance(reason, str) and reason:
             return reason
         return "This policy does not support Mirror search."
@@ -101,7 +101,7 @@ def searched_descriptor(
         name=f"{base.name} + mirror search {spec.worlds}×{spec.depth}",
         runner=f"mirror/{source or search_source_identity()}",
         config={"base_policy": base.id, "search": asdict(spec)},
-        metadata={**base.metadata, "base_policy": base.record()},
+        base_policy=base,
     )
 
 

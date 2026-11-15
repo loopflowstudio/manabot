@@ -236,7 +236,7 @@ def test_runner_retains_search_evidence_and_complete_composition_identity() -> N
     runner.configure_search(spec, seed=7)
     assert runner.descriptor.id != base.id
     assert runner.descriptor.config["base_policy"] == base.id
-    assert runner.descriptor.metadata["base_policy"] == base.record()
+    assert runner.descriptor.base_policy == base
     first_id = runner.descriptor.id
     runner.configure_search(SearchSpec(worlds=2, depth=1), seed=7)
     assert runner.descriptor.id != first_id
@@ -257,7 +257,7 @@ def test_search_identity_binds_execution_and_keeps_display_metadata_separate() -
     spec = SearchSpec(worlds=1, depth=1)
     original = searched_descriptor(base, spec)
     renamed = searched_descriptor(
-        replace(base, name="Better label", metadata={"updates": 42}), spec
+        replace(base, name="Better label", group="Training run"), spec
     )
     assert original.id == renamed.id
     assert (

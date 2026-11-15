@@ -84,6 +84,8 @@ class PolicyDescriptor:
     supports_search: bool = False
     contract_version: int = 1
     recurrent: bool = False
+    search_reason: str | None = None
+    base_policy: PolicyDescriptor | None = None
 
     @property
     def id(self) -> str:
@@ -102,6 +104,7 @@ class PolicyDescriptor:
         return {
             **asdict(self),
             "details": [asdict(detail) for detail in self.details],
+            "base_policy": self.base_policy.record() if self.base_policy else None,
             "id": self.id,
         }
 
