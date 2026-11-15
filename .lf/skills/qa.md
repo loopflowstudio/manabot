@@ -152,9 +152,8 @@ publish, land or choose the next Graph step from here.
   dialog moves focus and scrolls the table, so screenshot it as it is.
   To play specific cards, open **Import decklist files**, check "Use imported
   decks for the next game" (the `#hero-deck-source`/`#villain-deck-source`
-  textareas appear only then), fill both, press Check decklists, wait for
-  `Ready —`, then press **Start game** (the setup form has no New Game
-  button); `POST /api/decklists/validate` answers the same check. During the
+  textareas appear only then), fill both, press Check decklists, then New
+  Game; `POST /api/decklists/validate` answers the same check. During the
   opponent's turn the offers stay rendered but disabled, so click only enabled
   buttons, or every click times out while the bot plays on. Hover a card name
   to read `[data-testid=card-rules-text]`. Search 64 with a fast creature deck
@@ -284,19 +283,6 @@ publish, land or choose the next Graph step from here.
   an action offer is enabled and automation has settled before recording
   `main[data-frame-revision]`; reload must restore that revision. A merely
   visible offer can still belong to an automated pending transition.
-- Hidden-card knowledge (`known_hand`, `known_library`, samplers): build a
-  debug wheel with its own `CARGO_TARGET_DIR` and `-o /tmp/<dir>`, unzip it
-  to its own directory and run games from there with `PYTHONPATH` set (print
-  `managym._managym.__file__`). Debug `assert_library_knowledge` checks every
-  fact against the true library, so it is the oracle; inferring draws from
-  hand/library count changes misreads scry transitions. Determinize a clone
-  for the acting viewer and keep stepping the branch: pending inspections and
-  library-top casts must still accept their offers. Forced Planetarium of Wan
-  Shi Tong (scry 2 plus a look-and-cast) with Hakoda gives facts on most
-  turns; 6 games took about 15 s debug. Academy shows facts as `[data-testid=
-  known-library]` inside the scrolling player region: `scrollIntoViewIfNeeded`
-  before a screenshot. `20 Plains / 40 Glider Kids` against `40 Plains`
-  Passive reaches a scry 1 by turn 9.
 - Engine rules changes (zones, tokens, copies, SBAs): play many games through
   `managym.Env` with `PlayerConfig(name, {card: count}, world=managym.WORLD_SETUP)`
   decks built around the cards involved, and a scripted policy over
