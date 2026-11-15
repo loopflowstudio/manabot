@@ -477,6 +477,20 @@ describe('GameSocketController presentation seam', () => {
   });
 });
 
+it('retains retry and work metadata when first recovery resets match state', () => {
+  gameStore.prepareForNewGame();
+  const controller = new GameSocketController();
+  const recovery = structuredClone(boltProtocolFixture.recovery);
+  const retry = {code: 'mirror_deadline_exceeded', message: 'Search deadline exceeded.', match_id: recovery.frame.match_id, expected_revision: recovery.frame.revision};
+  const work = {scope: 'match' as const, setup_id: null, loading_seat: null, operation_id: 'search', sequence: 1, kind: 'search' as const, started_at: 1,
+    match_id: recovery.frame.match_id, revision: recovery.frame.revision, chooser: 1, state: 'failed' as const};
+  deliver(controller, {type: 'observation', data: recovery.frame.projection, actions: [], recovery,
+    session_id: 'retry-table', resume_token: 'credential', mirror_retry: retry, work});
+  expect(gameStore.protocolFrame?.match_id).toBe(retry.match_id);
+  expect(gameStore.searchRetry).toEqual(retry);
+  expect(gameStore.work).toEqual(work);
+});
+
 it('draft validation never completes an outstanding submission or changes the frame', () => {
   gameStore.prepareForNewGame();
   gameStore.applyFrame(frameAt(42));

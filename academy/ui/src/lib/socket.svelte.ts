@@ -727,6 +727,10 @@ export class GameSocketController {
       if (message.session_id && message.resume_token) {
         this.persistResumeState(message.session_id, message.resume_token);
       }
+      // A first/replacement recovery resets match state. Its runner metadata
+      // belongs to the recovered frame and must survive that reset.
+      if ('work' in message) gameStore.work = message.work ?? null;
+      if ('mirror_retry' in message) gameStore.searchRetry = message.mirror_retry ?? null;
       this.flushQueue();
       return;
     }
