@@ -96,6 +96,7 @@ def test_cli_smoke_and_named_recipe(
             learning_seats="both",
             device=None,
             padded_shapes=False,
+            training_game_logs=False,
         )
     ]
     result = runner.invoke(
@@ -111,6 +112,7 @@ def test_cli_smoke_and_named_recipe(
         learning_seats="both",
         device=None,
         padded_shapes=False,
+        training_game_logs=False,
     )
     result = runner.invoke(
         cli.app, ["train", "--steps", "1", "--learning-seats", "one"]
@@ -217,7 +219,11 @@ def test_recipe_and_cli_device_selection(
         observed.append(self.regime.stages[0].execution.device)
         return result
 
-    def execute(plan: TrainingRegime, *args: object) -> SimpleNamespace:
+    def execute(
+        plan: TrainingRegime,
+        *args: object,
+        training_game_logs: bool = False,
+    ) -> SimpleNamespace:
         observed.append(plan.stages[0].execution.device)
         return result
 
@@ -262,7 +268,11 @@ def test_cli_padded_shapes_reaches_the_recipe_stage(
         record(self.regime)
         return result
 
-    def execute(plan: TrainingRegime, *args: object) -> SimpleNamespace:
+    def execute(
+        plan: TrainingRegime,
+        *args: object,
+        training_game_logs: bool = False,
+    ) -> SimpleNamespace:
         record(plan)
         return result
 

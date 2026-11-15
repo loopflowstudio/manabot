@@ -23,7 +23,7 @@ Collection never updates model weights; the regime executor owns learning.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from copy import deepcopy
 from dataclasses import dataclass, field
 import time
@@ -391,6 +391,9 @@ class SeatRoutedCollector:
         record_attempt: Callable[[GameAttempt], GameErrorState] | None = None,
         precision: Precision = "float32",
         adaptive: AdaptiveConfig | None = None,
+        operation: Callable[[str], AbstractContextManager[None]] = lambda name: (
+            nullcontext()
+        ),
     ) -> None:
         if adaptive is not None and (
             opponent_mode != "self"
@@ -403,6 +406,7 @@ class SeatRoutedCollector:
             raise ValueError(
                 "adaptive collection requires both-seat current-self, one producer, fixed roots and current-game recovery"
             )
+        self._operation = operation
         self._sampler = AdaptiveSampler(adaptive) if adaptive is not None else None
         self._assignments = (
             [self._sampler.draw() for _ in range(num_envs)] if self._sampler else []
@@ -768,18 +772,19 @@ class SeatRoutedCollector:
     def _opponent_actions(
         self, agent: ActorCritic, rows: np.ndarray, inference: PolicyInference
     ) -> np.ndarray:
-        if self.opponent_mode == "self":
-            obs = self._slice_obs_tensors(rows, inference)
-            with torch.inference_mode():
-                with forward_precision(self.precision, self.device):
-                    logits, _ = agent.forward(obs)
-                logits = logits.float()
-                probs = self._policy_logs(logits, obs).exp()
-                actions = torch.multinomial(probs, 1, generator=self._self_rng).squeeze(
-                    -1
-                )
-            return actions.cpu().numpy().astype(np.int64)
-        return self._opponent.select(self._buffers, rows)
+        with self._operation("opponent_inference"):
+            if self.opponent_mode == "self":
+                obs = self._slice_obs_tensors(rows, inference)
+                with torch.inference_mode():
+                    with forward_precision(self.precision, self.device):
+                        logits, _ = agent.forward(obs)
+                    logits = logits.float()
+                    probs = self._policy_logs(logits, obs).exp()
+                    actions = torch.multinomial(
+                        probs, 1, generator=self._self_rng
+                    ).squeeze(-1)
+                return actions.cpu().numpy().astype(np.int64)
+            return self._opponent.select(self._buffers, rows)
 
     @staticmethod
     def _policy_logs(
@@ -999,7 +1004,11 @@ class SeatRoutedCollector:
                             and opponent_inference is not None
                         )
                         opp_acts = self._sample_learning_rows(
-                            self.opponent_agent, opp_rows, acting, opponent_inference
+                            self.opponent_agent,
+                            opp_rows,
+                            acting,
+                            opponent_inference,
+                            "opponent_inference",
                         )
                     else:
                         opp_acts = self._opponent_actions(agent, opp_rows, inference)
@@ -1429,38 +1438,40 @@ class SeatRoutedCollector:
         rows: np.ndarray,
         acting: np.ndarray,
         inference: PolicyInference,
+        operation: str = "learner_inference",
     ) -> np.ndarray:
-        with self.profiler.track("Observation preparation"):
-            obs_t = self._slice_obs_tensors(rows, inference)
-        with self.profiler.track("Policy inference and action selection"):
-            with torch.no_grad():
-                outcomes: np.ndarray | None = None
-                with forward_precision(self.precision, self.device):
+        with self._operation(operation):
+            with self.profiler.track("Observation preparation"):
+                obs_t = self._slice_obs_tensors(rows, inference)
+            with self.profiler.track("Policy inference and action selection"):
+                with torch.no_grad():
+                    outcomes: np.ndarray | None = None
+                    with forward_precision(self.precision, self.device):
+                        if agent.config.value_kind == "categorical_wdl":
+                            logits, value_t = agent.forward_distribution(obs_t)
+                        else:
+                            logits, value_t = agent(obs_t)
+                    logits, value_t = logits.float(), value_t.float()
                     if agent.config.value_kind == "categorical_wdl":
-                        logits, value_t = agent.forward_distribution(obs_t)
-                    else:
-                        logits, value_t = agent(obs_t)
-                logits, value_t = logits.float(), value_t.float()
-                if agent.config.value_kind == "categorical_wdl":
-                    outcome_t = value_t.softmax(dim=-1)
-                    value_t = outcome_t[:, 2] - outcome_t[:, 0]
-                    outcomes = outcome_t.cpu().numpy()
-                logs = self._policy_logs(logits, obs_t)
-                require(
-                    torch.isfinite(value_t),
-                    "nonfinite_collection_values",
-                    values=value_t,
-                    valid=obs_t["actions_valid"] > 0,
-                )
-                weights = logs.exp()
-                action_t = torch.multinomial(
-                    weights, 1, generator=self._self_rng
-                ).squeeze(-1)
-                logprob_t = logs.gather(-1, action_t[:, None]).squeeze(-1)
-                log_probabilities = logs.cpu().numpy()
-            acts = action_t.cpu().numpy().astype(np.int64)
-            logprobs = logprob_t.cpu().numpy()
-            values = value_t.view(-1).cpu().numpy()
+                        outcome_t = value_t.softmax(dim=-1)
+                        value_t = outcome_t[:, 2] - outcome_t[:, 0]
+                        outcomes = outcome_t.cpu().numpy()
+                    logs = self._policy_logs(logits, obs_t)
+                    require(
+                        torch.isfinite(value_t),
+                        "nonfinite_collection_values",
+                        values=value_t,
+                        valid=obs_t["actions_valid"] > 0,
+                    )
+                    weights = logs.exp()
+                    action_t = torch.multinomial(
+                        weights, 1, generator=self._self_rng
+                    ).squeeze(-1)
+                    logprob_t = logs.gather(-1, action_t[:, None]).squeeze(-1)
+                    log_probabilities = logs.cpu().numpy()
+                acts = action_t.cpu().numpy().astype(np.int64)
+                logprobs = logprob_t.cpu().numpy()
+                values = value_t.view(-1).cpu().numpy()
         with self.profiler.track("Rollout recording"):
             needs = obs_t.needs if isinstance(obs_t, AdmittedObservation) else None
             first = self._observations.append(rows, needs)

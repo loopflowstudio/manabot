@@ -274,6 +274,7 @@ def runs(
     seeds: str = "26501,26502",
     arms: str = "",
     usd: float = 9.0,
+    training_game_logs: bool = False,
 ) -> list[Run]:
     """Each chosen arm once per seed: one capped GPU allocation, no retry."""
     result: list[Run] = []
@@ -292,6 +293,7 @@ def runs(
                     max_hours=hours,
                     max_usd=Decimal(str(usd)),
                     milestones=tuple(range(EXPORT_EVERY, updates, EXPORT_EVERY)),
+                    training_game_logs=training_game_logs,
                 )
             ]
     return result

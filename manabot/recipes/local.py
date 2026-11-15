@@ -59,6 +59,7 @@ def local_smoke(
 
 def run_local(
     *,
+    training_game_logs: bool = False,
     steps: int = LOCAL_STEPS,
     seed: int = 197,
     out: Path | None = None,
@@ -79,4 +80,10 @@ def run_local(
     )
     destination.parent.mkdir(parents=True, exist_ok=True)
     with VerifyStore(destination.parent / "training.sqlite") as store:
-        return execute_regime(plan, seed, destination, store)
+        return execute_regime(
+            plan,
+            seed,
+            destination,
+            store,
+            training_game_logs=training_game_logs,
+        )

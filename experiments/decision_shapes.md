@@ -268,3 +268,20 @@ failed create receipts, not additional acquired GPUs. The 48 GB requests acquire
 provider pods opsg4qsv72e1o8 and iz9foqpir9vv9v. The exact reason for the
 provider's 400 replies is not established. No scientific or deck-selection
 change was required for this capacity workaround.
+
+### 2026-11-15: restart with durable training journals
+
+The surviving baseline seed26502, Etude run4218e16c4678 at sourceb3b47e82d31b,
+completed500updates, confirmed by its node's run.json and refreshed launcher
+status. Preserve this completed candidate; do not queue its duplicate.
+The other five study attempts were cancelled after stalls and remain excluded
+from a completed learning comparison. Probe bca62f5daf0f ended at its40-minute
+cap after39updates; the backward stack at that instant does not establish a hang.
+
+Retries use the same engine, policy layout, populations, seeds and500-update
+schedule with only the diagnostic logging implementation from PR540 backported.
+Runtime training_game_logs=True persists rolling producer inputs before native
+calls and marks collection/inference/learning/export. The runtime option does
+not alter the regime digest or checkpoint binding. Logging can reduce throughput;
+these retries measure learning by updates, not a throughput comparison. No decks
+were excluded. The existing USD55 total includes retries and evaluation.

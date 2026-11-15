@@ -183,6 +183,7 @@ class TrainingJob(Strict):
     # Run the CUDA numerics gate (manabot.experiment.numerics) before learning.
     validate_numerics: bool = Field(default=False, exclude_if=lambda value: not value)
     training_exposure: bool = Field(default=False, exclude_if=lambda value: not value)
+    training_game_logs: bool = Field(default=False, exclude_if=lambda value: not value)
     # Frozen by `job` from the exact revision; absent only for local workers,
     # which read source identity from their git checkout.
     source_bundle: SourceBundle | None = Field(
@@ -406,6 +407,7 @@ def run_worker() -> TrainingRun:
             stop_path=stop,
             stop_reserve_seconds=spec.stop_reserve,
             training_exposure=spec.training_exposure,
+            training_game_logs=spec.training_game_logs,
         )
     finished = run.status == "completed" and run.updates_through() == spec.updates
     # A wall-bounded stop exported the complete learner state short of target.

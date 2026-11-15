@@ -339,6 +339,7 @@ def capped_runs(
     max_hours: float,
     max_usd: Decimal,
     milestones: tuple[int, ...] = (),
+    training_game_logs: bool = False,
 ) -> list[Run]:
     """One capped allocation; calibration measures the job the frontier launches."""
     return (
@@ -349,6 +350,7 @@ def capped_runs(
             finalization_seconds=600,
             stop_reserve_seconds=600,
             validate_numerics=True,
+            training_game_logs=training_game_logs,
         )
         .job(repo=ROOT, revision=revision, max_hours=max_hours, max_usd=max_usd)
         .runs(seed)

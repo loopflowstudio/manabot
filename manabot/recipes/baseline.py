@@ -82,7 +82,13 @@ class TrainingRecipe(Strict):
             ),
         )
 
-    def run(self, *, seed: int = 197, out: Path | None = None) -> ExperimentRun:
+    def run(
+        self,
+        *,
+        seed: int = 197,
+        out: Path | None = None,
+        training_game_logs: bool = False,
+    ) -> ExperimentRun:
         """Train, export and evaluate with one reserved CPU evaluator thread."""
         destination = out or Path(".runs") / (
             "baseline-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
@@ -97,7 +103,12 @@ class TrainingRecipe(Strict):
             )
         )
         try:
-            result = run_experiment(self.experiment(seed), hardware, destination)
+            result = run_experiment(
+                self.experiment(seed),
+                hardware,
+                destination,
+                training_game_logs=training_game_logs,
+            )
         except Exception:
             if (destination / "experiment.json").exists():
                 report_baseline(destination)
@@ -226,6 +237,7 @@ def _baseline(
 
 def run_baseline(
     *,
+    training_game_logs: bool = False,
     steps: int = BASELINE_STEPS,
     seed: int = 197,
     out: Path | None = None,
@@ -242,4 +254,8 @@ def run_baseline(
         device=device,
         padded_shapes=padded_shapes,
     )
-    return plan.run(seed=seed, out=out)
+    return plan.run(
+        seed=seed,
+        out=out,
+        training_game_logs=training_game_logs,
+    )

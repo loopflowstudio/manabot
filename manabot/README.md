@@ -104,6 +104,14 @@ simulation retain pending Commands before execution. The same bounded replay com
 handles strict failures without enabling tolerance or process recovery; see the
 linked capture audit for boundaries and supervision limits.
 
+To diagnose a future training stall, opt into durable pending-call snapshots
+with `uv run manabot train --recipe local --training-game-logs --out .runs/journal-demo`.
+The private `game-journals/` directory retains rolling producer replay inputs
+and an active operation marker that distinguishes native work from inference
+and learning. Logging defaults off and can substantially reduce throughput;
+see [diagnosing stalled training](../docs/training.md#diagnosing-stalled-training)
+for remote job configuration, inspection, replay and retention limits.
+
 The TLA frontier run uses `experiments/tla_corpus.py` for the fixed admitted
 corpus and `experiments/tla_frontier.py` for Etude training and paired
 evaluation ([report](../experiments/tla-frontier-c5fba4-results.md)).
