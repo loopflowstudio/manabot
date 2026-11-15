@@ -896,7 +896,7 @@ Collector construction, which resets each producer's first games, is part of the
 | Phase | Interpretation |
 | --- | --- |
 | `preparing` | Inputs are durable before native decision-frame reads; cached decision context is explicitly last-known. Execution has not started. |
-| `executing` | The named native mutation (step, reset, reassignment or failed-row replacement) was entered without a durable return acknowledgment. For an indexed step, the selected action and its fresh pre-action binding are durable. |
+| `executing` | Intent to call the named native mutation (step, reset, reassignment or failed-row replacement) is durable, with no durable return acknowledgment. For an indexed step, the selected action and its fresh pre-action binding are durable. |
 | `synchronizing` | The native call returned; current seeds, decks or game generations are still being read. |
 | `ready` | Synchronization completed and the retained evidence describes the current known game prefixes. |
 
@@ -905,9 +905,11 @@ outcomes stay unknown. During sampled reset or auto-reset, the new seed/setup
 may be unknown until synchronization; the previous prefix and decks remain
 last-known evidence, never the claimed new game. The operation marker and
 producer files are written independently, so compare their coordinates and
-sequences rather than treating them as one atomic snapshot. A crash after a
-call returns but before its acknowledgment is durable can still leave a pending,
-unknown outcome. Neither that state nor a lack of progress proves an illegal
+sequences rather than treating them as one atomic snapshot. A process can stop
+after publishing intent but before entering the native call, or after the call
+returns but before its acknowledgment is durable. Both leave a pending, unknown
+outcome; the journal cannot distinguish them from a call that never returned.
+Neither that state nor a lack of progress proves an illegal
 action, a failed game or the cause of a stall.
 
 ### Inspect and replay a journal
