@@ -798,7 +798,8 @@ disabled with the precise reason. A selected policy is checked against the setup
 a mismatch shows the provider’s reason beside the picker. Start checks again,
 so changed artifacts and setups are still refused precisely. Bound checkpoint
 decks are also listed as **Bound decks**. Registered launch aliases appear
-alongside provider-authored names in setup and recorded player identities, so
+alongside provider-authored names in setup and recorded player identities (unless
+they match the name ignoring case), so
 configurations of the same artifact can have recognizable labels. A refused
 Play launch keeps its selected policy and decks for an explicit retry.
 Imported decks work when the provider admits them.

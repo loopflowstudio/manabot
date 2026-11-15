@@ -10,10 +10,11 @@ import torch
 
 from manabot.backends import resolve
 from manabot.model.world import WORLD
+from manabot.sim.policy_provider import BaselineFactory
 from managym.academy import server, trace as trace_store
-from managym.academy.opponent import policy_registry
+from managym.academy.opponent import Opponent, opponent_catalog, policy_registry
 from managym.academy.server import app
-from managym.policy import PolicySpec
+from managym.policy import PolicyRegistry, PolicySpec
 from tests.academy.test_play_modes import _recorded_traces, _write_tiny_checkpoint
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
@@ -70,6 +71,33 @@ def test_catalog_lists_admissible_and_refused_checkpoints(runs: Path) -> None:
     older = entries["older/step_0"]
     assert not older["available"]
     assert older["reason"] == f"trained in w5, engine is {WORLD}"
+
+
+@pytest.mark.parametrize("kind", ["heuristic", "greedy"])
+@pytest.mark.parametrize("extra_alias", [None, "challenger"])
+def test_anchor_names_omit_case_only_aliases(
+    monkeypatch: pytest.MonkeyPatch, kind: str, extra_alias: str | None
+) -> None:
+    factory = BaselineFactory(PolicySpec("manabot", config={"kind": kind}))
+    descriptor = factory.describe()
+    registry = PolicyRegistry(providers={})
+    monkeypatch.setattr("managym.academy.opponent._registry", registry)
+    key = registry.register(factory)
+    assert descriptor.alias == kind
+    assert key == descriptor.id
+    assert registry.register(factory, name=kind.upper()) == key
+    if extra_alias is not None:
+        assert registry.register(factory, name=extra_alias) == key
+
+    expected = kind.title() + (f" · {extra_alias}" if extra_alias else "")
+    (entry,) = opponent_catalog()["opponents"]
+    assert entry["name"] == expected
+    assert entry["sha256"] == key
+    record = Opponent(registry.descriptor(key)).record()
+    assert record["name"] == expected
+    assert record["sha256"] == key
+    assert record["policy"]["name"] == kind.title()
+    assert record["policy"] == descriptor.record()
 
 
 def test_incompatible_checkpoint_is_refused_with_the_mismatch(runs: Path) -> None:

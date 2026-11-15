@@ -38,7 +38,8 @@ class Opponent:
         aliases = sorted(
             alias
             for alias, key in policy_registry().aliases.items()
-            if key == self.descriptor.id and alias != self.descriptor.name
+            if key == self.descriptor.id
+            and alias.casefold() != self.descriptor.name.casefold()
         )
         return " · ".join((self.descriptor.name, *aliases))
 
