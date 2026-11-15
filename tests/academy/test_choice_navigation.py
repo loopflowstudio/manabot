@@ -9,6 +9,7 @@ import pytest
 from managym.academy import server, trace as trace_store
 from managym.academy.server import GameSession
 from managym.experience import ExperienceFrame
+from tests.academy.socket_messages import settled_message
 
 
 class PrefixStep(BaseModel):
@@ -97,7 +98,7 @@ def test_accumulate_wisdom_order_survives_reconnect_and_commits_once(
     with TestClient(server.app) as client:
         with client.websocket_connect("/ws/play") as socket:
             socket.send_json({"type": "new_game", "config": position.config})
-            initial = socket.receive_json()
+            initial = settled_message(socket)
             frame = initial["frame"]
             for ordinal, step in enumerate(position.prefix):
                 if step.label.endswith(" next on the bottom"):
@@ -115,7 +116,7 @@ def test_accumulate_wisdom_order_survives_reconnect_and_commits_once(
                         },
                     }
                 )
-                result = socket.receive_json()
+                result = settled_message(socket)
                 assert result["status"] == "accepted"
                 frame = result["update"]["frame"]
             assert len(frame["offers"]) == 2
@@ -144,14 +145,14 @@ def test_accumulate_wisdom_order_survives_reconnect_and_commits_once(
                     "resume_token": initial["resume_token"],
                 }
             )
-            recovered = socket.receive_json()["recovery"]["frame"]
+            recovered = settled_message(socket)["recovery"]["frame"]
             assert recovered["offers"] == frame["offers"]
             assert recovered["projection"]["decision_context"]["pending"] == pending
             assert game.env.state_digest() == pending_digest
             socket.send_json({"type": "command", "command": command})
-            assert socket.receive_json()["status"] == "accepted"
+            assert settled_message(socket)["status"] == "accepted"
             committed_digest = game.env.state_digest()
             assert committed_digest != pending_digest
             socket.send_json({"type": "command", "command": command})
-            assert socket.receive_json()["status"] == "duplicate"
+            assert settled_message(socket)["status"] == "duplicate"
             assert game.env.state_digest() == committed_digest

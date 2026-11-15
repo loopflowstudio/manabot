@@ -3,12 +3,11 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import {
-  serializeReplayDecisionAddress,
+  canonicalReplayProjectionSha256,
   type CanonicalReplayProjectionV1,
-  type CanonicalReplayProjectionResponseV1,
   type RestoredReplayDecision,
 } from './replay-index';
-import { bindStudyArtifact, buildStudyPlans } from './study-runtime';
+import { bindStudyArtifact, buildStudyPlans, type StudySource } from './study-runtime';
 import type { StudyArtifact } from './study-protocol';
 
 function fixture<T>(name: string): T {
@@ -20,36 +19,23 @@ function fixture<T>(name: string): T {
 const replay = fixture<CanonicalReplayProjectionV1>('canonical-replay-player-0.json');
 const artifact = fixture<StudyArtifact>('study-curated-decision.json');
 
-function projectionAndRestored(): {
-  projection: CanonicalReplayProjectionResponseV1;
+async function projectionAndRestored(): Promise<{
+  projection: StudySource;
   restored: RestoredReplayDecision;
-} {
-  const addressedDecisions = replay.decisions.map((row) => ({
-    ...structuredClone(row),
-    address: serializeReplayDecisionAddress({
-      version: 1,
-      replay_id: replay.replay_id,
-      match_id: replay.match_id,
-      ordinal: String(row.ordinal),
-      viewer: String(row.viewer),
-      revision: String(row.revision),
-      prompt_id: String(row.prompt_id),
-      offer_id: String(row.offer_id),
-      command_id: row.command_id,
-      presentation_cursor: String(row.presentation_cursor),
-      decision_sha256: '0'.repeat(64),
-    }),
-  }));
-  addressedDecisions[0].address = artifact.landmarks[0].decision_id;
-  const projection: CanonicalReplayProjectionResponseV1 = {
-    ...structuredClone(replay),
-    decisions: addressedDecisions,
+}> {
+  const row = replay.decisions[0];
+  const projection: StudySource = {
+    replay_id: replay.replay_id,
+    match_id: replay.match_id,
+    viewer: replay.viewer,
+    content_hash: replay.content_hash,
+    asset_manifest_hash: replay.asset_manifest_hash,
+    sha256: await canonicalReplayProjectionSha256(replay),
   };
-  const row = projection.decisions[0];
   return {
     projection,
     restored: {
-      address: row.address,
+      address: artifact.landmarks[0].decision_id,
       ordinal: row.ordinal,
       viewer: row.viewer,
       revision: row.revision,
@@ -64,8 +50,8 @@ function projectionAndRestored(): {
 
 describe('Study runtime consumer', () => {
   it('joins exact evidence and keeps Played, Policy, and Search distinct', async () => {
-    const { projection, restored } = projectionAndRestored();
-    const landmark = await bindStudyArtifact(artifact, projection, restored);
+    const { projection, restored } = await projectionAndRestored();
+    const landmark = bindStudyArtifact(artifact, projection, restored);
     const plans = buildStudyPlans(landmark);
 
     expect(plans.map(({ label }) => label)).toEqual(['Played', 'Policy', 'Search']);
@@ -94,17 +80,17 @@ describe('Study runtime consumer', () => {
   });
 
   it('fails closed when replay or restored identities drift', async () => {
-    const { projection, restored } = projectionAndRestored();
+    const { projection, restored } = await projectionAndRestored();
     const driftedArtifact = structuredClone(artifact);
     driftedArtifact.identity.source_replay_sha256 = 'f'.repeat(64);
-    await expect(
+    expect(() =>
       bindStudyArtifact(driftedArtifact, projection, restored),
-    ).rejects.toThrow(/identity differs/);
+    ).toThrow(/identity differs/);
 
     const driftedRestored = structuredClone(restored);
     driftedRestored.command.command_id = 'different-command';
-    await expect(
+    expect(() =>
       bindStudyArtifact(artifact, projection, driftedRestored),
-    ).rejects.toThrow(/landmark differs/);
+    ).toThrow(/landmark differs/);
   });
 });

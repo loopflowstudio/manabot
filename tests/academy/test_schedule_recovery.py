@@ -9,6 +9,7 @@ import pytest
 from managym.academy import server, trace as trace_store
 from managym.experience import ExperienceFrame, InteractionOffer
 from managym.experience_projection import decision_surface_view
+from tests.academy.socket_messages import settled_message
 
 
 def _command(
@@ -48,7 +49,7 @@ def test_bumi_schedule_reconnect_keeps_current_restriction_and_rejects_stale_com
     with TestClient(server.app) as client:
         with client.websocket_connect("/ws/play") as socket:
             socket.send_json({"type": "new_game", "config": config})
-            initial = socket.receive_json()
+            initial = settled_message(socket)
             frame = ExperienceFrame.model_validate(initial["recovery"]["frame"])
             cast = False
             saw_pending = False
@@ -81,7 +82,7 @@ def test_bumi_schedule_reconnect_keeps_current_restriction_and_rejects_stale_com
                 cast |= offer.label == "Cast Bumi, Unleashed"
                 stale = _command(frame, offer, f"schedule-prefix.{ordinal}")
                 socket.send_json({"type": "command", "command": stale})
-                result = socket.receive_json()
+                result = settled_message(socket)
                 assert result["status"] == "accepted"
                 frame = ExperienceFrame.model_validate(result["update"]["frame"])
             else:
@@ -109,13 +110,13 @@ def test_bumi_schedule_reconnect_keeps_current_restriction_and_rejects_stale_com
                 }
             )
             recovered = ExperienceFrame.model_validate(
-                socket.receive_json()["recovery"]["frame"]
+                settled_message(socket)["recovery"]["frame"]
             )
             assert recovered == frame
             socket.send_json(
                 {"type": "command", "command": stale | {"command_id": "schedule-stale"}}
             )
-            rejected = socket.receive_json()
+            rejected = settled_message(socket)
             assert rejected["status"] == "rejected"
             assert rejected["rejection"]["code"] == "stale_revision"
             assert game.env.state_digest() == digest
@@ -141,7 +142,7 @@ def test_delayed_lifetime_reconnect_preserves_waiter_and_expired_state(
     with TestClient(server.app) as client:
         with client.websocket_connect("/ws/play") as socket:
             socket.send_json({"type": "new_game", "config": config})
-            initial = socket.receive_json()
+            initial = settled_message(socket)
             frame = ExperienceFrame.model_validate(initial["recovery"]["frame"])
             game = server.SESSION_REGISTRY[initial["session_id"]].game
             cast_ogre = False
@@ -169,7 +170,7 @@ def test_delayed_lifetime_reconnect_preserves_waiter_and_expired_state(
                 played_mountain |= offer.label == "Play Mountain"
                 command = _command(frame, offer, f"delayed-prefix.{ordinal}")
                 socket.send_json({"type": "command", "command": command})
-                result = socket.receive_json()
+                result = settled_message(socket)
                 assert result["status"] == "accepted"
                 frame = ExperienceFrame.model_validate(result["update"]["frame"])
             else:
@@ -202,7 +203,7 @@ def test_delayed_lifetime_reconnect_preserves_waiter_and_expired_state(
                 }
             )
             recovered = ExperienceFrame.model_validate(
-                socket.receive_json()["recovery"]["frame"]
+                settled_message(socket)["recovery"]["frame"]
             )
             assert recovered == frame
             assert game.env.state_digest() == digest
@@ -218,7 +219,7 @@ def test_delayed_lifetime_reconnect_preserves_waiter_and_expired_state(
                     "command": command | {"command_id": "delayed-stale"},
                 }
             )
-            assert socket.receive_json()["status"] == "rejected"
+            assert settled_message(socket)["status"] == "rejected"
             assert game.env.state_digest() == digest
             # No match before cleanup: let the real turn advance, without
             # recasting or recreating the watcher during recovery.
@@ -236,7 +237,7 @@ def test_delayed_lifetime_reconnect_preserves_waiter_and_expired_state(
                         "command": _command(frame, offer, f"delayed-expire.{ordinal}"),
                     }
                 )
-                result = socket.receive_json()
+                result = settled_message(socket)
                 assert result["status"] == "accepted"
                 frame = ExperienceFrame.model_validate(result["update"]["frame"])
             else:
@@ -252,7 +253,7 @@ def test_delayed_lifetime_reconnect_preserves_waiter_and_expired_state(
             )
             assert (
                 ExperienceFrame.model_validate(
-                    socket.receive_json()["recovery"]["frame"]
+                    settled_message(socket)["recovery"]["frame"]
                 )
                 == frame
             )

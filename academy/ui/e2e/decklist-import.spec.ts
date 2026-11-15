@@ -20,7 +20,7 @@ test('correct a file, start a novel deck and reconnect to its pending decision',
   await page.getByRole('button', { name: 'Check decklists', exact: true }).click();
   await expect(page.getByText(/Ready — development-v1/)).toBeVisible();
   await page.getByTestId('opponent-select').selectOption('passive');
-  await page.getByRole('button', { name: 'New Game', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
   await expect(page.getByTestId('action-option').first()).toBeVisible();
   const revision = await page.locator('main').getAttribute('data-frame-revision');
   const choices = await page.getByTestId('action-option').allTextContents();
