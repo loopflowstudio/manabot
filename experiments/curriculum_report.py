@@ -17,7 +17,7 @@ from typing import Literal
 
 from etude.eval.query import statsdb
 from etude.eval.records import Code, Environment, Model
-from etude.run.storage import Storage
+from etude.storage import Storage
 import numpy as np
 from pydantic import BaseModel, ConfigDict
 
@@ -88,7 +88,13 @@ def load_games(
         game_columns = {row[0] for row in db.sql("describe games").fetchall()}
         score = "g.score" if "score" in game_columns else "cast(null as double)"
         failure = "g.failure" if "failure" in game_columns else "cast(null as varchar)"
-        for arm, agent in selections.items():
+        for arm, selected in selections.items():
+            # Resolve released checkpoint keys in the same experiment context
+            # used when Etude seats and records these players.
+            agent = Model.model_validate_json(
+                selected.model_dump_json(),
+                context={"experiment": "curriculum_adapters"},
+            )
             cursor = db.execute(
                 f"""select g.deck as model_deck, g.opponent_deck as heuristic_deck,
                     g.game_seat as model_seat, g.deal, {score} as score, g.valid, {failure} as failure,

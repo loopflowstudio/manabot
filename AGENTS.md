@@ -673,3 +673,12 @@ and native imports. Load the evaluation projection only for evaluation inputs;
 keep its simulation dependencies off the LLM-only path. Check this boundary in a
 fresh process with those imports blocked, and exercise mixed reports through the
 actual builder CLI in the existing headless Perf proof.
+
+The repository pins Etude's merged migration build through `tool.uv.sources`;
+PyPI's 0.4.0 does not contain that API. Etude's shared records, storage and
+errors live in `etude.records`, `etude.storage` and `etude.errors`, and training
+uses `etude.train.tracking`. Experiment entry points are `training_jobs()` and
+`eval_jobs(state)`; discovery is in `etude.declarations`, state in `etude.jobs`.
+A resumed tracker uses `resume=True`; its first logged row sets the supersession
+coordinate, and an attempt that logs nothing supersedes nothing. Retained
+nested tracker declarations still decode through Etude's `RunRecord`.

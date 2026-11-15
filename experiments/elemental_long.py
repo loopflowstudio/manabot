@@ -42,7 +42,7 @@ import random
 from typing import Literal
 
 from etude.launch.records import Job
-from etude.run.storage import Storage, storage_from_uri
+from etude.storage import Storage, storage_from_uri
 
 from experiments.elemental_grid import DECKS, Game, schedule
 from manabot.experiment.job import LearnerContinuation, StagedExport, TrainingJob

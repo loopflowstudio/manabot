@@ -274,9 +274,9 @@ def supervise(config: Campaign, *, worker_module: str) -> None:
         raise RuntimeError("campaign worker interrupted; partial evidence retained")
 
 
-def runs(native_artifact: str, native_source: str) -> Job:
+def training_jobs(native_artifact: str, native_source: str) -> Job:
     """One rental, one attempt; caller's $10 cap includes setup and delivery."""
-    from etude.jobs import training
+    from etude.jobs import TrainingJob
     from etude.launch.records import Input, Variable
 
     from experiments.qwen_mtg183 import Campaign as CampaignConfig, run as campaign_run
@@ -304,8 +304,8 @@ def runs(native_artifact: str, native_source: str) -> Job:
     scheme, bucket, key = split_bucket_uri(artifact.uri)
     if (scheme, bucket) != ("r2", "manabot"):
         raise ValueError("expected manabot R2 artifact")
-    return training(
-        campaign_run,
+    return TrainingJob(
+        train=campaign_run,
         config=CampaignConfig(),
         repo=".",
         revision="HEAD",

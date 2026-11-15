@@ -17,7 +17,7 @@ import time
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from etude.train.records import CheckpointRecord, Step
-from etude.train.run import track
+from etude.train.tracking import track
 import numpy as np
 
 # Local imports

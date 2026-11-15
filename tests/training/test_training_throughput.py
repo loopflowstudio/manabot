@@ -9,7 +9,7 @@ import subprocess
 import sys
 from types import SimpleNamespace
 
-from etude.launch.job_file import read_job_file
+from etude.declarations import read_training_jobs
 import pytest
 
 from experiments import (
@@ -195,7 +195,7 @@ def _regime_digest(run: packing.Run) -> str:
 
 def _launched(*arguments: str) -> list[packing.Run]:
     """The runs `etude launch FILE ARGUMENTS` would read from the launch file."""
-    return read_job_file(
+    return read_training_jobs(
         ROOT / "experiments/training_throughput_packing.py", list(arguments)
     )
 
@@ -219,7 +219,7 @@ def test_launch_file_declares_every_leg() -> None:
 
 
 def test_metric_legs_share_regime_bytes_and_stay_separate_jobs() -> None:
-    metric = [packing.runs("HEAD", leg)[0] for leg in ("m1", "m2", "m3")]
+    metric = [packing.training_jobs("HEAD", leg)[0] for leg in ("m1", "m2", "m3")]
 
     assert len({_regime_digest(run) for run in metric}) == 1
     assert len({run.job.environment for run in metric}) == 3
@@ -238,7 +238,7 @@ def test_speed_legs_differ_from_the_control_only_in_producers(
     leg: str, producers: int
 ) -> None:
     def regime(name: str) -> dict[str, object]:
-        run = packing.runs("HEAD", name)[0]
+        run = packing.training_jobs("HEAD", name)[0]
         frozen = TrainingJob.model_validate_json(run.job.config or "").regime
         return frozen.model_dump(mode="json")
 
@@ -257,7 +257,7 @@ def test_speed_legs_differ_from_the_control_only_in_producers(
 
 
 def test_speed_legs_fit_the_rental_and_keep_separate_jobs() -> None:
-    legs = [packing.runs("HEAD", leg)[0].job for leg in ("s14", "s22", "s44")]
+    legs = [packing.training_jobs("HEAD", leg)[0].job for leg in ("s14", "s22", "s44")]
 
     assert len({job.environment for job in legs}) == 3
     assert {job.max_hours for job in legs} == {0.75}
@@ -271,7 +271,7 @@ def test_only_cuda_legs_sample_the_gpu() -> None:
     sampled = {
         leg
         for leg in packing.LEGS
-        if packing.GPU_SAMPLER in packing.runs("HEAD", leg)[0].job.command
+        if packing.GPU_SAMPLER in packing.training_jobs("HEAD", leg)[0].job.command
     }
     assert sampled == set(packing.LEGS) - {"d1", "d2"}
 
@@ -307,7 +307,7 @@ def test_gpu_sampler_writes_rows_and_leaves_the_jobs_exit_status(
 
 
 def test_digest_legs_run_the_small_cpu_variant() -> None:
-    solo, packed = (packing.runs("HEAD", leg)[0] for leg in ("d1", "d2"))
+    solo, packed = (packing.training_jobs("HEAD", leg)[0] for leg in ("d1", "d2"))
 
     assert _regime_digest(solo) == _regime_digest(packed)
     stage = TrainingJob.model_validate_json(solo.job.config or "").regime.stages[0]
@@ -319,9 +319,9 @@ def test_one_seed_of_a_leg_can_launch_alone_and_others_are_refused() -> None:
     one = _launched("--revision", "HEAD", "--leg", "m2", "--seeds", "26212")
     assert [run.seed for run in one] == [26212]
     with pytest.raises(ValueError, match="declares no seeds"):
-        packing.runs("HEAD", "m2", "99")
+        packing.training_jobs("HEAD", "m2", "99")
     with pytest.raises(ValueError, match="unknown leg"):
-        packing.runs("HEAD", "m9")
+        packing.training_jobs("HEAD", "m9")
 
 
 # ---------------------------------------------------------------------------
