@@ -1,3 +1,4 @@
+import { tableSnapshot } from './fixtures/table';
 import { writeFile } from 'node:fs/promises';
 import { finishBoardNarration } from './presentation-readiness';
 import { confirmCombat } from './combat';
@@ -80,7 +81,7 @@ async function installTable(page: Page, options: TableOptions = {}): Promise<{
       const message = JSON.parse(String(raw));
       if (message.type === 'new_game' || message.type === 'resume') {
         socket.send(JSON.stringify({ type: 'observation', data: frame.projection, actions: [],
-          session_id: 'laptop', resume_token: 'laptop', recovery: recover() }));
+          table: tableSnapshot(), session_id: 'laptop', resume_token: 'laptop', recovery: recover() }));
       } else if (message.type === 'set_stops') {
         frame.stops = { ...message.stops, auto_pass: message.auto_pass, stop_on_stack: message.stop_on_stack };
         publish();

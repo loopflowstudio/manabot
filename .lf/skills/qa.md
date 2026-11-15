@@ -99,6 +99,9 @@ publish, land or choose the next Graph step from here.
   combat, import `16 Mountain\n10 Gray Ogre\n8 Boggart Brute\n6 Raging Goblin`
   (menace via Boggart Brute) against Search 16. A `vite preview` server dies
   when a later build replaces `.svelte-kit/output`; restart it after building.
+  Setup/navigation changes also run `npm --prefix academy/ui run test:e2e:policy`
+  and `npm --prefix academy/ui run test:e2e:search`; the release browser config
+  does not include those policy refusal, reload and Search journeys.
 - Configured launch (`managym academy play|replay`, `managym.academy.launch.serve`):
   from a checkout first build the static SPA with
   `ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build`, then set
@@ -448,6 +451,11 @@ publish, land or choose the next Graph step from here.
   otherwise a reload comparison uses a stale opening frame. For a short real
   target/recovery game, import `20 Mountain\n40 Lightning Bolt` against
   `40 Plains`, select Passive, play Mountains and cast Bolts at Villain.
+  The ordinary server also lists manabot's Heuristic and Greedy as Registered
+  policies; after a restart `/api/opponents` can stay empty for a while, so
+  poll it before selecting one. Repeated sessions: after **Swap sides** the
+  human sits at native seat 1, so check whose life a "Target …" offer lowers
+  and confirm the session's swapped game is a win, not just completed.
   Replay's newest entry can be an unfinished Play Again attempt: select the
   completed result explicitly before checking Next frame. Playwright offline
   mode did not close an existing localhost WebSocket in the MTG-355 run; it
@@ -489,6 +497,13 @@ publish, land or choose the next Graph step from here.
   Check the hand ends above history. Recorded terminal results have no next-game
   action and must leave keyboard navigation available; the live Play Again
   dialog retains its focus behavior.
+- Repeated sessions and Watch setup: the Play session strip (`region` "Play session")
+  offers Rematch, Swap sides, Edit next game and Change opponent; editors end in
+  Save next setup / Start next game / Cancel, and Cancel must leave the next
+  draft unchanged. Session results load after their region appears; wait for a
+  row before reading counts. The standalone bot-matchup setup is
+  `/replay?watch=1` (`region` "Game setup for watching"); plain `/replay` shows
+  none. Its "Continue to play" after switching a seat to You lands on `/?setup=1`.
 - Play/Inspect QA: fresh storage starts in Inspect. In Play, activate the exact
   hand `[data-object-id]` by pointer or Enter, then commit its labeled
   `[data-offer-id]`; selection, Inspect card, mode switches and Escape send no

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 import sqlite3
-from typing import Any
+from typing import Any, Literal
 
 import pytest
 
@@ -24,13 +24,14 @@ from managym.decision import Command as SemanticCommand
 from managym.experience import ExperienceFrame
 
 
-def _session(path: Path, *, stage: CombatStage = "attackers") -> GameSession:
+def _session(
+    path: Path, *, stage: CombatStage = "attackers", human_seat: Literal[0, 1] = 0
+) -> GameSession:
     session = GameSession(path, capture_authority_evidence=True)
-    session.new_game(combat_config())
+    session.new_game({**combat_config(), "human_seat": human_seat})
     assert session.env is not None
-    session.obs = configure_combat(session.env, stage)
+    session.obs = configure_combat(session.env, stage, human_seat=human_seat)
     session.published_prompt = None
-    session.presentation.reset()
     session._publish_current_prompt()
     return session
 
@@ -70,10 +71,12 @@ def _snapshot(session: GameSession) -> _Snapshot:
     )
 
 
+@pytest.mark.parametrize("human_seat", [0, 1])
 def test_combat_confirmation_records_actual_children_and_retries_once(
     tmp_path: Path,
+    human_seat: Literal[0, 1],
 ) -> None:
-    session = _session(tmp_path)
+    session = _session(tmp_path, human_seat=human_seat)
     assert session.env is not None
     frame = _frame(session)
     command = declaration_command(frame, "combat.confirm", select=True)
@@ -87,6 +90,7 @@ def test_combat_confirmation_records_actual_children_and_retries_once(
     assert outcome["status"] == "accepted"
     assert session.env is env_identity
     receipt = outcome["update"]["receipt"]
+    assert receipt["actor"] == human_seat
     children = receipt["declaration"]["child_command_ids"]
     rows = {row.command_id: row for row in session.canonical_decisions}
     transitions = {}

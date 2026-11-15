@@ -1,7 +1,13 @@
 // Implements the `testing-house-v1` wire schema (frozen identifier).
 import type { RestoredReplayDecision } from './replay-index';
-import type { AdviceRequestIdentity } from './advice';
 import type { Command, DeclarationCommand, Observation, PresentationEvent } from './types';
+
+interface AdviceRequestIdentity {
+  source_replay_id: string;
+  match_id: string;
+  advisor_id: string;
+  compute_id: string;
+}
 
 export const SHARED_TABLE_VERSION = 'testing-house-v1' as const;
 
@@ -43,7 +49,7 @@ export type TableCapability =
 export interface ViewerIdentity {
   viewer_id: string;
   table_id: string;
-  rules_viewer: 0;
+  rules_viewer: 0 | 1;
 }
 
 export interface ViewerAccess {
@@ -111,12 +117,13 @@ export type SharedTableRequest =
     }
   | {
       type: 'resume';
+      play_session_id?: string;
       session_id: string;
       resume_token: string;
       presentation_cursor?: number | null;
     }
   | ({ type: 'new_game'; grant_revision?: number | null; config?: Record<string, unknown> })
-  | (GrantedRequest & { type: 'rematch'; config?: Record<string, unknown> })
+  | (GrantedRequest & { type: 'rematch'; request_id: string; attempt_id: string; setup_revision: number; intent: 'rematch' | 'swap_sides' | 'change_opponent'; config?: Record<string, unknown> })
   | ({ type: 'command'; grant_revision?: number | null; command: Command })
   | ({ type: 'declaration'; grant_revision?: number | null; command: DeclarationCommand })
   | ({ type: 'validate_declaration'; grant_revision?: number | null; request_id: string; command: DeclarationCommand })
