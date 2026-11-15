@@ -3,20 +3,29 @@ import { readFileSync } from 'node:fs';
 
 const proof = new URL('../test-results/launch/addresses.json', import.meta.url);
 
-test('starting and reopening an unfinished bot game keeps the Watch two bots heading', async ({ page }) => {
+test('starting and reopening an unfinished bot game keeps its live replay position', async ({ page }) => {
   const start = page.getByRole('button', { name: 'Start watching' });
-  const heading = page.getByRole('heading', { name: 'Watch two bots', exact: true });
-  const decision = page.getByText(/^Decision 1 of 1 ·/);
+  const heading = page.getByRole('heading', { name: 'Replay', exact: true });
+  const position = page.getByTestId('position-counter');
+  const status = page.getByRole('main').getByRole('status');
+  const continuation = page.getByRole('button', { name: 'Continue', exact: true });
   await page.goto('/replay?watch=1');
   await expect(start).toBeEnabled();
   await page.getByRole('combobox', { name: 'Seat 1', exact: true }).selectOption('random');
   await page.getByRole('combobox', { name: 'Seat 2', exact: true }).selectOption('random');
   await start.click();
-  await expect(decision).not.toContainText('Finished');
+  await expect(position).toHaveText('Position 1 / 1');
+  await expect(status).toHaveText('Waiting at the live edge');
+  await expect(continuation).toBeEnabled();
   await expect(heading).toBeVisible();
   await expect(start).toBeHidden();
+  const recording = new URL(page.url()).searchParams.get('trace');
+  expect(recording).toBeTruthy();
   await page.reload();
-  await expect(decision).toBeVisible();
+  await expect(position).toHaveText('Position 1 / 1');
+  await expect(status).toHaveText('Waiting at the live edge');
+  await expect(continuation).toBeEnabled();
+  expect(new URL(page.url()).searchParams.get('trace')).toBe(recording);
   await expect(heading).toBeVisible();
   await expect(page.getByRole('banner').getByRole('link', { name: 'Replay', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(start).toBeHidden();
@@ -114,8 +123,8 @@ test('an exported collector game opens with both policy names, training label an
   const addresses = JSON.parse(readFileSync(proof, 'utf8')) as { training_replay: string };
   await page.goto(addresses.training_replay);
   await expect(page.getByRole('heading', { name: 'Replay', exact: true })).toBeVisible();
-  await expect(page.getByText('Training game', { exact: true })).toBeVisible();
-  await expect(page.getByText('Seat 1: learner · Seat 2: learner', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'The Score · Training game', exact: true })).toBeVisible();
+  await expect(page.getByTestId('game-board').getByRole('heading', { name: 'learner', exact: true })).toHaveCount(2);
   const visibleCard = page.locator('[data-testid="card-treatment"]:visible').first();
   await visibleCard.scrollIntoViewIfNeeded();
   await expect(visibleCard).toHaveAttribute('data-art-source', 'scryfall');
