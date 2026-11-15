@@ -855,7 +855,8 @@ uv run --no-project --python /tmp/manabot-release-venv/bin/python manabot-releas
 
 The training smoke checks one shared engine behind both import paths, catalog
 binding, gradients, a CPU update on the native lethal-target fixture, and the
-installed Academy bot entry point and checkpoint catalog. This bounded fixture
+installed historical Academy extension, policy provider registration and compatible
+discovery of the checkpoint just trained. This bounded fixture
 does not certify the default training recipe's completion time. Repeat in a separate environment with
 3.12 and its wheel. `release.yml` covers both interpreters on Linux and macOS,
 then installs and imports the optional extras. Consumer checks run outside the
