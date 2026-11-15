@@ -73,9 +73,11 @@ def create_watch(
     try:
         for seat, kind in enumerate(request.players):
             seats.append(resolve_player(kind, request, seat))
-    except (ValueError, OSError, ImportError) as error:
+    except BaseException as error:
         server.close_policies(policy for policy, _ in seats)
-        raise HTTPException(400, str(error)) from error
+        if isinstance(error, (ValueError, OSError, ImportError)):
+            raise HTTPException(400, str(error)) from error
+        raise
     token = server.secrets.token_urlsafe(32)
     game = server.GameSession(watch_mode=True)
     game.attempt_owner = server.participant_id(token)
