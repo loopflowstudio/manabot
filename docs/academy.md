@@ -174,7 +174,7 @@ setup screen is shown, and nothing is chosen for you beyond what you named.
 | `--deck` | `ur_lessons` | Your deck: a bundled deck name or the path of a decklist file |
 | `--opponent-deck` | `gw_allies` | The opponent's deck, named the same way |
 | `--opponent` | `search` | `search`, `random`, `passive`, a registered policy alias, or `policy:<id>` |
-| `--sims` | `64` | Simulated playouts per decision for `search` |
+| `--sims` | `64` | Random playouts per legal action for `search` |
 | `--seed` | random | Deal seed, an unsigned 64-bit integer; the same seed and decks give the same deal |
 | `--decklists` | `open` | `open` or `closed`: whether each player knows the other's list |
 

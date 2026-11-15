@@ -105,7 +105,7 @@
 
     {:else if replacement}The runner changed since this was selected. Reselect the policy to use the current runner.
     {:else if custom && value !== 'policy:'}The selected policy is no longer available.
-    {:else if value.startsWith('search-')}Built-in: {value.slice(7)} random playouts per decision, no policy
+    {:else if value.startsWith('search-')}Built-in: {value.slice(7)} random playouts per legal action, no policy
     {:else if value === 'random'}Built-in: uniform random legal action
     {:else if value === 'passive'}Built-in: passes when possible, otherwise takes the first legal action
     {/if}

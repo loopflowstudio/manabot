@@ -122,7 +122,7 @@ def play(
         "search",
         help="search, random, passive, registered policy name or ID",
     ),
-    sims: int = typer.Option(64, help="Simulated playouts per decision for search"),
+    sims: int = typer.Option(64, help="Random playouts per legal action for search"),
     seed: int | None = typer.Option(
         None,
         help="Deal seed; the same seed and decks give the same deal (default random)",
