@@ -28,8 +28,8 @@ from managym.academy.launch import (
     _path_or_name,
     serve,
 )
-from managym.mirror_search import MirrorSearch
 from managym.policy import PolicySpec
+from managym.search import SearchConfig
 
 DEFAULT_URL = "http://127.0.0.1:8000"
 GUIDE_URL = "https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#running-academy"
@@ -130,10 +130,11 @@ def play(
     decklists: Literal["open", "closed"] = typer.Option(
         "open", help="Whether each player knows the other's list"
     ),
-    mirror_json: str | None = typer.Option(
+    mirror_json: str | None = typer.Option(None, "--mirror", hidden=True),
+    search_json: str | None = typer.Option(
         None,
-        "--mirror",
-        help="Mirror search settings as a JSON object; requires a search-capable policy.",
+        "--search",
+        help="Search settings as a JSON object; requires a search-capable policy.",
     ),
     host: str | None = _HOST,
     port: int | None = _PORT,
@@ -143,16 +144,24 @@ def play(
 ) -> None:
     from managym.academy import server
 
+    if mirror_json is not None:
+        typer.echo("--mirror is deprecated; use --search (removed in 0.4.0)", err=True)
+        if search_json is not None:
+            raise typer.BadParameter(
+                "Pass --search only; do not combine it with --mirror."
+            )
+        search_json = mirror_json
+
     def prepare(running: Academy) -> str:
         try:
-            mirror = (
-                TypeAdapter(MirrorSearch).validate_json(mirror_json)
-                if mirror_json
+            search = (
+                TypeAdapter(SearchConfig).validate_json(search_json)
+                if search_json
                 else None
             )
         except ValueError as exc:
             raise AcademyLaunchError(
-                "setup.invalid", f"Invalid Mirror search spec: {exc}"
+                "setup.invalid", f"Invalid Search spec: {exc}"
             ) from exc
         return running.new_game(
             deck=_path_or_name(deck, _DECK_SUFFIXES, server.NAMED_DECKS),
@@ -163,7 +172,7 @@ def play(
             sims=sims,
             seed=seed,
             decklists=decklists,
-            mirror=mirror,
+            search=search,
         ).url
 
     _run(
@@ -180,10 +189,11 @@ def watch(
         "--player",
         help="Seat player (exactly twice): random, search-N or registered policy",
     ),
-    mirror_json: str | None = typer.Option(
+    mirror_json: str | None = typer.Option(None, "--mirror", hidden=True),
+    search_json: str | None = typer.Option(
         None,
-        "--mirror",
-        help='Two-seat JSON Mirror search settings, e.g. [{"worlds":4},null].',
+        "--search",
+        help='Two-seat JSON Search settings, e.g. [{"worlds":4},null].',
     ),
     host: str | None = _HOST,
     port: int | None = _PORT,
@@ -191,6 +201,13 @@ def watch(
     no_open: bool | None = _NO_OPEN,
     policies: list[Path] | None = _POLICIES,
 ) -> None:
+    if mirror_json is not None:
+        typer.echo("--mirror is deprecated; use --search (removed in 0.4.0)", err=True)
+        if search_json is not None:
+            raise typer.BadParameter(
+                "Pass --search only; do not combine it with --mirror."
+            )
+        search_json = mirror_json
     if len(player) != 2:
         _report(
             AcademyLaunchError(
@@ -201,20 +218,20 @@ def watch(
 
     def prepare(running: Academy) -> str:
         try:
-            mirrors = (
+            searches = (
                 TypeAdapter(
-                    tuple[MirrorSearch | None, MirrorSearch | None]
-                ).validate_json(mirror_json)
-                if mirror_json
+                    tuple[SearchConfig | None, SearchConfig | None]
+                ).validate_json(search_json)
+                if search_json
                 else (None, None)
             )
         except ValueError as exc:
             raise AcademyLaunchError(
-                "setup.invalid", f"Invalid Mirror search spec: {exc}"
+                "setup.invalid", f"Invalid Search spec: {exc}"
             ) from exc
         return running.watch(
             players=(player[0], player[1]),
-            mirror=mirrors,
+            search=searches,
         ).url
 
     _run(

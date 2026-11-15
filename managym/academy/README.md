@@ -211,9 +211,9 @@ The browser renders provider-authored groups and detail lines and precise unavai
 missing training counts remain "not recorded". Optional advice/import capabilities
 are separate from policy loading.
 
-An optional `MirrorSearch` per bot composes an admitted policy with the
-framework-free `managym.mirror_search` owner in Play, Watch and launch APIs
-([Mirror search](../../docs/academy.md#mirror-search)). Its initial budget is one
+An optional `SearchConfig` per bot composes an admitted policy with the
+framework-free `managym.search` owner in Play, Watch and launch APIs
+([Search](../../docs/academy.md#search)). Its initial budget is one
 world at depth one, with a 30-second ceiling; explicit larger budgets are retained.
 Native physical-deal sampling and bound Commands remain authoritative; the two-KL numerical update
 has one implementation in `managym.mirror`. Full legal probabilities, compatible

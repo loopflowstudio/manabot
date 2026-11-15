@@ -1,13 +1,13 @@
 <script lang="ts">
-  import type { MirrorSearch } from '$lib/watch';
+  import type { SearchConfig } from '$lib/watch';
 
   interface Props {
-    value: MirrorSearch | null;
+    value: SearchConfig | null;
     supported: boolean;
     reason?: string | null;
     label?: string;
     disabled?: boolean;
-    onChange: (value: MirrorSearch | null) => void;
+    onChange: (value: SearchConfig | null) => void;
   }
   let { value, supported, reason = null, label = 'Search', disabled = false, onChange }: Props = $props();
 
@@ -22,18 +22,18 @@
   <select
     aria-label={label}
     class="w-full rounded border border-line bg-panel px-3 py-2 text-ink"
-    value={value ? 'mirror' : 'none'}
+    value={value ? 'search' : 'none'}
     {disabled}
-    onchange={(event) => onChange(event.currentTarget.value === 'mirror' ? {
+    onchange={(event) => onChange(event.currentTarget.value === 'search' ? {
       algorithm: 'local_update', belief: 'physical_deal', worlds: 1, depth: 1,
       decision_seconds: 30, alpha: 0.02, beta: 1,
     } : null)}
   >
     <option value="none">None (raw policy)</option>
-    <option value="mirror" disabled={!supported}>Mirror search</option>
+    <option value="search" disabled={!supported}>Search</option>
   </select>
   {#if !supported}
-    <p class="type-caption text-ink-2">{reason ?? 'This policy does not support Mirror search.'}</p>
+    <p class="type-caption text-ink-2">{reason ?? 'This policy does not support Search.'}</p>
   {/if}
   {#if value}
     <div class="flex flex-wrap gap-3">
@@ -44,6 +44,6 @@
         <input class="ml-1 w-20 rounded border border-line bg-panel px-2 py-1" aria-label={`${label} depth`} type="number" min="1" max="40" step="1" required {disabled} value={value.depth} onchange={(event) => setBudget('depth', event)} />
       </label>
     </div>
-    <p class="type-caption text-ink-2">Uniform belief (physical deal) · {value.decision_seconds} s per decision. A timeout keeps the decision for explicit retry.</p>
+    <p class="type-caption text-ink-2">Uniform belief (physical deal) · Action priors from policy · {value.decision_seconds} s per decision. A timeout keeps the decision for explicit retry.</p>
   {/if}
 </fieldset>

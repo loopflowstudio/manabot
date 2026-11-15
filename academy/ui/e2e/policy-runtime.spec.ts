@@ -72,7 +72,7 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(page.getByTestId('policy-compatibility')).toHaveCount(0);
     await selections.nth(0).focus();
     await page.keyboard.press('Tab');
-    await expect(page.getByText(/Mirror search unavailable/).first()).toBeVisible();
+    await expect(page.getByText(/Search unavailable/).first()).toBeVisible();
     await page.screenshot({ path: fileURLToPath(new URL(`../test-results/policy/watch-setup-${theme}.png`, import.meta.url)) });
     await page.getByRole('button', { name: 'Start watching' }).click();
     await expect(page.getByText(/^Decision 1 of 1 ·/)).toBeVisible();

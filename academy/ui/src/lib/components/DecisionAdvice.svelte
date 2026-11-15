@@ -114,7 +114,8 @@
         <p class="type-caption">Belief: {recorded.belief.model} · {recorded.belief.sampled_worlds} sampled worlds · condition mass {recorded.belief.condition_mass.toFixed(4)}</p>
       {/if}
       {#if recorded?.mirror}
-        <p class="type-caption">Mirror search: {recorded.mirror.worlds} worlds × depth {recorded.mirror.depth} · {recorded.mirror.rollouts} rollouts · {recorded.mirror.seconds.toFixed(3)} s of {recorded.mirror.decision_seconds} s · α {recorded.mirror.alpha}, β {recorded.mirror.beta}</p>
+        <p class="type-caption">Action priors come from the policy; uniform belief samples hidden worlds.</p>
+        <p class="type-caption">Search: {recorded.mirror.worlds} worlds × depth {recorded.mirror.depth} · {recorded.mirror.rollouts} rollouts · {recorded.mirror.seconds.toFixed(3)} s of {recorded.mirror.decision_seconds} s · α {recorded.mirror.alpha}, β {recorded.mirror.beta}</p>
         <p class="type-caption">Uniform belief (physical deal): hidden cards are sampled with copy counts and public knowledge.</p>
         <details class="type-caption"><summary>Search identity</summary>
           <p>Seed: {recorded.mirror.seed}</p>
