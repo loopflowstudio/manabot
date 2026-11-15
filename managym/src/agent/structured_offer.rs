@@ -1405,6 +1405,18 @@ impl Game {
                         })
                     })
                     .collect::<Result<_, _>>()?;
+                if selected.len() != attackers.len() {
+                    return Err(StructuredOfferError::StaleOrIllegal(
+                        "attacker declaration contains a duplicate permanent".to_string(),
+                    ));
+                }
+                let legal: BTreeSet<_> = declaration_order.iter().copied().collect();
+                if !selected.is_subset(&legal) {
+                    return Err(StructuredOfferError::StaleOrIllegal(
+                        "attacker declaration contains a permanent outside the pending batch"
+                            .to_string(),
+                    ));
+                }
                 let mut actions = 0;
                 let mut done = false;
                 // The final choice may skip trivial windows all the way to a
@@ -1495,9 +1507,10 @@ impl Game {
 
     /// Apply one decoded structured command as a single rules mutation.
     ///
-    /// Presentation Commands snapshot and restore on failure because the
-    /// current engine has no transaction journal. Action-aligned search
-    /// Commands validate every fallible precondition before their commit point.
+    /// Declarations execute their ordinary choices on a private clone and
+    /// publish it only after the whole sequence succeeds. Other presentation
+    /// Commands restore on failure. Action-aligned search Commands validate
+    /// every fallible precondition before their commit point.
     pub fn apply_atomic_command(
         &mut self,
         command: &AtomicCommand,
@@ -1505,16 +1518,20 @@ impl Game {
         if matches!(command, AtomicCommand::SearchAction { .. }) {
             return self.apply_search_action(command);
         }
-        let checkpoint = self.clone();
-        if matches!(command, AtomicCommand::DeclarationSequence { .. }) {
-            return match self.apply_legacy_command_inner(command, &mut None) {
-                Ok((done, _)) => Ok(done),
-                Err(error) => {
-                    *self = checkpoint;
-                    Err(error)
-                }
-            };
+        if matches!(
+            command,
+            AtomicCommand::DeclarationSequence { .. } | AtomicCommand::DeclareAttackers { .. }
+        ) {
+            let mut fork = self.clone();
+            // Search clones intentionally omit author captures. This clone is
+            // the candidate live state, so its ordinary choices must extend
+            // the same capture and publish it only with successful gameplay.
+            fork.card_capture = self.card_capture.clone();
+            let (done, _) = fork.apply_legacy_command_inner(command, &mut None)?;
+            *self = fork;
+            return Ok(done);
         }
+        let checkpoint = self.clone();
         match self.apply_atomic_command_inner(command) {
             Ok(game_over) => Ok(game_over),
             Err(error) => {
@@ -1663,56 +1680,8 @@ impl Game {
                     .map_err(|error| StructuredOfferError::StaleOrIllegal(error.0))?;
                 Ok(self.finish_action_step())
             }
-            AtomicCommand::DeclareAttackers {
-                player, attackers, ..
-            } => {
-                let (legal_player, declaration_order) = self.current_attacker_declaration()?;
-                if player != &legal_player {
-                    return Err(StructuredOfferError::StaleOrIllegal(
-                        "attacker declaration actor is no longer current".to_string(),
-                    ));
-                }
-
-                let legal: BTreeSet<_> = declaration_order.iter().copied().collect();
-                let selected: BTreeSet<_> = attackers
-                    .iter()
-                    .map(|object_ref| {
-                        self.lookup_current_permanent(*object_ref).map_err(|_| {
-                            StructuredOfferError::StaleOrIllegal(format!(
-                                "attacker object {}@{} is no longer current",
-                                object_ref.slot(),
-                                object_ref.generation()
-                            ))
-                        })
-                    })
-                    .collect::<Result<_, _>>()?;
-                if selected.len() != attackers.len() {
-                    return Err(StructuredOfferError::StaleOrIllegal(
-                        "attacker declaration contains a duplicate permanent".to_string(),
-                    ));
-                }
-                if let Some(attacker) = selected.iter().find(|attacker| !legal.contains(attacker)) {
-                    return Err(StructuredOfferError::StaleOrIllegal(format!(
-                        "permanent {} is not offered as an attacker",
-                        attacker.0
-                    )));
-                }
-
-                self.current_action_space.take();
-                let combat = self.state.combat.as_mut().ok_or_else(|| {
-                    StructuredOfferError::StaleOrIllegal(
-                        "attacker declaration has no combat state".to_string(),
-                    )
-                })?;
-                combat.attackers_to_declare.clear();
-                for attacker in declaration_order {
-                    self.declare_attacker(attacker, selected.contains(&attacker))
-                        .map_err(|error| StructuredOfferError::StaleOrIllegal(error.0))?;
-                }
-                Ok(self.finish_action_step())
-            }
-            AtomicCommand::DeclarationSequence { .. } => {
-                unreachable!("sequence routed to canonical lowering")
+            AtomicCommand::DeclareAttackers { .. } | AtomicCommand::DeclarationSequence { .. } => {
+                unreachable!("declaration routed to canonical lowering")
             }
             AtomicCommand::SearchAction { action, .. } => {
                 let offered = action_space.actions.iter().any(|legal| legal == action);

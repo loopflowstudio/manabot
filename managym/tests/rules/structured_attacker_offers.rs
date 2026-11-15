@@ -5,10 +5,10 @@ use managym::{
         action::{Action, ActionSpaceKind},
         observation::Observation,
         structured_offer::{
-            Candidate, CandidateId, CandidateSource, CandidateSourceId, CandidateValue,
-            ChoiceAnswer, ChoiceStep, InteractionOffer, ObjectRenderId, OfferId, OfferSubmission,
-            OfferVerb, PromptKind, RoleId, StructuredOfferError, StructuredOfferProjection,
-            SubjectRef,
+            AtomicCommand, Candidate, CandidateId, CandidateSource, CandidateSourceId,
+            CandidateValue, ChoiceAnswer, ChoiceStep, InteractionOffer, ObjectRenderId, OfferId,
+            OfferSubmission, OfferVerb, PromptKind, RoleId, StructuredOfferError,
+            StructuredOfferProjection, SubjectRef,
         },
     },
     flow::turn::StepKind,
@@ -200,11 +200,15 @@ fn apply_legacy_attacker_adapter(game: &mut Game, selected_entities: &BTreeSet<u
 }
 
 fn assert_equivalent_surface(structured: &Game, legacy: &Game) {
-    // The atomic command is one external decision while the compatibility
-    // adapter walks every legacy binary prompt. Their decision epochs must
-    // therefore differ even though the resulting rules and viewer surfaces
-    // are equivalent. Search-state snapshots intentionally include that
-    // authority epoch, so compare the semantic surface explicitly here.
+    // Grouped submission and ordinary decisions must keep identical authority
+    // epochs so each recorded child can be replayed and forked exactly.
+    assert_eq!(structured.is_game_over(), legacy.is_game_over());
+    if !structured.is_game_over() {
+        assert_eq!(
+            serde_json::to_value(structured.semantic_decision_frame().unwrap()).unwrap(),
+            serde_json::to_value(legacy.semantic_decision_frame().unwrap()).unwrap()
+        );
+    }
     assert_eq!(
         structured.state.deterministic_hash(),
         legacy.state.deterministic_hash()
@@ -637,4 +641,179 @@ fn compound_decline_stops_before_a_later_attacker_declaration() {
         expected.take_observation_events();
         assert_equivalent_surface(&replay, &expected);
     }
+}
+
+#[test]
+fn structured_attacker_confirmation_matches_each_recorded_command() {
+    let root = arranged_attack_scenario(
+        gw_allies_deck(),
+        ur_lessons_deck(),
+        &[
+            "Water Tribe Rallier",
+            "Invasion Reinforcements",
+            "Compassionate Healer",
+        ],
+        193,
+    )
+    .game()
+    .clone();
+    let offers = root.structured_attacker_offers().unwrap();
+    let offer = attacker_offer(&offers);
+    let (role, candidates) = attacker_candidates(offer);
+    let (submission, _) = submission_for_mask(offer, role, candidates, 5);
+    let commands = root.compound_commands(&offers, &submission).unwrap();
+    assert_eq!(commands.len(), 3);
+    let mut replay = root.clone();
+    for command in &commands {
+        replay.execute_semantic_command(command).unwrap();
+    }
+    let mut confirmed = root;
+    confirmed
+        .apply_offer_submission(&offers, &submission)
+        .unwrap();
+    // Semantic execution returns and consumes event batches per child; the
+    // grouped positional caller consumes its accumulated batch once on return.
+    confirmed.take_observation_events();
+    assert_equivalent_surface(&confirmed, &replay);
+}
+
+#[test]
+fn structured_attacker_confirmation_rolls_back_after_a_late_failure() {
+    let mut root = arranged_attack_scenario(
+        gw_allies_deck(),
+        ur_lessons_deck(),
+        &[
+            "Water Tribe Rallier",
+            "Invasion Reinforcements",
+            "Compassionate Healer",
+        ],
+        194,
+    )
+    .game()
+    .clone();
+    let later = *root
+        .state
+        .combat
+        .as_ref()
+        .unwrap()
+        .attackers_to_declare
+        .last()
+        .unwrap();
+    let offers = root.structured_attacker_offers().unwrap();
+    let offer = attacker_offer(&offers);
+    let (role, candidates) = attacker_candidates(offer);
+    let (submission, _) = submission_for_mask(offer, role, candidates, 7);
+    // Inject a failure in the second ordinary declaration after the first can
+    // already tap. This simulates late rules failure, not a legal game mutation.
+    root.state.permanents[later].as_mut().unwrap().tapped = true;
+    let revision = root.semantic_decision_frame().unwrap().revision;
+    let before = blake3::hash(format!("{root:?}").as_bytes());
+    assert!(root.apply_offer_submission(&offers, &submission).is_err());
+    assert_eq!(blake3::hash(format!("{root:?}").as_bytes()), before);
+    assert_eq!(root.semantic_decision_frame().unwrap().revision, revision);
+}
+
+#[test]
+fn structured_attacker_decoded_duplicate_is_rejected_before_commit() {
+    let mut root = arranged_attack_scenario(
+        gw_allies_deck(),
+        ur_lessons_deck(),
+        &["Water Tribe Rallier"],
+        196,
+    )
+    .game()
+    .clone();
+    let offers = root.structured_attacker_offers().unwrap();
+    let offer = attacker_offer(&offers);
+    let (role, candidates) = attacker_candidates(offer);
+    let (submission, _) = submission_for_mask(offer, role, candidates, 1);
+    let mut command = offers.decode(&submission).unwrap();
+    let AtomicCommand::DeclareAttackers { attackers, .. } = &mut command else {
+        panic!("expected attacker declaration");
+    };
+    attackers.push(attackers[0]);
+    let before = format!("{root:?}");
+    assert!(matches!(
+        root.apply_atomic_command(&command),
+        Err(StructuredOfferError::StaleOrIllegal(_))
+    ));
+    assert_eq!(format!("{root:?}"), before);
+}
+
+#[test]
+fn structured_attacker_confirmation_keeps_the_committed_prefix() {
+    let mut root = arranged_attack_scenario(
+        gw_allies_deck(),
+        ur_lessons_deck(),
+        &[
+            "Water Tribe Rallier",
+            "Invasion Reinforcements",
+            "Compassionate Healer",
+        ],
+        197,
+    )
+    .game()
+    .clone();
+    let (index, first) = root
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .enumerate()
+        .find_map(|(index, action)| match action {
+            Action::DeclareAttacker {
+                permanent,
+                attack: true,
+                ..
+            } => Some((index, *permanent)),
+            _ => None,
+        })
+        .unwrap();
+    root.step(index).unwrap();
+    let offers = root.structured_attacker_offers().unwrap();
+    let offer = attacker_offer(&offers);
+    let (role, candidates) = attacker_candidates(offer);
+    assert_eq!(candidates.len(), 2);
+    let (submission, _) = submission_for_mask(offer, role, candidates, 1);
+    let commands = root.compound_commands(&offers, &submission).unwrap();
+    assert_eq!(commands.len(), 2);
+    let mut replay = root.clone();
+    for command in &commands {
+        replay.execute_semantic_command(command).unwrap();
+    }
+    root.apply_offer_submission(&offers, &submission).unwrap();
+    root.take_observation_events();
+    assert_equivalent_surface(&root, &replay);
+    let combat = root.state.combat.as_ref().unwrap();
+    assert_eq!(combat.attackers.len(), 2);
+    assert!(combat.attackers.contains(&first));
+    assert!(root.state.permanents[first].as_ref().unwrap().tapped);
+}
+
+#[test]
+fn structured_attacker_final_child_retains_native_forced_progression() {
+    let deck = || BTreeMap::from([("Mountain".to_string(), 24), ("Gray Ogre".to_string(), 16)]);
+    let mut root = arranged_attack_scenario(deck(), deck(), &["Gray Ogre"], 195)
+        .game()
+        .clone();
+    root.skip_trivial = true;
+    let offers = root.structured_attacker_offers().unwrap();
+    let offer = attacker_offer(&offers);
+    let (role, candidates) = attacker_candidates(offer);
+    let (submission, _) = submission_for_mask(offer, role, candidates, 1);
+    let commands = root.compound_commands(&offers, &submission).unwrap();
+    assert_eq!(commands.len(), 1);
+    let mut replay = root.clone();
+    replay.execute_semantic_command(&commands[0]).unwrap();
+    root.apply_offer_submission(&offers, &submission).unwrap();
+    root.take_observation_events();
+    assert_equivalent_surface(&root, &replay);
+    // Completing a declaration can consume all forced combat windows, including
+    // damage, before the scalar Command returns its next strategic decision.
+    assert_eq!(
+        root.state.turn.current_step_kind(),
+        StepKind::PostcombatMain
+    );
+    assert_eq!(root.state.players[1].life, 18);
+    assert!(root.state.combat.is_none());
 }

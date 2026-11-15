@@ -291,6 +291,10 @@ from rules/deck PlayerConfig and world identity.
 Every game runner, benchmark and Academy session uses native trivial-decision
 skipping (`skip_trivial`, on by default); a decision with one legal action is
 never shown to a person or sent to a model or policy (Jack Heart, 2026-10-28).
+With trivial skipping, an ordinary Command returns at the next nontrivial
+decision, which can be in a later turn: its final declaration choice may also
+resolve forced combat damage.
+The returned game state is not a snapshot of the declaration boundary.
 Turning it off is for explicit debugging only. Outside tests, the only code
 that does is the constructed-position fixtures listed in
 `tests/env/test_skip_forced_decisions.py`; they play no game for a person,
@@ -524,7 +528,9 @@ across `&self` code that reads the board per source or per ability. Continuous-e
 live in `EffectRecords` (indexed by affected object and player); trigger
 sources are looked up per event kind through `TriggerIndex`
 (`flow/triggers.rs`), invalidated by trigger and layer dependencies; departed-object
-facts are an `ObjectLkiLog`. A cloned `Game` carries these caches.
+facts are an `ObjectLkiLog`. A cloned `Game` carries these caches. Search clones
+omit card/exposure capture; a transactional candidate for the live game must
+explicitly preserve that capture and publish it only on success.
 Layer rebuilds reuse immutable copiable source objects and static plans, bound to
 exact definition identity, appearance and timestamp; copy/transform definition
 changes invalidate that source. Intermediate layer objects detach on writes.
