@@ -16,10 +16,12 @@ import subprocess
 import sys
 import tempfile
 from threading import Thread
+from time import monotonic
+from typing import Any
 from urllib.parse import parse_qs, urlparse
 from urllib.request import urlopen
 
-from websockets.sync.client import connect
+from websockets.sync.client import ClientConnection, connect
 
 import managym
 
@@ -28,6 +30,29 @@ INSTALL_COMMAND = (
 )
 LAUNCH_COMMAND = "uv run --no-project managym academy"
 DEFAULT_URL = "http://127.0.0.1:8000"
+
+
+def _settled_message(ws: ClientConnection) -> dict[str, Any]:
+    """Wait up to 30 seconds for a reply after progress and early receipts.
+
+    An accepted command can still be running the opponent; only its settled
+    reply supplies the next playable frame. Errors pass through to assertions.
+    """
+    deadline = monotonic() + 30
+    while True:
+        # The wire envelope contains heterogeneous JSON frames and receipts.
+        message: dict[str, Any] = json.loads(
+            ws.recv(timeout=max(0, deadline - monotonic()))
+        )
+        if message["type"] == "work_status":
+            continue
+        if (
+            message["type"] == "command_outcome"
+            and message.get("status") == "accepted"
+            and (message.get("work") or {}).get("state") == "running"
+        ):
+            continue
+        return message
 
 
 def main() -> None:
@@ -108,7 +133,7 @@ def main() -> None:
                         }
                     )
                 )
-                payload = json.loads(ws.recv(timeout=30))
+                payload = _settled_message(ws)
                 assert payload["launch"] == launch_id
                 assert payload["frame"]["prompt"]
                 ws.send(
@@ -125,7 +150,7 @@ def main() -> None:
                         }
                     )
                 )
-                payload = json.loads(ws.recv(timeout=30))
+                payload = _settled_message(ws)
                 frame = payload["frame"]
                 for step in range(300):
                     if frame["projection"]["game_over"]:
@@ -146,7 +171,7 @@ def main() -> None:
                             }
                         )
                     )
-                    payload = json.loads(ws.recv(timeout=30))
+                    payload = _settled_message(ws)
                     assert payload["status"] == "accepted", payload
                     frame = payload["update"]["frame"]
                 else:
