@@ -18,14 +18,16 @@ from etude.run.records import ArtifactRef, RunFile
 from etude.train.records import Step
 from etude.train.run import Run, track
 import numpy as np
-import torch
 
 import manabot.infra.log
+from manabot.policy.protocol import Backend
 
 from .config import RuntimeConfig
 
 
-def seed_random(seed: int, *, torch_deterministic: bool = True) -> None:
+def seed_random(
+    seed: int, *, backend: Backend | None, torch_deterministic: bool = True
+) -> None:
     """Reset training RNGs without constructing a tracking run.
 
     Call at the declared sampling boundary: evaluation and checkpoint admission
@@ -33,8 +35,8 @@ def seed_random(seed: int, *, torch_deterministic: bool = True) -> None:
     """
     random.seed(seed)
     np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.backends.cudnn.deterministic = torch_deterministic
+    if backend is not None:
+        backend.seed_training(seed, torch_deterministic=torch_deterministic)
 
 
 def regime_tag(regime: str) -> str:
@@ -67,6 +69,7 @@ class RunContext:
         config: RuntimeConfig,
         *,
         experiment: str,
+        backend: Backend,
         regime: str | None = None,
         run: str | None = None,
         resume: Path | None = None,
@@ -78,7 +81,9 @@ class RunContext:
         self.runs_dir.mkdir(parents=True, exist_ok=True)
         level = getattr(logging, config.log_level.upper(), logging.INFO)
         manabot.infra.log.setGlobalLogLevel(level)
-        seed_random(config.seed, torch_deterministic=config.torch_deterministic)
+        seed_random(
+            config.seed, backend=backend, torch_deterministic=config.torch_deterministic
+        )
         self.run: Run = track(
             # A resumed run keeps the experiment it was declared under, which
             # names the stage that started it, not necessarily this one.

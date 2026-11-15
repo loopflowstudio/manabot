@@ -14,24 +14,20 @@ from typing import Literal
 
 import numpy as np
 from pydantic import Field
-import torch
 
-from manabot.backends.torch.arrays import device_of, on_device, to_numpy
-from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.env.observation import ActionEnum
 from manabot.eval.monitor import MonitorResult
 from manabot.experiment.evaluation_queue import Attempt, checkpoints
 from manabot.experiment.execution import ExperimentRun
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
-from manabot.model.world import validate_agent_setup
 from manabot.sim.matchup import selected_decks
 from manabot.sim.search.flat_mc import ACTION_SPACE_KIND_NAMES
 from manabot.training.records import TrainingRun
 from manabot.training.regime import Strict, TrainSelfPlay
+from manabot.training.state.backend import TrainingBackend
 from manabot.training.update_metrics import read_updates, stage_rows
-from manabot.verify.action_cases import reorder_objects, reorder_offers
-from manabot.verify.choice_corpus import PACK, Case, collect_choices, input_collisions
+from manabot.verify.choice_corpus import Case, collect_choices, input_collisions
 import managym
 
 Verdict = Literal["learning", "regression", "inconclusive", "error"]
@@ -125,120 +121,10 @@ class PolicySnapshot(Strict):
     maximum_invariance_error: float
 
 
-@torch.no_grad()
-def inspect_policy(path: Path, cases: list[Case], updates: int) -> PolicySnapshot:
-    """Use the ordinary world-bound loader and exact setup; never refit weights."""
-    if not cases:
-        raise ValueError("empty frozen choice corpus")
-    if len(cases) > 32:
-        chunks = [
-            inspect_policy(path, cases[i : i + 32], updates)
-            for i in range(0, len(cases), 32)
-        ]
-        return PolicySnapshot(
-            updates=updates,
-            checkpoint_sha256=chunks[0].checkpoint_sha256,
-            choices=[choice for chunk in chunks for choice in chunk.choices],
-            maximum_invariance_error=max(
-                chunk.maximum_invariance_error for chunk in chunks
-            ),
-        )
-    agent, _ = load_checkpoint(str(path))
-    configs = [
-        managym.authored_deck_setup(PACK, key) for key in ("ur_lessons", "gw_allies")
-    ]
-    validate_agent_setup(agent, configs)
-    batch = on_device(
-        agent.prepare(
-            {
-                key: to_numpy(torch.cat([case.obs[key] for case in cases]))
-                for key in cases[0].obs
-            },
-            inference=True,
-        ),
-        device_of(agent),
-    )
-    logits, values = agent(batch)
-    probabilities = logits.softmax(-1)
-    if not torch.isfinite(probabilities).all() or not torch.isfinite(values).all():
-        raise ValueError("nonfinite frozen checkpoint output")
-    restored, _ = load_checkpoint(str(path))
-    loaded_logits, loaded_values = restored(batch)
-    errors = [
-        float((loaded_logits.softmax(-1) - probabilities).abs().max()),
-        float((loaded_values - values).abs().max()),
-    ]
-    scores = []
-    for row, case in enumerate(cases):
-        obs = case.obs
-        single, value = agent(
-            on_device(
-                agent.prepare(
-                    {key: to_numpy(value) for key, value in (obs).items()},
-                    inference=True,
-                ),
-                device_of(agent),
-            )
-        )
-        p = single.softmax(-1)
-        count = int(obs["actions_valid"].sum())
-        order = torch.arange(count - 1, -1, -1)
-        offers, offer_value = agent(
-            on_device(
-                agent.prepare(
-                    {
-                        key: to_numpy(value)
-                        for key, value in (reorder_offers(obs, order)).items()
-                    },
-                    inference=True,
-                ),
-                device_of(agent),
-            )
-        )
-        objects, object_value = agent(
-            on_device(
-                agent.prepare(
-                    {
-                        key: to_numpy(value)
-                        for key, value in (reorder_objects(obs)).items()
-                    },
-                    inference=True,
-                ),
-                device_of(agent),
-            )
-        )
-        errors.extend(
-            [
-                float((p[0] - probabilities[row]).abs().max()),
-                float((value[0] - values[row]).abs().max()),
-                float((offers.softmax(-1)[0, :count] - p[0, order]).abs().max()),
-                float((objects.softmax(-1) - p).abs().max()),
-                float((offer_value - value).abs().max()),
-                float((object_value - value).abs().max()),
-                float(p[obs["actions_valid"] == 0].sum()),
-            ]
-        )
-        # Log-sum-exp avoids underflow and gives identical public copies shared
-        # probability mass. Its sign has no prescribed strategic interpretation.
-        left, right = case.groups
-        log_odds = float(single[0, left].logsumexp(0) - single[0, right].logsumexp(0))
-        scores.append(
-            ChoiceScore(
-                case=case.name,
-                family=case.family,
-                log_odds=log_odds,
-                value=float(value[0]),
-            )
-        )
-    maximum = max(errors)
-    if maximum > 1e-4:
-        raise ValueError(f"frozen-policy invariance error {maximum} exceeds 1e-4")
-    return PolicySnapshot(
-        updates=updates,
-        checkpoint_sha256=file_sha256(path),
-        choices=scores,
-        maximum_invariance_error=maximum,
-    )
+def inspect_policy(
+    path: Path, cases: list[Case], updates: int, *, backend: TrainingBackend
+) -> PolicySnapshot:
+    return backend.verification.inspect_policy(path, cases, updates)
 
 
 class FamilyChange(Strict):
@@ -333,14 +219,14 @@ def _paired(initial: MonitorResult, final: MonitorResult) -> list[PairedDeal]:
     return result
 
 
-def report_baseline(directory: Path) -> BaselineReport:
+def report_baseline(directory: Path, *, backend: TrainingBackend) -> BaselineReport:
     """Retain an honest report even when training, evaluation or probes failed."""
     experiment = ExperimentRun.model_validate_json(
         (directory / "experiment.json").read_text()
     )
     (attempt,) = experiment.attempts
-    previous_threads = torch.get_num_threads()
-    torch.set_num_threads(1)
+    previous_threads = backend.runtime.threads()
+    backend.runtime.configure(1, "float32", "cpu")
     report = BaselineReport(
         seed=attempt.seed,
         regime_digest="unavailable",
@@ -421,7 +307,7 @@ def report_baseline(directory: Path) -> BaselineReport:
             cases.extend(rows)
             corpus_hashes.append(file_sha256(target / "cases.json"))
         report.corpus_sha256 = canonical_sha256(corpus_hashes)
-        with torch.random.fork_rng():
+        with backend.state.preserve_rng():
             for checkpoint in exported:
                 if (
                     file_sha256(checkpoint.artifact["path"])
@@ -433,6 +319,7 @@ def report_baseline(directory: Path) -> BaselineReport:
                         Path(checkpoint.artifact["path"]),
                         cases,
                         checkpoint.coordinates.updates,
+                        backend=backend,
                     )
                 )
         report.families = family_changes(report.policies[0], report.policies[-1])
@@ -460,7 +347,7 @@ def report_baseline(directory: Path) -> BaselineReport:
         report.learning = LearningEvidence(
             verdict="error", seeds=1, deals=0, reason=report.error
         )
-    torch.set_num_threads(previous_threads)
+    backend.runtime.configure(previous_threads, "float32", "cpu")
     atomic_json(directory / "learning.json", report.model_dump(mode="json"))
     lines = [
         f"# Baseline learning: {report.learning.verdict}",

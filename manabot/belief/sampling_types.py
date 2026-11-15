@@ -75,7 +75,7 @@ class SamplerInput:
             raise ValueError("public pool exceeds sampler count capacity")
 
 
-def _digest(value: object) -> str:
+def sampling_digest(value: object) -> str:
     return hashlib.sha256(
         json.dumps(
             value, sort_keys=True, separators=(",", ":"), allow_nan=False

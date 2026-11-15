@@ -11,6 +11,7 @@ from manabot.backends.torch.rl import (
     policy_logs,
     reverse_kl,
 )
+import manabot.backends.torch.rollout as torch_rollout
 from manabot.training.rollout.actions import PackedActions
 
 
@@ -41,9 +42,9 @@ def test_packed_actions_preserve_sparse_coordinates_distributions_and_copy_owner
     None
 ):
     obs, logs, actions = evidence()
-    packed = PackedActions.pack(obs, logs)
+    packed = PackedActions.pack(obs, logs, validator=torch_rollout)
     selected = logs[np.arange(4), actions]
-    packed.check(actions, selected)
+    packed.check(actions, selected, validator=torch_rollout)
     order = np.array([2, 0, 3, 1])
     restored = packed.unpack(order)
     for key, value in obs.items():
@@ -61,6 +62,7 @@ def test_packed_actions_preserve_sparse_coordinates_distributions_and_copy_owner
             PackedActions.pack(
                 {k: v[i : i + 1] for k, v in restored.observation.items()},
                 restored.log_probabilities[i : i + 1],
+                validator=torch_rollout,
             )
             for i in range(4)
         ]
@@ -78,7 +80,7 @@ def test_packed_action_learning_loss_and_gradients_match_dense_evidence(
     rule: str,
 ) -> None:
     obs, logs, actions = evidence()
-    packed = PackedActions.pack(obs, logs)
+    packed = PackedActions.pack(obs, logs, validator=torch_rollout)
     indexes = np.array([3, 0])
     restored = packed.unpack(indexes)
     gradients = []
@@ -123,19 +125,19 @@ def test_packed_action_learning_loss_and_gradients_match_dense_evidence(
 
 def test_packed_action_checks_reject_corruption_in_original_rows() -> None:
     obs, logs, actions = evidence()
-    packed = PackedActions.pack(obs, logs)
+    packed = PackedActions.pack(obs, logs, validator=torch_rollout)
     packed.log_probabilities[-1] = np.nan
     with pytest.raises(NumericalError, match="nonfinite_behavior_logs") as caught:
-        packed.check(actions, logs[np.arange(4), actions])
+        packed.check(actions, logs[np.arange(4), actions], validator=torch_rollout)
     assert caught.value.tensors["minibatch_indexes"].tolist() == [0, 1, 2, 3]
     logs[1, np.flatnonzero(obs["actions_valid"][1] == 0)[0]] = -1
     with pytest.raises(ValueError, match="illegal_log_mass"):
-        PackedActions.pack(obs, logs)
+        PackedActions.pack(obs, logs, validator=torch_rollout)
 
 
 def test_rows_of_a_packed_block_reassemble_it_exactly() -> None:
     obs, logs, _ = evidence()
-    packed = PackedActions.pack(obs, logs)
+    packed = PackedActions.pack(obs, logs, validator=torch_rollout)
     whole = PackedActions.concatenate([packed.row(index) for index in range(4)])
     np.testing.assert_array_equal(whole.offsets, packed.offsets)
     np.testing.assert_array_equal(whole.slots, packed.slots)
@@ -146,7 +148,7 @@ def test_rows_of_a_packed_block_reassemble_it_exactly() -> None:
 
 def test_selected_types_read_the_chosen_action_of_every_row() -> None:
     obs, logs, actions = evidence()
-    packed = PackedActions.pack(obs, logs)
+    packed = PackedActions.pack(obs, logs, validator=torch_rollout)
     expected = obs["actions"][np.arange(4), actions, :6].argmax(-1)
     np.testing.assert_array_equal(
         packed.selected_types(actions.reshape(2, 2), 6), expected.reshape(2, 2)
@@ -155,7 +157,7 @@ def test_selected_types_read_the_chosen_action_of_every_row() -> None:
 
 def test_selected_types_reject_an_action_outside_packed_support() -> None:
     obs, logs, actions = evidence()
-    packed = PackedActions.pack(obs, logs)
+    packed = PackedActions.pack(obs, logs, validator=torch_rollout)
     illegal = actions.copy()
     illegal[2] = np.flatnonzero(obs["actions_valid"][2] == 0)[0]
     with pytest.raises(ValueError, match="absent from packed support"):

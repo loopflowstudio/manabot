@@ -36,6 +36,7 @@ from pathlib import Path
 import tempfile
 import warnings
 
+from manabot.backends import resolve
 from manabot.training.execution import execute_regime, validate_regime
 from manabot.training.records import TrainingRun
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
@@ -168,7 +169,9 @@ def _execute(
             nullcontext() if counts is None else _cuda_counts(counts)
         )
         with VerifyStore(out / "runs.sqlite") as store, counting:
-            return execute_regime(regime, seed, out / "run", store)
+            return execute_regime(
+                regime, seed, out / "run", store, backend=resolve("torch")
+            )
 
 
 if __name__ == "__main__":

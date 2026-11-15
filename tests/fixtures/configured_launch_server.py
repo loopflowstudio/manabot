@@ -7,6 +7,7 @@ from pathlib import Path
 
 import torch
 
+from manabot.backends import resolve
 from manabot.infra.config import ModelConfig
 from manabot.sim.recording import record_games
 from manabot.training.loops.minimal import train
@@ -31,6 +32,7 @@ def main() -> None:
             decisions=16,
             seed=3,
             model=ModelConfig(hidden_dim=8, num_attention_heads=2),
+            backend=resolve("torch"),
         )
     training_source = games.sample(seed=0).export(
         output.parent / "training.game.jsonl.gz"

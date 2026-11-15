@@ -10,6 +10,7 @@ from nbclient import NotebookClient
 import nbformat
 import pytest
 
+from manabot.backends import resolve
 from manabot.eval.monitor import MonitorProtocol, MonitorResult
 from manabot.experiment.config import Baseline, Case, Experiment, ModelOverride
 from manabot.experiment.evaluation_queue import Attempt, MonitoringBudget
@@ -117,7 +118,12 @@ def _experiment_failures(record: ExperimentRun, monitoring: Path) -> str:
 def test_configured_hardware_and_budget_admission(tmp_path: Path) -> None:
     experiment = demo_declaration()
     with pytest.raises(ValueError, match="not configured"):
-        run_experiment(experiment, HardwareInventory(resources=()), tmp_path / "absent")
+        run_experiment(
+            experiment,
+            HardwareInventory(resources=()),
+            tmp_path / "absent",
+            backend=resolve("torch"),
+        )
     assert not (tmp_path / "absent").exists()
     with pytest.raises(ValueError, match="not this host"):
         Hardware(
@@ -143,7 +149,7 @@ def test_tiny_comparison_evaluates_live_and_notebook_refresh_preserves_edits(
 ) -> None:
     experiment = demo_declaration()
     out = tmp_path / "comparison"
-    record = run_experiment(experiment, hardware(), out)
+    record = run_experiment(experiment, hardware(), out, backend=resolve("torch"))
     if record.status != "completed":
         pytest.fail(_experiment_failures(record, out / "monitoring"), pytrace=False)
     assert len(record.attempts) == 4
@@ -198,7 +204,9 @@ def test_tiny_comparison_evaluates_live_and_notebook_refresh_preserves_edits(
     # Persist the executed artifact; a later report refresh must preserve outputs too.
     nbformat.write(notebook, notebook_path)
     before = notebook_path.read_bytes()
-    resumed = run_experiment(experiment, hardware(), out, resume=True)
+    resumed = run_experiment(
+        experiment, hardware(), out, resume=True, backend=resolve("torch")
+    )
     assert (
         len(resumed.attempts) == 4
         and resumed.evaluator_seconds == record.evaluator_seconds
@@ -250,8 +258,8 @@ def test_failed_learner_restart_retains_attempts_without_retraining(
     def stop(process: object) -> None:
         pass
 
-    runtime = runner._runtime()
-    monkeypatch.setattr(runner, "_runtime", lambda: runtime)
+    runtime = runner._runtime(backend=resolve("torch"))
+    monkeypatch.setattr(runner, "_runtime", lambda **kwargs: runtime)
     monkeypatch.setattr(runner.subprocess, "Popen", launch)
     monkeypatch.setattr(runner, "_stop", stop)
     experiment = demo_declaration()
@@ -259,14 +267,16 @@ def test_failed_learner_restart_retains_attempts_without_retraining(
     regime.stages[0].execution.device = device
     experiment = replace(experiment, baseline=Baseline.capture("fixture", regime))
     out = tmp_path / "failed"
-    record = run_experiment(experiment, hardware(), out)
+    record = run_experiment(experiment, hardware(), out, backend=resolve("torch"))
     assert record.status == "incomplete" and len(launched) == 4
     assert all(
         a.status == "failed" and "fixture learner failure" in a.error
         for a in record.attempts
     )
     before = record.process_seconds
-    restarted = run_experiment(experiment, hardware(), out, resume=True)
+    restarted = run_experiment(
+        experiment, hardware(), out, resume=True, backend=resolve("torch")
+    )
     assert restarted.status == "incomplete" and len(launched) == 4
     assert restarted.process_seconds == before
     with pytest.raises(ValueError, match="intent"):
@@ -279,6 +289,7 @@ def test_failed_learner_restart_retains_attempts_without_retraining(
             hardware(),
             out,
             resume=True,
+            backend=resolve("torch"),
         )
 
 
@@ -290,7 +301,12 @@ def test_budget_exhaustion_retains_pending_work_without_launch(tmp_path: Path) -
     )
     out = tmp_path / "no-room"
     with pytest.raises(TimeoutError, match="monitoring reserve"):
-        run_experiment(replace(experiment, schedule=schedule), hardware(), out)
+        run_experiment(
+            replace(experiment, schedule=schedule),
+            hardware(),
+            out,
+            backend=resolve("torch"),
+        )
     payload = json.loads((out / "experiment.json").read_text())
     assert payload["status"] == "incomplete"
     assert all(a["status"] == "pending" for a in payload["attempts"])
@@ -333,6 +349,7 @@ def test_live_diagnostics_and_requested_exports_remain_separate(tmp_path: Path) 
         Experiment("diagnostic", Baseline.capture("fixture", value), schedule=schedule),
         hardware(),
         tmp_path / "live",
+        backend=resolve("torch"),
     )
     if record.status != "completed":
         pytest.fail(
@@ -367,5 +384,7 @@ def test_accelerator_still_reserves_cpu_evaluator_thread(
     regime.stages[0].execution.threads = 2
     experiment = replace(experiment, baseline=Baseline.capture("fixture", regime))
     with pytest.raises(ValueError, match="reserve one evaluator thread"):
-        run_experiment(experiment, hardware(), tmp_path / "over-budget")
+        run_experiment(
+            experiment, hardware(), tmp_path / "over-budget", backend=resolve("torch")
+        )
     assert not (tmp_path / "over-budget").exists()

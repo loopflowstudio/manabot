@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from manabot.eval.monitor import _summarize
+from manabot.eval.monitor import summarize
 from manabot.eval.results import EvaluationRow
 from manabot.experiment import evaluation_queue as queue
 from manabot.infra.files import atomic_json
@@ -171,7 +171,7 @@ def test_completed_result_projects_and_interruption_suppresses_rate(
     attempt = monitor.attempts[0]
     manifest = _manifest()
     manifest.rows = [EvaluationRow.model_validate(r) for r in _rows(manifest)]
-    _summarize(manifest)
+    summarize(manifest)
     directory = monitor._directory(attempt) / "evaluation"
     directory.mkdir()
     atomic_json(directory / "monitor.json", manifest.model_dump(mode="json"))
@@ -239,7 +239,7 @@ def test_completed_worker_survives_delayed_parent_poll(
         monitor.tick([source])
         result = _manifest()
         result.rows = [EvaluationRow.model_validate(r) for r in _rows(result)]
-        _summarize(result)
+        summarize(result)
         directory = monitor._directory(monitor.attempts[0]) / "evaluation"
         directory.mkdir()
         atomic_json(directory / "monitor.json", result.model_dump(mode="json"))

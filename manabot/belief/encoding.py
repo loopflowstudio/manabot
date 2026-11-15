@@ -9,7 +9,6 @@ from typing import Any, Mapping
 
 import numpy as np
 from numpy.typing import NDArray
-import torch
 
 from manabot.belief.range import BeliefError, BeliefState
 from managym.possible_worlds import PossibleWorldSpace
@@ -193,30 +192,26 @@ class BeliefTensorView:
     effective_support: float
     encoding_receipt: str
 
-    def to_torch_observation(
-        self, *, batch_size: int, device: torch.device | str
-    ) -> dict[str, torch.Tensor]:
+    def observation(self, *, batch_size: int) -> dict[str, np.ndarray]:
         """Broadcast one immutable view across a model inference batch."""
 
         if batch_size < 1:
             raise BeliefError("belief batch size must be positive")
 
-        def repeated(values: NDArray, dtype: torch.dtype) -> torch.Tensor:
-            tensor = torch.as_tensor(
-                np.asarray(values).copy(), dtype=dtype, device=device
-            )
-            return tensor.unsqueeze(0).expand(batch_size, *tensor.shape)
+        def repeated(values: NDArray, dtype: np.typing.DTypeLike) -> np.ndarray:
+            array = np.asarray(values, dtype=dtype)
+            return np.broadcast_to(array, (batch_size, *array.shape)).copy()
 
         return {
-            "belief_card_def_ids": repeated(self.card_def_ids, torch.long),
-            "belief_owner_role_ids": repeated(self.owner_role_ids, torch.long),
-            "belief_hidden_zone_ids": repeated(self.hidden_zone_ids, torch.long),
+            "belief_card_def_ids": repeated(self.card_def_ids, np.int64),
+            "belief_owner_role_ids": repeated(self.owner_role_ids, np.int64),
+            "belief_hidden_zone_ids": repeated(self.hidden_zone_ids, np.int64),
             "belief_count_probabilities": repeated(
-                self.count_probabilities, torch.float32
+                self.count_probabilities, np.float32
             ),
-            "belief_validity": repeated(self.validity, torch.float32),
+            "belief_validity": repeated(self.validity, np.float32),
             "belief_globals": repeated(
-                np.asarray([self.entropy, self.effective_support]), torch.float32
+                np.asarray([self.entropy, self.effective_support]), np.float32
             ),
         }
 

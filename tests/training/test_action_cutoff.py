@@ -7,6 +7,9 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.failures import CaptureScope, capture_scope
@@ -108,6 +111,9 @@ def test_collector_uses_configured_prefix_and_one_masked_distribution(
             workers=workers,
             opponent_mode="self",
             learning_seats="both",
+            numerics=TorchCollectionSession(
+                device="cpu", seed=213, precision="float32"
+            ),
         )
         try:
             batch = collector.collect(agent, 2)

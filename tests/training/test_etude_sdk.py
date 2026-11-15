@@ -13,6 +13,7 @@ from etude.train.records import Step
 from etude.train.run import track
 import pytest
 
+from manabot.backends import resolve
 from manabot.infra.config import RuntimeConfig
 from manabot.infra.runtime import RunContext
 
@@ -49,6 +50,7 @@ def test_run_context_records_update_clocks(
     with RunContext(
         RuntimeConfig(name="sdk-fixture", runs_dir=tmp_path),
         experiment="seat_comparison",
+        backend=resolve("torch"),
     ) as experiment:
         experiment.log_update({"loss": 0.25}, updates=2, transitions=512)
     data = read_all(tmp_path / "sdk-fixture" / "etude")
@@ -68,6 +70,7 @@ def test_run_context_retains_failure_state(tmp_path: Path) -> None:
         with RunContext(
             RuntimeConfig(name="failed-fixture", runs_dir=tmp_path),
             experiment="failed-fixture",
+            backend=resolve("torch"),
         ):
             raise RuntimeError("fixture failure")
     data = read_all(tmp_path / "failed-fixture" / "etude")
@@ -85,6 +88,7 @@ def test_run_context_obeys_launcher_identity_and_directory(
         RuntimeConfig(name="launched-fixture", runs_dir=tmp_path / "local"),
         experiment="launched-fixture",
         resolved_config={"fixture": "resolved-recipe"},
+        backend=resolve("torch"),
     ) as experiment:
         experiment.log_update({"loss": 0.5}, updates=1, transitions=16)
     data = read_all(launched)

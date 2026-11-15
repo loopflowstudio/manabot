@@ -79,6 +79,18 @@ def test_torch_backend_runs_the_policy_and_damped_step_over_numpy() -> None:
     np.testing.assert_array_equal(logits, expected_logits.numpy())
     np.testing.assert_array_equal(values, expected_values.numpy())
 
+    policy.train()
+    modes = [module.training for module in policy.modules()]
+    probabilities, probability_values = policy.evaluate_probabilities(
+        policy.prepare(obs, inference=True)
+    )
+    np.testing.assert_array_equal(
+        probabilities, torch.softmax(expected_logits, dim=-1).numpy()
+    )
+    np.testing.assert_array_equal(probability_values, expected_values.numpy())
+    assert [module.training for module in policy.modules()] == modes
+    policy.eval()
+
     batch = policy.prepare(obs)
     targets = _targets(obs, logits)
     settings = Settings(

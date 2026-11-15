@@ -21,7 +21,7 @@ from manabot.sim.rollout import (
     BatchedSampler,
     PolicyRolloutMCPlayer,
     RandomBatchController,
-    _allocate_buffers,
+    allocate_buffers,
     run_vector_games,
 )
 from manabot.sim.search.flat_mc import aggregate_records
@@ -52,7 +52,7 @@ class TestRolloutPool:
         assert pool.num_slots == 2 * 3 * num_actions
 
         obs_space = ObservationSpace()
-        buffers = _allocate_buffers(obs_space, pool.num_slots)
+        buffers = allocate_buffers(obs_space, pool.num_slots)
         pool.set_buffers(buffers, pool.num_slots)
 
         rng = np.random.default_rng(0)
@@ -79,7 +79,7 @@ class TestRolloutPool:
         env, _ = make_env(seed=5)
         pool = env._engine.rollout_pool(1, 1, 7, 2000)
         capacity = pool.num_slots + 8
-        buffers = _allocate_buffers(ObservationSpace(), capacity)
+        buffers = allocate_buffers(ObservationSpace(), capacity)
         pool.set_buffers(buffers, capacity)
         assert pool.encode_active() is not None
 
@@ -87,7 +87,7 @@ class TestRolloutPool:
         env, _ = make_env(seed=9)
         before = env._engine.action_count()
         pool = env._engine.rollout_pool(2, 2, 11, 2000)
-        buffers = _allocate_buffers(ObservationSpace(), pool.num_slots)
+        buffers = allocate_buffers(ObservationSpace(), pool.num_slots)
         pool.set_buffers(buffers, pool.num_slots)
         active = pool.encode_active()
         guard = 0
@@ -102,7 +102,7 @@ class TestRolloutPool:
 class TestBatchedSampler:
     def _obs_batch(self, batch: int = 8) -> dict[str, np.ndarray]:
         """Real opening observations from distinct seeds, one per row."""
-        buffers = _allocate_buffers(ObservationSpace(), batch)
+        buffers = allocate_buffers(ObservationSpace(), batch)
         for row in range(batch):
             _, obs = make_env(seed=20 + row)
             for key, value in obs.items():

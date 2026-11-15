@@ -17,7 +17,13 @@ from manabot.env.observation import ACTION_TYPE_DIM
 from manabot.policy.prepare import reference_distribution
 from manabot.training.regime import Learning
 from manabot.training.rollout.collection import RolloutBatch
-from manabot.training.updates.backend import Array, PPOBackend, PPOLearner, PPOPolicy
+from manabot.training.updates.backend import (
+    Array,
+    PPOBackend,
+    PPOLearner,
+    PPOPolicy,
+    ppo_rl,
+)
 from manabot.training.updates.health import (
     OptimizerHealth,
     batch_health,
@@ -42,11 +48,15 @@ def update_iteration(
 
     `backend` is the module whose arrays `learner` holds.
     """
-    rl, to_device = backend.rl, backend.arrays.from_numpy
+    rl, to_device = ppo_rl(backend.rl), backend.arrays.from_numpy
     dev = learner.device
     track = learner.profiler.track
     with track("Batch transfer, targets and behavior checks"):
-        batch.action_data.check(batch.actions, batch.logprobs)
+        batch.action_data.check(
+            batch.actions,
+            batch.logprobs,
+            validator=backend.rollout,
+        )
         admitted = backend.rollout.AdmittedRollout(learner.agent, batch)
         values = to_device(batch.values, dev)
         rewards = to_device(batch.rewards, dev)

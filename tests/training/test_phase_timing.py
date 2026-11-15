@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends import resolve
 import manabot.backends.torch as torch_backend
 from manabot.backends.torch.learner import Learner
 from manabot.infra.config import MatchConfig
@@ -160,7 +161,9 @@ def test_self_play_stage_records_both_timing_trees_by_default(tmp_path: Path) ->
         schedule_clock="iteration_fraction",
     )
     with VerifyStore(tmp_path / "store.sqlite") as store:
-        run = execute_regime(regime, 17, tmp_path / "run", store)
+        run = execute_regime(
+            regime, 17, tmp_path / "run", store, backend=resolve("torch")
+        )
     record = run.stages[0]
     assert record.collection_timings and record.learning_timings
     assert record.learning_timings["EMA update"].calls == 2
