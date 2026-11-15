@@ -111,12 +111,30 @@ def replay_failure_inputs(evidence: FailureEvidence) -> list[dict[str, object]]:
     if boundary is None:
         return [_replay_game_inputs(evidence, game) for game in evidence.games]
     retained = evidence.model_copy(deep=True)
-    if boundary.phase != "executing":
-        retained.operation = "step"
-        for game in retained.games:
-            game.frame = None
+    # Journal reset inputs describe the prior game, not the proposed new root.
+    # Only an active step row with its exact pre-action frame binds an attempt.
+    retained.operation = "step"
     results: list[dict[str, object]] = []
-    for game in retained.games:
+    for index, game in enumerate(retained.games):
+        bound_step = (
+            boundary.phase == "executing"
+            and boundary.operation in {"step", "step_isolated"}
+            and index < len(boundary.active)
+            and boundary.active[index]
+            and index < len(boundary.committed_counts)
+            and index < len(boundary.pending_actions)
+            and len(game.actions) == boundary.committed_counts[index] + 1
+            and game.actions[-1] == boundary.pending_actions[index]
+            and game.frame is not None
+        )
+        if not bound_step:
+            game.frame = None
+            if (
+                boundary.phase == "executing"
+                and boundary.operation in {"step", "step_isolated"}
+                and index < len(boundary.committed_counts)
+            ):
+                game.actions = game.actions[: boundary.committed_counts[index]]
         if not game.players:
             result: dict[str, object] = {
                 "stream": game.stream,
@@ -125,16 +143,18 @@ def replay_failure_inputs(evidence: FailureEvidence) -> list[dict[str, object]]:
         else:
             result = _replay_game_inputs(retained, game)
         result.update(
+            boundary_operation=boundary.operation,
             boundary_phase=boundary.phase,
             native_returned=boundary.returned,
             setup_known=boundary.setup_known,
             original_outcome="execution_outcome_unknown",
             diagnostic="Replay cannot settle the original interrupted call's outcome",
         )
-        if boundary.phase != "executing":
+        if not bound_step:
             result.update(
                 at_retained_failure=False,
                 matches_binding=None,
+                matches_error=None,
                 diagnostic="Reconstructed last-known prefix; pending binding or current setup unavailable",
             )
         results.append(result)

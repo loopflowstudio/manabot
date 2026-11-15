@@ -660,7 +660,8 @@ class ScalarCapture(_Capture):
         self.journal = None
         with self._guard(lambda: self.evidence("reset")):
             if self._cursor is not None:
-                self._publish(self.evidence("reset"), "executing")
+                assert self._call_evidence is not None
+                self._publish(self._call_evidence, "executing")
             result = env.reset(players)
             if self._cursor is not None:
                 self._returned(self.evidence("reset"))
@@ -986,6 +987,9 @@ class CapturedVector(_Capture):
             game.players = [PlayerSetup.retain(p) for p in setup]
             game.restart(seed)
         with self._guard(lambda: self._evidence_for(self.games, "reset")):
+            if self._cursor is not None:
+                assert self._call_evidence is not None
+                self._publish(self._call_evidence, "executing")
             self.native.reset_each_into_buffers(players)
         if self._cursor is not None:
             self._returned(self._evidence_for(self.games, "reset"))
@@ -1012,6 +1016,9 @@ class CapturedVector(_Capture):
                 game.players = [PlayerSetup.retain(p) for p in setup]
                 game.restart(seed)
         with self._guard(lambda: self._evidence_for(proposed, "reset")):
+            if self._cursor is not None:
+                assert self._call_evidence is not None
+                self._publish(self._call_evidence, "executing")
             self.native.reassign_roots_into_buffers(players)
         if self._cursor is not None:
             self._returned(self._evidence_for(self.games, "reset"))
@@ -1030,6 +1037,9 @@ class CapturedVector(_Capture):
         for game, seed in zip(self.games, seeds, strict=True):
             game.restart(seed)
         with self._guard(lambda: self._evidence_for(self.games, "reset")):
+            if self._cursor is not None:
+                assert self._call_evidence is not None
+                self._publish(self._call_evidence, "executing")
             self.native.reset_seeds_into_buffers(seeds)
         if self._cursor is not None:
             self._returned(self._evidence_for(self.games, "reset"))
@@ -1087,6 +1097,9 @@ class CapturedVector(_Capture):
                 active=active,
                 setup_known=not self._sampled_roots,
             )
+        if self._cursor is not None:
+            assert self._call_evidence is not None
+            self._publish(self._call_evidence, "executing")
         self.native.replace_failed_into_buffers(active)
         if self._cursor is not None:
             self._returned(self._evidence_for(self.games, "reset"))

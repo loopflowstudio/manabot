@@ -87,6 +87,8 @@ def _interrupt_child(directory: str, mode: str, phase: str) -> None:
                 vector.step_into_buffers([0, 0])
                 with scope.operation("collection"), scope.operation(phase):
                     os._exit(73)
+            if phase == "executing":
+                vector.step_into_buffers([0, 0])
             method = {
                 "preparing": "semantic_decision_frames_json",
                 "executing": "step_into_buffers",
@@ -153,8 +155,8 @@ def test_abrupt_exit_leaves_replayable_private_cursor(
         assert [game.seed for game in evidence.games] == [24, 25]
     if mode == "vector" and phase == "executing":
         assert boundary.active == [True, False]
-        assert evidence.games[0].actions == [0]
-        assert evidence.games[1].actions == []
+        assert evidence.games[0].actions == [0, 0]
+        assert evidence.games[1].actions == [0]
     before = cursor.read_bytes()
     replay = subprocess.run(
         [
@@ -177,6 +179,11 @@ def test_abrupt_exit_leaves_replayable_private_cursor(
     assert all(
         row["original_outcome"] == "execution_outcome_unknown" for row in results
     )
+    if mode == "vector" and phase == "executing":
+        assert results[0]["matches_binding"] is True
+        assert results[0]["at_retained_failure"] is True
+        assert results[1]["matches_binding"] is None
+        assert results[1]["at_retained_failure"] is False
     assert cursor.read_bytes() == before
 
 
@@ -191,6 +198,113 @@ def test_nested_operation_restores_parent_and_records_return(tmp_path: Path) -> 
         assert parent["sequence"] > first["sequence"]
         assert parent["operation"] == "collection" and parent["state"] == "pending"
     assert json.loads(marker.read_text())["state"] == "returned"
+
+
+def _interrupt_reset_child(directory: str, operation: str, first: str) -> None:
+    scope = CaptureScope(Path(directory) / "failures", training_game_logs=True)
+    with capture_scope(scope):
+        if operation == "scalar_reset":
+            capture = ScalarCapture(24)
+            env = managym.Env(seed=24)
+            if first != "first":
+                capture.reset(env, _players())
+                capture.step(env, 0)
+            capture.reset(_ExitNative(env, "reset"), list(reversed(_players())))
+        else:
+            vector = CapturedVector(num_envs=2, seed=24)
+            vector.set_buffers(_buffers(2))
+            vector.set_uniform_roster(_roster())
+            if first != "first":
+                vector.reset_all_into_buffers(_players())
+                vector.step_into_buffers([0, 0])
+            method = {
+                "reset_each": "reset_each_into_buffers",
+                "reset_seeds": "reset_seeds_into_buffers",
+                "reassign_roots": "reassign_roots_into_buffers",
+                "replace_failed": "replace_failed_into_buffers",
+                "reassign_preparing": "current_game_seeds",
+            }[operation]
+            vector.native = _ExitNative(vector.native, method)
+            if operation == "reset_each":
+                vector.reset_each_into_buffers([_players(), _players()])
+            elif operation == "reset_seeds":
+                vector.reset_seeds_into_buffers([31, 32])
+            elif operation in {"reassign_roots", "reassign_preparing"}:
+                vector.reassign_roots_into_buffers([list(reversed(_players())), None])
+            else:
+                vector.replace_failed_into_buffers([True, False])
+    raise AssertionError("injected reset boundary was not reached")
+
+
+@pytest.mark.parametrize(
+    "operation,first",
+    [
+        ("scalar_reset", "prior"),
+        ("scalar_reset", "first"),
+        ("reset_each", "prior"),
+        ("reset_each", "first"),
+        ("reset_seeds", "prior"),
+        ("reassign_roots", "prior"),
+        ("replace_failed", "prior"),
+        ("reassign_preparing", "prior"),
+    ],
+)
+def test_interrupted_reset_replays_prior_game_without_binding_claim(
+    tmp_path: Path, operation: str, first: str
+) -> None:
+    code = "import runpy,sys; runpy.run_path(sys.argv[1])['_interrupt_reset_child'](*sys.argv[2:])"
+    child = subprocess.run(
+        [sys.executable, "-c", code, __file__, str(tmp_path), operation, first],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert child.returncode == 73, child.stderr
+    cursor = next((tmp_path / "game-journals").glob("*.jsonl"))
+    evidence = read_failure(cursor)
+    boundary = evidence.boundary
+    assert boundary is not None
+    assert boundary.phase == (
+        "preparing" if operation == "reassign_preparing" else "executing"
+    )
+    assert boundary.operation == (
+        "reset"
+        if operation == "scalar_reset"
+        else "reassign_roots"
+        if operation == "reassign_preparing"
+        else operation
+    )
+    assert not boundary.returned
+    assert evidence.execution_outcome == "execution_outcome_unknown"
+    assert [game.seed for game in evidence.games] == (
+        [24] if operation == "scalar_reset" else [24, 25]
+    )
+    assert all(
+        game.actions == ([] if first == "first" else [0]) for game in evidence.games
+    )
+    if first == "first":
+        assert all(not game.players for game in evidence.games)
+    elif operation == "scalar_reset":
+        assert evidence.games[0].players[0].name == "a"
+        assert boundary.proposed_players[0][0].name == "b"
+    else:
+        assert not boundary.setup_known or operation.startswith("reassign")
+        assert evidence.games[0].players[0].name in {
+            player.name for player in _roster()
+        }
+    before = cursor.read_bytes()
+    results = replay_failure_inputs(evidence)
+    assert all(
+        row["status"] == ("setup_unavailable" if first == "first" else "advanced")
+        for row in results
+    )
+    assert all(row["at_retained_failure"] is False for row in results)
+    assert all(
+        row["matches_binding"] is None and row["matches_error"] is None
+        for row in results
+    )
+    assert all(row["boundary_operation"] == boundary.operation for row in results)
+    assert cursor.read_bytes() == before
 
 
 def test_disabled_logging_has_no_writer_or_extra_native_reads(
@@ -210,6 +324,35 @@ def test_disabled_logging_has_no_writer_or_extra_native_reads(
         with scope.operation("learning"):
             pass
     assert not scope.journal_directory.exists()
+
+
+@pytest.mark.parametrize("operation", ["step", "step_isolated"])
+@pytest.mark.parametrize("binding", ["fresh", "missing", "inactive"])
+def test_executing_replay_requires_active_fresh_step_binding(
+    tmp_path: Path, operation: str, binding: str
+) -> None:
+    scope = CaptureScope(tmp_path / "failures", training_game_logs=True)
+    with capture_scope(scope):
+        vector = CapturedVector(num_envs=1, seed=24)
+        vector.set_buffers(_buffers(1))
+        vector.reset_all_into_buffers(_players())
+        frame = vector.semantic_decision_frames_json()[0]
+        vector.step_into_buffers([0])
+        evidence = read_failure(next(scope.journal_directory.glob("*.jsonl")))
+        vector.close()
+    boundary = evidence.boundary
+    assert boundary is not None
+    boundary.phase = "executing"
+    boundary.operation = operation
+    boundary.returned = False
+    boundary.active = [binding != "inactive"]
+    evidence.games[0].frame = None if binding == "missing" else frame
+    result = replay_failure_inputs(evidence)[0]
+    assert result["status"] == "advanced"
+    assert result["actions"] == (1 if binding == "fresh" else 0)
+    assert result["at_retained_failure"] == (binding == "fresh")
+    assert result["matches_binding"] is (True if binding == "fresh" else None)
+    assert evidence.games[0].actions == [0]
 
 
 @pytest.mark.parametrize("seed", [24, 2**64 - 1])
