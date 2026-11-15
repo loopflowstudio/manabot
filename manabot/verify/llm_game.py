@@ -37,7 +37,7 @@ from manabot.semantic.text_observation import (
 from manabot.verify.llm_opponent import (
     CheckpointOpponent as ConfiguredCheckpointOpponent,
 )
-from manabot.verify.util import _select_agent_action
+from manabot.verify.util import select_agent_action
 import managym
 from managym.decision import DecisionFrame, apply_semantic_command
 
@@ -159,7 +159,7 @@ class CheckpointOpponent:
         encoded = self.space.encode(raw)
         encoding_seconds = time.monotonic() - started
         started = time.monotonic()
-        index = _select_agent_action(self.agent, encoded, deterministic=False)
+        index = select_agent_action(self.agent, encoded, deterministic=False)
         inference_seconds = time.monotonic() - started
         if index < 0 or index >= len(encoded["actions_valid"]):
             raise ValueError("policy returned an invalid action index")
@@ -173,7 +173,7 @@ class CheckpointOpponent:
         return PolicyChoice(choices[0].reference, encoding_seconds, inference_seconds)
 
 
-def _write(path: Path, payload: str) -> None:
+def write_payload(path: Path, payload: str) -> None:
     temporary = path.with_suffix(path.suffix + ".pending")
     temporary.write_text(payload + "\n")
     temporary.replace(path)
@@ -276,7 +276,7 @@ def play(
     Native trivial-decision skipping is declared and identical for both seats.
     """
     out.mkdir(parents=True, exist_ok=False)
-    _write(out / "config.json", config.model_dump_json(indent=2))
+    write_payload(out / "config.json", config.model_dump_json(indent=2))
     started = time.monotonic()
     observations: dict[str, float] = {}
 
@@ -292,7 +292,7 @@ def play(
 
     def retain(path: Path, payload: str) -> None:
         with observe("evidence_write"):
-            _write(path, payload)
+            write_payload(path, payload)
 
     env: managym.Env | None = None
     replay: managym.Env | None = None

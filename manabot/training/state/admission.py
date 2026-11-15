@@ -49,7 +49,7 @@ def copy_verified_artifact(
     return {"path": str(target), "sha256": source["sha256"], "bytes": source["bytes"]}
 
 
-def _admit_setups(agent: object, regime: TrainingRegime) -> None:
+def admit_setups(agent: object, regime: TrainingRegime) -> None:
     """Admit a policy for a regime's setups: its match, or its whole deck source.
 
     A deck run admits a checkpoint only if its world may play every deck the
@@ -145,7 +145,7 @@ def admit_policy(
     if agent.config != regime.agent or space.encoder.config != regime.observation:
         raise ValueError("published checkpoint model/observation differs from regime")
     for setups in (source.regime, regime):
-        _admit_setups(agent, setups)
+        admit_setups(agent, setups)
     payload = backend.metadata(admitted["path"])
     metadata = payload.get("bc", {})
     for key, expected in {

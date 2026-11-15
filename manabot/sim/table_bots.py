@@ -76,12 +76,12 @@ class CheckpointVillain:
         import torch
 
         from manabot.backends.torch.arrays import device_of, on_device
-        from manabot.verify.util import _prepare_observation
+        from manabot.verify.util import prepare_observation
 
         with torch.no_grad():
             logits, value = self.agent(
                 on_device(
-                    _prepare_observation(self.agent, encoded), device_of(self.agent)
+                    prepare_observation(self.agent, encoded), device_of(self.agent)
                 )
             )
             distribution = torch.distributions.Categorical(logits=logits)

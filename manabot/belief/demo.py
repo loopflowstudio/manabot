@@ -30,7 +30,7 @@ from manabot.verify.games import INTERACTIVE_DECK
 from managym.possible_worlds import PossibleWorldSpace, WorldQuery
 
 
-def _runtime_env() -> tuple[Env, dict[str, np.ndarray]]:
+def runtime_env() -> tuple[Env, dict[str, np.ndarray]]:
     observation_space = ObservationSpace()
     match = Match(
         MatchConfig(
@@ -94,7 +94,7 @@ def _run_swapped_world(
 def run_demo(*, backend: TrainingBackend) -> dict[str, Any]:
     """Run the keystone checks through one real managym decision."""
 
-    env, observation = _runtime_env()
+    env, observation = runtime_env()
     viewer = int(env.last_raw_obs.agent.player_index)
     schema, policy_value = _schema_and_agent(env._engine, viewer, backend=backend)
     with TemporaryDirectory(prefix="manabot-belief-demo-") as tmp_dir:

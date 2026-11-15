@@ -16,7 +16,7 @@ import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
-from manabot.belief.sampling_types import SamplerInput, _digest
+from manabot.belief.sampling_types import SamplerInput, sampling_digest
 from manabot.sim.search.rollout_receipt import RolloutReceipt
 from manabot.sim.search.sampling_receipt import (
     PHYSICAL_SAMPLER_IDENTITY,
@@ -258,7 +258,7 @@ class LocalUpdateReceipt:
                     raise ValueError(
                         "compact rollout must omit actor observation hashes"
                     )
-                _validate_rollout_audit(
+                validate_rollout_audit(
                     row.branch_audit_json, row.canonical_commands, full=False
                 )
         prefix = receipt.compound_prefix
@@ -358,7 +358,7 @@ class LocalUpdateReceipt:
             identity["viewer"] != receipt.viewer
             or identity["revision"] != receipt.revision
             or identity["viewer_state_hash"] != receipt.viewer_state_hash
-            or _digest(source) != receipt.world_identity
+            or sampling_digest(source) != receipt.world_identity
             or sampling_seed != receipt.seed
             or receipt.sampling_probabilities
             or receipt.condition_mass != 1.0
@@ -416,7 +416,7 @@ class _RolloutAudit(BaseModel):
     tapes: dict[str, list[dict[str, object]]]
 
 
-def _validate_rollout_audit(encoded: str, commands: int, *, full: bool) -> None:
+def validate_rollout_audit(encoded: str, commands: int, *, full: bool) -> None:
     """A rollout forks once at the world site and applies only child Commands.
 
     Native counters count every applied Command in either mode; only an audited

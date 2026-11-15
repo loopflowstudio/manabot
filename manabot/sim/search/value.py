@@ -21,7 +21,7 @@ from manabot.env.env import Env
 from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.model.world import validate_agent_setup
 from manabot.policy.protocol import Backend, BackendPolicy
-from manabot.sim.rollout import _allocate_buffers
+from manabot.sim.rollout import allocate_buffers
 from manabot.sim.search.flat_mc import DEFAULT_MAX_PLAYOUT_STEPS, SearchStats
 
 # -----------------------------------------------------------------------------
@@ -123,7 +123,7 @@ class _ValueLeafScorer:
 
     def _ensure_buffers(self, capacity: int) -> dict[str, np.ndarray]:
         if self._buffers is None or self._capacity < capacity:
-            self._buffers = _allocate_buffers(self._obs_space, capacity)
+            self._buffers = allocate_buffers(self._obs_space, capacity)
             self._capacity = capacity
         return self._buffers
 

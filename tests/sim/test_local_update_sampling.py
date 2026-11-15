@@ -10,7 +10,7 @@ import torch
 
 from manabot.backends import resolve
 from manabot.backends.torch.belief import AutoregressiveBeliefSampler
-from manabot.belief.sampling_types import SamplerSchema, _digest
+from manabot.belief.sampling_types import SamplerSchema, sampling_digest
 from manabot.belief.state import ViewerHistory
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ObservationConfig
@@ -49,7 +49,7 @@ def saved_sampler(teacher: LocalUpdateTeacher, path: Path) -> SamplerArtifact:
     )
     model = AutoregressiveBeliefSampler(schema, hidden_size=8)
     identity = teacher.likelihood.checkpoint_sha256
-    world = _digest(teacher.agent.world_binding)
+    world = sampling_digest(teacher.agent.world_binding)
     torch.save(
         {
             "format": "manabot.autoregressive-belief-sampler/v1",

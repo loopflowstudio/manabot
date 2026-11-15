@@ -31,7 +31,7 @@ from manabot.training.regime import (
     TrainingRegime,
     TrainSelfPlay,
 )
-from manabot.training.state.admission import _admit_setups, copy_verified_artifact
+from manabot.training.state.admission import admit_setups, copy_verified_artifact
 from manabot.training.state.backend import TrainingBackend
 
 
@@ -228,7 +228,7 @@ def admit_learning_state(
         if spec.source_match is not None:
             validate_agent_setup(agent, Match(source_match).to_rust())
         else:
-            _admit_setups(agent, regime)
+            admit_setups(agent, regime)
         if agent.config != regime.agent or space.encoder.config != regime.observation:
             raise ValueError("learning-state checkpoint architecture mismatch")
         payload = backend.metadata(copied["path"])

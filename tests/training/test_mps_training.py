@@ -513,7 +513,7 @@ def test_mps_w64_single_selected_row_without_program_facts(
     finally:
         collector.close()
     assert batch.actions.shape == (1, 2)
-    original = damped_policy._targets
+    original = damped_policy.targets
 
     def singleton(
         backend: ModuleType,
@@ -527,7 +527,7 @@ def test_mps_w64_single_selected_row_without_program_facts(
         selected.flatten()[0] = True
         return damped_policy.DampedTargets(targets.advantages, targets.values, selected)
 
-    monkeypatch.setattr(damped_policy, "_targets", singleton)
+    monkeypatch.setattr(damped_policy, "targets", singleton)
     learner = Learner(agent, "mps", minibatch_rows=256)
     result = damped_policy.update_damped_iteration(
         torch_backend, learner, batch, stage.learning, 1

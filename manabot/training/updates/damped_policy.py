@@ -108,13 +108,14 @@ def minibatch_objective(
     return policy_loss + rl.float64_operand(value_loss), policy_loss, value_loss
 
 
-def _targets(
+def compute_targets(
     backend: UpdateBackend,
     learner: Learner,
     admitted: AdmittedRollout,
     learning: DampedPolicyLearning,
     bootstrap_agent: Policy | None = None,
 ) -> DampedTargets:
+    """Build detached learning targets and selection from an admitted rollout."""
     rl, device = backend.rl, learner.device
     batch = admitted.batch
     with backend.learner.no_grad():
@@ -201,7 +202,7 @@ def update_damped_iteration(
         admitted = backend.rollout.AdmittedRollout(learner.agent, batch)
         actions = to_device(batch.actions, device)
     with track("Targets"):
-        targets = _targets(backend, learner, admitted, learning, bootstrap_agent)
+        targets = compute_targets(backend, learner, admitted, learning, bootstrap_agent)
         advantage_abs_mean = float(targets.advantages.abs().mean())
     # Which rows the actor trains on, [T,E] on the host.
     actor_rows = to_host(targets.selected)

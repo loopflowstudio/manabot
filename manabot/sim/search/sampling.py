@@ -10,7 +10,7 @@ import json
 from typing import Callable, Literal, Protocol
 
 from manabot.belief.sampling_data import public_sampler_input
-from manabot.belief.sampling_types import SamplerInput, SamplerSchema, _digest
+from manabot.belief.sampling_types import SamplerInput, SamplerSchema, sampling_digest
 from manabot.belief.state import ViewerHistory
 from manabot.sim.search.sampling_receipt import (
     PHYSICAL_SAMPLER_IDENTITY,
@@ -93,7 +93,7 @@ class PhysicalHandSampler:
         constraints = json.loads(encoded)
         names = tuple(sorted(constraints["pool"]))
         inputs = SamplerInput(
-            _digest({"method": self.identity, "names": names}),
+            sampling_digest({"method": self.identity, "names": names}),
             tuple(constraints["pool"][name] for name in names),
             tuple(constraints["known_hand"].get(name, 0) for name in names),
             constraints["hand_size"],

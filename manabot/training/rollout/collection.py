@@ -46,7 +46,7 @@ from manabot.policy.protocol import BackendPolicy
 from manabot.sim.rollout import (
     BatchedSampler,
     RandomBatchController,
-    _allocate_buffers,
+    allocate_buffers,
 )
 from manabot.training.decks import UniformDecks, pair_match
 from manabot.training.regime import BatchClosure
@@ -536,7 +536,7 @@ class SeatRoutedCollector:
                 raise ValueError("unsupported training root or root recovery")
             self._env = TargetPracticeVector(observation_space, match, num_envs, seed)
         try:
-            self._buffers = _allocate_buffers(observation_space, num_envs)
+            self._buffers = allocate_buffers(observation_space, num_envs)
             self._env.set_buffers(
                 self._buffers,
                 action_overflow=observation_space.encoder.config.action_overflow,

@@ -246,7 +246,7 @@ def test_bf16_wraps_exactly_the_policy_forwards_and_keeps_float32_outputs(
         return real(declared, device)
 
     for module in (
-        "manabot.training.rollout.collection",
+        "manabot.backends.torch.collection",
         "manabot.backends.torch.learner",
     ):
         monkeypatch.setattr(f"{module}.forward_precision", recorded)

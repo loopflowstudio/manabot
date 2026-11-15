@@ -24,8 +24,8 @@ from manabot.sim.replay import read_trace, replay_games, write_trace
 from manabot.sim.search.flat_mc import AgentMatchupPlayer, make_player
 from manabot.training.state.backend import TrainingBackend
 from manabot.verify.scenario_validation import (
-    _outcome,
     scenario_identity,
+    scenario_outcome,
     validate_scenarios,
 )
 from manabot.verify.scenarios import (
@@ -116,8 +116,8 @@ def score_checkpoint(
         for revision in range(max_steps + 1):
             raw = env.last_raw_obs
             tracker.observe_state(raw)
-            resolution = _outcome(scenario, raw, True, cast, creatures_at_cast)
-            contrast = _outcome(scenario, raw, False, cast, creatures_at_cast)
+            resolution = scenario_outcome(scenario, raw, True, cast, creatures_at_cast)
+            contrast = scenario_outcome(scenario, raw, False, cast, creatures_at_cast)
             if resolution is not None or contrast is not None:
                 score.correct = resolution[0] if resolution is not None else False
                 score.outcome = (resolution or contrast)[1]

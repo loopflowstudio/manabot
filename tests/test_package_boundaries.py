@@ -16,6 +16,28 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_shared_manabot_imports_use_public_names() -> None:
+    """A helper used by another production module is a public contract."""
+    violations: list[str] = []
+    for directory in ("manabot", "scripts", "experiments"):
+        for path in sorted((REPO_ROOT / directory).rglob("*.py")):
+            for node in ast.walk(ast.parse(path.read_text(), str(path))):
+                if not isinstance(node, ast.ImportFrom):
+                    continue
+                module = node.module or ""
+                if not module.startswith("manabot.") and not (
+                    node.level and path.is_relative_to(REPO_ROOT / "manabot")
+                ):
+                    continue
+                for alias in node.names:
+                    if alias.name.startswith("_"):
+                        violations.append(
+                            f"{path.relative_to(REPO_ROOT)}:{node.lineno}: "
+                            f"{'.' * node.level}{module}.{alias.name}"
+                        )
+    assert violations == []
+
+
 def _imported_modules(tree: ast.Module) -> list[tuple[int, str]]:
     found: list[tuple[int, str]] = []
     for node in ast.walk(tree):

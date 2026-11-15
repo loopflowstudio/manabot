@@ -15,7 +15,7 @@ from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.backends.torch.collection import (
     CollectionSession as TorchCollectionSession,
 )
-from manabot.backends.torch.policy import ActorCritic, PolicyInference
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
@@ -24,6 +24,7 @@ from manabot.training.execution import execute_regime, validate_regime
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.training.rollout.matchups import elemental_roster
+from manabot.training.rollout.numerics import CollectionScope
 from manabot.training.state.game_errors import (
     GameAttempt,
     GameErrorLedger,
@@ -341,13 +342,12 @@ def test_uniform_crash_refill_retains_sampled_setups(
     calls = 0
 
     def sample(
-        agent: ActorCritic,
         rows: np.ndarray,
         acting: np.ndarray,
-        inference: PolicyInference,
+        inference: CollectionScope,
     ) -> np.ndarray:
         nonlocal calls
-        actions = original(agent, rows, acting, inference)
+        actions = original(rows, acting, inference)
         calls += 1
         if calls == 4:
             actions[0] = -1

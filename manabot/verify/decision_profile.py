@@ -47,8 +47,8 @@ from manabot.verify.games import (
 )
 from manabot.verify.util import (
     VerificationConfig,
-    _select_agent_action,
     build_verification_config,
+    select_agent_action,
     step_with_fallback,
     suppress_truncation_logs,
 )
@@ -108,7 +108,7 @@ def _untrained_agent(
 
 def _agent_policy(agent: BackendPolicy) -> Callable[[ObservationBuffers], int]:
     def policy(obs: ObservationBuffers) -> int:
-        return _select_agent_action(agent, obs, deterministic=False)
+        return select_agent_action(agent, obs, deterministic=False)
 
     return policy
 

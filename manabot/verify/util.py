@@ -41,7 +41,7 @@ def build_verification_config(**overrides: object) -> VerificationConfig:
     return VerificationConfig.model_validate(merged)
 
 
-def _prepare_observation(
+def prepare_observation(
     agent: BackendPolicy, obs: ObservationBuffers
 ) -> Prepared[np.ndarray]:
     """One encoded decision, admitted once with the inference input layout."""
@@ -51,11 +51,11 @@ def _prepare_observation(
     )
 
 
-def _select_agent_action(
+def select_agent_action(
     agent: BackendPolicy, obs: ObservationBuffers, deterministic: bool
 ) -> int:
     return int(
-        agent.sample(_prepare_observation(agent, obs), deterministic=deterministic)[0]
+        agent.sample(prepare_observation(agent, obs), deterministic=deterministic)[0]
     )
 
 

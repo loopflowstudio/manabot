@@ -19,7 +19,7 @@ import tempfile
 from typing import Literal, cast
 
 from manabot.belief.protocol import SamplerBackend
-from manabot.belief.sampling_types import SamplerInput, SamplerSchema, _digest
+from manabot.belief.sampling_types import SamplerInput, SamplerSchema, sampling_digest
 from manabot.belief.state import ViewerHistory
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
@@ -66,7 +66,7 @@ class SamplerDataset:
 
     @property
     def identity(self) -> str:
-        return _digest(asdict(self))
+        return sampling_digest(asdict(self))
 
     def __post_init__(self) -> None:
         if len({game.game_id for game in self.games}) != len(self.games) or len(
@@ -300,7 +300,7 @@ def collect_frozen_policy(
                         | set(match.villain_sideboard)
                     )
                 )
-                identity = _digest(
+                identity = sampling_digest(
                     {
                         "content": manifest["content_digest"],
                         "names": names,
@@ -378,6 +378,6 @@ def collect_frozen_policy(
     return SamplerDataset(
         schema,
         policy_identity,
-        _digest(getattr(agent, "world_binding")),
+        sampling_digest(getattr(agent, "world_binding")),
         tuple(records),
     )

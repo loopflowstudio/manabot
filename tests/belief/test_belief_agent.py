@@ -6,7 +6,7 @@ import pytest
 from manabot.backends import resolve
 from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.agent import AgentMemory
-from manabot.belief.demo import _runtime_env, run_demo
+from manabot.belief.demo import run_demo, runtime_env
 from manabot.belief.encoding import belief_schema_from_engine, encode_belief
 from manabot.belief.range import BeliefError
 from manabot.belief.state import CompatibleDealBeliefModel, ViewerHistory
@@ -111,7 +111,7 @@ def test_keystone_demo_changes_belief_tokens_and_hides_actual_truth() -> None:
 
 
 def test_real_engine_manifest_rows_preserve_normalized_zero_counts() -> None:
-    env, _ = _runtime_env()
+    env, _ = runtime_env()
     viewer = int(env.last_raw_obs.agent.player_index)
     space = PossibleWorldSpace.from_engine(env._engine, viewer)
     history = ViewerHistory.from_observation(

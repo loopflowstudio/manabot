@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from manabot.belief.protocol import SamplerBackend
 from manabot.model.world import validate_agent_setup
 from manabot.semantic.text_observation import TextDecision
-from manabot.verify.util import _select_agent_action
+from manabot.verify.util import select_agent_action
 import managym
 
 
@@ -62,7 +62,7 @@ class CheckpointOpponent:
         with self.backend.seeded_inference(
             self.identity.seed + self.decisions, cpu_only=True
         ):
-            index = _select_agent_action(self.agent, obs, deterministic=False)
+            index = select_agent_action(self.agent, obs, deterministic=False)
         if not 0 <= index < len(decision.actions):
             raise ValueError("policy selected an unavailable action")
         self.decisions += 1

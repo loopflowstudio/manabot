@@ -171,10 +171,10 @@ def test_repeated_card_identity_projects_distinct_hand_and_library_rows() -> Non
 def test_native_projection_preserves_canonical_receipt_bytes() -> None:
     """Pin float accumulation across a large support, including zero mass."""
 
-    from manabot.belief.demo import _runtime_env, _schema_and_agent
+    from manabot.belief.demo import _schema_and_agent, runtime_env
     from managym.possible_worlds import PossibleWorldSpace
 
-    env, _ = _runtime_env()
+    env, _ = runtime_env()
     viewer = int(env.last_raw_obs.agent.player_index)
     schema, _ = _schema_and_agent(env._engine, viewer, backend=resolve("torch"))
     space = PossibleWorldSpace.from_engine(env._engine, viewer)
