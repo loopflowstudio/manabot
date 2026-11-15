@@ -263,9 +263,14 @@ def test_checkpoint_outputs_are_from_the_chosen_inference(
         with pytest.raises(ValueError, match="no longer executable"):
             CheckpointVillain(str(checkpoint), player_configs=config.to_rust())
         return
-    policy = CheckpointVillain(
-        str(checkpoint), deterministic=True, player_configs=config.to_rust()
+    from manabot.sim.policy_provider import provider
+    from managym.policy import PolicyRegistry, PolicySpec
+
+    registry = PolicyRegistry(providers={"manabot": provider})
+    key = registry.register(
+        PolicySpec("manabot", str(checkpoint), {"deterministic": True})
     )
+    policy = registry.load(key, config.to_rust(), seat=0, seed=42)
     engine = server.managym.Env(seed=42)
     observation, _ = engine.reset(config.to_rust())
     digest = engine.state_digest()
@@ -293,6 +298,82 @@ def test_training_watch_players_keep_their_declared_identity(
             kind.title(),
             kind.title(),
         ]
-        assert row["outputs"]["probabilities"][row["outputs"]["action"]] == 1
+        assert row["outputs"]["probabilities"] == []
     finally:
         server._drop_session(result["id"], "test")
+
+
+@pytest.mark.parametrize(
+    "players",
+    [
+        ("checkpoint", "heuristic"),
+        ("checkpoint", "checkpoint"),
+        ("heuristic", "checkpoint"),
+    ],
+)
+def test_checkpoint_watch_records_exact_seats_and_policy_outputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, players: tuple[str, str]
+) -> None:
+    from managym.academy.opponent import policy_registry
+    from managym.policy import PolicySpec
+    from tests.academy.test_play_modes import _write_tiny_checkpoint
+
+    checkpoint = tmp_path / "model.pt"
+    _write_tiny_checkpoint(checkpoint)
+    digest = policy_registry().register(PolicySpec("manabot", str(checkpoint)))
+    monkeypatch.setenv("ACADEMY_PLAY_CHECKPOINTS", str(checkpoint))
+    monkeypatch.setenv("MANABOT_RUNS_DIR", str(tmp_path / "absent"))
+    monkeypatch.setattr(server.trace_store, "TRACES_DIR", tmp_path / "traces")
+    selected = [f"policy:{digest}" if p == "checkpoint" else p for p in players]
+    created = create_watch(WatchRequest(players=selected, seed=42))
+    try:
+        seen: set[int] = set()
+        for revision in range(24):
+            step_watch(created["id"], created["token"], revision)
+            row = inspect_watch(created["id"], revision, created["token"])
+            seat = row["decision"]["viewer"]
+            seen.add(seat)
+            assert row["players"] == selected
+            if players[seat] == "checkpoint":
+                assert row["identities"][seat]["version"] == digest
+                assert row["identities"][seat]["inference"]["sha256"] == digest
+                assert row["outputs"]["value"] is not None
+                assert sum(row["outputs"]["probabilities"]) == pytest.approx(1)
+            assert (
+                inspect_watch(created["id"], revision, created["token"])["outputs"]
+                == row["outputs"]
+            )
+        assert seen == {0, 1}
+    finally:
+        server._drop_session(created["id"], "test")
+
+
+def test_checkpoint_watch_refuses_incompatible_and_wrong_decks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from fastapi import HTTPException
+
+    from managym.academy.opponent import policy_registry
+    from managym.policy import PolicySpec
+    from tests.academy.test_play_modes import _write_tiny_checkpoint
+    from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
+
+    checkpoint = tmp_path / "model.pt"
+    _write_tiny_checkpoint(checkpoint)
+    monkeypatch.setenv("ACADEMY_PLAY_CHECKPOINTS", str(checkpoint))
+    monkeypatch.setenv("MANABOT_RUNS_DIR", str(tmp_path / "absent"))
+    digest = policy_registry().register(PolicySpec("manabot", str(checkpoint)))
+    with pytest.raises(HTTPException, match="was trained on"):
+        create_watch(
+            WatchRequest(
+                players=["random", f"policy:{digest}"],
+                hero_deck="interactive",
+                villain_deck="interactive",
+            )
+        )
+    data = read_checkpoint(checkpoint, weights_only=True)
+    data["world_binding"]["world"] = "w5"
+    write_checkpoint(data, checkpoint)
+    digest = policy_registry().register(PolicySpec("manabot", str(checkpoint)))
+    with pytest.raises(HTTPException, match="trained in w5"):
+        create_watch(WatchRequest(players=[f"policy:{digest}", "random"]))

@@ -7,135 +7,47 @@ output types. Heavy model imports happen only when a capability is requested.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from pathlib import Path
-from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
+import warnings
 
-from manabot.backends import resolve
 import managym
 from managym.bots import (
     BeliefSummary,
     BotArtifactError,
     BotDecision,
-    BotPolicy,
     VerifiedArena,
 )
+from managym.policy import PolicyRegistry, PolicyRunner, PolicySpec
 
 if TYPE_CHECKING:
-    from manabot.model.catalog import CheckpointSummary, UnavailableEntry
-    from manabot.policy.protocol import Backend
     from manabot.sim.search.runtime import RetainedCheckpointRegistration
 
 
-def checkpoint_backend() -> Backend:
-    """Select the training provider's runtime for checkpoint operations."""
-    return resolve("torch")
+def CheckpointVillain(
+    path: str,
+    *,
+    deterministic: bool = False,
+    player_configs: Sequence[managym.PlayerConfig] | None = None,
+) -> PolicyRunner:
+    """Deprecated checkpoint loader; use a PolicySpec (removed in 0.4.0)."""
+    from manabot.sim.policy_provider import provider
 
-
-class CheckpointVillain:
-    """A trained ActorCritic loaded from a policy container or legacy .pt.
-
-    Torch and the model stack are imported lazily so that search/random games
-    never pay the import cost.
-    """
-
-    def __init__(
-        self,
-        path: str,
-        *,
-        deterministic: bool = False,
-        player_configs: Sequence[managym.PlayerConfig] | None = None,
-    ) -> None:
-        from manabot.backends.torch.checkpoint import load_checkpoint
-        from manabot.model.world import validate_agent_setup
-
-        self.agent, self.obs_space = load_checkpoint(path)
-        if player_configs is not None:
-            validate_agent_setup(self.agent, player_configs)
-        self.deterministic = deterministic
-        self.last_decision: BotDecision | None = None
-
-    def __call__(self, env: managym.Env, obs: managym.Observation) -> int:
-        del env
-        self.last_decision = None
-        # Policy weights score each action independently of the padded action
-        # count. At inference preserve the entire rules offer list, including
-        # decisions wider than the training batch's storage capacity.
-        space = self.obs_space
-        if len(obs.action_space.actions) > space.encoder.max_actions:
-            from manabot.env.observation import ObservationSpace
-
-            space = ObservationSpace(
-                space.encoder.config.model_copy(
-                    update={
-                        "max_actions": len(obs.action_space.actions),
-                    }
-                )
-            )
-        encoded = space.encode(obs)
-        import torch
-
-        from manabot.verify.util import _tensor_observation
-
-        with torch.no_grad():
-            logits, value = self.agent(_tensor_observation(self.agent, encoded))
-            distribution = torch.distributions.Categorical(logits=logits)
-            action = int(
-                (
-                    logits.argmax(dim=-1)
-                    if self.deterministic
-                    else distribution.sample()
-                ).item()
-            )
-            self.last_decision = BotDecision(
-                action=action,
-                probabilities=distribution.probs[
-                    0, : len(obs.action_space.actions)
-                ].tolist(),
-                value=float(value.item()),
-                value_semantic=self.agent.value_semantic or "undeclared critic units",
-            )
-        return action
+    warnings.warn(
+        "CheckpointVillain is deprecated; use PolicySpec and PolicyRegistry (removed in 0.4.0)",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    registry = PolicyRegistry(providers={"manabot": provider})
+    key = registry.register(
+        PolicySpec("manabot", path, {"deterministic": deterministic})
+    )
+    return registry.load(key, player_configs or (), seat=1, seed=0)
 
 
 class TrainingBots:
+    """Optional historical replay/advice capabilities, independent of players."""
+
     name = "manabot"
-    watch_players = ("greedy", "heuristic")
-
-    def discover(
-        self, paths: list[Path], runs_dir: Path
-    ) -> tuple[list[CheckpointSummary], list[UnavailableEntry]]:
-        from manabot.model.catalog import discover_checkpoints
-
-        return discover_checkpoints(
-            paths, backend=checkpoint_backend(), runs_dir=runs_dir
-        )
-
-    def checkpoint_policy(
-        self,
-        path: str,
-        *,
-        deterministic: bool,
-        player_configs: Sequence[managym.PlayerConfig],
-    ) -> BotPolicy:
-        return CheckpointVillain(
-            path, deterministic=deterministic, player_configs=player_configs
-        )
-
-    def watch_policy(self, kind: str) -> BotPolicy:
-        if kind not in self.watch_players:
-            raise ValueError(f"Unsupported watch player: {kind}")
-
-        from manabot.env.env import Env
-        from manabot.sim.anchors import ScriptedGreedyPlayer
-        from manabot.sim.heuristic import HeuristicPlayer
-
-        player = HeuristicPlayer() if kind == "heuristic" else ScriptedGreedyPlayer()
-
-        def anchor(env: managym.Env, obs: managym.Observation) -> int:
-            return player.act(cast(Env, SimpleNamespace(last_raw_obs=obs)), {})
-
-        return anchor
 
     def checkpoint_registration(self, seed: int) -> RetainedCheckpointRegistration:
         from manabot.sim.search.runtime import (
