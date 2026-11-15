@@ -1,14 +1,16 @@
+import { seedError, type PlaySession } from './play-session';
 import { playerToken } from './records';
-import type { SearchConfig, PendingSearch } from './search';
+import { parseSearchConfigs, type SearchConfig, type PendingSearch } from './search';
 import {
   loadStoredDeckSelection,
+  sanitizeDeckSelection,
   saveStoredDeckSelection,
   type DeckChoice,
   type DeckSelection,
 } from './decks';
 import { deriveObservationNotes } from './log';
 export { DECISION_PROMPTS } from './prompt-instructions';
-import { defaultStops, loadStoredStops, saveStoredStops } from './stops';
+import { defaultStops, loadStoredStops, saveStoredStops, sanitizeStops } from './stops';
 import type { RestoredReplayDecision } from './replay-index';
 import type {
   BranchRetryPayload,
@@ -65,6 +67,53 @@ export function buildOpponentConfig(choice: PlayerChoice): OpponentConfig {
 }
 
 export class GameStore {
+  constructor(private readonly persistPreferences = true) {}
+
+  /** An isolated editor: nested source/search values must not mutate live setup. */
+  editableSetup(draft: Record<string, unknown> = this.setupConfig()): GameStore {
+    const editor = new GameStore(false);
+    editor.applySetupDraft(JSON.parse(JSON.stringify(draft)));
+    editor.watchMode = this.watchMode;
+    editor.watchPlayerChoice = this.watchPlayerChoice;
+    editor.watchSearchConfig = this.watchSearchConfig ? {...this.watchSearchConfig} : null;
+    return editor;
+  }
+
+  playSession = $state<PlaySession | null>(null);
+  storageWarning = $state('');
+  tableUnavailable = $state(false);
+  humanSeat = $state<0 | 1>(0);
+  watchMode = $state(false);
+  watchPlayerChoice = $state<PlayerChoice>('random');
+  watchSearchConfig = $state<SearchConfig | null>(null);
+  dealMode = $state<'fresh' | 'repeat'>('fresh');
+  seed = $state('0');
+  seedError = $derived(this.dealMode === 'repeat' ? seedError(this.seed) : null);
+
+  applyPlaySession(session: PlaySession): void {
+    const changed = session.game_number !== this.playSession?.game_number || session.id !== this.playSession?.id;
+    this.playSession = session;
+    if (!changed) return;
+    this.watchMode = false;
+    this.applySetupDraft(session.draft);
+  }
+
+  applySetupDraft(draft: Record<string, unknown>): void {
+    this.humanSeat = draft.human_seat === 1 ? 1 : 0;
+    this.dealMode = draft.seed == null ? 'fresh' : 'repeat';
+    this.seed = String(draft.seed ?? '0');
+    this.deckImport = (draft.deck_import as typeof this.deckImport) ?? null;
+    const named = sanitizeDeckSelection({hero:draft.hero_deck, villain:draft.villain_deck});
+    if (named) { this.setHeroDeck(named.hero); this.setVillainDeck(named.villain); }
+    this.decklists = draft.decklists === 'closed' ? 'closed' : 'open';
+    this.searchConfig = parseSearchConfigs([draft.mirror ?? null, null])[0];
+    const stops = sanitizeStops({...((draft.stops ?? {}) as Record<string, unknown>), stop_on_stack:draft.stop_on_stack, auto_pass:draft.auto_pass});
+    if (stops) this.stops = stops;
+    if (draft.villain_type === 'policy' && typeof draft.opponent_sha256 === 'string') this.opponentChoice = policyChoice(draft.opponent_sha256);
+    else if (draft.villain_type === 'search') this.opponentChoice = `search-${draft.villain_sims ?? 64}` as PlayerChoice;
+    else if (draft.villain_type === 'random' || draft.villain_type === 'passive') this.opponentChoice = draft.villain_type;
+  }
+
   table = $state<TableSnapshot | null>(null);
   restoredDecision = $state<RestoredReplayDecision | null>(null);
   branchAttemptId = $state<string | null>(null);
@@ -205,9 +254,18 @@ export class GameStore {
 
   newGameConfig(): Record<string, unknown> {
     return {
-      ...this.opponentConfig(),
+      ...this.setupConfig(),
       request_id: crypto.randomUUID(),
       player_token: playerToken(),
+    };
+  }
+
+  /** Setup data has no request identity or participant credential. */
+  setupConfig(): Record<string, unknown> {
+    return {
+      ...this.opponentConfig(),
+      human_seat: this.humanSeat,
+      seed: this.dealMode === 'repeat' ? this.seed : null,
       ...(this.deckImport ? { deck_import: this.deckImport } : {}),
       hero_deck: this.decks.hero,
       villain_deck: this.decks.villain,
@@ -384,6 +442,8 @@ export class GameStore {
 
   markResumeFailed(message: string): void {
     this.resetMatchState();
+    this.playSession = null;
+    this.table = null;
     this.resumeFailed = true;
     this.errorMessage = message;
     this.sessionId = null;
@@ -415,12 +475,12 @@ export class GameStore {
 
   private updateStops(next: StopsConfig): void {
     this.stops = next;
-    saveStoredStops(next);
+    if (this.persistPreferences) saveStoredStops(next);
   }
 
   private updateDecks(next: DeckSelection): void {
     this.decks = next;
-    saveStoredDeckSelection(next);
+    if (this.persistPreferences) saveStoredDeckSelection(next);
   }
 
   private applyDeckNames(deckNames: DeckNames | undefined): void {

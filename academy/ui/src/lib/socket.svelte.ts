@@ -1,7 +1,9 @@
+import { currentGame, rememberCurrentGame } from './current-game.svelte';
+import type { PlaySession } from './play-session';
 import { browser } from '$app/environment';
 
 import { sanitizeDeckSelection } from './decks';
-import { rememberRecordCredential } from './records';
+import { playerToken, rememberRecordCredential } from './records';
 import { policyChoice, gameStore } from './game.svelte';
 import {
   mergePresentationLabels,
@@ -60,7 +62,22 @@ type TableServerMessage = (ServerMessage | SharedTableControlEvent) & Pick<Serve
 interface ResumeCredentials {
   session_id: string;
   resume_token: string;
+  play_session_id?: string;
   presentation_cursor?: number;
+}
+
+function tabValue(key: string): string | null {
+  if (!browser) return null;
+  try { return window.sessionStorage.getItem(key); }
+  catch { gameStore.storageWarning = 'Session storage is unavailable. Reload continuity is unavailable; this game remains usable.'; return null; }
+}
+
+function writeTabValue(key: string, value: string | null): void {
+  if (!browser) return;
+  try {
+    if (value === null) window.sessionStorage.removeItem(key);
+    else window.sessionStorage.setItem(key, value);
+  } catch { gameStore.storageWarning = 'Session storage is unavailable. Reload continuity is unavailable; this game remains usable.'; }
 }
 
 function loadResumeCredentials(): ResumeCredentials | null {
@@ -68,7 +85,7 @@ function loadResumeCredentials(): ResumeCredentials | null {
     return null;
   }
 
-  const raw = window.sessionStorage.getItem(RESUME_STORAGE_KEY);
+  const raw = tabValue(RESUME_STORAGE_KEY);
   if (!raw) {
     return null;
   }
@@ -88,6 +105,7 @@ function loadResumeCredentials(): ResumeCredentials | null {
     return {
       session_id: parsed.session_id,
       resume_token: parsed.resume_token,
+      ...(typeof parsed.play_session_id === 'string' ? {play_session_id: parsed.play_session_id} : {}),
       ...(presentationCursor === undefined
         ? {}
         : { presentation_cursor: presentationCursor }),
@@ -101,7 +119,7 @@ function saveResumeCredentials(credentials: ResumeCredentials): void {
   if (!browser) {
     return;
   }
-  window.sessionStorage.setItem(RESUME_STORAGE_KEY, JSON.stringify(credentials));
+  writeTabValue(RESUME_STORAGE_KEY, JSON.stringify({...credentials, ...(gameStore.playSession ? {play_session_id: gameStore.playSession.id} : {})}));
   rememberRecordCredential(credentials.resume_token);
 }
 
@@ -109,7 +127,8 @@ function clearResumeCredentials(): void {
   if (!browser) {
     return;
   }
-  window.sessionStorage.removeItem(RESUME_STORAGE_KEY);
+  writeTabValue(RESUME_STORAGE_KEY, null);
+  writeTabValue('academy.continuation', null);
 }
 
 export function parseServerMessage(raw: string): TableServerMessage | null {
@@ -186,6 +205,7 @@ export class GameSocketController {
             type: 'resume',
             session_id: credentials.session_id,
             resume_token: credentials.resume_token,
+            ...(credentials.play_session_id ? {play_session_id: credentials.play_session_id} : {}),
             ...(this.presentationCursor === null ? {} : { presentation_cursor: this.presentationCursor }),
           });
           return;
@@ -234,7 +254,7 @@ export class GameSocketController {
     this.launchId = id;
     const session = loadResumeCredentials()?.session_id;
     try {
-      const started = JSON.parse(sessionStorage.getItem(LAUNCH_STORAGE_KEY) ?? 'null') as
+      const started = JSON.parse(tabValue(LAUNCH_STORAGE_KEY) ?? 'null') as
         | { id: string; session_id: string; setup: LaunchSetup }
         | null;
       if (session && started?.id === id && started.session_id === session) {
@@ -243,7 +263,7 @@ export class GameSocketController {
         return;
       }
     } catch {
-      sessionStorage.removeItem(LAUNCH_STORAGE_KEY);
+      writeTabValue(LAUNCH_STORAGE_KEY, null);
     }
     this.sendNewGame({ launch: id });
   }
@@ -253,7 +273,7 @@ export class GameSocketController {
     if (!config?.launch) {
       this.launchId = null;
       if (browser) {
-        sessionStorage.removeItem(LAUNCH_STORAGE_KEY);
+        writeTabValue(LAUNCH_STORAGE_KEY, null);
         const url = new URL(window.location.href);
         if (url.searchParams.has('launch')) {
           url.searchParams.delete('launch');
@@ -269,6 +289,21 @@ export class GameSocketController {
       ...(grantRevision === undefined ? {} : { grant_revision: grantRevision }),
       ...(config ? { config } : {}),
     });
+  }
+
+  sendContinuation(intent: 'rematch' | 'swap_sides' | 'change_opponent', config: Record<string, unknown> = {}): void {
+    const session = gameStore.playSession;
+    const table = gameStore.table;
+    if (!session || !table?.attempt_id || gameStore.newGamePending) return;
+    const request: SharedTableRequest = {
+      type: 'rematch', intent, config: {...config, player_token: playerToken()}, request_id: crypto.randomUUID(),
+      attempt_id: table.attempt_id, setup_revision: session.revision,
+      grant_revision: table.access.grant_revision,
+    };
+    writeTabValue('academy.continuation', JSON.stringify({table: table.table_id, request}));
+    gameStore.newGamePending = true;
+    gameStore.setError(null);
+    this.send(request);
   }
 
   sendAction(offerId: number): boolean {
@@ -400,18 +435,6 @@ export class GameSocketController {
     });
   }
 
-  sendAuthorBelief(scenarioId: string): void {
-    const grantRevision = gameStore.table?.access.grant_revision;
-    if (grantRevision === undefined) return;
-    this.send({ type: 'author_belief', grant_revision: grantRevision, scenario_id: scenarioId });
-  }
-
-  sendShareBelief(beliefId: string): void {
-    const grantRevision = gameStore.table?.access.grant_revision;
-    if (grantRevision === undefined) return;
-    this.send({ type: 'share_belief', grant_revision: grantRevision, belief_id: beliefId });
-  }
-
   sendRestoreDecision(address: string): void {
     const grantRevision = gameStore.table?.access.grant_revision;
     if (grantRevision === undefined) return;
@@ -496,9 +519,15 @@ export class GameSocketController {
       }
     }
 
+    if ('play_session' in message && message.play_session) {
+      gameStore.applyPlaySession(message.play_session as PlaySession);
+    }
+
     if ('launch_setup' in message && message.launch_setup) applyLaunchSetup(message.launch_setup);
 
     if ('table' in message && message.table) {
+      const matchChanged = message.table.table_id !== gameStore.table?.table_id || message.table.attempt_id !== gameStore.table?.attempt_id;
+      if (matchChanged && !('play_session' in message && message.play_session)) gameStore.playSession = null;
       gameStore.applyTable(message.table);
     }
 
@@ -508,6 +537,13 @@ export class GameSocketController {
     }
 
     if (message.type === 'table_snapshot') {
+      if ('session_interrupted' in message && message.session_interrupted) {
+        gameStore.tableUnavailable = true;
+        gameStore.observation = null;
+        gameStore.gameOver = true;
+        gameStore.newGamePending = false;
+        writeTabValue('academy.continuation', null);
+      }
       this.pendingResume = false;
       this.persistControlCredentials(message);
       return;
@@ -551,6 +587,7 @@ export class GameSocketController {
     }
 
     if (message.type === 'control_error') {
+      writeTabValue('academy.continuation', null);
       gameStore.newGamePending = false;
       gameStore.endFastForward();
       gameStore.setError(message.message);
@@ -558,9 +595,20 @@ export class GameSocketController {
     }
 
     if (message.type === 'observation' || message.type === 'game_over') {
+      gameStore.tableUnavailable = false;
+      if (!this.pendingResume || !currentGame.href) rememberCurrentGame('/');
+      if (this.pendingResume) {
+        try {
+          const pending = JSON.parse(tabValue('academy.continuation') ?? 'null');
+          if (pending?.table === message.table?.table_id && pending.request.attempt_id === message.table?.attempt_id) this.send(pending.request);
+          else writeTabValue('academy.continuation', null);
+        } catch { /* No durable continuation to retry. */ }
+      } else {
+        writeTabValue('academy.continuation', null);
+      }
       gameStore.newGamePending = false;
       if ('launch' in message && message.launch && message.launch_setup) {
-        sessionStorage.setItem(LAUNCH_STORAGE_KEY, JSON.stringify({ id: message.launch, session_id: message.session_id, setup: message.launch_setup }));
+        writeTabValue(LAUNCH_STORAGE_KEY, JSON.stringify({ id: message.launch, session_id: message.session_id, setup: message.launch_setup }));
       }
       this.pendingResume = false;
       this.inFlightCommand = null;
@@ -635,6 +683,7 @@ export class GameSocketController {
       return;
     }
 
+    writeTabValue('academy.continuation', null);
     gameStore.endFastForward();
     gameStore.endCommand();
     gameStore.newGamePending = false;
@@ -643,7 +692,7 @@ export class GameSocketController {
       this.inFlightCommand = null;
       this.launchId = null;
       clearResumeCredentials();
-      if (browser) sessionStorage.removeItem(LAUNCH_STORAGE_KEY);
+      if (browser) writeTabValue(LAUNCH_STORAGE_KEY, null);
       gameStore.markResumeFailed(message.message);
       return;
     }
@@ -877,14 +926,6 @@ export function sendTransferPilot(targetViewerId: string): void {
   controller.sendTransferPilot(targetViewerId);
 }
 
-export function sendAuthorBelief(scenarioId: string): void {
-  controller.sendAuthorBelief(scenarioId);
-}
-
-export function sendShareBelief(beliefId: string): void {
-  controller.sendShareBelief(beliefId);
-}
-
 export function sendRestoreDecision(address: string): void {
   controller.sendRestoreDecision(address);
 }
@@ -911,3 +952,5 @@ export async function fetchPaymentPreview(address: import('./payment-preview').P
   if (!response.ok) throw new Error('Payment preview unavailable');
   return response.json();
 }
+
+export function sendContinuation(intent: 'rematch' | 'swap_sides' | 'change_opponent', config: Record<string, unknown> = {}): void { controller.sendContinuation(intent, config); }

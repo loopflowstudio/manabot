@@ -82,7 +82,9 @@ unchanged match protocol. It closes the one-pilot/one-watcher request
 vocabulary, server-derived roles and capabilities, participant leases,
 personal-until-shared GAM-6 scenario references, and participant-local Study
 events. It never embeds match legality or strategy evidence; both participants
-remain bound server-side to the same player-0 rules projection.
+remain bound server-side to the same recorded human-seat rules projection.
+Historical Play records default to native seat 0; new Play setup may choose
+seat 1. Watch continues to use its recorded acting viewers.
 
 Regenerate the checked schema after changing the Pydantic authority:
 

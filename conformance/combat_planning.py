@@ -39,11 +39,11 @@ def combat_config() -> dict[str, object]:
 
 
 def configure_combat(
-    env: managym.Env, stage: CombatStage, *, count: int = 3
+    env: managym.Env, stage: CombatStage, *, count: int = 3, human_seat: int = 0
 ) -> managym.Observation:
     for seat in (0, 1):
         env.scenario_clear_hand(seat)
-    attacking_seat = 0 if stage == "attackers" else 1
+    attacking_seat = human_seat if stage == "attackers" else 1 - human_seat
     for name in ("Boggart Brute", "Boggart Brute", "Wind Drake"):
         env.scenario_force_battlefield(attacking_seat, name, ready=True)
     for index in range(count):
@@ -54,7 +54,7 @@ def configure_combat(
         )
     observation = env.scenario_refresh()
     for ordinal in range(32):
-        projection = json.loads(env.declaration_projection_json(0))
+        projection = json.loads(env.declaration_projection_json(human_seat))
         if projection is not None and projection["stage"] == stage:
             return observation
         frame = json.loads(env.semantic_decision_frame_json())
@@ -73,7 +73,7 @@ def configure_combat(
                 (
                     index
                     for index, action in enumerate(actions)
-                    if action.declared is (frame["actor"] == 1)
+                    if action.declared is (frame["actor"] != human_seat)
                 ),
                 0,
             )

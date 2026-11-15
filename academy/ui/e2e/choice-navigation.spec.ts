@@ -1,7 +1,10 @@
+import { tableSnapshot } from './fixtures/table';
 import { expect, test, type Page } from '@playwright/test';
 import positionsJson from '../../../managym/academy/fixtures/choice-navigation-w17-mana-actions.json' with { type: 'json' };
 import boltJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type { Command, ExperienceFrame, RecoveryEnvelope } from '../src/lib/types';
+
+test.beforeEach(({ page }) => { page.on('dialog', dialog => dialog.accept()); });
 
 const positions = positionsJson.positions;
 type Family = keyof typeof positions;
@@ -29,8 +32,8 @@ async function installPosition(page: Page, family: Family): Promise<Command[]> {
   await page.routeWebSocket('**/ws/play', socket => {
     socket.onMessage(raw => {
       const message = JSON.parse(String(raw));
-      if (message.type === 'new_game') {
-        socket.send(JSON.stringify({ type: 'observation', data: frame.projection,
+      if (message.type === 'new_game' || message.type === 'resume') {
+        socket.send(JSON.stringify({ type: 'observation', table: tableSnapshot(), data: frame.projection,
           actions: [], recovery, session_id: 'navigation', resume_token: 'navigation' }));
       } else if (message.type === 'command') {
         commands.push(message.command);
@@ -42,7 +45,7 @@ async function installPosition(page: Page, family: Family): Promise<Command[]> {
       }
     });
   });
-  await page.goto('/');
+  await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByRole('button', { name: 'New Game', exact: true }).first().click();
   await expect(page.getByTestId('action-panel')).toHaveAttribute('data-action-space-kind', family);

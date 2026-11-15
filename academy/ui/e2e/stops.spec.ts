@@ -31,6 +31,9 @@ async function setCheckbox(page: Page, testId: string, checked: boolean): Promis
   const box = page.getByTestId(testId);
   if ((await box.isChecked()) !== checked) {
     await box.click();
+    if (await page.getByTestId('automation-status').count()) {
+      await expect(page.getByTestId('automation-status')).not.toContainText('updating…');
+    }
   }
 }
 
@@ -119,7 +122,7 @@ test('stops cut the inputs needed to finish a game, log keeps narrating', async 
   await setCheckbox(page, 'stop-my-main2', true);
   await setCheckbox(page, 'stop-opponent-end_step', false);
 
-  await page.getByRole('button', { name: 'Play Again' }).click();
+  await page.getByRole('button', { name: 'Rematch', exact: true }).first().click();
   // The prior game's board remains mounted while the new request is pending.
   await expect(page.getByTestId('action-option').first()).toBeVisible({ timeout: 15_000 });
   const stopsInputs = await playUntilGameOver(page);

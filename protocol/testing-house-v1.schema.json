@@ -1587,6 +1587,18 @@
     "RematchMessage": {
       "additionalProperties": false,
       "properties": {
+        "attempt_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attempt Id"
+        },
         "config": {
           "additionalProperties": true,
           "title": "Config",
@@ -1597,6 +1609,44 @@
           "minimum": 0,
           "title": "Grant Revision",
           "type": "integer"
+        },
+        "intent": {
+          "default": "rematch",
+          "enum": [
+            "rematch",
+            "swap_sides",
+            "change_opponent"
+          ],
+          "title": "Intent",
+          "type": "string"
+        },
+        "request_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Request Id"
+        },
+        "setup_revision": {
+          "anyOf": [
+            {
+              "maximum": 18446744073709551615,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Setup Revision"
         },
         "type": {
           "const": "rematch",
@@ -1641,6 +1691,18 @@
     "ResumeMessage": {
       "additionalProperties": false,
       "properties": {
+        "play_session_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Play Session Id"
+        },
         "presentation_cursor": {
           "anyOf": [
             {
@@ -2249,8 +2311,11 @@
       "additionalProperties": false,
       "properties": {
         "rules_viewer": {
-          "const": 0,
           "default": 0,
+          "enum": [
+            0,
+            1
+          ],
           "title": "Rules Viewer",
           "type": "integer"
         },

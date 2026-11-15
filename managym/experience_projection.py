@@ -506,15 +506,15 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
     return LegacyHeroObservation.model_validate(data).model_dump(mode="json")
 
 
-def _player_label(player: managym.Player) -> str:
-    return "Hero" if int(player.player_index) == HERO_PLAYER_INDEX else "Villain"
+def _player_label(player: managym.Player, hero_seat: int) -> str:
+    return "Hero" if int(player.player_index) == hero_seat else "Villain"
 
 
-def _build_id_to_name(obs: managym.Observation) -> dict[int, str]:
+def _build_id_to_name(obs: managym.Observation, hero_seat: int) -> dict[int, str]:
     """Map object ids (players, cards, permanents) to display names."""
     names: dict[int, str] = {
-        int(obs.agent.id): _player_label(obs.agent),
-        int(obs.opponent.id): _player_label(obs.opponent),
+        int(obs.agent.id): _player_label(obs.agent, hero_seat),
+        int(obs.opponent.id): _player_label(obs.opponent, hero_seat),
     }
     names.update(
         {
@@ -612,9 +612,16 @@ def format_action(
     return label
 
 
-def describe_actions(obs: managym.Observation) -> list[dict[str, Any]]:
+def describe_actions(
+    obs: managym.Observation, *, hero_seat: int = HERO_PLAYER_INDEX
+) -> list[dict[str, Any]]:
+    """Describe legal actions, naming the Hero role's native seat "Hero".
+
+    Academy seats the human role at either native seat, so a player target
+    names that role, never a fixed seat index.
+    """
     results: list[dict[str, Any]] = []
-    names = _build_id_to_name(obs)
+    names = _build_id_to_name(obs, hero_seat)
     space_kind = enum_name(ActionSpaceEnum, int(obs.action_space.action_space_type))
     for index, action in enumerate(obs.action_space.actions):
         focus = [int(value) for value in action.focus]

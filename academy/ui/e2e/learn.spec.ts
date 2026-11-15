@@ -30,7 +30,7 @@ test('Learn modes, previews, Back, reconnect and three ordinary outcomes', async
   }, prefix.config);
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.goto('/');
+  await page.goto('/?demo=learn');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
 
   for (const outcome of ['LEARN_TAKE_LESSON', 'LEARN_DISCARD', 'DECLINE_CHOICE']) {

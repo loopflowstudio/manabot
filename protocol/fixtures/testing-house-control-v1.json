@@ -250,6 +250,7 @@
       "type": "join_table"
     },
     {
+      "play_session_id": null,
       "presentation_cursor": 10,
       "resume_token": "lease-example",
       "session_id": "table.example",
@@ -263,6 +264,10 @@
       "type": "new_game"
     },
     {
+      "request_id": null,
+      "attempt_id": null,
+      "setup_revision": null,
+      "intent": "rematch",
       "config": {
         "seed": 8
       },

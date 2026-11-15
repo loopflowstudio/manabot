@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { currentGame, rememberCurrentGame } from '$lib/current-game.svelte';
   import { goto, replaceState } from '$app/navigation';
   import { page } from '$app/state';
   import { tick, untrack } from 'svelte';
@@ -10,7 +11,7 @@
   import GameBoard from '$lib/components/GameBoard.svelte';
   import PresentationHistory from '$lib/components/PresentationHistory.svelte';
   import DecisionSurface from '$lib/components/DecisionSurface.svelte';
-  import DecisionAdvice from '$lib/components/DecisionAdvice.svelte';
+  import RecordedDecisionEvidence from '$lib/components/RecordedDecisionEvidence.svelte';
   import DecisionContext from '$lib/components/DecisionContext.svelte';
   import StudyPanel from '$lib/components/StudyPanel.svelte';
   import Timeline from '$lib/components/Timeline.svelte';
@@ -104,6 +105,8 @@
     replayStore.reveal = (params.get('view') ?? (saved.reveal ? 'spectator' : 'acting')) === 'spectator';
     try { notes = JSON.parse(localStorage.getItem(`etude.score.notes.${id}`) ?? '{}'); } catch { notes = {}; }
     await replayStore.open(id, params.get('position') ?? saved.key);
+    if (!params.has('near') && saved.near === undefined) replayStore.nearSeat = replayStore.index?.players.find(player => player.kind === 'human')?.seat === 1 ? 1 : 0;
+    if (!currentGame.href || replayStore.index?.can_produce) rememberCurrentGame(`/replay?trace=${encodeURIComponent(id)}`);
   }
   function selectRecording(id: string): void { void goto(`/replay?trace=${encodeURIComponent(id)}`); }
 
@@ -343,7 +346,7 @@
 {#snippet watchSetup()}
   <details open={!page.url.searchParams.has('trace')} class="mb-4 rounded border border-line bg-panel p-4">
     <summary class="type-label cursor-pointer">{index ? 'Watch another matchup' : 'Choose a bot matchup'}</summary>
-    <WatchSetup disabled={inStudy || studyStore.busy || replayStore.producing} onOpen={selectRecording} />
+    {#key index?.id}<WatchSetup setup={index?.private_setup} disabled={inStudy || studyStore.busy || replayStore.producing} onOpen={selectRecording} />{/key}
   </details>
 {/snippet}
 
@@ -421,7 +424,7 @@
             {:else if current.decision}
               <DecisionSurface frame={current.decision.frame} readOnly chosenOffer={current.decision.offer_id} />
               <p class="type-caption text-ink-2">Automatic payment preview was not recorded. Recorded activations and spending remain visible.</p>
-              <DecisionAdvice mode="watch" frame={current.decision.frame} offers={current.decision.frame.offers} recorded={current.outputs} chosenOffer={current.decision.offer_id} scenarios={[]} selectedScenarioId="" evidence={null} deltas={null} status="ok" reason={null} advisorId="" computeId="" onSelectScenario={() => {}} />
+              <RecordedDecisionEvidence offers={current.decision.frame.offers} recorded={current.outputs} chosenOffer={current.decision.offer_id} />
               <button class="btn btn-secondary mt-3" disabled={!index.can_study || studyStore.busy || replayStore.busy || !!index.mirror_retry} onclick={event => void openStudyDecision(event.currentTarget)} bind:this={studyButton}>Try another line</button>
               {#if !index.can_study}<p class="type-caption">Study requires retained rules state and this game's participant credential.</p>{/if}
             {:else}<p class="type-caption mt-3">{current.kind === 'choice' ? 'Legal offers and Study not recorded.' : 'No decision at this position. Select a choice to inspect its offers and evidence.'}</p>{/if}

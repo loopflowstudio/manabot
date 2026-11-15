@@ -126,14 +126,14 @@ is displayed while a card or text filter narrows navigation; **Show all** and
 **Clear filter** restore the full set. In live play at laptop widths and heights,
 the board sits beside independently scrolling offers; instruction, legal count
 and filter navigation stay available. Long instructions have their own scroll
-area. **History and settings** opens decision details, consequences, advice and
+area. **History and settings** opens decision details, consequences and
 stop configuration while the pending decision stays available. **Edit stops**
 beside the choices opens **Your turn** / **Opponent turn** settings; changing
 them may immediately advance priority. See
 [priority stops](../../docs/academy.md#choosing-priority-stops) for defaults,
 stack responses and F6. Narrow or short windows stack
-the board above choices, with links between them. History, advice and table
-tools can be opened separately; **Compare advice** opens and focuses Advice. Native card
+the board above choices, with links between them. History and table tools remain contextual. Recorded policy/search evidence is
+attached to the decision it describes; the live table has no example Advice panel. Native card
 types group creatures, lands, other
 permanents and artifact tokens into bounded battlefield lanes; dense lanes
 compact their cards, then offer explicit paging beside their headings. Occupied

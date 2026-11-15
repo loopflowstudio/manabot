@@ -14,7 +14,7 @@ test('live Watch, archived playback and the final action share one resumable tim
     }) });
   });
   await page.goto('/replay?watch=1');
-  await page.getByRole('combobox', {name: 'Seat 2', exact: true}).selectOption('random');
+  await page.getByRole('combobox', {name: 'Seat 2 bot', exact: true}).selectOption('random');
   await page.getByRole('button', {name: 'Start watching', exact: true}).click();
   await page.getByRole('button', {name: 'Continue', exact: true}).click();
   await expect(page.getByTestId('position-counter')).toHaveText('Position 1 / 3');
