@@ -138,6 +138,10 @@ Consumers read the encoded arrays by name; see
 
 **Proposed (Task f1a44c; not implemented).** The following contract describes
 the next implementation. Current native state retains public hand minima only.
+The disjoint-bag inspection rule is under review: revealing a hand can leave
+correlated library constraints that these rows cannot express exactly. The
+proposal needs an explicit coarsening rule or a richer constraint model before
+implementation can continue.
 
 A seat that has seen a hidden card keeps what it learned for as long as the
 rules let it stay true. Suppose the opponent reveals a hand of A, B and C,

@@ -533,6 +533,10 @@ Magic's rules, and does not broaden deck admission.
 
 **Proposed (Task f1a44c; not implemented).** These buffers and backend reads
 are the intended next layout, pending native state and sampler implementation.
+The disjoint-bag inspection rule is under review: revealing a hand can leave
+correlated library constraints that these rows cannot express exactly. The
+proposal needs an explicit coarsening rule or a richer constraint model before
+implementation can continue.
 
 The engine keeps what each seat knows about hidden cards as segments and bags
 ([the engine guide](engine.md#hidden-card-knowledge) has the rules and a worked
