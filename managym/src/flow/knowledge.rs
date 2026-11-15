@@ -77,7 +77,6 @@ impl Game {
         pool: &mut Vec<ObjectId>,
     ) -> Option<Vec<(usize, ObjectId)>> {
         let mut facts = self.library_facts(owner, viewer);
-        let mut inspected = BTreeMap::new();
         if self.shares_information(viewer, owner) {
             if let Some(suspended) = &self.state.suspended_decision {
                 for decision in suspended.decisions() {
@@ -99,7 +98,6 @@ impl Game {
                             .enumerate()
                         {
                             if objects.contains(object) {
-                                inspected.insert(position, *object);
                                 facts.insert(position, self.state[*object].definition_id);
                             }
                         }
@@ -121,8 +119,9 @@ impl Game {
                 .rev()
                 .nth(position)
                 .copied()?;
-            if inspected.get(&position) == Some(&original)
-                || commitments.pins_object(original)
+            // Shared inspections already pin their exact objects through
+            // HiddenCommitments; ordinary facts reserve definition witnesses.
+            if commitments.pins(original)
                 || position == 0
                     && self.shares_information(viewer, owner)
                     && self.looks_at_library_top(owner)
@@ -137,8 +136,7 @@ impl Game {
                 .iter()
                 .enumerate()
                 .filter(|(_, object)| {
-                    self.state[**object].definition_id == definition
-                        && !commitments.pins_object(**object)
+                    self.state[**object].definition_id == definition && !commitments.pins(**object)
                 })
                 .min_by_key(|(_, object)| object.slot())
                 .map(|(index, _)| index)?;
@@ -150,7 +148,7 @@ impl Game {
     /// Fill the remaining slots without changing the order of the random
     /// remainder. Indices in the returned vector still run bottom to top.
     pub(crate) fn place_library_facts(
-        mut remainder: Vec<ObjectId>,
+        remainder: Vec<ObjectId>,
         reserved: Vec<(usize, ObjectId)>,
     ) -> Option<Vec<ObjectId>> {
         if reserved.is_empty() {
@@ -164,10 +162,10 @@ impl Game {
                 return None;
             }
         }
-        remainder.reverse();
+        let mut remainder = remainder.into_iter();
         for position in &mut positions {
             if position.is_none() {
-                *position = remainder.pop();
+                *position = remainder.next();
             }
         }
         positions.into_iter().collect()

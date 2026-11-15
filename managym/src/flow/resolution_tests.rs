@@ -3843,6 +3843,39 @@ fn hidden_selection_library_inspections_preserve_known_prefixes_and_refresh_unkn
     }
 }
 
+/// A pending free cast of the looked-at top card keeps that exact card for
+/// its chooser, or the offered cast would name a card no longer on top.
+#[test]
+fn determinize_keeps_a_pending_library_top_cast_for_its_chooser() {
+    use crate::flow::decision::EffectFrame;
+    let player = PlayerId(0);
+    let (mut root, _, _) = fixture(player);
+    let castable = root
+        .state
+        .zones
+        .zone_objects(ZoneType::Library, player)
+        .iter()
+        .copied()
+        .find(|object| root.state[*object].types.is_creature())
+        .unwrap();
+    root.state
+        .zones
+        .reposition(ZoneType::Library, player, castable, usize::MAX);
+    root.run_frame(EffectFrame::new(player, vec![Effect::CastLibraryTopFree]));
+    root.publish_action_space(root.suspended_decision_action_space().unwrap());
+    for seed in 0..16 {
+        let mut branch = root.clone();
+        branch.determinize(player, seed).unwrap();
+        assert_eq!(branch.library_top_objects(player, 1), vec![castable]);
+        assert_eq!(
+            branch.state.suspended_decision,
+            root.state.suspended_decision
+        );
+        let action = branch.action_space().unwrap().actions[0].clone();
+        checked_command(&mut branch, action);
+    }
+}
+
 /// Equal current choices can retain different work. These are constructed
 /// positions, serialized for the stateless Python encoder/model witness below.
 #[test]

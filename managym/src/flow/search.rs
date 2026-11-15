@@ -202,7 +202,7 @@ impl Game {
         player: PlayerId,
         commitments: &HiddenCommitments,
     ) -> (Vec<ObjectId>, Vec<ObjectId>) {
-        let is_fixed = |object: ObjectId| commitments.pins_object(object);
+        let is_fixed = |object: ObjectId| commitments.pins(object);
         let mut pool: Vec<_> = [ZoneType::Hand, ZoneType::Library]
             .into_iter()
             .flat_map(|zone| self.state.zones.zone_objects(zone, player).iter().copied())

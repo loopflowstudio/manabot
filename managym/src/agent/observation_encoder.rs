@@ -193,7 +193,7 @@ impl Default for ObservationEncoderConfig {
 }
 
 impl ObservationEncoderConfig {
-    /// Candidate rows share the action axis, but never consume object capacity.
+    /// Two seats, each with a definition and position per retained fact.
     pub fn known_library_len(&self) -> usize {
         if self.layout == InputLayout::OneToken {
             4 * crate::state::knowledge::KNOWN_LIBRARY_ROWS
@@ -202,6 +202,7 @@ impl ObservationEncoderConfig {
         }
     }
 
+    /// Candidate rows share the action axis, but never consume object capacity.
     pub fn name_candidates_len(&self) -> usize {
         NAME_DIM * self.max_actions
     }

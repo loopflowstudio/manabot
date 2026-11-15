@@ -69,18 +69,13 @@ impl LibraryKnowledge {
         if view.len() <= KNOWN_LIBRARY_CAPACITY {
             return;
         }
-        let kept: Vec<_> = view
+        let top_end = *view.keys().nth(TOP_CAPACITY - 1).unwrap();
+        let bottom_start = *view
             .keys()
-            .take(TOP_CAPACITY)
-            .copied()
-            .chain(
-                view.keys()
-                    .rev()
-                    .take(KNOWN_LIBRARY_CAPACITY - TOP_CAPACITY)
-                    .copied(),
-            )
-            .collect();
-        view.retain(|position, _| kept.contains(position));
+            .rev()
+            .nth(KNOWN_LIBRARY_CAPACITY - TOP_CAPACITY - 1)
+            .unwrap();
+        view.retain(|position, _| *position <= top_end || *position >= bottom_start);
     }
 }
 

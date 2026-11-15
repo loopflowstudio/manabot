@@ -6,7 +6,7 @@
 //! exact-object mapping across active decisions, saved callers and captured
 //! bindings, so the same selection cannot acquire two meanings on resume.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, ops::Range};
 
 use rand::{seq::SliceRandom, Rng};
 use rand_chacha::ChaCha8Rng;
@@ -55,8 +55,7 @@ struct SelectionMinimum {
 /// within its current top N; an already ordered choice keeps its exact rank.
 struct InspectionSlot {
     owner: PlayerId,
-    position: usize,
-    prefix: Option<usize>,
+    positions: Range<usize>,
     definition: Option<CardDefId>,
 }
 
@@ -98,10 +97,6 @@ impl HiddenCommitments {
 
     pub(crate) fn pins(&self, object: ObjectId) -> bool {
         self.pinned.binary_search(&object).is_ok()
-    }
-
-    pub(crate) fn pins_object(&self, object_id: ObjectId) -> bool {
-        self.pinned.contains(&object_id)
     }
 
     /// Pinned cards currently in `owner`'s library: they rejoin the sampled
@@ -269,8 +264,7 @@ impl Game {
                     for (position, object) in objects.iter().enumerate() {
                         slots.entry(*object).or_default().push(InspectionSlot {
                             owner,
-                            position,
-                            prefix: Some(objects.len()),
+                            positions: 0..objects.len(),
                             definition: facts.get(&position).copied(),
                         });
                     }
@@ -293,8 +287,7 @@ impl Game {
                         };
                         slots.entry(*object).or_default().push(InspectionSlot {
                             owner: *player,
-                            position,
-                            prefix: None,
+                            positions: position..position + 1,
                             definition: facts.get(&position).copied(),
                         });
                     }
@@ -314,12 +307,8 @@ impl Game {
         if zone != ZoneType::Library {
             return false;
         }
-        if let Some(position) = known_position {
-            if inspection.prefix.is_some_and(|count| position >= count)
-                || inspection.prefix.is_none() && position != inspection.position
-            {
-                return false;
-            }
+        if known_position.is_some_and(|position| !inspection.positions.contains(&position)) {
+            return false;
         }
         inspection
             .definition
@@ -631,7 +620,7 @@ impl Game {
                     .iter()
                     .filter(|object| {
                         self.state.zones.contains(**object, ZoneType::Hand, owner)
-                            && commitments.pins_object(**object)
+                            && commitments.pins(**object)
                     })
                     .count();
                 for index in pinned_hand..objects.len() - foretold {

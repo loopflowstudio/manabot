@@ -449,7 +449,7 @@ impl HiddenHandConstraints {
                 .rev()
                 .nth(*position)
                 .expect("known position");
-            if commitments.pins_object(*object) {
+            if commitments.pins(*object) {
                 continue;
             }
             let name = &crate::cards::content_pack::default_content_pack()
@@ -571,9 +571,7 @@ impl HiddenHandConstraints {
                     .push(object);
             }
             for objects in by_name.values_mut() {
-                objects.sort_unstable_by_key(|object| {
-                    (!commitments.pins_object(*object), object.slot())
-                });
+                objects.sort_unstable_by_key(|object| (!commitments.pins(*object), object.slot()));
             }
 
             let mut new_hand: Vec<ObjectId> = Vec::with_capacity(self.hand_size as usize);

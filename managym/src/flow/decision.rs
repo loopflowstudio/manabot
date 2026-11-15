@@ -801,6 +801,11 @@ impl Decision {
                     LibraryEnd::Bottom => &objects[*next..],
                 },
             )),
+            Self::CastDuringResolution {
+                player,
+                offer: ResolutionCastOffer::LibraryTop { object },
+                ..
+            } => Some((*player, std::slice::from_ref(object))),
             _ => None,
         }
     }
@@ -2458,14 +2463,12 @@ impl Game {
                     top.push(*object_id);
                 }
                 if remaining.is_empty() {
-                    self.state.known_library_mut(*player).forget_order();
                     for object in bottom.iter().rev() {
                         self.state
                             .zones
                             .reposition(ZoneType::Library, *player, *object, 0);
                     }
                     self.put_on_top_of_library(*player, top);
-                    self.remember_library_objects(*player, top);
                     self.remember_library_objects(*player, bottom);
                     self.run_frame(suspended.frame);
                 } else {

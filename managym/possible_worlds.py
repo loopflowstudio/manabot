@@ -335,8 +335,9 @@ class PossibleWorldSpace:
             ):
                 raise PossibleWorldError("known library is outside the unseen pool")
         for world in self.worlds:
+            hand = dict(world.hand)
             if any(
-                dict(world.hand).get(name, 0) + count > pool.get(name, 0)
+                hand.get(name, 0) + count > pool.get(name, 0)
                 for name, count in self.known_library
             ):
                 raise PossibleWorldError(
@@ -348,7 +349,6 @@ class PossibleWorldSpace:
                 count < 0 or count > pool.get(name, 0) for name, count in world.hand
             ):
                 raise PossibleWorldError("a canonical world is outside the unseen pool")
-            hand = dict(world.hand)
             if any(hand.get(name, 0) < count for name, count in self.known_hand):
                 raise PossibleWorldError("a canonical world omits known hand cards")
 
