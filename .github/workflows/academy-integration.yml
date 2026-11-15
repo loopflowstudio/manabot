@@ -65,6 +65,7 @@ jobs:
             tests/academy/test_forced_step_automation.py \
             tests/academy/test_watch.py \
             tests/academy/test_policy_runtime.py \
+            tests/academy/test_play_sessions.py \
             tests/academy/test_policy_search_play.py tests/academy/test_search_baseline.py \
             tests/academy/test_checkpoint_catalog.py \
             tests/academy/test_configured_launch.py \

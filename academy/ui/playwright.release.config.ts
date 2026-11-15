@@ -10,12 +10,13 @@ const traceDir = fileURLToPath(new URL('./test-results/release/traces', import.m
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: ['combat-planning.spec.ts', 'unified-replay.spec.ts', 'watch.spec.ts', 'experience-proof.spec.ts', 'stops.spec.ts', 'laptop-comfort.spec.ts', 'game-history.spec.ts', 'decision-surface.spec.ts', 'learn.spec.ts', 'combat-presentation.spec.ts', 'choice-navigation.spec.ts', 'elemental-world.spec.ts', 'deck-browser.spec.ts', 'decklist-import.spec.ts', 'trigger-order.spec.ts'],
+  testMatch: ['play-session.spec.ts', 'shared-table.spec.ts', 'combat-planning.spec.ts', 'unified-replay.spec.ts', 'watch.spec.ts', 'experience-proof.spec.ts', 'stops.spec.ts', 'laptop-comfort.spec.ts', 'game-history.spec.ts', 'decision-surface.spec.ts', 'learn.spec.ts', 'combat-presentation.spec.ts', 'choice-navigation.spec.ts', 'elemental-world.spec.ts', 'deck-browser.spec.ts', 'decklist-import.spec.ts', 'trigger-order.spec.ts'],
   outputDir,
   timeout: 120_000,
   fullyParallel: false,
   workers: 1,
   use: {
+    actionTimeout: 20_000,
     baseURL: `http://127.0.0.1:${frontendPort}`,
     browserName: 'chromium',
     colorScheme: 'dark',
@@ -29,7 +30,7 @@ export default defineConfig({
     {
       command: `uv run --active --no-sync python -m uvicorn trigger_order_server:app --app-dir tests/fixtures --host 127.0.0.1 --port ${apiPort}`,
       cwd: repoRoot,
-      env: { ACADEMY_TRACES_DIR: traceDir },
+      env: { ACADEMY_TRACES_DIR: traceDir, ACADEMY_PLAY_RECORD_ORIGIN: 'automated_validation', ACADEMY_CARD_ART: 'off' },
       url: `http://127.0.0.1:${apiPort}/api/traces`,
       reuseExistingServer: false,
       timeout: 180_000,

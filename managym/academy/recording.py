@@ -38,6 +38,7 @@ class Recording:
     def __init__(self, trace_id: str, payload: dict[str, Any]) -> None:
         self.id = trace_id
         self.payload = payload
+        self.human_seat = payload["config"].get("human_seat", 0)
         self.watch = bool(payload["config"].get("watch_players"))
         self.completed_mirror = bool(
             payload["config"].get("mirror") is not None
@@ -96,7 +97,9 @@ class Recording:
             self.track_revisions[0] = [event.to_revision for event in events]
         for i, event in enumerate(payload["events"]):
             row = decisions.get(i)
-            if row and (self.watch or self.completed_mirror or row.viewer == 0):
+            if row and (
+                self.watch or self.completed_mirror or row.viewer == self.human_seat
+            ):
                 self.positions.append(
                     Position(
                         DecisionAddressV2.from_decision(self.replay, row).serialize(),
@@ -271,7 +274,7 @@ class Recording:
     ) -> dict[str, Any]:
         position = self.by_key[key]
         row = position.decision if position.kind == "choice" else None
-        viewer = row.viewer if row else 0
+        viewer = row.viewer if row else self.human_seat
         cursor = self._cursor(position, viewer)
         end = min(cursor, before) if before is not None else cursor
         start = max(0, end - history_limit)

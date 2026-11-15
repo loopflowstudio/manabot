@@ -1,3 +1,4 @@
+import { tableSnapshot } from './fixtures/table';
 import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Browser, type Page } from '@playwright/test';
@@ -167,7 +168,7 @@ async function installCombatAuthority(
           frame.offers = [];
         }
         socket.send(JSON.stringify({
-          type: 'observation',
+          type: 'observation', table: tableSnapshot(),
           data: frame.projection,
           actions: [],
           session_id: 'combat-session',
@@ -342,7 +343,10 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await expect(history).toContainText('Otter-Penguin, Badgermole Cub die.');
     await expect(history).toContainText("Hero's turn begins.");
 
-    await page.getByRole('button', { name: 'New Game' }).first().click();
+    await page.getByRole('banner').getByRole('link', { name: 'New game', exact: true }).click();
+    await page.clock.runFor(32); // Flush the navigation's animation frame while narration time is controlled.
+    page.once('dialog', dialog => dialog.accept());
+    await page.getByRole('button', { name: 'New Game', exact: true }).click();
     await expect(stage).toBeVisible();
     await page.getByRole('button', { name: 'Skip beat' }).click();
     await page.getByRole('button', { name: 'Fast-forward' }).click();
@@ -411,7 +415,7 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 800
           if (message.type === 'command') { commands.push(message.command); return; }
           if (message.type !== 'new_game') return;
           const frame = frameAt('attack');
-          socket.send(JSON.stringify({ type: 'observation', data: frame.projection, actions: [],
+          socket.send(JSON.stringify({ type: 'observation', table: tableSnapshot(), data: frame.projection, actions: [],
             session_id: 'history', resume_token: 'history', recovery: {
               ...structuredClone(boltFixture.recovery), frame,
               presentation_tail: history, presentation_cursor: 0,
@@ -569,7 +573,7 @@ test('partial history recovery preserves event pixels, focus and recovered unrea
       const frame = frameAt('attack');
       frame.match_id = match;
       if (match === 'different-viewer-scope') frame.projection.opponent.battlefield[0].name = 'Scope-only name';
-      socket.send(JSON.stringify({ type: 'observation', data: frame.projection, actions: [],
+      socket.send(JSON.stringify({ type: 'observation', table: tableSnapshot(), data: frame.projection, actions: [],
         session_id: 'partial-history', resume_token: 'partial-history', recovery: {
           ...structuredClone(boltFixture.recovery), frame, presentation_tail: tail, presentation_cursor: tail[0]?.seq ?? 0,
         },

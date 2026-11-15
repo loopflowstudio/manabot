@@ -30,11 +30,11 @@ for (const theme of ['light', 'dark'] as const) {
     await page.screenshot({ path: fileURLToPath(new URL(`../test-results/search/play-${theme}.png`, import.meta.url)) });
 
     await page.goto(addresses.watch);
-    await expect(page.getByRole('combobox', { name: 'Seat 1 search', exact: true })).toHaveValue('search');
-    await page.getByRole('combobox', { name: 'Seat 1 search', exact: true }).selectOption('none');
-    await page.getByRole('combobox', { name: 'Seat 1 search', exact: true }).selectOption('search');
-    await expect(page.getByRole('spinbutton', { name: 'Seat 1 search worlds', exact: true })).toHaveValue('1');
-    await expect(page.getByRole('spinbutton', { name: 'Seat 1 search depth', exact: true })).toHaveValue('1');
+    await expect(page.getByRole('combobox', { name: 'Seat 1 bot search', exact: true })).toHaveValue('search');
+    await page.getByRole('combobox', { name: 'Seat 1 bot search', exact: true }).selectOption('none');
+    await page.getByRole('combobox', { name: 'Seat 1 bot search', exact: true }).selectOption('search');
+    await expect(page.getByRole('spinbutton', { name: 'Seat 1 bot search worlds', exact: true })).toHaveValue('1');
+    await expect(page.getByRole('spinbutton', { name: 'Seat 1 bot search depth', exact: true })).toHaveValue('1');
     await page.getByRole('button', { name: 'Start watching' }).click();
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(page.getByRole('columnheader', { name: 'Raw policy', exact: true })).toBeVisible();
