@@ -18,6 +18,7 @@ from managym.policy import PolicyRunner
 
 from . import server
 from .attempts import AttemptStore, RecordedPlayer, bot_player
+from .deck_import import DeckImportInput
 from .extensions import bot_extension
 from .launch import refuse_training_receipt
 from .opponent import policy_registry
@@ -42,7 +43,8 @@ class WatchRequest(BaseModel):
     )
     hero_deck: str = "ur_lessons"
     villain_deck: str = "gw_allies"
-    seed: int = Field(default=0, ge=0, lt=2**64)
+    seed: int | None = Field(default=0, ge=0, lt=2**64)
+    deck_import: DeckImportInput | None = None
     villain_sims: int = Field(default=16, ge=1, le=4096)
     mirror: list[MirrorSearch | None] | None = Field(
         default=None, min_length=2, max_length=2
@@ -58,6 +60,7 @@ def resolve_player(
         ("policy:", "search-")
     ):
         kind = f"policy:{policy_registry().descriptor(kind).id}"
+    assert request.seed is not None
     data = {**request.model_dump(), "seed": (request.seed + seat) % 2**64}
     mirror = request.mirror[seat] if request.mirror else None
     data["mirror"] = asdict(mirror) if mirror is not None else None
@@ -67,13 +70,16 @@ def resolve_player(
     return policy, replace(
         bot_player(asdict(config)),
         seat=seat,
-        deck=request.hero_deck if seat == 0 else request.villain_deck,
+        deck=config.hero_deck_name if seat == 0 else config.villain_deck_name,
     )
 
 
 def create_watch(
     request: WatchRequest, recorded_players: list[RecordedPlayer] | None = None
 ) -> WatchCreated:
+    requested_seed = request.seed is not None
+    if request.seed is None:
+        request = request.model_copy(update={"seed": server.secrets.randbits(32)})
     with ExitStack() as candidates:
         seats: list[tuple[BotPolicy, RecordedPlayer]] = []
         try:
@@ -113,6 +119,7 @@ def create_watch(
                 "name": " vs ".join(player.name for _, player in seats),
                 "kind": "watch",
             }
+            game.trace.config.seed_was_requested = requested_seed
             game.trace.config.watch_players = request.players
             game._persist_attempt()
         except BaseException:

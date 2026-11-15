@@ -25,9 +25,9 @@ describe('search setup and thinking', () => {
     expect(() => parseMirrors([{ ...spec, worlds: 0 }, null])).toThrow('Invalid');
   });
   it('identifies waiting time without showing private search outputs', () => {
-    const { body } = render(MirrorThinking, { props: { active: true, budget: 'Mirror search 4×2' } });
+    const { body } = render(MirrorThinking, { props: { active: true, budget: 'Search 4×2' } });
     expect(body).toContain('role="status"');
-    expect(body).toContain('Mirror search 4×2');
+    expect(body).toContain('Search 4×2');
     expect(body).toContain('0.0 s');
   });
 });

@@ -61,7 +61,8 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(selections).toHaveCount(2);
     await expect(selections.nth(0)).toHaveValue(`policy:${addresses.ids.independent}`);
     await expect(selections.nth(1)).toHaveValue(`policy:${addresses.ids.baseline}`);
-    await expect(selections.nth(0)).toContainText('independent');
+    await expect(selections.nth(0)).toContainText('Independent');
+    await page.getByText('Browse decks and cards', {exact:true}).click();
     await page.getByText('Other decks', { exact: true }).click();
     await page.getByTestId('browse-interactive').click();
     await page.getByTestId('assign-deck-villain').click();
@@ -72,7 +73,7 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(page.getByTestId('policy-compatibility')).toHaveCount(0);
     await selections.nth(0).focus();
     await page.keyboard.press('Tab');
-    await expect(page.getByText(/Mirror search unavailable/).first()).toBeVisible();
+    await expect(page.getByText(/Search unavailable/).first()).toBeVisible();
     await page.screenshot({ path: fileURLToPath(new URL(`../test-results/policy/watch-setup-${theme}.png`, import.meta.url)) });
     await page.getByRole('button', { name: 'Start watching' }).click();
     await page.getByRole('button', {name: 'Continue', exact: true}).click();

@@ -1,7 +1,9 @@
+import type { PlaySession } from './play-session';
 import { playerToken } from './records';
 import type { MirrorSearch, PendingMirror } from './mirror';
 import {
   loadStoredDeckSelection,
+  sanitizeDeckSelection,
   saveStoredDeckSelection,
   type DeckChoice,
   type DeckSelection,
@@ -63,6 +65,37 @@ export function buildOpponentConfig(choice: PlayerChoice): OpponentConfig {
 }
 
 export class GameStore {
+  playSession = $state<PlaySession | null>(null);
+  storageWarning = $state('');
+  tableUnavailable = $state(false);
+  humanSeat = $state<0 | 1>(0);
+  watchMode = $state(false);
+  watchPlayerChoice = $state<PlayerChoice>('random');
+  watchMirrorSearch = $state<MirrorSearch | null>(null);
+  dealMode = $state<'fresh' | 'repeat'>('fresh');
+  seed = $state('0');
+
+  applyPlaySession(session: PlaySession): void {
+    const changed = session.game_number !== this.playSession?.game_number || session.id !== this.playSession?.id;
+    this.playSession = session;
+    if (!changed) return;
+    this.watchMode = false;
+    this.applySetupDraft(session.draft);
+  }
+
+  applySetupDraft(draft: Record<string, unknown>): void {
+    this.humanSeat = draft.human_seat === 1 ? 1 : 0;
+    this.dealMode = draft.seed == null ? 'fresh' : 'repeat';
+    this.seed = String(draft.seed ?? '0');
+    this.deckImport = (draft.deck_import as typeof this.deckImport) ?? null;
+    const named = sanitizeDeckSelection({hero:draft.hero_deck, villain:draft.villain_deck});
+    if (named) { this.setHeroDeck(named.hero); this.setVillainDeck(named.villain); }
+    this.decklists = draft.decklists === 'closed' ? 'closed' : 'open';
+    if (draft.villain_type === 'policy' && typeof draft.opponent_sha256 === 'string') this.opponentChoice = policyChoice(draft.opponent_sha256);
+    else if (draft.villain_type === 'search') this.opponentChoice = `search-${draft.villain_sims ?? 64}` as PlayerChoice;
+    else if (draft.villain_type === 'random' || draft.villain_type === 'passive') this.opponentChoice = draft.villain_type;
+  }
+
   table = $state<TableSnapshot | null>(null);
   restoredDecision = $state<RestoredReplayDecision | null>(null);
   branchAttemptId = $state<string | null>(null);
@@ -201,6 +234,8 @@ export class GameStore {
     return {
       ...this.opponentConfig(),
       request_id: crypto.randomUUID(),
+      human_seat: this.humanSeat,
+      seed: this.dealMode === 'repeat' ? this.seed : null,
       player_token: playerToken(),
       ...(this.deckImport ? { deck_import: this.deckImport } : {}),
       hero_deck: this.decks.hero,
@@ -375,6 +410,8 @@ export class GameStore {
 
   markResumeFailed(message: string): void {
     this.resetMatchState();
+    this.playSession = null;
+    this.table = null;
     this.resumeFailed = true;
     this.errorMessage = message;
     this.sessionId = null;

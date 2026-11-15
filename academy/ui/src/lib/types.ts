@@ -614,6 +614,9 @@ export interface GameSummary extends TraceSummary {
   revision: number | null;
   mine: boolean;
   replay_available: boolean;
+  play_session_id?: string | null;
+  game_number?: number | null;
+  feedback_truncated?: boolean;
   feedback: { note: string; created_at: string; author_id: string | null; decision_address: string | null }[];
 }
 

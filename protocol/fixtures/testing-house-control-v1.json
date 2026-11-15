@@ -9,6 +9,7 @@
     },
     {
       "type": "resume",
+      "play_session_id": null,
       "session_id": "table.example",
       "resume_token": "lease-example",
       "presentation_cursor": 10
@@ -23,6 +24,10 @@
     {
       "type": "rematch",
       "grant_revision": 1,
+      "request_id": null,
+      "attempt_id": null,
+      "setup_revision": null,
+      "intent": "rematch",
       "config": {
         "seed": 8
       }

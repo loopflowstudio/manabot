@@ -24,6 +24,28 @@ digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 - [Attempts and shared history](#attempts-and-shared-history)
 - [Experience proof gate](#experience-proof-gate)
 
+## One game, from setup to its recorded decisions
+
+**New game** and **Games** are the main destinations. **Current game** returns
+this tab to its last table or watched game. Existing launch, replay and Watch
+links continue to open their intended games.
+
+New game shows two native seats. Choose each controller, deck and optional
+**Search**. One controller can be you; choosing bots in both seats starts a
+watched game through the same setup. Seat 1 plays first; seat 2 draws first.
+Policies are chosen directly by name and execution identity. Their provider,
+artifacts and runner remain available in details. **Browse decks and cards**
+opens the full deck browser; imported sources and disclosure use the same
+admission checks for played and watched games.
+
+Inspect a card through hover, focus or its **Inspect card** action without
+changing how you play. The Play/Inspect click preference controls gestures;
+it never gates reading. **Open a recorded game file** in Games imports a training game or evaluation
+trace without changing its original evidence. Games links back to recorded positions, their legal
+choices and available recorded policy/search evidence. Trying another line
+creates a separate Study branch with an explicit return to the source decision.
+There is no live example Advice panel or example-scenario read selector.
+
 ## Running Academy
 
 The PyPI commands below apply once a release that includes Academy is
@@ -462,7 +484,9 @@ its admitted decks, disclosure, actual seed and native seats.
 
 Your preferred **Play** or **Inspect** mode stays selected across games. To
 exchange decks, edit them explicitly in **Choose decks**. Changing setup affects
-the next game; it does not rewrite earlier recordings. Stop edits during play
+the next game; it does not rewrite earlier recordings. **Save next setup**
+retains edits without starting a game; **Continue with setup** starts it in
+the same session. Stop edits during play
 also carry into the next game. Replacing an unfinished game warns that it will
 be stopped; inspecting setup or opening a recording does not stop it.
 
@@ -536,7 +560,7 @@ At laptop widths and heights, the board and hand sit beside the current
 decision. Scroll the legal choices while the current instruction, legal count,
 **Show all** and filter controls remain available. Long instructions scroll
 independently. Open **History and settings** for decision details, consequences,
-advice and stop configuration without losing the pending decision. The current
+recorded consequences and stop configuration without losing the pending decision. The current
 priority-stop automation setting and **Edit stops** remain visible beside the choices. At narrow or short windows, board and
 choices stack; use the board/choices jump links to move between them. Changing decisions
 moves focus within the choices region without pulling the page away from the
@@ -913,9 +937,9 @@ It adds:
 
 Independent Python policies work without manabot. A saved game that was played
 against a checkpoint still replays without its provider; continuing it needs
-the original admitted policy. The decision-advice panel reads
-fixtures from a checkout of this repository and is absent from an installed
-package.
+the original admitted policy. Recorded policy and search evidence comes from
+the saved game and works in installed Academy; missing outputs stay unavailable.
+The live table does not load example analysis from a repository checkout.
 
 #### How a trained opponent is named
 
@@ -949,9 +973,10 @@ uv run --no-project managym academy --policy challenger.json watch \
     --player challenger --player random
 ```
 
-Watch opens at setup with both seats selected. Choose decks and press **Start**.
-Either seat can use a registered policy. **Registered policy**, **Provider / group**
-and **Policy** are the same native selects in Play and Watch. They preserve an
+Watch opens at setup with both seats selected. Choose decks and press **Start watching**.
+Either seat can use a registered policy. **Registered policy** and **Policy**
+use the same direct selection in Play and Watch; provider and runner details
+remain available as provenance. They preserve an
 unavailable selection rather than substituting a newer model. Keyboard navigation
 uses the browser's select controls.
 
@@ -996,16 +1021,18 @@ The Qwen provider needs manabot's optional LLM dependencies (`uv pip install
 'manabot[llm]'`). It reads local files only, pins model and tokenizer bytes,
 and uses the complete native text decision. It returns a single legal action;
 probabilities and a critic stay absent. Invalid or late output leaves the
-pending decision intact. Qwen does not support Mirror search. A provider's
+pending decision intact. Qwen does not support Search. A provider's
 `supports_search` defaults false; a true flag alone is no search admission.
 Search-capable policies can use the shared composition below.
 
-#### Mirror search
+<a id="mirror-search"></a>
+
+#### Search
 
 Choose a registered policy, then change its **Search** control from **None
-(raw policy)** to **Mirror search**. This works for the opponent in Play and
-for either Watch seat. The label includes the budget, for example
-`challenger + mirror search 1×1`. While a decision is pending, the table shows
+(raw policy)** to **Search**. This works for the opponent in Play and
+for either Watch seat. Its configuration includes the exact budget; details retain the magnetic
+mirror update algorithm and recorded identities. While a decision is pending, the table shows
 its search budget and elapsed waiting time. Reload preserves the configuration.
 
 | Setting | Default | Range |
@@ -1223,8 +1250,8 @@ browser. The invariants that follow:
   Imported game files get their own Academy identity while retaining the
   source digest; frozen `erd1` evidence keeps its original bindings.
 
-`/api/advice` serves fixture advice for the decision-advice surface; Academy has
-no live belief runtime.
+The historical `/api/advice` fixture API remains available to conformance tools.
+The live table does not fetch or display that example as current-game analysis.
 
 ## Choice navigation
 

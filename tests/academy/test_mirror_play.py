@@ -12,11 +12,17 @@ import managym
 from managym import mirror_search
 from managym.academy import server
 from managym.academy.opponent import set_policy_registry
-from managym.academy.trace import load_trace, prepare_trace_payload
+from managym.academy.trace import GameConfig, load_trace, prepare_trace_payload
 from managym.academy.watch import WatchRequest, create_watch, inspect_watch, step_watch
 from managym.bots import passive_policy
 from managym.mirror_search import MirrorSearch
-from managym.policy import PolicyDecision, PolicyDescriptor, PolicyRegistry, PolicyView
+from managym.policy import (
+    PolicyDecision,
+    PolicyDescriptor,
+    PolicyRegistry,
+    PolicyRunner,
+    PolicyView,
+)
 from tests.academy.test_policy_runtime import IndependentFactory
 from tests.semantic.test_mirror_policy_search import Clock, IndependentSession, _runner
 
@@ -168,7 +174,12 @@ def test_play_search_timeout_survives_reconnect_and_stop_changes(
     runner = _runner(live, 1)
     runner.configure_mirror(MirrorSearch(worlds=1, depth=1), seed=3)
     monkeypatch.setattr(mirror_search, "time", clock)
-    monkeypatch.setattr(server, "build_villain_policy", lambda _config: runner)
+
+    def selected_policy(config: GameConfig, *, seat: int = 1) -> PolicyRunner:
+        assert seat == 1 - config.human_seat
+        return runner
+
+    monkeypatch.setattr(server, "build_villain_policy", selected_policy)
     game = server.GameSession(trace_dir=tmp_path)
     try:
         game.new_game(

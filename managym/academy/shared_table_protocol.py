@@ -52,7 +52,7 @@ ROLE_CAPABILITIES: dict[ViewerRole, tuple[TableCapability, ...]] = {
 class ViewerIdentity(ProtocolModel):
     viewer_id: str
     table_id: str
-    rules_viewer: Literal[0] = 0
+    rules_viewer: Literal[0, 1] = 0
 
 
 class ViewerAccess(ProtocolModel):
@@ -159,6 +159,7 @@ class JoinTableMessage(ProtocolModel):
 
 class ResumeMessage(ProtocolModel):
     type: Literal["resume"]
+    play_session_id: str | None = None
     session_id: str
     resume_token: str
     presentation_cursor: UInt64 | None = None
@@ -173,6 +174,10 @@ class NewGameMessage(ProtocolModel):
 class RematchMessage(ProtocolModel):
     type: Literal["rematch"]
     grant_revision: UInt64
+    request_id: str | None = Field(default=None, min_length=1, max_length=128)
+    attempt_id: str | None = None
+    setup_revision: UInt64 | None = None
+    intent: Literal["rematch", "swap_sides", "change_opponent"] = "rematch"
     config: dict[str, object] = Field(default_factory=dict)
 
 

@@ -30,11 +30,11 @@ for (const theme of ['light', 'dark'] as const) {
     await page.screenshot({ path: fileURLToPath(new URL(`../test-results/mirror/play-${theme}.png`, import.meta.url)) });
 
     await page.goto(addresses.watch);
-    await expect(page.getByRole('combobox', { name: 'Seat 1 search', exact: true })).toHaveValue('mirror');
-    await page.getByRole('combobox', { name: 'Seat 1 search', exact: true }).selectOption('none');
-    await page.getByRole('combobox', { name: 'Seat 1 search', exact: true }).selectOption('mirror');
-    await expect(page.getByRole('spinbutton', { name: 'Seat 1 search worlds', exact: true })).toHaveValue('1');
-    await expect(page.getByRole('spinbutton', { name: 'Seat 1 search depth', exact: true })).toHaveValue('1');
+    await expect(page.getByRole('combobox', { name: 'Seat 1 bot search', exact: true })).toHaveValue('mirror');
+    await page.getByRole('combobox', { name: 'Seat 1 bot search', exact: true }).selectOption('none');
+    await page.getByRole('combobox', { name: 'Seat 1 bot search', exact: true }).selectOption('mirror');
+    await expect(page.getByRole('spinbutton', { name: 'Seat 1 bot search worlds', exact: true })).toHaveValue('1');
+    await expect(page.getByRole('spinbutton', { name: 'Seat 1 bot search depth', exact: true })).toHaveValue('1');
     await page.getByRole('button', { name: 'Start watching' }).click();
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(page.getByRole('columnheader', { name: 'Raw policy', exact: true })).toBeVisible();
@@ -152,7 +152,7 @@ test('the waiting line remains legible while a real response awaits delivery', a
     await expect(page.getByTestId('action-option').first()).toBeEnabled();
     await page.getByTestId('action-option').first().click();
     await expect.poll(() => held.length).toBe(1);
-    await expect(page.getByTestId('mirror-thinking')).toContainText('Mirror search 1×1');
+    await expect(page.getByTestId('mirror-thinking')).toContainText('Search 1×1');
     await expect(page.getByTestId('mirror-thinking')).toContainText(/\d+\.\d s/);
     await page.screenshot({ path: fileURLToPath(new URL('../test-results/mirror/thinking.png', import.meta.url)) });
     held.shift()?.();

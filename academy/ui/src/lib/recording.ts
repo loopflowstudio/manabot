@@ -55,6 +55,7 @@ export interface RecordingIndex {
   opponent_checkpoint?: TraceConfig['opponent_checkpoint'];
   watch: boolean;
   can_feedback: boolean;
+  private_setup?: Record<string, unknown> | null;
 }
 export interface RecordedPosition extends Position {
   description: string | null;

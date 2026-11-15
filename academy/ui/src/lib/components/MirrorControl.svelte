@@ -30,10 +30,10 @@
     } : null)}
   >
     <option value="none">None (raw policy)</option>
-    <option value="mirror" disabled={!supported}>Mirror search</option>
+    <option value="mirror" disabled={!supported}>Search</option>
   </select>
   {#if !supported}
-    <p class="type-caption text-ink-2">{reason ?? 'This policy does not support Mirror search.'}</p>
+    <p class="type-caption text-ink-2">{reason ?? 'This policy does not support Search.'}</p>
   {/if}
   {#if value}
     <div class="flex flex-wrap gap-3">

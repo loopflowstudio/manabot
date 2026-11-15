@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import logging
+import os
 from pathlib import Path
 import secrets
 import sqlite3
@@ -80,7 +81,13 @@ from .advice import (
     request_advice,
     request_versioned_fixture_advice,
 )
-from .attempts import AttemptStore, decode_cursor, page_cursor, participant_id
+from .attempts import (
+    AttemptStore,
+    RecordedPlayer,
+    decode_cursor,
+    page_cursor,
+    participant_id,
+)
 from .curated_pack import (
     CURATED_PACK,
     CURATED_PACK_CATALOG,
@@ -94,6 +101,13 @@ from .opponent import (
     catalog_opponent,
     opponent_catalog,
     policy_registry,
+)
+from .play_session import (
+    SessionSetupUpdate,
+    SessionStart,
+    continuation_config,
+    request_fingerprint,
+    setup_draft,
 )
 from .presentation import PresentationProjector
 from .recording import Recording, read_cache
@@ -524,33 +538,21 @@ def hero_view(obs: managym.Observation) -> dict[str, Any]:
     return viewer_view(obs, HERO_PLAYER_INDEX)
 
 
-def _winner_for_hero(obs: managym.Observation) -> int | None:
-    if not obs.game_over:
-        return None
-
-    agent_is_hero = int(obs.agent.player_index) == HERO_PLAYER_INDEX
-    if bool(obs.won):
-        return 0 if agent_is_hero else 1
-    return 1 if agent_is_hero else 0
-
-
-def _is_hero_turn(obs: managym.Observation) -> bool:
-    return int(obs.agent.player_index) == HERO_PLAYER_INDEX
+def _is_hero_turn(obs: managym.Observation, human_seat: int = 0) -> bool:
+    return int(obs.agent.player_index) == human_seat
 
 
 def _is_priority_space(obs: managym.Observation) -> bool:
     return obs.action_space.action_space_type == managym.ActionSpaceEnum.PRIORITY
 
 
-def _hero_is_active_player(obs: managym.Observation) -> bool:
+def _hero_is_active_player(obs: managym.Observation, human_seat: int = 0) -> bool:
     """Whether the hero is the active player (it is 'my' turn).
 
     Perspective-independent: finds the hero side by player_index rather than
     assuming ``obs.agent`` is the hero.
     """
-    hero = (
-        obs.agent if int(obs.agent.player_index) == HERO_PLAYER_INDEX else obs.opponent
-    )
+    hero = obs.agent if int(obs.agent.player_index) == human_seat else obs.opponent
     return int(obs.turn.active_player_id) == int(hero.id)
 
 
@@ -675,6 +677,12 @@ def _parse_game_config(config: Any) -> GameConfig:
     if seed_value is None:
         seed: int | None = None
     else:
+        if type(seed_value) is not int and not (
+            isinstance(seed_value, str)
+            and seed_value.isascii()
+            and seed_value.isdecimal()
+        ):
+            raise ValueError("seed must be an unsigned 64-bit integer.")
         try:
             seed = int(seed_value)
         except Exception as exc:
@@ -705,7 +713,7 @@ def _parse_game_config(config: Any) -> GameConfig:
 
     # Private import provenance (see `GameConfig.hero_source`); empty for named decks.
     provenance: dict[str, Any] = {}
-    if "deck_import" in data:
+    if data.get("deck_import") is not None:
         deck_import = DeckImportInput.model_validate(data["deck_import"])
         hero_import, villain_import = deck_import.admit()
         provenance = {
@@ -790,6 +798,7 @@ def _parse_game_config(config: Any) -> GameConfig:
         villain_deck_name=villain_deck_name,
         asset_pack=selected_pack.reference if selected_pack is not None else None,
         villain_type=villain_type,
+        human_seat=data.get("human_seat", 0),
         seed=seed,
         seed_was_requested=seed_value is not None,
         villain_sims=villain_sims,
@@ -848,13 +857,15 @@ class GameSession:
     ) -> None:
         self.trace_dir = trace_dir or trace_store.TRACES_DIR
         self.watch_mode = watch_mode
+        self.human_seat = 0
+        self.interrupted_config: dict[str, Any] | None = None
         self.watch_policies: tuple[BotPolicy, BotPolicy] | None = None
         self._bot_decision: BotDecision | None = None
         self.mirror_retry: PendingMirror | None = None
         self._id_factory = id_factory or (lambda _kind: secrets.token_urlsafe(16))
         self._clock = clock or trace_store.utc_now_iso
         self.attempt_owner = participant_id(secrets.token_urlsafe(32))
-        self._new_game_requests: set[str] = set()
+        self._session_start: SessionStart | None = None
         self._preparing_demo = False
         self.attempt_store = AttemptStore(self.trace_dir / "play.sqlite")
         self.record_players = None
@@ -904,7 +915,7 @@ class GameSession:
         # Durable replay truth is unbounded by the live reconnect ledger.
         self.canonical_decisions: list[ReplayDecision] = []
         self.canonical_presentation: dict[int, list[dict[str, Any]]] = {
-            HERO_PLAYER_INDEX: [],
+            0: [],
             1: [],
         }
         self._authority_command_seq = 0
@@ -923,7 +934,9 @@ class GameSession:
         self._study_attempts: dict[str, StudyAttempt] = {}
         self._study_attempt_seq = 0
 
-    def new_game(self, raw_config: Any) -> dict[str, Any]:
+    def new_game(
+        self, raw_config: Any, *, continuation_fingerprint: str | None = None
+    ) -> dict[str, Any]:
         launch_id = raw_config.get("launch") if isinstance(raw_config, dict) else None
         if launch_id is not None:
             if not isinstance(launch_id, str) or launch_id not in LAUNCH_CONFIGS:
@@ -942,8 +955,28 @@ class GameSession:
             not isinstance(request_id, str) or len(request_id) > 128
         ):
             raise ValueError("Invalid new-game request id.")
-        if request_id in self._new_game_requests:
-            return self._wire_message()
+        request_id = request_id or secrets.token_urlsafe(16)
+        fingerprint = continuation_fingerprint or request_fingerprint(raw_config or {})
+        if not self.watch_mode:
+            previous_attempt = self.attempt_store.continuation_receipt(
+                self.attempt_owner, request_id, fingerprint
+            )
+            if previous_attempt is not None:
+                if previous_attempt == self.match_id and self.obs is not None:
+                    return self.current_message()
+                raise ValueError(
+                    f"Request already started recording {previous_attempt}; it cannot be redealt. Open its recording or explicitly start another game."
+                )
+
+        if (
+            isinstance(raw_config, dict)
+            and raw_config.get("play_session_id") is not None
+        ):
+            retained_session = self.attempt_store.session(
+                raw_config["play_session_id"], {self.attempt_owner}
+            )
+            if retained_session["revision"] != raw_config.get("setup_revision"):
+                raise ValueError("Session setup changed; recover before continuing.")
 
         from .play_demo import load_play_demo, replay_checked_prefix
 
@@ -957,7 +990,11 @@ class GameSession:
         seed = config.seed if config.seed is not None else secrets.randbits(32)
         config.seed = seed
         try:
-            policy = None if self.watch_mode else build_villain_policy(config)
+            policy = (
+                None
+                if self.watch_mode
+                else build_villain_policy(config, seat=1 - config.human_seat)
+            )
         except MirrorSearchError as exc:
             raise ValueError(f"{exc.reason}: {exc}") from exc
         except ValueError:
@@ -998,11 +1035,20 @@ class GameSession:
             if self.watch_mode and self.record_players is not None:
                 players = self.record_players
             if (
-                not player_config.get("player_token")
+                not self.watch_mode
+                and not player_config.get("player_token")
                 and self.record_players
                 and self._record_player_owner == self.attempt_owner
             ):
-                players[0] = replace(self.record_players[0], deck=config.hero_deck_name)
+                players[0] = replace(
+                    next(
+                        player
+                        for player in self.record_players
+                        if player.kind == "human"
+                    ),
+                    deck=config.hero_deck_name,
+                    seat=config.human_seat,
+                )
             if self.trace is not None:
                 self.close(end_reason="new_game")
             self.record_players = players
@@ -1014,6 +1060,8 @@ class GameSession:
         self._demo_name = demo_name
         # A pack identifies both decks, so closed games use the generic identity.
         # Cards still resolve their treatments by name from their public zones.
+        self.interrupted_config = None
+        self.human_seat = config.human_seat
         self.decklists_closed = config.decklists == "closed"
         if selected_pack is not None and not self.decklists_closed:
             self.asset_manifest_hash = selected_pack.manifest_sha256
@@ -1062,7 +1110,7 @@ class GameSession:
         self.presentation_events = []
         self._last_presentation_cursor = 0
         self.canonical_decisions = []
-        self.canonical_presentation = {HERO_PLAYER_INDEX: [], 1: []}
+        self.canonical_presentation = {0: [], 1: []}
         self._authority_command_seq = 0
         self._study_roots = {}
         self._pending_decision = None
@@ -1088,6 +1136,19 @@ class GameSession:
             caused_by=None,
         )
         self.trace_id = self.match_id
+        if not self.watch_mode:
+            session_id = player_config.get("play_session_id")
+            session_revision = player_config.get("setup_revision", 0)
+            if session_id is not None:
+                self.attempt_store.session(session_id, {self.attempt_owner})
+            self._session_start = SessionStart(
+                session_id=session_id or secrets.token_urlsafe(16),
+                owner=self.attempt_owner,
+                request_id=request_id,
+                fingerprint=fingerprint,
+                revision=session_revision,
+                draft=setup_draft(config),
+            )
         self._persist_attempt()
         # A checked demo prefix is setup, not a sequence of surfaced human
         # decisions. Retain every Command and Study root in memory, then persist
@@ -1104,18 +1165,79 @@ class GameSession:
             self._preparing_demo = False
         if demo is not None:
             update = self._wire_message(reason="initial_connect")
-        if request_id is not None:
-            self._new_game_requests.add(request_id)
         if launch_id is not None:
             update["launch"] = launch_id
         return update
+
+    def continue_game(self, request: RematchMessage, owner: str) -> dict[str, Any]:
+        """Resolve one revision-bound next game from the owner-private draft."""
+        if self.trace is None and self.interrupted_config is None:
+            raise ValueError("No game to continue.")
+        membership = self.attempt_store.session_for_attempt(self.match_id)
+        if membership is None:
+            raise ValueError("This recording has no play session.")
+        session = self.attempt_store.session(membership["session_id"], {owner})
+        # Legacy callers may omit continuation bindings. New clients always pin
+        # all three; generate a single-use binding for the legacy operation.
+        request = request.model_copy(
+            update={
+                "request_id": request.request_id or secrets.token_urlsafe(16),
+                "attempt_id": request.attempt_id or self.match_id,
+                "setup_revision": request.setup_revision
+                if request.setup_revision is not None
+                else session["revision"],
+            }
+        )
+        assert request.request_id is not None
+        receipt_config = {
+            "request_id": request.request_id,
+            "intent": request.intent,
+            "attempt_id": request.attempt_id,
+            "setup_revision": request.setup_revision,
+            "overrides": request.config,
+        }
+        fingerprint = request_fingerprint(receipt_config)
+        receipt = self.attempt_store.continuation_receipt(
+            owner, request.request_id, fingerprint
+        )
+        if receipt is not None:
+            if receipt == self.match_id:
+                return self.current_message()
+            raise ValueError(
+                f"Continuation already started recording {receipt}; recover that recording."
+            )
+        if (
+            request.attempt_id != self.match_id
+            or request.setup_revision != session["revision"]
+        ):
+            raise ValueError("The game or setup changed. Recover before continuing.")
+        overrides = dict(request.config)
+        forbidden = {
+            "play_session_id",
+            "setup_revision",
+            "request_id",
+            "launch",
+            "demo",
+        }
+        if forbidden.intersection(overrides):
+            raise ValueError("Continuation setup contains reserved fields.")
+        config = continuation_config(session["draft"], overrides, request.intent)
+        config.update(
+            play_session_id=membership["session_id"],
+            setup_revision=session["revision"],
+            request_id=request.request_id,
+        )
+        # new_game checks the exact receipt again. Retain the request envelope's
+        # fingerprint so a retry can be checked before resolving against new setup.
+        self.attempt_owner = owner
+        return self.new_game(config, continuation_fingerprint=fingerprint)
 
     def hero_action(self, raw_index: Any) -> dict[str, Any]:
         if self.env is None or self.obs is None or self.trace is None:
             raise ValueError("No active game session. Send new_game first.")
         if self.obs.game_over:
             raise ValueError("Game is already over. Start a new game.")
-        if not _is_hero_turn(self.obs):
+        if not _is_hero_turn(self.obs, self.human_seat):
             raise ValueError("Cannot accept hero action: waiting on villain auto-play.")
 
         try:
@@ -1194,7 +1316,7 @@ class GameSession:
             return self._reject_command(raw, "invalid_selection", recover=False)
         if self.obs.game_over:
             return self._reject_command(raw, "authority_busy", recover=True)
-        if not _is_hero_turn(self.obs):
+        if not _is_hero_turn(self.obs, self.human_seat):
             return self._reject_command(raw, "not_actor", recover=False)
 
         try:
@@ -1216,7 +1338,7 @@ class GameSession:
         transient = self._drain_surface_metadata()
         receipt = {
             "command_id": command_id,
-            "actor": HERO_PLAYER_INDEX,
+            "actor": self.human_seat,
             "accepted_at": base_revision,
             "resulting_revision": self.revision,
             "resulting_frame_hash": frame["frame_hash"],
@@ -1273,6 +1395,21 @@ class GameSession:
                 raise ValueError("auto_pass must be a boolean.")
             self.auto_pass = raw_auto_pass
 
+        membership = self.attempt_store.session_for_attempt(self.match_id)
+        if membership is not None:
+            session = self.attempt_store.session(
+                membership["session_id"], {self.attempt_owner}
+            )
+            draft = {
+                **session["draft"],
+                "stops": self.stops,
+                "stop_on_stack": self.stop_on_stack,
+                "auto_pass": self.auto_pass,
+            }
+            self.attempt_store.update_session(
+                membership["session_id"], self.attempt_owner, session["revision"], draft
+            )
+
         # Stop configuration is versioned authority state even though it is not
         # a player decision and therefore never receives a replay ordinal.
         self._advance_protocol_revision()
@@ -1289,7 +1426,7 @@ class GameSession:
         if self.obs.game_over:
             raise ValueError("Game is already over. Start a new game.")
 
-        if _is_hero_turn(self.obs) and _is_priority_space(self.obs):
+        if _is_hero_turn(self.obs, self.human_seat) and _is_priority_space(self.obs):
             batch_cursor = self.presentation.next_seq
             self._f6_turn = int(self.obs.turn.turn_number)
             self._advance()
@@ -1346,7 +1483,7 @@ class GameSession:
         ]
         if action_index is None or len(matching_offers) != 1:
             raise RuntimeError("Bound command does not lower through one exact offer.")
-        actor = "hero" if context.viewer == HERO_PLAYER_INDEX else "villain"
+        actor = "hero" if context.viewer == self.human_seat else "villain"
         self._step_and_record(
             actor=actor,
             action_index=action_index,
@@ -1383,7 +1520,7 @@ class GameSession:
         state_before = (
             self.env.state_digest() if self._capture_authority_evidence else None
         )
-        actor_index = HERO_PLAYER_INDEX if actor == "hero" else 1
+        actor_index = self.human_seat if actor == "hero" else 1 - self.human_seat
         selected_offer: dict[str, Any] | None = None
         if auto:
             if context is None:
@@ -1433,7 +1570,7 @@ class GameSession:
                 }
             )
             retained_root = self.env.clone_env()
-            if actor_index == HERO_PLAYER_INDEX:
+            if actor_index == self.human_seat:
                 pending = self._pending_decision
                 if pending is None:
                     raise RuntimeError(
@@ -1598,12 +1735,12 @@ class GameSession:
             raise RuntimeError("Villain policy not initialized.")
 
         steps = 0
-        while not self.obs.game_over and not _is_hero_turn(self.obs):
+        while not self.obs.game_over and not _is_hero_turn(self.obs, self.human_seat):
             if steps >= MAX_AUTOPLAY_STEPS:
                 raise RuntimeError("Villain auto-play exceeded safety step limit.")
             steps += 1
 
-            context = self._build_decision_context(self.obs, viewer=1)
+            context = self._build_decision_context(self.obs, viewer=1 - self.human_seat)
             if self._villain_offer_policy is not None:
                 offer_id = int(self._villain_offer_policy(context))
                 action_index = context.action_by_offer.get(offer_id)
@@ -1730,7 +1867,7 @@ class GameSession:
         if stop_step is None:
             # Untap/cleanup/end-of-combat: no stop exists for these steps.
             return False
-        side = "my" if _hero_is_active_player(obs) else "opponent"
+        side = "my" if _hero_is_active_player(obs, self.human_seat) else "opponent"
         return stop_step in self.stops.get(side, [])
 
     def _stops_payload(self) -> dict[str, Any]:
@@ -1779,7 +1916,7 @@ class GameSession:
             caused_by=caused_by,
         )
         viewer_events: dict[int, list[dict[str, Any]]] = {}
-        for viewer in (HERO_PLAYER_INDEX, 1):
+        for viewer in (0, 1):
             projected: list[dict[str, Any]] = []
             for event in authority_events:
                 copy = deepcopy(event)
@@ -1789,7 +1926,7 @@ class GameSession:
             self.canonical_presentation[viewer].extend(projected)
             viewer_events[viewer] = projected
 
-        live_events = viewer_events[HERO_PLAYER_INDEX]
+        live_events = viewer_events[self.human_seat]
         self.presentation_events.extend(live_events)
         if len(self.presentation_events) > MAX_PRESENTATION_EVENTS:
             self.presentation_events = self.presentation_events[
@@ -1812,16 +1949,16 @@ class GameSession:
 
         self.published_prompt = self._build_decision_context(
             self.obs,
-            viewer=HERO_PLAYER_INDEX,
+            viewer=self.human_seat,
         )
         frame = ExperienceFrame.model_validate(self.published_prompt.frame)
         address = DecisionAddressV2.from_frame(
             replay_id=f"replay.{self.match_id}",
             match_id=self.match_id,
             ordinal=len(self.canonical_decisions),
-            viewer=HERO_PLAYER_INDEX,
+            viewer=self.human_seat,
             frame=frame,
-            presentation_cursor=len(self.canonical_presentation[HERO_PLAYER_INDEX]),
+            presentation_cursor=len(self.canonical_presentation[self.human_seat]),
         )
         self._pending_decision = PendingCanonicalDecision(
             address=address,
@@ -1829,7 +1966,7 @@ class GameSession:
             root=self.env.clone_env(),
             source_sha256=decision_source_sha256(address, frame),
             rules_revision=int(
-                json.loads(self.env.semantic_observation_json(HERO_PLAYER_INDEX))[
+                json.loads(self.env.semantic_observation_json(self.human_seat))[
                     "identity"
                 ]["revision"]
             ),
@@ -1912,9 +2049,7 @@ class GameSession:
             return None
         names = dict(self.deck_names)
         if self.decklists_closed:
-            names["villain" if viewer == HERO_PLAYER_INDEX else "hero"] = (
-                CLOSED_DECK_NAME
-            )
+            names["villain" if viewer == self.human_seat else "hero"] = CLOSED_DECK_NAME
         return names
 
     def _build_frame(
@@ -1946,7 +2081,7 @@ class GameSession:
             "prompt": prompt,
             "projection": projection,
             "offers": offers,
-            "winner": _winner_for_hero(obs) if viewer == HERO_PLAYER_INDEX else None,
+            "winner": self.env.winner_index() if obs.game_over else None,
             "action_space": action_space,
             "stops": self._stops_payload(),
             "deck_names": self._deck_names_for(viewer),
@@ -1976,7 +2111,7 @@ class GameSession:
             self._persist_attempt()
             return self._build_frame(
                 self.obs,
-                viewer=HERO_PLAYER_INDEX,
+                viewer=self.human_seat,
                 prompt=None,
                 offers=[],
                 action_space="",
@@ -1986,7 +2121,7 @@ class GameSession:
             self._persist_attempt(end_reason="game_over")
             return self._build_frame(
                 self.obs,
-                viewer=HERO_PLAYER_INDEX,
+                viewer=self.human_seat,
                 prompt=None,
                 offers=[],
                 action_space="",
@@ -2121,8 +2256,8 @@ class GameSession:
         )
         retained = replace(
             self.trace,
-            final_observation=decision_surface_view(self.env, HERO_PLAYER_INDEX),
-            winner=_winner_for_hero(self.obs),
+            final_observation=decision_surface_view(self.env, self.human_seat),
+            winner=self.env.winner_index() if self.obs.game_over else None,
             end_reason=end_reason if finished else self.trace.end_reason,
             canonical_replay=canonical.model_dump(mode="json"),
         )
@@ -2140,14 +2275,16 @@ class GameSession:
             retained.to_record(),
             finished=finished,
             players=self.record_players,
+            session_start=self._session_start,
             origin=(
-                "bot_evaluation"
+                (os.getenv("ACADEMY_PLAY_RECORD_ORIGIN") or "bot_evaluation")
                 if self.watch_mode
                 else "automated_validation"
                 if self._demo_name
                 else None
             ),
         )
+        self._session_start = None
         if finished:
             self._study_provider = study_provider
             self._trace_saved = True
@@ -2199,7 +2336,7 @@ class GameSession:
         viewer = (
             int(parse_decision_address(raw_address).viewer)
             if self.watch_mode
-            else HERO_PLAYER_INDEX
+            else self.human_seat
         )
         return self.study_fork_provider().fork(raw_address, viewer)
 
@@ -2226,7 +2363,7 @@ class GameSession:
         viewer = (
             int(parse_decision_address(raw_address).viewer)
             if self.watch_mode
-            else HERO_PLAYER_INDEX
+            else self.human_seat
         )
         projection = project_replay(replay, viewer)
         restored = restore_decision(replay, raw_address, viewer)
@@ -2529,6 +2666,7 @@ def _cleanup_expired_sessions() -> None:
 def _participant_from_resume(
     raw_session_id: Any,
     raw_resume_token: Any,
+    play_session_id: str | None = None,
 ) -> tuple[SessionRecord, ParticipantLease]:
     if not isinstance(raw_session_id, str) or not raw_session_id:
         raise ValueError("resume messages require a non-empty 'session_id'.")
@@ -2537,7 +2675,32 @@ def _participant_from_resume(
 
     record = SESSION_REGISTRY.get(raw_session_id)
     if record is None:
-        raise ValueError("Session not found or expired. Start a new game.")
+        if play_session_id is None:
+            raise ValueError("Session not found or expired. Start a new game.")
+        game = _new_game_session()
+        owner = participant_id(raw_resume_token)
+        game.attempt_store.session(play_session_id, {owner})
+        attempt = game.attempt_store.latest_session_attempt(play_session_id)
+        retained = game.attempt_store.load(attempt)
+        if retained is None or retained["end_reason"] == "active":
+            raise ValueError(
+                "Original table is unavailable; an active attempt cannot be recreated."
+            )
+        # Recover only private setup and recorded identity. No Env, prompt or
+        # live Command authority can survive a process restart.
+        game.attempt_owner = owner
+        game.match_id = game.trace_id = attempt
+        game.record_players = [
+            RecordedPlayer(**player)
+            for player in game.attempt_store.metadata(attempt)["players"]
+        ]
+        game._record_player_owner = owner
+        game.interrupted_config = retained["config"]
+        game.human_seat = retained["config"].get("human_seat", 0)
+        record = SessionRecord(
+            session_id=raw_session_id, resume_token=raw_resume_token, game=game
+        )
+        SESSION_REGISTRY[raw_session_id] = record
     participants = [
         participant
         for participant in record.participants.values()
@@ -2619,7 +2782,7 @@ def _live_decision_summaries(record: SessionRecord) -> list[dict[str, Any]]:
             "offer_id": decision.offer_id,
         }
         for decision in record.game.canonical_decisions
-        if decision.viewer == HERO_PLAYER_INDEX
+        if decision.viewer == record.game.human_seat
     ]
     pending = record.game._pending_decision
     if pending is None:
@@ -2668,6 +2831,7 @@ def _table_snapshot(
             identity=ViewerIdentity(
                 viewer_id=participant.viewer_id,
                 table_id=record.session_id,
+                rules_viewer=record.game.human_seat,
             ),
             role=participant.role,
             capabilities=capabilities,
@@ -2711,6 +2875,26 @@ def _response_with_participant(
     )
     # Launch metadata belongs only to the browser that submitted the setup.
     payload.pop("launch", None)
+    payload.pop("play_session", None)
+    membership = record.game.attempt_store.session_for_attempt(record.game.match_id)
+    if membership is not None:
+        try:
+            session = record.game.attempt_store.session(
+                membership["session_id"], {participant_id(participant.resume_token)}
+            )
+            payload["play_session"] = {
+                **session,
+                **membership,
+                "config": asdict(record.game.trace.config)
+                if record.game.trace
+                else dict(record.game.interrupted_config or {}),
+            }
+            payload["play_session"]["config"]["seed"] = str(
+                payload["play_session"]["config"].get("seed")
+            )
+        except ValueError:
+            pass
+    payload["session_interrupted"] = record.game.interrupted_config is not None
     payload["table"] = _table_snapshot(
         record, participant, watcher_invite=watcher_invite
     )
@@ -2912,37 +3096,17 @@ def _dispatch_table_request(
     _authorize_table_request(record, participant, request)
 
     if isinstance(request, (NewGameMessage, RematchMessage)):
-        config = dict(request.config)
-        if isinstance(request, RematchMessage) and record.game.trace is not None:
-            previous = record.game.trace.config
-            config = {
-                "villain_type": previous.villain_type,
-                "villain_sims": previous.villain_sims,
-                "hero_deck": previous.hero_deck_name,
-                "villain_deck": previous.villain_deck_name,
-                "decklists": previous.decklists,
-                "mirror": asdict(previous).get("mirror"),
-                "stops": record.game.stops,
-                "auto_pass": record.game.auto_pass,
-                "stop_on_stack": record.game.stop_on_stack,
-                **({"seed": previous.seed} if previous.seed_was_requested else {}),
-                **config,
-            }
-            if previous.hero_source is not None and previous.villain_source is not None:
-                # New game re-admits the retained sources against the installed world.
-                config["deck_import"] = {
-                    seat: {"source": source["source"], "filename": source["filename"]}
-                    for seat, source in (
-                        ("hero", previous.hero_source),
-                        ("villain", previous.villain_source),
-                    )
-                }
-            if previous.opponent is not None:
-                config["opponent_sha256"] = previous.opponent.get(
-                    "base_sha256", previous.opponent["sha256"]
-                )
-        record.game.attempt_owner = participant_id(participant.resume_token)
-        response = record.game.new_game(config)
+        owner = participant_id(participant.resume_token)
+        previous_match = record.game.match_id
+        if isinstance(request, RematchMessage):
+            response = record.game.continue_game(request, owner)
+        else:
+            if {"play_session_id", "setup_revision"}.intersection(request.config):
+                raise ValueError("Use continuation to join a session.")
+            record.game.attempt_owner = owner
+            response = record.game.new_game(dict(request.config))
+        if record.game.match_id == previous_match:
+            return response, False
         record.accepted_command_submitters.clear()
         record.shared_beliefs.clear()
         for candidate in record.participants.values():
@@ -2997,7 +3161,7 @@ def _dispatch_table_request(
     if isinstance(request, RestoreDecisionMessage):
         replay = record.game.canonical_replay()
         try:
-            restored = restore_decision(replay, request.address, HERO_PLAYER_INDEX)
+            restored = restore_decision(replay, request.address, record.game.human_seat)
         except (InvalidAddressError, DecisionNotFoundError) as exc:
             raise TableDispatchError("not_found", "Decision not found.") from exc
         return {
@@ -3169,7 +3333,9 @@ async def play_socket(websocket: WebSocket) -> None:
                         )
                     else:
                         record, participant = _participant_from_resume(
-                            parsed.session_id, parsed.resume_token
+                            parsed.session_id,
+                            parsed.resume_token,
+                            parsed.play_session_id,
                         )
                     await _attach_participant_websocket(record, participant, websocket)
                     attached_table_id = record.session_id
@@ -3379,7 +3545,11 @@ async def record_feedback(
         if address is not None:
             if not isinstance(address, str):
                 raise ValueError("Invalid decision address.")
-            restore_decision(_load_trace_replay(trace_id), address, HERO_PLAYER_INDEX)
+            restore_decision(
+                _load_trace_replay(trace_id),
+                address,
+                trace_store.load_trace(trace_id)["config"].get("human_seat", 0),
+            )
         author = (
             store.profile(x_etude_player_token)["id"] if x_etude_player_token else None
         )
@@ -3391,11 +3561,71 @@ async def record_feedback(
     return {"saved": True}
 
 
+@app.put("/api/play-sessions/{session_id}")
+async def update_play_session(
+    session_id: str,
+    update: SessionSetupUpdate,
+    x_etude_participant_token: str = Header(),
+) -> dict[str, Any]:
+    try:
+        record, participant = _participant_from_resume(
+            update.table_id, x_etude_participant_token
+        )
+        async with record.lock:
+            _authorize_table_request(
+                record,
+                participant,
+                NewGameMessage(type="new_game", grant_revision=update.grant_revision),
+            )
+            owner = participant_id(participant.resume_token)
+            session = record.game.attempt_store.session(session_id, {owner})
+            membership = record.game.attempt_store.session_for_attempt(
+                record.game.match_id
+            )
+            if membership is None or membership["session_id"] != session_id:
+                raise ValueError("Setup belongs to another table.")
+            if update.revision != session["revision"]:
+                raise ValueError("Session setup changed; recover before editing.")
+            parsed = _parse_game_config(
+                continuation_config(session["draft"], update.config, "rematch")
+            )
+            record.game.attempt_store.update_session(
+                session_id, owner, update.revision, setup_draft(parsed)
+            )
+            response = _response_with_participant(
+                {"type": "table_snapshot"}, record, participant
+            )
+            return response["play_session"]
+    except (ValueError, TableDispatchError) as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@app.get("/api/play-sessions/{session_id}")
+def get_play_session(
+    session_id: str,
+    result_offset: int = Query(default=0, ge=0),
+    x_etude_participant_tokens: str | None = Header(default=None),
+) -> dict[str, Any]:
+    store = AttemptStore(trace_store.TRACES_DIR / "play.sqlite")
+    owners = _record_owners(x_etude_participant_tokens)
+    try:
+        rows = store.session_results(session_id, owners, offset=result_offset)
+        return {
+            **store.session(session_id, owners),
+            "results": rows[:100],
+            "next_result_offset": result_offset + 100 if len(rows) > 100 else None,
+            "totals": store.session_totals(session_id, owners),
+        }
+    except ValueError as exc:
+        raise HTTPException(403, str(exc)) from exc
+
+
 @app.get("/api/traces")
 async def list_traces(
     response: Response,
     x_etude_participant_tokens: str | None = Header(default=None),
     x_etude_player_token: str | None = Header(default=None),
+    session: str | None = None,
     scope: str = "all",
     q: str = "",
     player: str | None = None,
@@ -3417,6 +3647,7 @@ async def list_traces(
             _record_owners(x_etude_participant_tokens),
             token=x_etude_player_token,
             scope=scope,
+            session=session,
             q=q,
             player=player,
             other=other,
@@ -3435,7 +3666,11 @@ async def list_traces(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     # Frozen JSON history has no player identity. Keep it readable and label
     # missing provenance honestly; identity filters cannot match it.
-    if scope == "all" and not any((player, other, pairing, version, deck, result)):
+    if (
+        scope == "all"
+        and not session
+        and not any((player, other, pairing, version, deck, result))
+    ):
         for row in trace_store.list_trace_summaries():
             timestamp = row["timestamp"] or ""
             legacy_status = (
@@ -3618,7 +3853,7 @@ def get_recording_index(
     players = deepcopy(metadata.get("players", []))
     if payload["config"].get("decklists") == "closed":
         for player in players:
-            if player["seat"] == 1:
+            if player["seat"] == 1 - payload["config"].get("human_seat", 0):
                 player["deck"] = "closed"
     return {
         "id": trace_id,
@@ -3648,6 +3883,14 @@ def get_recording_index(
         "opponent": payload["config"].get("opponent"),
         "opponent_checkpoint": provenance,
         "watch": recording.watch,
+        "private_setup": {
+            **setup_draft(GameConfig(**payload["config"])),
+            "watch_players": payload["config"].get("watch_players"),
+            "watch_mirrors": _recorded_mirrors(players),
+        }
+        if recording.watch
+        and (getattr(request.state, "record_access", None) or {}).get("mine")
+        else None,
         "can_feedback": bool(
             (getattr(request.state, "record_access", None) or {}).get("mine")
         ),
@@ -3680,7 +3923,11 @@ def get_recording_position(
 @app.get("/api/traces/{trace_id}/decisions")
 async def get_trace_decisions(trace_id: str) -> dict[str, Any]:
     replay = _load_trace_replay(trace_id)
-    return projection_with_addresses(project_replay(replay, HERO_PLAYER_INDEX))
+    return projection_with_addresses(
+        project_replay(
+            replay, trace_store.load_trace(trace_id)["config"].get("human_seat", 0)
+        )
+    )
 
 
 @app.get("/api/traces/{trace_id}/decisions/{address}")
@@ -3701,7 +3948,7 @@ async def get_trace_decision(
         viewer = (
             int(parse_decision_address(address).viewer)
             if watch_mode
-            else HERO_PLAYER_INDEX
+            else payload["config"].get("human_seat", 0)
         )
         restored = restore_decision(replay, address, viewer)
     except InvalidAddressError as exc:
