@@ -178,6 +178,21 @@ def execute_game(
                         seed=game["player_seeds"][responsible],
                         checkpoint_path=checkpoint_paths.get(responsible),
                     )
+        if "opening_score_seat" in game:
+            if game["opening_score_seat"] not in (0, 1) or policies:
+                raise ValueError(
+                    "opening scoring requires scalar checkpoint players and a game seat"
+                )
+            for player, _ in built.values():
+                agent = getattr(player, "agent", None)
+                if agent is None or not callable(
+                    getattr(player, "opening_value", None)
+                ):
+                    raise ValueError(
+                        "opening scoring requires ordinary checkpoint players"
+                    )
+                agent.eval()
+                agent.requires_grad_(False)
         responsible = None
         send(("phase", None))
         spaces = [space for _, space in built.values() if space is not None]
@@ -213,6 +228,14 @@ def execute_game(
             raw = env.last_raw_obs
             actor = int(raw.agent.player_index)
             player_id = game["seat_players"][actor]
+            if actor == game.get("opening_score_seat") and "opening_value" not in game:
+                value = built[player_id][0].opening_value(env, obs)
+                game["opening_value"] = value
+                game["opening_revision"] = revision
+                send(("opening", {"value": value, "revision": revision, "seat": actor}))
+                if game.get("stop_after_opening", False):
+                    game["termination_reason"] = "opening_scored"
+                    break
             frame_started = time.monotonic()
             frame = build_viewer_frame(
                 raw,

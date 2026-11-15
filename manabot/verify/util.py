@@ -20,7 +20,7 @@ from manabot.infra.config import (
     ObservationConfig,
     RewardConfig,
 )
-from manabot.policy.prepare import Prepared
+from manabot.policy.prepare import GamePrepared as Prepared
 
 if TYPE_CHECKING:
     from manabot.backends.torch.policy import ActorCritic

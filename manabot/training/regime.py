@@ -688,8 +688,39 @@ class TrainBelief(Stage):
     evaluation_samples: int = Field(default=32, ge=1)
 
 
+class TrainRotisserie(Stage):
+    """Public draft policy learning through a separately admitted frozen player."""
+
+    operation: Literal["train_rotisserie"] = "train_rotisserie"
+    player: ArtifactReference
+    reward: Literal["game", "value"]
+    set: str = "tla"
+    seats: int = Field(default=8, ge=2, le=8, multiple_of=2)
+    picks_per_seat: int = Field(default=45, ge=1)
+    drafts_per_update: int = Field(default=2, ge=1)
+    updates: int = Field(default=2, ge=1)
+    evaluate: bool = True
+    evaluate_initial: bool = True
+
+    @model_validator(mode="after")
+    def scalar_execution(self) -> "TrainRotisserie":
+        if self.execution.device != "cpu" or self.execution.precision not in (
+            "auto",
+            "float32",
+        ):
+            raise ValueError(
+                "Rotisserie currently requires scalar CPU float32 execution"
+            )
+        return self
+
+
 Operation = Annotated[
-    ImportPolicy | TrainSelfPlay | CollectBelief | CollectSelection | TrainBelief,
+    ImportPolicy
+    | TrainSelfPlay
+    | CollectBelief
+    | CollectSelection
+    | TrainBelief
+    | TrainRotisserie,
     Field(discriminator="operation"),
 ]
 
@@ -879,6 +910,11 @@ class TrainingRegime(Strict):
 
     @model_validator(mode="after")
     def references(self) -> "TrainingRegime":
+        if (
+            any(isinstance(stage, TrainRotisserie) for stage in self.stages)
+            and len(self.stages) != 1
+        ):
+            raise ValueError("Rotisserie requires a single independent stage")
         if self.match is None and self.deck_source is None:
             raise ValueError("regime requires a match or a deck source")
         if self.match is not None and self.deck_source is not None:

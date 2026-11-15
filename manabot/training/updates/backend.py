@@ -30,7 +30,7 @@ from numpy.typing import NDArray
 
 from manabot.env.observation import ObservationBuffers
 from manabot.infra.profiler import Profiler
-from manabot.policy.prepare import Prepared
+from manabot.policy.prepare import GamePrepared as Prepared
 from manabot.policy.protocol import BackendLearner
 from manabot.training.rollout.actions import ActionRows
 from manabot.training.rollout.collection import RolloutBatch

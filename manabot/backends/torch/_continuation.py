@@ -9,7 +9,7 @@ object/catalog encoders and this projection; no memory survives a decision.
 import torch
 from torch import nn
 
-from manabot.policy.prepare import Prepared
+from manabot.policy.prepare import GamePrepared as Prepared
 
 
 class ContinuationEncoder(nn.Module):

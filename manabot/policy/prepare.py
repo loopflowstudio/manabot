@@ -397,8 +397,12 @@ class EventRows[A]:
     status: A
 
 
-@dataclass(frozen=True)
 class Prepared[A]:
+    """Shared policy input family: admitted game or public pre-game rows."""
+
+
+@dataclass(frozen=True)
+class GamePrepared[A](Prepared[A]):
     """One admitted observation batch, ready for a backend policy."""
 
     batch: int
@@ -468,7 +472,7 @@ def prepare(
     binding: str = "",
     action_capacity: int | None = None,
     select_programs: bool = False,
-) -> Prepared[Array]:
+) -> GamePrepared[Array]:
     """Build every index a backend forward reads from one admitted batch.
 
     `inference` enables CPU inference compaction: unused fact columns are
@@ -574,7 +578,7 @@ def prepare(
     present = validity != 0
     if value_token:
         present = np.concatenate((present, np.ones((batch, 1), bool)), 1)
-    return Prepared(
+    return GamePrepared(
         batch=batch,
         legal_support=bool(legal.any(-1).all()),
         agent_player=players[0],

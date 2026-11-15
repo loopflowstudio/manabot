@@ -47,7 +47,7 @@ from manabot.env.observation import (
 from manabot.infra.config import MatchConfig
 from manabot.infra.profiler import Profiler
 from manabot.policy.buckets import AXES
-from manabot.policy.prepare import Prepared
+from manabot.policy.prepare import GamePrepared as Prepared
 from manabot.sim.rollout import (
     BatchedSampler,
     RandomBatchController,

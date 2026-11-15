@@ -1,12 +1,11 @@
 # TLA Rotisserie: game rewards versus opening values
 
-Implementation status (2026-11-14): the native supply, draft and construction
-preparation below are available. The reward comparison described in this guide
-is still pending: draft-policy training and supervised opening scoring have not
-been implemented, and no competent player has passed supported current-source
-admission. Preparation is software validation and supplies no reward or strength
-result. The `compare` and `--fixtures` interfaces below describe the accepted
-design; they are not available commands yet.
+Implementation status (2026-11-14): native preparation, typed public draft
+inputs, a random draft/construction policy, seat-owned terminal-return updates,
+`TrainRotisserie` executor integration, supervised opening scoring and fixed
+reference evaluation plumbing are implemented. `compare --fixtures` runs a
+controlled software proof. No competent player has passed supported current
+source admission, so there is no measured reward comparison or strength result.
 
 ```sh
 uv run --extra artifacts --extra evaluation python experiments/tla_rotisserie.py prepare \
@@ -49,9 +48,11 @@ The refusal is retained in `.runs/tla-rotisserie-player-admission-final.json`.
 The exact missing dependency is a competent game player with its opening critic
 that passes supported current-world/input admission, whether supplied by
 MTG-353 or an already compatible artifact. The MTG-349 runs were left running.
-Draft-policy Prepared inputs, trainable policy/update/executor integration,
-supervised opening scoring and fixed-reference comparison remain unimplemented.
-This handoff establishes runnable native foundations, not a completed comparison.
+The implementation continuation adds Prepared draft inputs, draft artifact
+save/reload, a shared Learner update, supervised opening scoring, durable reward
+schedules and fixed-reference tables. The compatible competent player/critic
+remains necessary for measured execution. Controlled fixtures establish software
+behavior, not a completed comparison.
 
 Validation: eight focused native debug tests passed; 12 Python binding,
 preparation and existing Limited-foundation tests passed. After rebuilding and
@@ -62,7 +63,7 @@ all-features clippy and Python lint/format checks passed. The broader debug
 engine suite and remaining design acceptance checks belong to gate; no game
 rules, policy input layout or game checkpoint loader was changed.
 
-## Planned comparison
+## Running the comparison
 
 Run from a source checkout with its matching native extension built and the
 locked dependencies installed. The first implementation uses the Torch backend.
@@ -144,6 +145,8 @@ first decision. A game ending before that point has no opening value; its outcom
 does not substitute for a critic observation. Categorical WDL critics use signed
 expectation. Scalar critics must declare `signed_outcome` or `win_logit` semantics;
 logits convert with `2 * sigmoid(logit) - 1`. Unspecified scalar units are refused.
+A signed-outcome regression head can extrapolate outside ±1; preserve those
+finite predictions without clipping and show the range as a critic limitation.
 
 Each seat's reward credits only its own draft and build choices. Both arms use
 episode policy gradient with a detached running baseline from earlier completed
@@ -207,8 +210,73 @@ retained failure and fix its cause before a separately identified attempt;
 neither repairing code nor starting another attempt completes missing historical
 samples. Exclusions can bias results toward games that fit the runtime limits.
 
-`--fixtures` is controlled software validation, not measured reward evidence.
-Keep it separate from the comparison. Preserve transcripts and completed replays,
+Run the controlled proof without a player:
+
+```sh
+uv run --extra artifacts --extra evaluation python experiments/tla_rotisserie.py compare \
+    --fixtures --out .runs/tla-rotisserie-fixtures --seed 370
+```
+
+This uses two seats, one draft pick each and native 40-card construction, then
+one update with a declared synthetic return. It is controlled software
+validation, not measured reward evidence. Keep it separate from the comparison. Preserve transcripts and completed replays,
 planned/attempted/completed/failed/missing counts, identities and phase costs.
 Publish retained experiment data through the [artifact manifest](README.md#data)
 before committing the report's results.
+
+
+## Retained implementation outputs
+
+Each arm runs through `execute_regime` and retains its `TrainingRun` and Etude
+identity. Draft artifacts live under `<arm>/<stage>/drafts/update-NNNN.pt`;
+they carry a draft-specific schema, configuration, catalog/printing binding and
+source revision. They are not game checkpoints. `catalog.json` and
+`printings.json` retain the bound inputs beside them. Initialization is permanent;
+the other opponent snapshot is the previous update and stays frozen throughout
+collection. The two arms use the same initialization seed and independent
+per-seat action generators, with separate reward and evaluation seeds.
+
+Per-episode setup and choice journals precede native mutation. Reward schedules
+precede dispatch; dispatch and settlement rows are fsynced. Game traces, opening
+observations and failed journals remain in the reward directory. Completed games
+also require a supervised replay; a replay failure stops the attempt. A critic
+observation is a successful score, never a completed game. A terminal game
+without the evaluated seat's first decision has no opening score.
+
+Fixed-reference evaluations retain table assignments, per-game outcomes and
+opening values, plus summaries with planned, attempted, completed, failed and
+missing denominators, win/draw/loss counts and value/outcome divergence. Etude
+stores these as immutable tables. Update receipts retain collected and gradient
+decisions, prior-batch baseline, collection/learning time and parent CPU/wall
+cost; game receipts keep worker CPU separately (unknown after an abrupt exit).
+Different rewards do not consume draft/evaluation schedule randomness.
+
+The initial evaluation is shared between arms; each trained checkpoint is
+scored separately. `comparison.json` keeps expected checkpoint endpoints even
+when a deadline leaves an arm unstarted. Unreached schedules are incomplete;
+there is no automatic resume or replacement of failed evaluation samples.
+
+
+## Controlled implementation validation, 2026-11-14
+
+The `compare --fixtures` command completed one synthetic-return update with 41
+learner choices and two native-legal decks. Its receipt is
+`.runs/tla-rotisserie-fixtures-implementation/receipt.json` and explicitly records
+zero reward games and no strength result. This proof ran from the implementation
+checkout with dirty source; it is not a committed measured experiment identity.
+
+Focused tests cover native public projection and masks, owned terminal gradients,
+failed-bundle exclusion, prior-batch baselines, artifact reload/transcript identity,
+regime execution, fixed-reference draft/game seats, signed scalar/logit/WDL units,
+actual supervised checkpoint opening inference, completed-game replay, persistent
+error allowance, worker exit, truncation, deadline and missing-slot accounting.
+Successful opening scores are recorded as `opening_scored` in the shared ledger,
+separately from completed games. Scalar extrapolations remain visible.
+
+Validation commands passed: the draft/reward test files (21 checks); existing game preparation,
+policy catalog, package-boundary and supervision checks (89 checks); observation,
+Torch optimizer-contract and restart checks (55 checks); and focused existing
+ledger threshold and acknowledged-worker-exit cases. Backend conformance included
+two skips for unavailable optional backend coverage. Ruff and diff checks passed.
+The new tests are included in the training CI group. Broader gate/CI validation
+and the admitted competent-player dependency remain; no measured arm was launched.

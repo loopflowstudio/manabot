@@ -17,7 +17,7 @@ import torch
 from manabot.backends.torch.arrays import array_fields, on_device
 from manabot.backends.torch.policy import ActorCritic
 from manabot.policy.buckets import row_needs
-from manabot.policy.prepare import Prepared
+from manabot.policy.prepare import GamePrepared as Prepared
 from manabot.training.rollout.actions import ActionRows
 from manabot.training.rollout.collection import RolloutBatch
 

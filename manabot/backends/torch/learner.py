@@ -1,6 +1,6 @@
 """The torch learner: optimizer state, precision and the guarded update step.
 
-`Learner` bundles a trainable `ActorCritic` with its Adam optimizer, its
+`Learner` bundles a trainable model with its Adam optimizer, its
 forward precision and a profiler; the updates in `manabot.training.updates`
 step it through `Learner.loss` and `Learner.step`, the two calls every
 backend's learner has. `gradient_step` runs backward, global-norm clipping and the
@@ -27,7 +27,6 @@ from manabot.infra.profiler import Profiler
 if TYPE_CHECKING:
     # Annotations only: the update step and EMA serve any model, so importing
     # them loads neither the player's network nor the training configuration.
-    from manabot.backends.torch.policy import ActorCritic
     from manabot.policy.checkpoint import ParameterArrays
     from manabot.training.regime import Precision
 
@@ -223,7 +222,7 @@ class Learner:
 
     def __init__(
         self,
-        agent: "ActorCritic",
+        agent: nn.Module,
         device: torch.device | str,
         *,
         minibatch_rows: int,

@@ -172,6 +172,20 @@ while drafting remains in progress. Construction still uses the existing Limited
 rules and free basics. For the complete unscored draft/build demo and the planned
 reward comparison, see [TLA Rotisserie](../experiments/tla-rotisserie.md).
 
+## Learning public drafting and construction
+
+`TrainRotisserie` in `manabot.training.regime` trains a separate random draft
+policy through the maintained executor and Learner. Both phases use shared
+`Prepared` inputs: `DraftPrepared` carries native card ids, exact legal masks,
+public supply and chooser-relative pools, position, and only the chooser's
+partial construction. `GamePrepared` retains the ordinary game input contract.
+
+Terminal signed rewards credit only the owning learner seat's picks and build
+additions. Incomplete reward bundles provide no gradient; other seats and the
+frozen game player never enter the draft optimizer. Draft artifacts have their
+own loader and bind catalog and printing identities. The [experiment guide](../experiments/tla-rotisserie.md)
+describes the controlled proof and the compatible-player requirement.
+
 ## The TLA pool corpus
 
 Restore the frozen corpus from the repository root:

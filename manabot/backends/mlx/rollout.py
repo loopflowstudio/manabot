@@ -15,7 +15,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from manabot.backends.mlx.policy import MLXActorCritic
-from manabot.policy.prepare import Prepared
+from manabot.policy.prepare import GamePrepared as Prepared
 
 if TYPE_CHECKING:
     from manabot.training.rollout.actions import ActionRows
