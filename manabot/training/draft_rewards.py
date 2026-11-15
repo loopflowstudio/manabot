@@ -69,9 +69,12 @@ class RewardResult(StrictModel):
 class RewardBatch:
     results: tuple[RewardResult, ...]
     rewards: dict[str, float | None]
-    stopped: bool
     stop_reason: str | None = None
     timed_out: bool = False
+
+    @property
+    def stopped(self) -> bool:
+        return self.stop_reason is not None
 
 
 def _append(path: Path, row: dict[str, object]) -> None:
@@ -205,14 +208,12 @@ def score_schedule(
     atomic_json(out / "schedule.json", [s.model_dump(mode="json") for s in samples])
     ledger = ledger or GameErrorLedger(out / "game-errors.jsonl", policy)
     results: list[RewardResult] = []
-    stopped = False
     stop_reason = None
     timed_out = False
     for sample in samples:
         try:
             check()
         except Exception as error:
-            stopped = True
             timed_out = isinstance(error, TimeoutError)
             stop_reason = f"{type(error).__name__}: {error}"
             break
@@ -238,7 +239,6 @@ def score_schedule(
             out / "events.jsonl", {"event": "settled", **result.model_dump(mode="json")}
         )
         if result.status in ("infrastructure", "deadline") or ledger.state.stop_reason:
-            stopped = True
             timed_out = result.status == "deadline"
             stop_reason = f"sample {sample.id}: {result.status}: {game.get('failure') or ledger.state.stop_reason}"
             break
@@ -251,6 +251,7 @@ def score_schedule(
             if len(rows) == len(ids) and all(r.value is not None for r in rows)
             else None
         )
+    batch = RewardBatch(tuple(results), rewards, stop_reason, timed_out)
     atomic_json(
         out / "receipt.json",
         {
@@ -260,13 +261,13 @@ def score_schedule(
             "completed_games": sum(r.status == "completed" for r in results),
             "opening_scores": sum(r.status == "scored" for r in results),
             "failed_or_unavailable": sum(r.value is None for r in results),
-            "stopped": stopped,
+            "stopped": batch.stopped,
             "stop_reason": stop_reason,
             "timed_out": timed_out,
             "rewards": rewards,
         },
     )
-    return RewardBatch(tuple(results), rewards, stopped, stop_reason, timed_out)
+    return batch
 
 
 class FrozenRewardRunner:

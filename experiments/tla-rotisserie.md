@@ -101,6 +101,15 @@ samples per arm, and 96 evaluation games: 112 complete games and 16 opening
 scores total. The observed range suggests roughly 16–38 minutes; 30 minutes
 still does not guarantee completion. This test player establishes no strength.
 
+2026-11-14 software check of that default (`--updates 1 --seconds 1800`), with
+a fresh non-competent world-bound test checkpoint trained on current source
+(load average 160–240 on 16 CPUs): it completed in 996 seconds wall time. The
+value update took 19 seconds (16 openings) and the game update 130 seconds
+(16 games). All 96 evaluation games completed, with no failures or missing
+games, at about 8 seconds per game (15 seconds at most). Checkpoints that
+predate the 2026-11-14 record-vocabulary additions on main fail the maintained
+loader's state-dict shape check. This is not a playing-strength result.
+
 Value runs first with at most half the wall time remaining after admission;
 game receives the remaining time, including unused value time. An arm timeout
 retains its interrupted record and permits the next arm to start. Infrastructure

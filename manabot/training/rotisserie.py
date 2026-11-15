@@ -297,18 +297,20 @@ def train_rotisserie(
     )
     plans = _schedule(stage, seed)
     atomic_json(out / "schedule.json", [plan.model_dump(mode="json") for plan in plans])
-    for update in range(stage.updates + 1):
+
+    def save_policy(update: int) -> None:
         target = out / f"update-{update:04d}.pt"
         backend.draft.save(target, policy)
         backend.draft.load(target, binding=catalog.binding, cards=catalog.cards)
         artifact(f"draft-update-{update}", target)
-        if update == stage.updates:
-            break
+
+    save_policy(0)
+    for update in range(1, stage.updates + 1):
         collection_started = perf_counter()
         trajectories, rewards = [], []
         environment_decisions = 0
         reward_results = []
-        for plan in (plan for plan in plans if plan.update == update + 1):
+        for plan in (plan for plan in plans if plan.update == update):
             roles = plan.roles
             frozen = [seat for seat, role in enumerate(roles) if role != "learner"]
             actors = [
@@ -368,7 +370,7 @@ def train_rotisserie(
         if loss is not None:
             history = deepcopy(policy).eval().requires_grad_(False)
         row: DraftUpdate = {
-            "update": update + 1,
+            "update": update,
             "loss": loss,
             "valid_trajectories": sum(r is not None for r in rewards),
             "learner_decisions": sum(len(t.actions) for t in trajectories),
@@ -397,8 +399,9 @@ def train_rotisserie(
             "parent_cpu_seconds": process_time() - cpu_started,
             "wall_seconds": perf_counter() - started,
         }
-        atomic_json(out / f"update-{update + 1:04d}.json", row)
+        atomic_json(out / f"update-{update:04d}.json", row)
         progress(row)
+        save_policy(update)
 
     if stage.evaluate:
         for update in range(0 if stage.evaluate_initial else 1, stage.updates + 1):

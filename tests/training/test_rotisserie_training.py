@@ -221,9 +221,14 @@ def test_fixed_reference_evaluation_crosses_draft_and_game_seats(
     assert all(r["value"] == 1 and r["opening"] == -0.25 for r in rows)
 
 
-@pytest.mark.parametrize("evaluation_deadline", [False, True])
+@pytest.mark.parametrize(
+    "updates,evaluation_deadline", [(1, False), (2, False), (1, True)]
+)
 def test_regime_executes_draft_update_with_controlled_rewards(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, evaluation_deadline: bool
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    updates: int,
+    evaluation_deadline: bool,
 ) -> None:
 
     torch.set_num_threads(1)
@@ -261,7 +266,7 @@ def test_regime_executes_draft_update_with_controlled_rewards(
         seats=2,
         picks_per_seat=1,
         drafts_per_update=1,
-        updates=1,
+        updates=updates,
         evaluate=evaluation_deadline,
         execution=Execution(wall_seconds=60, threads=1),
     )
@@ -287,9 +292,11 @@ def test_regime_executes_draft_update_with_controlled_rewards(
         == record.status
         == ("interrupted" if evaluation_deadline else "completed")
     )
-    assert record.updates == record.optimizer_updates == 1
-    assert record.optimizer_exposures == record.learner_transitions == 41
-    assert set(record.artifacts) == {"draft-update-0", "draft-update-1"}
+    assert record.updates == record.optimizer_updates == updates
+    assert record.optimizer_exposures == record.learner_transitions == 41 * updates
+    assert set(record.artifacts) == {
+        f"draft-update-{update}" for update in range(updates + 1)
+    }
     assert result.selected_artifact is None  # Draft artifacts are not game players.
     assert result.metrics_run
     # Every return is +1, but the first update had no earlier batch to subtract.
