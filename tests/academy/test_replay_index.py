@@ -482,8 +482,8 @@ def test_recording_rejects_a_missing_legacy_board() -> None:
 
 
 def test_recording_index_keeps_seat_two_checkpoint_provenance_private_path_out(
-    monkeypatch, tmp_path
-):
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     payload = _terminal_recording()
     payload.pop("canonical_replay")
     opponent = {"name": "learner-8", "sha256": "ab" * 32, "producer": "manabot"}
