@@ -9,6 +9,7 @@ test('unauthorized session history explains access and offers to leave the sessi
   await expect(alert).toContainText('browser and address (including port) where you played');
   await expect(alert).toContainText('credentials were cleared');
   await expect(alert.getByRole('button', { name: 'Try again' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Session results' })).toHaveCount(0);
   await alert.getByRole('link', { name: 'Browse games outside this session' }).click();
   await expect(page).toHaveURL(/\/games\?q=Passive$/);
   await expect(alert).toHaveCount(0);
@@ -23,6 +24,7 @@ test('temporary session history failure retains retry and recovers authorized re
   await page.goto('/games?session=retry-session');
   await expect(page.getByRole('alert')).toContainText('Session history could not be loaded.');
   await expect(page.getByRole('alert')).not.toContainText('credentials');
+  await expect(page.getByRole('region', { name: 'Session results' })).toHaveCount(0);
   unavailable = false;
   await page.getByRole('button', { name: 'Try again', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Session results' })).toContainText('2 completed');
@@ -32,11 +34,12 @@ test('temporary session history failure retains retry and recovers authorized re
 test('session history pagination denial gives the same access guidance', async ({ page }) => {
   await page.route('**/api/play-sessions/paged-session*', route => route.fulfill(new URL(route.request().url()).searchParams.has('result_offset')
     ? { status: 403, json: { detail: 'Session not owned' } }
-    : { json: { results: [], totals: [], next_result_offset: 100 } }));
+    : { json: { results: [], totals: [{ origin: 'human', status: 'completed', count: 3 }], next_result_offset: 100 } }));
   await page.route('**/api/traces?**', route => route.fulfill({ json: [] }));
   await page.goto('/games?session=paged-session');
   await page.getByRole('button', { name: 'More result configurations' }).click();
   await expect(page.getByRole('alert')).toContainText('Copying the link does not copy access');
+  await expect(page.getByRole('region', { name: 'Session results' })).toContainText('human: 3 completed');
   await expect(page.getByRole('alert').getByRole('button', { name: 'Try again' })).toHaveCount(0);
 });
 

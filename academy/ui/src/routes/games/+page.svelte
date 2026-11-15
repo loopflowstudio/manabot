@@ -161,7 +161,7 @@
   </header>
 
   <GameFileImport onOpen={id => void goto(`/replay?trace=${encodeURIComponent(id)}&from=${encodeURIComponent(page.url.pathname + page.url.search)}`)} />
-  {#if page.url.searchParams.has('session')}
+  {#if page.url.searchParams.has('session') && !(error && !sessionTotals.length && !sessionResults.length)}
     <section aria-label="Session results" class="mb-5 border-y border-line py-3">
       <h2 class="type-title text-xl">Session results</h2>
       <p class="text-sm text-ink-2">Each configuration counts every matching game across history pages. Counts describe recordings, not playing strength. Origins stay separate.</p>
