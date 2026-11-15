@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 import torch
 
+from manabot.backends import resolve
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.experiment.checkpoint_evaluation import stage_checkpoint
@@ -76,7 +77,9 @@ def recipe(updates: int) -> TrainingRegime:
 @pytest.fixture
 def producer(tmp_path: Path) -> TrainingRun:
     with VerifyStore(tmp_path / "training.sqlite") as store:
-        return execution.execute_regime(recipe(2), 197, tmp_path / "producer", store)
+        return execution.execute_regime(
+            recipe(2), 197, tmp_path / "producer", store, backend=resolve("torch")
+        )
 
 
 def continuation(parent: TrainingRun, export: Path, endpoint: int) -> TrainingRegime:
@@ -107,7 +110,9 @@ def test_segments_keep_adam_ema_and_absolute_coordinates(
     assert isinstance(stage, TrainSelfPlay)
     admitted_dir = tmp_path / "admission"
     admitted_dir.mkdir()
-    admitted = admit_learning_state(stage, recipe, admitted_dir)
+    admitted = admit_learning_state(
+        stage, recipe, admitted_dir, backend=resolve("torch")
+    )
     for role, agent in (("raw", admitted.raw), ("ema", admitted.ema)):
         payload = read_checkpoint(producer.stages[0].artifacts[role]["path"])
         # Use ordinary reader state to avoid coupling to checkpoint wire keys.
@@ -119,7 +124,7 @@ def test_segments_keep_adam_ema_and_absolute_coordinates(
         assert payload["bc"]["weights"] == role
     initial_steps = [s["step"].item() for s in admitted.optimizer["state"].values()]
     assert initial_steps and min(initial_steps) > 0
-    original_update_ema = execution.update_ema
+    original_update_ema = resolve("torch").learner.update_ema
     observed_ema_updates = 0
 
     def checked_ema(averaged: ActorCritic, learner: ActorCritic, rate: float) -> None:
@@ -135,16 +140,22 @@ def test_segments_keep_adam_ema_and_absolute_coordinates(
         original_update_ema(averaged, learner, rate)
         observed_ema_updates += 1
 
-    monkeypatch.setattr(execution, "update_ema", checked_ema)
+    monkeypatch.setattr(resolve("torch").learner, "update_ema", checked_ema)
     with VerifyStore(tmp_path / "training.sqlite") as store:
         second = execution.execute_regime(
-            recipe, 197, tmp_path / "second", store, checkpoint_seconds=1e9
+            recipe,
+            197,
+            tmp_path / "second",
+            store,
+            checkpoint_seconds=1e9,
+            backend=resolve("torch"),
         )
         third = execution.execute_regime(
             continuation(second, tmp_path / "second/run.json", 5),
             197,
             tmp_path / "third",
             store,
+            backend=resolve("torch"),
         )
     assert second.status == third.status == "completed"
     assert observed_ema_updates == 3
@@ -220,12 +231,15 @@ def test_a_deck_source_run_continues_from_its_final_exports(tmp_path: Path) -> N
     )
     regime = TrainingRegime.model_validate(regime.model_dump(mode="json"))
     with VerifyStore(tmp_path / "training.sqlite") as store:
-        parent = execution.execute_regime(regime, 197, tmp_path / "parent", store)
+        parent = execution.execute_regime(
+            regime, 197, tmp_path / "parent", store, backend=resolve("torch")
+        )
         child = execution.execute_regime(
             continuation(parent, tmp_path / "parent/run.json", 3),
             197,
             tmp_path / "child",
             store,
+            backend=resolve("torch"),
         )
     assert parent.status == child.status == "completed"
     assert child.updates_through() == 3
@@ -274,7 +288,9 @@ def test_rejects_incomplete_or_mismatched_learning_state(
         spec.source_run = reference(tmp_path / "producer/run.json")
     with VerifyStore(tmp_path / "training.sqlite") as store:
         with pytest.raises((ValueError, FileNotFoundError)):
-            execution.execute_regime(recipe, 197, tmp_path / "rejected", store)
+            execution.execute_regime(
+                recipe, 197, tmp_path / "rejected", store, backend=resolve("torch")
+            )
     failed = TrainingRun.model_validate_json(
         (tmp_path / "rejected/run.json").read_text()
     )
@@ -308,7 +324,7 @@ def test_historical_wire_digest_and_next_iteration(
     assert isinstance(stage, TrainSelfPlay)
     out = tmp_path / "admit"
     out.mkdir()
-    state = admit_learning_state(stage, recipe, out)
+    state = admit_learning_state(stage, recipe, out, backend=resolve("torch"))
     assert state.origin.iteration == 26000
     assert stage.learning.rates(state.origin.iteration + 1) == pytest.approx(
         (6.957944302072213e-6, 0.0023684978179155515)
@@ -327,7 +343,12 @@ def interrupted(tmp_path: Path) -> TrainingRun:
     """
     with VerifyStore(tmp_path / "interrupted.sqlite") as store:
         execution.execute_regime(
-            recipe(3), 197, tmp_path / "interrupted", store, checkpoint_updates=1
+            recipe(3),
+            197,
+            tmp_path / "interrupted",
+            store,
+            checkpoint_updates=1,
+            backend=resolve("torch"),
         )
     export = tmp_path / "interrupted/run.json"
     payload = json.loads(export.read_text())
@@ -365,7 +386,7 @@ def test_raw_only_import_resets_ema_and_adam_at_the_monitoring_export(
     assert receipt.artifact is not None
     expected, _ = load_checkpoint(receipt.artifact["path"])
     seeded: list[dict[str, torch.Tensor]] = []
-    original_update_ema = execution.update_ema
+    original_update_ema = resolve("torch").learner.update_ema
 
     def checked_ema(averaged: ActorCritic, learner: ActorCritic, rate: float) -> None:
         if not seeded:
@@ -374,9 +395,11 @@ def test_raw_only_import_resets_ema_and_adam_at_the_monitoring_export(
             )
         original_update_ema(averaged, learner, rate)
 
-    monkeypatch.setattr(execution, "update_ema", checked_ema)
+    monkeypatch.setattr(resolve("torch").learner, "update_ema", checked_ema)
     with VerifyStore(tmp_path / "training.sqlite") as store:
-        run = execution.execute_regime(continued, 197, tmp_path / "continued", store)
+        run = execution.execute_regime(
+            continued, 197, tmp_path / "continued", store, backend=resolve("torch")
+        )
     assert run.status == "completed" and run.updates_through() == 4
     # The EMA starts as the monitoring export's raw weights.
     for key, value in expected.state_dict().items():
@@ -428,7 +451,7 @@ def test_raw_only_import_requires_the_declared_monitoring_export(
     out = tmp_path / "admit"
     out.mkdir()
     with pytest.raises(ValueError):
-        admit_learning_state(stage, continued, out)
+        admit_learning_state(stage, continued, out, backend=resolve("torch"))
 
 
 def test_wall_bounded_stage_pauses_with_learner_state_a_successor_continues(
@@ -440,7 +463,12 @@ def test_wall_bounded_stage_pauses_with_learner_state_a_successor_continues(
     reserve = watchdog - 1e-3
     with VerifyStore(tmp_path / "training.sqlite") as store:
         run = execution.execute_regime(
-            bounded, 197, tmp_path / "bounded", store, stop_reserve_seconds=reserve
+            bounded,
+            197,
+            tmp_path / "bounded",
+            store,
+            stop_reserve_seconds=reserve,
+            backend=resolve("torch"),
         )
         record = run.stages[0]
         assert run.status == record.status == "paused"
@@ -452,6 +480,7 @@ def test_wall_bounded_stage_pauses_with_learner_state_a_successor_continues(
             197,
             tmp_path / "successor",
             store,
+            backend=resolve("torch"),
         )
     assert successor.status == "completed" and successor.updates_through() == 3
     with pytest.raises(ValueError, match="wall-bounded"):
@@ -462,4 +491,5 @@ def test_wall_bounded_stage_pauses_with_learner_state_a_successor_continues(
                 tmp_path / "refused",
                 store,
                 stop_reserve_seconds=watchdog,
+                backend=resolve("torch"),
             )

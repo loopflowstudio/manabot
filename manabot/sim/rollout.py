@@ -122,7 +122,7 @@ class RandomBatchController:
 # -----------------------------------------------------------------------------
 
 
-def _allocate_buffers(obs_space: ObservationSpace, n: int) -> dict[str, np.ndarray]:
+def allocate_buffers(obs_space: ObservationSpace, n: int) -> dict[str, np.ndarray]:
     buffers = obs_space.encoder.allocate(n)
     buffers.update(
         rewards=np.zeros((n,), dtype=np.float64),
@@ -171,7 +171,7 @@ def run_vector_games(
         skip_trivial=True,
         player_policies=("agent", "agent"),
     )
-    buffers = _allocate_buffers(obs_space, num_streams)
+    buffers = allocate_buffers(obs_space, num_streams)
     env.set_buffers(buffers)
     env.reset_all_into_buffers(match.to_rust())
 
@@ -304,7 +304,7 @@ class PolicyRolloutMCPlayer:
         self._capacity = (
             self._obs_space.encoder.max_actions * self.worlds * self.rollouts
         )
-        self._buffers = _allocate_buffers(self._obs_space, self._capacity)
+        self._buffers = allocate_buffers(self._obs_space, self._capacity)
 
     def act(self, env: Env, obs: ObservationBuffers) -> int:
         validate_agent_setup(getattr(self.sampler, "agent", None), env.match.to_rust())

@@ -17,6 +17,9 @@ from torch import nn
 
 from experiments.elemental_variants import elemental_recipe
 from manabot.backends.torch._semantic_cards import SemanticCardEncoder
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.learner import forward_precision
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.env.match import Match, Reward
@@ -100,6 +103,7 @@ def test_cuda_semantic_policy_admission(declared: Literal["float32", "bf16"]) ->
         seed=26400,
         opponent_mode="self",
         recovery_max_microsteps=10000,
+        numerics=TorchCollectionSession(device="cpu", seed=26400, precision="float32"),
     )
     try:
         host = collector._slice_obs_rows(np.arange(2))

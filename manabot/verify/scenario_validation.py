@@ -141,7 +141,7 @@ class _Hero:
         return len(actions) - 1
 
 
-def _outcome(
+def scenario_outcome(
     scenario: Scenario,
     raw: managym.Observation,
     reference: bool,
@@ -228,7 +228,9 @@ def _run_line(
         creatures_at_cast = 0
         while steps < max_steps:
             raw = env.last_raw_obs
-            resolved = _outcome(scenario, raw, reference, cast, creatures_at_cast)
+            resolved = scenario_outcome(
+                scenario, raw, reference, cast, creatures_at_cast
+            )
             if resolved is not None:
                 expected, outcome = resolved
                 return ScenarioLineEvidence(

@@ -18,7 +18,7 @@ from manabot.infra.config import MatchConfig
 from manabot.sim.execution import EvalAllocation, EvalExecution
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.replay import read_trace, replay_prefix
-from manabot.sim.serving import PolicyStore, _infer
+from manabot.sim.serving import PolicyStore, infer_requests
 from manabot.sim.serving_protocol import DecisionRequest, PolicyAdmission, PolicyKey
 
 if TYPE_CHECKING:
@@ -226,7 +226,9 @@ def _retained(
                             "same-device retained-input outputs changed between passes"
                         )
 
-                _infer(store, requests, f"{pass_index}-{batch_index}", witness=witness)
+                infer_requests(
+                    store, requests, f"{pass_index}-{batch_index}", witness=witness
+                )
             _write(
                 out / f"pass-{pass_index}.json",
                 {

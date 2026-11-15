@@ -22,9 +22,10 @@ from etude.launch.records import Job
 from pydantic import BaseModel, Field
 
 from experiments.elemental_grid import DECKS, PACK
+from manabot.backends import resolve
 from manabot.infra.artifacts import StoredArtifact, split_bucket_uri
 from manabot.infra.config import MatchConfig
-from manabot.verify.llm_game import GameConfig, GameSummary, _write
+from manabot.verify.llm_game import GameConfig, GameSummary, write_payload
 
 CHECKPOINT_SHA256 = "4f2ad656ba036a33d527212a7ac2badf2c5b9db136916f730846b07eef2fbea4"
 CHECKPOINT_BYTES = 1071166
@@ -110,11 +111,11 @@ def worker(config: Campaign, out: Path) -> None:
     started = time.monotonic()
     deadline = started + config.seconds
     games = schedule(config)
-    _write(
+    write_payload(
         out / "schedule.json",
         json.dumps([g.model_dump(mode="json") for g in games], indent=2),
     )
-    _write(
+    write_payload(
         out / "games.json",
         json.dumps(
             {
@@ -128,11 +129,12 @@ def worker(config: Campaign, out: Path) -> None:
         Path(os.environ["ETUDE_INPUTS_DIR"]) / "checkpoint.pt",
         CHECKPOINT_SHA256,
         CHECKPOINT_BYTES,
+        backend=resolve("torch"),
     )
     inference = InferenceConfig.model_validate_json(INFERENCE.read_text())
     results: list[GameResult] = []
     session = InferenceSession(inference, load_seconds=300)
-    _write(
+    write_payload(
         out / "readiness.json",
         json.dumps(
             {
@@ -164,15 +166,18 @@ def worker(config: Campaign, out: Path) -> None:
                     session,
                     opponent=opponent,
                     progress_path=out / "progress.json",
+                    backend=resolve("torch"),
                 )
             except Exception as error:
                 summary = GameSummary(
                     mode="qwen-v-checkpoint", failure=f"{type(error).__name__}: {error}"
                 )
                 record.mkdir(parents=True, exist_ok=True)
-                _write(record / "summary.json", summary.model_dump_json(indent=2))
+                write_payload(
+                    record / "summary.json", summary.model_dump_json(indent=2)
+                )
             results.append(GameResult(game=game, summary=summary))
-            _write(
+            write_payload(
                 out / "results.json",
                 json.dumps([r.model_dump(mode="json") for r in results], indent=2),
             )
@@ -188,7 +193,7 @@ def worker(config: Campaign, out: Path) -> None:
     finally:
         session.close()
         collect(out)
-        _write(
+        write_payload(
             out / "campaign.json",
             json.dumps(
                 {
@@ -215,7 +220,7 @@ def supervise(config: Campaign, *, worker_module: str) -> None:
     out = Path(os.environ["ETUDE_OUTPUT_DIR"])
     out.mkdir(parents=True, exist_ok=True)
     config_path = out / "campaign-config.json"
-    _write(config_path, config.model_dump_json(indent=2))
+    write_payload(config_path, config.model_dump_json(indent=2))
     sampler = subprocess.Popen(
         [
             "nvidia-smi",
@@ -261,7 +266,7 @@ def supervise(config: Campaign, *, worker_module: str) -> None:
         sampler.terminate()
         sampler.wait(timeout=10)
         collect(out)
-        _write(
+        write_payload(
             out / "supervision.json",
             json.dumps({"timed_out": timed_out, "returncode": child.returncode}),
         )

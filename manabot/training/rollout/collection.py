@@ -30,12 +30,7 @@ import time
 from typing import Any, Literal, TypedDict
 
 import numpy as np
-import torch
 
-from manabot.backends.torch.arrays import array_fields
-from manabot.backends.torch.learner import forward_precision
-from manabot.backends.torch.policy import ActorCritic, PolicyInference
-from manabot.backends.torch.rl import NumericalError, policy_logs, require
 from manabot.env.failures import CapturedVector
 from manabot.env.match import Match, Reward
 from manabot.env.observation import (
@@ -47,14 +42,14 @@ from manabot.env.observation import (
 from manabot.infra.config import MatchConfig
 from manabot.infra.profiler import Profiler
 from manabot.policy.buckets import AXES
-from manabot.policy.prepare import Prepared
+from manabot.policy.protocol import BackendPolicy
 from manabot.sim.rollout import (
     BatchedSampler,
     RandomBatchController,
-    _allocate_buffers,
+    allocate_buffers,
 )
 from manabot.training.decks import UniformDecks, pair_match
-from manabot.training.regime import BatchClosure, Precision
+from manabot.training.regime import BatchClosure
 from manabot.training.rollout.actions import ACTION_FIELDS, ActionRows, PackedActions
 from manabot.training.rollout.adaptive import (
     AdaptiveConfig,
@@ -72,6 +67,7 @@ from manabot.training.rollout.matchups import (
     elemental_roster,
     stream_matches,
 )
+from manabot.training.rollout.numerics import CollectionScope, CollectionSession
 from manabot.training.rollout.producers import ShardedVectorEnv
 from manabot.training.rollout.self_play import SelfPlayCounter
 from manabot.training.state.game_errors import (
@@ -352,7 +348,7 @@ class CollectorSnapshot:
 
     journal: list[tuple[list[int], list[bool]]]
     buffers: dict[str, np.ndarray]
-    sampling_rng: torch.Tensor
+    sampling_rng: object
     stats: CollectorStats
     current_games: CurrentGames | None = None
     adaptive: AdaptiveSnapshot | None = None
@@ -379,13 +375,13 @@ class SeatRoutedCollector:
         reward: Reward,
         *,
         num_envs: int,
+        numerics: CollectionSession,
         seed: int = 0,
         opponent_mode: str = "random",
-        opponent_agent: ActorCritic | None = None,
+        opponent_agent: BackendPolicy | None = None,
         learning_seats: Literal["one", "both"] | None = None,
         batch_closure: BatchClosure = "complete-games",
         games_per_stream: int | None = None,
-        device: str = "cpu",
         recovery_max_microsteps: int | None = None,
         recovery_max_game_microsteps: int | None = None,
         root: str | None = None,
@@ -394,7 +390,6 @@ class SeatRoutedCollector:
         workers: int = 1,
         game_errors: GameErrorPolicy | None = None,
         record_attempt: Callable[[GameAttempt], GameErrorState] | None = None,
-        precision: Precision = "float32",
         adaptive: AdaptiveConfig | None = None,
     ) -> None:
         if adaptive is not None and (
@@ -492,8 +487,7 @@ class SeatRoutedCollector:
         self.batch_closure = batch_closure
         self.games_per_stream = games_per_stream
         self.opponent_agent = opponent_agent
-        self.device = torch.device(device)
-        self.precision: Precision = precision
+        self.numerics = numerics
         self.stats = CollectorStats()
         if game_errors is not None and (
             record_attempt is None
@@ -542,7 +536,7 @@ class SeatRoutedCollector:
                 raise ValueError("unsupported training root or root recovery")
             self._env = TargetPracticeVector(observation_space, match, num_envs, seed)
         try:
-            self._buffers = _allocate_buffers(observation_space, num_envs)
+            self._buffers = allocate_buffers(observation_space, num_envs)
             self._env.set_buffers(
                 self._buffers,
                 action_overflow=observation_space.encoder.config.action_overflow,
@@ -598,11 +592,13 @@ class SeatRoutedCollector:
                 self._opponent: Any = RandomBatchController(seed=seed + 1)
             elif opponent_mode == "frozen":
                 self._opponent = BatchedSampler(
-                    opponent_agent, deterministic=False, seed=seed + 1, device=device
+                    opponent_agent,
+                    deterministic=False,
+                    seed=seed + 1,
+                    device=self.numerics.device_name,
                 )
             else:  # self-play: live learner weights, bound at collect() time
                 self._opponent = None
-            self._self_rng = torch.Generator(device=self.device).manual_seed(seed + 1)
 
             self._win_reward = float(reward.config.win_reward)
             self._lose_reward = float(reward.config.lose_reward)
@@ -628,7 +624,7 @@ class SeatRoutedCollector:
         return CollectorSnapshot(
             deepcopy(self._journal),
             {key: value.copy() for key, value in self._buffers.items()},
-            self._self_rng.get_state().clone(),
+            self.numerics.snapshot_rng(),
             deepcopy(self.stats),
             CurrentGames(self._env.current_game_seeds(), deepcopy(self._game_actions))
             if self._game_recovery_limit is not None
@@ -714,7 +710,7 @@ class SeatRoutedCollector:
             if not np.array_equal(self._buffers[key], expected):
                 raise ValueError(f"collector replay diverged: {key}")
         self._journal = deepcopy(state.journal)
-        self._self_rng.set_state(state.sampling_rng)
+        self.numerics.restore_rng(state.sampling_rng)
         self.stats = deepcopy(state.stats)
         self._refresh_roots(np.arange(self.num_envs))
         # Pre-instrumentation snapshots have no outcome counters to recover.
@@ -771,33 +767,11 @@ class SeatRoutedCollector:
     # -- opponent routing -----------------------------------------------------
 
     def _opponent_actions(
-        self, agent: ActorCritic, rows: np.ndarray, inference: PolicyInference
+        self, rows: np.ndarray, inference: CollectionScope
     ) -> np.ndarray:
         if self.opponent_mode == "self":
-            obs = inference.prepare(self._slice_obs_rows(rows))
-            with torch.inference_mode():
-                with forward_precision(self.precision, self.device):
-                    logits, _ = agent.forward(obs)
-                logits = logits.float()
-                probs = self._policy_logs(logits, obs).exp()
-                actions = torch.multinomial(probs, 1, generator=self._self_rng).squeeze(
-                    -1
-                )
-            return actions.cpu().numpy().astype(np.int64)
+            return inference.opponent_actions(self._slice_obs_rows(rows))
         return self._opponent.select(self._buffers, rows)
-
-    @staticmethod
-    def _policy_logs(logits: torch.Tensor, obs: Prepared[torch.Tensor]) -> torch.Tensor:
-        try:
-            return policy_logs(logits, obs.legal)
-        except NumericalError as error:
-            error.tensors.update(
-                {
-                    f"observation/{key}": value.detach()
-                    for key, value in array_fields(obs, torch.Tensor).items()
-                }
-            )
-            raise
 
     def _slice_obs_rows(self, rows: np.ndarray) -> ObservationBuffers:
         """Host observation rows with the training action-focus dtype."""
@@ -822,7 +796,7 @@ class SeatRoutedCollector:
 
     def collect(
         self,
-        agent: ActorCritic,
+        agent: BackendPolicy,
         num_steps: int,
         *,
         deadline_monotonic: float | None = None,
@@ -841,9 +815,8 @@ class SeatRoutedCollector:
             raise ValueError("use collect_pair for two learning models")
         # No cache or prepared observation survives learning, snapshot or restore.
         # Both seats in self-play use this same unchanged behavior-policy scope.
-        with self.profiler.track("Collection"), PolicyInference(agent) as inference:
+        with self.profiler.track("Collection"), self.numerics.scope(agent) as inference:
             batch = self._collect(
-                agent,
                 num_steps,
                 inference,
                 deadline_monotonic=deadline_monotonic,
@@ -854,7 +827,7 @@ class SeatRoutedCollector:
 
     def collect_pair(
         self,
-        agent: ActorCritic,
+        agent: BackendPolicy,
         num_steps: int,
         *,
         deadline_monotonic: float | None = None,
@@ -867,11 +840,10 @@ class SeatRoutedCollector:
             raise ValueError("use self mode for a shared learning model")
         with (
             self.profiler.track("Collection"),
-            PolicyInference(agent) as inference,
-            PolicyInference(self.opponent_agent) as opponent_inference,
+            self.numerics.scope(agent) as inference,
+            self.numerics.scope(self.opponent_agent) as opponent_inference,
         ):
             batches = self._collect(
-                agent,
                 num_steps,
                 inference,
                 deadline_monotonic=deadline_monotonic,
@@ -883,24 +855,14 @@ class SeatRoutedCollector:
 
     def _collect(
         self,
-        agent: ActorCritic,
         num_steps: int,
-        inference: PolicyInference,
+        inference: CollectionScope,
         *,
         deadline_monotonic: float | None,
         check: Callable[[], None] | None,
-        opponent_inference: PolicyInference | None = None,
+        opponent_inference: CollectionScope | None = None,
     ) -> RolloutBatch | tuple[RolloutBatch, RolloutBatch]:
 
-        for scope in (inference, opponent_inference):
-            if scope is not None and (
-                scope.device.type != self.device.type
-                or (
-                    self.device.index is not None
-                    and scope.device.index != self.device.index
-                )
-            ):
-                raise ValueError("collector and inference policy devices differ")
         if self._needs_assignment or self._results:
             raise ValueError("commit adaptive targets before the next collection")
         start = time.perf_counter()
@@ -988,7 +950,7 @@ class SeatRoutedCollector:
                 opp_rows = np.array([], dtype=np.int64)
             if len(learner_rows):
                 actions[learner_rows] = self._sample_learning_rows(
-                    agent, learner_rows, acting, inference
+                    learner_rows, acting, inference
                 )
                 self._count_action_types(
                     self.stats.learner_action_types, learner_rows, actions[learner_rows]
@@ -997,15 +959,12 @@ class SeatRoutedCollector:
             if len(opp_rows):
                 with self.profiler.track("Opponent policy"):
                     if self.opponent_mode == "learning":
-                        assert (
-                            self.opponent_agent is not None
-                            and opponent_inference is not None
-                        )
+                        assert opponent_inference is not None
                         opp_acts = self._sample_learning_rows(
-                            self.opponent_agent, opp_rows, acting, opponent_inference
+                            opp_rows, acting, opponent_inference
                         )
                     else:
-                        opp_acts = self._opponent_actions(agent, opp_rows, inference)
+                        opp_acts = self._opponent_actions(opp_rows, inference)
                 actions[opp_rows] = opp_acts
                 if not both:
                     self.stats.opponent_decisions += len(opp_rows)
@@ -1428,48 +1387,14 @@ class SeatRoutedCollector:
 
     def _sample_learning_rows(
         self,
-        agent: ActorCritic,
         rows: np.ndarray,
         acting: np.ndarray,
-        inference: PolicyInference,
+        inference: CollectionScope,
     ) -> np.ndarray:
-        with self.profiler.track("Observation preparation"):
-            obs_t = inference.prepare(self._slice_obs_rows(rows))
-        with self.profiler.track("Policy inference and action selection"):
-            with torch.no_grad():
-                outcomes: np.ndarray | None = None
-                with forward_precision(self.precision, self.device):
-                    if agent.config.value_kind == "categorical_wdl":
-                        logits, value_t = agent.forward_distribution(obs_t)
-                    else:
-                        logits, value_t = agent(obs_t)
-                logits, value_t = logits.float(), value_t.float()
-                if agent.config.value_kind == "categorical_wdl":
-                    outcome_t = value_t.softmax(dim=-1)
-                    value_t = outcome_t[:, 2] - outcome_t[:, 0]
-                    outcomes = outcome_t.cpu().numpy()
-                logs = self._policy_logs(logits, obs_t)
-                require(
-                    torch.isfinite(value_t),
-                    "nonfinite_collection_values",
-                    values=value_t,
-                    valid=obs_t.legal,
-                )
-                weights = logs.exp()
-                action_t = torch.multinomial(
-                    weights, 1, generator=self._self_rng
-                ).squeeze(-1)
-                logprob_t = logs.gather(-1, action_t[:, None]).squeeze(-1)
-                log_probabilities = logs.cpu().numpy()
-            acts = action_t.cpu().numpy().astype(np.int64)
-            logprobs = logprob_t.cpu().numpy()
-            values = value_t.view(-1).cpu().numpy()
+        sampled = inference.sample(self._slice_obs_rows(rows), self.profiler)
+        acts, logprobs, values = sampled.actions, sampled.logprobs, sampled.values
+        outcomes, needs = sampled.outcomes, sampled.needs
         with self.profiler.track("Rollout recording"):
-            needs = (
-                None
-                if obs_t.bucket_needs is None
-                else np.asarray(obs_t.bucket_needs, dtype=np.int64)
-            )
             first = self._observations.append(rows, needs)
             packed = PackedActions.pack(
                 {
@@ -1477,7 +1402,8 @@ class SeatRoutedCollector:
                     for key in ACTION_FIELDS
                     if key in self._buffers
                 },
-                log_probabilities,
+                sampled.log_probabilities,
+                validator=self.numerics,
             )
             for j, row in enumerate(rows):
                 slot = (

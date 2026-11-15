@@ -6,6 +6,7 @@ from typing import Literal
 from pydantic import ValidationError
 import pytest
 
+from manabot.backends import resolve
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
@@ -243,10 +244,12 @@ def test_frozen_opponent_runs_the_stage_setting(
         learners.append((bucketed_shapes, live_tokens))
         raise _Built
 
-    monkeypatch.setattr(execution, "load_checkpoint", load)
-    monkeypatch.setattr(execution, "ActorCritic", build)
+    monkeypatch.setattr(resolve("torch"), "load_policy", load)
+    monkeypatch.setattr(resolve("torch").runtime, "create_policy", build)
     with VerifyStore(tmp_path / "training.sqlite") as store:
         with pytest.raises(_Built):
-            execution.execute_regime(regime, 41, tmp_path / "run", store)
+            execution.execute_regime(
+                regime, 41, tmp_path / "run", store, backend=resolve("torch")
+            )
     assert opponents == [(True, False)]
     assert learners == [(True, False)]

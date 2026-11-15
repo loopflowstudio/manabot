@@ -17,6 +17,9 @@ import torch
 
 from experiments import learning_signal, value_readout_252
 from experiments.learning_signal import ELEMENTAL_PAIRS
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
@@ -228,6 +231,9 @@ def test_pairings_depend_on_the_run_seed_not_the_arm() -> None:
             opponent_mode="self",
             learning_seats="both",
             matchup_curriculum="elemental-uniform",
+            numerics=TorchCollectionSession(
+                device="cpu", seed=25201 + 10000, precision="float32"
+            ),
         )
         for _ in range(4):
             games = collector.stats.games_by_stream

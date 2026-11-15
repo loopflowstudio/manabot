@@ -9,12 +9,11 @@ import hashlib
 from pathlib import Path
 
 from pydantic import BaseModel
-import torch
 
-from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.belief.protocol import SamplerBackend
 from manabot.model.world import validate_agent_setup
 from manabot.semantic.text_observation import TextDecision
-from manabot.verify.util import _select_agent_action
+from manabot.verify.util import select_agent_action
 import managym
 
 
@@ -32,9 +31,15 @@ class CheckpointIdentity(BaseModel):
 
 class CheckpointOpponent:
     def __init__(
-        self, path: Path, players: list[managym.PlayerConfig], seed: int
+        self,
+        path: Path,
+        players: list[managym.PlayerConfig],
+        seed: int,
+        *,
+        backend: SamplerBackend,
     ) -> None:
-        self.agent, self.space = load_checkpoint(str(path))
+        self.backend = backend
+        self.agent, self.space = backend.load_policy(str(path))
         if self.agent.belief_count_buckets:
             raise ValueError("text-game opponent requires an ordinary flat policy")
         validate_agent_setup(self.agent, players)
@@ -42,7 +47,7 @@ class CheckpointOpponent:
             path=str(path.resolve()),
             sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
             size_bytes=path.stat().st_size,
-            parameters=sum(p.numel() for p in self.agent.parameters()),
+            parameters=self.agent.parameter_count,
             policy_input_version=self.space.encoder.config.policy_input_version,
             policy_history_version=self.space.encoder.config.policy_history_version,
             seed=seed,
@@ -54,9 +59,10 @@ class CheckpointOpponent:
         if len(raw.action_space.actions) != len(decision.actions):
             raise ValueError("policy action space differs from the captured decision")
         obs = self.space.encode(raw)
-        with torch.random.fork_rng(devices=[]), torch.inference_mode():
-            torch.manual_seed(self.identity.seed + self.decisions)
-            index = _select_agent_action(self.agent, obs, deterministic=False)
+        with self.backend.seeded_inference(
+            self.identity.seed + self.decisions, cpu_only=True
+        ):
+            index = select_agent_action(self.agent, obs, deterministic=False)
         if not 0 <= index < len(decision.actions):
             raise ValueError("policy selected an unavailable action")
         self.decisions += 1

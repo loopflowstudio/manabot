@@ -7,6 +7,7 @@ from typing import Literal
 import pytest
 import torch
 
+from manabot.backends import resolve
 from manabot.backends.torch.checkpoint import save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.sampling_data import read_dataset
@@ -143,7 +144,9 @@ def test_saved_policy_consumers_and_costs(
         ]
     )
     with VerifyStore(tmp_path / "store.sqlite") as store:
-        run = execute_regime(recipe, 112, tmp_path / "run", store)
+        run = execute_regime(
+            recipe, 112, tmp_path / "run", store, backend=resolve("torch")
+        )
         assert run.status == "completed", run.error
         assert store.training_run(run.id) == run
     admission = run.stages[0]
@@ -230,7 +233,9 @@ def test_rejects_and_persists_failed_admission(
         stage.source_run = reference(export)
     with VerifyStore(tmp_path / "store.sqlite") as store:
         with pytest.raises((ValueError, FileNotFoundError)):
-            execute_regime(recipe, 112, tmp_path / "run", store)
+            execute_regime(
+                recipe, 112, tmp_path / "run", store, backend=resolve("torch")
+            )
         run = TrainingRun.model_validate_json((tmp_path / "run/run.json").read_text())
         assert run.status == "failed"
         assert match in (run.error or "")
@@ -280,7 +285,9 @@ def test_original_wire_digest_precedes_default_normalization(tmp_path: Path) -> 
         != source["regime_digest"]
     )
     with VerifyStore(tmp_path / "store.sqlite") as store:
-        run = execute_regime(recipe, 112, tmp_path / "run", store)
+        run = execute_regime(
+            recipe, 112, tmp_path / "run", store, backend=resolve("torch")
+        )
     assert run.status == "completed", run.error
 
 
@@ -311,7 +318,9 @@ def test_nested_producer_cost_cannot_be_lost(tmp_path: Path) -> None:
     stage.source_run = reference(export)
     with VerifyStore(tmp_path / "store.sqlite") as store:
         with pytest.raises(ValueError, match="nested published producer costs"):
-            execute_regime(recipe, 112, tmp_path / "run", store)
+            execute_regime(
+                recipe, 112, tmp_path / "run", store, backend=resolve("torch")
+            )
     run = TrainingRun.model_validate_json((tmp_path / "run/run.json").read_text())
     assert run.status == "failed"
     assert "nested published producer costs" in (run.error or "")

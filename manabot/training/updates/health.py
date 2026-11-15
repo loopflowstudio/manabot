@@ -13,34 +13,12 @@ from typing import Any, TypedDict
 
 import numpy as np
 from numpy.typing import NDArray
-import torch
-from torch import Tensor, nn
 
-import manabot.backends.torch as torch_backend
-from manabot.backends.torch.rl import float64_operand
 from manabot.infra.profiler import Profiler
 from manabot.training.rollout.actions import PackedActions
 from manabot.training.updates.backend import UpdateBackend
 
 HEALTH_INTERVAL = 25
-# ActorCritic parameter prefixes that only the critic output reads, in every
-# value aggregation.
-_CRITIC_READOUT = ("value_head.", "value_readout.")
-# The value token is an unmasked key in object attention, so actor logits read
-# it too: its gradient mixes policy and value loss and is reported on its own.
-_VALUE_TOKEN = "value_token"
-
-
-def _norm(tensors: list[Tensor]) -> float:
-    if not tensors:
-        return 0.0
-    return float(
-        torch.stack(
-            [float64_operand(t.detach()).double().square().sum() for t in tensors]
-        )
-        .sum()
-        .sqrt()
-    )
 
 
 class NumericalHealth(TypedDict, total=False):
@@ -114,10 +92,9 @@ class OptimizerHealth:
 
     `check` rejects a detached or nonfinite objective; it waits for the loss on
     the device, so a caller timing its forward pass ends that timer there.
-    `backend` is the module whose learner steps (`manabot.backends.torch` when
-    omitted): its `learner.check_objective` and `rl.NumericalError` are the
-    check and the refusal counted. The gradient and parameter samples read
-    torch modules; a backend whose step takes none leaves them absent.
+    `backend` supplies the objective check and numerical refusal type. Its
+    learner measures gradients and parameter changes; a backend whose step
+    takes no samples leaves that detail absent.
     With a profiler, `gradient_step` times backward and the optimizer step
     separately; each ends at a finite check that already waits for the device,
     so timing adds no synchronization.
@@ -131,8 +108,9 @@ class OptimizerHealth:
         iteration: int,
         profiler: Profiler | None = None,
         *,
-        backend: UpdateBackend = torch_backend,
+        backend: UpdateBackend,
     ) -> None:
+        self._measurements = backend.learner
         self.health = health
         self._check_objective: Callable[[Any], None] = backend.learner.check_objective
         self._refusal: type[Exception] = backend.rl.NumericalError
@@ -161,75 +139,21 @@ class OptimizerHealth:
         """Whether the coming step is this iteration's detailed sample."""
         return self.measure and not self.health["sampled_steps"]
 
-    def before_clip(self, model: nn.Module) -> None:
-        """Read the critic's pre-clip gradient norms (`critic_gradient_norms`)."""
-        self._critic_norms = critic_gradient_norms(model)
+    def before_clip(self, model: Any) -> None:
+        self._critic_norms = self._measurements.critic_gradient_norms(model)
 
-    def record_gradients(self, model: nn.Module, norm_before: Tensor) -> None:
-        """After clipping, on a sampled step that `before_clip` already read."""
+    def record_gradients(self, model: Any, norm_before: Any) -> None:
         if self._critic_norms is None:
             raise RuntimeError("record_gradients requires before_clip first")
-        critic_norm, token_norm = self._critic_norms
-        self._critic_norms = None
-        parameters = list(model.parameters())
-        grads = [p.grad for p in parameters if p.grad is not None]
         self.health.update(
-            sampled_steps=1,
-            gradient_norm_before=float(norm_before),
-            gradient_norm_after=_norm(grads),
-            gradient_norm_critic_readout=critic_norm,
-            gradient_missing_tensors=sum(
-                p.requires_grad and p.grad is None for p in parameters
-            ),
-            gradient_zero_tensors=sum(not bool(g.any()) for g in grads),
-            gradient_nonzero_tensors=sum(bool(g.any()) for g in grads),
-            frozen_parameter_tensors=sum(not p.requires_grad for p in parameters),
+            self._measurements.gradient_health(model, norm_before, self._critic_norms)
         )
-        if token_norm is not None:
-            self.health["gradient_norm_value_token"] = token_norm
+        self._critic_norms = None
 
-    def record_step(self, parameters: list[nn.Parameter], before: list[Tensor]) -> None:
-        """Count a completed step; `before` is empty unless this step is sampled."""
+    def record_step(self, parameters: list[Any], before: list[Any]) -> None:
         self.health["optimizer_steps"] += 1
-        if not before:
-            return
-        delta = (
-            torch.stack(
-                [
-                    (float64_operand(p.detach()).double() - float64_operand(b).double())
-                    .square()
-                    .sum()
-                    for p, b in zip(parameters, before, strict=True)
-                ]
-            )
-            .sum()
-            .sqrt()
-        )
-        scale = (
-            torch.stack([float64_operand(b).double().square().sum() for b in before])
-            .sum()
-            .sqrt()
-        )
-        self.health["parameter_delta_l2"] = float(delta)
-        self.health["parameter_relative_delta"] = (
-            float(delta / scale) if scale > 0 else float(delta)
-        )
-
-
-def critic_gradient_norms(model: nn.Module) -> tuple[float, float | None]:
-    """Pre-clip norms of the critic-only readout and, if present, the value token."""
-    named = dict(model.named_parameters())
-    critic = _norm(
-        [
-            p.grad
-            for name, p in named.items()
-            if p.grad is not None and name.startswith(_CRITIC_READOUT)
-        ]
-    )
-    token = named.get(_VALUE_TOKEN)
-    if token is None:
-        return critic, None
-    return critic, _norm([] if token.grad is None else [token.grad])
+        if before:
+            self.health.update(self._measurements.parameter_health(parameters, before))
 
 
 @contextmanager

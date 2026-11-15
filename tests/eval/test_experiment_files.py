@@ -26,6 +26,7 @@ from experiments.elemental_long_eval import (
     EvalState,
     units,
 )
+from manabot.backends import resolve
 from manabot.experiment.job import TrainingJob
 from manabot.infra.config import MatchConfig
 from manabot.training.execution import execute_regime
@@ -106,7 +107,12 @@ def test_a_tracked_self_play_run_draws_every_named_metric(
     )
     with VerifyStore(tmp_path / "store.sqlite") as store:
         run = execute_regime(
-            regime, 17, tmp_path / "run", store, experiment="seat_comparison"
+            regime,
+            17,
+            tmp_path / "run",
+            store,
+            experiment="seat_comparison",
+            backend=resolve("torch"),
         )
     record = run.stages[0]
 
