@@ -145,7 +145,12 @@ def _choice(name: ChoiceName) -> NativeChoice:
             env.scenario_force_battlefield(0, "Forest", ready=True)
         raw = env.scenario_refresh()
         raw, _, _, _, _ = env.step(
-            _indices(raw, managym.ActionEnum.PRIORITY_ACTIVATE_ABILITY)[0]
+            next(
+                i
+                for i, action in enumerate(raw.action_space.actions)
+                if action.action_type == managym.ActionEnum.PRIORITY_ACTIVATE_ABILITY
+                and action.ability_index == 0
+            )
         )
         assert raw.action_space.action_space_type == managym.ActionSpaceEnum.WATERBEND
         taps = _indices(raw, managym.ActionEnum.TAP_FOR_COST)

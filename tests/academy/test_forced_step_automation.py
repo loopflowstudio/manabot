@@ -30,7 +30,7 @@ def test_forced_decisions_never_surface(
     session = GameSession(tmp_path, capture_authority_evidence=True)
     session.new_game(
         {
-            "hero_deck": {"Mountain": 14, "Gray Ogre": 8},
+            "hero_deck": {"Plains": 14, "Savannah Lions": 8},
             "villain_deck": {"Island": 20},
             "villain_type": "passive",
             "seed": 3,
@@ -45,11 +45,19 @@ def test_forced_decisions_never_surface(
         if frame.prompt is None:
             break
         assert len(frame.offers) > 1
+        # Pay the one-mana creature's cost so its tapped land leaves forced
+        # priority passes. Untapped sources deliberately remain real choices.
         offer = next(
             (
                 row
+                for kind in (
+                    "PRIORITY_PLAY_LAND",
+                    "PRIORITY_CAST_SPELL",
+                    "PAY_COST",
+                    "PRIORITY_PASS_PRIORITY",
+                )
                 for row in frame.offers
-                if row.action_type in {"PRIORITY_PLAY_LAND", "PRIORITY_CAST_SPELL"}
+                if row.action_type == kind
             ),
             frame.offers[0],
         )

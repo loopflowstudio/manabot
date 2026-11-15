@@ -93,12 +93,14 @@ def test_independent_policies_watch_both_seats_and_cleanup(
     assert all(factory.sessions[0].seen for factory in (first, second))
     game = server.SESSION_REGISTRY[created["id"]].game
     before = game.revision
+    assert game.obs is not None
+    chooser = int(game.obs.agent.player_index)
     first.sessions[0].stale = second.sessions[0].stale = True
     with pytest.raises(HTTPException) as refused:
         step_watch(created["id"], created["token"], before)
     assert refused.value.status_code == 422
     assert refused.value.detail == (
-        "Seat 1 policy could not choose: Policy returned a stale decision binding."
+        f"Seat {chooser + 1} policy could not choose: Policy returned a stale decision binding."
     )
     assert game.revision == before
     server._drop_session(created["id"], "test")

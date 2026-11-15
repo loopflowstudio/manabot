@@ -10,9 +10,6 @@ from dataclasses import asdict
 import json
 from pathlib import Path
 
-from managym.decision import Observation, SemanticContractError, apply_semantic_command
-from managym.decision_capture import CardReference, DecisionInput
-
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from manabot.semantic.text_observation import (
     ResponseProtocolError,
@@ -23,6 +20,8 @@ from manabot.semantic.text_observation import (
     submit_response,
 )
 import managym
+from managym.decision import Observation, SemanticContractError, apply_semantic_command
+from managym.decision_capture import CardReference, DecisionInput
 
 
 def priority_root(
@@ -146,7 +145,7 @@ def native_fixtures() -> dict[str, managym.Env]:
     _choose(mana_payment, "cast")
     _choose(mana_payment, "choose_target")
     mana_color = mana_payment.clone_env()
-    _choose(mana_color, "activate_ability")
+    _choose(mana_color, "activate_ability", focus_name="Prophetic Prism")
     alternative = priority_root(
         ("Deadly Precision",), ("Swamp",) * 5 + ("Gray Ogre", "Gray Ogre")
     )

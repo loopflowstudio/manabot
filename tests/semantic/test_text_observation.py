@@ -14,6 +14,7 @@ from manabot.env.observation import (
 )
 from manabot.infra.config import ObservationConfig
 from manabot.managym.experience_projection import decision_surface_view
+from manabot.semantic.decision_contract import SemanticDecisionContract
 from manabot.semantic.text_observation import (
     _OBLIGATIONS,
     RepresentationOverflow,
@@ -28,6 +29,11 @@ from manabot.verify.text_observation import collision_branches, priority_root, r
 import managym
 from managym.decision import SemanticContractError
 from managym.decision_capture import DecisionInput
+
+
+def _pay_cost(env: managym.Env) -> None:
+    contract = SemanticDecisionContract.from_env(env)
+    contract.apply(env, contract.frame.find_verb("pay_cost")["id"])
 
 
 def test_every_native_decision_code_has_a_label() -> None:
@@ -192,6 +198,7 @@ def test_stack_text_uses_exact_native_links_over_frozen_card_ids() -> None:
     _, env = collision_branches()
     decision = capture_text_decision(env)
     submit_response(env, decision, "A0")
+    _pay_cost(env)
     payload = json.loads(capture_text_decision(env).capture_json)
     assert payload["frames"][0]["kind"] == 1
     target = payload["frames"][0]["targets"][0]["reference"]
@@ -215,7 +222,9 @@ def test_stack_text_uses_exact_native_links_over_frozen_card_ids() -> None:
 
 def test_ally_restricted_mana_is_not_described_as_lesson_mana() -> None:
     env = priority_root((), ("Jasmine Dragon Tea Shop",))
-    submit_response(env, capture_text_decision(env), "A0")
+    activation = capture_text_decision(env)
+    restricted = next(a for a in activation.actions if "; ability 1" in a.description)
+    submit_response(env, activation, restricted.reference)
     modes = capture_text_decision(env)
     green = next(a for a in modes.actions if "Add {G}" in a.description)
     submit_response(env, modes, green.reference)
@@ -357,6 +366,7 @@ def test_effect_derived_characteristics_appear_only_when_present() -> None:
 def test_stack_text_states_announced_x_only_when_present() -> None:
     _, env = collision_branches()
     submit_response(env, capture_text_decision(env), "A0")
+    _pay_cost(env)
     decision = capture_text_decision(env)
     assert "X = " not in decision.text
     payload = json.loads(decision.capture_json)
@@ -370,6 +380,7 @@ def test_stack_text_states_announced_x_only_when_present() -> None:
 def test_stack_text_states_granted_spell_keywords_only_when_present() -> None:
     _, env = collision_branches()
     submit_response(env, capture_text_decision(env), "A0")
+    _pay_cost(env)
     decision = capture_text_decision(env)
     assert "granted keywords" not in decision.text
     payload = json.loads(decision.capture_json)
@@ -413,15 +424,27 @@ def test_foretell_is_an_ability_offer_naming_the_card() -> None:
     actions = capture_text_decision(env).text.split("Legal actions:\n", 1)[1]
     assert actions.splitlines() == [
         "A0 — Cast C1 (Sozin's Comet).",
-        "A1 — Activate ability of C1 (Sozin's Comet). Native description:"
+        *[
+            f"A{index} — Activate ability of P{index} (Mountain). Native description:"
+            " Tap Mountain for {R} (commits mana activation)."
+            for index in range(1, 7)
+        ],
+        "A7 — Activate ability of C1 (Sozin's Comet). Native description:"
         " Foretell Sozin's Comet.",
-        "A2 — Pass priority.",
+        "A8 — Pass priority.",
     ]
     _foretell(env)
     decision = capture_text_decision(env)
     assert "; zone exile; " in _card_line(decision.text, "C1")
     assert "; foretold, face down" in _card_line(decision.text, "C1")
-    assert [a.description for a in decision.actions] == ["Pass priority"]
+    assert [a.description for a in decision.actions] == [
+        *[
+            f"Activate ability of P{index} (Mountain). Native description:"
+            " Tap Mountain for {R} (commits mana activation)"
+            for index in range(3, 7)
+        ],
+        "Pass priority",
+    ]
 
 
 def test_a_foretold_card_is_cast_from_exile_on_a_later_turn() -> None:
@@ -454,6 +477,7 @@ def test_an_ally_is_cast_from_the_visible_top_of_the_library() -> None:
     assert decision.actions[0].description == "Cast C1 (Hakoda, Selfless Commander)"
     assert "; zone library; " in _card_line(decision.text, "C1")
     submit_response(env, decision, decision.actions[0].reference)
+    _pay_cost(env)
     stack = capture_text_decision(env).text.split(
         "Stack (native order, top to bottom):\n", 1
     )[1]

@@ -137,6 +137,8 @@ def test_stack_targets_remain_distinct_after_the_same_committed_cost() -> None:
     for env in branches:
         contract = SemanticDecisionContract.from_env(env)
         contract.apply(env, contract.frame.find_verb("select_card")["id"])
+        contract = SemanticDecisionContract.from_env(env)
+        contract.apply(env, contract.frame.find_verb("pay_cost")["id"])
     observations = [
         env.observation_for_player(env.current_agent_index()) for env in branches
     ]

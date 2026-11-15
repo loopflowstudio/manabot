@@ -54,7 +54,8 @@ def test_heuristic_scores_only_retained_legal_offers(tmp_path: Path) -> None:
                 engine.scenario_force_battlefield(actor, "Mountain")
             raw = env._last_obs = engine.scenario_refresh()
             obs = space.encoder.encode(raw)
-            assert len(raw.action_space.actions) == 67
+            # 66 casts, six deliberate source activations, and Pass priority.
+            assert len(raw.action_space.actions) == 73
             assert obs["actions_valid"].sum() == 64
             frame = json.loads(engine.semantic_decision_frame_json())
             before = engine.state_digest()
@@ -69,7 +70,7 @@ def test_heuristic_scores_only_retained_legal_offers(tmp_path: Path) -> None:
             assert cards[raw.action_space.actions[retained].focus[0]] == "Hill Giant"
             assert engine.state_digest() == before
             assert json.loads(engine.semantic_decision_frame_json()) == frame
-            assert len(env.last_raw_obs.action_space.actions) == 67
+            assert len(env.last_raw_obs.action_space.actions) == 73
             # Execute the exact retained offer, without clamping or remapping.
             decision = DecisionFrame.from_json(engine.semantic_decision_frame_json())
             command = Command(
@@ -84,7 +85,7 @@ def test_heuristic_scores_only_retained_legal_offers(tmp_path: Path) -> None:
     (path,) = tmp_path.glob("action-cutoff-*.json")
     report = json.loads(path.read_bytes())
     assert report["counts_by_kind"] == {
-        "Priority": {"decisions": 1, "overflows": 1, "dropped_actions": 3}
+        "Priority": {"decisions": 1, "overflows": 1, "dropped_actions": 9}
     }
     assert report["samples"][0]["game"]["actor"] == actor
 

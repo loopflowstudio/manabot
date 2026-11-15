@@ -5,6 +5,7 @@ import torch
 
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.policy.prepare import OBJECT_VALIDITY_KEYS
+import managym
 from tests.model.prepared_routes import device_input, host_inputs
 from tests.model.test_inference import PolicyFixture, _policy
 
@@ -29,12 +30,23 @@ def _pair(
     return padded, live
 
 
-def _later_decisions(case: PolicyFixture) -> dict[str, torch.Tensor]:
-    """Decisions from played turns, so boards hold different object counts."""
-    batch = case.collector.collect(case.agent, 24)
+def _different_boards(case: PolicyFixture) -> dict[str, torch.Tensor]:
+    """Native positions with known object counts, independent of policy choices."""
+    env = managym.Env(seed=23)
+    env.reset(
+        [
+            managym.PlayerConfig(name, {"Mountain": 20, "Gray Ogre": 20})
+            for name in ("a", "b")
+        ]
+    )
+    space = case.agent.observation_space
+    rows = [space.encode(env.scenario_refresh())]
+    for _ in range(7):
+        env.scenario_force_battlefield(0, "Gray Ogre", ready=True)
+        rows.append(space.encode(env.scenario_refresh()))
     return {
-        key: torch.from_numpy(value[-8:, 0]).float()
-        for key, value in batch.observations().observation.items()
+        key: torch.stack([torch.from_numpy(row[key]).float() for row in rows])
+        for key in rows[0]
     }
 
 
@@ -47,7 +59,10 @@ def test_outputs_and_gradients_match_padded(
 ) -> None:
     torch.manual_seed(319)
     case = _policy()
-    obs = _later_decisions(case)
+    try:
+        obs = _different_boards(case)
+    finally:
+        case.collector.close()
     valid = sum(
         obs[key].sum(1) for key in ("agent_cards_valid", "agent_permanents_valid")
     )

@@ -44,9 +44,33 @@ def test_native_default_never_surfaces_a_forced_decision() -> None:
 
 def test_vector_default_skips_forced_decisions() -> None:
     vector = managym.VectorEnv(1, seed=3)
-    vector.reset_all([managym.PlayerConfig(name, _deck()) for name in ("a", "b")])
+    # A one-mana cast taps the only source and leaves forced priority passes;
+    # action zero alone may instead keep opening deliberate mana activations.
+    (initial,) = vector.reset_all(
+        [
+            managym.PlayerConfig(name, {"Plains": 14, "Savannah Lions": 8})
+            for name in ("a", "b")
+        ]
+    )
+    obs, _ = initial
     for _ in range(50):
-        vector.step([0])
+        assert len(obs.action_space.actions) > 1
+        action = next(
+            (
+                index
+                for kind in (
+                    managym.ActionEnum.PRIORITY_PLAY_LAND,
+                    managym.ActionEnum.PRIORITY_CAST_SPELL,
+                    managym.ActionEnum.PAY_COST,
+                    managym.ActionEnum.PRIORITY_PASS_PRIORITY,
+                )
+                for index, choice in enumerate(obs.action_space.actions)
+                if choice.action_type == kind
+            ),
+            0,
+        )
+        (result,) = vector.step([action])
+        obs = result[0]
     assert sum(vector.skip_trivial_counts()) > 0
 
 

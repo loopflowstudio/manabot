@@ -81,6 +81,20 @@ class NativeOutcome:
     opponent_permanent_definitions: list[int]
 
 
+def _pay_announced_cost(
+    env: managym.Env, raw: managym.Observation
+) -> managym.Observation:
+    """Commit the fixed-source payment in these one-mana outcome probes."""
+    payment = next(
+        i
+        for i, action in enumerate(raw.action_space.actions)
+        if action.action_type == managym.ActionEnum.PAY_COST
+    )
+    paid, _, done, _, _ = env.step(payment)
+    assert not done
+    return paid
+
+
 def _resolved_outcomes(
     env: managym.Env, raw: managym.Observation, kind: Family, candidates: list[int]
 ) -> list[NativeOutcome]:
@@ -89,6 +103,7 @@ def _resolved_outcomes(
         branch = env.clone_env()
         current, _, done, _, _ = branch.step(index)
         if kind in {"target", "mode", "ability"}:
+            current = _pay_announced_cost(branch, current)
             for _ in range(2):
                 passing = next(
                     i
@@ -196,6 +211,7 @@ def decision_case(
             current, _, _, _, _ = branch.step(index)
             # Spell modes are announced before payment and priority; their
             # consequences arrive after both players pass on the stack.
+            current = _pay_announced_cost(branch, current)
             for _ in range(2):
                 passing = next(
                     i

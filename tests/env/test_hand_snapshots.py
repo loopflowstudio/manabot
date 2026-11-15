@@ -242,12 +242,15 @@ def test_hand_snapshots_return_an_empty_hand_after_its_last_card_is_played() -> 
     )
     [(obs, _, terminated, truncated, _)] = vector.step([action])
     assert not terminated and not truncated
+    # The untapped Mountain offers a real source decision before the opponent
+    # draws; playing the last card no longer forces priority to the other seat.
+    assert obs.agent.player_index == 0
     scalar.step(action)
     assert vector.hand_snapshots([0])[0].cards == scalar.hand_snapshot(0).cards == {}
     assert (
         vector.hand_snapshots([1])[0].cards
         == scalar.hand_snapshot(1).cards
-        == {"Island": 8}
+        == {"Island": 7}
     )
 
 
