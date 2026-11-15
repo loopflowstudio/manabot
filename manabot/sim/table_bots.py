@@ -75,10 +75,12 @@ class CheckpointVillain:
         encoded = space.encode(obs)
         import torch
 
-        from manabot.verify.util import _tensor_observation
+        from manabot.backends.torch.arrays import device_of, on_device
+        from manabot.verify.util import prepare_observation
 
         with torch.no_grad():
-            logits, value = self.agent(_tensor_observation(self.agent, encoded))
+            prepared = prepare_observation(self.agent, encoded)
+            logits, value = self.agent(on_device(prepared, device_of(self.agent)))
             distribution = torch.distributions.Categorical(logits=logits)
             action = int(
                 (
