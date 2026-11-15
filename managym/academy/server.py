@@ -6,6 +6,7 @@ FastAPI server for interactive managym play over WebSocket.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterable
 from contextlib import suppress
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field, replace
@@ -17,6 +18,7 @@ from pathlib import Path
 import secrets
 import sqlite3
 from typing import Any, Callable, Literal
+import warnings
 
 from fastapi import (
     FastAPI,
@@ -62,6 +64,7 @@ from managym.experience_projection import (
     redact_observation,
     serialize_observation,
 )
+from managym.policy import PolicyRunner
 
 from . import trace as trace_store, villain as villain_module
 from .advice import (
@@ -84,6 +87,7 @@ from .opponent import (
     Opponent,
     catalog_opponent,
     opponent_catalog,
+    policy_registry,
 )
 from .presentation import PresentationProjector
 from .replay_index import (
@@ -198,7 +202,7 @@ CLOSED_DECK_NAME = "Closed decklist"
 DEFAULT_DECK = INTERACTIVE_DECK
 
 MAX_AUTOPLAY_STEPS = 1024
-VILLAIN_TYPES = {"passive", "random", "search", "checkpoint"}
+VILLAIN_TYPES = {"passive", "random", "search", "policy"}
 MAX_ACCEPTED_COMMANDS = 64
 MAX_PRESENTATION_EVENTS = 256
 MAX_UINT64 = 2**64 - 1
@@ -634,46 +638,11 @@ def _select_opponent(sha256: Any) -> Opponent:
     """
 
     if not isinstance(sha256, str):
-        raise ValueError("opponent_sha256 must name a trained checkpoint digest.")
+        raise ValueError("opponent_sha256 must name a registered policy identity.")
     opponent = catalog_opponent(sha256)
     if opponent is None:
         raise ValueError("The selected opponent is no longer available.")
     return opponent
-
-
-def _deck_label(setup: dict) -> str:
-    for name, deck in NAMED_DECKS.items():
-        if deck == setup.get("deck"):
-            return DECK_DISPLAY_NAMES.get(name, name)
-    return "a custom deck"
-
-
-def _check_opponent_decks(opponent: Opponent, setups: list[dict]) -> None:
-    """Refuse a matchup outside the decks a catalog checkpoint was bound to.
-
-    Seats may swap: the binding is the sorted pair of deck/sideboard setups,
-    so the bot plays either of its decks from either seat.
-    """
-
-    if not opponent.setups:
-        return
-
-    def key(setup: dict) -> str:
-        return json.dumps(setup, sort_keys=True)
-
-    admitted = set(map(key, opponent.setups))
-    roster_match = (
-        len(opponent.setups) > 2
-        and len(setups) == 2
-        and all(key(setup) in admitted for setup in setups)
-    )
-    if not roster_match and sorted(map(key, setups)) != sorted(
-        map(key, opponent.setups)
-    ):
-        trained = " vs ".join(_deck_label(setup) for setup in opponent.setups)
-        raise ValueError(
-            f"{opponent.name} was trained on {trained}; choose those decks to play it."
-        )
 
 
 def _parse_game_config(config: Any) -> GameConfig:
@@ -682,6 +651,13 @@ def _parse_game_config(config: Any) -> GameConfig:
         raise ValueError("new_game.config must be an object.")
 
     villain_type = data.get("villain_type", "search")
+    if villain_type == "checkpoint":
+        warnings.warn(
+            "checkpoint player names are deprecated; use registered policies (removed in 0.4.0)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        villain_type = "policy"
     if villain_type not in VILLAIN_TYPES:
         raise ValueError(
             "villain_type must be one of: " + ", ".join(sorted(VILLAIN_TYPES)) + "."
@@ -782,22 +758,11 @@ def _parse_game_config(config: Any) -> GameConfig:
                 raise ValueError(f"{seat}_sideboard must match the named deck setup")
             sideboards[seat] = sideboard
 
-    villain_checkpoint: str | None = None
-    villain_deterministic = False
     opponent: Opponent | None = None
-    if villain_type == "checkpoint":
+    if villain_type == "policy":
         opponent = _select_opponent(data.get("opponent_sha256"))
-        _check_opponent_decks(
-            opponent,
-            [
-                {"deck": hero_deck, "sideboard": sideboards["hero"]},
-                {"deck": villain_deck, "sideboard": sideboards["villain"]},
-            ],
-        )
-        villain_checkpoint = str(opponent.checkpoint)
-        villain_deterministic = opponent.deterministic
 
-    return GameConfig(
+    parsed = GameConfig(
         **provenance,
         hero_deck=hero_deck,
         villain_deck=villain_deck,
@@ -810,8 +775,6 @@ def _parse_game_config(config: Any) -> GameConfig:
         seed=seed,
         seed_was_requested=seed_value is not None,
         villain_sims=villain_sims,
-        villain_checkpoint=villain_checkpoint,
-        villain_deterministic=villain_deterministic,
         opponent=opponent.identity() if opponent is not None else None,
         opponent_checkpoint=opponent.record() if opponent is not None else None,
         stops=_parse_stops(data.get("stops")),
@@ -819,6 +782,28 @@ def _parse_game_config(config: Any) -> GameConfig:
         auto_pass=_parse_flag(data, "auto_pass", True),
         decklists=decklists,
     )
+    if opponent is not None:
+        policy_registry().admit(opponent.descriptor.id, parsed.to_rust())
+    return parsed
+
+
+def observe_policies(
+    policies: Iterable[BotPolicy | None], env: managym.Env, obs: managym.Observation
+) -> None:
+    """Show each registered policy its own seat's view of the current state."""
+    for policy in policies:
+        if isinstance(policy, PolicyRunner):
+            policy.observe(
+                obs
+                if int(obs.agent.player_index) == policy.seat
+                else env.observation_for_player(policy.seat)
+            )
+
+
+def close_policies(policies: Iterable[BotPolicy | None]) -> None:
+    for policy in policies:
+        if isinstance(policy, PolicyRunner):
+            policy.close()
 
 
 class GameSession:
@@ -955,7 +940,9 @@ class GameSession:
             # priority-stop automation still records its Commands here.
             env = managym.Env(seed=seed)
             obs, _ = env.reset(config.to_rust())
+            observe_policies((policy,), env, obs)
         except BaseException as exc:
+            close_policies((policy,))
             # PyO3's PanicException derives directly from BaseException and has
             # no importable Python class. A failed disposable replacement must
             # not close the existing authority; process interrupts still escape.
@@ -988,6 +975,7 @@ class GameSession:
             self.close(end_reason="new_game")
         self.record_players = players
         self._record_player_owner = self.attempt_owner
+        self._close_policies()
         self.env, self.obs, self.villain_policy = env, obs, policy
         self._demo_name = demo_name
         # A pack identifies both decks, so closed games use the generic identity.
@@ -1528,6 +1516,12 @@ class GameSession:
                 )
             )
 
+        try:
+            self._observe_policies()
+        finally:
+            if next_obs.game_over:
+                self._close_policies()
+
     def _auto_play_villain(self) -> None:
         if self.env is None or self.obs is None or self.trace is None:
             return
@@ -1555,6 +1549,11 @@ class GameSession:
                         self.villain_policy, self.env, self.obs
                     )
                     action_index = self._bot_decision.action
+                except ValueError as exc:
+                    # Validation and provider refusals carry authored reasons.
+                    raise RuntimeError(
+                        f"The opponent could not continue this game: {exc}"
+                    ) from exc
                 except Exception as exc:
                     raise RuntimeError(
                         "The opponent could not continue this game."
@@ -2347,7 +2346,17 @@ class GameSession:
                 attempt.branch.return_to_recorded()
         self._study_attempts = {}
 
+    def _observe_policies(self) -> None:
+        if self.env is not None and self.obs is not None:
+            observe_policies(
+                self.watch_policies or (self.villain_policy,), self.env, self.obs
+            )
+
+    def _close_policies(self) -> None:
+        close_policies((self.villain_policy, *(self.watch_policies or ())))
+
     def close(self, end_reason: str) -> None:
+        self._close_policies()
         self._close_study_attempts()
         self._persist_attempt(end_reason=end_reason)
 
@@ -2951,6 +2960,30 @@ def _dispatch_table_request(
     raise RuntimeError(f"closed dispatch missing handler for {request.type}")
 
 
+def _launch_metadata(launch_id: object) -> dict[str, Any]:
+    """Return setup to the requesting tab even when a known launch is refused."""
+    if not isinstance(launch_id, str) or launch_id not in LAUNCH_CONFIGS:
+        return {}
+    return {
+        "launch": launch_id,
+        "launch_setup": {
+            key: value
+            for key, value in LAUNCH_CONFIGS[launch_id].items()
+            if key != "seed"
+        },
+    }
+
+
+def _request_error(request: object, message: str) -> dict[str, Any]:
+    """An error reply; a refused new game keeps its launch setup for a retry."""
+    error: dict[str, Any] = dict(_error_message(message))
+    if isinstance(request, dict) and request.get("type") == "new_game":
+        config = request.get("config")
+        if isinstance(config, dict):
+            error.update(_launch_metadata(config.get("launch")))
+    return error
+
+
 async def _send_table_response(
     record: SessionRecord,
     initiator: ParticipantLease,
@@ -2971,13 +3004,7 @@ async def _send_table_response(
             watcher_invite=(watcher_invite if recipient is initiator else None),
         )
         if recipient is initiator and response.get("launch") in LAUNCH_CONFIGS:
-            launch_id = response["launch"]
-            payload["launch"] = launch_id
-            payload["launch_setup"] = {
-                key: value
-                for key, value in LAUNCH_CONFIGS[launch_id].items()
-                if key != "seed"
-            }
+            payload.update(_launch_metadata(response["launch"]))
         try:
             await socket.send_json(payload)
         except Exception:
@@ -2997,6 +3024,7 @@ async def play_socket(websocket: WebSocket) -> None:
     await websocket.accept()
     attached_table_id: str | None = None
     attached_viewer_id: str | None = None
+    request: Any = None
 
     try:
         while True:
@@ -3100,7 +3128,7 @@ async def play_socket(websocket: WebSocket) -> None:
                 await websocket.send_json(_control_error(exc))
                 continue
             except ValueError as exc:
-                await websocket.send_json(_error_message(str(exc)))
+                await websocket.send_json(_request_error(request, str(exc)))
                 continue
     except WebSocketDisconnect:
         return
@@ -3108,14 +3136,19 @@ async def play_socket(websocket: WebSocket) -> None:
         message = str(exc)
         if isinstance(exc, sqlite3.Error):
             message = "Game recording failed; this game may not have been saved."
+        error = _request_error(request, message)
         if attached_table_id is not None:
+            # The client must neither resume nor relaunch an ended game.
+            error["session_ended"] = True
             try:
                 _drop_session(attached_table_id, end_reason="error")
             except Exception:
                 logging.getLogger(__name__).exception("Failed to retain stopped game")
-                message = "Game recording failed; this game may not have been saved."
+                error["message"] = (
+                    "Game recording failed; this game may not have been saved."
+                )
         with suppress(Exception):
-            await websocket.send_json(_error_message(message))
+            await websocket.send_json(error)
         with suppress(Exception):
             await websocket.close()
 
@@ -3149,11 +3182,17 @@ def card_image(kind: Literal["art", "full"], slug: str) -> Response:
 
 @app.get("/api/opponents")
 async def get_opponents() -> dict[str, Any]:
-    # Reading checkpoints touches the filesystem and Torch; keep the loop free.
-    catalog = await asyncio.to_thread(opponent_catalog)
-    for entry in catalog["opponents"]:
-        entry["decks"] = [_deck_label(setup) for setup in entry.pop("setups")]
-    return catalog
+    return await asyncio.to_thread(opponent_catalog)
+
+
+@app.post("/api/policies/check")
+def check_policy_setup(config: dict[str, Any]) -> dict[str, str | bool | None]:
+    """Preview admission without loading a session; Start repeats the same checks."""
+    try:
+        _parse_game_config(config)
+    except (ValueError, OSError, ImportError) as exc:
+        return {"compatible": False, "reason": str(exc)}
+    return {"compatible": True, "reason": None}
 
 
 def _record_owners(tokens: str | None) -> set[str]:

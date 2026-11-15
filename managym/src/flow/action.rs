@@ -32,7 +32,11 @@ impl Game {
                     .remaining
                     .iter()
                     .find(|t| t.id == *trigger_id)?;
-                let record = &self.state.objects[trigger.source_object];
+                let face = trigger.source_lki.as_ref().map_or_else(
+                    || self.state.source_base(trigger.source_object()).0,
+                    |lki| lki.definition_id,
+                );
+                let record = self.source_face(trigger.source_object(), face)?;
                 let mut label = format!(
                     "Put on stack next — {}",
                     trigger_description(
@@ -58,7 +62,7 @@ impl Game {
             }
             Action::Foretell {
                 object: object_id, ..
-            } => Some(format!("Foretell {}", self.state.objects[*object_id].name)),
+            } => Some(format!("Foretell {}", self.state[*object_id].name)),
             Action::ChooseMode { mode, .. }
                 if matches!(
                     self.pending_choice,
@@ -78,11 +82,10 @@ impl Game {
                 match &self.state.suspended_decision.as_ref()?.decision {
                     Decision::OrderReplacement { candidates, .. } => {
                         let candidate = candidates.get(*mode)?;
-                        let object_id =
-                            crate::state::game_object::ObjectId::from(candidate.source().entity);
+                        let object_id = candidate.source();
                         Some(format!(
                             "{}: {}",
-                            self.state.objects[object_id].name,
+                            self.state[object_id].name,
                             candidate.description()
                         ))
                     }
@@ -139,7 +142,7 @@ impl Game {
             Action::PayCost { .. } => match &self.pending_choice {
                 Some(PendingChoice::KickerChoice {
                     object: object_id, ..
-                }) if self.state.objects[*object_id].exile_alternative().is_some() => {
+                }) if self.state[*object_id].exile_alternative().is_some() => {
                     Some("Exile a card from your hand instead of paying the mana cost".into())
                 }
                 Some(PendingChoice::SacrificePayment { cost, .. }) => {
@@ -167,42 +170,33 @@ impl Game {
                     self.pending_choice,
                     Some(PendingChoice::ExileFromHandPayment { .. })
                 ) {
-                    Some(format!(
-                        "Exile {} to pay",
-                        self.state.objects[*object_id].name
-                    ))
+                    Some(format!("Exile {} to pay", self.state[*object_id].name))
                 } else if matches!(self.pending_choice, Some(PendingChoice::Crew { .. })) {
-                    Some(format!(
-                        "Tap {} to crew",
-                        self.state.objects[*object_id].name
-                    ))
+                    Some(format!("Tap {} to crew", self.state[*object_id].name))
                 } else if matches!(self.pending_choice, Some(PendingChoice::TapPayment { .. })) {
-                    Some(format!(
-                        "Tap {} to pay",
-                        self.state.objects[*object_id].name
-                    ))
+                    Some(format!("Tap {} to pay", self.state[*object_id].name))
                 } else if matches!(
                     self.pending_choice,
                     Some(PendingChoice::SacrificePayment { .. })
                 ) {
-                    Some(format!("Sacrifice {}", self.state.objects[*object_id].name))
+                    Some(format!("Sacrifice {}", self.state[*object_id].name))
                 } else if let Some(suspended) = &self.state.suspended_decision {
                     match &suspended.decision {
-                        Decision::ManaUpfront { tap_remaining, .. } if *tap_remaining > 0 => Some(
-                            format!("Tap {} to pay", self.state.objects[*object_id].name),
-                        ),
+                        Decision::ManaUpfront { tap_remaining, .. } if *tap_remaining > 0 => {
+                            Some(format!("Tap {} to pay", self.state[*object_id].name))
+                        }
                         Decision::ChooseObject { effect, .. } => Some(format!(
                             "{} {}",
                             choice_verb(effect),
-                            self.state.objects[*object_id].name
+                            self.state[*object_id].name
                         )),
 
                         Decision::SelectCards { .. } => {
-                            Some(format!("Select {}", self.state.objects[*object_id].name))
+                            Some(format!("Select {}", self.state[*object_id].name))
                         }
                         Decision::OrderLibrary { end, .. } => Some(format!(
                             "Put {} next on the {}",
-                            self.state.objects[*object_id].name,
+                            self.state[*object_id].name,
                             match end {
                                 LibraryEnd::Top => "top",
                                 LibraryEnd::Bottom => "bottom",
@@ -210,11 +204,11 @@ impl Game {
                         )),
                         Decision::Surveil { .. } => Some(format!(
                             "Put {} into your graveyard",
-                            self.state.objects[*object_id].name
+                            self.state[*object_id].name
                         )),
                         Decision::SearchNamed { .. } => Some(format!(
                             "Exile {} from {}",
-                            self.state.objects[*object_id].name,
+                            self.state[*object_id].name,
                             self.state
                                 .zones
                                 .zone_of(*object_id)
@@ -223,7 +217,7 @@ impl Game {
                         Decision::DistributeCounters { kind, .. } => Some(format!(
                             "Put a {} counter on {}",
                             counter_description(*kind),
-                            self.state.objects[*object_id].name
+                            self.state[*object_id].name
                         )),
                         _ => None,
                     }
@@ -235,7 +229,7 @@ impl Game {
                 if matches!(
                     &self.pending_choice,
                     Some(PendingChoice::KickerChoice { object: object_id, .. })
-                        if self.state.objects[*object_id].exile_alternative().is_some()
+                        if self.state[*object_id].exile_alternative().is_some()
                 ) =>
             {
                 Some("Pay the mana cost".into())
@@ -376,7 +370,7 @@ impl Game {
                 .filter(|card| self.can_foretell(player, *card))
                 .map(|card| Action::Foretell {
                     player,
-                    object: card.into(),
+                    object: self.state.object_of(card),
                 }),
         );
         actions
@@ -388,7 +382,10 @@ impl Game {
         let mut actions = Vec::new();
         for zone in [ZoneType::Hand, ZoneType::Graveyard] {
             for card in self.state.zone_cards(zone, player) {
-                for ability_index in 0..self.state.objects[card].activated_abilities.len() {
+                for ability_index in 0..self.state[self.state.object_of(card)]
+                    .activated_abilities
+                    .len()
+                {
                     let Some(ability) = self.card_ability_in_zone(player, card, ability_index)
                     else {
                         continue;
@@ -409,7 +406,7 @@ impl Game {
                     {
                         actions.push(Action::ActivateCardAbility {
                             player,
-                            object: card.into(),
+                            object: self.state.object_of(card),
                             ability_index,
                         });
                     }
@@ -420,21 +417,21 @@ impl Game {
     }
 
     fn priority_action_for_card(&self, player: PlayerId, card: CardId) -> Option<Action> {
-        let object = &self.state.objects[card];
-        if !self.may_play_from_zone(player, card) {
+        let object = &self.state[self.state.object_of(card)];
+        if !self.may_play_from_zone(player, self.state.object_of(card)) {
             return None;
         }
         if object.types.is_land() {
             return self.can_play_land(player).then_some(Action::PlayLand {
                 player,
-                object: card.into(),
+                object: self.state.object_of(card),
             });
         }
         if !object.types.is_castable() {
             return None;
         }
 
-        let can_cast_now = if self.has_instant_timing(player, card) {
+        let can_cast_now = if self.has_instant_timing(player, self.state.object_of(card)) {
             self.can_cast_instants(player)
         } else {
             self.can_cast_sorceries(player)
@@ -445,7 +442,7 @@ impl Game {
         self.can_cast_with(player, card, Default::default())
             .then_some(Action::CastSpell {
                 player,
-                object: card.into(),
+                object: self.state.object_of(card),
             })
     }
 
@@ -453,32 +450,37 @@ impl Game {
     /// `player` can pay its total cost with `cast`'s choices. Timing and zone
     /// permission are the caller's.
     pub(crate) fn can_cast_with(&self, player: PlayerId, card: CardId, cast: CastChoices) -> bool {
-        let object = &self.state.objects[card];
-        if object.spell_modes().is_some() && self.legal_spell_modes(player, card).is_empty() {
+        let object = &self.state[self.state.object_of(card)];
+        if object.spell_modes().is_some()
+            && self
+                .legal_spell_modes(player, self.state.object_of(card))
+                .is_empty()
+        {
             return false;
         }
         // Every mandatory targeting requirement needs a legal target.
         for requirement in object.target_requirements() {
             if requirement.min > 0
                 && self
-                    .legal_targets_for_requirement(player, card, &requirement)
+                    .legal_targets_for_requirement(player, self.state.object_of(card), &requirement)
                     .is_empty()
             {
                 return false;
             }
         }
 
-        let Some(cost) = self.effective_spell_cost(player, card, cast, None) else {
+        let Some(cost) = self.effective_spell_cost(player, self.state.object_of(card), cast, None)
+        else {
             return true;
         };
         // Castability gating sees pooled mana too — until-end-of-combat mana
         // (firebending) must make spells castable.
         let Some(additional) = object.sacrifice_cost() else {
-            return self.can_pay_cast(player, card, cast)
+            return self.can_pay_cast(player, self.state.object_of(card), cast)
                 || (object.exile_alternative().is_some()
                     && self.can_pay_cast(
                         player,
-                        card,
+                        self.state.object_of(card),
                         CastChoices {
                             kicked: true,
                             ..cast
@@ -486,7 +488,7 @@ impl Game {
                     ));
         };
         let payment = Payment::Spell {
-            object: card.into(),
+            object: self.state.object_of(card),
             cast,
             mode: None,
             targets: Vec::new(),
@@ -603,7 +605,7 @@ impl Game {
                     .into_iter()
                     .map(|card| Action::SelectCard {
                         player: *player,
-                        object: card.into(),
+                        object: self.state.object_of(card),
                     })
                     .collect(),
                 focus: Vec::new(),
@@ -616,7 +618,7 @@ impl Game {
                     .zone_cards(ZoneType::Hand, *player)
                     .map(|card| Action::SelectCard {
                         player: *player,
-                        object: card.into(),
+                        object: self.state.object_of(card),
                     })
                     .collect(),
                 focus: Vec::new(),
@@ -686,7 +688,7 @@ impl Game {
                         mode,
                     })
                     .collect(),
-                focus: vec![self.state.objects[object].id],
+                focus: vec![self.state[object].id],
             }),
             PendingChoice::AnnounceX {
                 player,
@@ -695,7 +697,7 @@ impl Game {
             } => Some(x_action_space(
                 *player,
                 self.legal_x_values(*player, *object, *cast),
-                vec![self.state.objects[object].id],
+                vec![self.state[object].id],
             )),
             PendingChoice::ActivationX {
                 player,
@@ -716,7 +718,7 @@ impl Game {
                     Action::PayCost { player: *player },
                     Action::Decline { player: *player },
                 ],
-                focus: vec![self.state.objects[object].id],
+                focus: vec![self.state[object].id],
             }),
             PendingChoice::ChooseTargets {
                 player,
@@ -736,7 +738,7 @@ impl Game {
                         target,
                     })
                     .collect();
-                let requirements = self.state.objects[object].target_requirements_for_mode(*mode);
+                let requirements = self.state[object].target_requirements_for_mode(*mode);
                 let chosen_in_req = chosen_req_indices
                     .iter()
                     .filter(|i| **i == *requirement_index)
@@ -752,7 +754,7 @@ impl Game {
                     player: Some(*player),
                     kind: ActionSpaceKind::ChooseTarget,
                     actions,
-                    focus: vec![self.state.objects[object].id],
+                    focus: vec![self.state[object].id],
                 })
             }
             PendingChoice::Waterbend {
@@ -793,7 +795,7 @@ impl Game {
                         .unwrap_or_default(),
                     _ => self
                         .payment_source_object(payment)
-                        .map(|object| vec![self.state.objects[object].id])
+                        .map(|object| vec![self.state[object].id])
                         .unwrap_or_default(),
                 };
                 Some(ActionSpace {
@@ -809,7 +811,7 @@ impl Game {
     /// Narrow untrusted action ids at card-only entry points.
     fn chosen_card(&self, object: ObjectId) -> Result<CardId, AgentError> {
         self.state
-            .card_id(object)
+            .card_of(object)
             .ok_or_else(|| AgentError("choice must name a card".into()))
     }
 
@@ -1039,5 +1041,51 @@ fn choice_verb(effect: &Effect) -> &'static str {
             to: ZoneType::Hand, ..
         } => "Return",
         _ => "Choose",
+    }
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use std::collections::BTreeMap;
+
+    use super::*;
+    use crate::{search_state::witness, state::player::PlayerConfig};
+
+    #[test]
+    fn stale_card_action_cannot_follow_a_card_back_to_hand() {
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("p0", BTreeMap::from([("Mountain".into(), 40)])),
+                PlayerConfig::new("p1", BTreeMap::from([("Island".into(), 40)])),
+            ],
+            400_715,
+            false,
+        );
+        let player = game.active_player();
+        game.state.turn.current_phase = 1;
+        game.state.turn.current_step = 0;
+        let old = game.state.zones.zone_objects(ZoneType::Hand, player)[0];
+        let card = game.state.card_of(old).unwrap();
+        let exiled = game.move_object(old, ZoneType::Exile);
+        let returned = game.move_object(exiled, ZoneType::Hand);
+        let before = witness(&game);
+        assert!(game
+            .execute_action(&Action::PlayLand {
+                player,
+                object: old
+            })
+            .is_err());
+        assert_eq!(witness(&game), before);
+        assert_eq!(game.chosen_card(returned).unwrap(), card);
+        assert!(game
+            .execute_action(&Action::PlayLand {
+                player,
+                object: returned
+            })
+            .is_ok());
+        assert_eq!(
+            game.state.zones.zone_of(game.state.object_of(card)),
+            Some(ZoneType::Battlefield)
+        );
     }
 }

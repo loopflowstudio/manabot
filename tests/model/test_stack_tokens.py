@@ -10,7 +10,7 @@ import torch
 
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import STACK_DEFINITION_INDEX
-from manabot.model.admission import admit_observation
+from tests.model.prepared_routes import device_input
 from tests.model.test_inference import PolicyFixture, _policy
 
 
@@ -54,7 +54,7 @@ def test_bucketed_and_live_forwards_match_plain(input_version: int) -> None:
     outputs = []
     with torch.no_grad():
         for model in _variants(case):
-            outputs.append(model.forward_distribution(admit_observation(model, obs)))
+            outputs.append(model.forward_distribution(device_input(model, obs)))
     (logits, values), *others = outputs
     for other_logits, other_values in others:
         torch.testing.assert_close(other_logits, logits, atol=1e-5, rtol=1e-5)
@@ -73,8 +73,8 @@ def test_stack_rows_change_the_policy() -> None:
     erased["stack"] = torch.zeros_like(obs["stack"])
     erased["stack_valid"] = torch.zeros_like(obs["stack_valid"])
     with torch.no_grad():
-        _, values = model.forward_distribution(admit_observation(model, obs))
-        _, without = model.forward_distribution(admit_observation(model, erased))
+        _, values = model.forward_distribution(device_input(model, obs))
+        _, without = model.forward_distribution(device_input(model, erased))
     assert not torch.allclose(values[rows], without[rows])
 
 

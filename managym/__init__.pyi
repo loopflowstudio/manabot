@@ -301,6 +301,20 @@ class HandSnapshot:
     @property
     def cards(self) -> dict[str, int]: ...
 
+class ObservationRead:
+    """Identity of a viewer-safe encoded row at one native seat's read boundary."""
+
+    @property
+    def slot(self) -> int: ...
+    @property
+    def player(self) -> int: ...
+    @property
+    def game_id(self) -> int: ...
+    @property
+    def seed(self) -> int: ...
+    @property
+    def revision(self) -> int: ...
+
 class VectorEnv:
     def __init__(
         self,
@@ -348,6 +362,13 @@ class VectorEnv:
     def current_game_seeds(self) -> list[int]: ...
     def current_game_generations(self) -> list[int]:
         """Opaque process-local game identities; every reset or replacement changes them."""
+    def write_observations_for_players(
+        self,
+        players: list[int],
+        buffers: dict[str, np.ndarray],
+        action_overflow: Literal["error", "first-legal"] = "error",
+    ) -> list[ObservationRead]:
+        """Write every fixed-seat view; discard all output rows after an error."""
     def hand_snapshots(self, players: list[int]) -> list[HandSnapshot]:
         """One native seat per slot; after done, snapshots describe the reset game."""
     def current_action_summaries(self) -> list[tuple[int, str]]: ...

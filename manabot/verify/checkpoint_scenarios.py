@@ -17,6 +17,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 import torch
 
+from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import RECORDED_ASSET_MANIFEST_HASH
 from manabot.model.world import checkpoint_world, validate_agent_setup
@@ -77,6 +78,7 @@ def score_checkpoint(
         player, space = make_player(
             {"kind": "checkpoint", "path": str(checkpoint), "deterministic": True},
             seed=seed,
+            backend=TORCH_BACKEND,
         )
         if not isinstance(player, AgentMatchupPlayer):
             score.status = "unsupported"

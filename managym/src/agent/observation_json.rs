@@ -505,10 +505,7 @@ mod tests {
     fn historical_captures_move_battlefield_and_spell_rows_onto_their_records() {
         use crate::{
             flow::game::Game,
-            state::{
-                game_object::{ObjectId, PlayerId},
-                player::PlayerConfig,
-            },
+            state::{game_object::PlayerId, player::PlayerConfig},
         };
         let mut game = Game::new(
             vec![
@@ -524,9 +521,10 @@ mod tests {
             111,
             false,
         );
-        game.move_object(ObjectId(0), ZoneType::Battlefield);
-        game.move_object(ObjectId(40), ZoneType::Battlefield);
-        game.push_spell_to_stack(ObjectId(1), PlayerId(0), vec![], vec![], Default::default());
+        let objects: Vec<_> = game.state.zones.latest().collect();
+        game.move_object(objects[0], ZoneType::Battlefield);
+        game.move_object(objects[40], ZoneType::Battlefield);
+        game.push_spell_to_stack(objects[1], PlayerId(0), vec![], vec![], Default::default());
         let current = Observation::for_player(&game, PlayerId(0));
         assert!(!current.historical());
         // The same observation as a capture written before card records.

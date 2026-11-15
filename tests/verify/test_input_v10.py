@@ -27,7 +27,7 @@ from manabot.infra.config import (
     RewardConfig,
     UnsupportedPolicyInput,
 )
-from manabot.model.admission import admit_observation
+from tests.model.prepared_routes import device_input
 from manabot.verify.text_observation import priority_root
 import managym
 
@@ -118,5 +118,5 @@ def test_v10_vector_buffers_reach_the_model(
     torch.manual_seed(0)
     agent = ActorCritic(space, ModelConfig(hidden_dim=4, num_attention_heads=2))
     with torch.no_grad():
-        _, _, _, value = agent.get_action_and_value(admit_observation(agent, obs))
+        _, _, _, value = agent.get_action_and_value(device_input(agent, obs))
     assert value.shape == (2,)

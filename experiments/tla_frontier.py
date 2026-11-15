@@ -69,6 +69,7 @@ from pydantic import Field
 import torch
 
 from experiments import tla_frontier
+from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND
 from manabot.eval.admission import register_checkpoint
 from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.models import EvaluationKey
@@ -1028,6 +1029,7 @@ def _registration(
         role=role,
         artifact_prefix="c5fba4",
         allow_deck_repetition=True,
+        backend=TORCH_BACKEND,
     )
     if admission.space.encoder.config != observation:
         raise ValueError("checkpoint observation differs from frontier protocol")

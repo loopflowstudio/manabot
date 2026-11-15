@@ -1,5 +1,6 @@
 //! Tests for cards filed in `src/mid.rs`, in card order.
 
+use crate::support::inspect::zone_of;
 use crate::support::{
     game::five_color_setup,
     play::{cast, settle},
@@ -28,12 +29,9 @@ fn join_the_dance_makes_two_humans_and_flashes_back_for_two_more() {
     assert_eq!(humans.len(), 2);
     let view = s.game().characteristics(humans[0]);
     assert_eq!((view.power, view.toughness), (1, 1));
-    assert_eq!(
-        s.game().state.zones.zone_of(dance),
-        Some(ZoneType::Graveyard)
-    );
+    assert_eq!(zone_of(&s, dance), Some(ZoneType::Graveyard));
     crate::support::play::cast_card(&mut s, dance);
     settle(&mut s);
     assert_eq!(s.battlefield_permanents_named(0, "Human").len(), 4);
-    assert_eq!(s.game().state.zones.zone_of(dance), Some(ZoneType::Exile));
+    assert_eq!(zone_of(&s, dance), Some(ZoneType::Exile));
 }

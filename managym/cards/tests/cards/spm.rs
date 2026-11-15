@@ -1,5 +1,6 @@
 //! Supportive Parents consumes shared taps without summoning-sickness or
 //! mana-tap semantics.
+use crate::support::inspect::zone_of;
 use crate::support::{
     game::{five_color_unfunded_setup, move_to_hand},
     play::command,
@@ -70,7 +71,7 @@ fn supportive_parents_repeats_only_with_distinct_shared_creatures() {
     assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("UR"));
     command(&mut s, |action| matches!(action, Action::PayCost { .. }));
     assert_eq!(s.game().state.players[0].mana_pool, Mana::default());
-    assert_eq!(s.game().state.zones.zone_of(spell), Some(ZoneType::Stack));
+    assert_eq!(zone_of(&s, spell), Some(ZoneType::Stack));
     assert!([first, second, third, fourth]
         .iter()
         .all(|id| s.game().state.permanents[*id].as_ref().unwrap().tapped));

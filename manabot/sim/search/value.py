@@ -16,14 +16,11 @@ from dataclasses import dataclass
 import time
 
 import numpy as np
-import torch
 
-from manabot.backends.torch.checkpoint import load_checkpoint
-from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
-from manabot.env.observation import ObservationSpace
-from manabot.model.inference import admit_on_device
+from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.model.world import validate_agent_setup
+from manabot.policy.protocol import Backend, BackendPolicy
 from manabot.sim.rollout import _allocate_buffers
 from manabot.sim.search.flat_mc import DEFAULT_MAX_PLAYOUT_STEPS, SearchStats
 
@@ -40,27 +37,22 @@ class ValueScorer:
     wins. Callers flip 1-V for non-hero actors.
     """
 
-    def __init__(self, agent: ActorCritic, *, device: str = "cpu"):
+    def __init__(self, agent: BackendPolicy, *, device: str = "cpu") -> None:
         self.agent = agent.to(device)
         self.agent.eval()
-        self.device = torch.device(device)
+        self.device = device
         self.forward_calls = 0
         self.obs_scored = 0
 
-    def score(self, buffers: dict[str, np.ndarray], rows: np.ndarray) -> np.ndarray:
-        obs = admit_on_device(
-            self.agent,
-            {
-                key: torch.from_numpy(buffers[key][rows])
-                for key in self.agent.observation_space.shapes
-            },
+    def score(self, buffers: ObservationBuffers, rows: np.ndarray) -> np.ndarray:
+        obs = self.agent.prepare(
+            {key: buffers[key][rows] for key in self.agent.observation_space.shapes},
+            inference=True,
         )
-        with torch.inference_mode():
-            _, value = self.agent.forward(obs)
-            probs = torch.sigmoid(value)
+        probs = self.agent.win_probabilities(obs)
         self.forward_calls += 1
         self.obs_scored += len(rows)
-        return probs.float().cpu().numpy()
+        return probs
 
 
 # -----------------------------------------------------------------------------
@@ -80,7 +72,7 @@ class ValueSearchStats(SearchStats):
 
 
 def _random_valid_actions(
-    buffers: dict[str, np.ndarray], rows: np.ndarray, rng: np.random.Generator
+    buffers: ObservationBuffers, rows: np.ndarray, rng: np.random.Generator
 ) -> np.ndarray:
     valid = buffers["actions_valid"][rows] > 0
     weights = valid.astype(np.float64)
@@ -209,7 +201,7 @@ class VGreedyPlayer:
     def stats(self) -> ValueSearchStats:
         return self._leaf.stats
 
-    def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
+    def act(self, env: Env, obs: ObservationBuffers) -> int:
         del obs
         scores = self._leaf.score_actions(env)
         self.last_scores = scores
@@ -255,15 +247,17 @@ class ValueSearchPlayer:
     def stats(self) -> ValueSearchStats:
         return self._leaf.stats
 
-    def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
+    def act(self, env: Env, obs: ObservationBuffers) -> int:
         del obs
         scores = self._leaf.score_actions(env)
         self.last_scores = scores
         return int(np.argmax(scores))
 
 
-def load_value_scorer(checkpoint: str, *, device: str = "cpu") -> ValueScorer:
-    agent, _ = load_checkpoint(checkpoint)
+def load_value_scorer(
+    checkpoint: str, *, backend: Backend, device: str = "cpu"
+) -> ValueScorer:
+    agent, _ = backend.load_policy(checkpoint)
     return ValueScorer(agent, device=device)
 
 

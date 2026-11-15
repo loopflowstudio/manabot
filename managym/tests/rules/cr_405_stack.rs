@@ -8,6 +8,7 @@ use managym::{
 };
 
 use crate::support::game::*;
+use crate::support::inspect::now;
 
 /// CR 405.1 — Stack objects resolve in last-in, first-out order.
 #[test]
@@ -106,5 +107,5 @@ fn cr_405_counterspell_targets_stack_object() {
             _ => None,
         })
         .expect("bolt should be on stack");
-    assert!(s.choose_target(Target::StackSpell(bolt_card)));
+    assert!(s.choose_target(Target::StackSpell(now(&s, bolt_card))));
 }

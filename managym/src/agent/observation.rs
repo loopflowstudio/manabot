@@ -1092,16 +1092,10 @@ impl Observation {
     }
 
     /// Copies of each definition id among `objects`.
-    fn definition_counts(
-        game: &Game,
-        objects: impl IntoIterator<Item = impl Into<ObjectId>>,
-    ) -> BTreeMap<u32, u32> {
+    fn definition_counts(definitions: impl IntoIterator<Item = u32>) -> BTreeMap<u32, u32> {
         let mut counts = BTreeMap::new();
-        for object in objects {
-            let object: ObjectId = object.into();
-            *counts
-                .entry(game.state.objects[object].definition_id.0)
-                .or_default() += 1;
+        for definition in definitions {
+            *counts.entry(definition).or_default() += 1;
         }
         counts
     }
@@ -1110,7 +1104,11 @@ impl Observation {
     /// an opponent's hand. The possible-world pool keeps those copies, since
     /// a sampled world must still place them in the hand.
     fn unseen_counts(game: &Game, player: PlayerId, viewer: PlayerId) -> BTreeMap<u32, u32> {
-        let mut counts = Self::definition_counts(game, game.unseen_objects(player, viewer));
+        let mut counts = Self::definition_counts(
+            game.unseen_objects(player, viewer)
+                .into_iter()
+                .map(|object| game.state[object].definition_id.0),
+        );
         if player != viewer {
             for (definition, known) in &game.state.players[player.0].known_hand {
                 if let Some(count) = counts.get_mut(&definition.0) {
@@ -1135,18 +1133,27 @@ impl Observation {
                 .size(Self::zone_from_index(zone_index), player) as i32;
         }
 
+        // V16 roster counts used the current row's face for in-game cards.
+        // Preserve that viewer projection separately from immutable Card identity.
         let (main_counts, unseen_counts, sideboard_counts, remaining_sideboard_counts) =
             if game.decklist_known(player, viewer) {
-                let outside = p
-                    .sideboard
-                    .iter()
-                    .copied()
-                    .filter(|object| game.state.zones.zone_of(*object).is_none());
+                let outside = p.sideboard.iter().copied().filter(|card| {
+                    game.state
+                        .zones
+                        .zone_of(game.state.object_of(*card))
+                        .is_none()
+                });
                 (
-                    Some(Self::definition_counts(game, p.deck.iter().copied())),
+                    Some(Self::definition_counts(p.deck.iter().map(|card| {
+                        game.state.source_base(game.state.object_of(*card)).0 .0
+                    }))),
                     Some(Self::unseen_counts(game, player, viewer)),
-                    Some(Self::definition_counts(game, p.sideboard.iter().copied())),
-                    Some(Self::definition_counts(game, outside)),
+                    Some(Self::definition_counts(p.sideboard.iter().map(|card| {
+                        game.state.source_base(game.state.object_of(*card)).0 .0
+                    }))),
+                    Some(Self::definition_counts(outside.map(|card| {
+                        game.state.source_base(game.state.object_of(card)).0 .0
+                    }))),
                 )
             } else {
                 (None, None, None, None)
@@ -1245,12 +1252,22 @@ impl Observation {
 
     fn populate_cards(&mut self, game: &Game, agent_player: PlayerId) {
         for card in &game.state.players[agent_player.0].sideboard {
-            if game.state.zones.zone_of(*card).is_none() {
-                let record = &game.state.objects[*card];
+            if game
+                .state
+                .zones
+                .zone_of(game.state.object_of(*card))
+                .is_none()
+            {
+                let record = game
+                    .state
+                    .objects
+                    .retained_base(game.state.object_of(*card))
+                    .expect("roster printing")
+                    .1;
                 self.agent_sideboard.push(SideboardCardData {
-                    candidate_id: record.id.0 as i32,
+                    candidate_id: game.state.cards[*card].public_id.0 as i32,
                     owner_id: self.agent.id,
-                    registry_key: record.definition_id.0 as i32,
+                    registry_key: game.state.cards[*card].definition.0 as i32,
                     name: record.name.clone(),
                     text_box: record.text_box.clone(),
                 });
@@ -1264,7 +1281,7 @@ impl Observation {
             if seen.insert(object_id) {
                 self.push_card(
                     Self::card_data(game, object_id, zone),
-                    game.state.objects[object_id].owner,
+                    game.state[object_id].owner,
                 );
             }
         };
@@ -1272,9 +1289,8 @@ impl Observation {
         // A replacement question identifies prospective battlefield entrants
         // publicly before their retained zone moves commit.
         for object in game.pending_public_entries() {
-            let object_id = ObjectId::from(object.entity);
-            if let Some(zone) = game.state.zones.zone_of(object_id) {
-                add_object(object_id, zone);
+            if let Some(zone) = game.state.zones.zone_of(object) {
+                add_object(object, zone);
             }
         }
 
@@ -1315,7 +1331,7 @@ impl Observation {
                         .filter(|object_id| {
                             game.state.zones.zone_of(*object_id) == Some(ZoneType::Library)
                                 || (game.state.zones.zone_of(*object_id) == Some(ZoneType::Hand)
-                                    && game.state.objects[*object_id].owner != perspective)
+                                    && game.state[*object_id].owner != perspective)
                         })
                         .collect(),
                     Decision::SelectCards {
@@ -1367,7 +1383,7 @@ impl Observation {
 
     /// A spell owns characteristics and identity; a copy is never a card.
     fn spell_data(game: &Game, spell: &crate::state::stack_object::SpellOnStack) -> SpellData {
-        let object = &game.state.objects[spell.object];
+        let object = &game.state[spell.object];
         let has_x = object.mana_cost.as_ref().is_some_and(|cost| cost.x > 0)
             || object.replicate().is_some();
         SpellData {
@@ -1417,15 +1433,13 @@ impl Observation {
         characteristics: &Characteristics,
     ) {
         let pdat = PermanentData {
-            colors: (characteristics.colors != game.state.objects[permanent.object].colors()).then(
-                || {
-                    characteristics
-                        .colors
-                        .iter()
-                        .map(|c| format!("{c:?}"))
-                        .collect()
-                },
-            ),
+            colors: (characteristics.colors != game.state[permanent.object].colors()).then(|| {
+                characteristics
+                    .colors
+                    .iter()
+                    .map(|c| format!("{c:?}"))
+                    .collect()
+            }),
             keyword_counter_timestamps: permanent
                 .keyword_counter_timestamps
                 .iter()
@@ -1433,7 +1447,7 @@ impl Observation {
                 .collect(),
             transforms: permanent.transforms,
             id: permanent.id.0 as i32,
-            registry_key: game.state.objects[permanent.object].registry_key.0 as i32,
+            registry_key: game.state[permanent.object].registry_key.0 as i32,
             controller_id: game.state.players[permanent.controller.0].id.0 as i32,
             tapped: permanent.tapped,
             damage: permanent.damage,
@@ -1443,7 +1457,7 @@ impl Observation {
             attacking: permanent.attacking,
             exhausted_abilities: permanent.exhausted.len() as i32,
             once_each_turn_used: (permanent.activated_this_turn.len()
-                + game.permanent_object_ref(perm_id).map_or(0, |object| {
+                + game.permanent_object(perm_id).map_or(0, |object| {
                     game.state
                         .turn
                         .ability_triggers_this_turn
@@ -1458,14 +1472,12 @@ impl Observation {
                 .collect(),
             cant_be_blocked_this_turn: game.cant_be_blocked(perm_id),
             is_animated: characteristics.is_animated,
-            has_exile_link: game
-                .permanent_object_ref(perm_id)
-                .is_some_and(|object_ref| {
-                    game.state
-                        .exile_links
-                        .iter()
-                        .any(|link| link.source == object_ref)
-                }),
+            has_exile_link: game.permanent_object(perm_id).is_some_and(|object_ref| {
+                game.state
+                    .exile_links
+                    .iter()
+                    .any(|link| link.source == object_ref)
+            }),
             counters: permanent
                 .counters
                 .iter()
@@ -1487,7 +1499,7 @@ impl Observation {
                     .collect()
             }),
             is_granted_land: characteristics.is_land()
-                && !game.state.objects[permanent.object].types.is_land(),
+                && !game.state[permanent.object].types.is_land(),
             blocking: game.state.combat.as_ref().and_then(|combat| {
                 combat
                     .attacker_to_blockers
@@ -1508,15 +1520,15 @@ impl Observation {
             effects: ContinuousEffectData::list(game, game.affected_permanent(perm_id)),
             timestamp: (permanent.timestamp != permanent.id)
                 .then_some(permanent.timestamp.0 as i32),
-            copy: game.state.objects[permanent.object]
+            copy: game.state[permanent.object]
                 .copy
                 .as_ref()
                 .map(|copy| CopyData::new(copy, permanent.timestamp.0 as i32)),
-            object_id: Some(game.state.objects[permanent.object].id.0 as i32),
-            owner_id: game.state.players[game.state.objects[permanent.object].owner.0]
+            object_id: Some(game.state[permanent.object].id.0 as i32),
+            owner_id: game.state.players[game.state[permanent.object].owner.0]
                 .id
                 .0 as i32,
-            is_token: !game.state.objects[permanent.object].is_card(),
+            is_token: !game.state[permanent.object].is_card(),
             characteristics: CharacteristicsData {
                 name: characteristics.name.clone(),
                 power: characteristics.power,
@@ -1547,7 +1559,7 @@ impl Observation {
     }
 
     fn printed_card_data(game: &Game, object_id: ObjectId, zone: ZoneType) -> CardData {
-        let object = &game.state.objects[object_id];
+        let object = &game.state[object_id];
         CardData {
             zone,
             owner_id: game.state.players[object.owner.0].id.0 as i32,
@@ -1577,14 +1589,14 @@ impl Observation {
                 }),
             x: None,
             from_battlefield_this_turn: zone == ZoneType::Graveyard
-                && game.current_object_ref(object_id).is_some_and(|object| {
+                && game.state.live(object_id).is_some_and(|object| {
                     game.state.turn.graveyard_from_battlefield.contains(&object)
                 }),
         }
     }
 
     fn printed_characteristics_data(game: &Game, object_id: ObjectId) -> CharacteristicsData {
-        let object = &game.state.objects[object_id];
+        let object = &game.state[object_id];
         CharacteristicsData {
             name: object.name.clone(),
             text_box: object.text_box.clone(),
@@ -1612,7 +1624,8 @@ impl Observation {
                 }
                 StackObject::TriggeredAbility(a) => {
                     Some(super::ability_description::trigger_description(
-                        &game.state.objects[a.source_object],
+                        game.source_face(a.source_object(), a.source_definition_id)
+                            .expect("trigger face"),
                         a.ability_index,
                         a.inline_effects.as_deref(),
                     ))
@@ -1629,7 +1642,7 @@ impl Observation {
             source_card_registry_key: stack_object.source_card_registry_key().0 as i32,
             source_permanent_id: match stack_object {
                 StackObject::ActivatedAbility(ability) => game
-                    .object_event_ref(ability.source_ref)
+                    .object_event_ref(ability.source_object())
                     .map(|object| object.entity.0 as i32),
                 _ => None,
             },
@@ -1688,7 +1701,7 @@ impl Observation {
                 player_id: None,
                 permanent_id: None,
                 stack_object_id: None,
-                card_id: Some(game.state.objects[ObjectId::from(object.entity)].id.0 as i32),
+                card_id: Some(game.state[object].id.0 as i32),
             }),
             Target::StackSpell(object_id) => {
                 let stack_object_id = Self::stack_spell_object_id(game, object_id)?.0 as i32;
@@ -1753,6 +1766,7 @@ impl Observation {
                 to,
                 controller,
                 face_down,
+                ..
             } => {
                 let mut data = Self::card_event_data(EventType::CardMoved, *object_id, *controller);
                 data.from_zone = from.map_or(-1, |zone| zone as i32);
@@ -1930,12 +1944,12 @@ impl Observation {
         if let Some(source) = source {
             data.source_kind = EventEntityKind::Object as i32;
             data.source_id = source.entity.0 as i32;
-            data.source_incarnation = source.incarnation.0 as i32;
+            data.source_incarnation = source.incarnation as i32;
         }
         if let Some(target) = target {
             data.target_kind = EventEntityKind::Object as i32;
             data.target_id = target.entity.0 as i32;
-            data.target_incarnation = target.incarnation.0 as i32;
+            data.target_incarnation = target.incarnation as i32;
         }
         data
     }
@@ -1977,7 +1991,7 @@ impl Observation {
 
     fn event_entity(entity: Option<EventEntity>) -> (i32, i32) {
         match entity {
-            Some(EventEntity::Card(object)) => (EventEntityKind::Card as i32, object.0 as i32),
+            Some(EventEntity::Card(object)) => (EventEntityKind::Card as i32, object.slot() as i32),
             Some(EventEntity::Permanent(permanent)) => {
                 (EventEntityKind::Permanent as i32, permanent.0 as i32)
             }
@@ -1993,7 +2007,7 @@ impl Observation {
                 .trigger_placement
                 .as_ref()
                 .and_then(|p| p.remaining.iter().find(|t| t.id == *trigger_id))
-                .and_then(|t| t.source_ref)
+                .and_then(|t| t.source_ref())
                 .and_then(|r| game.visible_reference(r, *player).object)
                 .map(|id| vec![PublicId(id as u32)])
                 .unwrap_or_default(),
@@ -2003,8 +2017,12 @@ impl Observation {
             | Action::Foretell { object, .. }
             | Action::ScryCard { object, .. }
             | Action::SelectCard { object, .. }
-            | Action::LearnDiscard { object, .. }
-            | Action::LearnTakeLesson { object, .. } => vec![game.state.objects[object].id],
+            | Action::LearnDiscard { object, .. } => vec![game.state[object].id],
+            Action::LearnTakeLesson { object, .. } => game
+                .state
+                .card_id(*object)
+                .map(|card| vec![game.state.cards[card].public_id])
+                .unwrap_or_default(),
             Action::ActivateAbility { permanent, .. }
             | Action::DeclareAttacker { permanent, .. }
             | Action::WaterbendTap { permanent, .. } => game.state.permanents[*permanent]
@@ -2036,10 +2054,10 @@ impl Observation {
                     .map(|perm| vec![perm.id])
                     .unwrap_or_default(),
                 crate::state::target::Target::GraveyardCard(object) => {
-                    vec![game.state.objects[ObjectId::from(object.entity)].id]
+                    vec![game.state[object].id]
                 }
                 crate::state::target::Target::StackSpell(object_id) => {
-                    vec![game.state.objects[object_id].id]
+                    vec![game.state[object_id].id]
                 }
                 crate::state::target::Target::StackAbility(id) => vec![*id],
             },
@@ -2053,9 +2071,7 @@ impl Observation {
                 ) {
                     return candidates
                         .get(*mode)
-                        .map(|candidate| {
-                            game.state.objects[ObjectId::from(candidate.source().entity)].id
-                        })
+                        .map(|candidate| game.state[candidate.source()].id)
                         .into_iter()
                         .collect();
                 }
@@ -2064,7 +2080,7 @@ impl Observation {
                     .state
                     .suspended_decision
                     .as_ref()
-                    .and_then(|suspended| suspended.frame.source)
+                    .and_then(|suspended| suspended.frame.source())
                     .or(match &game.pending_choice {
                         Some(crate::flow::game::PendingChoice::SpellMode {
                             object: object_id,
@@ -2093,7 +2109,7 @@ impl Observation {
                         | Some(crate::flow::game::PendingChoice::TapPayment {
                             source: crate::flow::game::ActivationSource::Card(card),
                             ..
-                        }) => Some((*card).into()),
+                        }) => Some(game.state.object_of(*card)),
                         Some(crate::flow::game::PendingChoice::ActivatedTarget {
                             source: crate::flow::game::ActivationSource::Permanent(permanent),
                             ..
@@ -2128,7 +2144,15 @@ impl Observation {
                         None => None,
                     });
                 object_id
-                    .map(|object_id| vec![game.state.objects[object_id].id])
+                    .map(|object_id| {
+                        vec![
+                            game.state
+                                .objects
+                                .provenance(object_id)
+                                .expect("source provenance")
+                                .0,
+                        ]
+                    })
                     .unwrap_or_default()
             }
         }
@@ -2440,8 +2464,10 @@ mod characteristics_tests {
     #[test]
     fn copied_spells_keep_identity_and_x_without_becoming_cards() {
         let mut game = game();
-        game.push_spell_to_stack(ObjectId(0), PlayerId(0), vec![], vec![], Default::default());
-        let target = Target::StackSpell(ObjectId(0));
+        let source = game.state.zones.latest().next().unwrap();
+        let spell =
+            game.push_spell_to_stack(source, PlayerId(0), vec![], vec![], Default::default());
+        let target = Target::StackSpell(spell);
         game.copy_stack_object(target, PlayerId(0)).unwrap();
         for (index, object) in game.state.stack_objects.iter_mut().enumerate() {
             if let StackObject::Spell(spell) = object {

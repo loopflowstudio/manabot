@@ -14,16 +14,17 @@
   import DeckIdentity from '$lib/components/DeckIdentity.svelte';
   import DeckSelector from '$lib/components/DeckSelector.svelte';
   import DeckImport from '$lib/components/DeckImport.svelte';
+  import { checkpointIdentity, playerIdentity } from '$lib/player-identity';
   import GameBoard from '$lib/components/GameBoard.svelte';
   import Feedback from '$lib/components/Feedback.svelte';
   import GameLog from '$lib/components/GameLog.svelte';
   import PresentationHistory from '$lib/components/PresentationHistory.svelte';
-  import OpponentSelector from '$lib/components/OpponentSelector.svelte';
+  import PlayerPicker from '$lib/components/PlayerPicker.svelte';
   import DecklistsSelector from '$lib/components/DecklistsSelector.svelte';
   import StopsPanel from '$lib/components/StopsPanel.svelte';
   import SharedTablePanel from '$lib/components/SharedTablePanel.svelte';
   import { fetchAdviceMeta, postAdvice, type AdviceMeta, type AdviceResponse } from '$lib/advice';
-  import { checkpointChoice, gameStore } from '$lib/game.svelte';
+  import { policyChoice, gameStore } from '$lib/game.svelte';
   import { sanitizeDeckSelection } from '$lib/decks';
   import { presentationPlayer, studyPresentationPlayer } from '$lib/presentation.svelte';
   import {
@@ -87,7 +88,7 @@
         gameStore.setVillainDeck(decks.villain);
       }
       const opponent = params.get('opponent');
-      if (opponent && /^[a-f0-9]{64}$/.test(opponent)) gameStore.setOpponentChoice(checkpointChoice(opponent));
+      if (opponent && /^[a-f0-9]{64}$/.test(opponent)) gameStore.setOpponentChoice(policyChoice(opponent));
     }
     learnDemo = demoName === 'learn';
     if (demoName) gameStore.setOpponentChoice(learnDemo ? 'random' : 'passive');
@@ -293,11 +294,9 @@
     random: 'Random',
     passive: 'Passive',
   };
-  const opponentLabel = $derived(
-    gameStore.table?.opponent_label
-      ?? OPPONENT_LABELS[gameStore.opponentChoice]
-      ?? 'Opponent',
-  );
+  const opponentIdentity = $derived(gameStore.table?.opponent
+    ? checkpointIdentity(gameStore.table.opponent)
+    : playerIdentity({ name: gameStore.table?.opponent_label ?? OPPONENT_LABELS[gameStore.opponentChoice] ?? 'Opponent' }));
 
   function syncStopsToServer(): void {
     if (gameActive && gameStore.hasCapability('configure_match')) {
@@ -422,7 +421,7 @@
         <!-- The players live at their bars; this line is the summary for
              assistive tech and the proof suite. -->
         <span data-testid="deck-names" class="sr-only">
-          You ({gameStore.deckNames.hero}) vs {opponentLabel} ({gameStore.deckNames.villain})
+          You ({gameStore.deckNames.hero}) vs {opponentIdentity.text} ({gameStore.deckNames.villain})
         </span>
       {:else}
         <span class="type-annotation text-ink-2">No game in progress</span>
@@ -433,12 +432,13 @@
       {#if learnDemo}<p class="type-caption">Learn demo · UR Lessons vs Random GW Allies. Automated checked setup; New Game repeats it.</p>
       {:else if demoName}<p class="type-caption" data-testid="demo-origin">Precision demo · custom stress decks · automated checked setup. Choose actions from the legal choices below. New Game repeats setup.</p>{/if}
       {#if !demoName && (!gameStore.observation || gameStore.gameOver || showSetup) && gameStore.hasCapability('configure_match')}
-        <OpponentSelector
+        <PlayerPicker
           value={gameStore.opponentChoice}
           trained={trainedOpponents}
           {catalogError}
           extension={botExtension}
           decklists={gameStore.decklists}
+          setup={{hero_deck: gameStore.decks.hero, villain_deck: gameStore.decks.villain, ...(gameStore.deckImport ? {deck_import: gameStore.deckImport} : {})}}
           onChange={(value) => gameStore.setOpponentChoice(value)}
         />
       {/if}
@@ -532,8 +532,8 @@
         onHoverTarget={handleBoardTargetHover}
         winner={gameStore.winner}
         deckNames={gameStore.deckNames}
-        heroLabel="You"
-        villainLabel={opponentLabel}
+        heroIdentity={playerIdentity({ name: 'You', kind: 'human' })}
+        villainIdentity={opponentIdentity}
         overlayActionLabel="Play Again"
         onOverlayAction={startNewGame}
         presentationPlayer={tablePresentation}

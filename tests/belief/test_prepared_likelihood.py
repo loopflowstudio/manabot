@@ -11,11 +11,11 @@ import torch
 from manabot.belief import likelihood as likelihood_module
 from manabot.belief.likelihood import FrozenPolicyLikelihood, _matching_offer_indexes
 from manabot.belief.range import BeliefState
-from manabot.model.admission import admit_observation
 import managym
 from managym.decision import SEMANTIC_DECISION_VERSION, DecisionFrame
 from managym.possible_worlds import PossibleWorld, PossibleWorldSpace
 from tests.belief.fresh_env import fresh_env
+from tests.model.prepared_routes import device_input
 
 
 def test_prepared_python_handle_preserves_scalar_parity_and_live_root() -> None:
@@ -173,6 +173,11 @@ class _FakeObservationSpace:
 
 
 class _FakeAgent:
+    def prepare(
+        self, obs: dict[str, np.ndarray], *, inference: bool = False
+    ) -> dict[str, np.ndarray]:
+        return obs
+
     def forward(
         self, tensors: dict[str, torch.Tensor]
     ) -> tuple[torch.Tensor, torch.Tensor]:
@@ -182,16 +187,25 @@ class _FakeAgent:
 
 
 @pytest.fixture(autouse=True)
-def _stub_admission(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The fake agent reads a synthetic row column, not a policy input."""
-    admit = likelihood_module.admit_on_device
+def _synthetic_policy_input(monkeypatch: pytest.MonkeyPatch) -> None:
+    move = likelihood_module.on_device
+    device_of = likelihood_module.device_of
 
-    def fake_admission(
-        agent: object, tensors: dict[str, torch.Tensor]
-    ) -> dict[str, torch.Tensor]:
-        return tensors if isinstance(agent, _FakeAgent) else admit(agent, tensors)
+    def device_input(batch: object, device: torch.device) -> object:
+        return (
+            {key: torch.as_tensor(value, device=device) for key, value in batch.items()}
+            if isinstance(batch, dict)
+            else move(batch, device)
+        )
 
-    monkeypatch.setattr(likelihood_module, "admit_on_device", fake_admission)
+    monkeypatch.setattr(likelihood_module, "on_device", device_input)
+    monkeypatch.setattr(
+        likelihood_module,
+        "device_of",
+        lambda agent: (
+            torch.device("cpu") if isinstance(agent, _FakeAgent) else device_of(agent)
+        ),
+    )
 
 
 def test_frozen_likelihood_uses_one_prepared_handle_and_releases_each_batch() -> None:
@@ -319,7 +333,7 @@ def test_real_prepared_likelihood_matches_scalar_reference(monkeypatch) -> None:
         tensors = {key: torch.from_numpy(value[None]) for key, value in encoded.items()}
         with torch.inference_mode():
             logits, _ = likelihood.agent.forward(
-                admit_observation(likelihood.agent, tensors)
+                device_input(likelihood.agent, tensors)
             )
             expected.append(float(torch.softmax(logits, dim=-1)[0, indexes].sum()))
         legal.append(count)

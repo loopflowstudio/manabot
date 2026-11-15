@@ -1,4 +1,4 @@
-"""The MLX backend: the policy and its PPO learner step on Apple Silicon; see
+"""The MLX backend: the policy and its damped learner step on Apple Silicon; see
 ../mlx.md.
 
 Requires the optional `mlx` extra. It is the only manabot package that imports

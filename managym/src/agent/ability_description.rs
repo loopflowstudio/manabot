@@ -12,7 +12,6 @@ use crate::state::{
     },
     card::{CardType, Keyword, Keywords},
     effect::{EffectDuration, Modification},
-    game_object::Object,
     mana::{Color, Mana, ManaCost},
     permanent::CounterKind,
     predicate::CardPredicate,
@@ -21,7 +20,7 @@ use crate::state::{
 
 /// Inline delayed payloads take precedence: their ability index is not a card slot.
 pub(crate) fn trigger_description(
-    object: &Object,
+    object: &crate::state::card::PrintedCharacteristics,
     index: usize,
     inline: Option<&[Effect]>,
 ) -> String {

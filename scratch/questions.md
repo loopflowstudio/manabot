@@ -48,3 +48,9 @@ Each is reversible before the PR lands.
     Task's already reviewed v9/v10 deprecation. Frozen viewer JSON keeps
     its old field names through boundary-only wire records; those are not
     canonical live storage.
+
+14. Sync onto main d7c89e55a8 carries its shared `Prepared` policy boundary.
+    V11 stack indexes, ownership and catalog references move into that shared
+    host preparation; Torch consumes prepared stack features and routes.
+    MLX keeps its explicit v9 admission. This supersedes assumption 5's
+    statement that shared preparation stays v9-only.

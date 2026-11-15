@@ -379,6 +379,11 @@ impl Env {
         self.seed
     }
 
+    /// Seed the live game was reset with; a pending `set_seed` does not change it.
+    pub(crate) fn reset_seed(&self) -> u64 {
+        self.reset_seed
+    }
+
     /// Setups this game was reset with; empty before the first reset.
     pub fn player_configs(&self) -> &[PlayerConfig] {
         self.action_trace
@@ -1191,9 +1196,7 @@ impl Env {
             .zone_objects(ZoneType::Hand, PlayerId(player))
             .iter()
         {
-            *counts
-                .entry(game.state.objects[*object].name.clone())
-                .or_insert(0) += 1;
+            *counts.entry(game.state[*object].name.clone()).or_insert(0) += 1;
         }
         Ok(counts)
     }

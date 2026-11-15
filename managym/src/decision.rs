@@ -21,7 +21,7 @@ use crate::{
     },
     flow::game::Game,
     state::{
-        game_object::{ObjectId, ObjectLookupError, PlayerId},
+        game_object::{ObjectLookupError, PlayerId},
         zone::ZoneType,
     },
 };
@@ -38,7 +38,7 @@ pub type DecisionFingerprint = String;
 pub type EventIdentity = String;
 
 /// Public authorization address for one object-bearing candidate. Only opaque
-/// candidate identity crosses the wire; the exact ObjectRef remains bound in
+/// candidate identity crosses the wire; the exact ObjectId remains bound in
 /// the match authority.
 #[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct ObjectCandidateAddress {
@@ -372,9 +372,9 @@ impl Game {
             card.zone != ZoneType::Hand
                 || self.shares_information(viewer, PlayerId(1 - viewer.0))
                 || self.searches_private_zones(viewer, PlayerId(1 - viewer.0))
-                || public_entries.iter().any(|object| {
-                    self.state.objects[ObjectId::from(object.entity)].id.0 as i32 == card.id
-                })
+                || public_entries
+                    .iter()
+                    .any(|object| self.state[object].id.0 as i32 == card.id)
         }) {
             return Err(SemanticError::ViewerSafetyViolation);
         }
@@ -448,10 +448,10 @@ impl Game {
                 .ok_or(SemanticError::UnknownObjectCandidate)?;
             match self.lookup_current_permanent(object_ref) {
                 Ok(_) => {}
-                Err(ObjectLookupError::StaleIncarnation | ObjectLookupError::WrongZone) => {
+                Err(ObjectLookupError::Stale | ObjectLookupError::WrongZone) => {
                     return Err(SemanticError::StaleObject)
                 }
-                Err(ObjectLookupError::MissingEntity) => {
+                Err(ObjectLookupError::Missing) => {
                     return Err(SemanticError::UnknownObjectCandidate)
                 }
             }
@@ -786,7 +786,7 @@ mod tests {
             .expect("refreshed priority");
 
         let object_ref = game
-            .permanent_object_ref(permanent)
+            .permanent_object(permanent)
             .expect("exact current object");
         let frame = game.semantic_decision_frame().expect("semantic frame");
         let address = frame
@@ -804,7 +804,7 @@ mod tests {
         let rendered_json = serde_json::to_value(rendered.projection()).expect("projection json");
         assert!(rendered_json
             .to_string()
-            .contains(&format!("\"incarnation\":{}", object_ref.incarnation.0)));
+            .contains(&format!("\"incarnation\":{}", object_ref.generation())));
 
         let object = game.state.permanents[permanent]
             .as_ref()

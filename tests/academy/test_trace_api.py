@@ -115,3 +115,25 @@ def test_trace_listing_ignores_unrelated_json(tmp_path):
     (tmp_path / "receipt.json").write_text('{"status":"complete"}')
     (tmp_path / "malformed.json").write_text("null")
     assert list_trace_summaries(tmp_path) == []
+
+
+def test_viewer_checkpoint_provenance_omits_server_path() -> None:
+    name = "ci-fix-528/consumer/release-smoke/checkpoints/learner_transitions-8"
+    identity = {"name": name, "sha256": "a" * 64, "producer": "manabot"}
+    checkpoint = {
+        **identity,
+        "checkpoint": "/private/runs/model.pt",
+        "source": "runs",
+        "world": "w6",
+        "step": 8,
+    }
+    payload = {
+        "config": {"opponent": identity, "opponent_checkpoint": checkpoint},
+        "events": [],
+    }
+    viewer = trace_store.prepare_trace_payload(payload)
+    assert viewer["config"]["opponent"] == identity
+    assert viewer["config"]["opponent_checkpoint"] == {
+        key: value for key, value in checkpoint.items() if key != "checkpoint"
+    }
+    assert payload["config"]["opponent_checkpoint"]["checkpoint"] == "/private/runs/model.pt"
