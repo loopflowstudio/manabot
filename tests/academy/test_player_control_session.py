@@ -12,7 +12,6 @@ from manabot.infra.config import MatchConfig, RewardConfig
 from manabot.managym.experience import ExperienceFrame, InteractionOffer
 import managym
 from managym.academy import server, trace as trace_store
-from tests.academy.socket_messages import settled_message
 
 HERO = "56 Island\n4 Secret of Bloodbending"
 VILLAIN = "56 Island\n4 Accumulate Wisdom"
@@ -71,7 +70,7 @@ def test_bloodbending_pending_discard_recovers_and_commits_once(
     with TestClient(server.app) as client:
         with client.websocket_connect("/ws/play") as socket:
             socket.send_json({"type": "new_game", "config": _request()})
-            initial = settled_message(socket)
+            initial = socket.receive_json()
             frame = initial["frame"]
             for index in range(300):
                 controls = frame["projection"].get("player_controls", [])
@@ -82,7 +81,7 @@ def test_bloodbending_pending_discard_recovers_and_commits_once(
                 parsed = ExperienceFrame.model_validate(frame)
                 command = _command(parsed, _next_offer(parsed), index)
                 socket.send_json({"type": "command", "command": command})
-                result = settled_message(socket)
+                result = socket.receive_json()
                 assert result["status"] == "accepted", result
                 frame = result["update"]["frame"]
             else:
@@ -106,7 +105,7 @@ def test_bloodbending_pending_discard_recovers_and_commits_once(
                     "resume_token": initial["resume_token"],
                 }
             )
-            recovery = settled_message(resumed)["recovery"]
+            recovery = resumed.receive_json()["recovery"]
             assert recovery["frame"]["frame_hash"] == before_hash
             assert recovery["frame"]["offers"] == frame["offers"]
             assert (
@@ -114,17 +113,17 @@ def test_bloodbending_pending_discard_recovers_and_commits_once(
                 == frame["projection"]["agent"]["inspected"]
             )
             resumed.send_json({"type": "command", "command": command})
-            accepted = settled_message(resumed)
+            accepted = resumed.receive_json()
             assert accepted["status"] == "accepted"
             next_frame = accepted["update"]["frame"]
             assert not next_frame["projection"].get("player_controls")
             assert not next_frame["projection"]["agent"].get("inspected")
             resumed.send_json({"type": "command", "command": command})
-            duplicate = settled_message(resumed)
+            duplicate = resumed.receive_json()
             assert duplicate["status"] == "duplicate"
             stale = {**command, "command_id": "bloodbending.stale"}
             resumed.send_json({"type": "command", "command": stale})
-            rejected = settled_message(resumed)
+            rejected = resumed.receive_json()
             assert rejected["status"] == "rejected"
             assert (
                 rejected["recovery"]["frame"]["frame_hash"] == next_frame["frame_hash"]

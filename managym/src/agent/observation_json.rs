@@ -61,9 +61,6 @@ impl Serialize for ObservationJson<'_> {
         }
         map.serialize_entry("stack_objects", &StackObjectsJson(&value.stack_objects))?;
         map.serialize_entry("turn", &TurnJson(&value.turn))?;
-        if let Some(guidance) = &value.unavailable_actions {
-            map.serialize_entry("unavailable_actions", &sorted_record(guidance))?;
-        }
         map.serialize_entry("won", &value.won)?;
         map.end()
     }
@@ -527,8 +524,7 @@ mod tests {
             ],
             111,
             false,
-        )
-        .expect("valid game setup");
+        );
         let objects: Vec<_> = game.state.zones.latest().collect();
         game.move_object(objects[0], ZoneType::Battlefield);
         game.move_object(objects[40], ZoneType::Battlefield);

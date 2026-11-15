@@ -2,7 +2,6 @@
   import { onMount, type Snippet } from 'svelte';
   import { artCredits as getArtCredits, type ArtCredit } from '$lib/card-art';
 
-  import { currentGame, loadCurrentGame } from '$lib/current-game.svelte';
   import { page } from '$app/state';
 
   import '../app.css';
@@ -11,7 +10,6 @@
 
   let artCredits = $state<[string, ArtCredit][]>([]);
   onMount(() => {
-    loadCurrentGame();
     let active = true;
     let revision = 0;
     const update = () => {
@@ -23,16 +21,18 @@
     return () => { active = false; window.removeEventListener('academy-art-loaded', update); };
   });
 
-  const NAV = $derived([
-    { href: '/?setup=1', label: 'New game' },
+  const NAV = [
+    { href: '/', label: 'Play' },
     { href: '/games', label: 'Games' },
-    ...(currentGame.href ? [{href:currentGame.href, label:'Current game'}] : []),
-  ]);
+    { href: '/replay', label: 'Replay' },
+    { href: '/replay?watch=1', label: 'Watch' },
+  ];
+
   function isActive(href: string): boolean {
-    if (href === '/?setup=1') return page.url.pathname === '/' && page.url.searchParams.has('setup');
-    if (href === '/') return page.url.pathname === '/' && !page.url.searchParams.has('setup');
-    if (href.startsWith('/replay?')) return page.url.pathname === '/replay' && page.url.searchParams.get('trace') === new URL(href, page.url).searchParams.get('trace');
-    return page.url.pathname.startsWith(href);
+    const watchSetup = page.url.searchParams.has('watch') && !page.url.searchParams.has('trace');
+    if (href.includes('?watch')) return page.url.pathname === '/replay' && watchSetup;
+    if (href === '/replay' && watchSetup) return false;
+    return href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(href);
   }
 </script>
 
@@ -60,7 +60,7 @@
     <div class="mx-auto flex w-full max-w-[1600px] flex-wrap items-center justify-between gap-y-2 px-4 py-3">
       <div class="flex items-baseline gap-3">
         <div data-testid="brand-name" class="type-brand text-[#f8f1e0]">Academy</div>
-        <div class="type-rubric hidden text-[#f8f1e0]/65 sm:block">Games and recorded decisions</div>
+        <div class="type-rubric hidden text-[#f8f1e0]/65 sm:block">Play · replay · study</div>
       </div>
       <nav class="flex items-center gap-2">
         {#each NAV as item}

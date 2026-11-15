@@ -14,7 +14,6 @@ from manabot.verify.trigger_order import DECK, SEED, configure_root, prefix_inde
 import managym
 from managym.academy import server, trace as trace_store
 from managym.academy.server import GameSession
-from tests.academy.socket_messages import settled_message
 
 
 def _command(session: GameSession, index: int, identity: str) -> dict[str, object]:
@@ -75,7 +74,7 @@ def test_order_reconnect_recovers_bound_choices_without_automatic_selection(
     with TestClient(server.app) as client:
         with client.websocket_connect("/ws/play") as socket:
             socket.send_json({"type": "new_game", "config": {}})
-            initial = settled_message(socket)
+            initial = socket.receive_json()
             record = server.SESSION_REGISTRY[initial["session_id"]]
             for ordinal in range(8):
                 assert record.game.obs is not None
@@ -88,7 +87,7 @@ def test_order_reconnect_recovers_bound_choices_without_automatic_selection(
                     record.game, prefix_index(record.game.obs), f"ws-prefix-{ordinal}"
                 )
                 socket.send_json({"type": "command", "command": command})
-                assert settled_message(socket)["status"] == "accepted"
+                assert socket.receive_json()["status"] == "accepted"
             assert record.game.env is not None
             digest = record.game.env.state_digest()
             command = _command(record.game, 0, "lost-order-response")
@@ -100,12 +99,12 @@ def test_order_reconnect_recovers_bound_choices_without_automatic_selection(
                     "resume_token": initial["resume_token"],
                 }
             )
-            frame = settled_message(socket)["recovery"]["frame"]
+            frame = socket.receive_json()["recovery"]["frame"]
             assert frame["action_space"] == "ORDER_TRIGGERS"
             assert len(frame["offers"]) == 2
             assert record.game.env.state_digest() == digest
             socket.send_json({"type": "command", "command": command})
-            assert settled_message(socket)["status"] == "accepted"
+            assert socket.receive_json()["status"] == "accepted"
             committed = record.game.env.state_digest()
         with client.websocket_connect("/ws/play") as socket:
             socket.send_json(
@@ -115,11 +114,11 @@ def test_order_reconnect_recovers_bound_choices_without_automatic_selection(
                     "resume_token": initial["resume_token"],
                 }
             )
-            recovered = settled_message(socket)["recovery"]["frame"]
+            recovered = socket.receive_json()["recovery"]["frame"]
             assert recovered["action_space"] != "ORDER_TRIGGERS"
             assert record.game.env.state_digest() == committed
             socket.send_json({"type": "command", "command": command})
-            assert settled_message(socket)["status"] == "duplicate"
+            assert socket.receive_json()["status"] == "duplicate"
             assert record.game.env.state_digest() == committed
 
 

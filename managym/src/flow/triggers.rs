@@ -305,13 +305,13 @@ impl Game {
             .trigger_placement
             .as_ref()
             .and_then(|p| p.placing.as_ref())
-            .ok_or_else(|| AgentError::Rules("no pending target choice".into()))?;
+            .ok_or_else(|| AgentError("no pending target choice".into()))?;
         let requirements = self
             .trigger_requirements(trigger)
-            .ok_or_else(|| AgentError::Rules("missing triggered ability".into()))?;
+            .ok_or_else(|| AgentError("missing triggered ability".into()))?;
         let requirement = requirements
             .get(trigger.requirement_index)
-            .ok_or_else(|| AgentError::Rules("no pending target requirement".into()))?;
+            .ok_or_else(|| AgentError("no pending target requirement".into()))?;
         let duplicate = trigger
             .targets
             .iter()
@@ -332,7 +332,7 @@ impl Game {
                 .excluded_source(trigger, requirement)
                 .is_some_and(|id| target == Target::Permanent(id))
         {
-            return Err(AgentError::Rules("illegal trigger target".into()));
+            return Err(AgentError("illegal trigger target".into()));
         }
         let trigger = self
             .state
@@ -609,14 +609,14 @@ impl Game {
             .trigger_placement
             .as_ref()
             .and_then(|p| p.placing.as_ref())
-            .ok_or_else(|| AgentError::Rules("no pending trigger mode".into()))?;
+            .ok_or_else(|| AgentError("no pending trigger mode".into()))?;
         let modes = self
             .unchosen_trigger_modes(trigger)
-            .ok_or_else(|| AgentError::Rules("no pending trigger mode".into()))?;
+            .ok_or_else(|| AgentError("no pending trigger mode".into()))?;
         if trigger.controller != player
             || !self.legal_trigger_modes(trigger, &modes).contains(&mode)
         {
-            return Err(AgentError::Rules("illegal trigger mode".into()));
+            return Err(AgentError("illegal trigger mode".into()));
         }
         let rule = self.trigger_mode_rule(trigger).cloned();
         let source = trigger
@@ -669,12 +669,12 @@ impl Game {
             .trigger_placement
             .as_ref()
             .and_then(|p| p.placing.as_ref())
-            .ok_or_else(|| AgentError::Rules("no pending trigger".into()))?;
+            .ok_or_else(|| AgentError("no pending trigger".into()))?;
         let modes = self
             .unchosen_trigger_modes(trigger)
-            .ok_or_else(|| AgentError::Rules("no pending trigger mode".into()))?;
+            .ok_or_else(|| AgentError("no pending trigger mode".into()))?;
         if trigger.controller != player {
-            return Err(AgentError::Rules("not the trigger's controller".into()));
+            return Err(AgentError("not the trigger's controller".into()));
         }
         let effects = self.chosen_mode_effects(trigger, &modes);
         self.state
@@ -692,7 +692,7 @@ impl Game {
             .trigger_placement
             .as_ref()
             .and_then(|p| p.placing.as_ref())
-            .ok_or_else(|| AgentError::Rules("no pending trigger".into()))?;
+            .ok_or_else(|| AgentError("no pending trigger".into()))?;
         if matches!(
             self.trigger_mode_rule(trigger),
             Some(Effect::TriggerModes { up_to: Some(_), .. })
@@ -702,10 +702,10 @@ impl Game {
         }
         let requirements = self
             .trigger_requirements(trigger)
-            .ok_or_else(|| AgentError::Rules("missing triggered ability".into()))?;
+            .ok_or_else(|| AgentError("missing triggered ability".into()))?;
         let requirement = requirements
             .get(trigger.requirement_index)
-            .ok_or_else(|| AgentError::Rules("no pending target requirement".into()))?;
+            .ok_or_else(|| AgentError("no pending target requirement".into()))?;
         let count = trigger
             .target_req_indices
             .iter()
@@ -715,7 +715,7 @@ impl Game {
             || count < requirement.min
             || requirement.max == requirement.min
         {
-            return Err(AgentError::Rules("trigger cannot decline target".into()));
+            return Err(AgentError("trigger cannot decline target".into()));
         }
         self.state
             .trigger_placement
@@ -735,17 +735,15 @@ impl Game {
             .state
             .trigger_placement
             .as_mut()
-            .ok_or_else(|| AgentError::Rules("no trigger order pending".into()))?;
+            .ok_or_else(|| AgentError("no trigger order pending".into()))?;
         if placement.placing.is_some() || placement.controller() != player {
-            return Err(AgentError::Rules(
-                "not the pending trigger controller".into(),
-            ));
+            return Err(AgentError("not the pending trigger controller".into()));
         }
         let index = placement
             .remaining
             .iter()
             .position(|t| t.id == id && placement.in_current_group(t))
-            .ok_or_else(|| AgentError::Rules("trigger is not in the current group".into()))?;
+            .ok_or_else(|| AgentError("trigger is not in the current group".into()))?;
         placement.placing = Some(placement.remaining.remove(index));
         Ok(())
     }

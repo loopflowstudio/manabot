@@ -66,12 +66,6 @@ def test_policy_choice_can_learn_either_preference(
     torch.testing.assert_close(
         logits[0, candidates[0]], logits[0, candidates[1]], rtol=0, atol=0
     )
-    count = int(obs["actions_valid"].sum())
-    order = torch.arange(count - 1, -1, -1)
-    with torch.no_grad():
-        logits, _ = agent(device_input(agent, obs))
-        reordered, _ = agent(device_input(agent, reorder_offers(obs, order)))
-        torch.testing.assert_close(reordered[:, :count], logits[:, order])
     optimizer = torch.optim.Adam(agent.parameters(), lr=0.02)
     admitted = device_input(agent, obs)
     preferred = candidates[preference]
@@ -83,11 +77,10 @@ def test_policy_choice_can_learn_either_preference(
     with torch.no_grad():
         logits, _ = agent(admitted)
         assert float(logits.softmax(-1)[0, preferred]) > 0.95
+        count = int(obs["actions_valid"].sum())
+        order = torch.arange(count - 1, -1, -1)
         actual, _ = agent(device_input(agent, reorder_offers(obs, order)))
-        # Training can produce large logits whose float32 reduction differs
-        # with row order. The learned choice must still follow its identity.
-        reordered_preferred = int((order == preferred).nonzero().item())
-        assert float(actual.softmax(-1)[0, reordered_preferred]) > 0.95
+        torch.testing.assert_close(actual[:, :count], logits[:, order])
 
 
 @pytest.mark.parametrize("bad", [-1.0, 0.5, float("nan"), float("inf"), 1000000.0])

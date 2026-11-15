@@ -8,7 +8,6 @@ import pytest
 
 from managym.academy import server, trace
 from managym.academy.attempts import AttemptStore, participant_id
-from tests.academy.socket_messages import settled_message
 
 
 def rows(path):
@@ -143,12 +142,12 @@ def test_websocket_reports_recording_failure_even_when_close_also_fails(
             socket.send_json(
                 {"type": "new_game", "config": {"villain_type": "passive"}}
             )
-            assert settled_message(socket)["type"] == "observation"
+            assert socket.receive_json()["type"] == "observation"
             monkeypatch.setattr(AttemptStore, "save", fail)
             socket.send_json(
                 {"type": "new_game", "config": {"villain_type": "passive"}}
             )
-            message = settled_message(socket)
+            message = socket.receive_json()
             assert message["type"] == "error"
             assert "recording failed" in message["message"].lower()
             assert "not have been saved" in message["message"]

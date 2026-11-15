@@ -8,8 +8,8 @@ operation chooses a game action.
 
 from __future__ import annotations
 
-from collections.abc import Collection, Mapping, Sequence
-from dataclasses import asdict, dataclass, field
+from collections.abc import Collection
+from dataclasses import dataclass, field
 import errno
 import gzip
 import json
@@ -21,11 +21,7 @@ import threading
 import time
 from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import urlencode
-import warnings
 import webbrowser
-
-from managym.policy import PolicyFactory, PolicySource, PolicySpec
-from managym.search import SearchConfig, SearchError, search_descriptor
 
 if TYPE_CHECKING:
     import uvicorn
@@ -261,9 +257,6 @@ class Academy:
         server.LAUNCH_CONFIGS.clear()
         self._listener.close()
         self._closed = True
-        from managym.academy.opponent import set_policy_registry
-
-        set_policy_registry(None)
         _ACTIVE_LOCK.release()
 
     def new_game(
@@ -271,26 +264,14 @@ class Academy:
         *,
         deck: str | Path = "ur_lessons",
         opponent_deck: str | Path = "gw_allies",
-        opponent: str | Path = "search",
+        opponent: str = "search",
         sims: int = 64,
         seed: int | None = None,
         decklists: Literal["open", "closed"] = "open",
-        search: SearchConfig | None = None,
-        mirror: SearchConfig | None = None,
     ) -> Launched:
         self._require_open()
-        if mirror is not None:
-            warnings.warn(
-                "mirror= is deprecated; use search= (removed in 0.4.0)",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            if search is not None:
-                raise ValueError("Pass search= only; do not combine it with mirror=.")
-            search = mirror
         import managym
         from managym.academy import server
-        from managym.academy.villain import player_fields
 
         seats = (
             ("hero", deck, "your deck"),
@@ -304,16 +285,21 @@ class Academy:
                     f"bundled names: {', '.join(sorted(server.NAMED_DECKS))}."
                     + _file_hint(selected, _DECK_SUFFIXES),
                 )
-        opponent = self._player(opponent, "opponent.unavailable")
-        checkpoint = opponent.startswith("policy:")
+        checkpoint = _is_sha256(opponent)
         imported = isinstance(deck, Path) or isinstance(opponent_deck, Path)
         config: dict[str, Any] = {
+            "villain_type": "checkpoint" if checkpoint else opponent,
             "villain_sims": sims,
             "seed": seed,
             "decklists": decklists,
-            "mirror": asdict(search) if search is not None else None,
-            **player_fields(opponent),
         }
+        if checkpoint:
+            config["opponent_sha256"] = opponent
+            if imported:
+                raise AcademyLaunchError(
+                    "setup.invalid",
+                    "Checkpoint opponents do not accept imported decklists.",
+                )
         if imported:
             config["deck_import"] = {
                 seat: _deck_file(selected, label) for seat, selected, label in seats
@@ -324,7 +310,7 @@ class Academy:
             server._parse_game_config(config)
         except managym.DeckImportError as exc:
             raise AcademyLaunchError("deck.rejected", str(exc)) from exc
-        except (ValueError, SearchError) as exc:
+        except ValueError as exc:
             code = (
                 "opponent.unavailable"
                 if checkpoint and "opponent" in str(exc).lower()
@@ -334,73 +320,6 @@ class Academy:
         launch_id = secrets.token_hex(16)
         server.LAUNCH_CONFIGS[launch_id] = config
         return Launched(f"{self.url}/?{urlencode({'launch': launch_id})}")
-
-    def _player(self, value: str | Path, code: str) -> str:
-        from managym.academy.opponent import policy_registry
-
-        try:
-            registry = policy_registry()
-            if isinstance(value, Path):
-                return f"policy:{registry.register(PolicySpec.read(value))}"
-            key = value.removeprefix("policy:")
-            if (
-                key in registry.aliases
-                or value.startswith("policy:")
-                or _is_sha256(key)
-            ):
-                return f"policy:{registry.descriptor(key).id}"
-            if value.startswith("search-"):
-                if not 1 <= int(value[7:]) <= 4096:
-                    raise ValueError("Search playout count must be between 1 and 4096.")
-            elif value not in ("random", "search", "passive"):
-                raise ValueError(
-                    f"Player {value!r} is unavailable. Register a policy object or specification first."
-                )
-            return value
-        except (OSError, ValueError, ImportError) as error:
-            raise AcademyLaunchError(code, str(error)) from error
-
-    def watch(
-        self,
-        *,
-        players: tuple[str | Path, str | Path],
-        search: tuple[SearchConfig | None, SearchConfig | None] = (None, None),
-        mirror: tuple[SearchConfig | None, SearchConfig | None] | None = None,
-    ) -> Launched:
-        """Open Watch setup with exact seats selected, without starting a game."""
-        self._require_open()
-        if mirror is not None:
-            warnings.warn(
-                "mirror= is deprecated; use search= (removed in 0.4.0)",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            if search != (None, None):
-                raise ValueError("Pass search= only; do not combine it with mirror=.")
-            search = mirror
-        seats = [self._player(player, "player.unavailable") for player in players]
-        from managym.academy.opponent import policy_registry
-
-        for player, spec in zip(seats, search, strict=True):
-            if spec is not None:
-                if not player.startswith("policy:"):
-                    raise AcademyLaunchError(
-                        "setup.invalid",
-                        "Search requires a registered search-capable policy.",
-                    )
-                try:
-                    search_descriptor(
-                        policy_registry().descriptor(player.removeprefix("policy:")),
-                        spec,
-                    )
-                except SearchError as exc:
-                    raise AcademyLaunchError("setup.invalid", str(exc)) from exc
-        query = {"watch": "1", "seat1": seats[0], "seat2": seats[1]}
-        if any(search):
-            query["search"] = json.dumps(
-                [asdict(spec) if spec else None for spec in search]
-            )
-        return Launched(f"{self.url}/replay?{urlencode(query)}")
 
     def replay(self, source: str | Path, game: int | str | None = None) -> Launched:
         self._require_open()
@@ -473,8 +392,6 @@ def serve(
     host: str = "127.0.0.1",
     port: int = 8000,
     traces_dir: Path | None = None,
-    policies: Mapping[str, PolicyFactory | PolicySpec] | None = None,
-    sources: Sequence[PolicySource] = (),
 ) -> Academy:
     """Start the site without opening a browser; the caller must close the server."""
     if not 0 <= port <= 65535:
@@ -514,17 +431,10 @@ def serve(
             .resolve()
         )
         from managym.academy import server, trace
-        from managym.academy.opponent import policy_registry, set_policy_registry
+        from managym.academy.extensions import bot_extension
 
         trace.TRACES_DIR = traces
-        set_policy_registry(None)
-        registry = policy_registry()
-        try:
-            registry.discover(sources)
-            for name, policy in (policies or {}).items():
-                registry.register(policy, name=name)
-        except (ImportError, OSError, ValueError) as exc:
-            raise AcademyLaunchError("policy.unavailable", str(exc)) from exc
+        bot_extension()
         # Keep the hosted app and its routes; replace only this launcher's mount.
         server.app.router.routes[:] = [
             route

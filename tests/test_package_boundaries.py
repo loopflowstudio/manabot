@@ -392,6 +392,7 @@ _TORCH_NOT_YET_MOVED = frozenset(
         "manabot/reports/belief.py",
         "manabot/sim/native_game.py",
         "manabot/sim/serving.py",
+        "manabot/sim/table_bots.py",
         "manabot/training/mps.py",
         "manabot/verify/action_cases.py",
         "manabot/verify/choice_corpus.py",
@@ -534,7 +535,7 @@ def test_backend_resolver_selects_configured_backends_and_names_missing_extras(
 # capabilities to library code. Mixed modules permit only named entry points.
 _BACKEND_ROOTS = frozenset(
     (
-        "manabot/sim/policy_provider.py",
+        "manabot/sim/table_bots.py",
         "manabot/cli.py",
         "manabot/eval/cards.py",
         "manabot/eval/evaluate.py",

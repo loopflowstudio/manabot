@@ -4,28 +4,21 @@ Controllers advance exactly one Command; inspection exposes only one acting
 view. The mixed canonical record and retained roots remain server-private.
 """
 
-from contextlib import ExitStack
-from dataclasses import asdict, dataclass, field, replace
-from threading import Lock
-from time import monotonic
-from typing import Any, Literal, TypedDict
+from dataclasses import asdict, replace
+from typing import Any, TypedDict
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
-from managym.bots import BotPolicy
-from managym.policy import PolicyRunner
-from managym.search import SearchConfig, SearchError
+from managym.bots import BotPolicy, choose_bot
 
 from . import server
 from .attempts import AttemptStore, RecordedPlayer, bot_player
-from .deck_import import DeckImportInput
 from .extensions import bot_extension
 from .launch import refuse_training_receipt
-from .opponent import policy_registry
-from .replay_index import DecisionAddressV2
-from .villain import NATIVE_WATCH_PLAYERS, build_villain_policy, player_fields
-from .work import Work
+from .replay_index import DecisionAddressV2, load_canonical_replay
+from .trace import load_trace
+from .villain import NATIVE_WATCH_PLAYERS, build_villain_policy
 
 
 class WatchCreated(TypedDict):
@@ -45,205 +38,65 @@ class WatchRequest(BaseModel):
     )
     hero_deck: str = "ur_lessons"
     villain_deck: str = "gw_allies"
-    seed: int | None = Field(default=0, ge=0, lt=2**64)
-    deck_import: DeckImportInput | None = None
+    seed: int = Field(default=0, ge=0, lt=2**64)
     villain_sims: int = Field(default=16, ge=1, le=4096)
-    mirror: list[SearchConfig | None] | None = Field(
-        default=None, min_length=2, max_length=2
-    )
-    decklists: Literal["open", "closed"] = "open"
 
 
-def resolve_player(
-    kind: str, request: WatchRequest, seat: int
-) -> tuple[BotPolicy, RecordedPlayer]:
-    """Resolve a seat once through Play's admission and policy construction."""
-    if kind not in (*NATIVE_WATCH_PLAYERS, "passive") and not kind.startswith(
-        ("policy:", "search-")
-    ):
-        kind = f"policy:{policy_registry().descriptor(kind).id}"
-    assert request.seed is not None
-    data = {**request.model_dump(), "seed": (request.seed + seat) % 2**64}
-    mirror = request.mirror[seat] if request.mirror else None
-    data["mirror"] = asdict(mirror) if mirror is not None else None
-    data.update(player_fields(kind))
-    config = server._parse_game_config(data)
-    policy = build_villain_policy(config, seat=seat)
-    return policy, replace(
-        bot_player(asdict(config)),
-        seat=seat,
-        deck=config.hero_deck_name if seat == 0 else config.villain_deck_name,
-    )
+def _policy(kind: str, request: WatchRequest, seat: int) -> BotPolicy:
+    if kind not in NATIVE_WATCH_PLAYERS:
+        extension = bot_extension()
+        if extension is None or kind not in extension.watch_players:
+            raise HTTPException(400, "watch_player_unavailable")
+        return extension.watch_policy(kind)
+    config = server._parse_game_config({**request.model_dump(), "villain_type": kind})
+    config.seed = request.seed + seat
+    return build_villain_policy(config)
 
 
 def create_watch(
-    request: WatchRequest,
-    recorded_players: list[RecordedPlayer] | None = None,
-    *,
-    work: Work | None = None,
+    request: WatchRequest, recorded_players: list[RecordedPlayer] | None = None
 ) -> WatchCreated:
-    requested_seed = request.seed is not None
-    if request.seed is None:
-        request = request.model_copy(update={"seed": server.secrets.randbits(32)})
-    with ExitStack() as candidates:
-        seats: list[tuple[BotPolicy, RecordedPlayer]] = []
-        try:
-            for seat, kind in enumerate(request.players):
-                if work is not None:
-                    work.stage("load", loading_seat=seat)
-                policy, player = resolve_player(kind, request, seat)
-                seats.append((policy, player))
-                if isinstance(policy, PolicyRunner):
-                    candidates.callback(policy.close)
-        except (ValueError, OSError, ImportError, SearchError) as error:
-            detail = (
-                {"code": error.reason, "message": str(error)}
-                if isinstance(error, SearchError)
-                else str(error)
-            )
-            raise HTTPException(400, detail) from error
-        if work is not None:
-            work.stage("advance")
-        token = server.secrets.token_urlsafe(32)
-        game = server.GameSession(watch_mode=True)
-        game.attempt_owner = server.participant_id(token)
-        game.record_players = (
-            recorded_players
-            if recorded_players is not None
-            else [player for _, player in seats]
-        )
-        try:
-            game.new_game(
+    policies = (
+        _policy(request.players[0], request, 0),
+        _policy(request.players[1], request, 1),
+    )
+    token = server.secrets.token_urlsafe(32)
+    game = server.GameSession(watch_mode=True)
+    # Session closure releases controllers, including checkpoint tensors.
+    # Policies never cross the trace or HTTP boundary.
+    game.watch_policies = policies
+    game.attempt_owner = server.participant_id(token)
+    game.record_players = []
+    for seat, kind in enumerate(request.players):
+        config = asdict(
+            server._parse_game_config(
                 {
-                    **request.model_dump(exclude={"mirror"}),
-                    "villain_type": "random",
-                    "auto_pass": False,
+                    **request.model_dump(),
+                    "villain_type": kind if kind in NATIVE_WATCH_PLAYERS else "passive",
                 }
             )
-            game.watch_policies = (seats[0][0], seats[1][0])
-            game._observe_policies()
-            record = server.SessionRecord(game.match_id, token, game)
-            assert game.trace is not None
-            game.trace.config.opponent = {
-                "name": " vs ".join(player.name for _, player in seats),
-                "kind": "watch",
-            }
-            game.trace.config.seed_was_requested = requested_seed
-            game.trace.config.watch_players = request.players
-            game._persist_attempt()
-        except BaseException:
-            game.close("setup_failed")
-            raise
-        candidates.pop_all()
-    game.work.finish()
+        )
+        config["villain_type"] = kind
+        game.record_players.append(
+            replace(
+                bot_player(config),
+                seat=seat,
+                deck=request.hero_deck if seat == 0 else request.villain_deck,
+            )
+        )
+    if recorded_players is not None:
+        game.record_players = recorded_players
+    game.new_game(
+        {**request.model_dump(), "villain_type": "random", "auto_pass": False}
+    )
+    record = server.SessionRecord(game.match_id, token, game)
     server.SESSION_REGISTRY[game.match_id] = record
+    assert game.trace is not None
+    # Persist bot seat identities, avoiding a fictional human in shared history.
+    game.trace.config.opponent = {"name": " vs ".join(request.players), "kind": "watch"}
+    game.trace.config.watch_players = request.players
+    game._persist_attempt()
     return {"id": game.match_id, "token": token, "finished": False}
-
-
-@dataclass
-class WatchSetupAttempt:
-    """One tab-owned start: status reads never load or recreate its policies."""
-
-    request: WatchRequest
-    owner: str
-    work: Work
-    result: WatchCreated | None = None
-    error: str | None = None
-    finished_at: float | None = None
-    lock: Lock = field(default_factory=Lock)
-
-    def payload(self) -> dict[str, Any]:
-        with self.lock:
-            return {
-                "work": self.work.payload(),
-                "created": self.result,
-                "error": self.error,
-            }
-
-
-_SETUP_LOCK = Lock()
-_SETUP_ATTEMPTS: dict[str, WatchSetupAttempt] = {}
-
-
-def setup_attempt(handle: str, token: str | None) -> WatchSetupAttempt:
-    with _SETUP_LOCK:
-        attempt = _SETUP_ATTEMPTS.get(handle)
-    if attempt is None:
-        raise HTTPException(404, "Watch setup unavailable. Start again explicitly.")
-    _authorize_setup(attempt, token)
-    return attempt
-
-
-def _authorize_setup(attempt: WatchSetupAttempt, token: str | None) -> None:
-    if token is None or not server.secrets.compare_digest(
-        attempt.owner, server.participant_id(token)
-    ):
-        raise HTTPException(403, "Watch setup credential required.")
-
-
-def start_setup(
-    handle: str, request: WatchRequest, token: str | None
-) -> dict[str, Any]:
-    # The public attempt ID scopes progress; the separate tab credential never
-    # appears in work metadata, URLs or public recordings.
-    if token is None or not 32 <= len(token) <= 512:
-        raise HTTPException(403, "Watch setup credential required.")
-    if (
-        len(handle) < 32
-        or len(handle) > 128
-        or not handle.isascii()
-        or not all(c.isalnum() or c in "-_" for c in handle)
-    ):
-        raise HTTPException(400, "invalid_setup_handle")
-    with _SETUP_LOCK:
-        previous = _SETUP_ATTEMPTS.get(handle)
-        if previous is not None:
-            _authorize_setup(previous, token)
-            if previous.request != request:
-                raise HTTPException(
-                    409, "Watch setup already binds another configuration."
-                )
-            return previous.payload()
-        now = monotonic()
-        finished = sorted(
-            (
-                (key, ended)
-                for key, item in _SETUP_ATTEMPTS.items()
-                if (ended := item.finished_at) is not None
-            ),
-            key=lambda item: item[1],
-        )
-        for index, (key, ended) in enumerate(finished):
-            if now - ended > 900 or index < len(finished) - 127:
-                del _SETUP_ATTEMPTS[key]
-        if sum(item.finished_at is None for item in _SETUP_ATTEMPTS.values()) >= 16:
-            raise HTTPException(429, "Watch setup capacity reached. Try again later.")
-        attempt = WatchSetupAttempt(request, server.participant_id(token), Work(handle))
-        _SETUP_ATTEMPTS[handle] = attempt
-    try:
-        created = create_watch(request, work=attempt.work)
-        with attempt.lock:
-            attempt.result = created
-    except Exception:
-        # Providers may include local paths in exceptions. Keep those out of
-        # this progress surface; the native setup cleanup owns candidate close.
-        status = attempt.work.read()
-        operation = (
-            f"Seat {status.loading_seat + 1} bot loading"
-            if status is not None
-            and status.kind == "load"
-            and status.loading_seat is not None
-            else "Watch setup"
-        )
-        with attempt.lock:
-            attempt.error = f"{operation} failed. Your selections are unchanged. Start again explicitly."
-        attempt.work.finish(failed=True)
-    else:
-        attempt.work.finish()
-    finally:
-        with attempt.lock:
-            attempt.finished_at = monotonic()
-    return attempt.payload()
 
 
 def record_for_watch(trace_id: str, token: str | None) -> server.SessionRecord:
@@ -254,9 +107,7 @@ def record_for_watch(trace_id: str, token: str | None) -> server.SessionRecord:
     return record
 
 
-def step_watch(
-    trace_id: str, token: str | None, expected_revision: int, retry: bool = False
-) -> WatchStep:
+def step_watch(trace_id: str, token: str | None, expected_revision: int) -> WatchStep:
     record = record_for_watch(trace_id, token)
     game = record.game
     assert game.env is not None and game.obs is not None
@@ -264,10 +115,6 @@ def step_watch(
         raise HTTPException(409, "stale_watch_revision")
     if game.obs.game_over:
         return {"finished": True, "revision": game.revision}
-    if game.mirror_retry is not None and not retry:
-        raise HTTPException(
-            409, {**game.mirror_retry, "code": "explicit_retry_required"}
-        )
     seat = int(game.obs.agent.player_index)
     context = (
         game._publish_current_prompt()
@@ -276,17 +123,11 @@ def step_watch(
     )
     assert context is not None
     assert game.watch_policies is not None
-    game.mirror_retry = None
-    proposal = game._choose_bot(game.watch_policies[seat])
-    if proposal is None:
-        assert game.mirror_retry is not None
-        if game.mirror_retry["code"].startswith(("search_", "mirror_")):
-            raise SearchError(game.mirror_retry["code"], game.mirror_retry["message"])
-        raise HTTPException(422, dict(game.mirror_retry))
+    game._bot_decision = choose_bot(game.watch_policies[seat], game.env, game.obs)
     offer_id = next(
         key
         for key, index in context.action_by_offer.items()
-        if index == proposal.action
+        if index == game._bot_decision.action
     )
     command = game._authority_command(context, offer_id, "policy")
     game._apply_bound_command(context, command, source="policy")
@@ -297,65 +138,53 @@ def step_watch(
 def inspect_watch(
     trace_id: str, ordinal: int, token: str | None, reveal: bool = False
 ) -> dict[str, Any]:
-    access = AttemptStore(server.trace_store.TRACES_DIR / "play.sqlite").access(
-        trace_id, {server.participant_id(token)} if token else set()
-    )
-    if access is not None and not access["replay"]:
-        raise HTTPException(403, "participant_credential_required")
-    recording, metadata = server._recording_read(trace_id)
-    payload = recording.payload
-    finished = payload.get("end_reason") == "game_over" and bool(
-        payload["final_observation"].get("game_over")
-    )
-    if not recording.watch and not recording.completed_mirror:
+    payload = load_trace(trace_id)
+    if not payload["config"].get("watch_players"):
         raise HTTPException(409, "not_a_bot_watch")
-    record = None if finished else record_for_watch(trace_id, token)
-    identities = metadata.get("players", [])
-    mirrors = server._recorded_mirrors(identities)
-    watched = payload["config"].get("watch_players")
-    replay = recording.replay
-    if ordinal == -1:
-        ordinal = max(0, len(replay.decisions) - 1) if replay else 0
-    if replay is None or ordinal < 0 or ordinal >= len(replay.decisions):
-        if record is not None and (replay is None or not replay.decisions):
-            pending = record.game.mirror_retry
-            raise HTTPException(
-                409,
-                {
-                    "code": pending["code"] if pending else "watch_pending",
-                    "message": pending["message"]
-                    if pending
-                    else "No decision recorded yet. Continue the pending bot decision explicitly.",
-                    "revision": record.game.revision,
-                    "mirror": mirrors,
-                },
-            )
-        raise HTTPException(404, "decision_not_found")
-    key = DecisionAddressV2.from_decision(replay, replay.decisions[ordinal]).serialize()
-    position = recording.read(
-        key, reveal=reveal, history_limit=server.MAX_PRESENTATION_EVENTS
+    finished = (
+        payload["end_reason"] == "game_over"
+        and payload["final_observation"]["game_over"]
     )
+    if not finished:
+        record_for_watch(trace_id, token)
+    replay = load_canonical_replay(payload)
+    if ordinal >= len(replay.decisions):
+        raise HTTPException(404, "decision_not_found")
+    row = replay.decisions[ordinal]
+    event = payload["events"][ordinal]
+    address = DecisionAddressV2.from_decision(replay, row).serialize()
+    observation = row.frame.projection.model_dump(mode="json")
+    if reveal:
+        observation = event["analysis_observation"]
+    # Only the acting viewer's committed prefix belongs to this decision.
+    # Keep the response bounded; unavailable older history is explicit in the UI.
+    track = next(
+        track for track in replay.presentation_tracks if track.viewer == row.viewer
+    )
+    presentation = track.events[
+        max(
+            0, row.presentation_cursor - server.MAX_PRESENTATION_EVENTS
+        ) : row.presentation_cursor
+    ]
     opponent = payload["config"].get("opponent") or {}
     return {
         "id": trace_id,
-        "decision": position["decision"],
-        "observation": position["observation"],
-        "outputs": position["outputs"],
-        "presentation": position["history"],
+        "decision": {**row.model_dump(mode="json"), "address": address},
+        "observation": observation,
+        "outputs": event.get("bot_decision"),
+        "presentation": [event.model_dump(mode="json") for event in presentation],
         "count": len(replay.decisions),
         "finished": finished,
         "revealed": reveal,
-        "revision": replay.decisions[ordinal].revision,
+        "revision": row.revision,
         "winner": payload.get("winner"),
-        "players": watched or [identity["name"] for identity in identities],
-        "mirror": mirrors,
-        "mirror_retry": record.game.mirror_retry if record is not None else None,
-        "source_kind": "play"
-        if not watched
-        else opponent.get(
+        "players": payload["config"]["watch_players"],
+        "source_kind": opponent.get(
             "source_kind", "evaluation" if opponent.get("kind") == "arena" else None
         ),
-        "identities": metadata.get("players", []),
+        "identities": AttemptStore(server.trace_store.TRACES_DIR / "play.sqlite")
+        .metadata(trace_id)
+        .get("players", []),
     }
 
 

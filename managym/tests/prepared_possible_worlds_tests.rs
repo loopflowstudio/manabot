@@ -121,17 +121,14 @@ fn prepared_batches_enumerate_once_preserve_order_and_fail_closed() {
         let error = prepared
             .materialize_indexes(&root, &indexes, &seeds, false)
             .expect_err("invalid batch must fail before returning branches");
-        assert!(
-            error.to_string().contains(expected),
-            "unexpected error: {error}"
-        );
+        assert!(error.0.contains(expected), "unexpected error: {}", error.0);
     }
 
     root.step(0).expect("advance the live root");
     let error = prepared
         .materialize_indexes(&root, &[0], &[19], false)
         .expect_err("stale root must fail between batches");
-    assert!(error.to_string().contains("source identity is stale"));
+    assert!(error.0.contains("source identity is stale"));
 }
 
 #[test]
@@ -140,7 +137,7 @@ fn prepared_rejects_invalid_construction_and_changed_hidden_pool() {
     assert!(empty
         .prepare_possible_world_materializer(0, "identity", 1)
         .unwrap_err()
-        .to_string()
+        .0
         .contains("before reset"));
     let root = authored_env();
     let projection = root.possible_world_space(0).unwrap();
@@ -153,10 +150,10 @@ fn prepared_rejects_invalid_construction_and_changed_hidden_pool() {
         assert!(root
             .prepare_possible_world_materializer(viewer, identity, maximum)
             .unwrap_err()
-            .to_string()
+            .0
             .contains(message));
     }
-    let root = managym::Game::new(authored_configs(), 0, true).expect("valid game setup");
+    let root = managym::Game::new(authored_configs(), 0, true);
     let space = managym::possible_worlds::PossibleWorldSpace::for_viewer(&root, PlayerId(0));
     let mut changed = root.clone();
     let object = changed

@@ -51,13 +51,9 @@ def matches_retained_error(
         "AgentError": managym.AgentError.__name__,
         "NativePanic": "PanicException",
     }.get(error_class, error_class)
-    # Native receipts keep AgentError when Python exposes a typed subtype.
-    class_matches = type(error).__name__ == replay_class or (
-        replay_class == managym.AgentError.__name__
-        and isinstance(error, managym.AgentError)
-    )
-    return class_matches and (
-        str(error).partition("; native_failure=")[0]
+    return (
+        type(error).__name__ == replay_class
+        and str(error).partition("; native_failure=")[0]
         == message.partition("; native_failure=")[0]
     )
 

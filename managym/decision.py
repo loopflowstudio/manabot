@@ -158,17 +158,6 @@ class Command:
     answers: tuple[Mapping[str, Any], ...] = ()
     object_preconditions: tuple[Mapping[str, Any], ...] = ()
 
-    @classmethod
-    def from_payload(cls, payload: Mapping[str, Any]) -> "Command":
-        """Read a native Command, retaining its exact ordinary choice binding."""
-        return cls(
-            command_id=str(payload["command_id"]),
-            expected_revision=int(payload["expected_revision"]),
-            offer_id=int(payload["offer_id"]),
-            answers=tuple(payload["answers"]),
-            object_preconditions=tuple(payload.get("object_preconditions", ())),
-        )
-
     def to_json(self) -> str:
         return json.dumps(
             {

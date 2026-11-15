@@ -3,10 +3,9 @@
 
   interface Props {
     player: PresentationPlayer;
-    externallyDriven?: boolean;
   }
 
-  let { player, externallyDriven = false }: Props = $props();
+  let { player }: Props = $props();
   const beat = $derived(player.currentBeat);
   const event = $derived(player.currentEvent);
 
@@ -20,7 +19,7 @@
   });
 
   $effect(() => {
-    if (externallyDriven || !player.playing || !event) {
+    if (!player.playing || !event) {
       return;
     }
     const timer = window.setTimeout(() => player.advance(), player.effectiveDurationMs);
@@ -53,7 +52,7 @@
           <h2 class="type-label mt-1 text-ink">{beat.heading}</h2>
           <p class="mt-1 text-ink">{beat.detail}</p>
         </div>
-        {#if !externallyDriven}<div class="flex flex-wrap gap-2">
+        <div class="flex flex-wrap gap-2">
           <button
             type="button"
             class="btn btn-secondary btn-sm"
@@ -84,7 +83,7 @@
           >
             Finish
           </button>
-        </div>{/if}
+        </div>
       </div>
     </div>
   </aside>

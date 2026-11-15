@@ -7,26 +7,6 @@
     "command": {
       "$ref": "#/$defs/Command"
     },
-    "declaration_command": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/DeclarationCommand"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
-    "declaration_receipt": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/CommandReceipt"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
     "recovery": {
       "$ref": "#/$defs/RecoveryEnvelope"
     }
@@ -72,7 +52,7 @@
       "type": "object",
       "properties": {
         "help": {
-          "$ref": "#/$defs/RequiredNullable4"
+          "$ref": "#/$defs/RequiredNullable3"
         },
         "id": {
           "type": "integer",
@@ -83,7 +63,7 @@
           "type": "string"
         },
         "preview": {
-          "$ref": "#/$defs/RequiredNullable4"
+          "$ref": "#/$defs/RequiredNullable3"
         },
         "value": {
           "$ref": "#/$defs/CandidateValue"
@@ -623,16 +603,6 @@
         "command_id": {
           "type": "string"
         },
-        "declaration": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/DeclarationReceipt"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "resulting_frame_hash": {
           "type": "string"
         },
@@ -753,13 +723,13 @@
           "minimum": 0
         },
         "chosen_mode": {
-          "$ref": "#/$defs/RequiredNullable5"
+          "$ref": "#/$defs/RequiredNullable4"
         },
         "instruction": {
           "type": "string"
         },
         "mana_cost": {
-          "$ref": "#/$defs/RequiredNullable4"
+          "$ref": "#/$defs/RequiredNullable3"
         },
         "pending": {
           "description": "Native pending execution, omitted on older recorded projections.",
@@ -775,10 +745,10 @@
           }
         },
         "reserved_sacrifice": {
-          "$ref": "#/$defs/RequiredNullable3"
+          "$ref": "#/$defs/RequiredNullable2"
         },
         "source": {
-          "$ref": "#/$defs/RequiredNullable3"
+          "$ref": "#/$defs/RequiredNullable2"
         },
         "stage": {
           "type": "string"
@@ -865,240 +835,6 @@
         "villain"
       ]
     },
-    "DeclarationAnswer": {
-      "description": "Every editable subject must appear once, including explicit declines.",
-      "type": "object",
-      "properties": {
-        "destination": {
-          "$ref": "#/$defs/RequiredNullable"
-        },
-        "subject": {
-          "$ref": "#/$defs/ObjectRenderId"
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "subject",
-        "destination"
-      ]
-    },
-    "DeclarationBinding": {
-      "description": "Engine address for one declaration, separate from transport revisions.",
-      "type": "object",
-      "properties": {
-        "fingerprint": {
-          "type": "string"
-        },
-        "revision": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "revision",
-        "fingerprint"
-      ]
-    },
-    "DeclarationCommand": {
-      "type": "object",
-      "properties": {
-        "command_id": {
-          "type": "string"
-        },
-        "expected_revision": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0
-        },
-        "match_id": {
-          "type": "string"
-        },
-        "plan": {
-          "$ref": "#/$defs/DeclarationPlan"
-        },
-        "prompt_id": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "command_id",
-        "match_id",
-        "expected_revision",
-        "prompt_id",
-        "plan"
-      ]
-    },
-    "DeclarationCommitment": {
-      "description": "Viewer-safe completion evidence, independent of the board after consequences.",
-      "type": "object",
-      "properties": {
-        "assignments": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/DeclarationAnswer"
-          }
-        },
-        "rules_player": {
-          "type": "integer",
-          "format": "uint8",
-          "maximum": 255,
-          "minimum": 0
-        },
-        "stage": {
-          "$ref": "#/$defs/DeclarationStage"
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "stage",
-        "rules_player",
-        "assignments"
-      ]
-    },
-    "DeclarationPlan": {
-      "type": "object",
-      "properties": {
-        "assignments": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/DeclarationAnswer"
-          }
-        },
-        "binding": {
-          "$ref": "#/$defs/DeclarationBinding"
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "binding",
-        "assignments"
-      ]
-    },
-    "DeclarationProjection": {
-      "type": "object",
-      "properties": {
-        "actor": {
-          "type": "integer",
-          "format": "uint8",
-          "maximum": 255,
-          "minimum": 0
-        },
-        "binding": {
-          "$ref": "#/$defs/DeclarationBinding"
-        },
-        "constraints": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "destinations": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/DecisionObjectView"
-          }
-        },
-        "rules_player": {
-          "type": "integer",
-          "format": "uint8",
-          "maximum": 255,
-          "minimum": 0
-        },
-        "stage": {
-          "$ref": "#/$defs/DeclarationStage"
-        },
-        "subjects": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/DeclarationSubject"
-          }
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "binding",
-        "stage",
-        "actor",
-        "rules_player",
-        "subjects",
-        "destinations",
-        "constraints"
-      ]
-    },
-    "DeclarationReceipt": {
-      "type": "object",
-      "properties": {
-        "child_command_ids": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "command": {
-          "$ref": "#/$defs/DeclarationCommand"
-        },
-        "completion": {
-          "$ref": "#/$defs/DeclarationCommitment"
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "command",
-        "child_command_ids",
-        "completion"
-      ]
-    },
-    "DeclarationStage": {
-      "type": "string",
-      "enum": [
-        "attackers",
-        "blockers"
-      ]
-    },
-    "DeclarationSubject": {
-      "description": "One visible creature and its complete pair/destination supports. Supports\ndescribe individual eligibility; the whole plan still needs native validation.",
-      "type": "object",
-      "properties": {
-        "assigned_to": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SubjectRef"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "destinations": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/SubjectRef"
-          }
-        },
-        "fixed": {
-          "type": "boolean"
-        },
-        "object": {
-          "$ref": "#/$defs/DecisionObjectView"
-        },
-        "power": {
-          "type": "integer",
-          "format": "int32"
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "object",
-        "power",
-        "destinations",
-        "fixed"
-      ]
-    },
     "ExperienceFrame": {
       "type": "object",
       "properties": {
@@ -1139,16 +875,6 @@
             }
           ]
         },
-        "declaration": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/DeclarationProjection"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "frame_hash": {
           "type": "string"
         },
@@ -1174,7 +900,7 @@
           "$ref": "#/$defs/LegacyHeroObservation"
         },
         "prompt": {
-          "$ref": "#/$defs/RequiredNullable2"
+          "$ref": "#/$defs/RequiredNullable"
         },
         "protocol": {
           "$ref": "#/$defs/ProtocolVersion"
@@ -1243,7 +969,7 @@
           }
         },
         "help": {
-          "$ref": "#/$defs/RequiredNullable4"
+          "$ref": "#/$defs/RequiredNullable3"
         },
         "id": {
           "type": "integer",
@@ -1254,7 +980,7 @@
           "type": "string"
         },
         "source": {
-          "$ref": "#/$defs/RequiredNullable"
+          "$ref": "#/$defs/RequiredNullable6"
         },
         "subjects": {
           "type": "array",
@@ -1517,15 +1243,6 @@
         "turn": {
           "$ref": "#/$defs/LegacyTurnView"
         },
-        "unavailable_actions": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "$ref": "#/$defs/UnavailableActionView"
-          }
-        },
         "won": {
           "type": "boolean"
         }
@@ -1560,10 +1277,10 @@
           "type": "boolean"
         },
         "base_power": {
-          "$ref": "#/$defs/RequiredNullable6"
+          "$ref": "#/$defs/RequiredNullable5"
         },
         "base_toughness": {
-          "$ref": "#/$defs/RequiredNullable6"
+          "$ref": "#/$defs/RequiredNullable5"
         },
         "blocking": {
           "description": "The attacking permanent this one blocks.",
@@ -1655,7 +1372,7 @@
           ]
         },
         "name": {
-          "$ref": "#/$defs/RequiredNullable4"
+          "$ref": "#/$defs/RequiredNullable3"
         },
         "once_each_turn_used": {
           "description": "\"Once each turn\" abilities this object has used this turn.",
@@ -1669,7 +1386,7 @@
           "minimum": 0
         },
         "power": {
-          "$ref": "#/$defs/RequiredNullable6"
+          "$ref": "#/$defs/RequiredNullable5"
         },
         "summoning_sick": {
           "type": "boolean"
@@ -1687,7 +1404,7 @@
           "type": "string"
         },
         "toughness": {
-          "$ref": "#/$defs/RequiredNullable6"
+          "$ref": "#/$defs/RequiredNullable5"
         },
         "transforms": {
           "type": "integer",
@@ -2206,7 +1923,7 @@
       "type": "object",
       "properties": {
         "caused_by": {
-          "$ref": "#/$defs/RequiredNullable4"
+          "$ref": "#/$defs/RequiredNullable3"
         },
         "from_revision": {
           "type": "integer",
@@ -2230,7 +1947,7 @@
           "minimum": 0
         },
         "sound": {
-          "$ref": "#/$defs/RequiredNullable4"
+          "$ref": "#/$defs/RequiredNullable3"
         },
         "suggested_ms": {
           "type": "integer",
@@ -2350,7 +2067,7 @@
               "const": "damage"
             },
             "source": {
-              "$ref": "#/$defs/RequiredNullable"
+              "$ref": "#/$defs/RequiredNullable6"
             },
             "target": {
               "$ref": "#/$defs/SubjectRef"
@@ -2533,7 +2250,7 @@
           "type": "string"
         },
         "checkpoint": {
-          "$ref": "#/$defs/RequiredNullable4"
+          "$ref": "#/$defs/RequiredNullable3"
         },
         "content_hash": {
           "type": "string"
@@ -2599,7 +2316,7 @@
       "description": "A nullable wire value whose key must still be present.\n\nSerde otherwise treats a missing ``Option`` field as ``None``, and schemars\nmarks it optional. This transparent wrapper keeps null on the wire while\nmaking presence part of the generated contract.",
       "anyOf": [
         {
-          "$ref": "#/$defs/SubjectRef"
+          "$ref": "#/$defs/PromptView"
         },
         {
           "type": "null"
@@ -2610,7 +2327,7 @@
       "description": "A nullable wire value whose key must still be present.\n\nSerde otherwise treats a missing ``Option`` field as ``None``, and schemars\nmarks it optional. This transparent wrapper keeps null on the wire while\nmaking presence part of the generated contract.",
       "anyOf": [
         {
-          "$ref": "#/$defs/PromptView"
+          "$ref": "#/$defs/DecisionObjectView"
         },
         {
           "type": "null"
@@ -2619,23 +2336,12 @@
     },
     "RequiredNullable3": {
       "description": "A nullable wire value whose key must still be present.\n\nSerde otherwise treats a missing ``Option`` field as ``None``, and schemars\nmarks it optional. This transparent wrapper keeps null on the wire while\nmaking presence part of the generated contract.",
-      "anyOf": [
-        {
-          "$ref": "#/$defs/DecisionObjectView"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
-    "RequiredNullable4": {
-      "description": "A nullable wire value whose key must still be present.\n\nSerde otherwise treats a missing ``Option`` field as ``None``, and schemars\nmarks it optional. This transparent wrapper keeps null on the wire while\nmaking presence part of the generated contract.",
       "type": [
         "string",
         "null"
       ]
     },
-    "RequiredNullable5": {
+    "RequiredNullable4": {
       "description": "A nullable wire value whose key must still be present.\n\nSerde otherwise treats a missing ``Option`` field as ``None``, and schemars\nmarks it optional. This transparent wrapper keeps null on the wire while\nmaking presence part of the generated contract.",
       "type": [
         "integer",
@@ -2644,13 +2350,24 @@
       "format": "uint32",
       "minimum": 0
     },
-    "RequiredNullable6": {
+    "RequiredNullable5": {
       "description": "A nullable wire value whose key must still be present.\n\nSerde otherwise treats a missing ``Option`` field as ``None``, and schemars\nmarks it optional. This transparent wrapper keeps null on the wire while\nmaking presence part of the generated contract.",
       "type": [
         "integer",
         "null"
       ],
       "format": "int32"
+    },
+    "RequiredNullable6": {
+      "description": "A nullable wire value whose key must still be present.\n\nSerde otherwise treats a missing ``Option`` field as ``None``, and schemars\nmarks it optional. This transparent wrapper keeps null on the wire while\nmaking presence part of the generated contract.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SubjectRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "RequiredNullable7": {
       "description": "A nullable wire value whose key must still be present.\n\nSerde otherwise treats a missing ``Option`` field as ``None``, and schemars\nmarks it optional. This transparent wrapper keeps null on the wire while\nmaking presence part of the generated contract.",
@@ -2898,27 +2615,6 @@
             "id"
           ]
         }
-      ]
-    },
-    "UnavailableActionView": {
-      "type": "object",
-      "properties": {
-        "message": {
-          "type": "string"
-        },
-        "object": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "reason": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "object",
-        "reason",
-        "message"
       ]
     }
   }

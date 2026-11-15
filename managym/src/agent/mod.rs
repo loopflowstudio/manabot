@@ -4,7 +4,6 @@ pub mod behavior_tracker;
 pub mod continuation;
 pub(crate) mod effect_execution;
 pub mod env;
-pub mod guidance;
 pub mod heuristic;
 pub mod legacy_input;
 pub mod observation;
