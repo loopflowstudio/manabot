@@ -19,7 +19,7 @@ fn authored_configs(pack: &AuthoredSetup) -> Vec<PlayerConfig> {
 #[test]
 fn exact_authored_match_runs_to_a_winner_on_the_catalog() {
     let pack = authored_setup("two_deck").unwrap();
-    let mut game = Game::new(authored_configs(pack), 0, true).expect("valid game setup");
+    let mut game = Game::new(authored_configs(pack), 0, true);
 
     let winner = game
         .random_playout(100_000, None)
@@ -56,7 +56,7 @@ fn elemental_validation_rosters_play_to_terminal() {
         pack.player_config("right", "elemental_right").unwrap(),
     ];
     for configs in [configs.clone(), configs.into_iter().rev().collect()] {
-        let mut game = Game::new(configs, 161, true).expect("valid game setup");
+        let mut game = Game::new(configs, 161, true);
         assert!(game.random_playout(100_000, None).unwrap().is_some());
         assert!(game.is_game_over());
     }

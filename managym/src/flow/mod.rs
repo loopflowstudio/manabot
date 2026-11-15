@@ -1,12 +1,10 @@
 pub mod action;
-pub(crate) mod block_declaration;
 pub mod card_capture;
 pub mod cast_permission;
 pub mod combat;
 pub mod combat_actions;
 pub mod damage;
 pub mod decision;
-pub mod declaration;
 pub mod effects;
 pub mod event;
 pub mod game;

@@ -51,15 +51,14 @@ pending choice with the same legal offers and permitted information.
 - **`card_art.py`**: Scryfall art and credits, fetched on first view into a
   local cache and served from `/api/card-art/`
 - **`villain.py`**: opponent policies for the hero to face
-- **`opponent.py`**: the server-scoped registered policy catalog
-  (`GET /api/opponents`), chosen by exact Policy ID and verified before play
+- **`opponent.py`**: trained opponents — the checkpoint catalog
+  (`GET /api/opponents`), chosen by exact SHA-256 and verified before play
 
-Academy never imports manabot or Torch, eagerly or lazily. Direct Python factories
-and installed `managym.bots` providers supply playing policies, including manabot's
-trained, greedy and heuristic players. Optional historical replay/advice uses the
-separate `managym.academy.bots` group; when several such extensions are installed,
-the first by entry-point name supplies those legacy capabilities. Built-in play
-and finished replay work without a provider. Study validates the existing
+Academy never imports manabot or Torch, eagerly or lazily. Trained opponents,
+greedy and heuristic Watch players and game file import come from the one
+`managym.academy.bots` entry point that manabot declares; without it those
+features report that they need manabot, and play, replay and Study are
+unaffected. Study validates the existing
 `ed2` address against the pre-command frame, and validates the played Command
 against its landmark separately. Retained `erd1` addresses still bind the
 recorded offer and Command.
@@ -119,14 +118,14 @@ is displayed while a card or text filter narrows navigation; **Show all** and
 **Clear filter** restore the full set. In live play at laptop widths and heights,
 the board sits beside independently scrolling offers; instruction, legal count
 and filter navigation stay available. Long instructions have their own scroll
-area. **History and settings** opens decision details, consequences and
+area. **History and settings** opens decision details, consequences, advice and
 stop configuration while the pending decision stays available. **Edit stops**
 beside the choices opens **Your turn** / **Opponent turn** settings; changing
 them may immediately advance priority. See
 [priority stops](../../docs/academy.md#choosing-priority-stops) for defaults,
 stack responses and F6. Narrow or short windows stack
-the board above choices, with links between them. History and table tools remain contextual. Recorded policy/search evidence is
-attached to the decision it describes; the live table has no example Advice panel. Native card
+the board above choices, with links between them. History, advice and table
+tools can be opened separately; **Compare advice** opens and focuses Advice. Native card
 types group creatures, lands, other
 permanents and artifact tokens into bounded battlefield lanes; dense lanes
 compact their cards, then offer explicit paging beside their headings. Occupied
@@ -190,41 +189,24 @@ uv run uvicorn managym.academy.server:app --port 8000
 The [local challenger workflow](../../docs/academy.md#playing-a-trained-challenger)
 covers the built same-origin server, feedback, and read-only SQL.
 
-Play and both Watch seats use the same registered policy picker and
-`managym.policy` registry/session lifecycle
-([provider and Python contract](../../docs/academy.md#play-and-watch-a-trained-checkpoint)).
-Direct factories need no manifest. Optional `PolicySpec` values name installed
-providers in `managym.bots`; multiple providers coexist. `serve(policies=...,
-sources=...)` scopes sources to the server without rewriting environment variables.
-Providers also discover their ambient configuration once per server start; explicit
-sources add to that discovery.
-The CLI accepts repeatable `--policy <spec.json>` and uses each file stem as an alias.
-
-manabot owns checkpoint/run/Tournament discovery, bound-setup admission and
-training metadata; Academy never interprets its run directories. Its Qwen
-provider loads local fine-tuned safetensors with the tokenizer and advertises no
-search support. Action-only policies retain no fabricated probabilities or value.
-One-use decision bindings and complete legal-set validation precede native bound
-Commands. The descriptor pins artifact, runner, config and provider identity in
-existing recordings; old checkpoint records and finished replays need no loader.
-The browser renders provider-authored groups and detail lines and precise unavailable reasons;
-missing training counts remain "not recorded". Optional advice/import capabilities
-are separate from policy loading.
-
-An optional `SearchConfig` per bot composes an admitted policy with the
-framework-free `managym.search` owner in Play, Watch and launch APIs
-([Search](../../docs/academy.md#search)). Its initial budget is one
-world at depth one, with a 30-second ceiling; explicit larger budgets are retained.
-Native physical-deal sampling and bound Commands remain authoritative; the two-KL numerical update
-has one implementation in `managym.mirror`. Full legal probabilities, compatible
-signed values and isolated current-view forks are mandatory. Deadline failure
-retains the live decision for an explicit, match/revision-bound pilot retry.
-Budget checks bracket synchronous provider calls; an in-flight call returns
-before its overdue result is rejected, and no overdue action is accepted.
-`BotDecision.mirror` retains prior probabilities, budget, timing, hexadecimal seed
-and receipt digest; model outputs stay out of an opponent's live/viewer export.
-Completed Play games expose retained actor-view evidence through Replay's
-**Inspect bot search** link without loading a provider.
+Any trained checkpoint is selectable from the Opponent menu. The table
+lists every policy checkpoint under `MANABOT_RUNS_DIR` (default `./.runs`)
+and in `ACADEMY_PLAY_CHECKPOINTS` — policy files (`.safetensors`, or `.pt`
+from earlier revisions), run directories and
+Tournament files, separated by `:` — with world, model shape, training step
+and producer. manabot's `manabot.model.catalog` reads each file's metadata
+header (Torch's weights-only loader for a `.pt`) and checks each world binding against the running engine;
+an incompatible checkpoint stays listed, disabled, with the mismatch (for
+example `trained in w5, engine is w6`), and the server refuses it with the same
+sentence. The browser sends only a digest; the server re-hashes the bytes,
+checks the selected decks against the checkpoint's binding (either seat), and
+records the exact checkpoint identity as the trace's `opponent_checkpoint`;
+viewer traces omit its server path. Recorded names and digests are never
+rewritten: the browser derives the short form it displays
+(`academy/ui/src/lib/player-identity.ts`,
+[how a trained opponent is named](../../docs/academy.md#how-a-trained-opponent-is-named)).
+Listing needs manabot; an install without it lists no trained opponents and
+says so.
 
 Replacement admission must keep the old GameSession authority intact until the
 new environment resets successfully. Invalid native deck setup can raise
@@ -232,12 +214,7 @@ PyO3's `PanicException` (a direct `BaseException`, with no importable Python
 class); contain that failure only at disposable-environment construction, while
 letting process interrupts escape. Do not broaden gameplay error suppression.
 
-Focused runtime checks: `uv run --extra dev pytest tests/academy/test_policy_runtime.py tests/academy/test_checkpoint_catalog.py tests/academy/test_watch.py -q`.
-For shared picker or runtime changes, `npm --prefix academy/ui run test:e2e:policy`
-builds the static SPA and checks Play retry/reload, both Watch seats, explicit
-runner reselection and replay in both themes. Installed-wheel CI also checks the
-provider-free picker; keep its expectations aligned with the shared menu.
-The end-to-end browser
+Tests: `uv run --extra dev pytest tests/academy`. The end-to-end browser
 proofs (launch, offline reload, accessibility, release prompts) are under
 [academy/ui/e2e/](../../academy/ui/e2e/) and documented in
 [docs/development.md#clean-machine-play-proof](../../docs/development.md#clean-machine-play-proof) and
@@ -245,28 +222,12 @@ proofs (launch, offline reload, accessibility, release prompts) are under
 
 ## Watch and recorded bot decisions
 
-Open **Watch** (`/replay?watch=1`) to select both seats, decks and a deal seed;
-`managym academy watch --player X --player Y` opens it with the seats selected
-(`&seat1=…&seat2=…`) and leaves Start to the person. Trained checkpoints, in
-one seat or both, and the random, greedy, heuristic and search anchors use
-GameSession's normal Command authority. Live production is separate from
-recorded playback. The shared replay viewer walks choices, recorded
-consequences and result/latest-state positions for
-human games, Watch and imported games. At a live Watch's latest position,
-Continue requests one decision and Play can continue production. Browsing
-earlier positions reads saved data without rerunning a policy. Completed games
-open from Games in the same viewer. See the
-[replay guide](../../docs/academy.md#inspect-a-replay) for navigation, speed,
-perspective, reload and recovery. Watch credentials stay in the tab's
-`sessionStorage`; saved position URLs carry no credentials.
-
-Opening card details or reading earlier history pauses replay. Close the details
-when ready, then press **Play** to resume. Returning to **Latest** does not start
-playback. A live decision already being produced may finish saving while you read;
-your selected board stays put. A pending mirror-search timeout is
-retained across reload and shown with its message. At the live edge, **Retry
-search** explicitly retries that decision; browsing saved positions never retries
-it. The exact selected position remains selected after reload.
+Open **Watch** (`/replay?watch=1`) to select both seats, decks and a deal seed.
+The configured checkpoint and random, greedy, heuristic and search anchors use
+GameSession's normal Command authority. Step advances one native decision;
+Play/Pause and speed control that same operation. Previous decisions read saved
+outputs without rerunning the policy. Completed watched games open from Games
+in this same table. Reloading retains the watch credential in the browser.
 
 `watch.py` admits controllers and verified exported training games or evaluation
 traces through **Open a game file**; choose a game when a trace contains several.
@@ -288,16 +249,10 @@ conditional root-sequence factors and values; these remain labeled separately
 from native microchoice marginals. Anchors without critics have no value estimate. Watch's acting-view
 inspection endpoint never returns the full mixed canonical replay. The separate
 private analysis observation supplies **Show both hands**, available explicitly
-for authorized bot spectators, including during active watches. Every read,
-including completed inspection, follows the recording's participant/shared
-access rules; finishing does not make a private recording public. Active Watch
-inspection also requires its watch credential. Choices default to the acting
-bot's view, independently of the stable seat-0 table orientation. Consequence
-and result boards use the authorized recorded seat-0 view where actor-private
-post-action snapshots are absent, with the perspective explicitly labeled.
-Unavailable views stay unavailable. Ordinary trace reads always strip the
-analysis snapshot, and bot inputs, decision evidence and acting-view history
-retain their acting-view scope.
+for bot spectators, including during active watches. Active inspection requires
+the watch credential; completed inspection remains shared. The default
+is the acting bot's view. Ordinary trace reads always strip the analysis
+snapshot, and bot inputs and decision evidence retain their acting-view scope.
 
 **Try another line** uses retained Study roots from either acting seat, executes
 one exact semantic Command on an isolated branch, and returns to the recorded
@@ -351,9 +306,6 @@ a separate `ACADEMY_TRACES_DIR`, and
 `ACADEMY_PLAY_RECORD_ORIGIN=automated_validation`. Keep existing human-play
 stores and sibling servers untouched. Shared-history proofs use separate
 browser identities and cover private unfinished replays and participant feedback.
-For release-config proofs, set an absolute `ACADEMY_RELEASE_PROOF_DIR` per
-subprocess; both browser artifacts and its trace store live below that directory.
-Finish frontend generation and builds before starting the proof servers.
 
 Changes to persistence or Study addresses require presentation, Study runtime,
 and protocol checks as well as attempt-store checks. SQLite is the trace

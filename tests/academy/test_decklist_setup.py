@@ -14,7 +14,6 @@ import managym
 from managym.academy import server, trace as trace_store
 from managym.academy.trace import GameConfig, prepare_trace_payload
 from managym.decision import SemanticContractError
-from tests.academy.socket_messages import settled_message
 
 
 def _request() -> dict[str, object]:
@@ -136,10 +135,10 @@ def test_rematch_keeps_closed_decklists(
     with TestClient(server.app) as client:
         with client.websocket_connect("/ws/play") as websocket:
             websocket.send_json({"type": "new_game", "config": config})
-            assert settled_message(websocket)["type"] == "observation"
+            assert websocket.receive_json()["type"] == "observation"
             (record,) = server.SESSION_REGISTRY.values()
             websocket.send_json({"type": "rematch", "grant_revision": 1, "config": {}})
-            payload = settled_message(websocket)
+            payload = websocket.receive_json()
             assert payload["type"] == "observation"
             assert record.game.trace is not None
             assert record.game.trace.config.decklists == "closed"
@@ -155,12 +154,12 @@ def test_rematch_re_admits_retained_sources(
     with TestClient(server.app) as client:
         with client.websocket_connect("/ws/play") as websocket:
             websocket.send_json({"type": "new_game", "config": _request()})
-            assert settled_message(websocket)["type"] == "observation"
+            assert websocket.receive_json()["type"] == "observation"
             (record,) = server.SESSION_REGISTRY.values()
             assert record.game.trace is not None
             first = record.game.trace.config
             websocket.send_json({"type": "rematch", "grant_revision": 1, "config": {}})
-            assert settled_message(websocket)["type"] == "observation"
+            assert websocket.receive_json()["type"] == "observation"
             assert record.game.trace is not None
             second = record.game.trace.config
     assert second is not first

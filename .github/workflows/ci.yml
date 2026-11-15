@@ -252,10 +252,9 @@ jobs:
       - name: Install Python dependencies
         run: |
           uv venv .venv --python 3.13
-          # The evaluation replay fixture needs psutil for child process census.
           uv export --quiet --frozen --extra dev --no-emit-workspace \
-            --prune torch --prune typer \
-            --prune jsonschema --prune ruff \
+            --prune torch --prune typer --prune psutil \
+            --prune httpx --prune jsonschema --prune ruff \
             --output-file /tmp/visual-requirements.txt
           uv pip install --python .venv/bin/python \
             --requirements /tmp/visual-requirements.txt maturin==1.11.5
@@ -281,18 +280,13 @@ jobs:
           npm run test:e2e:release
           ACADEMY_STATIC_BUILD=1 npm run build
           npm run test:e2e:launch
-          npm run test:e2e:policy
-          npm run test:e2e:search
 
       - name: Upload browser failure evidence
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: academy-browser-failure
-          path: |
-            academy/ui/test-results/release
-            academy/ui/test-results/policy
-            academy/ui/test-results/search
+          path: academy/ui/test-results/release
           if-no-files-found: warn
 
   clean-machine-play:

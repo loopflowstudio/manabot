@@ -64,7 +64,7 @@ impl Scenario {
         let p0 = PlayerConfig::new("p0", player0_deck);
         let p1 = PlayerConfig::new("p1", player1_deck);
         Scenario {
-            game: Game::new(vec![p0, p1], seed, false).expect("valid game setup"),
+            game: Game::new(vec![p0, p1], seed, false),
         }
     }
 
@@ -83,8 +83,7 @@ impl Scenario {
                 ],
                 seed,
                 false,
-            )
-            .expect("valid game setup"),
+            ),
         }
     }
 

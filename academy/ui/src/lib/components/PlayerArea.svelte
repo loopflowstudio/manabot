@@ -31,13 +31,10 @@
     definitionNames?: Record<string, string>;
     opponent?: boolean;
     focusedIds?: Set<number>;
-    combatMarkers?: Map<number, string>;
     clickableTargets?: Map<number, number[]>;
     onSelectTarget?: (objectId: number) => void;
     onHoverTarget?: (objectId: number | null) => void;
     onPreviewCard?: (card: CardPreview | null) => void;
-    /** Fold the hand behind a disclosure while a combat declaration needs the room. */
-    compactHand?: boolean;
   }
 
   let {
@@ -47,16 +44,14 @@
     deckName = null,
     definitionNames = {},
     opponent = false,
-    focusedIds = new Set<number>(), combatMarkers = new Map<number, string>(),
+    focusedIds = new Set<number>(),
     clickableTargets = undefined,
     onSelectTarget = undefined,
     onHoverTarget = undefined,
     onPreviewCard = undefined,
-    compactHand = false,
   }: Props = $props();
 
   const label = $derived(identity.text);
-  const runtime = $derived(identity.runtime ?? identity.provenance?.policy);
 
   const narratedEvent = getContext<(() => PresentationEvent | null) | undefined>(PRESENTATION_CONTEXT);
   const narrated = $derived.by(() => {
@@ -161,13 +156,8 @@
   {#if identity.digest || identity.producer || identity.full !== identity.compact}
   <div class="identity-details" data-testid="player-identity">
     <p>{identity.full}</p>
-    {#if identity.digest}<p>{runtime ? 'Policy ID' : 'SHA-256'}: {identity.digest}</p>{/if}
+    {#if identity.digest}<p>SHA-256: {identity.digest}</p>{/if}
     {#if identity.producer}<p>Producer: {identity.producer}</p>{/if}
-    {#if runtime}
-      <p>Runner: {runtime.runner}</p>
-      {#each Object.entries(runtime.artifacts) as [role, digest]}<p>{role}: {digest}</p>{/each}
-      <p>Config: {JSON.stringify(runtime.config)}</p>
-    {/if}
     {#each ['source', 'world', 'model', 'step'] as const as key}
       {@const value = identity.provenance?.[key]}
       {#if value != null}<p>{key}: {value}</p>{/if}
@@ -249,7 +239,7 @@
         <Battlefield
           permanents={player.battlefield}
           {tablePermanents}
-          {focusedIds} {combatMarkers}
+          {focusedIds}
           {clickableTargets}
           {onSelectTarget}
           {onHoverTarget}
@@ -348,51 +338,40 @@
   </div>
 
   {#if !opponent}
-    {#if compactHand}
-      <details class="hand-staff hand-compact" data-testid="compact-hand">
-        <summary class="type-caption cursor-pointer">Hand ({player.hand.length}) · folded while planning combat</summary>
-        {@render handCards()}
-      </details>
-    {:else}
       <div class="hand-staff">
         {@render rubric(`Hand (${player.hand.length})`)}
-        {@render handCards()}
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex (keyboard access to horizontal hand scrolling) -->
+        <div role="region" aria-label={`${label} hand`} tabindex="0" class="hand-cards"
+          onfocusin={(event) => {
+            if (event.target instanceof HTMLElement) revealWithinScrollRegions(event.target);
+          }}>
+          {#if player.hand.length === 0}
+            <div class="type-caption px-1 py-1 text-ink-3">Empty hand</div>
+          {/if}
+          {#each player.hand as card}
+            <Card
+              objectId={card.id}
+              name={card.name}
+              copyDescription={copyLabel(player.hand, card.id)}
+              power={card.types.is_creature ? card.power : null}
+              toughness={card.types.is_creature ? card.toughness : null}
+              focused={focusedIds.has(card.id)}
+              clickable={onSelectTarget !== undefined}
+              onSelect={() => onSelectTarget?.(card.id)}
+              onHoverStart={() => {
+                onHoverTarget?.(clickableTargets?.has(card.id) ? card.id : null);
+                preview(card);
+              }}
+              onHoverEnd={() => {
+                onHoverTarget?.(null);
+                onPreviewCard?.(null);
+              }}
+            />
+          {/each}
+        </div>
       </div>
-    {/if}
   {/if}
 </section>
-
-{#snippet handCards()}
-  <!-- svelte-ignore a11y_no_noninteractive_tabindex (keyboard access to horizontal hand scrolling) -->
-  <div role="region" aria-label={`${label} hand`} tabindex="0" class="hand-cards"
-    onfocusin={(event) => {
-      if (event.target instanceof HTMLElement) revealWithinScrollRegions(event.target);
-    }}>
-    {#if player.hand.length === 0}
-      <div class="type-caption px-1 py-1 text-ink-3">Empty hand</div>
-    {/if}
-    {#each player.hand as card}
-      <Card
-        objectId={card.id}
-        name={card.name}
-        copyDescription={copyLabel(player.hand, card.id)}
-        power={card.types.is_creature ? card.power : null}
-        toughness={card.types.is_creature ? card.toughness : null}
-        focused={focusedIds.has(card.id)}
-        clickable={onSelectTarget !== undefined}
-        onSelect={() => onSelectTarget?.(card.id)}
-        onHoverStart={() => {
-          onHoverTarget?.(clickableTargets?.has(card.id) ? card.id : null);
-          preview(card);
-        }}
-        onHoverEnd={() => {
-          onHoverTarget?.(null);
-          onPreviewCard?.(null);
-        }}
-      />
-    {/each}
-  </div>
-{/snippet}
 
 <style>
   [data-narrated-seq] { outline: 2px solid var(--info); outline-offset: 2px; }
@@ -408,7 +387,6 @@
     .staves { display: flex; flex-direction: column; gap: .25rem; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 .25rem; }
     .empty-battlefield .staves { max-height: 64px; }
     .hand-staff { flex-shrink: 0; }
-    .hand-compact[open] { max-height: 45%; overflow-y: auto; overscroll-behavior: contain; }
     .staff { display: flex; flex-direction: column; flex: 1 0 auto; min-height: 0; }
     .staves > :global(:not(.staff)) { flex-shrink: 0; }
   }

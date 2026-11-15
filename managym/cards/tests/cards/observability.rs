@@ -1754,8 +1754,7 @@ fn ogre_game() -> (Game, PermanentId) {
         ],
         7,
         false,
-    )
-    .expect("valid game setup");
+    );
     let ogre = game
         .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
         .unwrap();
@@ -2508,7 +2507,6 @@ fn opponent_hidden_cards_do_not_reach_the_viewer_tensor() {
             11,
             false,
         )
-        .expect("valid game setup")
     };
     let mountains = game(&[("Mountain", 40)]);
     let ogres = game(&[("Gray Ogre", 20), ("Mountain", 20)]);
@@ -2920,7 +2918,6 @@ enum Encoded {
 /// The field each fact kind states; no wildcard, so a new kind must name it.
 fn fact_field(kind: FactKind) -> &'static str {
     match kind {
-        FactKind::UnavailableAction => "Observation.unavailable_actions",
         FactKind::ContinuationProgram => "ContinuationFrame.program",
         FactKind::EffectProgram => "ContinuousEffectData.program",
         FactKind::EffectiveColor => "PermanentData.colors",
@@ -2960,7 +2957,6 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
     use Buffer::*;
     use Encoded::*;
     let mut fields = encoding!(Observation {
-        unavailable_actions => [Fact(FactKind::UnavailableAction)],
         shared_effects => [Rows("v7 effects, effect_details, effect_members")],
         continuation => [Rows("relations")],
         game_over => [Excluded("no decision follows the end of the game")],
@@ -5221,39 +5217,5 @@ fn pooled_mana_expiry_preserves_totals_beyond_one_class_capacity() {
             *class
         );
         encoded_default(&observation);
-    }
-}
-
-#[test]
-fn decision_guidance_refusals_reach_facts_and_catalog_tokens() {
-    use crate::support::game::deck_of;
-    use managym::agent::guidance::{UnavailableAction, UnavailableReason};
-    let mut s = Scenario::new(
-        deck_of("Forest", "Gray Ogre"),
-        deck_of("Mountain", "Gray Ogre"),
-        368,
-    );
-    s.advance_to_active_step(0, StepKind::Main);
-    let mut observation = Observation::for_player(s.game(), PlayerId(0));
-    for reason in UnavailableReason::ALL {
-        observation.unavailable_actions = Some(vec![UnavailableAction {
-            object: observation.agent.id,
-            reason,
-        }]);
-        let rows = encoded_default(&observation);
-        let name = format!("UnavailableReason::{}", reason.name());
-        let row = fact_row(
-            &rows
-                .facts
-                .chunks(FACT_DIM)
-                .map(|row| row.to_vec())
-                .collect::<Vec<_>>(),
-            FactKind::UnavailableAction,
-            name_value(&name),
-        );
-        assert_eq!(row[fact::VALUE], 1.0);
-        assert!(managym::agent::record_vocabulary::record_names()
-            .iter()
-            .any(|record| record.name == name && record.token.is_some()));
     }
 }

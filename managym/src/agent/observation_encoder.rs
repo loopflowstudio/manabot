@@ -63,12 +63,10 @@ pub enum FactKind {
     EffectiveColor = 12,
     KeywordCounterTimestamp = 13,
     ContinuationProgram = 14,
-    UnavailableAction = 15,
 }
 
 impl FactKind {
-    pub const ALL: [FactKind; 14] = [
-        FactKind::UnavailableAction,
+    pub const ALL: [FactKind; 13] = [
         FactKind::Counter,
         FactKind::AddedSubtype,
         FactKind::SetName,
@@ -913,13 +911,7 @@ pub fn encode_into(
     {
         row[stack::SOURCE] = link(object.source_permanent_id);
     }
-    encode_facts(
-        obs,
-        &object_to_index,
-        &ranks,
-        out.facts,
-        config.layout == InputLayout::OneToken,
-    )?;
+    encode_facts(obs, &object_to_index, &ranks, out.facts)?;
     super::shared_effects::encode(
         obs,
         &object_to_index,
@@ -1537,7 +1529,7 @@ struct Fact {
 
 /// The facts `PermanentData` and `PlayerData` state as open vocabularies, in
 /// object order (agent, opponent, agent permanents, opponent permanents).
-fn facts(obs: &Observation, include_guidance: bool) -> Vec<Fact> {
+fn facts(obs: &Observation) -> Vec<Fact> {
     let mut out = Vec::new();
     let mut push = |object: i32, kind: FactKind, id: i32, value: f32| {
         out.push(Fact {
@@ -1549,19 +1541,6 @@ fn facts(obs: &Observation, include_guidance: bool) -> Vec<Fact> {
             effect: None,
         })
     };
-    for refusal in obs
-        .unavailable_actions
-        .iter()
-        .flatten()
-        .filter(|_| include_guidance)
-    {
-        push(
-            refusal.object,
-            FactKind::UnavailableAction,
-            name_value(&format!("UnavailableReason::{}", refusal.reason.name())),
-            1.0,
-        );
-    }
     let permanents = || obs.agent_permanents.iter().chain(&obs.opponent_permanents);
     for permanent in permanents() {
         let object = permanent.id;
@@ -1794,9 +1773,8 @@ fn encode_facts(
     object_to_index: &HashMap<i32, i32>,
     ranks: &BTreeMap<i32, f32>,
     out: &mut [f32],
-    include_guidance: bool,
 ) -> Result<(), ObservationEncodeError> {
-    let facts = facts(obs, include_guidance);
+    let facts = facts(obs);
     let capacity = out.len() / FACT_DIM;
     if facts.len() > capacity {
         return Err(ObservationEncodeError::Capacity {
@@ -2030,7 +2008,6 @@ mod tests {
 
     fn sample_observation() -> Observation {
         Observation {
-            unavailable_actions: Some(Vec::new()),
             shared_effects: Some(Vec::new()),
             continuation: Vec::new(),
             game_over: false,

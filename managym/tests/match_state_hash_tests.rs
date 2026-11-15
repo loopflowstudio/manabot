@@ -96,7 +96,6 @@ fn make_game(seed: u64) -> Game {
         seed,
         true,
     )
-    .expect("valid game setup")
 }
 
 #[test]

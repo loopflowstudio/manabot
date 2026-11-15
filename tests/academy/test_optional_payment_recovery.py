@@ -7,7 +7,6 @@ import pytest
 
 from managym.academy import server, trace as trace_store
 from managym.experience import ExperienceFrame, InteractionOffer
-from tests.academy.socket_messages import settled_message
 
 
 def _command(
@@ -40,7 +39,7 @@ def test_optional_mana_cost_survives_lost_response_reconnect_and_duplicate(
     with TestClient(server.app) as client:
         with client.websocket_connect("/ws/play") as websocket:
             websocket.send_json({"type": "new_game", "config": config})
-            initial = settled_message(websocket)
+            initial = websocket.receive_json()
             frame = ExperienceFrame.model_validate(initial["recovery"]["frame"])
             prism_cast = False
             land_plays = 0
@@ -83,7 +82,7 @@ def test_optional_mana_cost_survives_lost_response_reconnect_and_duplicate(
                         "command": _command(frame, offer, f"optional-prefix.{ordinal}"),
                     }
                 )
-                outcome = settled_message(websocket)
+                outcome = websocket.receive_json()
                 assert outcome["status"] == "accepted"
                 frame = ExperienceFrame.model_validate(outcome["update"]["frame"])
             assert frame.action_space == "WATERBEND"
@@ -109,14 +108,14 @@ def test_optional_mana_cost_survives_lost_response_reconnect_and_duplicate(
                     "resume_token": initial["resume_token"],
                 }
             )
-            recovery = settled_message(resumed)["recovery"]
+            recovery = resumed.receive_json()["recovery"]
             assert (
                 recovery["frame"]["frame_hash"]
                 == accepted["update"]["frame"]["frame_hash"]
             )
             assert record.game.env.state_digest() == digest
             resumed.send_json({"type": "command", "command": command})
-            assert settled_message(resumed)["status"] == "duplicate"
+            assert resumed.receive_json()["status"] == "duplicate"
             assert record.game.env.state_digest() == digest
             assert len(record.game.trace.events) == events
             frame = ExperienceFrame.model_validate(recovery["frame"])
@@ -126,7 +125,7 @@ def test_optional_mana_cost_survives_lost_response_reconnect_and_duplicate(
                     "command": _command(frame, frame.offers[0], "optional-color"),
                 }
             )
-            outcome = settled_message(resumed)
+            outcome = resumed.receive_json()
             assert outcome["status"] == "accepted"
             frame = ExperienceFrame.model_validate(outcome["update"]["frame"])
             # The activation fee committed and Prism produced one mana. The
@@ -141,7 +140,7 @@ def test_optional_mana_cost_survives_lost_response_reconnect_and_duplicate(
                     "command": _command(frame, decline, "optional-decline"),
                 }
             )
-            outcome = settled_message(resumed)
+            outcome = resumed.receive_json()
             assert outcome["status"] == "accepted"
             assert outcome["update"]["frame"]["action_space"] == "DISCARD"
             assert sum(record.game.obs.agent.mana) == 1

@@ -1,28 +1,34 @@
 import { expect, test } from '@playwright/test';
 
-test('watch reads choices and consequences in the shared viewer, then returns from Study', async ({ page }) => {
+test('watch steps, pauses, reopens a decision, and retries without advancing the match', async ({ page }) => {
   await page.goto('/replay?watch=1');
   await page.getByRole('button', { name: 'Start watching' }).click();
-  await expect(page.getByRole('button', {name: 'Continue', exact: true})).toBeVisible();
-  await page.getByRole('button', {name: 'Continue', exact: true}).click();
-  await expect(page.getByTestId('position-counter')).toHaveText('Position 1 / 3');
-  await expect(page.getByTestId('recorded-decision-evidence')).toContainText('Recorded at this decision');
-  await page.getByRole('checkbox', {name: 'Show both hands'}).check();
-  await expect(page.getByTestId('replay-perspective')).toContainText('Both hands · spectator view');
-  await page.getByRole('button', {name: 'Next', exact: true}).click();
-  await expect(page.getByTestId('position-counter')).toHaveText('Position 2 / 3');
-  await expect(page.getByTestId('replay-perspective')).toContainText('Recorded seat-0 view');
-  await page.getByRole('button', {name: 'Previous', exact: true}).click();
-  await page.getByRole('button', {name: 'Try another line', exact: true}).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Decision 1 of 1' })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByTestId('decision-advice')).toContainText('Recorded at the acting bot');
+  await expect(page.getByRole('table')).toContainText('✓');
+  await expect(page.getByRole('checkbox', { name: 'Show both hands' })).not.toBeChecked();
+  await expect(page.getByText('Both hands · spectator view', {exact: true})).toHaveCount(0);
+  await page.getByRole('checkbox', { name: 'Show both hands' }).check();
+  await expect(page.getByText('Both hands · spectator view', {exact: true})).toBeVisible();
+  await page.getByRole('button', { name: 'Step decision' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Decision 2 of 2' })).toBeVisible();
+  await page.getByRole('button', { name: 'Previous decision' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Decision 1 of 2' })).toBeVisible();
+  const history = page.getByTestId('presentation-history');
+  const canonicalScope = await history.getAttribute('data-scope');
+  await page.getByRole('button', { name: 'Try another line' }).click();
+  await expect(page.getByTestId('study-panel')).toBeVisible();
   await page.getByTestId('action-option').first().click();
   await expect(page.getByText('Your line is committed')).toBeVisible();
-  await page.getByTestId('study-return').click();
-  await expect(page.getByTestId('position-counter')).toHaveText('Position 1 / 3');
-  await expect(page.getByRole('checkbox', {name: 'Show both hands'})).not.toBeChecked();
-  await page.getByRole('button', {name: 'Next', exact: true}).click();
-  await expect(page.getByTestId('position-counter')).toHaveText('Position 2 / 3');
+  await expect(history).not.toHaveAttribute('data-scope', canonicalScope!);
+  await page.getByRole('button', { name: 'Return to score' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Decision 1 of 2' })).toBeVisible();
+  await expect(history).toHaveAttribute('data-scope', canonicalScope!);
+  await page.getByRole('button', { name: 'Play', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
   await page.reload();
-  await expect(page.getByTestId('position-counter')).toHaveText('Position 2 / 3');
+  await expect(page.getByRole('status').filter({ hasText: 'Decision 1 of 2' })).toBeVisible();
 });
 
 test('opens formatted arena JSON as one game', async ({ page }) => {
@@ -32,8 +38,8 @@ test('opens formatted arena JSON as one game', async ({ page }) => {
     imported = route.request().postDataJSON();
     await route.fulfill({ status: 400, json: { detail: 'arena_import_invalid' } });
   });
-  await page.goto('/games');
-  await page.getByText('Open a recorded game file',{exact:true}).click();
+  await page.goto('/replay?watch=1');
+  await expect(page.getByRole('button', { name: 'Start watching' })).toBeEnabled();
   await expect(page.getByLabel('Open a game file')).toHaveAccessibleDescription('An exported training game or an evaluation trace');
   await page.getByLabel('Open a game file').setInputFiles({
     name: 'game.json',
@@ -49,7 +55,7 @@ test('loads replay history when navigating from Watch to Replay', async ({ page 
   await page.goto('/replay?watch=1');
   await expect(page.getByRole('button', { name: 'Start watching' })).toBeEnabled();
   const history = page.waitForResponse(response => new URL(response.url()).pathname === '/api/traces');
-  await page.getByRole('banner').getByRole('link', { name: 'Games', exact: true }).click();
+  await page.getByRole('banner').getByRole('link', { name: 'Replay', exact: true }).click();
   expect((await history).ok()).toBe(true);
-  await expect(page.getByRole('heading', { name: 'Games', exact: true })).toBeAttached();
+  await expect(page.getByRole('heading', { name: 'Replay', exact: true })).toBeAttached();
 });

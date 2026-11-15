@@ -1,6 +1,5 @@
 /** Ordinary release-SPA work. Old DOM-response baselines remain frozen separately. */
 import { writeFile } from 'node:fs/promises';
-import { confirmCombat } from './combat';
 import { expect, test, type Request } from '@playwright/test';
 
 interface Sample {
@@ -8,7 +7,7 @@ interface Sample {
   message: number | null; applied: number | null; dom: number | null;
   renderingOpportunity: number | null; terminal: boolean;
 }
-interface Probe { samples: Sample[]; frames: number[]; working: boolean; }
+interface Probe { samples: Sample[]; frames: number[]; }
 declare global { interface Window { academyTiming: Probe; } }
 
 function distribution(values: number[]): { n: number; p50: number; p95: number; max: number; misses100ms: number } {
@@ -26,7 +25,7 @@ for (const [seed, width, height, motion] of [
     await page.setViewportSize({ width, height });
     await page.emulateMedia({ reducedMotion: motion });
     await page.addInitScript((gameSeed: number) => {
-      const probe: Probe = { samples: [], frames: [], working: false };
+      const probe: Probe = { samples: [], frames: [] };
       window.academyTiming = probe;
       const Native = window.WebSocket;
       class TimedSocket extends Native {
@@ -35,10 +34,6 @@ for (const [seed, width, height, motion] of [
           this.addEventListener('message', event => {
             const arrived = performance.now();
             const data = JSON.parse(event.data);
-            if ('work' in data) {
-              probe.working = data.work?.state === 'running';
-              if (!probe.working) window.dispatchEvent(new Event('academy-timing-settled'));
-            }
             const frame = data.update?.frame ?? data.recovery?.frame;
             const sample = probe.samples.at(-1);
             if (!sample || sample.sent === null || sample.message !== null || !frame || frame.match_id !== sample.match || frame.revision <= sample.revision) return;
@@ -103,23 +98,9 @@ for (const [seed, width, height, motion] of [
     await page.getByTestId('opponent-select').selectOption(seed === 0 ? 'random' : 'search-64');
     await page.getByRole('button', { name: 'New Game', exact: true }).click();
     await page.getByRole('button', { name: 'Play', exact: true }).click();
-    let declarations = 0;
     for (let input = 0; input < 30; input += 1) {
-      // The receipt can render before following bot work finishes. Keep that
-      // render sample, but wait for settled authority before choosing again.
-      await page.evaluate(() => new Promise<void>(resolve => {
-        if (!window.academyTiming.working) resolve();
-        else window.addEventListener('academy-timing-settled', () => resolve(), {once: true});
-      }));
-      await expect.poll(async () => await page.getByTestId('action-option').count() > 0 || await page.getByTestId('learn-mode').count() > 0 || await page.getByTestId('game-result').isVisible() || await page.getByTestId('combat-composer').isVisible()).toBe(true);
+      await expect.poll(async () => await page.getByTestId('action-option').count() > 0 || await page.getByTestId('learn-mode').count() > 0 || await page.getByTestId('game-result').isVisible()).toBe(true);
       if (await page.getByTestId('game-result').isVisible()) break;
-      if (await page.getByTestId('combat-composer').isVisible()) {
-        // Declarations are whole-plan confirmations, not timed offer inputs.
-        expect(++declarations).toBeLessThan(60);
-        await confirmCombat(page);
-        input -= 1;
-        continue;
-      }
       const actions = page.getByTestId('action-option');
       if (await actions.count() === 0) { await page.getByTestId('learn-mode').first().click(); continue; }
       if (input === 15) await page.getByRole('button', { name: 'Inspect', exact: true }).click();
@@ -154,9 +135,8 @@ for (const [seed, width, height, motion] of [
       browser: browser.version(), runtime: { node: process.version, platform: process.platform, arch: process.arch },
       artCacheState: process.env.ACADEMY_ART_CACHE_STATE ?? 'existing default server cache; not inventoried before launch', viewport: { width, height, dpr: 1, scale: await page.evaluate(() => visualViewport!.scale) },
       seed, opponent: seed === 0 ? 'random' : 'search-64', motion,
-      definitions: { acknowledgement: 'input to socket send', response: 'input to first matching authority frame before parse; an accepted human receipt precedes following bot work. Includes network and work before that frame',
+      definitions: { acknowledgement: 'input to socket send', response: 'input to matching authority message before parse, includes policy/network',
         applied: 'message to microtask after synchronous listeners (includes probe parse)', render: 'message to second rAF after matching DOM revision; rendering opportunity upper bound, not display latency',
-        settling: 'wait for runner completion before the next input; excluded from this render sample',
         overhead: 'WebSocket wrapper (including seed injection), one extra JSON parse, authority event, mutation observer, rAF loop and CDP timeline; no Playwright WebSocket routing' },
       acknowledgement: distribution(live.map(s => s.sent! - s.input)), authority: distribution(live.map(s => s.message! - s.input)),
       apply: distribution(live.map(s => s.applied! - s.message!)), render: distribution(live.map(s => s.renderingOpportunity! - s.message!)),

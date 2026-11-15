@@ -32,7 +32,7 @@ fn interactive_deck() -> BTreeMap<String, usize> {
 fn make_game(seed: u64) -> Game {
     let p1 = PlayerConfig::new("hero", interactive_deck());
     let p2 = PlayerConfig::new("villain", interactive_deck());
-    Game::new(vec![p1, p2], seed, true).expect("valid game setup")
+    Game::new(vec![p1, p2], seed, true)
 }
 
 fn make_env(seed: u64) -> Env {
