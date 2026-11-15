@@ -44,7 +44,7 @@ uv run --no-project managym academy play --deck ur_lessons --opponent-deck ./my-
 The browser opens already in that game: UR Lessons against the decklist in
 `my-deck.txt`, played by Search 64, with deal seed 7. Each deck is a bundled
 deck name or a decklist file; `--opponent` is `search`, `random`, `passive`
-or a checkpoint digest. A rejected decklist or unknown deck stops the command
+or a registered policy alias/identity. A rejected decklist or unknown deck stops the command
 with the reason before anything opens.
 Bundled names take precedence over same-named files; use `./ur_lessons` to
 select a file named `ur_lessons`.
@@ -57,8 +57,8 @@ For your own lists, expand **Import decklist files** and check **Use imported
 decks for the next game**. Upload or paste both decks, one `count card name`
 per line, with optional `Main` and `Sideboard` headings. Click **Check decklists**,
 fix any reported issues, and select **New Game**. Imported decks use the
-development format and supported cards; choose a built-in opponent, since
-checkpoint opponents do not accept imported decks. See the
+development format and supported cards. Registered policies check the complete
+setup, including imported lists, against their own admission requirements. See the
 [play guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#play-a-game).
 
 ### Watch a replay from an evaluation

@@ -386,7 +386,6 @@ _TORCH_NOT_YET_MOVED = frozenset(
         "manabot/sim/native_game.py",
         "manabot/sim/search/sampling.py",
         "manabot/sim/serving.py",
-        "manabot/sim/table_bots.py",
         "manabot/training/execution.py",
         "manabot/training/loops/minimal.py",
         "manabot/training/mps.py",
@@ -548,7 +547,7 @@ def test_backend_resolver_selects_configured_backends_and_names_missing_extras(
 # are explicit migration debt; removing an import must remove its entry.
 _BACKEND_ROOTS = frozenset(
     (
-        "manabot/sim/table_bots.py",
+        "manabot/sim/policy_provider.py",
         "manabot/cli.py",
         "manabot/eval/cards.py",
         "manabot/eval/evaluate.py",
