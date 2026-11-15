@@ -582,7 +582,12 @@ observation. Pass the actor and the revision/fingerprint from
 `env.semantic_decision_frame_json()`, and the action's index in that observation.
 It rejects stale or non-actor requests. `exact` means the ordered automatic
 production plan, including surplus; it does not necessarily resolve which mana
-to spend. Choice-dependent prices return `needs_choice` without source marks.
+to spend. `scope` identifies a spell cost, activation fee or current payment;
+`continuation` identifies native output alternatives and an outer payment still
+following the fee. A projected spending remainder stops at that cost boundary,
+before ability output or spell effects. Fee spending offers retain the boundary
+while unit selection remains unresolved. Choice-dependent prices return
+`needs_choice` without source marks.
 Fixed-output sources have deliberate activation offers alongside indexed mana
 abilities. Their absent `ability_index` remains distinct from ability zero on
 all policy input paths. No preview executes a spell or activation.

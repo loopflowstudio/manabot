@@ -163,3 +163,52 @@ test('a delayed preview response cannot restore source marks after a Command', a
   await expect(page.locator('[data-payment-source]')).toHaveCount(0);
   expect((await page.evaluate(() => window.__mana.frame!)).projection.agent.mana![1]).toBe(1);
 });
+
+
+test('activation fee preview stops before output and resumes the outer spell payment', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await track(page);
+  await page.goto('/');
+  await expect(page.getByTestId('connection-badge')).toHaveText('connected');
+  await page.getByRole('button', { name: 'New Game', exact: true }).click();
+  await expect(page.getByTestId('decision-surface')).toBeVisible();
+  await finishBoardNarration(page);
+  const preview = page.getByTestId('payment-preview');
+  const prism = await offer(page, 'Activate ability: Prophetic Prism');
+  await page.locator(`[data-testid="action-option"][data-offer-id="${prism}"]`).focus();
+  await expect(preview).toContainText('Activation fee: {1}');
+  await expect(preview).toContainText('Pool after fee, before ability output');
+  await expect(preview).toContainText("Choose the ability's output after activation");
+  await expect(preview).not.toContainText('The outer payment still follows');
+  await choose(page, await offer(page, 'Cast Boomerang Basics'));
+  const targeting = await page.evaluate(() => window.__mana.frame!);
+  await choose(page, targeting.offers[0].id);
+  const outer = await page.evaluate(() => window.__mana.frame!);
+  expect(outer.offers.some(candidate => candidate.label === 'Pay the cost')).toBe(true);
+  const nestedPrism = await offer(page, 'Activate ability: Prophetic Prism');
+  await page.locator(`[data-testid="action-option"][data-offer-id="${nestedPrism}"]`).focus();
+  await expect(preview).toContainText('Activation fee: {1}');
+  await expect(preview).toContainText('The outer payment still follows');
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.screenshot({ path: testInfo.outputPath(`activation-fee-${theme}.png`), fullPage: true });
+  }
+  await choose(page, nestedPrism);
+  const pending = await page.evaluate(() => window.__mana.frame!);
+  expect(pending.action_space).toBe('MODAL');
+  expect(pending.offers.some(candidate => candidate.label.includes('Add {U}'))).toBe(true);
+  expect(pending.projection.agent.mana!.reduce((a, b) => a + b, 0)).toBe(0);
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => window.__mana.frame?.frame_hash)).toBe(pending.frame_hash);
+  await finishBoardNarration(page);
+  expect((await page.evaluate(() => window.__mana.frame!)).projection.agent.mana).toEqual(pending.projection.agent.mana);
+  await choose(page, await offer(page, 'Add {U}'));
+  expect((await page.evaluate(() => window.__mana.frame!)).projection.agent.mana![1]).toBe(1);
+  const pay = await offer(page, 'Pay the cost');
+  await page.locator(`[data-testid="action-option"][data-offer-id="${pay}"]`).focus();
+  await expect(preview).toContainText('Spell cost proposal');
+  await expect(preview).toContainText('Pool after cost, before spell effects');
+  await expect(preview).not.toContainText('The outer payment still follows');
+  await choose(page, pay);
+  expect((await page.evaluate(() => window.__mana.frame!)).projection.agent.mana![1]).toBe(0);
+});

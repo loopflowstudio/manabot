@@ -99,6 +99,11 @@ def test_payment_preview_is_authenticated_read_only_and_stale_after_tap(
             preview = response.json()["preview"]
             assert preview["state"] == "exact"
             assert preview["cost"] == "{U}"
+            assert preview["scope"] == "spell_cost"
+            assert preview["continuation"] == {
+                "ability_output": False,
+                "outer_payment": False,
+            }
             assert preview["sources"]
             assert before == record.game.env.search_witness_json()
             assert record.game._next_prompt_id == prompt_count

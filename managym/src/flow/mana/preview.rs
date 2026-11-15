@@ -14,6 +14,23 @@ pub enum PaymentPreviewState {
     Unavailable,
 }
 
+/// The cost boundary explained, never a promise about resolution effects.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PaymentScope {
+    SpellCost,
+    ActivationFee,
+    CurrentPayment,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+pub struct PaymentContinuation {
+    /// Native output alternatives follow the fee; legality can narrow them.
+    pub ability_output: bool,
+    /// Another payment remains outside this fee, including optional payments.
+    pub outer_payment: bool,
+}
+
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct PaymentSourcePreview {
     pub source: SubjectRef,
@@ -24,6 +41,8 @@ pub struct PaymentSourcePreview {
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct PaymentPreview {
     pub state: PaymentPreviewState,
+    pub scope: Option<PaymentScope>,
+    pub continuation: PaymentContinuation,
     pub explanation: String,
     pub cost: Option<String>,
     pub sources: Vec<PaymentSourcePreview>,
@@ -64,9 +83,16 @@ impl From<&Mana> for PreviewPool {
 }
 
 impl PaymentPreview {
-    fn message(state: PaymentPreviewState, explanation: &str) -> Self {
+    fn message(
+        state: PaymentPreviewState,
+        explanation: &str,
+        scope: Option<PaymentScope>,
+        continuation: PaymentContinuation,
+    ) -> Self {
         Self {
             state,
+            scope,
+            continuation,
             explanation: explanation.into(),
             cost: None,
             sources: Vec::new(),
@@ -77,6 +103,94 @@ impl PaymentPreview {
 }
 
 impl Game {
+    fn preview_boundary(&self, action: &Action) -> (Option<PaymentScope>, PaymentContinuation) {
+        let mut continuation = PaymentContinuation::default();
+        let scope = match action {
+            Action::CastSpell { .. } => Some(PaymentScope::SpellCost),
+            Action::ChooseTarget { .. }
+                if matches!(
+                    self.pending_choice,
+                    Some(PendingChoice::ChooseTargets { .. })
+                ) =>
+            {
+                Some(PaymentScope::SpellCost)
+            }
+            Action::ActivateAbility {
+                permanent,
+                ability_index,
+                ..
+            } => {
+                continuation.ability_output = self.characteristics(*permanent).activated_abilities
+                    [*ability_index]
+                    .mana_choices()
+                    .is_some_and(|choices| choices.len() > 1);
+                continuation.outer_payment =
+                    matches!(
+                        self.pending_choice,
+                        Some(PendingChoice::ManaPayment { .. } | PendingChoice::Waterbend { .. })
+                    ) || self.state.suspended_decision.as_ref().is_some_and(|s| {
+                        matches!(
+                            s.decision,
+                            Decision::Payment(_)
+                                | Decision::ManaSpend { .. }
+                                | Decision::ManaUpfront { .. }
+                        )
+                    });
+                Some(PaymentScope::ActivationFee)
+            }
+            Action::PayCost { .. } => Some(match &self.pending_choice {
+                Some(
+                    PendingChoice::ManaPayment { payment, .. }
+                    | PendingChoice::Waterbend { payment, .. },
+                ) => match payment.as_ref() {
+                    Payment::Spell { .. } => PaymentScope::SpellCost,
+                    Payment::Activation { .. } => PaymentScope::ActivationFee,
+                },
+                _ => PaymentScope::CurrentPayment,
+            }),
+            // A spending offer is one unit of the same pending fee/cost. It
+            // has no automatic source plan, but keeps its continuation clear.
+            Action::ChooseMode { .. } => {
+                match self.state.suspended_decision.as_ref().map(|s| &s.decision) {
+                    Some(Decision::ManaSpend { completion, .. }) => match completion.as_ref() {
+                        SpendCompletion::Upfront(next) => {
+                            if let Decision::ManaUpfront {
+                                permanent,
+                                ability_index,
+                                resume,
+                                ..
+                            } = next.as_ref()
+                            {
+                                continuation.ability_output = self
+                                    .characteristics(*permanent)
+                                    .activated_abilities[*ability_index]
+                                    .mana_choices()
+                                    .is_some_and(|choices| choices.len() > 1);
+                                continuation.outer_payment = resume.is_some()
+                                    || matches!(
+                                        self.pending_choice,
+                                        Some(
+                                            PendingChoice::ManaPayment { .. }
+                                                | PendingChoice::Waterbend { .. }
+                                        )
+                                    );
+                            }
+                            Some(PaymentScope::ActivationFee)
+                        }
+                        SpendCompletion::Announced { payment, .. } => Some(match payment {
+                            Payment::Spell { .. } => PaymentScope::SpellCost,
+                            Payment::Activation { .. } => PaymentScope::ActivationFee,
+                        }),
+                        _ => Some(PaymentScope::CurrentPayment),
+                    },
+                    _ => None,
+                }
+            }
+            _ => None,
+        };
+        (scope, continuation)
+    }
+
     /// Query one legal action at its exact semantic authority address.
     pub fn payment_preview(
         &self,
@@ -102,6 +216,7 @@ impl Game {
             .actions
             .get(action_index)
             .ok_or_else(|| AgentError("unknown payment action".into()))?;
+        let (scope, continuation) = self.preview_boundary(action);
         let player = action.player();
         let mut reservation = None;
         let mut upfront_obligations = None;
@@ -112,6 +227,8 @@ impl Game {
                     return Ok(PaymentPreview::message(
                         PaymentPreviewState::NeedsChoice,
                         "Choose X or replicate count before previewing payment.",
+                        scope,
+                        continuation,
                     ));
                 }
                 let Some(cast) =
@@ -120,6 +237,8 @@ impl Game {
                     return Ok(PaymentPreview::message(
                         PaymentPreviewState::NeedsChoice,
                         "Choose the optional or alternative cost before previewing payment.",
+                        scope,
+                        continuation,
                     ));
                 };
                 if card.sacrifice_cost().is_some()
@@ -128,12 +247,16 @@ impl Game {
                     return Ok(PaymentPreview::message(
                         PaymentPreviewState::NeedsChoice,
                         "Choose the additional or alternative cost before previewing payment.",
+                        scope,
+                        continuation,
                     ));
                 }
                 if card.cost_reduction_if_targets().is_some() {
                     return Ok(PaymentPreview::message(
                         PaymentPreviewState::NeedsChoice,
                         "Choose targets before previewing this target-dependent cost.",
+                        scope,
+                        continuation,
                     ));
                 }
                 self.effective_spell_cost(player, *object, cast, None)
@@ -153,6 +276,8 @@ impl Game {
                         return Ok(PaymentPreview::message(
                             PaymentPreviewState::NeedsChoice,
                             "Choose the remaining additional costs before previewing payment.",
+                            scope,
+                            continuation,
                         ));
                     }
                     let requirements = card.target_requirements_for_mode(*mode);
@@ -165,7 +290,7 @@ impl Game {
                             >= requirements[*requirement_index].max_for(cast.x);
                     if card.cost_reduction_if_targets().is_some() && !completes {
                         return Ok(PaymentPreview::message(PaymentPreviewState::NeedsChoice,
-                            "Choose the remaining targets before previewing this target-dependent cost."));
+                            "Choose the remaining targets before previewing this target-dependent cost.", scope, continuation));
                     }
                     let mut targets = chosen.clone();
                     targets.push(*target);
@@ -192,6 +317,8 @@ impl Game {
                     return Ok(PaymentPreview::message(
                         PaymentPreviewState::NeedsChoice,
                         "Finish announcing costs and targets before previewing payment.",
+                        scope,
+                        continuation,
                     ))
                 }
                 None => self
@@ -203,6 +330,21 @@ impl Game {
                         _ => None,
                     }),
             },
+            Action::ChooseMode { .. } => {
+                if let Some(Decision::ManaSpend { cost, .. }) =
+                    self.state.suspended_decision.as_ref().map(|s| &s.decision)
+                {
+                    let mut preview = PaymentPreview::message(
+                        PaymentPreviewState::NeedsChoice,
+                        "Choose mana to finish paying this cost; the spending remainder is not yet determined.",
+                        scope,
+                        continuation,
+                    );
+                    preview.cost = Some(cost_description(cost));
+                    return Ok(preview);
+                }
+                None
+            }
             Action::ActivateAbility {
                 permanent,
                 ability_index,
@@ -218,6 +360,8 @@ impl Game {
                     return Ok(PaymentPreview::message(
                         PaymentPreviewState::NeedsChoice,
                         "Choose the activation's additional costs before previewing payment.",
+                        scope,
+                        continuation,
                     ));
                 }
                 reservation = Some(SourceReservation {
@@ -251,6 +395,8 @@ impl Game {
             return Ok(PaymentPreview::message(
                 PaymentPreviewState::NotApplicable,
                 "This action does not have an automatic payment preview.",
+                scope,
+                continuation,
             ));
         };
         let policy = if upfront_obligations.is_some() {
@@ -273,6 +419,8 @@ impl Game {
             let mut preview = PaymentPreview::message(
                 PaymentPreviewState::Unavailable,
                 "No automatic route. Use a legal mana activation and choose its output first.",
+                scope,
+                continuation,
             );
             preview.cost = Some(cost_description(&cost));
             return Ok(preview);
@@ -321,6 +469,8 @@ impl Game {
         };
         Ok(PaymentPreview {
             state: PaymentPreviewState::Exact,
+            scope,
+            continuation,
             explanation: if final_pool.is_some() {
                 "Exact automatic source plan."
             } else {
@@ -540,6 +690,10 @@ mod tests {
         let result = preview(&game, index);
         assert_eq!(result.state, PaymentPreviewState::Exact);
         assert_eq!(result.cost.as_deref(), Some("{1}"));
+        assert_eq!(result.scope, Some(PaymentScope::ActivationFee));
+        assert!(result.continuation.ability_output);
+        assert!(!result.continuation.outer_payment);
+        assert_eq!(result.pool_after_spending.as_ref().unwrap().amounts, [0; 6]);
         assert!(!result.sources.is_empty());
         game.step(index).unwrap();
         for source in result.sources {
@@ -557,6 +711,67 @@ mod tests {
             game.state.suspended_decision.as_ref().unwrap().decision,
             Decision::ManaChoice { .. }
         ));
+    }
+
+    #[test]
+    fn payment_preview_nested_fee_keeps_boundary_during_spending() {
+        let mut game = preview_game();
+        let prism = game
+            .scenario_force_battlefield(PlayerId(0), "Prophetic Prism", true)
+            .unwrap();
+        game.state
+            .mana_pool_mut(PlayerId(0))
+            .add(&Mana::parse("UR"));
+        game.scenario_refresh_priority().unwrap();
+        let cast = cast_index(&game);
+        assert_eq!(preview(&game, cast).scope, Some(PaymentScope::SpellCost));
+        game.step(cast).unwrap();
+        assert!(matches!(
+            game.pending_choice,
+            Some(PendingChoice::ManaPayment { .. })
+        ));
+        let activate = game
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .position(
+                |a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == prism),
+            )
+            .unwrap();
+        let before = witness(&game);
+        let fee = preview(&game, activate);
+        assert_eq!(fee.scope, Some(PaymentScope::ActivationFee));
+        assert!(fee.continuation.ability_output);
+        assert!(fee.continuation.outer_payment);
+        assert!(fee.pool_after_spending.is_none());
+        assert_eq!(before, witness(&game));
+        game.step(activate).unwrap();
+        assert!(matches!(
+            game.state.suspended_decision.as_ref().unwrap().decision,
+            Decision::ManaSpend { .. }
+        ));
+        let spending = preview(&game, 0);
+        assert_eq!(spending.scope, fee.scope);
+        assert_eq!(spending.cost.as_deref(), Some("{1}"));
+        assert_eq!(spending.state, PaymentPreviewState::NeedsChoice);
+        assert_eq!(spending.continuation, fee.continuation);
+        // No prediction of the chosen unit or the ability's output.
+        assert!(spending.pool_after_spending.is_none());
+        game.step(0).unwrap();
+        assert!(matches!(
+            game.state.suspended_decision.as_ref().unwrap().decision,
+            Decision::ManaChoice { .. }
+        ));
+        assert_eq!(game.pooled_mana(PlayerId(0)).total(), 1);
+        let restored = game.clone();
+        assert_eq!(witness(&game), witness(&restored));
+        game.step(0).unwrap();
+        assert!(matches!(
+            game.pending_choice,
+            Some(PendingChoice::ManaPayment { .. })
+        ));
+        assert_eq!(game.pooled_mana(PlayerId(0)).total(), 2);
     }
 
     #[test]

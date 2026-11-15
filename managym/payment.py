@@ -25,9 +25,19 @@ class PaymentSourcePreview(BaseModel):
     output: PreviewPool
 
 
+class PaymentContinuation(BaseModel):
+    """Native work still following the previewed fee or cost."""
+
+    model_config = ConfigDict(extra="forbid")
+    ability_output: bool
+    outer_payment: bool
+
+
 class PaymentPreview(BaseModel):
     model_config = ConfigDict(extra="forbid")
     state: Literal["exact", "needs_choice", "not_applicable", "unavailable"]
+    scope: Literal["spell_cost", "activation_fee", "current_payment"] | None
+    continuation: PaymentContinuation
     explanation: str
     cost: str | None
     sources: list[PaymentSourcePreview]

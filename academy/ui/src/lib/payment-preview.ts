@@ -8,6 +8,8 @@ export interface PreviewPool {
 }
 export interface PaymentPreview {
   state: 'exact' | 'needs_choice' | 'not_applicable' | 'unavailable';
+  scope: 'spell_cost' | 'activation_fee' | 'current_payment' | null;
+  continuation: { ability_output: boolean; outer_payment: boolean };
   explanation: string;
   cost: string | null;
   sources: { source: SubjectRef; label: string; output: PreviewPool }[];

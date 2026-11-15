@@ -91,6 +91,30 @@ def test_optional_mana_cost_survives_lost_response_reconnect_and_duplicate(
                 for offer in frame.offers
                 if offer.label == "Activate ability: Prophetic Prism"
             )
+            endpoint = f"/api/sessions/{initial['session_id']}/payment-preview"
+            assert frame.prompt is not None
+            response = client.post(
+                endpoint,
+                headers={"x-etude-participant-token": initial["resume_token"]},
+                json={
+                    "match_id": frame.match_id,
+                    "revision": frame.revision,
+                    "prompt_id": frame.prompt.id,
+                    "frame_hash": frame.frame_hash,
+                    "offer_id": activation.id,
+                    "request_id": "nested-fee-preview",
+                },
+            )
+            assert response.status_code == 200, response.text
+            fee = response.json()["preview"]
+            assert fee["state"] == "exact"
+            assert fee["scope"] == "activation_fee"
+            assert fee["cost"] == "{1}"
+            assert fee["continuation"] == {
+                "ability_output": True,
+                "outer_payment": True,
+            }
+            assert fee["pool_after_spending"]["amounts"] == [0] * 6
             command = _command(frame, activation, "optional-lost-activation")
 
         record = server.SESSION_REGISTRY[initial["session_id"]]

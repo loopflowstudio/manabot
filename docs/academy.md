@@ -541,7 +541,7 @@ Read the explanation before relying on the marks:
 - An exact source plan lists the sources and output for the current cost.
   It shows the pool after production and any spending choices still needed.
   An exact source plan can still require you to choose which mana to spend;
-  a final remaining pool is shown only when that outcome is determined.
+  the pool remaining after that cost is shown only when determined.
 - If X, an optional or alternative cost, or a target can change the price,
   the preview names the missing choice and leaves source marks clear. Follow
   the offered prompts; the preview refreshes as those choices become known.
@@ -557,6 +557,12 @@ choose the intended ability and follow its color or other prompts. Activation
 costs, including any mana fee or sacrifice, commit through those actions.
 Sources remain reachable beside the payment choices; **Show all** returns to
 the complete legal list. Only currently legal activations are offered.
+
+For an ability with a mana fee, the preview explains payment of that fee.
+Its projected remainder is before the ability produces mana or resolves other
+effects. Follow the actual output and remaining payment prompts; the
+floating-mana line shows what is already available. A spell's projected
+remainder is after its cost, before its effects resolve.
 
 The floating-mana line stays visible beside the board. Open its details to read
 spending restrictions, effects granted when mana is spent,

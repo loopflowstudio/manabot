@@ -17,7 +17,7 @@
 use std::num::NonZeroUsize;
 
 mod preview;
-pub use preview::{PaymentPreview, PaymentPreviewState};
+pub use preview::{PaymentContinuation, PaymentPreview, PaymentPreviewState, PaymentScope};
 
 use crate::{
     agent::action::{Action, AgentError},
