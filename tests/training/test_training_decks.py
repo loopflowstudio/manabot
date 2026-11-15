@@ -30,7 +30,7 @@ from manabot.infra.identity import canonical_sha256
 from manabot.infra.provenance import authored_matchup_sha256, runtime_fingerprints
 from manabot.model.catalog import checkpoint_incompatibility, inspect_checkpoint
 from manabot.model.world import checkpoint_world, validate_agent_setup
-from manabot.training.decks import UniformDecks, pair_match
+from manabot.training.decks import UniformDecks
 from manabot.training.execution import _runtime_identities, validate_regime
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.training.rollout.collection import SeatRoutedCollector
@@ -195,11 +195,12 @@ def test_collector_resets_recovers_seats_seeds_and_exposure(
     recovery: Literal["exact", "current"],
     sampling: Literal["uniform-distinct-v1", "uniform-independent-v1"],
 ) -> None:
-    decks = decks.model_copy(update={"sampling": sampling})
+    decks = decks.model_copy(update={"sampling": sampling, "decklists": "closed"})
     agent = _agent()
     first = _collector(decks, recovery)
     restored = _collector(decks, recovery)
     try:
+        assert all(m.config.decklists == "closed" for m in first.stream_matches)
         initial = first._env.current_game_seeds()
         batch = first.collect(agent, 1)
         assert first.stats.games == 4
@@ -224,6 +225,13 @@ def test_collector_resets_recovers_seats_seeds_and_exposure(
         assert first._self_play_decks == restored._self_play_decks
         assert first._env.current_game_seeds() == restored._env.current_game_seeds()
         assert first.stats.exposure == restored.stats.exposure
+        assert all(
+            p.disclosure == "closed"
+            for pair in restored._env.current_player_configs()
+            for p in pair
+        )
+        assert all(m.config.decklists == "closed" for m in restored.stream_matches)
+        assert not right.ordered_obs()["decklists"][..., 1, :, :].any()
         snapshot = first.snapshot()
         changed = _uniform("Plains", "Mountain", "Island", "Forest")
         fresh = _collector(changed, recovery)
@@ -400,9 +408,11 @@ def test_later_roots_take_new_decks_and_reject_invalid_ones_before_play(
         collector.close()
 
 
+@pytest.mark.parametrize("sampled", [False, True])
 def test_failure_records_actual_sampled_decks(
-    decks: UniformDecks, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    decks: UniformDecks, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sampled: bool
 ) -> None:
+    decks = decks.model_copy(update={"decklists": "closed"})
     policy = GameErrorPolicy()
     ledger = GameErrorLedger(tmp_path / "attempts.jsonl", policy)
     collector = SeatRoutedCollector(
@@ -413,7 +423,7 @@ def test_failure_records_actual_sampled_decks(
         seed=17402,
         opponent_mode="self",
         games_per_stream=1,
-        deck_source=decks,
+        deck_source=decks if sampled else None,
         game_errors=policy,
         record_attempt=lambda row: ledger.record(row, {}),
         numerics=TorchCollectionSession(device="cpu", seed=17402, precision="float32"),
@@ -443,19 +453,25 @@ def test_failure_records_actual_sampled_decks(
         failed = next(row for row in attempts if row.outcome == "engine_error")
         assert replay_attempt(failed)["at_retained_failure"]
         for attempt in attempts:
+            assert attempt.matchup.decklists == "closed"
             probe = managym.VectorEnv(num_envs=1, seed=attempt.seed)
-            probe.set_training_decks(decks.players())
+            if sampled:
+                probe.set_training_decks(decks.players())
             probe.reset_all(Match(decks.match_config()).to_rust())
-            assert attempt.matchup == pair_match(*probe.current_player_configs()[0])
-            assert attempt.decks_digest == decks.digest
+            assert attempt.matchup == MatchConfig.from_players(
+                *probe.current_player_configs()[0]
+            )
+            assert attempt.decks_digest == (decks.digest if sampled else None)
         scope = CaptureScope(tmp_path / "failures")
         with capture_scope(scope), pytest.raises(Exception):
             collector._env.step_into_buffers([-1, -1])
         evidence = FailureEvidence.model_validate_json(scope.paths[-1].read_bytes())
-        assert evidence.identities["deck_source"]["digest"] == decks.digest
+        if sampled:
+            assert evidence.identities["deck_source"]["digest"] == decks.digest
         for game, players in zip(
             evidence.games, collector._env.current_player_configs(), strict=True
         ):
+            assert all(p.disclosure == "closed" for p in game.players)
             assert [player.name for player in game.players] == [
                 player.name for player in players
             ]
@@ -526,3 +542,67 @@ def test_independent_population_retains_event_ids_and_mirrors() -> None:
         UniformDecks(
             decks=(deck,), sampling="uniform-independent-v1", entry_ids=("same", "same")
         )
+
+
+def test_source_disclosure_preserves_open_identity_and_binds_recovery() -> None:
+    source = UniformDecks(
+        decks=tuple(Deck({name: 10}) for name in ("Plains", "Mountain", "Island"))
+    )
+    assert "decklists" not in source.model_dump(mode="json")
+    assert (
+        source.digest
+        == "0f3c4ed44819bab893c6e693d8a2ed59dbaaedb1fd87d2ec1af604eedd544355"
+    )
+    closed = source.model_copy(update={"decklists": "closed"})
+    assert closed.digest != source.digest
+    assert {p.disclosure for p in closed.players()} == {"closed"}
+    assert closed.match_config().decklists == "closed"
+    record = _regime(closed).model_dump(mode="json")
+    assert record["deck_source"]["decklists"] == "closed"
+    assert TrainingRegime.model_validate(record).deck_source == closed
+    space = ObservationSpace()
+    with pytest.raises(ValueError, match="recovery runtime/source identity mismatch"):
+        admit_recovery_identities(
+            _runtime_identities(7, _regime(source), space, TORCH_BACKEND),
+            _runtime_identities(7, _regime(closed), space, TORCH_BACKEND),
+            None,
+        )
+
+
+def test_closed_fixed_roots_survive_auto_reset_and_restore(decks: UniformDecks) -> None:
+    match = Match(decks.model_copy(update={"decklists": "closed"}).match_config())
+
+    def collector() -> SeatRoutedCollector:
+        return SeatRoutedCollector(
+            ObservationSpace(),
+            match,
+            Reward(RewardConfig()),
+            num_envs=2,
+            seed=17402,
+            opponent_mode="self",
+            games_per_stream=2,
+            recovery_max_game_microsteps=1000,
+            numerics=TorchCollectionSession(
+                device="cpu", seed=17402, precision="float32"
+            ),
+        )
+
+    first, restored = collector(), collector()
+    try:
+        initial = first._env.current_game_seeds()
+        first.collect(_agent(), 1)
+        assert first.stats.games == 4
+        assert first._env.current_game_seeds() != initial
+        restored.restore(first.snapshot(), lambda: None)
+        for value in (first, restored):
+            assert all(m.config.decklists == "closed" for m in value.stream_matches)
+            assert all(
+                p.disclosure == "closed"
+                for pair in value._env.current_player_configs()
+                for p in pair
+            )
+        batch = restored.collect(_agent(), 1)
+        assert not batch.ordered_obs()["decklists"][..., 1, :, :].any()
+    finally:
+        first.close()
+        restored.close()

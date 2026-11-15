@@ -69,4 +69,6 @@ def elemental_roster(match: Match) -> list[managym.PlayerConfig]:
         for actual in match.to_rust()
     ):
         raise ValueError("elemental-uniform requires an exact Elemental authored match")
+    for player in roster:
+        player.disclosure = match.config.decklists
     return roster

@@ -78,6 +78,40 @@ both players know each other's main deck and sideboard) or `"closed"`; search
 players cannot play closed matches. `Match.swapped()` moves both lists together;
 `Env.reset(options={"match": match})` also replaces the setup used by later resets.
 
+### Closed decklists
+
+Training keeps the `decklists` setting for every game of the run, whichever
+way the run gets its decks:
+
+```python
+from manabot.training.decks import UniformDecks
+from managym import Deck
+
+decks = (Deck({"Island": 40}), Deck({"Mountain": 40}))
+source = UniformDecks(decks=decks, decklists="closed")
+{player.disclosure for player in source.players()}  # {'closed'}
+source.match_config().decklists                     # 'closed'
+```
+
+A fixed match and an `elemental-uniform` match take it from
+`MatchConfig.decklists`; a deck source takes it from `UniformDecks.decklists`
+(`"open"` by default). In a closed run the policy's `decklists` rows for the
+opponent are zero in every game, including games started by auto-reset and
+games regathered after a [game failure](../docs/training.md#game-failures), and
+the retained record of each game says closed. What the opponent shows during
+play still arrives: a revealed card appears in `known_hand` while it stays in
+that hand.
+
+The setting belongs to the match, not to a seat. `MatchConfig.from_players(first,
+second)` records two native players as a match and raises `ValueError`, naming
+both seats, when their disclosure or world differ; a training roster whose
+players do not share one disclosure is refused before it replaces the roster
+in use. Give both players the same setting. Evaluation matchups stay open.
+
+An open source serializes without a `decklists` key, so saved regimes and their
+source digests are unchanged; a closed source has its own digest, so a run
+resumes only under the setting it started with.
+
 
 Train on rented machines through Etude: see [remote training](../docs/training.md#remote-training).
 New self-play jobs use exact absolute update checkpoints (`checkpoint_updates`,

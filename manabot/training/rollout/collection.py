@@ -48,7 +48,7 @@ from manabot.sim.rollout import (
     RandomBatchController,
     allocate_buffers,
 )
-from manabot.training.decks import UniformDecks, pair_match
+from manabot.training.decks import UniformDecks
 from manabot.training.regime import BatchClosure
 from manabot.training.rollout.actions import ACTION_FIELDS, ActionRows, PackedActions
 from manabot.training.rollout.adaptive import (
@@ -734,7 +734,7 @@ class SeatRoutedCollector:
             # the run submitted, even one outside the supply it began with.
             setups = self._env.current_player_configs()
             for row in rows:
-                self.stream_matches[row] = Match(pair_match(*setups[row]))
+                self.stream_matches[row] = Match(MatchConfig.from_players(*setups[row]))
         for row in rows:
             match = self.stream_matches[row]
             self._self_play_decks[row] = (

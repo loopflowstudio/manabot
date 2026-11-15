@@ -38,8 +38,12 @@ from tests.training.test_recovery import tracked_updates
 PACK = "elemental-world-v2"
 
 
-def _match() -> Match:
-    return Match(MatchConfig.authored(PACK, "elemental_ug", "elemental_bg"))
+def _match(decklists: Literal["open", "closed"] = "open") -> Match:
+    return Match(
+        MatchConfig.authored(PACK, "elemental_ug", "elemental_bg").model_copy(
+            update={"decklists": decklists}
+        )
+    )
 
 
 def _collector(
@@ -49,7 +53,7 @@ def _collector(
 ) -> SeatRoutedCollector:
     return SeatRoutedCollector(
         ObservationSpace(),
-        _match(),
+        _match("closed"),
         Reward(RewardConfig()),
         num_envs=streams,
         seed=17402,
@@ -81,6 +85,8 @@ def test_uniform_collector_recovers_changed_terminal_roots(
     for match, players in zip(
         first.stream_matches, first._env.current_player_configs(), strict=True
     ):
+        assert match.config.decklists == "closed"
+        assert all(p.disclosure == "closed" for p in players)
         assert (match.hero_deck, match.villain_deck) == (
             players[0].decklist,
             players[1].decklist,
@@ -150,9 +156,16 @@ def test_uniform_collector_recovers_changed_terminal_roots(
         assert expected == first.stats.exposure
     restored = _collector(recovery, learning_seats=learning_seats)
     restored.restore(first.snapshot(), lambda: None)
+    assert all(m.config.decklists == "closed" for m in restored.stream_matches)
+    assert all(
+        p.disclosure == "closed"
+        for pair in restored._env.current_player_configs()
+        for p in pair
+    )
     assert first._self_play_decks == restored._self_play_decks
     left, right = first.collect(agent, 64), restored.collect(agent, 64)
     expected, actual = left.ordered_obs(), right.ordered_obs()
+    assert not actual["decklists"][..., 1, :, :].any()
     for key in expected:
         np.testing.assert_array_equal(expected[key], actual[key])
     np.testing.assert_array_equal(left.actions, right.actions)
@@ -327,7 +340,7 @@ def test_uniform_crash_refill_retains_sampled_setups(
     )
     collector = SeatRoutedCollector(
         ObservationSpace(),
-        _match(),
+        _match("closed"),
         Reward(RewardConfig()),
         num_envs=2,
         seed=17402,
@@ -369,10 +382,11 @@ def test_uniform_crash_refill_retains_sampled_setups(
         # Independently reset native roots at every retained seed: receipts must
         # bind the sampled pair, including the replacement, rather than the recipe pair.
         for attempt in attempts:
+            assert attempt.matchup.decklists == "closed"
             probe = managym.VectorEnv(num_envs=1, seed=attempt.seed)
-            roster = elemental_roster(_match())
+            roster = elemental_roster(_match("closed"))
             probe.set_uniform_roster(roster)
-            probe.reset_all(_match().to_rust())
+            probe.reset_all(_match("closed").to_rust())
             a, b = probe.current_matchup_indices()[0]
             assert attempt.matchup.hero_deck == roster[a].decklist
             assert attempt.matchup.villain_deck == roster[b].decklist

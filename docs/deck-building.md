@@ -214,6 +214,10 @@ population = UniformDecks(
 )
 ```
 
+Add `decklists="closed"` to train without either player knowing the other's
+list; the default is open
+([closed training](../manabot/README.md#closed-decklists)).
+
 TLA Limited games outgrow the default observation capacities; a run on
 these decks stops with a typed capacity error within its first few dozen
 games. Copy the `observation` block and the `game_errors` policy (with

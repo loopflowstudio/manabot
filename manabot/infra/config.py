@@ -16,7 +16,7 @@ from pydantic import (
 )
 
 from manabot.env.legacy_input import warn_deprecated_input
-from managym import WORLD_SETUP, Deck, DeckImport, Decklist
+from managym import WORLD_SETUP, Deck, DeckImport, Decklist, PlayerConfig
 
 # The policy input a fresh configuration selects. Input v11 gives each game
 # thing one object row (cards outside the battlefield and stack, permanents
@@ -190,6 +190,30 @@ class MatchConfig(BaseConfig):
                 raise ValueError("an imported decklist plays in the world")
             source.validate_deck(Deck(main, sideboard))
         return self
+
+    @classmethod
+    def from_players(cls, first: PlayerConfig, second: PlayerConfig) -> "MatchConfig":
+        """Record a native root in seat order, rejecting asymmetric match settings."""
+        for setting, left, right in (
+            ("world", first.world, second.world),
+            ("disclosure", first.disclosure, second.disclosure),
+        ):
+            if left != right:
+                raise ValueError(
+                    f"players require the same {setting}: "
+                    f"seat 0 ({first.name}) has {left!r}, "
+                    f"seat 1 ({second.name}) has {right!r}"
+                )
+        return cls(
+            hero=first.name,
+            villain=second.name,
+            hero_deck=first.decklist,
+            villain_deck=second.decklist,
+            hero_sideboard=first.sideboard,
+            villain_sideboard=second.sideboard,
+            world=first.world,
+            decklists=first.disclosure,
+        )
 
     @classmethod
     def from_import(cls, hero: DeckImport, villain: DeckImport) -> "MatchConfig":

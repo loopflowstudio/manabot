@@ -201,6 +201,14 @@ impl VectorEnv {
                 "uniform roster requires every exact Elemental setup once".into(),
             ));
         }
+        if let Some(first) = roster.first() {
+            if let Some(other) = roster.iter().find(|p| p.disclosure != first.disclosure) {
+                return Err(AgentError(format!(
+                    "training roster requires the same disclosure: {} has {:?}, {} has {:?}",
+                    first.name, first.disclosure, other.name, other.disclosure
+                )));
+            }
+        }
         self.uniform_roster = RootRoster {
             players: roster,
             distinct: false,
@@ -249,6 +257,14 @@ impl VectorEnv {
                 return Err(AgentError(
                     "training decks must be distinct normalized lists".into(),
                 ));
+            }
+        }
+        if let Some(first) = decks.first() {
+            if let Some(other) = decks.iter().find(|p| p.disclosure != first.disclosure) {
+                return Err(AgentError(format!(
+                    "training roster requires the same disclosure: {} has {:?}, {} has {:?}",
+                    first.name, first.disclosure, other.name, other.disclosure
+                )));
             }
         }
         self.uniform_roster = RootRoster {
@@ -1260,6 +1276,48 @@ mod tests {
             .iter()
             .map(|d| setup.player_config(&d.key, &d.key).unwrap())
             .collect()
+    }
+
+    #[test]
+    fn training_rosters_reject_mixed_disclosure_atomically() {
+        use crate::state::player::DecklistDisclosure;
+
+        for elemental in [false, true] {
+            let mut roster = if elemental {
+                elemental_roster()
+            } else {
+                ["Island", "Mountain"]
+                    .map(|name| {
+                        PlayerConfig::new(name, BTreeMap::from([(name.into(), 12)]))
+                            .submit_to_world()
+                    })
+                    .to_vec()
+            };
+            for player in &mut roster {
+                player.disclosure = DecklistDisclosure::Closed;
+            }
+            let mut vector = VectorEnv::new(2, 174, true, [PlayerPolicy::Agent; 2]);
+            let install = |vector: &mut VectorEnv, players: Vec<PlayerConfig>| {
+                if elemental {
+                    vector.set_uniform_roster(players)
+                } else {
+                    vector.set_training_decks(players, true)
+                }
+            };
+            install(&mut vector, roster.clone()).unwrap();
+            let mut mixed = roster.clone();
+            mixed[1].disclosure = DecklistDisclosure::Open;
+            assert!(install(&mut vector, mixed)
+                .unwrap_err()
+                .to_string()
+                .contains("same disclosure"));
+            vector.reset_all(roster[..2].to_vec()).unwrap();
+            for players in vector.current_player_configs() {
+                assert!(players
+                    .iter()
+                    .all(|p| p.disclosure == DecklistDisclosure::Closed));
+            }
+        }
     }
 
     #[test]

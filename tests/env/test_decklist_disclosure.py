@@ -1,13 +1,17 @@
 """Open and closed decklists through the match, encoders, text and Academy wire."""
 
+from dataclasses import asdict
+import random
 from typing import Literal
 
 import numpy as np
 import pytest
+import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import DECKLIST_DIM, ObservationSpace
-from manabot.infra.config import MatchConfig, ObservationConfig
+from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.managym.experience_projection import serialize_observation
 from manabot.semantic.text_observation import capture_text_decision
 from manabot.sim.registration import (
@@ -110,3 +114,161 @@ def test_open_is_the_default_and_omitted_from_serialized_configuration() -> None
     assert hero.disclosure == villain.disclosure == "closed"
     with pytest.raises(ValueError):
         managym.PlayerConfig("x", {"Island": 1}, disclosure="partial")
+
+
+def test_match_from_players_retains_disclosure_and_rejects_mixed_settings() -> None:
+    players = Match(_match("closed")).to_rust()
+    actual = MatchConfig.from_players(*players)
+    assert actual.decklists == "closed"
+    assert actual.hero_deck == players[0].decklist
+    assert actual.villain_sideboard == players[1].sideboard
+    assert (actual.hero, actual.villain, actual.world) == (
+        players[0].name,
+        players[1].name,
+        players[0].world,
+    )
+    players[1].disclosure = "open"
+    with pytest.raises(
+        ValueError, match=r"same disclosure: seat 0 .*closed.*seat 1 .*open"
+    ):
+        MatchConfig.from_players(*players)
+    players[1] = managym.Deck({"Island": 40}).player()
+    with pytest.raises(ValueError, match=r"same world: seat 0 .*seat 1"):
+        MatchConfig.from_players(*players)
+
+
+@pytest.mark.parametrize("viewer", [0, 1])
+def test_unseen_opponent_list_does_not_change_observation_or_prepared(
+    viewer: int,
+) -> None:
+    torch.set_num_threads(1)
+    space = ObservationSpace()
+    policy = ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
+
+    def game(land: str, disclosure: Decklists) -> managym.Env:
+        decks = [{"Forest": 40}, {land: 40}]
+        if viewer == 1:
+            decks.reverse()
+        env = managym.Env(seed=3)
+        env.reset(
+            Match(
+                MatchConfig(
+                    hero_deck=decks[0], villain_deck=decks[1], decklists=disclosure
+                )
+            ).to_rust()
+        )
+        return env
+
+    left, right = game("Island", "closed"), game("Mountain", "closed")
+    opened = [
+        game(land, "open").observation_for_player(viewer)
+        for land in ("Island", "Mountain")
+    ]
+    assert opened[0].toJSON() != opened[1].toJSON()
+    assert not np.array_equal(
+        space.encode(opened[0])["decklists"], space.encode(opened[1])["decklists"]
+    )
+    open_prepared = [
+        policy.prepare({key: value[None] for key, value in space.encode(obs).items()})
+        for obs in opened
+    ]
+    assert not np.array_equal(open_prepared[0].deck_rows, open_prepared[1].deck_rows)
+    reset = [env.observation_for_player(viewer) for env in (left, right)]
+    assert reset[0].toJSON() == reset[1].toJSON()
+    reset_buffers = [space.encode(obs) for obs in reset]
+    for key, value in reset_buffers[0].items():
+        np.testing.assert_array_equal(value, reset_buffers[1][key], err_msg=key)
+    reset_prepared = [
+        asdict(policy.prepare({key: value[None] for key, value in row.items()}))
+        for row in reset_buffers
+    ]
+    np.testing.assert_equal(reset_prepared[0], reset_prepared[1])
+    decisions = 0
+    # All-land decks have identical action ordering until the opponent plays a
+    # land. Equal sizes preserve shuffle RNG and the viewer's private cards.
+    for _ in range(100):
+        a, b = (env.observation_for_player(viewer) for env in (left, right))
+        if a.opponent_permanents:
+            break
+        if left.current_agent_index() == viewer:
+            assert a.toJSON() == b.toJSON()
+            encoded = [space.encode(obs) for obs in (a, b)]
+            for key in encoded[0]:
+                np.testing.assert_array_equal(
+                    encoded[0][key], encoded[1][key], err_msg=key
+                )
+            prepared = [
+                asdict(policy.prepare({k: v[None] for k, v in row.items()}))
+                for row in encoded
+            ]
+
+            np.testing.assert_equal(prepared[0], prepared[1])
+            decisions += 1
+        index = 0
+        if left.current_agent_index() != viewer and decisions == 0:
+            # Let the on-the-draw viewer act before the opponent exposes a land.
+            live = left.observation_for_player(left.current_agent_index())
+            index = next(
+                i
+                for i, action in enumerate(live.action_space.actions)
+                if int(action.action_type)
+                == int(managym.ActionEnum.PRIORITY_PASS_PRIORITY)
+            )
+        left.step(index)
+        right.step(index)
+    else:
+        pytest.fail("opponent never exposed a land")
+    assert decisions > 0
+
+
+def test_public_reveal_then_departure_updates_closed_known_hand() -> None:
+    torch.set_num_threads(1)
+    space = ObservationSpace()
+    policy = ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
+    env = managym.Env(seed=0)
+    obs, _ = env.reset(Match(_match("closed")).to_rust())
+    rng = random.Random(0)
+    owner: int | None = None
+    revealed: int | None = None
+    prepared_row: int | None = None
+    for _ in range(3000):
+        if owner is not None:
+            view = env.observation_for_player(1 - owner)
+            encoded = space.encode(view)
+            assert not encoded["decklists"][1].any()
+            prepared = policy.prepare({k: v[None] for k, v in encoded.items()})
+            assert revealed is not None
+            selected = encoded["known_hand"][1, :, 0] == revealed + 1
+            if prepared_row is None:
+                prepared_row = int(prepared.known_rows[0, 1, selected][0])
+                assert prepared_row > 0
+            if revealed not in view.opponent.known_hand:
+                assert not selected.any()
+                assert not prepared.known_counts[0, 1][
+                    prepared.known_rows[0, 1] == prepared_row
+                ].any()
+                return
+            count = view.opponent.known_hand[revealed]
+            assert encoded["known_hand"][1, selected, 1].sum() == count
+            assert (
+                prepared.known_counts[0, 1][
+                    prepared.known_rows[0, 1] == prepared_row
+                ].sum()
+                == count
+            )
+        actions = obs.action_space.actions
+        retrievals = [
+            i
+            for i, a in enumerate(actions)
+            if int(a.action_type) == int(managym.ActionEnum.LEARN_TAKE_LESSON)
+        ]
+        if retrievals and owner is None:
+            owner = env.current_agent_index()
+            obs, *_ = env.step(retrievals[-1])
+            known = env.observation_for_player(1 - owner).opponent.known_hand
+            assert sum(known.values()) == 1
+            revealed = next(iter(known))
+        else:
+            assert not obs.game_over, "game ended before revealed card left hand"
+            obs, *_ = env.step(rng.randrange(len(actions)))
+    pytest.fail("no public reveal followed by hand departure in bounded game")
