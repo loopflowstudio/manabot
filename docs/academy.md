@@ -793,8 +793,15 @@ with serve(
 
 Run, stage, raw/EMA, updates and transitions come from the run's `run.json`,
 joined to the exact artifact digest. Missing counts say **not recorded**;
-filenames never supply training counts. World/setup mismatches remain disabled
-with the precise reason. Imported decks work when the provider admits them.
+filenames never supply training counts. A world mismatch stays listed but
+disabled with the precise reason. A selected policy is checked against the setup before Start in Play and Watch;
+a mismatch shows the provider’s reason beside the picker. Start checks again,
+so changed artifacts and setups are still refused precisely. Bound checkpoint
+decks are also listed as **Bound decks**. Registered launch aliases appear
+alongside provider-authored names in setup and recorded player identities, so
+configurations of the same artifact can have recognizable labels. A refused
+Play launch keeps its selected policy and decks for an explicit retry.
+Imported decks work when the provider admits them.
 
 For a local fine-tuned Qwen saved with its tokenizer and safetensors weights:
 
@@ -818,6 +825,14 @@ Implement the framework-free contracts in `managym.policy`. A factory exposes
 `serve(policies={"my-bot": factory})`. Installed providers may also register
 in the `managym.bots` entry-point group and implement `policy(spec)` plus
 optional `DiscoveringPolicyProvider.discover(config | None)` returning factories.
+The entry point names a provider object, not its class:
+
+```toml
+[project.entry-points."managym.bots"]
+my-bot = "my_bot:provider"   # provider = Provider() in my_bot/__init__.py
+```
+
+A saved specification's `"provider"` is that entry-point name.
 `None` means the provider's ambient configuration, called once at server start;
 explicit `sources=` are additional discovery calls. Multiple providers coexist.
 Academy does not import a training framework or know their artifact layouts.

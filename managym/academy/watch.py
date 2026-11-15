@@ -5,6 +5,7 @@ view. The mixed canonical record and retained roots remain server-private.
 """
 
 from dataclasses import asdict, replace
+import logging
 from typing import Any, TypedDict
 
 from fastapi import HTTPException
@@ -125,7 +126,19 @@ def step_watch(trace_id: str, token: str | None, expected_revision: int) -> Watc
     )
     assert context is not None
     assert game.watch_policies is not None
-    game._bot_decision = choose_bot(game.watch_policies[seat], game.env, game.obs)
+    try:
+        game._bot_decision = choose_bot(game.watch_policies[seat], game.env, game.obs)
+    except ValueError as exc:
+        # Nothing was committed; the pending decision stays for an explicit retry.
+        raise HTTPException(
+            422, f"Seat {seat + 1} policy could not choose: {exc}"
+        ) from exc
+    except Exception as exc:
+        logging.getLogger(__name__).exception("Watch policy failed")
+        raise HTTPException(
+            500,
+            f"Seat {seat + 1} policy failed ({type(exc).__name__}); see the server log.",
+        ) from exc
     offer_id = next(
         key
         for key, index in context.action_by_offer.items()

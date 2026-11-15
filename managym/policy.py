@@ -164,6 +164,13 @@ class PolicySource:
     config: dict[str, JSONValue] = field(default_factory=dict)
 
 
+# An entry point names a provider object; a class would be called unbound.
+_CLASS_ENTRY_POINT = (
+    "its managym.bots entry point names a class; point it at a provider "
+    "instance instead (for example `mybot:provider` where `provider = Provider()`)."
+)
+
+
 class PolicyRegistry:
     """Server-scoped factories; catalog refresh never substitutes pinned bytes."""
 
@@ -186,12 +193,7 @@ class PolicyRegistry:
         self, policy: PolicyFactory | PolicySpec, *, name: str | None = None
     ) -> str:
         if isinstance(policy, PolicySpec):
-            provider = self.providers.get(policy.provider)
-            if provider is None:
-                raise ValueError(
-                    f"Policy provider {policy.provider!r} is not installed."
-                )
-            policy = provider.policy(policy)
+            policy = self._provider(policy.provider).policy(policy)
         descriptor = deepcopy(policy.describe())
         if descriptor.contract_version != 1:
             raise ValueError("Unsupported policy adapter contract version.")
@@ -210,6 +212,9 @@ class PolicyRegistry:
         if not self._discovered:
             self._discovered = True
             for name, provider in self.providers.items():
+                if isinstance(provider, type):
+                    self.discovery_errors.append(f"{name}: {_CLASS_ENTRY_POINT}")
+                    continue
                 discover = getattr(provider, "discover", None)
                 if discover is not None:
                     try:
@@ -218,11 +223,7 @@ class PolicyRegistry:
                     except (ImportError, OSError, ValueError) as exc:
                         self.discovery_errors.append(f"{name}: {exc}")
         for source in sources:
-            provider = self.providers.get(source.provider)
-            if provider is None:
-                raise ValueError(
-                    f"Policy provider {source.provider!r} is not installed."
-                )
+            provider = self._provider(source.provider)
             discover = getattr(provider, "discover", None)
             if discover is None:
                 raise ValueError(
@@ -230,6 +231,14 @@ class PolicyRegistry:
                 )
             for policy in discover(source.config):
                 self.register(policy)
+
+    def _provider(self, name: str) -> PolicyProvider:
+        provider = self.providers.get(name)
+        if provider is None:
+            raise ValueError(f"Policy provider {name!r} is not installed.")
+        if isinstance(provider, type):
+            raise ValueError(f"Policy provider {name!r}: {_CLASS_ENTRY_POINT}")
+        return provider
 
     def descriptors(self) -> tuple[PolicyDescriptor, ...]:
         return tuple(deepcopy(descriptor) for descriptor in self._descriptors.values())

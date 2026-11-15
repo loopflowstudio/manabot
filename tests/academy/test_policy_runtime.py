@@ -4,13 +4,21 @@ from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
+from fastapi import HTTPException
+from fastapi.testclient import TestClient
 import pytest
 
 import managym
 from managym.academy import server
 from managym.academy.opponent import opponent_catalog, set_policy_registry
 from managym.academy.watch import WatchRequest, create_watch, inspect_watch, step_watch
-from managym.policy import PolicyDecision, PolicyDescriptor, PolicyRegistry, PolicyView
+from managym.policy import (
+    PolicyDecision,
+    PolicyDescriptor,
+    PolicyRegistry,
+    PolicySpec,
+    PolicyView,
+)
 
 
 @dataclass
@@ -85,8 +93,12 @@ def test_independent_policies_watch_both_seats_and_cleanup(
     game = server.SESSION_REGISTRY[created["id"]].game
     before = game.revision
     first.sessions[0].stale = second.sessions[0].stale = True
-    with pytest.raises(ValueError, match="stale"):
+    with pytest.raises(HTTPException) as refused:
         step_watch(created["id"], created["token"], before)
+    assert refused.value.status_code == 422
+    assert refused.value.detail == (
+        "Seat 1 policy could not choose: Policy returned a stale decision binding."
+    )
     assert game.revision == before
     server._drop_session(created["id"], "test")
     assert all(factory.sessions[0].closed for factory in (first, second))
@@ -107,6 +119,52 @@ def test_policy_identity_rejects_runner_change(registry: PolicyRegistry) -> None
     with pytest.raises(ValueError, match="changed"):
         registry.load(key, config.to_rust(), seat=1, seed=2)
     assert not factory.sessions
+
+
+def test_failed_opponent_policy_ends_play_with_its_reason(
+    registry: PolicyRegistry,
+) -> None:
+    # The browser must show why and neither resume nor redeal the game.
+    @dataclass
+    class StaleFactory(IndependentFactory):
+        def load(self, *, seat: int, seed: int) -> IndependentSession:
+            session = super().load(seat=seat, seed=seed)
+            session.stale = True
+            return session
+
+    key = registry.register(StaleFactory())
+    config = {"villain_type": "policy", "opponent_sha256": key, "seed": 3}
+    with TestClient(server.app) as client:
+        with client.websocket_connect("/ws/play") as websocket:
+            websocket.send_json({"type": "new_game", "config": config})
+            payload = websocket.receive_json()
+            for _ in range(20):
+                if payload["type"] == "error":
+                    break
+                websocket.send_json(
+                    {"type": "action", "index": payload["actions"][-1]["index"]}
+                )
+                payload = websocket.receive_json()
+    assert payload == {
+        "type": "error",
+        "message": "The opponent could not continue this game: "
+        "Policy returned a stale decision binding.",
+        "session_ended": True,
+    }
+
+
+def test_class_entry_point_is_refused_with_its_fix() -> None:
+    class Provider:
+        def policy(self, spec: PolicySpec) -> IndependentFactory:
+            return IndependentFactory()
+
+    registry = PolicyRegistry(providers={"mine": Provider})  # type: ignore[dict-item]
+    with pytest.raises(
+        ValueError, match="names a class; point it at a provider instance"
+    ):
+        registry.register(PolicySpec("mine"))
+    registry.discover()
+    assert registry.discovery_errors[0].startswith("mine: its managym.bots entry point")
 
 
 def test_bad_probabilities_and_bindings_leave_game_pending(
@@ -313,3 +371,66 @@ def test_historical_extension_selection_has_no_named_provider_preference(
         assert extensions.bot_extension() is independent
     finally:
         extensions.bot_extension.cache_clear()
+
+
+def test_refused_launch_retains_setup_and_exact_policy(
+    registry: PolicyRegistry,
+) -> None:
+    factory = IndependentFactory()
+    key = registry.register(factory, name="chosen-config")
+    launch = "test-refused-policy"
+    config = {
+        "villain_type": "policy",
+        "opponent_sha256": key,
+        "hero_deck": "gw_allies",
+        "villain_deck": "ur_lessons",
+        "decklists": "closed",
+        "seed": 7,
+    }
+    server.LAUNCH_CONFIGS[launch] = config
+    factory.runner = "changed"
+    try:
+        with TestClient(server.app) as client:
+            with client.websocket_connect("/ws/play") as ws:
+                ws.send_json({"type": "new_game", "config": {"launch": launch}})
+                refused = ws.receive_json()
+        assert refused["type"] == "error"
+        assert "restart Academy and explicitly reselect" in refused["message"]
+        assert refused["launch_setup"] == {
+            k: v for k, v in config.items() if k != "seed"
+        }
+        assert not factory.sessions
+    finally:
+        del server.LAUNCH_CONFIGS[launch]
+
+
+def test_registered_aliases_distinguish_catalog_and_watch_identities(
+    registry: PolicyRegistry,
+) -> None:
+    class ConfiguredFactory(IndependentFactory):
+        def describe(self) -> PolicyDescriptor:
+            return replace(
+                super().describe(),
+                runner="same-runner",
+                artifacts={"actor": "same-weights"},
+                config={"mode": self.runner},
+            )
+
+    first, second = ConfiguredFactory(), ConfiguredFactory(runner="other-config")
+    keys = [
+        registry.register(first, name="uniform"),
+        registry.register(second, name="action-only"),
+    ]
+    assert {entry["name"] for entry in opponent_catalog()["opponents"]} == {
+        "Independent · uniform",
+        "Independent · action-only",
+    }
+    created = create_watch(
+        WatchRequest(players=[f"policy:{key}" for key in keys], seed=42)
+    )
+    step_watch(created["id"], created["token"], 0)
+    recorded = inspect_watch(created["id"], 0, created["token"])
+    assert {p["name"] for p in recorded["identities"]} == {
+        "Independent · uniform",
+        "Independent · action-only",
+    }

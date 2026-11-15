@@ -92,7 +92,7 @@ def test_incompatible_checkpoint_is_refused_with_the_mismatch(runs: Path) -> Non
                 "villain_deck": "interactive",
             },
         )
-        assert "selected setup differs" in message
+        assert "was trained on ur_lessons vs gw_allies; choose those decks" in message
 
 
 @pytest.mark.parametrize(
@@ -329,3 +329,22 @@ def test_portable_container_is_registered_and_plays(runs: Path) -> None:
         )
     finally:
         policy.close()
+
+
+def test_setup_preview_names_bound_decks_without_loading(runs: Path) -> None:
+    key = _id(runs / "self-play" / "step_0.pt")
+    with TestClient(app) as client:
+        config = {
+            "villain_type": "policy",
+            "opponent_sha256": key,
+            "hero_deck": "interactive",
+            "villain_deck": "interactive",
+        }
+        refused = client.post("/api/policies/check", json=config).json()
+        assert refused["compatible"] is False
+        assert "was trained on ur_lessons vs gw_allies" in refused["reason"]
+        config.update(hero_deck="ur_lessons", villain_deck="gw_allies")
+        assert client.post("/api/policies/check", json=config).json() == {
+            "compatible": True,
+            "reason": None,
+        }

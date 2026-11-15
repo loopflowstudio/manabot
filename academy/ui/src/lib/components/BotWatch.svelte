@@ -58,7 +58,7 @@
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
     if (!response.ok) {
-      const payload = await response.json();
+      const payload = await response.json().catch(() => ({}));
       throw new Error(typeof payload.detail === 'string' ? payload.detail.replaceAll('_', ' ') : `Request failed (${response.status})`);
     }
     return response.json() as Promise<T>;
@@ -255,6 +255,7 @@
         <legend class="sr-only">Bot matchup</legend>
         {#each [0, 1] as seat}
           <PlayerPicker label={`Seat ${seat + 1}`} value={players[seat]} {trained} {extension} {catalogError}
+            setup={{hero_deck: hero, villain_deck: villain}}
             referencePlayers={choices} onChange={value => players[seat] = value} />
         {/each}
         <DeckSelector {hero} {villain} heroLabel="Seat 1 deck" villainLabel="Seat 2 deck" onHeroChange={v => hero = v} onVillainChange={v => villain = v} />

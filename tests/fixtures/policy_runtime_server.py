@@ -16,6 +16,7 @@ def main() -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     checkpoint = output.parent / "baseline.pt"
     _write_tiny_checkpoint(checkpoint)
+    refused = IndependentFactory("Refused configuration")
     with serve(
         port=int(os.environ["ACADEMY_POLICY_PORT"]),
         traces_dir=output.parent / "traces",
@@ -23,17 +24,21 @@ def main() -> None:
             "independent": IndependentFactory(
                 "Independent/long-run/tracker/source/snapshot"
             ),
+            "refused-config": refused,
             "baseline": PolicySpec("manabot", str(checkpoint)),
         },
     ) as academy:
+        refused_url = academy.new_game(opponent="refused-config", seed=7).url
+        refused.runner = "changed-after-launch"
         output.write_text(
             json.dumps(
                 {
+                    "refused": refused_url,
                     "play": academy.new_game(opponent="independent", seed=7).url,
                     "watch": academy.watch(players=("independent", "baseline")).url,
                     "ids": {
                         name: policy_registry().descriptor(name).id
-                        for name in ("independent", "baseline")
+                        for name in ("independent", "baseline", "refused-config")
                     },
                 }
             )

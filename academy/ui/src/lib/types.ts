@@ -794,7 +794,7 @@ export type ServerMessage = (
           recovery?: RecoveryEnvelope;
         }
     ))
-  | { type: 'error'; message: string }
+  | { type: 'error'; message: string; session_ended?: boolean }
 ) & {
   table?: import('./shared-table-protocol').TableSnapshot;
   session_id?: string;

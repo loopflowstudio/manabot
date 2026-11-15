@@ -161,8 +161,10 @@ class BaselineFactory:
                 and all(deck in trained for deck in actual)
             )
         ):
+            bound = " vs ".join(_deck_name(deck) for deck in summary.setups)
             raise ValueError(
-                f"{summary.label} was trained on the recorded deck setups; selected setup differs."
+                f"{summary.label} was trained on {bound}; choose those decks "
+                "or another policy."
             )
 
     def load(self, *, seat: int, seed: int) -> PolicySession:
