@@ -5,6 +5,7 @@ view. The mixed canonical record and retained roots remain server-private.
 """
 
 from dataclasses import asdict, replace
+import logging
 from typing import Any, TypedDict
 
 from fastapi import HTTPException
@@ -16,9 +17,10 @@ from . import server
 from .attempts import AttemptStore, RecordedPlayer, bot_player
 from .extensions import bot_extension
 from .launch import refuse_training_receipt
+from .opponent import policy_registry
 from .replay_index import DecisionAddressV2, load_canonical_replay
 from .trace import load_trace
-from .villain import NATIVE_WATCH_PLAYERS, build_villain_policy
+from .villain import NATIVE_WATCH_PLAYERS, build_villain_policy, player_fields
 
 
 class WatchCreated(TypedDict):
@@ -42,53 +44,56 @@ class WatchRequest(BaseModel):
     villain_sims: int = Field(default=16, ge=1, le=4096)
 
 
-def _policy(kind: str, request: WatchRequest, seat: int) -> BotPolicy:
-    if kind not in NATIVE_WATCH_PLAYERS:
-        extension = bot_extension()
-        if extension is None or kind not in extension.watch_players:
-            raise HTTPException(400, "watch_player_unavailable")
-        return extension.watch_policy(kind)
-    config = server._parse_game_config({**request.model_dump(), "villain_type": kind})
-    config.seed = request.seed + seat
-    return build_villain_policy(config)
+def resolve_player(
+    kind: str, request: WatchRequest, seat: int
+) -> tuple[BotPolicy, RecordedPlayer]:
+    """Resolve a seat once through Play's admission and policy construction."""
+    if kind not in (*NATIVE_WATCH_PLAYERS, "passive") and not kind.startswith(
+        ("policy:", "search-")
+    ):
+        kind = f"policy:{policy_registry().descriptor(kind).id}"
+    config = server._parse_game_config(
+        {
+            **request.model_dump(),
+            "seed": (request.seed + seat) % 2**64,
+            **player_fields(kind),
+        }
+    )
+    return build_villain_policy(config, seat=seat), replace(
+        bot_player(asdict(config)),
+        seat=seat,
+        deck=request.hero_deck if seat == 0 else request.villain_deck,
+    )
 
 
 def create_watch(
     request: WatchRequest, recorded_players: list[RecordedPlayer] | None = None
 ) -> WatchCreated:
-    policies = (
-        _policy(request.players[0], request, 0),
-        _policy(request.players[1], request, 1),
-    )
+    seats: list[tuple[BotPolicy, RecordedPlayer]] = []
+    try:
+        for seat, kind in enumerate(request.players):
+            seats.append(resolve_player(kind, request, seat))
+    except BaseException as error:
+        server.close_policies(policy for policy, _ in seats)
+        if isinstance(error, (ValueError, OSError, ImportError)):
+            raise HTTPException(400, str(error)) from error
+        raise
     token = server.secrets.token_urlsafe(32)
     game = server.GameSession(watch_mode=True)
-    # Session closure releases controllers, including checkpoint tensors.
-    # Policies never cross the trace or HTTP boundary.
-    game.watch_policies = policies
     game.attempt_owner = server.participant_id(token)
-    game.record_players = []
-    for seat, kind in enumerate(request.players):
-        config = asdict(
-            server._parse_game_config(
-                {
-                    **request.model_dump(),
-                    "villain_type": kind if kind in NATIVE_WATCH_PLAYERS else "passive",
-                }
-            )
-        )
-        config["villain_type"] = kind
-        game.record_players.append(
-            replace(
-                bot_player(config),
-                seat=seat,
-                deck=request.hero_deck if seat == 0 else request.villain_deck,
-            )
-        )
+    game.record_players = [player for _, player in seats]
     if recorded_players is not None:
         game.record_players = recorded_players
-    game.new_game(
-        {**request.model_dump(), "villain_type": "random", "auto_pass": False}
-    )
+    try:
+        game.new_game(
+            {**request.model_dump(), "villain_type": "random", "auto_pass": False}
+        )
+        game.watch_policies = (seats[0][0], seats[1][0])
+        game._observe_policies()
+    except BaseException:
+        server.close_policies(policy for policy, _ in seats)
+        game.close("setup_failed")
+        raise
     record = server.SessionRecord(game.match_id, token, game)
     server.SESSION_REGISTRY[game.match_id] = record
     assert game.trace is not None
@@ -123,7 +128,19 @@ def step_watch(trace_id: str, token: str | None, expected_revision: int) -> Watc
     )
     assert context is not None
     assert game.watch_policies is not None
-    game._bot_decision = choose_bot(game.watch_policies[seat], game.env, game.obs)
+    try:
+        game._bot_decision = choose_bot(game.watch_policies[seat], game.env, game.obs)
+    except ValueError as exc:
+        # Nothing was committed; the pending decision stays for an explicit retry.
+        raise HTTPException(
+            422, f"Seat {seat + 1} policy could not choose: {exc}"
+        ) from exc
+    except Exception as exc:
+        logging.getLogger(__name__).exception("Watch policy failed")
+        raise HTTPException(
+            500,
+            f"Seat {seat + 1} policy failed ({type(exc).__name__}); see the server log.",
+        ) from exc
     offer_id = next(
         key
         for key, index in context.action_by_offer.items()

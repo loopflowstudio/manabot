@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
-import { checkpointChoice, createGameStore } from './game.svelte';
+import { policyChoice, createGameStore } from './game.svelte';
 import type { Command, Observation, RecoveryEnvelope } from './types';
 
 interface BoltProtocolFixture {
@@ -204,10 +204,10 @@ describe('GameStore', () => {
   it('names a chosen trained checkpoint by its digest', () => {
     const store = createGameStore();
     const sha256 = 'a'.repeat(64);
-    store.setOpponentChoice(checkpointChoice(sha256));
+    store.setOpponentChoice(policyChoice(sha256));
 
     const config = store.newGameConfig();
-    expect(config.villain_type).toBe('checkpoint');
+    expect(config.villain_type).toBe('policy');
     expect(config.opponent_sha256).toBe(sha256);
   });
 

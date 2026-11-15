@@ -47,6 +47,9 @@ def bot_player(config: dict) -> RecordedPlayer:
         inference["deterministic"] = config.get("villain_deterministic", False)
     elif policy == "search":
         inference["simulations"] = config.get("villain_sims")
+    provenance = config.get("opponent_checkpoint") or {}
+    if provenance.get("schema") == "managym-policy-1":
+        inference.update(runtime=provenance["policy"], sha256=digest)
     version = (
         digest
         or hashlib.sha256(json.dumps(inference, sort_keys=True).encode()).hexdigest()
