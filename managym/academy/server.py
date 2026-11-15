@@ -3083,6 +3083,16 @@ def _launch_metadata(launch_id: object) -> dict[str, Any]:
     }
 
 
+def _request_error(request: object, message: str) -> dict[str, Any]:
+    """An error reply; a refused new game keeps its launch setup for a retry."""
+    error: dict[str, Any] = dict(_error_message(message))
+    if isinstance(request, dict) and request.get("type") == "new_game":
+        config = request.get("config")
+        if isinstance(config, dict):
+            error.update(_launch_metadata(config.get("launch")))
+    return error
+
+
 async def _send_table_response(
     record: SessionRecord,
     initiator: ParticipantLease,
@@ -3227,16 +3237,7 @@ async def play_socket(websocket: WebSocket) -> None:
                 await websocket.send_json(_control_error(exc))
                 continue
             except ValueError as exc:
-                error = _error_message(str(exc))
-                if (
-                    isinstance(request, dict)
-                    and request.get("type") == "new_game"
-                    and isinstance(request.get("config"), dict)
-                ):
-                    error.update(
-                        _launch_metadata(request.get("config", {}).get("launch"))
-                    )
-                await websocket.send_json(error)
+                await websocket.send_json(_request_error(request, str(exc)))
                 continue
     except WebSocketDisconnect:
         return
@@ -3244,13 +3245,7 @@ async def play_socket(websocket: WebSocket) -> None:
         message = str(exc)
         if isinstance(exc, sqlite3.Error):
             message = "Game recording failed; this game may not have been saved."
-        error: dict[str, Any] = dict(_error_message(message))
-        if (
-            isinstance(request, dict)
-            and request.get("type") == "new_game"
-            and isinstance(request.get("config"), dict)
-        ):
-            error.update(_launch_metadata(request.get("config", {}).get("launch")))
+        error = _request_error(request, message)
         if attached_table_id is not None:
             # The client must neither resume nor relaunch an ended game.
             error["session_ended"] = True

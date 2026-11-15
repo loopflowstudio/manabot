@@ -84,19 +84,20 @@ def opponent_catalog() -> dict[str, Any]:
         provider_names = sorted(registry.providers)
         error = "; ".join(registry.discovery_errors) or None
         for descriptor in registry.descriptors():
+            record = descriptor.record()
             entries.append(
                 {
                     "sha256": descriptor.id,
                     "name": Opponent(descriptor).name,
                     "producer": descriptor.provider,
                     "group": descriptor.group or descriptor.provider,
-                    "details": descriptor.record()["details"],
+                    "details": record["details"],
                     "available": descriptor.incompatibility is None,
                     "reason": descriptor.incompatibility,
                     "supports_search": descriptor_search_unavailable(descriptor)
                     is None,
                     "search_reason": descriptor_search_unavailable(descriptor),
-                    "policy": descriptor.record(),
+                    "policy": record,
                 }
             )
     except (ImportError, OSError, ValueError) as exc:
