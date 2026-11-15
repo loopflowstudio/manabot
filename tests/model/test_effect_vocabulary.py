@@ -79,7 +79,10 @@ def test_missing_koh_registration_is_rejected(
     assert len(filtered) < len(registrations)
     monkeypatch.setattr(managym, "record_vocabulary", lambda: filtered)
     tables = _tables(SemanticCardEncoder("world", 4, records=True))
-    with pytest.raises(ValueError, match="program token outside the vocabulary"):
+    with pytest.raises(
+        ValueError,
+        match=rf"program token outside the vocabulary; missing keys: \({kind}, 0x{word:08x}\)$",
+    ):
         _catalog(tables).require_tokens(np.array([kind]), np.array([word]))
 
 
@@ -108,13 +111,9 @@ def test_definition_reference_and_null_require_exact_pairs(
     _catalog(tables).require_tokens(kinds, words)
     rows = tables.tokens(kinds, words)
     assert 0 < rows[0] < encoder.token_embedding.num_embeddings
-    without_pair = replace(
-        tables,
-        record_token_keys=keys[keys != key],
-        record_token_rows=tables.record_token_rows[keys != key],
-    )
+    without_pair = replace(_catalog(tables), tokens=keys[keys != key])
     with pytest.raises(ValueError, match="program token outside the vocabulary"):
-        _catalog(without_pair).require_tokens(kinds, words)
+        without_pair.require_tokens(kinds, words)
 
 
 @pytest.mark.parametrize("kind", [0, 10])

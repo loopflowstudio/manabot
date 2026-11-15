@@ -290,10 +290,7 @@ mod tests {
                 proposed_event::{CounterProvenance, EventBinding, EventCause},
                 turn::Bending,
             },
-            state::{
-                ability::{Effect, LibraryEnd},
-                game_object::PlayerId,
-            },
+            state::{ability::LibraryEnd, game_object::PlayerId},
         };
         let pack = default_content_pack();
         let catalog = catalog_tokens(pack).unwrap();
@@ -303,39 +300,22 @@ mod tests {
             .zip(catalog.token_value)
             .chain(record_names().into_iter().filter_map(|entry| entry.token))
             .collect();
+        // Effect programs are covered by the cards crate's exhaustive witnesses.
         let mut tokens = rules_tokens(
             &[
-                Effect::PlaceTargetInLibrary {
-                    second_from_top: true,
+                GameEvent::Scried {
+                    player: PlayerId(0),
                 },
-                Effect::RestoreController(PlayerId(1)),
-                Effect::SelectTargetRequirement { index: 1 },
-                // Generated for exiled-card ability choices at resolution;
-                // no printed card program supplies these tokens.
-                Effect::HaveAbilitiesOf {
-                    definition: crate::state::card::CardDefId(0),
+                GameEvent::Surveilled {
+                    player: PlayerId(0),
+                },
+                GameEvent::LibrarySearched {
+                    player: PlayerId(0),
                 },
             ],
             pack,
         )
         .unwrap();
-        tokens.extend(
-            rules_tokens(
-                &[
-                    GameEvent::Scried {
-                        player: PlayerId(0),
-                    },
-                    GameEvent::Surveilled {
-                        player: PlayerId(0),
-                    },
-                    GameEvent::LibrarySearched {
-                        player: PlayerId(0),
-                    },
-                ],
-                pack,
-            )
-            .unwrap(),
-        );
         tokens.extend(
             rules_tokens(
                 &[

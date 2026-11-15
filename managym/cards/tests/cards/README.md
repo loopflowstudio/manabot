@@ -74,5 +74,6 @@ uv run --extra dev pytest tests/model/test_effect_vocabulary.py tests/model/test
 
 These checks use the production encoder's tables, verify exact lookup semantics
 and reject each missing Koh runtime registration independently. Unknown tokens
-remain errors. The bounded record-coverage sweep in the development guide is
+remain errors; a policy admission failure lists the missing `(kind, 0x…)` keys,
+in the same kind and hex form as the guard's report. The bounded record-coverage sweep in the development guide is
 additional integration coverage; it does not establish that every effect ran.
