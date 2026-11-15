@@ -1,7 +1,7 @@
 """Does the shape of combat and mana decisions change how fast the small TLA model learns?
 
 Three arms train the frontier's small model (`experiments/tla_frontier.py`,
-width 64, policy input v9, damped self-play) and differ only in native decision
+width 64, fresh policy input v10, damped self-play) and differ only in native decision
 switches, exported in every job command as 0 or 1:
 
 - `baseline`: neither switch;

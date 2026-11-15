@@ -196,6 +196,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
                 "PlaceTargetInLibrary",
                 "RestoreController",
                 "SelectTargetRequirement",
+                "HaveAbilitiesOf",
             ][..],
         ),
     ] {
@@ -226,6 +227,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
         "amounts",
         "entry_counters",
         "combat",
+        "definition",
     ] {
         add(TokenKind::Field, field);
     }
@@ -303,6 +305,11 @@ mod tests {
                 },
                 Effect::RestoreController(PlayerId(1)),
                 Effect::SelectTargetRequirement { index: 1 },
+                // Generated for exiled-card ability choices at resolution;
+                // no printed card program supplies these tokens.
+                Effect::HaveAbilitiesOf {
+                    definition: crate::state::card::CardDefId(0),
+                },
             ],
             pack,
         )

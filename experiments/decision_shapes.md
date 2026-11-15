@@ -1,9 +1,9 @@
 # Combat and mana decision shapes on the Small TLA model
 
-**Current launch: `mtg265-study-20261114d`, source `ee0281c0d402`.** All six
-jobs are admitted on three provider-confirmed L4s, two jobs each. Each uses
-256 streams and targets 500 updates on the common v10 input. The three arm
-smokes completed two updates each; no study learning result is available yet.
+**Training stopped: `mtg265-study-20261114d`, source `ee0281c0d402`.** All six
+jobs failed vocabulary admission: baseline at 2/12 updates, combat at 0/15,
+and mana taps at 7/6. No completed study learning result is available. The
+supervisor terminated all three L4 rentals after the diagnostic retry ended.
 
 | Arm | Seed 26501 | Seed 26502 |
 | --- | --- | --- |
@@ -157,3 +157,20 @@ damping horizon, with a 1.2-hour maximum job window, on an existing free L4
 slot. It is diagnostic only and must not become a scored study candidate.
 No additional rental is authorized; the same three USD16 leases bound total
 hardware spending. The supervisor now waits for both cohorts before cleanup.
+
+## Identified runtime tokens (2026-11-15 UTC)
+
+All six original run logs ended with the same unknown-program-token admission
+error. Diagnostic `13bb90d47e30` reproduced it at update zero and named
+`(1, 0x31ddff0e)`, `(2, 0x3decd349)`, `(3, 0x193062ff)`: respectively
+`/Effect::HaveAbilitiesOf`, field `definition`, and `Effect::HaveAbilitiesOf`.
+Koh, the Face Stealer generates this runtime effect when choosing a
+card exiled with its source; printed catalog programs do not supply its
+vocabulary. Registration now includes the effect and its field, and the
+runtime-token regression serializes an actual `HaveAbilitiesOf` value.
+Both debug record-vocabulary tests pass. After rebuilding the cp313 native
+extension, all ten admission and bounded record-coverage tests pass. No
+repaired training has yet run; do not reuse old policy checkpoints with this
+expanded vocabulary. All three study rentals terminated successfully. The
+causal investigation is in `scratch/decision-shapes-vocabulary-failure.md`;
+its prevention proposals are not implemented by this patch.
