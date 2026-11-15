@@ -4,6 +4,7 @@ from typing import Any
 
 from payment_root import DECK as PAYMENT_DECK, configure_root as configure_payment
 
+from conformance.combat_planning import combat_config, configure_combat
 from manabot.verify.trigger_order import DECK, SEED, configure_root
 from managym.academy import server
 
@@ -37,6 +38,16 @@ def new_game(self: server.GameSession, raw_config: Any = None) -> dict[str, Any]
         )
         assert self.env is not None
         self.obs = configure_payment(self.env)
+        self.published_prompt = None
+        self.presentation.reset()
+        return self._wire_message()
+    combat = raw_config.get("combat_fixture") if isinstance(raw_config, dict) else None
+    if combat in ("attackers", "blockers"):
+        _new_game(self, combat_config())
+        assert self.env is not None
+        self.obs = configure_combat(
+            self.env, combat, count=24 if raw_config.get("dense") else 3
+        )
         self.published_prompt = None
         self.presentation.reset()
         return self._wire_message()

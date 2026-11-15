@@ -55,7 +55,8 @@ async function choose(page: Page, id: number): Promise<void> {
   await page.keyboard.press('Enter');
   await expect.poll(() => page.evaluate(() => window.__surface.frame?.revision)).toBeGreaterThan(revision);
   const next = await page.evaluate(() => window.__surface.frame!.revision);
-  await expect(page.getByTestId('decision-surface')).toHaveAttribute('data-revision', String(next));
+  // A choice can reach a combat declaration, which the composer presents.
+  await expect(page.locator('[data-testid="decision-surface"], [data-testid="combat-composer"]')).toHaveAttribute('data-revision', String(next));
 }
 
 for (const width of [390, 1500]) {

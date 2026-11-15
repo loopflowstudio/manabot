@@ -19,6 +19,7 @@ import type {
 } from './shared-table-protocol';
 import type {
   ClientMessage,
+  DeclarationPlan,
   FrameUpdate,
   LaunchSetup,
   RecoveryEnvelope,
@@ -51,6 +52,7 @@ const VALID_SERVER_TYPES = new Set([
   'branch_updated',
   'branch_returned',
   'control_error',
+  'declaration_validation',
 ]);
 
 type TableServerMessage = (ServerMessage | SharedTableControlEvent) & Pick<ServerMessage, 'mirror_retry' | 'mirror'>;
@@ -301,6 +303,53 @@ export class GameSocketController {
     return true;
   }
 
+  validateDeclaration(plan: DeclarationPlan, requestId: string): boolean {
+    const frame = gameStore.protocolFrame;
+    if (!frame?.declaration || !frame.prompt || this.pendingResume || !this.socket || this.socket.readyState !== WebSocket.OPEN) return false;
+    this.socket.send(JSON.stringify({
+      type: 'validate_declaration', request_id: requestId,
+      ...(gameStore.table ? { grant_revision: gameStore.table.access.grant_revision } : {}),
+      command: {
+        command_id: `draft.${requestId}`, match_id: frame.match_id,
+        expected_revision: frame.revision, prompt_id: frame.prompt.id, plan,
+      },
+    } satisfies SharedTableRequest));
+    return true;
+  }
+
+  sendDeclaration(plan: DeclarationPlan): string | null {
+    const frame = gameStore.protocolFrame;
+    if (!frame?.declaration || !frame.prompt || this.inFlightCommand !== null || this.pendingResume) return null;
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      gameStore.setError('Connection changed. Recovering the latest game state.');
+      this.connect();
+      return null;
+    }
+    const commandId = crypto.randomUUID();
+    this.inFlightCommand = commandId;
+    gameStore.beginCommand();
+    this.socket.send(JSON.stringify({
+      type: 'declaration',
+      ...(gameStore.table ? { grant_revision: gameStore.table.access.grant_revision } : {}),
+      command: {
+        command_id: commandId, match_id: frame.match_id,
+        expected_revision: frame.revision, prompt_id: frame.prompt.id, plan,
+      },
+    } satisfies SharedTableRequest));
+    return commandId;
+  }
+
+  recoverCurrentGame(): void {
+    const credentials = loadResumeCredentials();
+    if (credentials && this.socket?.readyState === WebSocket.OPEN) {
+      this.pendingResume = true;
+      this.socket.send(JSON.stringify({ type: 'resume', ...credentials } satisfies SharedTableRequest));
+    } else {
+      this.disconnect();
+      this.connect();
+    }
+  }
+
   sendRetrySearch(): void {
     const pending = gameStore.searchRetry;
     if (!pending || gameStore.commandPending) return;
@@ -453,6 +502,11 @@ export class GameSocketController {
       gameStore.applyTable(message.table);
     }
 
+    if (message.type === 'declaration_validation') {
+      gameStore.declarationValidation = message;
+      return;
+    }
+
     if (message.type === 'table_snapshot') {
       this.pendingResume = false;
       this.persistControlCredentials(message);
@@ -561,6 +615,7 @@ export class GameSocketController {
         if (message.recovery) {
           this.applyRecovery(message.recovery);
         }
+        gameStore.lastCommandRejection = message.rejection;
         gameStore.setError(message.rejection.message);
       }
       return;
@@ -792,6 +847,18 @@ export function sendNewGame(config?: Record<string, unknown>): void {
 
 export function sendAction(offerId: number): boolean {
   return controller.sendAction(offerId);
+}
+
+export function validateDeclaration(plan: DeclarationPlan, requestId: string): boolean {
+  return controller.validateDeclaration(plan, requestId);
+}
+
+export function sendDeclaration(plan: DeclarationPlan): string | null {
+  return controller.sendDeclaration(plan);
+}
+
+export function recoverCurrentGame(): void {
+  controller.recoverCurrentGame();
 }
 
 export function sendSetStops(): void {

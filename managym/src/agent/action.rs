@@ -241,13 +241,56 @@ impl ActionSpace {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct AgentError(pub String);
+/// Deterministic work exhausted before authority could establish legality.
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
+pub struct CapacityError {
+    pub resource: &'static str,
+    pub limit: usize,
+    pub visited: usize,
+}
+
+impl std::fmt::Display for CapacityError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} capacity exhausted: limit {}, visited {}",
+            self.resource, self.limit, self.visited
+        )
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum AgentError {
+    Rules(String),
+    Capacity(CapacityError),
+    Stream {
+        slot: usize,
+        frame: Option<String>,
+        context: String,
+        source: Box<AgentError>,
+    },
+}
 
 impl std::fmt::Display for AgentError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        match self {
+            Self::Rules(message) => f.write_str(message),
+            Self::Capacity(capacity) => capacity.fmt(f),
+            Self::Stream {
+                source, context, ..
+            } => write!(f, "{source}; native_failure={context}"),
+        }
     }
 }
 
 impl std::error::Error for AgentError {}
+
+impl AgentError {
+    pub fn capacity(&self) -> Option<&CapacityError> {
+        match self {
+            Self::Capacity(capacity) => Some(capacity),
+            Self::Stream { source, .. } => source.capacity(),
+            Self::Rules(_) => None,
+        }
+    }
+}

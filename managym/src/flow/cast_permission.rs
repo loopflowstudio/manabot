@@ -180,7 +180,7 @@ impl Game {
     /// its foretell cost.
     pub(crate) fn foretell(&mut self, player: PlayerId, card: CardId) -> Result<(), AgentError> {
         if !self.can_foretell(player, card) {
-            return Err(AgentError("card cannot be foretold now".into()));
+            return Err(AgentError::Rules("card cannot be foretold now".into()));
         }
         let cost = ManaCost::parse(FORETELL_ACTION_COST);
         self.produce_mana(player, &cost)?;

@@ -2397,6 +2397,7 @@ mod characteristics_tests {
             111,
             false,
         )
+        .expect("valid game setup")
     }
 
     #[test]

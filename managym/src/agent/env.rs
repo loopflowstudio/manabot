@@ -53,10 +53,11 @@ pub struct HandSnapshot {
 static GAME_GENERATION: AtomicU64 = AtomicU64::new(1);
 
 fn current_agent(game: &Game) -> Result<PlayerId, AgentError> {
+    game.ensure_playable()?;
     game.action_space()
-        .ok_or_else(|| AgentError("no active action space".to_string()))?
+        .ok_or_else(|| AgentError::Rules("no active action space".to_string()))?
         .player
-        .ok_or_else(|| AgentError("no agent player in current action space".to_string()))
+        .ok_or_else(|| AgentError::Rules("no agent player in current action space".to_string()))
 }
 
 fn finish_game_step(
@@ -152,6 +153,25 @@ pub struct Env {
     pub(crate) capture_generation: u64,
 }
 
+/// Private declaration result held until recording is ready for publication.
+/// The originating generation and exact root prevent cross-Env/stale commits.
+pub struct PreparedDeclaration {
+    source_generation: u64,
+    source: SearchStateWitness,
+    pub(crate) transaction: crate::flow::declaration::DeclarationTransaction,
+}
+
+impl PreparedDeclaration {
+    /// Ordinary choices and their exact recording evidence, in execution order.
+    pub fn children(&self) -> &[crate::flow::declaration::DeclarationChild] {
+        &self.transaction.children
+    }
+
+    pub fn completion(&self) -> &crate::flow::declaration::DeclarationCompletion {
+        &self.transaction.completion
+    }
+}
+
 /// One canonical space prepared for bounded materialization against the same
 /// live `Env` root. It retains no source snapshot and never re-enumerates.
 #[derive(Debug)]
@@ -192,12 +212,12 @@ impl PreparedPossibleWorldMaterializer {
         refresh_opponent_commitment: bool,
     ) -> Result<Vec<Env>, AgentError> {
         if self.space_identity != self.expected_space_identity {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "prepared possible-world space identity changed".to_string(),
             ));
         }
         let game = source.game.as_ref().ok_or_else(|| {
-            AgentError("prepared materializer source called before reset".to_string())
+            AgentError::Rules("prepared materializer source called before reset".to_string())
         })?;
         let mode = if refresh_opponent_commitment {
             MaterializeMode::RefreshOpponentCommitment
@@ -208,7 +228,7 @@ impl PreparedPossibleWorldMaterializer {
             .space
             .materialize_indexes(game, world_indexes, seeds, mode, self.max_batch_size)
             .map_err(|error| {
-                AgentError(format!("prepared possible-world materializer: {error}"))
+                AgentError::Rules(format!("prepared possible-world materializer: {error}"))
             })?;
         Ok(games
             .into_iter()
@@ -280,7 +300,7 @@ impl Env {
         // Admit submitted decks at the fallible environment boundary, before
         // Game construction can panic on them.
         crate::cards::deck_admission::admit_submitted(&player_configs)
-            .map_err(|error| AgentError(error.to_string()))?;
+            .map_err(|error| AgentError::Rules(error.to_string()))?;
         let _scope = self.profiler.track("env_reset");
         if self.capture_exposure && self.game.is_some() {
             self.retained_exposure.push(self.exposure_json()?);
@@ -294,7 +314,7 @@ impl Env {
             Game::new_capturing(player_configs, self.seed, self.skip_trivial)
         } else {
             Game::new(player_configs, self.seed, self.skip_trivial)
-        };
+        }?;
         if self.capture_exposure {
             game.card_capture
                 .as_mut()
@@ -317,7 +337,7 @@ impl Env {
     /// Must be enabled before reset so setup facts cannot be missed.
     pub fn enable_card_capture(&mut self) -> Result<(), AgentError> {
         if self.game.is_some() {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "card capture must be enabled before reset".into(),
             ));
         }
@@ -336,14 +356,14 @@ impl Env {
         let game = self
             .game
             .as_ref()
-            .ok_or_else(|| AgentError("capture before reset".into()))?;
+            .ok_or_else(|| AgentError::Rules("capture before reset".into()))?;
         serde_json::to_string(&serde_json::json!({
             "seed": self.action_trace.as_ref().map(|trace| trace.seed),
             "terminal": game.is_game_over(),
             "trace": self.action_trace,
             "cards": self.card_capture_value()?,
         }))
-        .map_err(|e| AgentError(e.to_string()))
+        .map_err(|e| AgentError::Rules(e.to_string()))
     }
 
     pub fn take_exposure(&mut self) -> Vec<String> {
@@ -351,18 +371,19 @@ impl Env {
     }
 
     pub fn card_capture_json(&self) -> Result<String, AgentError> {
-        serde_json::to_string(&self.card_capture_value()?).map_err(|e| AgentError(e.to_string()))
+        serde_json::to_string(&self.card_capture_value()?)
+            .map_err(|e| AgentError::Rules(e.to_string()))
     }
 
     fn card_capture_value(&self) -> Result<serde_json::Value, AgentError> {
         let game = self
             .game
             .as_ref()
-            .ok_or_else(|| AgentError("capture before reset".into()))?;
+            .ok_or_else(|| AgentError::Rules("capture before reset".into()))?;
         let capture = game
             .card_capture
             .as_ref()
-            .ok_or_else(|| AgentError("card capture unavailable".into()))?;
+            .ok_or_else(|| AgentError::Rules("card capture unavailable".into()))?;
         Ok(serde_json::json!({
             "capture": capture,
             "final_cards": crate::flow::card_capture::snapshots(game),
@@ -400,6 +421,31 @@ impl Env {
     /// Training-only error context. Public scalar/API errors do not expose
     /// hidden cards. The snapshot may be partially mutated by the failed step;
     /// the reset input and successful prefix reconstruct its pre-action root.
+    /// Solver work starts in combat. Retain its pre-action semantic frame only
+    /// there (or when built-ins can continue into combat within this call),
+    /// without adding frame hashing to ordinary noncombat training steps.
+    pub(crate) fn combat_failure_frame(&self) -> Result<Option<String>, AgentError> {
+        let in_combat = self.game.as_ref().is_some_and(|game| {
+            matches!(
+                game.state.turn.current_step_kind(),
+                crate::flow::turn::StepKind::DeclareAttackers
+                    | crate::flow::turn::StepKind::DeclareBlockers
+            )
+        });
+        if in_combat
+            || self
+                .player_policies
+                .iter()
+                .any(|policy| *policy != PlayerPolicy::Agent)
+        {
+            serde_json::to_string(&self.semantic_decision_frame()?)
+                .map(Some)
+                .map_err(|error| AgentError::Rules(error.to_string()))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub(crate) fn vector_failure_context(&self, action: i64) -> String {
         serde_json::json!({
             "schema": "managym-native-failure-v1",
@@ -427,20 +473,23 @@ impl Env {
         &mut self,
         action: i64,
     ) -> Result<(Observation, f64, bool, bool, InfoDict), AgentError> {
+        if let Some(game) = &self.game {
+            game.ensure_playable()?;
+        }
         let chooser = self
             .current_agent_index()
-            .ok_or_else(|| AgentError("no active chooser".into()))?;
+            .ok_or_else(|| AgentError::Rules("no active chooser".into()))?;
         let policy = self.player_policies[chooser];
         let action = if policy == PlayerPolicy::Agent {
             if action == -1 {
-                return Err(AgentError(format!(
+                return Err(AgentError::Rules(format!(
                     "external chooser (seat {chooser}) requires an action index"
                 )));
             }
             action
         } else {
             if action != -1 {
-                return Err(AgentError(
+                return Err(AgentError::Rules(
                     "built-in chooser requires action=None (vector: -1)".into(),
                 ));
             }
@@ -491,7 +540,7 @@ impl Env {
             (obs, reward, terminated, truncated, info) = self.step_once(action)?;
             reward = -reward;
         }
-        Err(AgentError(
+        Err(AgentError::Rules(
             "exceeded 10000 built-in decisions without an external chooser".into(),
         ))
     }
@@ -504,21 +553,23 @@ impl Env {
         let game = self
             .game
             .as_mut()
-            .ok_or_else(|| AgentError("env.step called before reset".to_string()))?;
+            .ok_or_else(|| AgentError::Rules("env.step called before reset".to_string()))?;
 
         if game.is_game_over() {
-            return Err(AgentError("env.step called after game over".to_string()));
+            return Err(AgentError::Rules(
+                "env.step called after game over".to_string(),
+            ));
         }
 
         let action_space = game
             .action_space()
-            .ok_or_else(|| AgentError("no active action space".to_string()))?;
-        let agent = action_space
-            .player
-            .ok_or_else(|| AgentError("no agent player in current action space".to_string()))?;
+            .ok_or_else(|| AgentError::Rules("no active action space".to_string()))?;
+        let agent = action_space.player.ok_or_else(|| {
+            AgentError::Rules("no agent player in current action space".to_string())
+        })?;
         let action_count = action_space.actions.len();
         let out_of_bounds = || {
-            AgentError(format!(
+            AgentError::Rules(format!(
                 "Action index {action} out of bounds: {action_count}"
             ))
         };
@@ -554,7 +605,7 @@ impl Env {
             .current_agent_index()
             .is_some_and(|seat| self.player_policies[seat] != PlayerPolicy::Agent)
         {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "built-in chooser requires native stepping".into(),
             ));
         }
@@ -565,18 +616,20 @@ impl Env {
     pub fn structured_offers(&self) -> Result<StructuredOfferSet, AgentError> {
         self.game
             .as_ref()
-            .ok_or_else(|| AgentError("env.structured_offers called before reset".to_string()))?
+            .ok_or_else(|| {
+                AgentError::Rules("env.structured_offers called before reset".to_string())
+            })?
             .structured_offers()
-            .map_err(|error| AgentError(error.to_string()))
+            .map_err(AgentError::from)
     }
 
     /// Project the complete action-aligned structured surface used by search.
     pub fn compound_offers(&self) -> Result<StructuredOfferSet, AgentError> {
         self.game
             .as_ref()
-            .ok_or_else(|| AgentError("env not reset".into()))?
+            .ok_or_else(|| AgentError::Rules("env not reset".into()))?
             .compound_offers()
-            .map_err(|error| AgentError(error.to_string()))
+            .map_err(AgentError::from)
     }
 
     pub fn compound_commands(
@@ -586,19 +639,19 @@ impl Env {
     ) -> Result<Vec<SemanticCommand>, AgentError> {
         self.game
             .as_ref()
-            .ok_or_else(|| AgentError("env not reset".into()))?
+            .ok_or_else(|| AgentError::Rules("env not reset".into()))?
             .compound_commands(offers, submission)
-            .map_err(|error| AgentError(error.to_string()))
+            .map_err(AgentError::from)
     }
 
     pub fn structured_search_offers(&self) -> Result<StructuredOfferSet, AgentError> {
         self.game
             .as_ref()
             .ok_or_else(|| {
-                AgentError("env.structured_search_offers called before reset".to_string())
+                AgentError::Rules("env.structured_search_offers called before reset".to_string())
             })?
             .structured_search_offers()
-            .map_err(|error| AgentError(error.to_string()))
+            .map_err(AgentError::from)
     }
 
     /// Apply one prompt-bound structured submission through the atomic path.
@@ -609,14 +662,13 @@ impl Env {
     ) -> Result<(Observation, f64, bool, bool, InfoDict, usize), AgentError> {
         self.require_external_chooser()?;
         let mut result = {
-            let game = self
-                .game
-                .as_mut()
-                .ok_or_else(|| AgentError("env.step_structured called before reset".to_string()))?;
+            let game = self.game.as_mut().ok_or_else(|| {
+                AgentError::Rules("env.step_structured called before reset".to_string())
+            })?;
             let agent = current_agent(game)?;
             let done = game
                 .apply_offer_submission(offers, submission)
-                .map_err(|error| AgentError(error.to_string()))?;
+                .map_err(AgentError::from)?;
             finish_game_step(game, agent, done)
         };
         if result.2 {
@@ -638,12 +690,12 @@ impl Env {
         self.require_external_chooser()?;
         let (mut result, legacy_actions) = {
             let game = self.game.as_mut().ok_or_else(|| {
-                AgentError("env.step_legacy_submission called before reset".to_string())
+                AgentError::Rules("env.step_legacy_submission called before reset".to_string())
             })?;
             let agent = current_agent(game)?;
             let (done, legacy_actions) = game
                 .apply_legacy_offer_submission(offers, submission)
-                .map_err(|error| AgentError(error.to_string()))?;
+                .map_err(AgentError::from)?;
             (finish_game_step(game, agent, done), legacy_actions)
         };
         if result.2 {
@@ -668,10 +720,10 @@ impl Env {
         self.game
             .as_ref()
             .ok_or_else(|| {
-                AgentError("env.semantic_decision_frame called before reset".to_string())
+                AgentError::Rules("env.semantic_decision_frame called before reset".to_string())
             })?
             .semantic_decision_frame()
-            .map_err(|error| AgentError(error.to_string()))
+            .map_err(AgentError::from)
     }
 
     pub fn payment_preview(
@@ -697,7 +749,7 @@ impl Env {
         Ok(self
             .game
             .as_ref()
-            .ok_or_else(|| AgentError("no active game".into()))?
+            .ok_or_else(|| AgentError::Rules("no active game".into()))?
             .presentation_subjects())
     }
 
@@ -706,12 +758,12 @@ impl Env {
         viewer: usize,
     ) -> Result<Vec<Vec<crate::experience::OfferSubjectView>>, AgentError> {
         if viewer >= 2 {
-            return Err(AgentError("viewer out of bounds".into()));
+            return Err(AgentError::Rules("viewer out of bounds".into()));
         }
         Ok(self
             .game
             .as_ref()
-            .ok_or_else(|| AgentError("no active game".into()))?
+            .ok_or_else(|| AgentError::Rules("no active game".into()))?
             .decision_offer_subjects(PlayerId(viewer)))
     }
 
@@ -719,7 +771,7 @@ impl Env {
         let game = self
             .game
             .as_ref()
-            .ok_or_else(|| AgentError("env.player_controls called before reset".into()))?;
+            .ok_or_else(|| AgentError::Rules("env.player_controls called before reset".into()))?;
         Ok(game.player_control_views())
     }
 
@@ -728,12 +780,12 @@ impl Env {
         viewer: usize,
     ) -> Result<Option<crate::experience::DecisionContextView>, AgentError> {
         if viewer >= 2 {
-            return Err(AgentError("viewer out of bounds".into()));
+            return Err(AgentError::Rules("viewer out of bounds".into()));
         }
         Ok(self
             .game
             .as_ref()
-            .ok_or_else(|| AgentError("no active game".into()))?
+            .ok_or_else(|| AgentError::Rules("no active game".into()))?
             .decision_context(PlayerId(viewer)))
     }
 
@@ -742,7 +794,7 @@ impl Env {
         Ok(self
             .game
             .as_ref()
-            .ok_or_else(|| AgentError("no active game".into()))?
+            .ok_or_else(|| AgentError::Rules("no active game".into()))?
             .state
             .turn
             .public_schedule())
@@ -755,9 +807,9 @@ impl Env {
     ) -> Result<crate::decision_capture::DecisionCapture, AgentError> {
         self.game
             .as_ref()
-            .ok_or_else(|| AgentError("no active game".into()))?
+            .ok_or_else(|| AgentError::Rules("no active game".into()))?
             .capture_decision(PlayerId(viewer), history_capacity)
-            .map_err(|error| AgentError(error.to_string()))
+            .map_err(AgentError::from)
     }
 
     /// Project the composite viewer-safe semantic observation for `viewer`.
@@ -765,18 +817,22 @@ impl Env {
     pub fn semantic_observation(&self, viewer: usize) -> Result<SemanticObservation, AgentError> {
         self.game
             .as_ref()
-            .ok_or_else(|| AgentError("env.semantic_observation called before reset".to_string()))?
+            .ok_or_else(|| {
+                AgentError::Rules("env.semantic_observation called before reset".to_string())
+            })?
             .semantic_observation(PlayerId(viewer))
-            .map_err(|error| AgentError(error.to_string()))
+            .map_err(AgentError::from)
     }
 
     /// The exact semantic observation identity, without its composite envelope.
     pub fn semantic_viewer_state_hash(&self, viewer: usize) -> Result<String, AgentError> {
         self.game
             .as_ref()
-            .ok_or_else(|| AgentError("env.semantic_viewer_state_hash called before reset".into()))?
+            .ok_or_else(|| {
+                AgentError::Rules("env.semantic_viewer_state_hash called before reset".into())
+            })?
             .semantic_viewer_state_hash(PlayerId(viewer))
-            .map_err(|error| AgentError(error.to_string()))
+            .map_err(AgentError::from)
     }
 
     /// Project hidden-hand constraints without enumerating compatible hands.
@@ -785,10 +841,10 @@ impl Env {
         viewer: usize,
     ) -> Result<crate::possible_worlds::HiddenHandConstraints, AgentError> {
         let game = self.game.as_ref().ok_or_else(|| {
-            AgentError("env.hidden_hand_constraints called before reset".to_string())
+            AgentError::Rules("env.hidden_hand_constraints called before reset".to_string())
         })?;
         if viewer >= game.state.players.len() {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "hidden_hand_constraints: invalid viewer".to_string(),
             ));
         }
@@ -806,10 +862,10 @@ impl Env {
         viewer: usize,
     ) -> Result<PossibleWorldSpaceProjection, AgentError> {
         let game = self.game.as_ref().ok_or_else(|| {
-            AgentError("env.possible_world_space called before reset".to_string())
+            AgentError::Rules("env.possible_world_space called before reset".to_string())
         })?;
         if viewer >= game.state.players.len() {
-            return Err(AgentError(format!(
+            return Err(AgentError::Rules(format!(
                 "possible_world_space: viewer {viewer} out of range"
             )));
         }
@@ -825,16 +881,16 @@ impl Env {
         query: crate::possible_worlds::WorldQueryWire,
     ) -> Result<crate::possible_worlds::SupportReceiptProjection, AgentError> {
         let game = self.game.as_ref().ok_or_else(|| {
-            AgentError("env.possible_world_support called before reset".to_string())
+            AgentError::Rules("env.possible_world_support called before reset".to_string())
         })?;
         if viewer >= game.state.players.len() {
-            return Err(AgentError(format!(
+            return Err(AgentError::Rules(format!(
                 "possible_world_support: viewer {viewer} out of range"
             )));
         }
         let space = self.construct_possible_world_space(game, PlayerId(viewer))?;
         if space.identity() != space_identity {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "possible_world_support: space identity mismatch".to_string(),
             ));
         }
@@ -848,22 +904,22 @@ impl Env {
         query: crate::possible_worlds::WorldQueryWire,
     ) -> Result<crate::possible_worlds::ConditioningReceiptProjection, AgentError> {
         let game = self.game.as_ref().ok_or_else(|| {
-            AgentError("env.possible_world_condition called before reset".to_string())
+            AgentError::Rules("env.possible_world_condition called before reset".to_string())
         })?;
         if viewer >= game.state.players.len() {
-            return Err(AgentError(format!(
+            return Err(AgentError::Rules(format!(
                 "possible_world_condition: viewer {viewer} out of range"
             )));
         }
         let space = self.construct_possible_world_space(game, PlayerId(viewer))?;
         if space.identity() != space_identity {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "possible_world_condition: space identity mismatch".to_string(),
             ));
         }
         space
             .condition_projection(query)
-            .map_err(|error| AgentError(format!("possible_world_condition: {error:?}")))
+            .map_err(|error| AgentError::Rules(format!("possible_world_condition: {error:?}")))
     }
 
     /// Direct sampled-hand materialization; never enumerates possible worlds.
@@ -876,21 +932,22 @@ impl Env {
     ) -> Result<Env, AgentError> {
         let constraints = self.hidden_hand_constraints(viewer)?;
         let expected: serde_json::Value = serde_json::from_str(source_json)
-            .map_err(|error| AgentError(format!("invalid hand constraints: {error}")))?;
-        if serde_json::to_value(&constraints).map_err(|error| AgentError(error.to_string()))?
+            .map_err(|error| AgentError::Rules(format!("invalid hand constraints: {error}")))?;
+        if serde_json::to_value(&constraints)
+            .map_err(|error| AgentError::Rules(error.to_string()))?
             != expected
         {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "sampled hand constraints are stale or inconsistent".to_string(),
             ));
         }
         let game = self
             .game
             .as_ref()
-            .ok_or_else(|| AgentError("sampled hand before reset".to_string()))?;
+            .ok_or_else(|| AgentError::Rules("sampled hand before reset".to_string()))?;
         let branch = constraints
             .materialize_hand(game, hand, seed)
-            .map_err(|error| AgentError(format!("sampled hand: {error}")))?;
+            .map_err(|error| AgentError::Rules(format!("sampled hand: {error}")))?;
         Ok(self.branch_from_game(branch))
     }
 
@@ -905,16 +962,16 @@ impl Env {
         refresh_opponent_commitment: bool,
     ) -> Result<Env, AgentError> {
         let game = self.game.as_ref().ok_or_else(|| {
-            AgentError("env.materialize_possible_world called before reset".to_string())
+            AgentError::Rules("env.materialize_possible_world called before reset".to_string())
         })?;
         if viewer >= game.state.players.len() {
-            return Err(AgentError(format!(
+            return Err(AgentError::Rules(format!(
                 "materialize_possible_world: viewer {viewer} out of range"
             )));
         }
         let space = self.construct_possible_world_space(game, PlayerId(viewer))?;
         if space.identity() != space_identity {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "materialize_possible_world: space identity mismatch".to_string(),
             ));
         }
@@ -925,7 +982,7 @@ impl Env {
         };
         let branch_game = space
             .materialize_index(game, world_index, seed, mode)
-            .map_err(|error| AgentError(format!("materialize_possible_world: {error}")))?;
+            .map_err(|error| AgentError::Rules(format!("materialize_possible_world: {error}")))?;
         Ok(self.branch_from_game(branch_game))
     }
 
@@ -938,21 +995,21 @@ impl Env {
         max_batch_size: usize,
     ) -> Result<PreparedPossibleWorldMaterializer, AgentError> {
         let game = self.game.as_ref().ok_or_else(|| {
-            AgentError("prepare_possible_world_materializer called before reset".to_string())
+            AgentError::Rules("prepare_possible_world_materializer called before reset".to_string())
         })?;
         if viewer >= game.state.players.len() {
-            return Err(AgentError(format!(
+            return Err(AgentError::Rules(format!(
                 "prepare_possible_world_materializer: viewer {viewer} out of range"
             )));
         }
         if expected_space_identity.is_empty() {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "prepare_possible_world_materializer: expected identity must not be empty"
                     .to_string(),
             ));
         }
         if max_batch_size == 0 {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "prepare_possible_world_materializer: max batch size must be positive".to_string(),
             ));
         }
@@ -960,7 +1017,7 @@ impl Env {
         let space = self.construct_possible_world_space(game, PlayerId(viewer))?;
         let space_identity = space.identity();
         if space_identity != expected_space_identity {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "prepare_possible_world_materializer: space identity mismatch".to_string(),
             ));
         }
@@ -986,9 +1043,11 @@ impl Env {
         let (transition, observation, _) = self
             .game
             .as_mut()
-            .ok_or_else(|| AgentError("env.execute_semantic_command called before reset".into()))?
+            .ok_or_else(|| {
+                AgentError::Rules("env.execute_semantic_command called before reset".into())
+            })?
             .execute_semantic_command_with_observation(command)
-            .map_err(|error| AgentError(error.to_string()))?;
+            .map_err(AgentError::from)?;
         self.remember_heuristic_events(&observation);
         Ok(transition)
     }
@@ -999,12 +1058,12 @@ impl Env {
     ) -> Result<(SemanticTransition, Observation, f64, bool, bool, InfoDict), AgentError> {
         self.require_external_chooser()?;
         let game = self.game.as_mut().ok_or_else(|| {
-            AgentError("env.step_semantic_command called before reset".to_string())
+            AgentError::Rules("env.step_semantic_command called before reset".to_string())
         })?;
         let actor = current_agent(game)?;
         let (transition, observation, done) = game
             .execute_semantic_command_with_observation(command)
-            .map_err(|error| AgentError(error.to_string()))?;
+            .map_err(AgentError::from)?;
         let reward = if done {
             game.winner_index()
                 .map(|winner| if winner == actor.0 { 1.0 } else { -1.0 })
@@ -1023,25 +1082,129 @@ impl Env {
         ))
     }
 
+    pub fn declaration_projection(
+        &self,
+        viewer: usize,
+    ) -> Result<Option<crate::flow::declaration::DeclarationProjection>, AgentError> {
+        let game = self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError::Rules("declaration before reset".into()))?;
+        if viewer > 1 {
+            return Err(AgentError::Rules("declaration viewer out of range".into()));
+        }
+        game.declaration_projection(PlayerId(viewer))
+            .map_err(AgentError::from)
+    }
+
+    pub fn validate_declaration_plan(
+        &self,
+        plan: &crate::flow::declaration::DeclarationPlan,
+    ) -> Result<(), AgentError> {
+        self.require_external_chooser()?;
+        self.game
+            .as_ref()
+            .ok_or_else(|| AgentError::Rules("declaration before reset".into()))?
+            .validate_declaration_plan(plan)
+            .map_err(AgentError::from)
+    }
+
+    pub fn prepare_declaration_plan(
+        &self,
+        plan: &crate::flow::declaration::DeclarationPlan,
+    ) -> Result<PreparedDeclaration, AgentError> {
+        self.require_external_chooser()?;
+        let game = self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError::Rules("declaration before reset".into()))?;
+        let transaction = game
+            .prepare_declaration_plan(plan)
+            .map_err(AgentError::from)?;
+        Ok(PreparedDeclaration {
+            source_generation: self.capture_generation,
+            source: witness(game),
+            transaction,
+        })
+    }
+
+    /// The actual before/after state of a prepared child, without re-execution.
+    /// Captures survive because these are live transaction roots, not search forks.
+    pub fn declaration_child_env(
+        &self,
+        prepared: &PreparedDeclaration,
+        index: usize,
+        after: bool,
+    ) -> Result<Env, AgentError> {
+        if self.capture_generation != prepared.source_generation {
+            return Err(AgentError::Rules(
+                "wrong origin for declaration candidate".into(),
+            ));
+        }
+        if index >= prepared.transaction.children.len() {
+            return Err(AgentError::Rules(
+                "declaration child index out of range".into(),
+            ));
+        }
+        let source = prepared
+            .transaction
+            .children
+            .get(index + usize::from(after))
+            .map_or(&prepared.transaction.game, |child| &child.root);
+        let mut game = source.clone_with_card_capture();
+        if after && index + 1 == prepared.transaction.children.len() {
+            game.take_observation_events();
+        }
+        let mut branch = self.branch_from_game(game);
+        if let Some(previous) = index.checked_sub(usize::from(!after)) {
+            branch.remember_heuristic_events(&prepared.transaction.children[previous].observation);
+        }
+        Ok(branch)
+    }
+
+    /// Publish once after staging. No fallible recording work belongs after this
+    /// commit point. Keep the Env's origin token and instrumentation ownership.
+    pub fn publish_declaration(
+        &mut self,
+        mut prepared: PreparedDeclaration,
+    ) -> Result<(), AgentError> {
+        self.require_external_chooser()?;
+        let game = self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError::Rules("declaration before reset".into()))?;
+        if self.capture_generation != prepared.source_generation || witness(game) != prepared.source
+        {
+            return Err(AgentError::Rules("stale declaration candidate".into()));
+        }
+        prepared.transaction.game.take_observation_events();
+        if let Some(child) = prepared.transaction.children.last() {
+            self.remember_heuristic_events(&child.observation);
+        }
+        self.game = Some(prepared.transaction.game);
+        Ok(())
+    }
+
     pub fn semantic_event_cursor(&self) -> Result<u64, AgentError> {
         self.game
             .as_ref()
             .map(Game::semantic_event_cursor)
-            .ok_or_else(|| AgentError("env.semantic_event_cursor called before reset".to_string()))
+            .ok_or_else(|| {
+                AgentError::Rules("env.semantic_event_cursor called before reset".to_string())
+            })
     }
 
     /// Canonical semantic digest used by differential ABI assertions.
     ///
-    /// The structured ABI can commit one logical choice where the legacy ABI
-    /// publishes several intermediate prompts. Those paths intentionally have
-    /// different decision epochs even when they reach the same rules state,
-    /// legal action, and pending choice. Exact search-fork admission uses
+    /// Grouped declarations execute the same ordinary child Commands, retaining
+    /// their decision epochs. This digest compares the positional surface;
+    /// exact search-fork admission uses
     /// `search_state::snapshot`, which includes that authority epoch.
     pub fn state_digest(&self) -> Result<String, AgentError> {
         let game = self
             .game
             .as_ref()
-            .ok_or_else(|| AgentError("env.state_digest called before reset".to_string()))?;
+            .ok_or_else(|| AgentError::Rules("env.state_digest called before reset".to_string()))?;
         let semantic_surface = (
             game.state.deterministic_hash_value(),
             &game.current_action_space,
@@ -1065,7 +1228,7 @@ impl Env {
     /// Manifest of the catalog this match runs on.
     pub fn content_pack_manifest(&self) -> Result<ContentPackManifest, AgentError> {
         self.game.as_ref().ok_or_else(|| {
-            AgentError("env.content_pack_manifest called before reset".to_string())
+            AgentError::Rules("env.content_pack_manifest called before reset".to_string())
         })?;
         Ok(default_content_pack().manifest())
     }
@@ -1109,7 +1272,7 @@ impl Env {
         let game = self
             .game
             .as_ref()
-            .ok_or_else(|| AgentError("env.fork called before reset".to_string()))?
+            .ok_or_else(|| AgentError::Rules("env.fork called before reset".to_string()))?
             .clone();
         let mut branch = self.branch_from_game(game);
         branch.action_trace = self.action_trace.clone();
@@ -1127,12 +1290,12 @@ impl Env {
         seed: u64,
     ) -> Result<(), AgentError> {
         if perspective > 1 {
-            return Err(AgentError(format!(
+            return Err(AgentError::Rules(format!(
                 "determinize: perspective {perspective} out of range"
             )));
         }
         let game = self.game.as_mut().ok_or_else(|| {
-            AgentError("env.selected_determinize called before reset".to_string())
+            AgentError::Rules("env.selected_determinize called before reset".to_string())
         })?;
         game.require_open_decklist(PlayerId(perspective))?;
         game.determinize(PlayerId(perspective), seed)?;
@@ -1141,7 +1304,7 @@ impl Env {
 
     pub fn selected_reseed_rollout(&mut self, seed: u64) -> Result<(), AgentError> {
         let game = self.game.as_mut().ok_or_else(|| {
-            AgentError("env.selected_reseed_rollout called before reset".to_string())
+            AgentError::Rules("env.selected_reseed_rollout called before reset".to_string())
         })?;
         game.reseed(seed);
         Ok(())
@@ -1150,18 +1313,16 @@ impl Env {
     /// Recompute pre-Command identity from the current authority, without views.
     #[cfg(feature = "python")]
     pub(crate) fn selected_identity(&self) -> Result<SearchStateIdentity, AgentError> {
-        let game = self
-            .game
-            .as_ref()
-            .ok_or_else(|| AgentError("env.selected_identity called before reset".to_string()))?;
+        let game = self.game.as_ref().ok_or_else(|| {
+            AgentError::Rules("env.selected_identity called before reset".to_string())
+        })?;
         Ok(identity(game))
     }
 
     pub fn selected_witness(&self) -> Result<SearchStateWitness, AgentError> {
-        let game = self
-            .game
-            .as_ref()
-            .ok_or_else(|| AgentError("env.selected_witness called before reset".to_string()))?;
+        let game = self.game.as_ref().ok_or_else(|| {
+            AgentError::Rules("env.selected_witness called before reset".to_string())
+        })?;
         Ok(witness(game))
     }
 
@@ -1179,7 +1340,9 @@ impl Env {
         self.game
             .as_ref()
             .map(|game| game.decision_epoch)
-            .ok_or_else(|| AgentError("env.selected_revision called before reset".to_string()))
+            .ok_or_else(|| {
+                AgentError::Rules("env.selected_revision called before reset".to_string())
+            })
     }
 
     /// Detached authoritative hand contents for a native seat at this read.
@@ -1198,12 +1361,13 @@ impl Env {
     /// Privileged read of the native seat's complete hand zone,
     /// without constructing a viewer observation or applying disclosure rules.
     fn hand_counts(&self, player: usize) -> Result<BTreeMap<String, usize>, AgentError> {
-        let game = self
-            .game
-            .as_ref()
-            .ok_or_else(|| AgentError("env must be reset before reading hand snapshots".into()))?;
+        let game = self.game.as_ref().ok_or_else(|| {
+            AgentError::Rules("env must be reset before reading hand snapshots".into())
+        })?;
         if player >= game.state.players.len() {
-            return Err(AgentError("hand snapshot player must be 0 or 1".into()));
+            return Err(AgentError::Rules(
+                "hand snapshot player must be 0 or 1".into(),
+            ));
         }
         let mut counts = BTreeMap::new();
         for object in game
@@ -1244,10 +1408,10 @@ impl Env {
         let game = self
             .game
             .as_ref()
-            .ok_or_else(|| AgentError("env.action_count called before reset".to_string()))?;
+            .ok_or_else(|| AgentError::Rules("env.action_count called before reset".to_string()))?;
         let action_space = game
             .action_space()
-            .ok_or_else(|| AgentError("no active action space".to_string()))?;
+            .ok_or_else(|| AgentError::Rules("no active action space".to_string()))?;
         Ok(action_space.actions.len())
     }
 
@@ -1265,10 +1429,11 @@ impl Env {
     /// an opponent decision cannot turn into an opponent-private observation.
     pub fn observation_for_player(&self, player_index: usize) -> Result<Observation, AgentError> {
         let game = self.game.as_ref().ok_or_else(|| {
-            AgentError("env.observation_for_player called before reset".to_string())
+            AgentError::Rules("env.observation_for_player called before reset".to_string())
         })?;
+        game.ensure_playable()?;
         if player_index >= game.state.players.len() {
-            return Err(AgentError(format!(
+            return Err(AgentError::Rules(format!(
                 "player index {player_index} is out of bounds"
             )));
         }
@@ -1292,13 +1457,20 @@ impl Env {
     // naming fixture requires and republishes an existing naming decision.
     // ------------------------------------------------------------------
 
+    #[cfg(test)]
+    pub(crate) fn fixture_set_game(&mut self, game: Game) {
+        self.game = Some(game);
+    }
+
     fn scenario_game_mut(&mut self, method: &str) -> Result<&mut Game, AgentError> {
         if self.game.as_ref().is_some_and(|game| game.is_game_over()) {
-            return Err(AgentError(format!("env.{method} called after game over")));
+            return Err(AgentError::Rules(format!(
+                "env.{method} called after game over"
+            )));
         }
         self.game
             .as_mut()
-            .ok_or_else(|| AgentError(format!("env.{method} called before reset")))
+            .ok_or_else(|| AgentError::Rules(format!("env.{method} called before reset")))
     }
 
     /// Fixture access for opt-in native measurement, absent from Python/wheels.
@@ -1310,7 +1482,7 @@ impl Env {
 
     fn scenario_player(player: usize) -> Result<PlayerId, AgentError> {
         if player > 1 {
-            return Err(AgentError(format!(
+            return Err(AgentError::Rules(format!(
                 "scenario: player {player} out of range"
             )));
         }
@@ -1370,14 +1542,14 @@ impl Env {
     /// See [`Game::determinize`].
     pub fn determinize(&mut self, perspective: usize, seed: u64) -> Result<(), AgentError> {
         if perspective > 1 {
-            return Err(AgentError(format!(
+            return Err(AgentError::Rules(format!(
                 "determinize: perspective {perspective} out of range"
             )));
         }
         let game = self
             .game
             .as_mut()
-            .ok_or_else(|| AgentError("env.determinize called before reset".to_string()))?;
+            .ok_or_else(|| AgentError::Rules("env.determinize called before reset".to_string()))?;
         game.require_open_decklist(PlayerId(perspective))?;
         game.determinize(PlayerId(perspective), seed)?;
         Ok(())
@@ -1390,10 +1562,9 @@ impl Env {
         seed: u64,
         max_steps: usize,
     ) -> Result<Option<usize>, AgentError> {
-        let game = self
-            .game
-            .as_mut()
-            .ok_or_else(|| AgentError("env.random_playout called before reset".to_string()))?;
+        let game = self.game.as_mut().ok_or_else(|| {
+            AgentError::Rules("env.random_playout called before reset".to_string())
+        })?;
         game.reseed(seed);
         game.random_playout(max_steps, None)
     }
@@ -1438,23 +1609,23 @@ impl Env {
         max_steps: usize,
     ) -> Result<FlatMcResult, AgentError> {
         if world_indexes.is_empty() {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "flat_mc_scores_for_worlds requires at least one world".to_string(),
             ));
         }
         if world_indexes.len() != world_seeds.len() {
-            return Err(AgentError(format!(
+            return Err(AgentError::Rules(format!(
                 "flat_mc_scores_for_worlds received {} worlds and {} seeds",
                 world_indexes.len(),
                 world_seeds.len()
             )));
         }
         let game = self.game.as_ref().ok_or_else(|| {
-            AgentError("env.flat_mc_scores_for_worlds called before reset".to_string())
+            AgentError::Rules("env.flat_mc_scores_for_worlds called before reset".to_string())
         })?;
         let actor = current_agent(game)?;
         if actor.0 != viewer {
-            return Err(AgentError(format!(
+            return Err(AgentError::Rules(format!(
                 "flat_mc_scores_for_worlds viewer {viewer} is not acting player {}",
                 actor.0
             )));
@@ -1462,7 +1633,7 @@ impl Env {
         game.require_open_decklist(actor)?;
         let space = PossibleWorldSpace::for_viewer(game, actor);
         if space.identity() != space_identity {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "flat_mc_scores_for_worlds: space identity mismatch".to_string(),
             ));
         }
@@ -1480,7 +1651,9 @@ impl Env {
                         world_seed,
                         MaterializeMode::PreserveViewerRoot,
                     )
-                    .map_err(|error| AgentError(format!("flat_mc_scores_for_worlds: {error}")))?;
+                    .map_err(|error| {
+                        AgentError::Rules(format!("flat_mc_scores_for_worlds: {error}"))
+                    })?;
                 Ok((world, world_seed))
             },
         )
@@ -1497,25 +1670,24 @@ impl Env {
     where
         F: FnMut(&Game, PlayerId, usize) -> Result<(Game, u64), AgentError>,
     {
-        let game = self
-            .game
-            .as_ref()
-            .ok_or_else(|| AgentError("env.flat_mc_scores called before reset".to_string()))?;
+        let game = self.game.as_ref().ok_or_else(|| {
+            AgentError::Rules("env.flat_mc_scores called before reset".to_string())
+        })?;
         if game.is_game_over() {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "env.flat_mc_scores called after game over".to_string(),
             ));
         }
         let action_space = game
             .action_space()
-            .ok_or_else(|| AgentError("no active action space".to_string()))?;
-        let hero = action_space
-            .player
-            .ok_or_else(|| AgentError("no agent player in current action space".to_string()))?;
+            .ok_or_else(|| AgentError::Rules("no active action space".to_string()))?;
+        let hero = action_space.player.ok_or_else(|| {
+            AgentError::Rules("no agent player in current action space".to_string())
+        })?;
         game.require_open_decklist(hero)?;
         let num_actions = action_space.actions.len();
         if num_actions == 0 {
-            return Err(AgentError("no valid actions available".to_string()));
+            return Err(AgentError::Rules("no valid actions available".to_string()));
         }
 
         let mut totals = vec![0.0f64; num_actions];
@@ -1575,21 +1747,20 @@ impl Env {
         let game = self
             .game
             .as_ref()
-            .ok_or_else(|| AgentError("env.rollout_pool called before reset".to_string()))?;
+            .ok_or_else(|| AgentError::Rules("env.rollout_pool called before reset".to_string()))?;
         crate::agent::rollout_pool::RolloutPool::from_game(game, worlds, rollouts, seed, max_steps)
     }
 
     pub fn random_action_index(&mut self) -> Result<usize, AgentError> {
-        let game = self
-            .game
-            .as_mut()
-            .ok_or_else(|| AgentError("env.random_action_index called before reset".to_string()))?;
+        let game = self.game.as_mut().ok_or_else(|| {
+            AgentError::Rules("env.random_action_index called before reset".to_string())
+        })?;
         let action_space = game
             .action_space()
-            .ok_or_else(|| AgentError("no active action space".to_string()))?;
+            .ok_or_else(|| AgentError::Rules("no active action space".to_string()))?;
         let count = action_space.actions.len();
         if count == 0 {
-            return Err(AgentError("no valid actions available".to_string()));
+            return Err(AgentError::Rules("no valid actions available".to_string()));
         }
         Ok(game.state.rng_mut().gen_range(0..count))
     }
@@ -1801,11 +1972,14 @@ mod content_pack_contract_tests {
         let error = absent
             .fork()
             .expect_err("an environment without a match has no content pack");
-        assert_eq!(error.0, "env.fork called before reset");
+        assert_eq!(error.to_string(), "env.fork called before reset");
         let error = absent
             .content_pack_manifest()
             .expect_err("an environment without a match has no manifest");
-        assert_eq!(error.0, "env.content_pack_manifest called before reset");
+        assert_eq!(
+            error.to_string(),
+            "env.content_pack_manifest called before reset"
+        );
 
         let mut first = Env::new(11, true, false, false);
         let mut second = Env::new(12, true, false, false);
@@ -1869,13 +2043,84 @@ mod content_pack_contract_tests {
     }
 
     #[test]
+    fn declaration_preparation_preserves_roots_and_publishes_only_to_its_origin() {
+        use crate::{
+            experience::SubjectRef,
+            flow::{
+                block_declaration::{capacity_attack_root, COMBAT_SOLVER_LIMIT},
+                declaration::{DeclarationAnswer, DeclarationPlan},
+            },
+        };
+        let mut game = capacity_attack_root();
+        game.combat_solver_limit = COMBAT_SOLVER_LIMIT;
+        let mut env = Env::new(1, true, false, false);
+        env.fixture_set_game(game);
+        let projection = env.declaration_projection(0).unwrap().unwrap();
+        let plan = DeclarationPlan {
+            binding: projection.binding,
+            assignments: projection
+                .subjects
+                .iter()
+                .filter(|row| !row.fixed)
+                .map(|row| {
+                    let SubjectRef::Object { id } = row.object.subject else {
+                        panic!("creature");
+                    };
+                    DeclarationAnswer {
+                        subject: id,
+                        destination: crate::experience::RequiredNullable(
+                            row.destinations.first().copied(),
+                        ),
+                    }
+                })
+                .collect(),
+        };
+        let before = env.selected_witness().unwrap();
+        let prepared = env.prepare_declaration_plan(&plan).unwrap();
+        assert_eq!(before, env.selected_witness().unwrap());
+        let mut replay = env.fork().unwrap();
+        for (index, child) in prepared.transaction.children.iter().enumerate() {
+            let root = env.declaration_child_env(&prepared, index, false).unwrap();
+            assert_eq!(
+                root.selected_witness().unwrap(),
+                replay.selected_witness().unwrap()
+            );
+            let transition = replay.step_semantic_command(&child.command).unwrap().0;
+            assert_eq!(
+                serde_json::to_value(transition).unwrap(),
+                serde_json::to_value(&child.transition).unwrap()
+            );
+            let after = env.declaration_child_env(&prepared, index, true).unwrap();
+            assert_eq!(
+                after.selected_witness().unwrap(),
+                replay.selected_witness().unwrap()
+            );
+        }
+        let mut another = env.fork().unwrap();
+        let wrong_origin = env.prepare_declaration_plan(&plan).unwrap();
+        assert!(another.publish_declaration(wrong_origin).is_err());
+        assert_eq!(another.selected_witness().unwrap(), before);
+        let stale = env.prepare_declaration_plan(&plan).unwrap();
+        env.publish_declaration(prepared).unwrap();
+        assert_eq!(
+            env.selected_witness().unwrap(),
+            replay.selected_witness().unwrap()
+        );
+        assert!(env.publish_declaration(stale).is_err());
+        assert_eq!(
+            env.selected_witness().unwrap(),
+            replay.selected_witness().unwrap()
+        );
+    }
+
+    #[test]
     fn fixed_player_observation_does_not_follow_the_acting_seat() {
         let absent = Env::new(1, true, false, false);
         assert_eq!(
             absent
                 .observation_for_player(0)
                 .expect_err("an environment without a match has no projection")
-                .0,
+                .to_string(),
             "env.observation_for_player called before reset"
         );
 
@@ -1899,7 +2144,7 @@ mod content_pack_contract_tests {
         assert_eq!(
             env.observation_for_player(2)
                 .expect_err("only two seats exist")
-                .0,
+                .to_string(),
             "player index 2 is out of bounds"
         );
     }

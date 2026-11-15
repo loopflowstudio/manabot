@@ -594,52 +594,6 @@ fn compound_waterbend_subset_is_order_independent_and_forced_suffix_safe() {
 }
 
 #[test]
-fn structured_compound_menace_retains_sequential_support() {
-    let mut scenario = Scenario::new(
-        deck_of("Mountain", "Boggart Brute"),
-        deck_of("Mountain", "Gray Ogre"),
-        993,
-    );
-    scenario.advance_to_active_step(0, StepKind::Main);
-    let attacker = scenario.force_permanent_on_battlefield(0, "Boggart Brute");
-    scenario.game_mut().state.permanents[attacker]
-        .as_mut()
-        .unwrap()
-        .summoning_sick = false;
-    for _ in 0..2 {
-        scenario.force_permanent_on_battlefield(1, "Gray Ogre");
-    }
-    scenario.advance_to_active_step(0, StepKind::DeclareAttackers);
-    scenario.declare_attack();
-    scenario.advance_to_active_step(0, StepKind::DeclareBlockers);
-    let root = scenario.game();
-    let offers = root.compound_offers().unwrap();
-    assert_eq!(
-        offers.projection().offers.len(),
-        root.action_space().unwrap().actions.len()
-    );
-    assert!(offers
-        .projection()
-        .offers
-        .iter()
-        .all(|offer| offer.verb == OfferVerb::DeclareBlocker && offer.choices.is_empty()));
-    for offer in &offers.projection().offers {
-        assert_eq!(
-            root.compound_commands(
-                &offers,
-                &OfferSubmission {
-                    offer_id: offer.id,
-                    answers: vec![]
-                }
-            )
-            .unwrap()
-            .len(),
-            1
-        );
-    }
-}
-
-#[test]
 fn structured_compound_flying_attack_has_optionless_blocker_roles() {
     let mut scenario = Scenario::new(
         BTreeMap::from([("Island".to_string(), 20), ("Wind Drake".to_string(), 20)]),

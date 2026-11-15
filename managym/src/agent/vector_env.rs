@@ -38,7 +38,7 @@ impl From<ObservationEncodeError> for ObservationWriteError {
 impl From<ObservationWriteError> for AgentError {
     fn from(error: ObservationWriteError) -> Self {
         match error {
-            ObservationWriteError::Encoding(error) => Self(error.to_string()),
+            ObservationWriteError::Encoding(error) => Self::Rules(error.to_string()),
             ObservationWriteError::Buffer(error) => error,
         }
     }
@@ -125,7 +125,7 @@ impl VectorEnv {
             env.scenario_naming_vocabulary()?;
             let obs = env.observation_for_player(
                 env.current_agent_index()
-                    .ok_or_else(|| AgentError("naming fixture has no chooser".into()))?,
+                    .ok_or_else(|| AgentError::Rules("naming fixture has no chooser".into()))?,
             )?;
             write(index, &obs)?;
         }
@@ -162,7 +162,7 @@ impl VectorEnv {
 
     pub fn enable_exposure_capture(&mut self) -> Result<(), AgentError> {
         if !self.player_configs.is_empty() {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "exposure capture must be enabled before reset".into(),
             ));
         }
@@ -183,10 +183,12 @@ impl VectorEnv {
     /// Configure only before allocation of roots; native authored setups are the authority.
     pub fn set_uniform_roster(&mut self, roster: Vec<PlayerConfig>) -> Result<(), AgentError> {
         if !self.player_configs.is_empty() {
-            return Err(AgentError("uniform roster must be set before reset".into()));
+            return Err(AgentError::Rules(
+                "uniform roster must be set before reset".into(),
+            ));
         }
         let setup = crate::cards::setups::authored_setup("optional_payments")
-            .map_err(|e| AgentError(e.to_string()))?;
+            .map_err(|e| AgentError::Rules(e.to_string()))?;
         let expected: Vec<PlayerConfig> = setup
             .decks
             .iter()
@@ -197,7 +199,7 @@ impl VectorEnv {
                 .iter()
                 .any(|e| roster.iter().filter(|r| r.deck == e.deck).count() != 1)
         {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "uniform roster requires every exact Elemental setup once".into(),
             ));
         }
@@ -223,30 +225,30 @@ impl VectorEnv {
         distinct_pairs: bool,
     ) -> Result<(), AgentError> {
         if self.uniform_roster.elemental {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "the Elemental roster cannot be replaced by training decks".into(),
             ));
         }
         if decks.is_empty() || (distinct_pairs && decks.len() < 2) {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "uniform-distinct-v1 requires at least two training decks".into(),
             ));
         }
         let mut distinct = std::collections::BTreeSet::new();
         for player in &decks {
             if !player.submitted {
-                return Err(AgentError(
+                return Err(AgentError::Rules(
                     "training decks must be submitted to the world".into(),
                 ));
             }
             if let Some(message) = crate::cards::deck_admission::development_rejection(player) {
-                return Err(AgentError(format!(
+                return Err(AgentError::Rules(format!(
                     "training deck {}: {message}",
                     player.name
                 )));
             }
             if distinct_pairs && !distinct.insert(&player.deck) {
-                return Err(AgentError(
+                return Err(AgentError::Rules(
                     "training decks must be distinct normalized lists".into(),
                 ));
             }
@@ -287,12 +289,14 @@ impl VectorEnv {
     /// Configure before resetting; ordinary vectors retain their local stride.
     pub fn with_seed_stride(mut self, stride: u64) -> Result<Self, AgentError> {
         if stride < self.envs.len().max(1) as u64 {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "seed stride must cover all local streams".into(),
             ));
         }
         if !self.player_configs.is_empty() {
-            return Err(AgentError("seed stride must be set before reset".into()));
+            return Err(AgentError::Rules(
+                "seed stride must be set before reset".into(),
+            ));
         }
         self.seed_stride = stride;
         Ok(self)
@@ -317,14 +321,14 @@ impl VectorEnv {
     /// replacement games; no terminal hands are cached and no capacities apply.
     pub fn hand_snapshots(&self, players: &[usize]) -> Result<Vec<HandSnapshot>, AgentError> {
         if players.len() != self.len() {
-            return Err(AgentError(format!(
+            return Err(AgentError::Rules(format!(
                 "expected {} hand snapshot players, got {}",
                 self.len(),
                 players.len()
             )));
         }
         self.validate_ready_for_step().map_err(|_| {
-            AgentError("vector env must be reset before reading hand snapshots".to_string())
+            AgentError::Rules("vector env must be reset before reading hand snapshots".to_string())
         })?;
         self.envs
             .iter()
@@ -342,17 +346,19 @@ impl VectorEnv {
         mut write: impl FnMut(usize, &Observation) -> Result<(), AgentError>,
     ) -> Result<Vec<ObservationRead>, AgentError> {
         if players.len() != self.len() {
-            return Err(AgentError(format!(
+            return Err(AgentError::Rules(format!(
                 "expected {} observation players, got {}",
                 self.len(),
                 players.len()
             )));
         }
         if players.iter().any(|&player| player > 1) {
-            return Err(AgentError("observation player must be 0 or 1".into()));
+            return Err(AgentError::Rules(
+                "observation player must be 0 or 1".into(),
+            ));
         }
         self.validate_ready_for_step().map_err(|_| {
-            AgentError("vector env must be reset before reading observations".into())
+            AgentError::Rules("vector env must be reset before reading observations".into())
         })?;
         let reads = self
             .envs
@@ -393,7 +399,7 @@ impl VectorEnv {
                 }
                 serde_json::to_string(&env.semantic_decision_frame()?)
                     .map(Some)
-                    .map_err(|error| AgentError(error.to_string()))
+                    .map_err(|error| AgentError::Rules(error.to_string()))
             })
             .collect()
     }
@@ -549,7 +555,7 @@ impl VectorEnv {
         self.validate_actions_len(configs.len())?;
         self.validate_ready_for_step()?;
         if !self.uniform_roster.is_empty() || self.player_policies != [PlayerPolicy::Agent; 2] {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "root reassignment requires externally routed fixed setups".into(),
             ));
         }
@@ -557,17 +563,19 @@ impl VectorEnv {
         for (index, setup) in configs.into_iter().enumerate() {
             if let Some(setup) = setup {
                 if !self.fresh_roots[index] {
-                    return Err(AgentError("cannot reassign a live game".into()));
+                    return Err(AgentError::Rules("cannot reassign a live game".into()));
                 }
                 Self::validate_player_configs(setup.len())?;
                 // Game creation panics on these; reject them as errors first.
                 crate::cards::deck_admission::admit_submitted(&setup)
-                    .map_err(|error| AgentError(error.to_string()))?;
+                    .map_err(|error| AgentError::Rules(error.to_string()))?;
                 let content = crate::cards::content_pack::default_content_pack();
                 for player in &setup {
                     for name in player.deck.main.keys() {
                         if content.definition_id(name).is_none() {
-                            return Err(AgentError(format!("unknown card in decklist: {name}")));
+                            return Err(AgentError::Rules(format!(
+                                "unknown card in decklist: {name}"
+                            )));
                         }
                     }
                     for (name, count) in &player.deck.sideboard {
@@ -576,7 +584,9 @@ impl VectorEnv {
                             .and_then(|id| content.definition(id))
                             .is_some_and(|definition| !definition.is_token);
                         if *count == 0 || !valid {
-                            return Err(AgentError(format!("invalid sideboard card: {name}")));
+                            return Err(AgentError::Rules(format!(
+                                "invalid sideboard card: {name}"
+                            )));
                         }
                     }
                 }
@@ -663,7 +673,7 @@ impl VectorEnv {
             }
             *fresh = false;
             let frame = serde_json::to_string(&env.semantic_decision_frame()?)
-                .map_err(|error| AgentError(error.to_string()))?;
+                .map_err(|error| AgentError::Rules(error.to_string()))?;
             // A Rust unwind is contained only around gameplay of a disposable
             // stream. Buffer errors and invalid setup must never be tolerated.
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -672,6 +682,10 @@ impl VectorEnv {
             let mut out = match result {
                 Ok(Ok(out)) => out,
                 failure => {
+                    let capacity = match &failure {
+                        Ok(Err(error)) => error.capacity().cloned(),
+                        _ => None,
+                    };
                     let (class, message) = match failure {
                         Ok(Err(error)) => ("AgentError", error.to_string()),
                         Err(payload) => (
@@ -684,7 +698,7 @@ impl VectorEnv {
                         ),
                         Ok(Ok(_)) => unreachable!(),
                     };
-                    return Ok(InfoDict::from([
+                    let mut info = InfoDict::from([
                         ("game_error".into(), InfoValue::String(message)),
                         ("game_error_class".into(), InfoValue::String(class.into())),
                         ("game_error_frame".into(), InfoValue::String(frame)),
@@ -694,7 +708,27 @@ impl VectorEnv {
                                 std::backtrace::Backtrace::force_capture().to_string(),
                             ),
                         ),
-                    ]));
+                    ]);
+                    if let Some(capacity) = capacity {
+                        info.insert(
+                            "game_error_kind".into(),
+                            InfoValue::String("resource_limit".into()),
+                        );
+                        info.insert("game_error_slot".into(), InfoValue::Int(index as i64));
+                        info.insert(
+                            "game_error_resource".into(),
+                            InfoValue::String(capacity.resource.into()),
+                        );
+                        info.insert(
+                            "game_error_limit".into(),
+                            InfoValue::Int(capacity.limit as i64),
+                        );
+                        info.insert(
+                            "game_error_visited".into(),
+                            InfoValue::Int(capacity.visited as i64),
+                        );
+                    }
+                    return Ok(info);
                 }
             };
             *fresh = false;
@@ -785,13 +819,27 @@ impl VectorEnv {
                     &self.uniform_roster,
                     fresh,
                 )
+                .map_err(|error| match error {
+                    AgentError::Stream {
+                        frame,
+                        context,
+                        source,
+                        ..
+                    } => AgentError::Stream {
+                        slot: env_index,
+                        frame,
+                        context,
+                        source,
+                    },
+                    other => other,
+                })
             })
             .collect()
     }
 
     fn validate_player_configs(config_len: usize) -> Result<(), AgentError> {
         if config_len != 2 {
-            return Err(AgentError(format!(
+            return Err(AgentError::Rules(format!(
                 "expected exactly 2 player configs, got {config_len}"
             )));
         }
@@ -800,7 +848,7 @@ impl VectorEnv {
 
     fn validate_actions_len(&self, actions_len: usize) -> Result<(), AgentError> {
         if actions_len != self.envs.len() {
-            return Err(AgentError(format!(
+            return Err(AgentError::Rules(format!(
                 "expected {} actions, got {actions_len}",
                 self.envs.len()
             )));
@@ -810,7 +858,7 @@ impl VectorEnv {
 
     fn validate_ready_for_step(&self) -> Result<(), AgentError> {
         if self.player_configs.len() != self.envs.len() || self.player_configs.is_empty() {
-            return Err(AgentError(
+            return Err(AgentError::Rules(
                 "vector env must be reset before step".to_string(),
             ));
         }
@@ -849,13 +897,14 @@ impl VectorEnv {
     }
 
     fn step_one_on_env(env: &mut Env, action: i64) -> Result<StepResult, AgentError> {
-        let (obs, reward, terminated, truncated, info) = env.step(action).map_err(|error| {
-            AgentError(format!(
-                "{}; native_failure={}",
-                error.0,
-                env.vector_failure_context(action)
-            ))
-        })?;
+        let frame = env.combat_failure_frame()?;
+        let (obs, reward, terminated, truncated, info) =
+            env.step(action).map_err(|error| AgentError::Stream {
+                slot: 0,
+                frame,
+                context: env.vector_failure_context(action),
+                source: Box::new(error),
+            })?;
         Ok(StepResult {
             obs,
             reward,
@@ -904,6 +953,51 @@ mod tests {
         infra::profiler::InfoValue,
         state::player::PlayerConfig,
     };
+
+    #[test]
+    fn combat_capacity_isolates_only_the_failed_stream() {
+        let mut vector = VectorEnv::new(2, 364, true, [PlayerPolicy::Agent; 2]);
+        vector.reset_all(sample_player_configs()).unwrap();
+        vector.envs[1].fixture_set_game(crate::flow::block_declaration::capacity_attack_root());
+        let healthy_before = vector.envs[0].semantic_decision_frame().unwrap();
+        let info = vector
+            .step_isolated_into(&[0, 0], &[false, true], true, |_, _, _, _, _| Ok(()))
+            .unwrap();
+        assert!(
+            matches!(info[1].get("game_error_kind"), Some(InfoValue::String(value)) if value == "resource_limit")
+        );
+        assert!(
+            matches!(info[1].get("game_error_class"), Some(InfoValue::String(value)) if value == "AgentError")
+        );
+        assert!(
+            matches!(info[1].get("game_error_resource"), Some(InfoValue::String(value)) if value == "combat_solver")
+        );
+        assert_eq!(
+            serde_json::to_value(healthy_before).unwrap(),
+            serde_json::to_value(vector.envs[0].semantic_decision_frame().unwrap()).unwrap()
+        );
+        assert!(vector.envs[1].semantic_decision_frame().is_err());
+        vector
+            .replace_failed_into(&[false, true], |_, _, _, _, _| Ok(()))
+            .unwrap();
+        assert!(vector.envs[1].semantic_decision_frame().is_ok());
+    }
+
+    #[test]
+    fn combat_capacity_vector_error_keeps_slot_and_pre_action_frame() {
+        let mut vector = VectorEnv::new(2, 364, true, [PlayerPolicy::Agent; 2]);
+        vector.reset_all(sample_player_configs()).unwrap();
+        vector.envs[1].fixture_set_game(crate::flow::block_declaration::capacity_attack_root());
+        let expected =
+            serde_json::to_string(&vector.envs[1].semantic_decision_frame().unwrap()).unwrap();
+        let error = vector
+            .step_into(&[0, 0], Some(&[false, true]), |_, _, _, _, _| Ok(()))
+            .unwrap_err();
+        assert_eq!(error.capacity().unwrap().resource, "combat_solver");
+        assert!(
+            matches!(error, AgentError::Stream { slot: 1, frame: Some(frame), .. } if frame == expected)
+        );
+    }
 
     #[test]
     fn fixed_seat_observations_validate_before_writing_and_preserve_control() {
@@ -1385,7 +1479,7 @@ mod tests {
                     Some(sample_player_configs())
                 ],
                 |index, _| if index == 2 {
-                    Err(AgentError("encoding capacity".into()))
+                    Err(AgentError::Rules("encoding capacity".into()))
                 } else {
                     Ok(())
                 },
@@ -1466,7 +1560,7 @@ mod tests {
                             }
                             .into(),
                             1 => ObservationEncodeError::InvalidShared("missing source").into(),
-                            _ => AgentError("invalid buffer pointer".into()).into(),
+                            _ => AgentError::Rules("invalid buffer pointer".into()).into(),
                         })
                     });
                 if !recover || kind != 0 {
@@ -1650,8 +1744,8 @@ mod tests {
         vector.reset_all(configs.clone()).unwrap();
         vector.step(&[0]).unwrap();
         let error = vector.step(&[999_999]).unwrap_err();
-        let (_, encoded) = error
-            .0
+        let message = error.to_string();
+        let (_, encoded) = message
             .split_once("; native_failure=")
             .expect("private failure context");
         let context: serde_json::Value = serde_json::from_str(encoded).unwrap();
@@ -1681,12 +1775,12 @@ mod tests {
         let err = env
             .step_into(&[0, 0, 0], None, |env_index, _, _, _, _| {
                 if env_index >= 1 {
-                    return Err(AgentError(format!("env error {env_index}")));
+                    return Err(AgentError::Rules(format!("env error {env_index}")));
                 }
                 Ok(())
             })
             .expect_err("step_into should fail");
-        assert_eq!(err.0, "env error 1");
+        assert_eq!(err.to_string(), "env error 1");
     }
 
     #[test]

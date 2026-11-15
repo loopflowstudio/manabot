@@ -277,8 +277,8 @@ struct ConformancePair {
 impl ConformancePair {
     fn new(orientation: Orientation, game_seed: u64) -> Result<Self, String> {
         let configs = player_configs(orientation)?;
-        let mut reference = Game::new(configs.clone(), game_seed, false);
-        let optimized = Game::new(configs, game_seed, true);
+        let mut reference = Game::new(configs.clone(), game_seed, false).expect("valid game setup");
+        let optimized = Game::new(configs, game_seed, true).expect("valid game setup");
         normalize_reference(&mut reference)?;
         let pair = Self {
             reference,

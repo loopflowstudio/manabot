@@ -9,17 +9,18 @@
 //! or policy decoding. `compound_offers` covers the full legal surface and
 //! `compound_commands` lowers its atomic selections to canonical Commands.
 
-use crate::state::card::Keyword;
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
     agent::action::{Action, ActionSpaceKind},
-    flow::game::{Game, PendingChoice},
+    flow::{
+        declaration::BlockerAssignment,
+        game::{Game, PendingChoice},
+    },
     state::{
         ability::TargetSpec,
-        card::Restriction,
         game_object::{ObjectId, PermanentId, PlayerId, PublicId, Target},
         zone::ZoneType,
     },
@@ -217,6 +218,11 @@ pub enum AtomicCommand {
         player: PlayerId,
         attackers: Vec<ObjectId>,
     },
+    DeclareBlockers {
+        binding: OfferSetBinding,
+        player: PlayerId,
+        assignments: Vec<BlockerAssignment>,
+    },
     DeclarationSequence {
         binding: OfferSetBinding,
         kind: ActionSpaceKind,
@@ -255,6 +261,7 @@ enum InternalOffer {
         declaration_order: Vec<ObjectId>,
     },
     DeclareBlockers {
+        player: PlayerId,
         choices: Vec<BlockerChoice>,
     },
     Waterbend {
@@ -273,8 +280,8 @@ enum InternalOffer {
 #[derive(Clone, Debug)]
 struct BlockerChoice {
     role: RoleId,
-    targets: BTreeMap<CandidateId, Action>,
-    decline: Action,
+    blocker: ObjectId,
+    targets: BTreeMap<CandidateId, ObjectId>,
 }
 
 #[derive(Clone, Debug)]
@@ -413,25 +420,27 @@ impl StructuredOfferSet {
                     attackers: selected_attackers,
                 })
             }
-            InternalOffer::DeclareBlockers { choices } => {
+            InternalOffer::DeclareBlockers { player, choices } => {
                 let mut answers = BTreeMap::new();
                 for ChoiceAnswer::Candidates { role, candidates } in &submission.answers {
                     if answers.insert(*role, candidates).is_some() {
                         return Err(StructuredOfferError::DuplicateRole(*role));
                     }
                 }
-                let mut actions = Vec::with_capacity(choices.len());
+                let mut assignments = Vec::with_capacity(choices.len());
                 for choice in choices {
                     let selected = answers
                         .remove(&choice.role)
                         .ok_or(StructuredOfferError::MissingAnswer(choice.role))?;
-                    let action = match selected.as_slice() {
-                        [] => choice.decline.clone(),
-                        [candidate] => choice
-                            .targets
-                            .get(candidate)
-                            .cloned()
-                            .ok_or(StructuredOfferError::UnknownCandidate(*candidate))?,
+                    let attacker = match selected.as_slice() {
+                        [] => None,
+                        [candidate] => Some(
+                            choice
+                                .targets
+                                .get(candidate)
+                                .cloned()
+                                .ok_or(StructuredOfferError::UnknownCandidate(*candidate))?,
+                        ),
                         _ => {
                             return Err(StructuredOfferError::CardinalityOutOfRange {
                                 role: choice.role,
@@ -441,15 +450,18 @@ impl StructuredOfferSet {
                             })
                         }
                     };
-                    actions.push(action);
+                    assignments.push(BlockerAssignment {
+                        blocker: choice.blocker,
+                        attacker,
+                    });
                 }
                 if let Some(role) = answers.keys().next() {
                     return Err(StructuredOfferError::UnexpectedRole(*role));
                 }
-                Ok(AtomicCommand::DeclarationSequence {
+                Ok(AtomicCommand::DeclareBlockers {
                     binding: self.binding,
-                    kind: ActionSpaceKind::DeclareBlocker,
-                    actions,
+                    player: *player,
+                    assignments,
                 })
             }
             InternalOffer::Waterbend {
@@ -505,6 +517,7 @@ impl StructuredOfferSet {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum StructuredOfferError {
+    Execution(crate::agent::action::AgentError),
     GameOver,
     NoActiveActionSpace,
     WrongDecision,
@@ -533,9 +546,28 @@ pub enum StructuredOfferError {
     StaleOrIllegal(String),
 }
 
+impl From<crate::decision::SemanticError> for StructuredOfferError {
+    fn from(error: crate::decision::SemanticError) -> Self {
+        match error {
+            crate::decision::SemanticError::Execution(error) => Self::Execution(error),
+            other => Self::Invariant(other.to_string()),
+        }
+    }
+}
+
+impl From<StructuredOfferError> for crate::agent::action::AgentError {
+    fn from(error: StructuredOfferError) -> Self {
+        match error {
+            StructuredOfferError::Execution(error) => error,
+            other => Self::Rules(other.to_string()),
+        }
+    }
+}
+
 impl std::fmt::Display for StructuredOfferError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::Execution(error) => error.fmt(f),
             Self::GameOver => write!(f, "game is over"),
             Self::NoActiveActionSpace => write!(f, "no active action space"),
             Self::WrongDecision => write!(f, "current decision has no structured offer support"),
@@ -605,6 +637,8 @@ impl Game {
     /// atomic structured executor, never by passing the policy index to
     /// `Game::step`.
     pub fn structured_search_offers(&self) -> Result<StructuredOfferSet, StructuredOfferError> {
+        self.ensure_playable()
+            .map_err(StructuredOfferError::Execution)?;
         if self.is_game_over() {
             return Err(StructuredOfferError::GameOver);
         }
@@ -734,11 +768,8 @@ impl Game {
         }
     }
 
-    /// Independent blocker assignments are a product of authoritative pair
-    /// supports. Menace couples assignments and the current engine repairs an
-    /// illegal singleton after declaration; a blocker limit refuses a second
-    /// blocker. Both retain the sequential path until a dependent joint
-    /// support can exclude those aliases before sampling.
+    /// Pending blocker factors expose every pair; full-plan validation owns
+    /// coupled restrictions and required blocks before any factor executes.
     fn structured_blocker_offers(
         &self,
     ) -> Result<Option<StructuredOfferSet>, StructuredOfferError> {
@@ -755,14 +786,6 @@ impl Game {
             .combat
             .as_ref()
             .ok_or(StructuredOfferError::WrongDecision)?;
-        if combat.attackers.iter().any(|attacker| {
-            self.characteristics(*attacker)
-                .keywords
-                .has(Keyword::Menace)
-                || self.has_restriction(*attacker, Restriction::CantBeBlockedByMoreThanOne)
-        }) {
-            return Ok(None);
-        }
         let first = space
             .actions
             .iter()
@@ -780,28 +803,20 @@ impl Game {
                 .attackers
                 .iter()
                 .copied()
-                .filter(|attacker| self.blocker_can_block_attacker(blocker, *attacker))
+                .filter(|attacker| self.blocker_pair_eligible(blocker, *attacker))
                 .collect();
-            // Optionless later declarations are auto-resolved by tick(). Keep
-            // them explicit only when that engine facility is disabled.
-            if targets.is_empty() && self.skip_trivial && blocker != first {
-                continue;
-            }
             let role = RoleId(
                 u16::try_from(choices.len()).map_err(|_| StructuredOfferError::IdentityOverflow)?,
             );
             let mut candidates = Vec::new();
-            let mut actions = BTreeMap::new();
+            let mut targets_by_id = BTreeMap::new();
             for attacker in targets {
                 let id = next_candidate_id(candidates.len())?;
                 candidates.push(self.compound_permanent_candidate(attacker, id)?);
-                actions.insert(
+                targets_by_id.insert(
                     id,
-                    Action::DeclareBlocker {
-                        player,
-                        blocker,
-                        attacker: Some(attacker),
-                    },
+                    self.permanent_object(attacker)
+                        .ok_or(StructuredOfferError::InvalidCurrentTarget)?,
                 );
             }
             let name = self
@@ -823,12 +838,10 @@ impl Game {
             });
             bound.push(BlockerChoice {
                 role,
-                targets: actions,
-                decline: Action::DeclareBlocker {
-                    player,
-                    blocker,
-                    attacker: None,
-                },
+                blocker: self
+                    .permanent_object(blocker)
+                    .ok_or(StructuredOfferError::InvalidCurrentTarget)?,
+                targets: targets_by_id,
             });
         }
         let offer = InteractionOffer {
@@ -851,7 +864,10 @@ impl Game {
             binding: OfferSetBinding(self.decision_epoch),
             internal: BTreeMap::from([(
                 OfferId(0),
-                InternalOffer::DeclareBlockers { choices: bound },
+                InternalOffer::DeclareBlockers {
+                    player,
+                    choices: bound,
+                },
             )]),
         }))
     }
@@ -983,7 +999,8 @@ impl Game {
     }
 
     /// Lower a complete submission on an exact fork, never mutate the root.
-    /// Multi-command offers stop at the end of the native declaration/payment.
+    /// Combat children stop once their bound declaration completes; the last
+    /// child's ordinary continuation may already have resolved its consequences.
     /// No planner or policy observes intermediate states during this operation.
     pub fn compound_commands(
         &self,
@@ -991,6 +1008,17 @@ impl Game {
         submission: &OfferSubmission,
     ) -> Result<Vec<crate::decision::Command>, StructuredOfferError> {
         let command = offers.decode(submission)?;
+        if matches!(
+            command,
+            AtomicCommand::DeclareAttackers { .. } | AtomicCommand::DeclareBlockers { .. }
+        ) {
+            return Ok(self
+                .prepare_declaration(&command)?
+                .children
+                .into_iter()
+                .map(|child| child.command)
+                .collect());
+        }
         let mut fork = self.clone();
         let mut commands = Some(Vec::new());
         fork.apply_legacy_command_inner(&command, &mut commands)?;
@@ -1005,7 +1033,7 @@ impl Game {
         if let Some(commands) = commands {
             let frame = self
                 .semantic_decision_frame()
-                .map_err(|error| StructuredOfferError::Invariant(error.to_string()))?;
+                .map_err(StructuredOfferError::from)?;
             commands.push(crate::decision::Command {
                 command_id: format!("compound-{}-{}", frame.revision, commands.len()),
                 expected_revision: frame.revision,
@@ -1014,8 +1042,7 @@ impl Game {
                 object_preconditions: Vec::new(),
             });
         }
-        self.step(action)
-            .map_err(|error| StructuredOfferError::StaleOrIllegal(error.0))
+        self.step(action).map_err(StructuredOfferError::Execution)
     }
 
     /// Project the currently covered priority actions without changing state.
@@ -1024,6 +1051,8 @@ impl Game {
     /// experimental projection currently covers pass and non-kicked casts with
     /// exactly one required `AnyTarget` target.
     pub fn structured_priority_offers(&self) -> Result<StructuredOfferSet, StructuredOfferError> {
+        self.ensure_playable()
+            .map_err(StructuredOfferError::Execution)?;
         if self.is_game_over() {
             return Err(StructuredOfferError::GameOver);
         }
@@ -1163,6 +1192,8 @@ impl Game {
     /// multi-select offer. N eligible creatures produce N candidates and
     /// represent all 2^N declarations without enumerating those subsets.
     pub fn structured_attacker_offers(&self) -> Result<StructuredOfferSet, StructuredOfferError> {
+        self.ensure_playable()
+            .map_err(StructuredOfferError::Execution)?;
         if self.is_game_over() {
             return Err(StructuredOfferError::GameOver);
         }
@@ -1302,6 +1333,7 @@ impl Game {
             AtomicCommand::PassPriority { binding, .. }
             | AtomicCommand::CastSpell { binding, .. }
             | AtomicCommand::DeclareAttackers { binding, .. }
+            | AtomicCommand::DeclareBlockers { binding, .. }
             | AtomicCommand::DeclarationSequence { binding, .. }
             | AtomicCommand::SearchAction { binding, .. } => *binding,
         };
@@ -1411,6 +1443,18 @@ impl Game {
                         })
                     })
                     .collect::<Result<_, _>>()?;
+                if selected.len() != attackers.len() {
+                    return Err(StructuredOfferError::StaleOrIllegal(
+                        "attacker declaration contains a duplicate permanent".to_string(),
+                    ));
+                }
+                let legal: BTreeSet<_> = declaration_order.iter().copied().collect();
+                if !selected.is_subset(&legal) {
+                    return Err(StructuredOfferError::StaleOrIllegal(
+                        "attacker declaration contains a permanent outside the pending batch"
+                            .to_string(),
+                    ));
+                }
                 let mut actions = 0;
                 let mut done = false;
                 // The final choice may skip trivial windows all the way to a
@@ -1450,6 +1494,39 @@ impl Game {
                     actions += 1;
                 }
                 Ok((done, actions))
+            }
+            AtomicCommand::DeclareBlockers {
+                player,
+                assignments,
+                ..
+            } => {
+                let mut done = false;
+                let mut executed = 0;
+                for assignment in assignments {
+                    let blocker = self
+                        .lookup_current_permanent(assignment.blocker)
+                        .map_err(|_| StructuredOfferError::InvalidCurrentTarget)?;
+                    let attacker = assignment
+                        .attacker
+                        .map(|object| {
+                            self.lookup_current_permanent(object)
+                                .map_err(|_| StructuredOfferError::InvalidCurrentTarget)
+                        })
+                        .transpose()?;
+                    let wanted = Action::DeclareBlocker {
+                        player: *player,
+                        blocker,
+                        attacker,
+                    };
+                    let index = self
+                        .action_space()
+                        .filter(|space| space.kind == ActionSpaceKind::DeclareBlocker)
+                        .and_then(|space| space.actions.iter().position(|action| action == &wanted))
+                        .ok_or(StructuredOfferError::WrongDecision)?;
+                    done = self.record_compound_step(index, commands)?;
+                    executed += 1;
+                }
+                Ok((done, executed))
             }
             AtomicCommand::DeclarationSequence { kind, actions, .. } => {
                 let mut done = false;
@@ -1499,28 +1576,634 @@ impl Game {
         }
     }
 
+    fn normalized_attacker_declaration(
+        &self,
+        command: &AtomicCommand,
+    ) -> Result<(crate::flow::declaration::DeclarationCompletion, Vec<Action>), StructuredOfferError>
+    {
+        use crate::flow::declaration::{DeclarationAssignments, DeclarationCompletion};
+        let AtomicCommand::DeclareAttackers {
+            binding,
+            player,
+            attackers,
+        } = command
+        else {
+            return Err(StructuredOfferError::WrongDecision);
+        };
+        if *binding != OfferSetBinding(self.decision_epoch) {
+            return Err(StructuredOfferError::StaleOrIllegal(
+                "offer set no longer names the current decision".into(),
+            ));
+        }
+        let (actor, order) = self.current_attacker_declaration()?;
+        if actor != *player {
+            return Err(StructuredOfferError::WrongDecision);
+        }
+        let selected = attackers.iter().copied().collect::<BTreeSet<_>>();
+        if selected.len() != attackers.len() {
+            return Err(StructuredOfferError::StaleOrIllegal(
+                "attacker declaration contains a duplicate permanent".into(),
+            ));
+        }
+        let pending = order
+            .iter()
+            .map(|id| {
+                self.permanent_object(*id)
+                    .ok_or(StructuredOfferError::InvalidCurrentTarget)
+            })
+            .collect::<Result<BTreeSet<_>, _>>()?;
+        if !selected.is_subset(&pending) {
+            return Err(StructuredOfferError::StaleOrIllegal(
+                "attacker declaration contains a permanent outside the pending batch".into(),
+            ));
+        }
+        let combat = self
+            .state
+            .combat
+            .as_ref()
+            .ok_or(StructuredOfferError::WrongDecision)?;
+        let mut expected_attackers = combat
+            .attackers
+            .iter()
+            .map(|id| {
+                self.permanent_object(*id)
+                    .ok_or(StructuredOfferError::InvalidCurrentTarget)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        expected_attackers.extend(order.iter().filter_map(|id| {
+            self.permanent_object(*id)
+                .filter(|object| selected.contains(object))
+        }));
+        let expected = DeclarationCompletion {
+            player: *player,
+            assignments: DeclarationAssignments::Attackers {
+                destination: self.non_active_player(),
+                attackers: expected_attackers,
+            },
+        };
+        let planned = order
+            .into_iter()
+            .map(|permanent| Action::DeclareAttacker {
+                player: *player,
+                permanent,
+                attack: self
+                    .permanent_object(permanent)
+                    .is_some_and(|object| selected.contains(&object)),
+            })
+            .collect();
+        Ok((expected, planned))
+    }
+
+    fn normalized_blocker_declaration(
+        &self,
+        command: &AtomicCommand,
+    ) -> Result<(crate::flow::declaration::DeclarationCompletion, Vec<Action>), StructuredOfferError>
+    {
+        use crate::flow::{
+            block_declaration::BlockProblem,
+            declaration::{DeclarationAssignments, DeclarationCompletion},
+        };
+        let AtomicCommand::DeclareBlockers {
+            binding,
+            player: actor,
+            assignments,
+        } = command
+        else {
+            return Err(StructuredOfferError::WrongDecision);
+        };
+        if *binding != OfferSetBinding(self.decision_epoch) {
+            return Err(StructuredOfferError::StaleOrIllegal(
+                "offer set no longer names the current decision".into(),
+            ));
+        }
+        let space = self
+            .action_space()
+            .filter(|space| space.kind == ActionSpaceKind::DeclareBlocker)
+            .ok_or(StructuredOfferError::WrongDecision)?;
+        let current = space
+            .actions
+            .iter()
+            .find_map(|action| match action {
+                Action::DeclareBlocker { blocker, .. } => Some(*blocker),
+                _ => None,
+            })
+            .ok_or(StructuredOfferError::WrongDecision)?;
+        let player = self.non_active_player();
+        let combat = self
+            .state
+            .combat
+            .as_ref()
+            .ok_or(StructuredOfferError::WrongDecision)?;
+        let order: Vec<_> = std::iter::once(current)
+            .chain(combat.blockers_to_declare.iter().rev().copied())
+            .collect();
+        let mut submitted = Vec::new();
+        if *actor != player {
+            return Err(StructuredOfferError::WrongDecision);
+        }
+        for assignment in assignments {
+            let blocker = self
+                .lookup_current_permanent(assignment.blocker)
+                .map_err(|_| StructuredOfferError::InvalidCurrentTarget)?;
+            let attacker = assignment
+                .attacker
+                .map(|object| {
+                    self.lookup_current_permanent(object)
+                        .map_err(|_| StructuredOfferError::InvalidCurrentTarget)
+                })
+                .transpose()?;
+            if !order.contains(&blocker) {
+                return Err(StructuredOfferError::WrongDecision);
+            }
+            submitted.push((blocker, attacker));
+        }
+        BlockProblem::from_game(self)
+            .and_then(|problem| problem.validate(self, Some(current), &submitted))
+            .map_err(StructuredOfferError::Execution)?;
+        let mut assigned = combat.attacker_to_blockers.clone();
+        let mut planned = Vec::new();
+        for blocker in order {
+            let attacker = submitted
+                .iter()
+                .find(|(id, _)| *id == blocker)
+                .ok_or(StructuredOfferError::WrongDecision)?
+                .1;
+            if let Some(attacker) = attacker {
+                assigned.entry(attacker).or_default().push(blocker);
+            }
+            planned.push(Action::DeclareBlocker {
+                player,
+                blocker,
+                attacker,
+            });
+        }
+        let mut assignments = Vec::new();
+        for (attacker, blockers) in assigned {
+            for blocker in blockers {
+                assignments.push((
+                    self.permanent_object(blocker)
+                        .ok_or(StructuredOfferError::InvalidCurrentTarget)?,
+                    self.permanent_object(attacker)
+                        .ok_or(StructuredOfferError::InvalidCurrentTarget)?,
+                ));
+            }
+        }
+        Ok((
+            DeclarationCompletion {
+                player,
+                assignments: DeclarationAssignments::Blockers { assignments },
+            },
+            planned,
+        ))
+    }
+
+    /// Dedicated combat surface. Nonacting viewers receive no draft authority.
+    /// Fixed rows recover the actual committed prefix, never a browser snapshot.
+    pub fn declaration_projection(
+        &self,
+        viewer: PlayerId,
+    ) -> Result<Option<crate::flow::declaration::DeclarationProjection>, StructuredOfferError> {
+        use crate::{
+            experience::{PlayerId as WirePlayer, SubjectRef as WireSubject},
+            flow::declaration::{
+                DeclarationBinding, DeclarationProjection, DeclarationStage, DeclarationSubject,
+            },
+        };
+        self.ensure_playable()
+            .map_err(StructuredOfferError::Execution)?;
+        let Some(space) = self.action_space() else {
+            return Ok(None);
+        };
+        if space.player != Some(viewer)
+            || !matches!(
+                space.kind,
+                ActionSpaceKind::DeclareAttacker | ActionSpaceKind::DeclareBlocker
+            )
+        {
+            return Ok(None);
+        }
+        let _scan = self.board_scan();
+        let frame = self.semantic_decision_frame()?;
+        let combat = self
+            .state
+            .combat
+            .as_ref()
+            .ok_or(StructuredOfferError::WrongDecision)?;
+        let (stage, pending, domain, destinations) = match space.kind {
+            ActionSpaceKind::DeclareAttacker => {
+                let (player, pending) = self.current_attacker_declaration()?;
+                let mut domain = self.eligible_attackers(player);
+                domain.extend(pending.iter().copied());
+                domain.extend(combat.attackers.iter().copied());
+                let destination = self
+                    .decision_target(&Target::Player(self.non_active_player()))
+                    .ok_or(StructuredOfferError::InvalidCurrentTarget)?;
+                (
+                    DeclarationStage::Attackers,
+                    pending,
+                    domain,
+                    vec![destination],
+                )
+            }
+            ActionSpaceKind::DeclareBlocker => {
+                let current = space
+                    .actions
+                    .iter()
+                    .find_map(|action| match action {
+                        Action::DeclareBlocker { blocker, .. } => Some(*blocker),
+                        _ => None,
+                    })
+                    .ok_or(StructuredOfferError::WrongDecision)?;
+                let pending: Vec<_> = std::iter::once(current)
+                    .chain(combat.blockers_to_declare.iter().rev().copied())
+                    .collect();
+                let destinations = combat
+                    .attackers
+                    .iter()
+                    .map(|attacker| self.declaration_object(*attacker))
+                    .collect::<Result<Vec<_>, _>>()?;
+                (
+                    DeclarationStage::Blockers,
+                    pending,
+                    self.eligible_blockers(self.non_active_player()),
+                    destinations,
+                )
+            }
+            _ => return Ok(None),
+        };
+        let domain: BTreeSet<_> = domain.into_iter().collect();
+        let subjects = domain
+            .into_iter()
+            .map(|permanent| {
+                let fixed = !pending.contains(&permanent);
+                let assigned_to = match stage {
+                    DeclarationStage::Attackers => {
+                        combat
+                            .attackers
+                            .contains(&permanent)
+                            .then_some(WireSubject::Player {
+                                id: WirePlayer(self.non_active_player().0 as u8),
+                            })
+                    }
+                    DeclarationStage::Blockers => combat
+                        .attacker_to_blockers
+                        .iter()
+                        .find_map(|(attacker, blockers)| {
+                            blockers.contains(&permanent).then_some(*attacker)
+                        })
+                        .map(|attacker| self.declaration_object(attacker).map(|view| view.subject))
+                        .transpose()?,
+                };
+                let supports = if fixed {
+                    Vec::new()
+                } else {
+                    match stage {
+                        DeclarationStage::Attackers => {
+                            destinations.iter().map(|view| view.subject).collect()
+                        }
+                        DeclarationStage::Blockers => combat
+                            .attackers
+                            .iter()
+                            .filter(|attacker| self.blocker_pair_eligible(permanent, **attacker))
+                            .map(|attacker| {
+                                self.declaration_object(*attacker).map(|view| view.subject)
+                            })
+                            .collect::<Result<_, _>>()?,
+                    }
+                };
+                Ok(DeclarationSubject {
+                    object: self.declaration_object(permanent)?,
+                    power: self.characteristics(permanent).power,
+                    destinations: supports,
+                    fixed,
+                    assigned_to,
+                })
+            })
+            .collect::<Result<_, StructuredOfferError>>()?;
+        let mut constraints = Vec::new();
+        if stage == DeclarationStage::Blockers {
+            for attacker in &combat.attackers {
+                let label = self.declaration_object(*attacker)?.label;
+                if self
+                    .characteristics(*attacker)
+                    .keywords
+                    .has(crate::state::card::Keyword::Menace)
+                {
+                    constraints.push(format!("{label} needs at least two blockers if blocked."));
+                }
+                if self.has_restriction(
+                    *attacker,
+                    crate::state::card::Restriction::CantBeBlockedByMoreThanOne,
+                ) {
+                    constraints.push(format!("{label} can be blocked by at most one creature."));
+                }
+                if self.must_be_blocked_by_all_able(*attacker) {
+                    constraints.push(format!("Creatures able to block {label} must do so. The full declaration must meet as many blocking requirements as legally possible."));
+                }
+            }
+        }
+        Ok(Some(DeclarationProjection {
+            binding: DeclarationBinding {
+                revision: frame.revision,
+                fingerprint: frame.fingerprint,
+            },
+            stage,
+            actor: frame.actor,
+            rules_player: wire_player_id(
+                space
+                    .actions
+                    .first()
+                    .ok_or(StructuredOfferError::MissingActor)?
+                    .player(),
+            )?,
+            subjects,
+            destinations,
+            constraints,
+        }))
+    }
+
+    /// Effective battlefield characteristics supply public names, including
+    /// copies. `characteristics_set` marks an override, not visibility.
+    fn declaration_object(
+        &self,
+        permanent: PermanentId,
+    ) -> Result<crate::experience::DecisionObjectView, StructuredOfferError> {
+        let object = self
+            .permanent_object(permanent)
+            .ok_or(StructuredOfferError::InvalidCurrentTarget)?;
+        let mut view = self
+            .decision_object(object)
+            .ok_or(StructuredOfferError::InvalidCurrentTarget)?;
+        let characteristics = self.characteristics(permanent);
+        view.label = characteristics.name.to_string();
+        Ok(view)
+    }
+
+    fn decode_declaration_plan(
+        &self,
+        plan: &crate::flow::declaration::DeclarationPlan,
+    ) -> Result<AtomicCommand, StructuredOfferError> {
+        use crate::{experience::SubjectRef as WireSubject, flow::declaration::DeclarationStage};
+        self.ensure_playable()
+            .map_err(StructuredOfferError::Execution)?;
+        let viewer = self
+            .action_space()
+            .and_then(|space| space.player)
+            .ok_or(StructuredOfferError::MissingActor)?;
+        let projection = self
+            .declaration_projection(viewer)?
+            .ok_or(StructuredOfferError::WrongDecision)?;
+        if plan.binding != projection.binding {
+            return Err(StructuredOfferError::StaleOrIllegal(
+                "declaration binding is stale".into(),
+            ));
+        }
+        let pending: Vec<_> = projection
+            .subjects
+            .iter()
+            .filter(|subject| !subject.fixed)
+            .collect();
+        if plan.assignments.len() != pending.len() {
+            return Err(StructuredOfferError::StaleOrIllegal(
+                "declaration must answer every pending creature exactly once".into(),
+            ));
+        }
+        let exact_object = |reference: crate::experience::ObjectRenderId| {
+            self.state
+                .permanents
+                .iter()
+                .flatten()
+                .find_map(|permanent| {
+                    (permanent.id.0 == reference.entity
+                        && permanent.object.generation() == reference.incarnation)
+                        .then_some(permanent.object)
+                })
+                .ok_or(StructuredOfferError::InvalidCurrentTarget)
+        };
+        let mut seen = BTreeSet::new();
+        let mut attackers = Vec::new();
+        let mut assignments = Vec::new();
+        for answer in &plan.assignments {
+            let row = pending
+                .iter()
+                .find(|row| row.object.subject == WireSubject::Object { id: answer.subject })
+                .ok_or(StructuredOfferError::InvalidCurrentTarget)?;
+            if !seen.insert((answer.subject.entity, answer.subject.incarnation)) {
+                return Err(StructuredOfferError::StaleOrIllegal(
+                    "duplicate creature in declaration".into(),
+                ));
+            }
+            if answer
+                .destination
+                .0
+                .is_some_and(|destination| !row.destinations.contains(&destination))
+            {
+                return Err(StructuredOfferError::StaleOrIllegal(format!(
+                    "{} has no such destination",
+                    row.object.label
+                )));
+            }
+            let object = exact_object(answer.subject)?;
+            match projection.stage {
+                DeclarationStage::Attackers => {
+                    if answer.destination.0.is_some() {
+                        attackers.push(object);
+                    }
+                }
+                DeclarationStage::Blockers => {
+                    let attacker = match answer.destination.0 {
+                        None => None,
+                        Some(WireSubject::Object { id }) => Some(exact_object(id)?),
+                        _ => return Err(StructuredOfferError::InvalidCurrentTarget),
+                    };
+                    assignments.push(BlockerAssignment {
+                        blocker: object,
+                        attacker,
+                    });
+                }
+            }
+        }
+        let player = self
+            .action_space()
+            .and_then(|space| space.actions.first())
+            .map(Action::player)
+            .ok_or(StructuredOfferError::MissingActor)?;
+        Ok(match projection.stage {
+            DeclarationStage::Attackers => AtomicCommand::DeclareAttackers {
+                binding: OfferSetBinding(self.decision_epoch),
+                player,
+                attackers,
+            },
+            DeclarationStage::Blockers => AtomicCommand::DeclareBlockers {
+                binding: OfferSetBinding(self.decision_epoch),
+                player,
+                assignments,
+            },
+        })
+    }
+
+    /// Read-only legality; no taps, costs, triggers, RNG or capture writes.
+    pub fn validate_declaration_plan(
+        &self,
+        plan: &crate::flow::declaration::DeclarationPlan,
+    ) -> Result<(), StructuredOfferError> {
+        let command = self.decode_declaration_plan(plan)?;
+        match command {
+            AtomicCommand::DeclareAttackers { .. } => {
+                self.normalized_attacker_declaration(&command).map(|_| ())
+            }
+            AtomicCommand::DeclareBlockers { .. } => {
+                self.normalized_blocker_declaration(&command).map(|_| ())
+            }
+            _ => Err(StructuredOfferError::WrongDecision),
+        }
+    }
+
+    pub fn prepare_declaration_plan(
+        &self,
+        plan: &crate::flow::declaration::DeclarationPlan,
+    ) -> Result<crate::flow::declaration::DeclarationTransaction, StructuredOfferError> {
+        self.prepare_declaration(&self.decode_declaration_plan(plan)?)
+    }
+
+    /// Validate and execute the bound combat declaration without publishing anything.
+    /// The last ordinary choice may finish combat; its completion evidence is
+    /// checked before consequences, independently of the returned board state.
+    pub fn prepare_declaration(
+        &self,
+        command: &AtomicCommand,
+    ) -> Result<crate::flow::declaration::DeclarationTransaction, StructuredOfferError> {
+        use crate::flow::declaration::{
+            DeclarationAssignments, DeclarationChild, DeclarationCollector, DeclarationStage,
+            DeclarationTransaction,
+        };
+
+        self.ensure_playable()
+            .map_err(StructuredOfferError::Execution)?;
+        let (expected, planned) = match command {
+            AtomicCommand::DeclareAttackers { .. } => {
+                self.normalized_attacker_declaration(command)?
+            }
+            AtomicCommand::DeclareBlockers { .. } => {
+                self.normalized_blocker_declaration(command)?
+            }
+            _ => return Err(StructuredOfferError::WrongDecision),
+        };
+        let (stage, kind) = match expected.assignments {
+            DeclarationAssignments::Attackers { .. } => (
+                DeclarationStage::Attackers,
+                ActionSpaceKind::DeclareAttacker,
+            ),
+            DeclarationAssignments::Blockers { .. } => {
+                (DeclarationStage::Blockers, ActionSpaceKind::DeclareBlocker)
+            }
+        };
+        let mut candidate = self.clone_with_card_capture();
+        let mut collector = DeclarationCollector::new(stage);
+        let mut children = Vec::new();
+        // Preserve the positional API's accumulated event batch while each
+        // child receipt consumes exactly the events scalar replay consumes.
+        let mut events = Vec::new();
+        let mut done = false;
+        while collector.completion.is_none() {
+            if collector.closed {
+                return Err(StructuredOfferError::Invariant(
+                    "bound declaration ended without completion evidence".into(),
+                ));
+            }
+            let index = candidate
+                .action_space()
+                .filter(|space| space.kind == kind)
+                .and_then(|space| {
+                    space
+                        .actions
+                        .iter()
+                        .position(|action| planned.contains(action))
+                })
+                .ok_or(StructuredOfferError::WrongDecision)?;
+            let frame = candidate
+                .semantic_decision_frame()
+                .map_err(StructuredOfferError::from)?;
+            let offer = &frame.offers[index];
+            let child = crate::decision::Command {
+                command_id: format!("compound-{}-{}", frame.revision, children.len()),
+                expected_revision: frame.revision,
+                offer_id: offer.id.0,
+                answers: Vec::new(),
+                object_preconditions: Vec::new(),
+            };
+            let root = candidate.clone_with_card_capture();
+            done = candidate
+                .step_with_completion(index, Some(&mut collector))
+                .map_err(StructuredOfferError::Execution)?;
+            events.extend(candidate.state.observation_events.iter().cloned());
+            let (transition, observation, _) = candidate
+                .finish_semantic_transition(
+                    &child,
+                    frame.revision,
+                    PlayerId(frame.actor as usize),
+                    offer.public_commitment.clone(),
+                    done,
+                )
+                .map_err(StructuredOfferError::from)?;
+            children.push(DeclarationChild {
+                root,
+                command: child,
+                transition,
+                observation,
+            });
+        }
+        let completion = collector.completion.ok_or_else(|| {
+            StructuredOfferError::Invariant("bound declaration did not complete".into())
+        })?;
+        if completion != expected {
+            return Err(StructuredOfferError::StaleOrIllegal(
+                "completed declaration differs from the submitted plan".into(),
+            ));
+        }
+        candidate.state.observation_events_mut().extend(events);
+        Ok(DeclarationTransaction {
+            game: candidate,
+            completion,
+            children,
+            done,
+        })
+    }
+
     /// Apply one decoded structured command as a single rules mutation.
     ///
-    /// Presentation Commands snapshot and restore on failure because the
-    /// current engine has no transaction journal. Action-aligned search
-    /// Commands validate every fallible precondition before their commit point.
+    /// Declarations execute their ordinary choices on a private clone and
+    /// publish it only after the whole sequence succeeds. Other presentation
+    /// Commands restore on failure. Action-aligned search Commands validate
+    /// every fallible precondition before their commit point.
     pub fn apply_atomic_command(
         &mut self,
         command: &AtomicCommand,
     ) -> Result<bool, StructuredOfferError> {
+        self.ensure_playable()
+            .map_err(StructuredOfferError::Execution)?;
         if matches!(command, AtomicCommand::SearchAction { .. }) {
             return self.apply_search_action(command);
         }
-        let checkpoint = self.clone();
-        if matches!(command, AtomicCommand::DeclarationSequence { .. }) {
-            return match self.apply_legacy_command_inner(command, &mut None) {
-                Ok((done, _)) => Ok(done),
-                Err(error) => {
-                    *self = checkpoint;
-                    Err(error)
-                }
-            };
+        if matches!(
+            command,
+            AtomicCommand::DeclareAttackers { .. } | AtomicCommand::DeclareBlockers { .. }
+        ) {
+            let transaction = self.prepare_declaration(command)?;
+            let done = transaction.done;
+            *self = transaction.game;
+            return Ok(done);
         }
+        if let AtomicCommand::DeclarationSequence { kind, .. } = command {
+            if *kind != ActionSpaceKind::Waterbend {
+                return Err(StructuredOfferError::WrongDecision);
+            }
+            let mut fork = self.clone_with_card_capture();
+            let (done, _) = fork.apply_legacy_command_inner(command, &mut None)?;
+            *self = fork;
+            return Ok(done);
+        }
+        let checkpoint = self.clone();
         match self.apply_atomic_command_inner(command) {
             Ok(game_over) => Ok(game_over),
             Err(error) => {
@@ -1534,9 +2217,8 @@ impl Game {
     ///
     /// `structured_search_offers` stores an exact clone of a currently legal
     /// action. Binding and equality are revalidated before `current_action_space`
-    /// is touched, so no rollback snapshot is needed on this hot path. A legal
-    /// action becoming unexecutable without a new decision epoch is an engine
-    /// invariant failure, not a recoverable Command error.
+    /// is touched, so no rollback snapshot is needed on this hot path.
+    /// Progression failures propagate and quarantine the in-place stream.
     fn apply_search_action(
         &mut self,
         command: &AtomicCommand,
@@ -1554,29 +2236,22 @@ impl Game {
         if self.is_game_over() {
             return Err(StructuredOfferError::GameOver);
         }
-        let offered = self
+        let index = self
             .current_action_space
             .as_ref()
             .ok_or(StructuredOfferError::NoActiveActionSpace)?
             .actions
             .iter()
-            .any(|legal| legal == action);
-        if !offered {
-            return Err(StructuredOfferError::StaleOrIllegal(
-                "search action is no longer offered".to_string(),
-            ));
-        }
+            .position(|legal| legal == action)
+            .ok_or_else(|| {
+                StructuredOfferError::StaleOrIllegal("search action is no longer offered".into())
+            })?;
 
         #[cfg(feature = "benchmark")]
         drop(validation_timer);
         #[cfg(feature = "benchmark")]
         let _rules_timer = crate::benchmark_search::Timer::new("rules_execution");
-        let action = action.clone();
-        self.current_action_space.take();
-        self.execute_action(&action).unwrap_or_else(|error| {
-            panic!("structured search offer admitted an unexecutable action: {error}")
-        });
-        Ok(self.finish_action_step())
+        self.step(index).map_err(StructuredOfferError::Execution)
     }
 
     fn apply_atomic_command_inner(
@@ -1587,6 +2262,7 @@ impl Game {
             AtomicCommand::PassPriority { binding, .. }
             | AtomicCommand::CastSpell { binding, .. }
             | AtomicCommand::DeclareAttackers { binding, .. }
+            | AtomicCommand::DeclareBlockers { binding, .. }
             | AtomicCommand::DeclarationSequence { binding, .. }
             | AtomicCommand::SearchAction { binding, .. } => *binding,
         };
@@ -1621,8 +2297,9 @@ impl Game {
                     })?;
                 self.current_action_space.take();
                 self.execute_action(&action)
-                    .map_err(|error| StructuredOfferError::StaleOrIllegal(error.0))?;
-                Ok(self.finish_action_step())
+                    .map_err(StructuredOfferError::Execution)?;
+                self.finish_action_step()
+                    .map_err(StructuredOfferError::Execution)
             }
             AtomicCommand::CastSpell {
                 player,
@@ -1660,78 +2337,23 @@ impl Game {
 
                 self.current_action_space.take();
                 self.execute_action(&action)
-                    .map_err(|error| StructuredOfferError::StaleOrIllegal(error.0))?;
+                    .map_err(StructuredOfferError::Execution)?;
                 let target_action = Action::ChooseTarget {
                     player: *player,
                     target: self.resolve_bound_target(targets[0])?,
                 };
                 self.execute_action(&target_action)
-                    .map_err(|error| StructuredOfferError::StaleOrIllegal(error.0))?;
-                Ok(self.finish_action_step())
+                    .map_err(StructuredOfferError::Execution)?;
+                self.finish_action_step()
+                    .map_err(StructuredOfferError::Execution)
             }
-            AtomicCommand::DeclareAttackers {
-                player, attackers, ..
-            } => {
-                let (legal_player, declaration_order) = self.current_attacker_declaration()?;
-                if player != &legal_player {
-                    return Err(StructuredOfferError::StaleOrIllegal(
-                        "attacker declaration actor is no longer current".to_string(),
-                    ));
-                }
-
-                let legal: BTreeSet<_> = declaration_order.iter().copied().collect();
-                let selected: BTreeSet<_> = attackers
-                    .iter()
-                    .map(|object_ref| {
-                        self.lookup_current_permanent(*object_ref).map_err(|_| {
-                            StructuredOfferError::StaleOrIllegal(format!(
-                                "attacker object {}@{} is no longer current",
-                                object_ref.slot(),
-                                object_ref.generation()
-                            ))
-                        })
-                    })
-                    .collect::<Result<_, _>>()?;
-                if selected.len() != attackers.len() {
-                    return Err(StructuredOfferError::StaleOrIllegal(
-                        "attacker declaration contains a duplicate permanent".to_string(),
-                    ));
-                }
-                if let Some(attacker) = selected.iter().find(|attacker| !legal.contains(attacker)) {
-                    return Err(StructuredOfferError::StaleOrIllegal(format!(
-                        "permanent {} is not offered as an attacker",
-                        attacker.0
-                    )));
-                }
-
-                self.current_action_space.take();
-                let combat = self.state.combat.as_mut().ok_or_else(|| {
-                    StructuredOfferError::StaleOrIllegal(
-                        "attacker declaration has no combat state".to_string(),
-                    )
-                })?;
-                combat.attackers_to_declare.clear();
-                for attacker in declaration_order {
-                    self.declare_attacker(attacker, selected.contains(&attacker))
-                        .map_err(|error| StructuredOfferError::StaleOrIllegal(error.0))?;
-                }
-                Ok(self.finish_action_step())
+            AtomicCommand::DeclareAttackers { .. }
+            | AtomicCommand::DeclareBlockers { .. }
+            | AtomicCommand::DeclarationSequence { .. } => {
+                unreachable!("declaration routed to canonical lowering")
             }
-            AtomicCommand::DeclarationSequence { .. } => {
-                unreachable!("sequence routed to canonical lowering")
-            }
-            AtomicCommand::SearchAction { action, .. } => {
-                let offered = action_space.actions.iter().any(|legal| legal == action);
-                if !offered {
-                    return Err(StructuredOfferError::StaleOrIllegal(
-                        "search action is no longer offered".to_string(),
-                    ));
-                }
-                let action = action.clone();
-                self.current_action_space.take();
-                self.execute_action(&action)
-                    .map_err(|error| StructuredOfferError::StaleOrIllegal(error.0))?;
-                Ok(self.finish_action_step())
+            AtomicCommand::SearchAction { .. } => {
+                unreachable!("search command routed to apply_search_action")
             }
         }
     }

@@ -1,5 +1,6 @@
 import { writeFile } from 'node:fs/promises';
 import { finishBoardNarration } from './presentation-readiness';
+import { confirmCombat } from './combat';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import boltJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type { Command, ExperienceFrame, FrameUpdate, PresentationEvent, RecoveryEnvelope, Trace } from '../src/lib/types';
@@ -389,7 +390,7 @@ for (const [seed, viewport] of [
       for (let input = 0; input < 240; input += 1) {
         const options = page.getByTestId('action-option');
         const result = page.getByTestId('game-result');
-        await expect(page.locator('[data-testid="action-option"], [data-testid="learn-mode"]:not(:disabled), [data-testid="game-result"]').first()).toBeVisible();
+        await expect(page.locator('[data-testid="action-option"], [data-testid="learn-mode"]:not(:disabled), [data-testid="game-result"], [data-testid="combat-composer"]').first()).toBeVisible();
         if (await result.isVisible()) {
           expect(selectedSources).toBeGreaterThan(0);
           expect(reloadedTarget).toBe(true);
@@ -435,13 +436,18 @@ for (const [seed, viewport] of [
           }, null, 2));
           return;
         }
+        const composer = page.getByTestId('combat-composer');
+        if (await composer.isVisible()) {
+          await confirmCombat(page);
+          continue;
+        }
         // Live offers stay usable while optional narration catches up.
         if (await options.count() === 0) {
           await page.getByTestId('learn-mode').first().click();
           continue;
         }
         expect(await page.evaluate(() => scrollY)).toBe(0);
-        const before = await page.getByTestId('decision-surface').getAttribute('data-revision');
+        const before = await page.locator('main').getAttribute('data-frame-revision');
         const labels = await options.allTextContents();
         let pick = labels.findIndex(label => /Play Mountain|Cast Lightning Bolt|Target opponent/.test(label));
         // These are deliberate test choices through the visible controls. Spare
@@ -498,7 +504,7 @@ for (const [seed, viewport] of [
         } else {
           await page.locator(`[data-testid="action-option"][data-offer-id="${offer!.id}"]`).click();
         }
-        await expect.poll(() => page.getByTestId('decision-surface').getAttribute('data-revision'), { timeout: 20_000 }).not.toBe(before);
+        await expect.poll(() => page.locator('main').getAttribute('data-frame-revision')).not.toBe(before);
         expect(submitted).toHaveLength(count + 1);
         expect(submitted.at(-1)).toMatchObject({ match_id: authority!.match_id, expected_revision: authority!.revision,
           prompt_id: authority!.prompt!.id, offer_id: offer!.id });

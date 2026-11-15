@@ -71,7 +71,7 @@ impl Game {
             }
         }
         *self = original.expect("constrained selection");
-        Err(AgentError(
+        Err(AgentError::Rules(
             "no sampled deal satisfies retained selection commitments".into(),
         ))
     }
@@ -194,7 +194,7 @@ impl Game {
         if self.decklist_known(opponent, viewer) {
             Ok(())
         } else {
-            Err(AgentError(format!(
+            Err(AgentError::Rules(format!(
                 "decklist closed: player {} cannot sample the opponent's hidden cards",
                 viewer.0
             )))
@@ -298,6 +298,7 @@ impl Game {
         max_steps: usize,
         hit_cap: Option<&mut bool>,
     ) -> Result<Option<usize>, AgentError> {
+        self.ensure_playable()?;
         let mut steps = 0usize;
         while !self.is_game_over() {
             if steps >= max_steps {
@@ -311,7 +312,9 @@ impl Game {
                 .as_ref()
                 .map_or(0, |space| space.actions.len());
             if action_count == 0 {
-                return Err(AgentError("random_playout: empty action space".to_string()));
+                return Err(AgentError::Rules(
+                    "random_playout: empty action space".to_string(),
+                ));
             }
             let index = self.state.rng_mut().gen_range(0..action_count);
             self.step(index)?;

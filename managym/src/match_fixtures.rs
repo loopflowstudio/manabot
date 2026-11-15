@@ -35,7 +35,7 @@ fn player_configs() -> Vec<PlayerConfig> {
 }
 
 fn new_match(seed: u64) -> Game {
-    Game::new(player_configs(), seed, true)
+    Game::new(player_configs(), seed, true).expect("valid game setup")
 }
 
 /// Plays fixture `id` from its seed and checks the position has not drifted.

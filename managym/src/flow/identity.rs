@@ -119,6 +119,7 @@ impl Game {
     }
 
     pub fn action_space(&self) -> Option<&ActionSpace> {
+        self.ensure_playable().ok()?;
         self.current_action_space.as_ref()
     }
 

@@ -1977,11 +1977,13 @@ impl Game {
     /// Feed a player action into the pending mid-resolution decision.
     pub(crate) fn execute_decision_action(&mut self, action: &Action) -> Result<(), AgentError> {
         let Some(suspended) = &self.state.suspended_decision else {
-            return Err(AgentError("no pending decision".to_string()));
+            return Err(AgentError::Rules("no pending decision".to_string()));
         };
 
         if action.player() != suspended.decision.player() {
-            return Err(AgentError("wrong player for pending decision".to_string()));
+            return Err(AgentError::Rules(
+                "wrong player for pending decision".to_string(),
+            ));
         }
 
         // Validate while the full continuation is still attached, so the
@@ -1995,9 +1997,11 @@ impl Game {
         {
             let mana = choices
                 .get(*mode)
-                .ok_or_else(|| AgentError("illegal mana color".into()))?;
+                .ok_or_else(|| AgentError::Rules("illegal mana color".into()))?;
             if !self.mana_choice_completes_payment(*player, mana) {
-                return Err(AgentError("mana color cannot complete the payment".into()));
+                return Err(AgentError::Rules(
+                    "mana color cannot complete the payment".into(),
+                ));
             }
         }
         if let (
@@ -2028,7 +2032,7 @@ impl Game {
                     Action::Decline { .. } => None,
                     _ => {
                         *self.state.suspended_decision_mut() = Some(suspended);
-                        return Err(AgentError("illegal creature to copy".into()));
+                        return Err(AgentError::Rules("illegal creature to copy".into()));
                     }
                 };
                 let mut batch = suspended.frame.batch.take().expect("retained event batch");
@@ -2040,7 +2044,7 @@ impl Game {
             (Decision::OrderReplacement { candidates, .. }, Action::ChooseMode { mode, .. }) => {
                 let Some(candidate) = candidates.get(*mode) else {
                     *self.state.suspended_decision_mut() = Some(suspended);
-                    return Err(AgentError("illegal replacement".into()));
+                    return Err(AgentError::Rules("illegal replacement".into()));
                 };
                 self.choose_replacement(
                     suspended
@@ -2059,7 +2063,7 @@ impl Game {
                     self.can_pay_mana_cost(*player, &ManaCost::default().with_generic(*x))
                 }) else {
                     *self.state.suspended_decision_mut() = Some(suspended);
-                    return Err(AgentError("unpayable X".into()));
+                    return Err(AgentError::Rules("unpayable X".into()));
                 };
                 suspended.frame.x = x;
                 let payment = PaymentProgress::new(
@@ -2095,7 +2099,7 @@ impl Game {
                     )
                 {
                     *self.state.suspended_decision_mut() = Some(suspended);
-                    return Err(AgentError("illegal named-search card".into()));
+                    return Err(AgentError::Rules("illegal named-search card".into()));
                 }
                 self.move_object(*object_id, ZoneType::Exile);
                 *remaining -= 1;
@@ -2231,7 +2235,7 @@ impl Game {
                     .and_then(|id| self.permanent_object(id));
                 let Some(selected) = selected else {
                     *self.state.suspended_decision_mut() = Some(suspended);
-                    return Err(AgentError("illegal object selection".into()));
+                    return Err(AgentError::Rules("illegal object selection".into()));
                 };
                 let Decision::ChooseObject { effect, .. } = suspended.decision else {
                     unreachable!()
@@ -2262,7 +2266,7 @@ impl Game {
                         .filter(|id| candidates.contains(id));
                     let Some(selected) = selected else {
                         *self.state.suspended_decision_mut() = Some(suspended);
-                        return Err(AgentError("illegal permanent to choose".into()));
+                        return Err(AgentError::Rules("illegal permanent to choose".into()));
                     };
                     chosen.push(selected);
                 }
@@ -2289,7 +2293,7 @@ impl Game {
                     .filter(|id| candidates.contains(id));
                 let Some(selected) = selected else {
                     *self.state.suspended_decision_mut() = Some(suspended);
-                    return Err(AgentError("illegal creature to keep".into()));
+                    return Err(AgentError::Rules("illegal creature to keep".into()));
                 };
                 let Decision::KeepCreatures {
                     player,
@@ -2321,7 +2325,7 @@ impl Game {
                     .contains(target)
                 {
                     *self.state.suspended_decision_mut() = Some(suspended);
-                    return Err(AgentError("illegal new target".into()));
+                    return Err(AgentError::Rules("illegal new target".into()));
                 }
                 self.change_stack_target(object, slot, *target);
                 let next = self
@@ -2377,7 +2381,7 @@ impl Game {
                     .filter(|id| self.tapped_opponent_creatures(*player).contains(id));
                 let Some(selected) = selected else {
                     *self.state.suspended_decision_mut() = Some(suspended);
-                    return Err(AgentError("illegal counter recipient".into()));
+                    return Err(AgentError::Rules("illegal counter recipient".into()));
                 };
                 let batch = self.event_batch(vec![
                     crate::flow::proposed_event::ProposedEvent::CounterChange {
@@ -2408,7 +2412,7 @@ impl Game {
                     || self.state.card_of(*object_id).is_none()
                 {
                     *self.state.suspended_decision_mut() = Some(suspended);
-                    return Err(AgentError("discard must be from hand".into()));
+                    return Err(AgentError::Rules("discard must be from hand".into()));
                 }
                 let discarded = self.move_object(*object_id, ZoneType::Graveyard);
                 if self.state.live(discarded).is_some() {
@@ -2448,7 +2452,7 @@ impl Game {
                     .position(|candidate| candidate == object_id)
                 else {
                     *self.state.suspended_decision_mut() = Some(suspended);
-                    return Err(AgentError("card is not in the pending scry".into()));
+                    return Err(AgentError::Rules("card is not in the pending scry".into()));
                 };
                 remaining.remove(index);
                 if *to_bottom {
@@ -2488,7 +2492,7 @@ impl Game {
                 let selectable = looked.contains(object_id)
                     && self.object_matches_predicate(*object_id, predicate);
                 if !selectable {
-                    let err = AgentError("card is not selectable".to_string());
+                    let err = AgentError::Rules("card is not selectable".to_string());
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(err);
                 }
@@ -2543,7 +2547,7 @@ impl Game {
                     .iter()
                     .any(|c| self.object_matches_predicate(*c, predicate));
                 if *selected < *min_select && any_selectable {
-                    let err = AgentError("selection is not optional yet".to_string());
+                    let err = AgentError::Rules("selection is not optional yet".to_string());
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(err);
                 }
@@ -2569,7 +2573,7 @@ impl Game {
                     .position(|candidate| candidate == object_id)
                 else {
                     *self.state.suspended_decision_mut() = Some(suspended);
-                    return Err(AgentError(
+                    return Err(AgentError::Rules(
                         "card is not in the pending library order".into(),
                     ));
                 };
@@ -2600,7 +2604,9 @@ impl Game {
                     .any(|card| self.state.object_of(*card) == *object_id)
                 {
                     *self.state.suspended_decision_mut() = Some(suspended);
-                    return Err(AgentError("not a distinct-name search candidate".into()));
+                    return Err(AgentError::Rules(
+                        "not a distinct-name search candidate".into(),
+                    ));
                 }
                 let Decision::SearchDistinctNames {
                     remaining,
@@ -2635,7 +2641,7 @@ impl Game {
                     || !self.object_matches_predicate(*object_id, predicate)
                 {
                     *self.state.suspended_decision_mut() = Some(suspended);
-                    return Err(AgentError(
+                    return Err(AgentError::Rules(
                         "not a matching card in the revealed hand".into(),
                     ));
                 }
@@ -2655,7 +2661,7 @@ impl Game {
                     .any(|card| self.state.object_of(*card) == *object_id)
                 {
                     *self.state.suspended_decision_mut() = Some(suspended);
-                    return Err(AgentError("not a castable offered card".into()));
+                    return Err(AgentError::Rules("not a castable offered card".into()));
                 }
                 if let Decision::CastDuringResolution {
                     spends: Some(key), ..
@@ -2703,7 +2709,7 @@ impl Game {
                     .any(|card| self.state.object_of(*card) == *object_id)
                 {
                     *self.state.suspended_decision_mut() = Some(suspended);
-                    return Err(AgentError("not an offered card to exile".into()));
+                    return Err(AgentError::Rules("not an offered card to exile".into()));
                 }
                 self.exile_linked(*object_id, grantee, source, grant);
                 self.run_frame(suspended.frame);
@@ -2743,7 +2749,7 @@ impl Game {
             ) => {
                 let Some(index) = revealed.iter().position(|c| c == object_id) else {
                     *self.state.suspended_decision_mut() = Some(suspended);
-                    return Err(AgentError("not a revealed card".into()));
+                    return Err(AgentError::Rules("not a revealed card".into()));
                 };
                 revealed.remove(index);
                 self.move_object(*object_id, ZoneType::Graveyard);
@@ -2810,7 +2816,9 @@ impl Game {
                 .then_some(*object_id);
                 let Some(choice) = choice.filter(|_| selected.len() < *max) else {
                     *self.state.suspended_decision_mut() = Some(suspended);
-                    return Err(AgentError("not an available selection candidate".into()));
+                    return Err(AgentError::Rules(
+                        "not an available selection candidate".into(),
+                    ));
                 };
                 selected.push(choice);
                 if selected.len() == *max || selected.len() == candidates.len() {
@@ -2848,7 +2856,7 @@ impl Game {
                 };
                 let Some(candidate) = candidate else {
                     *self.state.suspended_decision_mut() = Some(suspended);
-                    return Err(AgentError("name option out of range".into()));
+                    return Err(AgentError::Rules("name option out of range".into()));
                 };
                 suspended.frame.queue.push_front(Effect::ExileNamed {
                     name: candidate.name.clone(),
@@ -2859,7 +2867,7 @@ impl Game {
             }
             (Decision::Modal { modes, .. }, Action::ChooseMode { mode, .. }) => {
                 if *mode >= modes.len() {
-                    let err = AgentError("modal mode out of range".to_string());
+                    let err = AgentError::Rules("modal mode out of range".to_string());
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(err);
                 }
@@ -2885,7 +2893,7 @@ impl Game {
             ) => {
                 if !groups[0].contains(object_id) {
                     *self.state.suspended_decision_mut() = Some(suspended);
-                    return Err(AgentError("not a legend in this group".into()));
+                    return Err(AgentError::Rules("not a legend in this group".into()));
                 }
                 keep.push(*object_id);
                 groups.remove(0);
@@ -2926,7 +2934,7 @@ impl Game {
                     .contains(*object_id, ZoneType::Hand, player)
                     || self.state.card_of(*object_id).is_none()
                 {
-                    let err = AgentError("card to discard is not in hand".to_string());
+                    let err = AgentError::Rules("card to discard is not in hand".to_string());
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(err);
                 }
@@ -2947,7 +2955,7 @@ impl Game {
                     .is_some_and(|card| self.eligible_lesson(*player, card))
                 {
                     *self.state.suspended_decision_mut() = Some(suspended);
-                    return Err(AgentError(
+                    return Err(AgentError::Rules(
                         "card is not an available owned sideboard Lesson".to_string(),
                     ));
                 }
@@ -2960,7 +2968,7 @@ impl Game {
                 Ok(())
             }
             _ => {
-                let err = AgentError("action does not match pending decision".to_string());
+                let err = AgentError::Rules("action does not match pending decision".to_string());
                 *self.state.suspended_decision_mut() = Some(suspended);
                 Err(err)
             }
@@ -3348,6 +3356,7 @@ mod learn_tests {
             17,
             false,
         )
+        .expect("valid game setup")
     }
 
     #[test]
@@ -3831,7 +3840,8 @@ mod learn_tests {
             ],
             17,
             false,
-        );
+        )
+        .expect("valid game setup");
         // One unknown hand slot, a residual pool of two Lessons and two Islands.
         let deck = game.state.players[0].deck.clone();
         for card in deck {
@@ -4111,7 +4121,8 @@ mod payment_tests {
             ],
             165,
             false,
-        );
+        )
+        .expect("valid game setup");
         game.run_frame(EffectFrame::new(
             PlayerId(0),
             vec![
@@ -4370,7 +4381,8 @@ mod source_scope_tests {
             ],
             341,
             false,
-        );
+        )
+        .expect("valid game setup");
         let object = game.state.latest_objects().next().unwrap().0;
         let mut parent = EffectFrame::new(PlayerId(0), vec![]);
         parent.bind_source(Some(object), Some(object));
