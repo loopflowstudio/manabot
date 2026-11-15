@@ -63,6 +63,16 @@ class CheckpointSummary:
     # Why the running engine refuses this checkpoint; ``None`` means admissible.
     incompatibility: str | None = None
 
+    run: str | None = None
+    run_id: str | None = None
+    stage: str | None = None
+    weights: str | None = None
+    updates: int | None = None
+    transitions: int | None = None
+    supports_search: bool = False
+    policy_input_version: int | None = None
+    search_reason: str | None = None
+
     @property
     def compatible(self) -> bool:
         return self.incompatibility is None
@@ -128,6 +138,7 @@ def _inspect_cached(
     binding = checkpoint.get("world_binding")
     world = binding.get("world") if isinstance(binding, Mapping) else None
     step = checkpoint.get("global_step")
+    search_reason = checkpoint_search_incompatibility(checkpoint)
     return CheckpointSummary(
         path=Path(path),
         sha256=hashlib.sha256(data).hexdigest(),
@@ -141,9 +152,36 @@ def _inspect_cached(
         .get("parameters", {})
         .get("total", checkpoint.get("parameter_count", 0)),
         step=step if isinstance(step, int) and step > 0 else None,
+        run_id=_text(checkpoint.get("bc"), "run_id"),
+        stage=_text(checkpoint.get("bc"), "stage_id"),
+        weights=_text(checkpoint.get("bc"), "weights"),
         setups=_setups(binding),
         incompatibility=checkpoint_incompatibility(checkpoint),
+        policy_input_version=config.get("observation_hypers", {}).get(
+            "policy_input_version", 1
+        ),
+        supports_search=search_reason is None,
+        search_reason=search_reason,
     )
+
+
+def checkpoint_search_incompatibility(checkpoint: Mapping[str, object]) -> str | None:
+    """Explain baseline search admission from the same declared capabilities."""
+    hypers = checkpoint.get("hypers")
+    agent = hypers.get("agent_hypers") if isinstance(hypers, Mapping) else None
+    if not isinstance(agent, Mapping):
+        return "Search requires a declared policy configuration."
+    metadata = checkpoint.get("bc")
+    semantic = metadata.get("value_semantic") if isinstance(metadata, Mapping) else None
+    if agent.get("value_kind") != "categorical_wdl" and semantic != "signed_outcome":
+        return (
+            "Search requires a W/D/L value head or a scalar declared as signed_outcome."
+        )
+    if agent.get("recent_events"):
+        return "Search requires evaluation from the current view alone, without policy history."
+    if agent.get("belief_count_buckets"):
+        return "Search requires evaluation without belief-model inputs."
+    return None
 
 
 def checkpoint_incompatibility(checkpoint: Mapping[str, Any]) -> str | None:
@@ -308,7 +346,9 @@ def discover_checkpoints(
         directories.append(runs_dir)
 
     def add(summary: CheckpointSummary) -> None:
-        found.setdefault(summary.sha256, summary)
+        previous = found.get(summary.sha256)
+        if previous is None or len(str(summary.path)) < len(str(previous.path)):
+            found[summary.sha256] = summary
 
     for source in sources:
         if source.suffix == ".json" and source.is_file():
@@ -344,7 +384,91 @@ def _scan(
             )
         except (OSError, ValueError):
             continue
-    return summaries
+    return [_with_run_facts(summary, directory) for summary in summaries]
+
+
+def _text(value: object, key: str) -> str | None:
+    item = value.get(key) if isinstance(value, dict) else None
+    return item if isinstance(item, str) else None
+
+
+def _count(value: object) -> int | None:
+    return value if type(value) is int and value >= 0 else None
+
+
+@lru_cache(maxsize=512)
+def _run_record(path: str, size: int, mtime_ns: int) -> dict[str, Any]:
+    del size, mtime_ns  # cache key only
+    try:
+        record = json.loads(Path(path).read_text())
+    except (OSError, ValueError):
+        return {}
+    return record if isinstance(record, dict) else {}
+
+
+def _with_run_facts(summary: CheckpointSummary, root: Path) -> CheckpointSummary:
+    """Join portable run records by exact bytes, never by their recorded paths.
+
+    Monitoring coordinates belong to their own checkpoint. Stage export counts
+    apply only to completed stages; initialization is always update zero.
+    """
+    root = root.resolve()
+    for parent in summary.path.parents:
+        if not parent.is_relative_to(root):
+            break
+        path = parent / "run.json"
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        record = _run_record(str(path), stat.st_size, stat.st_mtime_ns)
+        points = record.get("monitoring_checkpoints", [])
+        stages = record.get("stages", [])
+        for point in points if isinstance(points, list) else []:
+            if not isinstance(point, dict):
+                continue
+            artifact = point.get("artifact")
+            if isinstance(artifact, dict) and artifact.get("sha256") == summary.sha256:
+                return replace(
+                    summary,
+                    run=parent.name,
+                    run_id=_text(record, "id") or summary.run_id,
+                    updates=_count(point.get("updates")),
+                    transitions=_count(point.get("learner_transitions")),
+                )
+        for stage in stages if isinstance(stages, list) else []:
+            if not isinstance(stage, dict) or not isinstance(
+                stage.get("artifacts"), dict
+            ):
+                continue
+            for weights, artifact in stage["artifacts"].items():
+                if weights not in {"raw", "ema", "initial_raw"}:
+                    continue
+                if (
+                    not isinstance(artifact, dict)
+                    or artifact.get("sha256") != summary.sha256
+                ):
+                    continue
+                completed = stage.get("status") == "completed"
+                initial = weights == "initial_raw"
+                return replace(
+                    summary,
+                    run=parent.name,
+                    run_id=_text(record, "id") or summary.run_id,
+                    stage=_text(stage, "id") or summary.stage,
+                    weights=weights,
+                    updates=0
+                    if initial
+                    else _count(stage.get("updates"))
+                    if completed
+                    else None,
+                    transitions=0
+                    if initial
+                    else _count(stage.get("learner_transitions"))
+                    if completed
+                    else None,
+                )
+    return summary
 
 
 def _tournament(

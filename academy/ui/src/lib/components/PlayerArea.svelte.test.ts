@@ -42,8 +42,8 @@ it('shows pooled amounts before qualifiers without repeating combat expiry', () 
       }),
     },
   });
-  expect(body).toContain('— including 2 {R}, expiring at end of combat');
-  expect(body).toContain('; 1 {G} only for creature spells that puts a +1/+1 counter on a non-Human creature spell it casts, expiring at step end');
+  expect(body).toContain('2 {R}, normally expires at end of combat');
+  expect(body).toContain('1 {G} only for creature spells that puts a +1/+1 counter on a non-Human creature spell it casts, normally expires at step end');
   expect(body.match(/at end of combat/g)).toHaveLength(1);
   expect(body).not.toContain('undefined');
 });
@@ -98,4 +98,14 @@ it('shows recorded model provenance without inventing missing fields', () => {
   expect(body).toContain('world: w6');
   expect(body).toContain('step: 0');
   expect(body).not.toContain('model:');
+});
+
+it('labels runtime identity as Policy ID and retains artifact roles', () => {
+  const runtime = { id: 'a'.repeat(64), provider: 'example', runner: 'runner-v2',
+    artifacts: { actor: 'b'.repeat(64) }, config: {}, supports_search: false };
+  const identity = playerIdentity({ name: 'Independent', kind: 'bot', digest: runtime.id, runtime });
+  const { body } = render(PlayerArea, { props: { identity, tablePermanents: [], player: player({}) } });
+  expect(body).toContain('Policy ID: ' + runtime.id);
+  expect(body).toContain('actor: ' + 'b'.repeat(64));
+  expect(body).not.toContain('SHA-256:');
 });

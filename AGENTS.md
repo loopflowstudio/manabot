@@ -48,7 +48,8 @@ checkpoint fields and frozen evidence keep their spelling.
 
 Code dependencies flow `managym.academy` → `managym` and `manabot` → `managym`.
 Academy never imports manabot or Torch; optional bot capabilities are discovered
-through the `managym.academy.bots` entry point. manabot never imports Academy.
+through the `managym.bots` provider entry points; optional historical replay/advice
+capabilities use `managym.academy.bots`. manabot never imports Academy.
 PyPI distributes the engine as `managym` and training as `manabot`, released
 together at the same version. Release builds use `scripts/release/prepare.py`
 to stage self-contained source archives; direct engine sdists from the workspace
@@ -72,9 +73,14 @@ reconnect, replay/fork identity and accessibility. Cancellation or undo needs an
 explicit shared action and cannot erase committed costs or revealed information.
 Configured priority-stop automation must remain identifiable as automation,
 separate from deliberate human decisions.
+Play's retained `hero_*`/`villain_*` setup fields name human/opponent roles;
+`GameConfig.human_seat` orders them at the native boundary. Record and project
+actual native seats; Watch keeps its two-seat acting-view contract.
 Academy resume credentials and the started-launch marker live in browser
 `sessionStorage`. Keep them scoped together; a launch must not resume another
 tab's or another launch's game.
+Game-file imports send original JSON source spans: JavaScript numeric parsing and
+re-encoding can round u64 identities and invalidate retained digests.
 Watch history is the selected acting viewer's recorded track strictly before
 that decision's `presentation_cursor`; spectator reveal never supplies history
 labels. Event emphasis stays separate from choice focus and lane navigation.
@@ -143,7 +149,7 @@ checkpoints or experiment evidence.
 - Library code receives a framework backend (the module for an update, a
   `BackendPolicy` for simulation and evaluation) and never imports
   `manabot.backends.*`. Only composition roots choose one: `experiments/`,
-  `scripts/`, recipe entry points, the CLI and child-process entry points, `manabot/sim/table_bots.py` and the
+  `scripts/`, recipe entry points, the CLI and child-process entry points, `manabot/sim/table_bots.py`, `manabot/sim/policy_provider.py` and the
   backends' tests, by import or `manabot.backends.resolve("torch")`.
   `tests/test_package_boundaries.py` enforces roots and named entry-point scopes
   in mixed CLI/library modules ([who chooses a backend](manabot/backends/README.md#who-chooses-a-backend)).
