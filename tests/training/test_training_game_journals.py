@@ -1,6 +1,8 @@
 """Durable training cursors survive native/learner interruption without cleanup."""
 
+from dataclasses import dataclass
 import json
+import math
 import os
 from pathlib import Path
 import subprocess
@@ -13,6 +15,8 @@ import pytest
 from manabot.env.failures import (
     CapturedVector,
     CaptureScope,
+    FailureEvidence,
+    NativeBoundary,
     ScalarCapture,
     atomic_private_json,
     capture_scope,
@@ -22,6 +26,17 @@ from manabot.env.observation import ObservationSpace
 from manabot.env.replay import replay_failure_inputs
 from manabot.training.rollout.producers import ShardedVectorEnv
 import managym
+
+
+def _run_child(function: str, *args: str) -> None:
+    code = "import runpy,sys; runpy.run_path(sys.argv[1])[sys.argv[2]](*sys.argv[3:])"
+    child = subprocess.run(
+        [sys.executable, "-c", code, __file__, function, *args],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert child.returncode == 73, child.stderr
 
 
 def _players() -> list[managym.PlayerConfig]:
@@ -121,14 +136,7 @@ def _interrupt_child(directory: str, mode: str, phase: str) -> None:
 def test_abrupt_exit_leaves_replayable_private_cursor(
     tmp_path: Path, mode: str, phase: str
 ) -> None:
-    code = "import runpy,sys; runpy.run_path(sys.argv[1])['_interrupt_child'](*sys.argv[2:])"
-    child = subprocess.run(
-        [sys.executable, "-c", code, __file__, str(tmp_path), mode, phase],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    assert child.returncode == 73, child.stderr
+    _run_child("_interrupt_child", str(tmp_path), mode, phase)
     directory = tmp_path / "game-journals"
     cursor = next(directory.glob("*.jsonl"))
     assert cursor.stat().st_mode & 0o777 == 0o600
@@ -252,14 +260,7 @@ def _interrupt_reset_child(directory: str, operation: str, first: str) -> None:
 def test_interrupted_reset_replays_prior_game_without_binding_claim(
     tmp_path: Path, operation: str, first: str
 ) -> None:
-    code = "import runpy,sys; runpy.run_path(sys.argv[1])['_interrupt_reset_child'](*sys.argv[2:])"
-    child = subprocess.run(
-        [sys.executable, "-c", code, __file__, str(tmp_path), operation, first],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    assert child.returncode == 73, child.stderr
+    _run_child("_interrupt_reset_child", str(tmp_path), operation, first)
     cursor = next((tmp_path / "game-journals").glob("*.jsonl"))
     evidence = read_failure(cursor)
     boundary = evidence.boundary
@@ -314,6 +315,7 @@ def test_disabled_logging_has_no_writer_or_extra_native_reads(
         raise AssertionError("disabled journal invoked writer")
 
     monkeypatch.setattr("manabot.env.failures.atomic_private_json", forbidden)
+    monkeypatch.setattr("manabot.infra.journal.DurableJournal.__init__", forbidden)
     scope = CaptureScope(tmp_path / "failures", context=forbidden)
     with capture_scope(scope):
         vector = CapturedVector(num_envs=1)
@@ -443,9 +445,9 @@ def test_pending_storage_error_prevents_native_step(tmp_path: Path) -> None:
         vector.set_buffers(_buffers(1))
         vector.reset_all_into_buffers(_players())
         before = vector.native.semantic_decision_frames_json()
-        assert vector._cursor is not None
-        vector._cursor.unlink()
-        vector._cursor.mkdir()
+        cursor = next(scope.journal_directory.glob("*.jsonl"))
+        cursor.unlink()
+        cursor.mkdir()
         with pytest.raises(OSError):
             vector.step_into_buffers([0])
         assert vector.native.semantic_decision_frames_json() == before
@@ -519,7 +521,7 @@ def test_job_option_is_runtime_only() -> None:
 def test_return_acknowledgment_storage_error_names_executed_call(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import manabot.env.failures as failures
+    from manabot.infra.journal import DurableJournal
 
     scope = CaptureScope(tmp_path / "failures", training_game_logs=True)
     with capture_scope(scope):
@@ -527,15 +529,18 @@ def test_return_acknowledgment_storage_error_names_executed_call(
         vector.set_buffers(_buffers(1))
         vector.reset_all_into_buffers(_players())
         frame = vector.native.semantic_decision_frames_json()
-        write = failures.atomic_private_json
+        write = DurableJournal.append
 
-        def fail_return(path: Path, row: dict[str, object]) -> None:
+        def fail_return(
+            writer: DurableJournal, row: object, *, create: bool = False
+        ) -> int:
+            assert isinstance(row, dict)
             boundary = row.get("boundary")
             if isinstance(boundary, dict) and boundary["phase"] == "synchronizing":
                 raise OSError("storage gone after execution")
-            write(path, row)
+            return write(writer, row, create=create)
 
-        monkeypatch.setattr(failures, "atomic_private_json", fail_return)
+        monkeypatch.setattr(DurableJournal, "append", fail_return)
         with pytest.raises(OSError) as error:
             vector.step_into_buffers([0])
         assert "Native operation returned" in " ".join(error.value.__notes__)
@@ -638,14 +643,7 @@ def _interrupt_execution(directory: str, phase: str) -> None:
 def test_executor_interrupt_marks_active_work_before_call(
     tmp_path: Path, phase: str
 ) -> None:
-    code = "import runpy,sys; runpy.run_path(sys.argv[1])['_interrupt_execution'](*sys.argv[2:])"
-    child = subprocess.run(
-        [sys.executable, "-c", code, __file__, str(tmp_path), phase],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    assert child.returncode == 73, child.stderr
+    _run_child("_interrupt_execution", str(tmp_path), phase)
     directory = tmp_path / "run/game-journals"
     marker = json.loads((directory / "operation.json").read_text())
     assert marker["operation"] == phase and marker["state"] == "pending"
@@ -657,3 +655,389 @@ def test_executor_interrupt_marks_active_work_before_call(
         assert evidence.boundary.returned
     run = json.loads((tmp_path / "run/run.json").read_text())
     assert Path(run["game_journal_directory"]).resolve() == directory.resolve()
+
+
+def _synthetic_evidence(length: int = 0) -> tuple[FailureEvidence, NativeBoundary]:
+    from manabot.env.failures import FailureEvidence, GameInputs, NativeBoundary
+
+    return (
+        FailureEvidence(
+            mode="vector",
+            operation="step",
+            identities={"world": "fixture"},
+            context={"update": 1},
+            seconds=0,
+            games=[GameInputs(seed=24, players=[], actions=[0] * length)],
+        ),
+        NativeBoundary(operation="step", phase="ready", sequence=1, timestamp=1),
+    )
+
+
+def test_delta_projection_and_root_replacement(tmp_path: Path) -> None:
+    from manabot.env.failures import _TrainingJournal
+
+    evidence, boundary = _synthetic_evidence(20)
+    journal = _TrainingJournal(tmp_path / "producer.jsonl")
+    journal.publish(evidence, boundary)
+    evidence.games[0].actions.append(3)
+    evidence.games[0].frame = "fresh-frame"
+    boundary.phase = "executing"
+    journal.publish(evidence, boundary)
+    assert read_failure(journal.writer.path).games == evidence.games
+    boundary.phase = "synchronizing"
+    boundary.returned = True
+    journal.publish(evidence, boundary, [20])
+    retained = read_failure(journal.writer.path)
+    assert retained.games[0].actions == [0] * 20
+    assert retained.games[0].frame is None
+    assert retained.execution_outcome == "execution_outcome_unknown"
+    evidence.games[0].restart(24)  # repeated seed still replaces the root
+    journal.publish(evidence, boundary)
+    assert read_failure(journal.writer.path).games[0].actions == []
+
+
+@dataclass
+class _JournalMetadata:
+    updates: list[int]
+
+
+@pytest.mark.parametrize("executing", [False, True])
+def test_initial_checkpoint_isolates_nested_inputs_without_false_deltas(
+    tmp_path: Path, executing: bool
+) -> None:
+    from manabot.env.failures import PlayerSetup, _TrainingJournal
+
+    evidence, boundary = _synthetic_evidence()
+    maximum = 2**64 - 1
+    metadata = {"coordinates": (maximum, {"updates": [1]})}
+    custom = _JournalMetadata(updates=[1])
+    evidence.context = {"nested": metadata, "custom": custom}
+    evidence.identities = {
+        "nested": {"bindings": (maximum, ["world"])},
+        "custom": custom,
+    }
+    evidence.opponent_policy = "none"
+    player = PlayerSetup.model_validate(
+        {
+            "name": "private",
+            "decklist": {"Mountain": 8},
+            "sideboard": {"Mountain": 1},
+            "content_pack": "fixture",
+            "disclosure": "closed",
+        }
+    )
+    game = evidence.games[0]
+    game.seed = maximum
+    game.actions = [maximum, "retained-command"]
+    game.players = [player]
+    game.actor = 1
+    game.frame = '{"object_id":18446744073709551615}'
+    boundary.phase = "executing" if executing else "preparing"
+    boundary.active = [True]
+    boundary.pending_actions = [maximum]
+    boundary.proposed_players = [[player]]
+    journal = _TrainingJournal(tmp_path / "producer.jsonl")
+    journal.publish(evidence, boundary)
+    assert journal.evidence is not None
+    assert journal.evidence.context == evidence.context
+    assert journal.evidence.identities == evidence.identities
+    for retained in (journal.evidence.context, journal.evidence.identities):
+        assert isinstance(retained["custom"], _JournalMetadata)
+        assert retained["custom"] is not custom
+    expected = evidence.model_dump(mode="json", by_alias=True)
+    expected["boundary"] = boundary.model_dump(mode="json")
+    if not executing:
+        expected["games"][0]["frame"] = None
+    assert (
+        read_failure(journal.writer.path).model_dump(mode="json", by_alias=True)
+        == expected
+    )
+    for _ in range(2):
+        journal.publish(evidence, boundary)
+        row = json.loads(journal.writer.path.read_bytes().splitlines()[-1])
+        assert row["context_updates"] == {}
+        assert "identities" not in row
+        assert row["games"] == []
+    # Both the durable bytes and compaction projection own their nested inputs.
+    saved = journal.writer.path.read_bytes()
+    projection = journal.evidence.model_dump(mode="json", by_alias=True)
+    metadata["coordinates"][1]["updates"].append(2)
+    custom.updates.append(2)
+    evidence.identities.clear()
+    player.decklist["Mountain"] = 7
+    player.sideboard.clear()
+    game.actions.append(3)
+    game.frame = "changed"
+    boundary.active[0] = False
+    boundary.pending_actions.append(4)
+    assert journal.writer.path.read_bytes() == saved
+    assert journal.evidence.model_dump(mode="json", by_alias=True) == projection
+    assert (
+        read_failure(journal.writer.path).model_dump(mode="json", by_alias=True)
+        == projection
+    )
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), -float("inf")])
+def test_initial_checkpoint_rejects_nonfinite_before_publication(
+    tmp_path: Path, value: float
+) -> None:
+    from manabot.env.failures import _TrainingJournal
+
+    evidence, boundary = _synthetic_evidence()
+    evidence.seconds = value
+    journal = _TrainingJournal(tmp_path / "producer.jsonl")
+    with pytest.raises(ValueError, match="Out of range float"):
+        journal.publish(evidence, boundary)
+    assert not journal.writer.path.exists()
+    assert journal.evidence is None
+    assert journal.sequence == journal.checkpoint_bytes == journal.appended_bytes == 0
+    assert journal.actions == []
+
+
+@pytest.mark.parametrize("field", ["context", "identities"])
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), -float("inf")])
+def test_initial_checkpoint_preserves_nested_nonfinite_metadata_behavior(
+    tmp_path: Path, field: str, value: float
+) -> None:
+    from manabot.env.failures import _TrainingJournal
+
+    evidence, boundary = _synthetic_evidence()
+    getattr(evidence, field)["nested"] = {"values": [value]}
+    journal = _TrainingJournal(tmp_path / "producer.jsonl")
+    journal.publish(evidence, boundary)
+    assert journal.evidence is not None
+    # Existing JSON projection normalizes opaque nonfinite metadata to null;
+    # the in-memory projection still owns the original Python value.
+    assert getattr(read_failure(journal.writer.path), field)["nested"] == {
+        "values": [None]
+    }
+    retained = getattr(journal.evidence, field)["nested"]["values"][0]
+    assert math.isnan(retained) if math.isnan(value) else retained == value
+
+
+@pytest.mark.parametrize("suffix", [b'{"schema":', b"bad interior\n", b"{}\n"])
+def test_training_tail_is_explicit_and_complete_corruption_rejected(
+    tmp_path: Path,
+    suffix: bytes,
+) -> None:
+    from manabot.env.failures import _TrainingJournal
+
+    evidence, boundary = _synthetic_evidence(3)
+    journal = _TrainingJournal(tmp_path / "producer.jsonl")
+    journal.publish(evidence, boundary)
+    with journal.writer.path.open("ab") as output:
+        output.write(suffix)
+    if not suffix.endswith(b"\n"):
+        with pytest.warns(RuntimeWarning, match="Incomplete final"):
+            assert read_failure(journal.writer.path).games == evidence.games
+    else:
+        with pytest.raises(ValueError):
+            read_failure(journal.writer.path)
+
+
+def test_training_sequence_gap_and_incomplete_checkpoint(tmp_path: Path) -> None:
+    from manabot.env.failures import _TrainingJournal
+
+    evidence, boundary = _synthetic_evidence()
+    journal = _TrainingJournal(tmp_path / "producer.jsonl")
+    journal.publish(evidence, boundary)
+    journal.publish(evidence, boundary)
+    lines = journal.writer.path.read_bytes().splitlines(keepends=True)
+    row = json.loads(lines[1])
+    row["sequence"] = 3
+    journal.writer.path.write_bytes(lines[0] + json.dumps(row).encode() + b"\n")
+    with pytest.raises(ValueError, match="sequence gap"):
+        read_failure(journal.writer.path)
+    journal.writer.path.write_bytes(lines[0].rstrip(b"\n"))
+    with pytest.raises(ValueError, match="incomplete initial"):
+        read_failure(journal.writer.path)
+
+
+def test_compaction_failure_keeps_fully_appended_projection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from manabot.env.failures import _TrainingJournal
+
+    evidence, boundary = _synthetic_evidence(100)
+    journal = _TrainingJournal(tmp_path / "producer.jsonl")
+    journal.publish(evidence, boundary)
+    evidence.games[0].actions.append(4)
+    evidence.context = {"large_changed_payload": "x" * 65536}
+
+    def fail_replace(source: Path, target: Path) -> None:
+        raise OSError("compaction interrupted")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "replace", fail_replace)
+        with pytest.raises(OSError, match="compaction interrupted"):
+            journal.publish(evidence, boundary)
+    retained = read_failure(journal.writer.path)
+    assert retained.context == evidence.context
+    assert retained.games == evidence.games
+    journal.publish(evidence, boundary)
+    assert len(journal.writer.path.read_bytes().splitlines()) == 1
+    assert read_failure(journal.writer.path).games == evidence.games
+
+
+@pytest.mark.parametrize("prefix_length", [10, 10000])
+def test_journal_io_counts_and_phase_payload(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    prefix_length: int,
+) -> None:
+    """Compare exact serialized bytes and real sync calls without host load."""
+    import stat
+
+    from manabot.env.failures import _TrainingJournal
+    from manabot.infra import journal as durable
+
+    counts = {"bytes": 0, "writes": 0, "file_syncs": 0, "directory_syncs": 0}
+    real_sync = os.fsync
+    real_line = durable.json_line
+
+    def sync(descriptor: int) -> None:
+        key = (
+            "directory_syncs"
+            if stat.S_ISDIR(os.fstat(descriptor).st_mode)
+            else "file_syncs"
+        )
+        counts[key] += 1
+        real_sync(descriptor)
+
+    def line(row: object) -> bytes:
+        body = real_line(row)
+        counts["bytes"] += len(body)
+        counts["writes"] += 1
+        return body
+
+    monkeypatch.setattr(os, "fsync", sync)
+    monkeypatch.setattr("manabot.infra.journal.json_line", line)
+    evidence, boundary = _synthetic_evidence(prefix_length)
+    journal = _TrainingJournal(tmp_path / "delta.jsonl")
+    journal.publish(evidence, boundary)
+    for phase in ("preparing", "executing", "synchronizing", "ready"):
+        boundary.phase = phase
+        journal.publish(evidence, boundary)
+    delta_counts = dict(counts)
+    rows = [json.loads(row) for row in journal.writer.path.read_bytes().splitlines()]
+    assert all(row["games"] == [] for row in rows[1:])
+    assert all("identities" not in row for row in rows[1:])
+    counts.update(dict.fromkeys(counts, 0))
+    # The replaced implementation used a full snapshot and synced both its
+    # temporary creation and replacement directory entry on every publication.
+    for phase in ("ready", "preparing", "executing", "synchronizing", "ready"):
+        boundary.phase = phase
+        evidence.boundary = boundary
+        body = evidence.model_dump(mode="json", by_alias=True)
+        temporary = tmp_path / "old.tmp"
+        durable.DurableJournal(temporary).append(body, create=True)
+        temporary.replace(tmp_path / "old.jsonl")
+        durable._sync_directory(tmp_path)
+    old_counts = dict(counts)
+    assert delta_counts["bytes"] < old_counts["bytes"]
+    if prefix_length == 10000:
+        assert delta_counts["bytes"] < old_counts["bytes"] // 3
+    assert delta_counts["file_syncs"] == old_counts["file_syncs"] == 5
+    assert delta_counts["directory_syncs"] == 1
+    assert old_counts["directory_syncs"] == 10
+    print({"prefix_length": prefix_length, "delta": delta_counts, "old": old_counts})
+
+
+def test_compaction_byte_allowance_has_one_record_overshoot(tmp_path: Path) -> None:
+    from manabot.env.failures import _TrainingJournal
+
+    evidence, boundary = _synthetic_evidence(30000)
+    journal = _TrainingJournal(tmp_path / "producer.jsonl")
+    journal.publish(evidence, boundary)
+    checkpoint_size = journal.checkpoint_bytes
+    assert checkpoint_size > 65536
+    evidence.context = {"payload": "x" * (checkpoint_size - 2048)}
+    journal.publish(evidence, boundary)
+    assert journal.appended_bytes < checkpoint_size
+    evidence.context = {"payload": "y" * 4096}
+    journal.publish(evidence, boundary)
+    assert journal.appended_bytes == 0
+    assert len(journal.writer.path.read_bytes().splitlines()) == 1
+    assert read_failure(journal.writer.path).context == evidence.context
+
+
+def _crash_journal_child(directory: str, cut: str) -> None:
+    from manabot.env.failures import _TrainingJournal
+    from manabot.infra.journal import DurableJournal, json_line
+
+    evidence, boundary = _synthetic_evidence(10)
+    journal = _TrainingJournal(Path(directory) / "producer.jsonl")
+    journal.publish(evidence, boundary)
+    evidence.games[0].actions.append(7)
+    evidence.context = {"payload": "x" * 65536}
+    replace = Path.replace
+
+    def crash_replace(source: Path, target: Path) -> Path:
+        if cut == "after_replace":
+            replace(source, target)
+        os._exit(73)
+
+    def crash_append(
+        writer: DurableJournal, row: object, *, create: bool = False
+    ) -> int:
+        body = json_line(row)
+        with writer.path.open("ab") as output:
+            output.write(body[: len(body) // 2])
+            output.flush()
+            os.fsync(output.fileno())
+        os._exit(73)
+
+    if cut == "append":
+        DurableJournal.append = crash_append
+    else:
+        Path.replace = crash_replace
+    journal.publish(evidence, boundary)
+
+
+@pytest.mark.parametrize("cut", ["append", "before_replace", "after_replace"])
+def test_process_exit_during_append_and_compaction(tmp_path: Path, cut: str) -> None:
+    _run_child("_crash_journal_child", str(tmp_path), cut)
+    path = tmp_path / "producer.jsonl"
+    if cut == "append":
+        with pytest.warns(RuntimeWarning, match="Incomplete final"):
+            retained = read_failure(path)
+        assert retained.games[0].actions == [0] * 10
+    else:
+        retained = read_failure(path)
+        assert retained.games[0].actions == [0] * 10 + [7]
+        assert retained.context == {"payload": "x" * 65536}
+    # The single producer file is sufficient; an abandoned compaction temporary
+    # is never required to read the surviving projection.
+    copied = tmp_path / "copy.jsonl"
+    copied.write_bytes(path.read_bytes())
+    if cut == "append":
+        with pytest.warns(RuntimeWarning):
+            assert read_failure(copied) == retained
+    else:
+        assert read_failure(copied) == retained
+
+
+def test_suffix_changes_and_one_root_replacement_leave_other_prefixes_out(
+    tmp_path: Path,
+) -> None:
+    from manabot.env.failures import GameInputs, _TrainingJournal
+
+    evidence, boundary = _synthetic_evidence(10000)
+    evidence.games.append(
+        GameInputs(stream=1, seed=25, players=[], actions=[2] * 10000)
+    )
+    journal = _TrainingJournal(tmp_path / "producer.jsonl")
+    journal.publish(evidence, boundary)
+    evidence.games[0].actions.append(5)
+    journal.publish(evidence, boundary)
+    row = json.loads(journal.writer.path.read_bytes().splitlines()[-1])
+    assert row["games"] == [{"index": 0, "keep": 10000, "append": [5]}]
+    evidence.games[0].restart(24)
+    journal.publish(evidence, boundary)
+    row = json.loads(journal.writer.path.read_bytes().splitlines()[-1])
+    assert len(row["games"]) == 1
+    assert row["games"][0]["replacement"]["actions"] == []
+    assert len(journal.writer.path.read_bytes().splitlines()) == 3
+    assert read_failure(journal.writer.path).games == evidence.games

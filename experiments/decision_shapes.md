@@ -285,3 +285,32 @@ calls and marks collection/inference/learning/export. The runtime option does
 not alter the regime digest or checkpoint binding. Logging can reduce throughput;
 these retries measure learning by updates, not a throughput comparison. No decks
 were excluded. The existing USD55 total includes retries and evaluation.
+
+### 2026-11-15: exact stalled payment retained; filtered diagnostic replacement
+
+The journaled mana seed26501 run6f59481c7a58 stopped at update2. Producer0's
+pending native step was replayed separately: stream24/game seed37037, action196,
+turn25/precombat main, actor0 choosing Add {G}, with an exact pre-action frame
+match. The single-game replay did not return within60seconds; stream25 from the
+same batch advanced. The outer payment context is Yue, the Moon Spirit's
+waterbend activation, with {3} remaining after two waterbend taps. This does not
+establish Yue as the producing source or a production-default root cause.
+MTG-350 now retains the complete minimal source-bound reproducer; #524 and #538
+are overlapping payment work, not approved merges. Full failed-attempt outputs
+and original journals were copied before cancelling the stuck worker.
+
+A replacement diagnostic training uses the optimized shared eval/training
+journal writer from PR540, backported onto this study's unchanged native engine.
+Its initial-copy CPU microprobe improvement is29.37% on a fixed retained snapshot;
+this is not a GPU, disk or end-to-end training speed measurement. The native
+pending-call durability and replay binding remain required.
+
+The replacement excludes every training entry containing Yue in its main deck
+or sideboard:879of900 entries remain. The same exclusion helper produces the
+same population digest for every arm. The four healthy attempts continue with
+their original frozen900-entry population; they are not relabelled. The filtered
+replacement is tagged calibration and cannot supply a clean matched learning
+comparison with those attempts. Its500-update damping horizon is retained with
+a coherent6-hour allocation/regime window on an existing lease; no new rental.
+A common-population study comparison remains unfinished. This operational
+workaround does not alter native card admission or the held-out evidence.

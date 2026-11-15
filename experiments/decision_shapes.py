@@ -233,13 +233,42 @@ def in_arm(job: Job, arm: Arm) -> Job:
     return job.model_copy(update={"command": exports + job.command})
 
 
-def recipe(arm: Arm, updates: int = 500, hours: float = 16.0) -> TrainingRegime:
+def recipe(
+    arm: Arm,
+    updates: int = 500,
+    hours: float = 16.0,
+    exclude_cards: tuple[str, ...] = (),
+) -> TrainingRegime:
     """The frontier's small regime on the training decks, for `updates` updates.
 
     The damping horizon is the update target, as the frontier set its horizon
     to the updates it expected to reach.
     """
     base = TrainingRegime.model_validate_json(TRAINING.read_bytes())
+    if exclude_cards:
+        source = base.deck_source
+        if not isinstance(source, UniformDecks):
+            raise ValueError("card exclusions require a uniform deck population")
+        excluded = frozenset(exclude_cards)
+        kept = [
+            index
+            for index, deck in enumerate(source.decks)
+            if excluded.isdisjoint(deck.main) and excluded.isdisjoint(deck.sideboard)
+        ]
+        if not kept:
+            raise ValueError("card exclusions removed the entire training population")
+        entry_ids = source.entry_ids
+        base = base.model_copy(
+            update={
+                "deck_source": UniformDecks(
+                    decks=tuple(source.decks[index] for index in kept),
+                    sampling=source.sampling,
+                    entry_ids=tuple(entry_ids[index] for index in kept)
+                    if entry_ids is not None
+                    else None,
+                )
+            }
+        )
     schedule = _schedule(base).model_copy(update={"steps": updates})
     learning = _stage(base).learning.model_copy(update={"iteration_schedule": schedule})
     return shortened(
@@ -275,11 +304,17 @@ def runs(
     arms: str = "",
     usd: float = 9.0,
     training_game_logs: bool = False,
+    exclude_cards: str = "",
 ) -> list[Run]:
     """Each chosen arm once per seed: one capped GPU allocation, no retry."""
     result: list[Run] = []
     for arm in _arms(arms):
-        regime = recipe(arm, updates, hours)
+        regime = recipe(
+            arm,
+            updates,
+            hours,
+            tuple(name.strip() for name in exclude_cards.split("|") if name.strip()),
+        )
         for seed in seeds.split(","):
             result += [
                 run.model_copy(update={"job": in_arm(run.job, arm)})

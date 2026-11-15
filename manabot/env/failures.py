@@ -13,6 +13,7 @@ from collections import Counter
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
+from copy import deepcopy
 from dataclasses import dataclass, field
 from functools import cache
 import hashlib
@@ -24,12 +25,14 @@ import time
 import traceback
 from typing import Any, Literal
 from uuid import uuid4
+import warnings
 from weakref import WeakValueDictionary
 
 import numpy as np
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 from manabot.env.card_capture import CapturedCards
+from manabot.infra.journal import DurableJournal, json_line
 from manabot.infra.log import getLogger
 import managym
 
@@ -146,6 +149,183 @@ class FailureEvidence(BaseModel):
     boundary: NativeBoundary | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
+
+
+class GameChange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    index: int = Field(ge=0)
+    replacement: GameInputs | None = None
+    keep: int = Field(default=0, ge=0)
+    append: list[int | str] = []
+    actor: int | None = None
+    frame: str | None = None
+
+
+class JournalCheckpoint(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    schema_version: Literal["training-game-checkpoint-v1"] = Field(
+        default="training-game-checkpoint-v1", alias="schema"
+    )
+    sequence: int = Field(ge=0)
+    evidence: FailureEvidence
+
+
+class JournalChange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    schema_version: Literal["training-game-change-v1"] = Field(
+        default="training-game-change-v1", alias="schema"
+    )
+    sequence: int = Field(ge=1)
+    operation: Literal["reset", "step"]
+    boundary: NativeBoundary
+    context_updates: dict[str, object] = {}
+    context_removed: list[str] = []
+    seconds: float
+    identities: dict[str, object] | None = None
+    execution_outcome: Literal["execution_outcome_unknown", "last_command_succeeded"]
+    games: list[GameChange] = []
+
+    def apply(self, evidence: FailureEvidence) -> None:
+        for change in self.games:
+            if change.index >= len(evidence.games):
+                raise ValueError("journal game index outside checkpoint")
+            if change.replacement is not None:
+                evidence.games[change.index] = change.replacement
+            else:
+                game = evidence.games[change.index]
+                if change.keep > len(game.actions):
+                    raise ValueError("journal prefix outside retained actions")
+                del game.actions[change.keep :]
+                game.actions.extend(change.append)
+                game.actor, game.frame = change.actor, change.frame
+        evidence.operation = self.operation
+        evidence.boundary = self.boundary
+        for key in self.context_removed:
+            evidence.context.pop(key, None)
+        evidence.context.update(deepcopy(self.context_updates))
+        evidence.seconds = self.seconds
+        evidence.execution_outcome = self.execution_outcome
+        if self.identities is not None:
+            evidence.identities = deepcopy(self.identities)
+
+
+class _TrainingJournal:
+    """One independently copyable checkpoint and sequenced changes per producer.
+
+    Retain a projection for compaction and action-list identity for root changes.
+    Phase-only writes never copy or serialize the retained action prefixes.
+    """
+
+    def __init__(self, path: Path) -> None:
+        self.writer = DurableJournal(path)
+        self.evidence: FailureEvidence | None = None
+        self.sequence = 0
+        self.checkpoint_bytes = 0
+        self.appended_bytes = 0
+        self.actions: list[list[int | str]] = []
+
+    def publish(
+        self,
+        evidence: FailureEvidence,
+        boundary: NativeBoundary,
+        counts: list[int] | None = None,
+    ) -> None:
+        executing = boundary.phase == "executing"
+        outcome: Literal["execution_outcome_unknown", "last_command_succeeded"] = (
+            "last_command_succeeded"
+            if boundary.returned and evidence.mode == "scalar"
+            else "execution_outcome_unknown"
+        )
+        if self.evidence is None:
+            # Reconstruct typed fields without recursively deepcopying prefixes;
+            # opaque caller metadata must retain its Python representation.
+            retained = FailureEvidence.model_validate(
+                {
+                    **evidence.model_dump(
+                        mode="python", by_alias=True, exclude={"context", "identities"}
+                    ),
+                    "context": deepcopy(evidence.context),
+                    "identities": deepcopy(evidence.identities),
+                }
+            )
+            retained.boundary = boundary.model_copy(deep=True)
+            retained.execution_outcome = outcome
+            if not executing:
+                for game in retained.games:
+                    game.frame = None
+            row = JournalCheckpoint(sequence=0, evidence=retained)
+            self.checkpoint_bytes = self.writer.replace(
+                row.model_dump(mode="json", by_alias=True)
+            )
+            self.evidence = retained
+            self.actions = [game.actions for game in evidence.games]
+            return
+        changes: list[GameChange] = []
+        for index, (game, old) in enumerate(
+            zip(evidence.games, self.evidence.games, strict=True)
+        ):
+            count = len(game.actions) if counts is None else counts[index]
+            frame = game.frame if executing else None
+            if (
+                self.actions[index] is not game.actions
+                or game.seed != old.seed
+                or game.players != old.players
+            ):
+                replacement = game.model_copy(
+                    update={"actions": game.actions[:count], "frame": frame}, deep=False
+                )
+                changes.append(GameChange(index=index, replacement=replacement))
+            else:
+                keep = min(count, len(old.actions))
+                addition = game.actions[keep:count]
+                if (
+                    count != len(old.actions)
+                    or addition
+                    or game.actor != old.actor
+                    or frame != old.frame
+                ):
+                    changes.append(
+                        GameChange(
+                            index=index,
+                            keep=keep,
+                            append=addition,
+                            actor=game.actor,
+                            frame=frame,
+                        )
+                    )
+        change = JournalChange(
+            sequence=self.sequence + 1,
+            operation=evidence.operation,
+            boundary=boundary.model_copy(deep=True),
+            context_updates={
+                key: value
+                for key, value in evidence.context.items()
+                if key not in self.evidence.context
+                or value != self.evidence.context[key]
+            },
+            context_removed=[
+                key for key in self.evidence.context if key not in evidence.context
+            ],
+            seconds=evidence.seconds,
+            execution_outcome=outcome,
+            games=changes,
+            identities=evidence.identities.copy()
+            if evidence.identities != self.evidence.identities
+            else None,
+        )
+        # The delta must be durable before mutating the compaction projection.
+        self.appended_bytes += self.writer.append(
+            change.model_dump(mode="json", by_alias=True, exclude_none=True)
+        )
+        change.apply(self.evidence)
+        self.sequence = change.sequence
+        self.actions = [game.actions for game in evidence.games]
+        if self.appended_bytes >= max(self.checkpoint_bytes, 64 * 1024):
+            row = JournalCheckpoint(sequence=self.sequence, evidence=self.evidence)
+            self.checkpoint_bytes = self.writer.replace(
+                row.model_dump(mode="json", by_alias=True)
+            )
+            self.appended_bytes = 0
 
 
 class NativeTrainingTrace(BaseModel):
@@ -301,7 +481,12 @@ class CaptureScope:
                 "state": state,
                 "sequence": self._operation_sequence,
                 "timestamp": time.time(),
-                "context": self.context(),
+                "context": {
+                    key: value
+                    for key, value in self.context().items()
+                    if key
+                    in {"run", "stage", "seed", "coordinates", "update", "updates"}
+                },
             },
         )
 
@@ -342,38 +527,18 @@ def runtime_identities() -> dict[str, object]:
 
 def _jsonl(row: dict[str, object]) -> str:
     """One serialization for receipt identities and durable journal writes."""
-    return json.dumps(row, sort_keys=True, allow_nan=False) + "\n"
+    return json_line(row).decode()
 
 
 def _append(path: Path, row: dict[str, object], *, create: bool = False) -> None:
-    flags = os.O_WRONLY | (os.O_CREAT | os.O_EXCL if create else os.O_APPEND)
-    with os.fdopen(os.open(path, flags, 0o600), "w") as output:
-        output.write(_jsonl(row))
-        output.flush()
-        os.fsync(output.fileno())
-    if create:
-        descriptor = os.open(path.parent, os.O_RDONLY)
-        try:
-            os.fsync(descriptor)
-        finally:
-            os.close(descriptor)
+    DurableJournal(path).append(row, create=create)
 
 
 def atomic_private_json(path: Path, row: dict[str, object]) -> None:
     """Replace a complete private snapshot, including durable directory entry."""
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(path.parent, 0o700)
-    temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
-    try:
-        _append(temporary, row, create=True)
-        temporary.replace(path)
-        descriptor = os.open(path.parent, os.O_RDONLY)
-        try:
-            os.fsync(descriptor)
-        finally:
-            os.close(descriptor)
-    finally:
-        temporary.unlink(missing_ok=True)
+    DurableJournal(path).replace(row)
 
 
 class _Capture:
@@ -386,9 +551,9 @@ class _Capture:
         self._policy_counts: dict[str, ActionCutoffCounts] = {}
         self._policy_samples: list[ActionCutoffSample] = []
         self._policy_path: Path | None = None
-        self._cursor: Path | None = None
         self._boundary: NativeBoundary | None = None
         self._call_evidence: FailureEvidence | None = None
+        self._training_journal: _TrainingJournal | None = None
         self.frozen_context: dict[str, object] | None = None
 
     def _start_cursor(self, name: str) -> None:
@@ -399,17 +564,20 @@ class _Capture:
                 index += 1
                 name = f"{base}-{index}"
             self.scope._writers[name] = self
-            self._cursor = self.scope.journal_directory / f"{name}.jsonl"
-            self._cursor.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-            for path in self._cursor.parent.glob(f".{self._cursor.name}.*.tmp"):
+            cursor = self.scope.journal_directory / f"{name}.jsonl"
+            self._training_journal = _TrainingJournal(cursor)
+            cursor.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            os.chmod(cursor.parent, 0o700)
+            for path in cursor.parent.glob(f".{cursor.name}.*.tmp"):
                 path.unlink(missing_ok=True)
 
     def _publish(
         self,
         evidence: FailureEvidence,
         phase: Literal["preparing", "executing", "synchronizing", "ready"],
+        counts: list[int] | None = None,
     ) -> None:
-        if self._cursor is None:
+        if self._training_journal is None:
             return
         assert self._boundary is not None
         self._boundary.phase = phase
@@ -420,19 +588,7 @@ class _Capture:
                 len(game.actions) - 1 if game.frame is not None else None
                 for game in evidence.games
             ]
-        evidence = evidence.model_copy(deep=True)
-        evidence.boundary = self._boundary.model_copy(deep=True)
-        if phase != "executing":
-            for game in evidence.games:
-                game.frame = None
-        evidence.execution_outcome = (
-            "last_command_succeeded"
-            if self._boundary.returned and evidence.mode == "scalar"
-            else "execution_outcome_unknown"
-        )
-        atomic_private_json(
-            self._cursor, evidence.model_dump(mode="json", by_alias=True)
-        )
+        self._training_journal.publish(evidence, self._boundary, counts)
 
     def _begin_boundary(
         self,
@@ -445,9 +601,13 @@ class _Capture:
         seeds: list[int] | None = None,
         players: list[list[PlayerSetup] | None] | None = None,
     ) -> None:
-        if self._cursor is None:
+        if self._training_journal is None:
             return
-        self._call_evidence = evidence.model_copy(deep=True)
+        # Freeze fields, retaining action-list references and their pre-call lengths.
+        # Actions append in place; root resets replace the list.
+        self._call_evidence = evidence.model_copy(
+            update={"games": [game.model_copy() for game in evidence.games]}
+        )
         self._boundary = NativeBoundary(
             operation=operation,
             phase="preparing",
@@ -469,16 +629,22 @@ class _Capture:
 
     def _executing(self) -> None:
         """Publish a reset mutation using its cached, previously observed inputs."""
-        if self._cursor is not None:
-            assert self._call_evidence is not None
-            self._publish(self._call_evidence, "executing")
+        if self._training_journal is not None:
+            assert self._boundary is not None and self._call_evidence is not None
+            self._publish(
+                self._call_evidence, "executing", self._boundary.committed_counts
+            )
 
     def _returned(self) -> None:
-        if self._cursor is not None:
+        if self._training_journal is not None:
             assert self._boundary is not None and self._call_evidence is not None
             self._boundary.returned = True
             try:
-                self._publish(self._call_evidence, "synchronizing")
+                self._publish(
+                    self._call_evidence,
+                    "synchronizing",
+                    self._boundary.committed_counts,
+                )
             except OSError as error:
                 error.add_note(
                     "Native operation returned; its durable journal acknowledgment failed"
@@ -635,7 +801,7 @@ class ScalarCapture(_Capture):
     def reset(self, env: managym.Env, players: list[managym.PlayerConfig]) -> Any:
         # The heterogeneous native observation/info tuple stays at this boundary.
         self.started = time.perf_counter()
-        if self._cursor is not None:
+        if self._training_journal is not None:
             self._begin_boundary(
                 self.evidence(),
                 "reset",
@@ -651,7 +817,7 @@ class ScalarCapture(_Capture):
             result = env.reset(players)
             self._returned()
             self.identities["content_manifest"] = env.content_pack_manifest()
-            if self._cursor is not None:
+            if self._training_journal is not None:
                 self._publish(self.evidence("reset"), "ready")
             return result
 
@@ -670,7 +836,7 @@ class ScalarCapture(_Capture):
             yield
 
     def step(self, env: managym.Env, action: int) -> Any:
-        if self._cursor is not None:
+        if self._training_journal is not None:
             self._begin_boundary(
                 self.evidence(), "step", actions=[int(action)], active=[True]
             )
@@ -678,11 +844,11 @@ class ScalarCapture(_Capture):
         self.inputs.actor = env.current_agent_index()
         self.inputs.frame = env.semantic_decision_frame_json()
         with self.guard():
-            if self._cursor is not None:
+            if self._training_journal is not None:
                 self._publish(self.evidence(), "executing")
             result = env.step(action)
             self._returned()
-            if self._cursor is not None:
+            if self._training_journal is not None:
                 self._publish(self.evidence(), "ready")
             return result
 
@@ -911,7 +1077,7 @@ class CapturedVector(_Capture):
     def reset_each_into_buffers(
         self, players: list[list[managym.PlayerConfig]]
     ) -> None:
-        if self._cursor is not None:
+        if self._training_journal is not None:
             self._begin_boundary(
                 self._evidence_for(self.games, "reset"),
                 "reset_each",
@@ -932,7 +1098,7 @@ class CapturedVector(_Capture):
         self, players: list[list[managym.PlayerConfig] | None]
     ) -> None:
         """Retain new setups only after native atomic fresh-root validation."""
-        if self._cursor is not None:
+        if self._training_journal is not None:
             self._begin_boundary(
                 self._evidence_for(self.games, "reset"),
                 "reassign_roots",
@@ -956,7 +1122,7 @@ class CapturedVector(_Capture):
         self._synchronize()
 
     def reset_seeds_into_buffers(self, seeds: list[int]) -> None:
-        if self._cursor is not None:
+        if self._training_journal is not None:
             self._begin_boundary(
                 self._evidence_for(self.games, "reset"),
                 "reset_seeds",
@@ -1000,7 +1166,7 @@ class CapturedVector(_Capture):
         ]
         if self._boundary is not None:
             self._boundary.setup_known = True
-        if self._cursor is not None:
+        if self._training_journal is not None:
             self._publish(self._evidence_for(self.games, "step"), "ready")
 
     def step_into_buffers(
@@ -1017,7 +1183,7 @@ class CapturedVector(_Capture):
         self._step(actions, active, isolated=True, recover_capacity=recover_capacity)
 
     def replace_failed_into_buffers(self, active: list[bool]) -> None:
-        if self._cursor is not None:
+        if self._training_journal is not None:
             self._begin_boundary(
                 self._evidence_for(self.games, "reset"),
                 "replace_failed",
@@ -1038,7 +1204,7 @@ class CapturedVector(_Capture):
         recover_capacity: bool = False,
     ) -> None:
         enabled = active if active is not None else [True] * len(self.games)
-        if self._cursor is not None:
+        if self._training_journal is not None:
             self._begin_boundary(
                 self._evidence_for(self.games, "step"),
                 "step_isolated" if isolated else "step",
@@ -1064,7 +1230,7 @@ class CapturedVector(_Capture):
                 game.actions.append(int(action))
                 attempted.append(game)
         with self._guard(lambda: self._evidence_for(attempted, "step")):
-            if self._cursor is not None:
+            if self._training_journal is not None:
                 self._publish(self._evidence_for(self.games, "step"), "executing")
             if isolated:
                 self.native.step_isolated_into_buffers(
@@ -1135,8 +1301,30 @@ class CapturedSearch(_Capture):
 
 
 def read_failure(path: Path) -> FailureEvidence:
-    with path.open() as source:
-        evidence = FailureEvidence.model_validate_json(next(source))
+    with path.open("rb") as source:
+        first = next(source, b"")
+        row = json.loads(first)
+        if row.get("schema") == "training-game-checkpoint-v1":
+            if not first.endswith(b"\n"):
+                raise ValueError("incomplete initial training checkpoint")
+            checkpoint = JournalCheckpoint.model_validate(row)
+            evidence = checkpoint.evidence
+            sequence = checkpoint.sequence
+            for line in source:
+                if not line.endswith(b"\n"):
+                    warnings.warn(
+                        "Incomplete final training journal tail; projected last complete boundary",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
+                    break
+                change = JournalChange.model_validate_json(line)
+                if change.sequence != sequence + 1:
+                    raise ValueError("training journal sequence gap")
+                change.apply(evidence)
+                sequence = change.sequence
+            return evidence
+        evidence = FailureEvidence.model_validate(row)
         for line in source:
             row = json.loads(line)
             if "pending" in row:
