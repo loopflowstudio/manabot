@@ -1,6 +1,9 @@
 """Simulation consumes retained Etude checkpoints and records evaluation facts."""
 
+from contextlib import nullcontext
 from pathlib import Path
+from types import SimpleNamespace
+from typing import cast
 from urllib.parse import unquote, urlsplit
 
 from etude.run.storage import DirectoryStorage
@@ -19,10 +22,16 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra import artifacts
-from manabot.infra.config import ModelConfig, RuntimeConfig, SimulationConfig
+from manabot.infra.config import (
+    ModelConfig,
+    ObservationConfig,
+    RuntimeConfig,
+    SimulationConfig,
+)
+from manabot.policy.protocol import BackendPolicy
 from manabot.reports import training
 from manabot.sim import sim
-from manabot.sim.player import ModelPlayer
+from manabot.sim.player import ModelPlayer, RandomPlayer
 
 
 @pytest.mark.parametrize("remote", [False, True])
@@ -117,3 +126,17 @@ def test_dashboard_delivery_failure_retries_without_duplicate_rows(
         if "projection/row_sha256" in table.row(index).values
     ]
     assert len(settled) == 1
+
+
+def test_simulation_encodes_with_the_models_policy_input() -> None:
+    def model(version: int) -> ModelPlayer:
+        with pytest.warns(DeprecationWarning) if version < 11 else nullcontext():
+            space = ObservationSpace(ObservationConfig(policy_input_version=version))
+        agent = SimpleNamespace(observation_space=space, device_type="cpu")
+        return ModelPlayer("model", cast(BackendPolicy, agent))
+
+    v10 = model(10)
+    assert sim._shared_observation_config(v10, v10).policy_input_version == 10
+    assert sim._shared_observation_config(RandomPlayer("r"), RandomPlayer("r")) is None
+    with pytest.raises(ValueError, match="different observation ABIs"):
+        sim._shared_observation_config(v10, model(11))

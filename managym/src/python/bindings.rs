@@ -1905,7 +1905,8 @@ fn warn_observation_alias(py: Python<'_>, old: &str, new: &str) -> PyResult<()> 
         (
             format!("{old} is deprecated; use {new}; removal in 0.4.0"),
             py.get_type_bound::<pyo3::exceptions::PyDeprecationWarning>(),
-            2,
+            // A native getter has no Python frame, so level 1 is the caller.
+            1,
         ),
     )?;
     Ok(())

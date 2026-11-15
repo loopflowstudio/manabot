@@ -26,7 +26,7 @@ from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.artifacts import fetch_etude_checkpoint
-from manabot.infra.config import RuntimeConfig, SimulationConfig
+from manabot.infra.config import ObservationConfig, RuntimeConfig, SimulationConfig
 from manabot.infra.log import getLogger, setGlobalLogLevel
 from manabot.infra.runtime import seed_random
 from manabot.model.world import validate_agent_setup
@@ -413,6 +413,22 @@ def determine_outcome(
 # -----------------------------------------------------------------------------
 
 
+def _shared_observation_config(*players: Player) -> ObservationConfig | None:
+    """The one policy input every model player reads; the default when none does.
+
+    Both seats are encoded with one space, so models bound to different inputs
+    cannot meet in one game.
+    """
+    configs = [
+        player.agent.observation_space.encoder.config
+        for player in players
+        if isinstance(player, ModelPlayer)
+    ]
+    if any(config != configs[0] for config in configs):
+        raise ValueError("players have different observation ABIs")
+    return configs[0] if configs else None
+
+
 def simulate_models(
     hero_player: Player,
     villain_player: Player,
@@ -427,6 +443,7 @@ def simulate_models(
     for player in (hero_player, villain_player):
         if isinstance(player, ModelPlayer):
             validate_agent_setup(player.agent, player_configs)
+    observation_config = _shared_observation_config(hero_player, villain_player)
 
     # Determine number of threads (capped by games and CPU cores)
     num_threads = min(sim_config.num_threads, sim_config.num_games)
@@ -448,7 +465,7 @@ def simulate_models(
     def worker_thread(thread_id):
         # Create environment for this thread
         match = Match(sim_config.match)
-        observation_space = ObservationSpace()
+        observation_space = ObservationSpace(observation_config)
         reward = Reward(sim_config.reward)
         env = Env(
             match,

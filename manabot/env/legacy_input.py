@@ -12,7 +12,10 @@ Removal release: 0.4.0, with the `policy_input_version` 9 and 10 branches in
 the general mechanism for checkpoints across worlds.
 """
 
+from pathlib import Path
 import warnings
+
+import pydantic
 
 import managym
 
@@ -27,7 +30,12 @@ def warn_deprecated_input(version: int) -> None:
         f"policy input v{version} is deprecated and will be removed in "
         f"{REMOVAL_RELEASE}; it serves checkpoints trained before input v11",
         DeprecationWarning,
-        stacklevel=3,
+        # Validation reaches here through pydantic and manabot frames at
+        # varying depths; attribute the warning to the first caller outside.
+        skip_file_prefixes=(
+            str(Path(pydantic.__file__).parent),
+            str(Path(__file__).parents[1]),
+        ),
     )
 
 

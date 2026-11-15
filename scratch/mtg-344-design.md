@@ -354,3 +354,18 @@ caller's delivery step. No retained receipts or checkpoint weights changed.
   installed atomically. `uv run --extra dev --extra play pytest tests/env/test_observation_characteristics.py tests/env/test_named_observation_layout.py tests/semantic/test_learning_projection.py -q`: 28 passed on that extension.
 - Rust formatting, Ruff and `git diff --check` passed. Gate/CI and the
   interactive demonstration remain with their Graph steps.
+
+## Resumed concept review (2026-11-14)
+
+Reviewed the merged checkout at `89845f7531` against the direction above.
+Outcome for loop-or-next: **nothing to change and no open product choice;
+advance**. The characteristics correction already implements the previous
+review's direction. The remaining gate and demonstration are validation, not
+another design iteration. No code changed or execution restarted in this pass.
+
+The review screen is `scratch/concept-review.html`. Keep the existing next
+demonstration: distinct same-definition tokens, sacrifice with a departed
+source, reconnect/stale rejection, copied-spell identity/X, and retained
+checkpoint admission. The recorded post-sync extension mismatch still limits
+validation claims; this read-only review does not supersede it. Learning
+improvement remains unproven, and MTG-353 retains broader compatibility design.

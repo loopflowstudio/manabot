@@ -50,3 +50,13 @@ def test_card_characteristics_are_read_only_snapshots_with_derived_aliases() -> 
         assert card.name == card.characteristics.name
     with pytest.raises(AttributeError):
         card.characteristics.power = 99
+
+
+def test_alias_warnings_name_the_calling_line() -> None:
+    env = priority_root((), ("Gray Ogre",))
+    permanent = env.observation_for_player(env.current_agent_index()).agent_permanents[
+        0
+    ]
+    with pytest.warns(DeprecationWarning) as caught:
+        permanent.power
+    assert caught[0].filename == __file__
