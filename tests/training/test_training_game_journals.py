@@ -1,6 +1,8 @@
 """Durable training cursors survive native/learner interruption without cleanup."""
 
+from dataclasses import dataclass
 import json
+import math
 import os
 from pathlib import Path
 import subprocess
@@ -694,6 +696,126 @@ def test_delta_projection_and_root_replacement(tmp_path: Path) -> None:
     evidence.games[0].restart(24)  # repeated seed still replaces the root
     journal.publish(evidence, boundary)
     assert read_failure(journal.writer.path).games[0].actions == []
+
+
+@dataclass
+class _JournalMetadata:
+    updates: list[int]
+
+
+@pytest.mark.parametrize("executing", [False, True])
+def test_initial_checkpoint_isolates_nested_inputs_without_false_deltas(
+    tmp_path: Path, executing: bool
+) -> None:
+    from manabot.env.failures import PlayerSetup, _TrainingJournal
+
+    evidence, boundary = _synthetic_evidence()
+    maximum = 2**64 - 1
+    metadata = {"coordinates": (maximum, {"updates": [1]})}
+    custom = _JournalMetadata(updates=[1])
+    evidence.context = {"nested": metadata, "custom": custom}
+    evidence.identities = {
+        "nested": {"bindings": (maximum, ["world"])},
+        "custom": custom,
+    }
+    evidence.player_policies = ("learner", "heuristic")
+    player = PlayerSetup.model_validate(
+        {
+            "name": "private",
+            "decklist": {"Mountain": 8},
+            "sideboard": {"Mountain": 1},
+            "content_pack": "fixture",
+            "disclosure": "closed",
+        }
+    )
+    game = evidence.games[0]
+    game.seed = maximum
+    game.actions = [maximum, "retained-command"]
+    game.players = [player]
+    game.actor = 1
+    game.frame = '{"object_id":18446744073709551615}'
+    boundary.phase = "executing" if executing else "preparing"
+    boundary.active = [True]
+    boundary.pending_actions = [maximum]
+    boundary.proposed_players = [[player]]
+    journal = _TrainingJournal(tmp_path / "producer.jsonl")
+    journal.publish(evidence, boundary)
+    assert journal.evidence is not None
+    assert journal.evidence.context == evidence.context
+    assert journal.evidence.identities == evidence.identities
+    for retained in (journal.evidence.context, journal.evidence.identities):
+        assert isinstance(retained["custom"], _JournalMetadata)
+        assert retained["custom"] is not custom
+    expected = evidence.model_dump(mode="json", by_alias=True)
+    expected["boundary"] = boundary.model_dump(mode="json")
+    if not executing:
+        expected["games"][0]["frame"] = None
+    assert (
+        read_failure(journal.writer.path).model_dump(mode="json", by_alias=True)
+        == expected
+    )
+    for _ in range(2):
+        journal.publish(evidence, boundary)
+        row = json.loads(journal.writer.path.read_bytes().splitlines()[-1])
+        assert row["context_updates"] == {}
+        assert "identities" not in row
+        assert row["games"] == []
+    # Both the durable bytes and compaction projection own their nested inputs.
+    saved = journal.writer.path.read_bytes()
+    projection = journal.evidence.model_dump(mode="json", by_alias=True)
+    metadata["coordinates"][1]["updates"].append(2)
+    custom.updates.append(2)
+    evidence.identities.clear()
+    player.decklist["Mountain"] = 7
+    player.sideboard.clear()
+    game.actions.append(3)
+    game.frame = "changed"
+    boundary.active[0] = False
+    boundary.pending_actions.append(4)
+    assert journal.writer.path.read_bytes() == saved
+    assert journal.evidence.model_dump(mode="json", by_alias=True) == projection
+    assert (
+        read_failure(journal.writer.path).model_dump(mode="json", by_alias=True)
+        == projection
+    )
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), -float("inf")])
+def test_initial_checkpoint_rejects_nonfinite_before_publication(
+    tmp_path: Path, value: float
+) -> None:
+    from manabot.env.failures import _TrainingJournal
+
+    evidence, boundary = _synthetic_evidence()
+    evidence.seconds = value
+    journal = _TrainingJournal(tmp_path / "producer.jsonl")
+    with pytest.raises(ValueError, match="Out of range float"):
+        journal.publish(evidence, boundary)
+    assert not journal.writer.path.exists()
+    assert journal.evidence is None
+    assert journal.sequence == journal.checkpoint_bytes == journal.appended_bytes == 0
+    assert journal.actions == []
+
+
+@pytest.mark.parametrize("field", ["context", "identities"])
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), -float("inf")])
+def test_initial_checkpoint_preserves_nested_nonfinite_metadata_behavior(
+    tmp_path: Path, field: str, value: float
+) -> None:
+    from manabot.env.failures import _TrainingJournal
+
+    evidence, boundary = _synthetic_evidence()
+    getattr(evidence, field)["nested"] = {"values": [value]}
+    journal = _TrainingJournal(tmp_path / "producer.jsonl")
+    journal.publish(evidence, boundary)
+    assert journal.evidence is not None
+    # Existing JSON projection normalizes opaque nonfinite metadata to null;
+    # the in-memory projection still owns the original Python value.
+    assert getattr(read_failure(journal.writer.path), field)["nested"] == {
+        "values": [None]
+    }
+    retained = getattr(journal.evidence, field)["nested"]["values"][0]
+    assert math.isnan(retained) if math.isnan(value) else retained == value
 
 
 @pytest.mark.parametrize("suffix", [b'{"schema":', b"bad interior\n", b"{}\n"])

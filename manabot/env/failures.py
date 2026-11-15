@@ -245,7 +245,17 @@ class _TrainingJournal:
             else "execution_outcome_unknown"
         )
         if self.evidence is None:
-            retained = evidence.model_copy(deep=True)
+            # Reconstruct typed fields without recursively deepcopying prefixes;
+            # opaque caller metadata must retain its Python representation.
+            retained = FailureEvidence.model_validate(
+                {
+                    **evidence.model_dump(
+                        mode="python", by_alias=True, exclude={"context", "identities"}
+                    ),
+                    "context": deepcopy(evidence.context),
+                    "identities": deepcopy(evidence.identities),
+                }
+            )
             retained.boundary = boundary.model_copy(deep=True)
             retained.execution_outcome = outcome
             if not executing:
