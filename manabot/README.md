@@ -780,7 +780,9 @@ Run the local response-stub proof with
 `uv run python -m manabot.verify.text_observation --out .runs/text-observation`.
 It retains native inputs, prompts, bindings, malformed/stale checks and execution
 receipts. This uses the bounded viewer [policy history](../docs/observation-and-model.md#optional-recent-events); it loads no model and has
-no writable model memory. Tokenizer/model recovery belongs to the caller;
+no writable model memory. Look history names inspected definitions for
+entitled viewers (including cards left in place), and preserves them after
+shuffle without carrying hidden order. Tokenizer/model recovery belongs to the caller;
 `TextDecision.check_token_budget` checks the complete prompt without truncation.
 
 [Decklist file import](../docs/engine.md#decks) admits novel development decks

@@ -166,24 +166,61 @@ fn push(game: &mut Game, row: HistoryEvent) {
     window.push_back(row);
 }
 
+/// Retain the inspected multiset, never the zone's hidden order or live slots.
+/// The looker adds entitlement; owning a library never grants its visibility.
 pub(crate) fn look(
     game: &mut Game,
     viewer: PlayerId,
     owner: PlayerId,
     zone: ZoneType,
-    count: usize,
+    objects: &[ObjectId],
 ) {
-    push(
-        game,
-        HistoryEvent {
-            kind: HistoryKind::Look,
-            amount: count as i32,
-            source: HistoryReference::Player(viewer),
-            target: HistoryReference::Player(owner),
-            from_zone: Some(zone),
-            library_end: 0,
-        },
-    );
+    let seen = private_viewers(game, viewer)
+        | if zone == ZoneType::Hand {
+            private_viewers(game, owner)
+        } else if public(zone) {
+            3
+        } else {
+            0
+        };
+    let mut definitions: Vec<_> = objects
+        .iter()
+        .map(|&object| game.state[object].definition_id.0)
+        .collect();
+    definitions.sort_unstable();
+    // An empty inspection still records who looked and whose zone it was.
+    if definitions.is_empty() {
+        push(
+            game,
+            HistoryEvent {
+                kind: HistoryKind::Look,
+                amount: 0,
+                source: HistoryReference::Player(viewer),
+                target: HistoryReference::Player(owner),
+                from_zone: Some(zone),
+                library_end: 0,
+            },
+        );
+    }
+    for definition in definitions {
+        push(
+            game,
+            HistoryEvent {
+                kind: HistoryKind::Look,
+                amount: 1,
+                source: HistoryReference::Player(viewer),
+                target: HistoryReference::Card {
+                    definition: Some(definition),
+                    seen,
+                    owner,
+                    zone: Some(zone),
+                    context_id: None,
+                },
+                from_zone: Some(zone),
+                library_end: 0,
+            },
+        );
+    }
 }
 
 pub(crate) fn shuffle(game: &mut Game, owner: PlayerId) {
@@ -628,6 +665,45 @@ mod tests {
             111,
             false,
         )
+    }
+
+    #[test]
+    fn policy_history_look_multiset_conceals_order_and_keeps_empty_count() {
+        let mut root = game();
+        let viewer = PlayerId(0);
+        let owner = PlayerId(1);
+        let inspected = root.library_top_objects(owner, 4);
+        root.policy_history = Default::default();
+        let mut other = root.clone();
+        look(&mut root, viewer, owner, ZoneType::Library, &inspected);
+        let reversed: Vec<_> = inspected.into_iter().rev().collect();
+        look(&mut other, viewer, owner, ZoneType::Library, &reversed);
+        for seat in [viewer, owner] {
+            assert_eq!(
+                rows(&Observation::for_player(&root, seat), 32),
+                rows(&Observation::for_player(&other, seat), 32)
+            );
+        }
+        look(&mut root, viewer, owner, ZoneType::Library, &[]);
+        let empty = root.policy_history.back().unwrap();
+        assert_eq!(empty.amount, 0);
+        assert_eq!(empty.source, HistoryReference::Player(viewer));
+        assert_eq!(empty.target, HistoryReference::Player(owner));
+        let object = root.move_object(reversed[0], ZoneType::Hand);
+        look(&mut root, viewer, owner, ZoneType::Hand, &[object]);
+        for seat in [viewer, owner] {
+            assert!(matches!(
+                Observation::for_player(&root, seat)
+                    .policy_history
+                    .back()
+                    .unwrap()
+                    .target,
+                HistoryReference::Card {
+                    definition: Some(_),
+                    ..
+                }
+            ));
+        }
     }
 
     #[test]

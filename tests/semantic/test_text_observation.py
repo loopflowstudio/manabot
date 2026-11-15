@@ -1350,14 +1350,17 @@ def test_shared_mill_selection_reaches_text_commands_and_both_encoders() -> None
 
 
 @pytest.mark.parametrize("viewer", [0, 1])
-def test_history_v2_renders_every_kind_and_hidden_cards(viewer: int) -> None:
+@pytest.mark.parametrize("visible", [False, True])
+def test_history_v2_renders_every_kind_and_hidden_cards(
+    viewer: int, visible: bool
+) -> None:
     env = priority_root(("Lightning Bolt",), ("Mountain",))
     payload = json.loads(env.capture_decision(env.current_agent_index(), 32).to_json())
     # A retained input's relative seat labels depend on its acting viewer.
     owner = viewer
     card = {
         "kind": "card",
-        "definition": None,
+        "definition": int(next(iter(payload["definitions"]))) if visible else None,
         "owner": owner,
         "zone": 1,
         "context_id": None,
@@ -1369,9 +1372,13 @@ def test_history_v2_renders_every_kind_and_hidden_cards(viewer: int) -> None:
         rows.append(
             {
                 "kind": kind,
-                "amount": 3 if kind == 8 else 1,
+                "amount": 1,
                 "source": player if kind in (8, 10) else card,
-                "target": player if kind in (6, 8, 9) else unavailable,
+                "target": card
+                if kind == 8
+                else player
+                if kind in (6, 9)
+                else unavailable,
                 "from_zone": 0 if kind in (0, 6, 8) else None,
                 "library_end": 1 if kind == 0 else 0,
             }
@@ -1398,7 +1405,9 @@ def test_history_v2_renders_every_kind_and_hidden_cards(viewer: int) -> None:
         "Declined",
     ):
         assert f"{label}:" in text
-    assert "hidden card" in text
+    look_line = next(line for line in text.splitlines() if line.startswith("Look:"))
+    assert "1 card." in look_line
+    assert ("hidden card" in look_line) == (not visible)
     assert "Policy history v2: what this viewer was shown" in text
 
 

@@ -79,7 +79,9 @@ from six to eleven, so a checkpoint trained with history is refused by the
 `events` shape; `policy_history_version` stays 1. History for policy inputs v9
 and v10 is removed (`b5478d8789` is the last revision carrying it). No
 `GameEvent`, state hash, conformance receipt or history-off tensor changes.
-Decision-capture history is version 2; version 1 captures still render.
+Look records include the inspected definition multiset for the looking viewer,
+one row per card, without hidden order or current object joins; later shuffles
+do not erase them. Decision-capture history is version 2; version 1 captures still render.
 [Row reference](docs/observation-and-model.md#optional-recent-events).
 
 MTG-243 makes naming ordinary group-then-name decisions of at most 64 options

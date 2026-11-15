@@ -874,3 +874,50 @@ def test_every_input_layout_agrees_natively_on_elemental_games(
             obs, *_ = env.step(random_valid_action(obs, rng))
     if version == 11:
         assert stack_rows > 0
+
+
+def test_inspected_history_scalar_vector_python_and_viewer_parity() -> None:
+    config = ObservationConfig(policy_history_version=1)
+    encoder = ObservationEncoder(config)
+    players = Match(
+        MatchConfig.authored("ur-lessons-vs-gw-allies", "ur_lessons", "gw_allies")
+    ).to_rust()
+    scalar = managym.Env(seed=0, skip_trivial=True)
+    vector = managym.VectorEnv(
+        num_envs=1, seed=0, skip_trivial=True, player_policies=("agent", "agent")
+    )
+    buffers = allocate_vector_buffers(1, config)
+    vector.set_buffers(buffers)
+    vector.reset_all(players)
+    vector.reset_seeds_into_buffers([0])
+    obs, _ = scalar.reset(players)
+    columns = managym.observation_layout(policy_history=True)["events"]["columns"]
+    kind = columns["kind"]["index"]
+    definition = columns["target_definition"]["index"]
+    status = columns["target_status"]["index"]
+    seen: set[int] = set()
+    rng = np.random.default_rng(0)
+    for _ in range(400):
+        expected = encoder.encode(obs)
+        assert_buffer_observation_equal(buffers, 0, expected)
+        for seat in (0, 1):
+            projected = scalar.observation_for_player(seat)
+            reference = encoder.encode(projected)
+            native = encoder.allocate()
+            scalar.encode_observation_into(projected, native)
+            np.testing.assert_array_equal(native["events"], reference["events"])
+            rows = reference["events"]
+            looks = rows[(rows[:, kind] == 8) & (reference["events_valid"] > 0)]
+            for row in looks:
+                if row[status] in (2, 3):
+                    seen.add(int(row[status]))
+                    assert (row[definition] > 0) == (row[status] == 2)
+        if seen == {2, 3}:
+            break
+        assert not obs.game_over, "seeded game must exercise an inspection"
+        action = random_valid_action(obs, rng)
+        obs, *_ = scalar.step(action)
+        vector.step_into_buffers([action])
+        if obs.game_over:
+            break
+    assert seen == {2, 3}

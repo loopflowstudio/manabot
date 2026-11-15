@@ -4146,8 +4146,22 @@ fn hidden_zone_history_hand_inspection_names_who_saw_each_zone() {
     let owner = PlayerId(1);
     let (mut game, _, _) = fixture(player);
     game.policy_history = Default::default();
-    let hand = game.state.zones.size(ZoneType::Hand, owner);
-    let library = game.state.zones.size(ZoneType::Library, owner);
+    let expected: Vec<_> = [ZoneType::Hand, ZoneType::Library]
+        .into_iter()
+        .flat_map(|zone| {
+            let mut definitions: Vec<_> = game
+                .state
+                .zones
+                .zone_objects(zone, owner)
+                .iter()
+                .map(|&object| game.state[object].definition_id.0)
+                .collect();
+            definitions.sort_unstable();
+            definitions
+                .into_iter()
+                .map(move |definition| (zone, definition))
+        })
+        .collect();
     let mut frame = crate::flow::decision::EffectFrame::new(
         player,
         vec![Effect::ExileNamed {
@@ -4157,17 +4171,38 @@ fn hidden_zone_history_hand_inspection_names_who_saw_each_zone() {
     );
     frame.context_target = Some(Target::Player(owner));
     game.run_frame(frame);
-    let rows: Vec<_> = game.policy_history.iter().collect();
-    assert_eq!(rows.len(), 2);
-    for (row, zone, count) in [
-        (rows[0], ZoneType::Hand, hand),
-        (rows[1], ZoneType::Library, library),
-    ] {
+    let rows: Vec<_> = crate::agent::observation::Observation::for_player(&game, player)
+        .policy_history
+        .iter()
+        .collect();
+    assert_eq!(rows.len(), expected.len().min(32));
+    for (row, &(zone, definition)) in rows
+        .iter()
+        .zip(&expected[expected.len().saturating_sub(32)..])
+    {
         assert_eq!(row.kind, HistoryKind::Look);
         assert_eq!(row.source, HistoryReference::Player(player));
-        assert_eq!(row.target, HistoryReference::Player(owner));
-        assert_eq!(row.amount, count as i32);
+        assert!(matches!(row.target, HistoryReference::Card {
+            definition: Some(id), owner: actual_owner, zone: Some(actual_zone), context_id: None, ..
+        } if id == definition && actual_owner == owner && actual_zone == zone));
+        assert_eq!(row.amount, 1);
         assert_eq!(row.from_zone, Some(zone));
+    }
+    // Owning the library does not disclose it; the owner's hand stays visible.
+    for row in crate::agent::observation::Observation::for_player(&game, owner)
+        .policy_history
+        .iter()
+    {
+        match row.target {
+            HistoryReference::Card {
+                definition,
+                context_id: None,
+                ..
+            } => {
+                assert_eq!(definition.is_some(), row.from_zone == Some(ZoneType::Hand));
+            }
+            _ => panic!("inspection must retain a definition-only card reference"),
+        }
     }
 }
 
@@ -4269,8 +4304,8 @@ fn hidden_zone_history_look_then_random_bottom_keeps_order_private_from_owner() 
             })
             .collect();
         for projected in &rows {
-            assert_eq!(projected.len(), 4);
-            for row in &projected[2..] {
+            assert_eq!(projected.len(), 5);
+            for row in &projected[3..] {
                 assert_eq!(row[2], 0.0);
                 assert_eq!(row[6], 3.0);
                 assert_eq!(row[13], 2.0);
@@ -4283,4 +4318,156 @@ fn hidden_zone_history_look_then_random_bottom_keeps_order_private_from_owner() 
         }
     }
     assert_eq!(orders.len(), 2);
+}
+
+/// An inspection is historical evidence even after its current location is lost.
+#[test]
+fn hidden_zone_history_look_identities_survive_shuffle_and_exact_fork() {
+    use crate::agent::{
+        observation::Observation,
+        observation_encoder::{encode, ObservationEncoderConfig},
+        policy_history::{self, HistoryKind, HistoryReference},
+    };
+    let viewer = PlayerId(0);
+    let other = PlayerId(1);
+    let (root, _, _) = fixture(viewer);
+    let mut opponent_histories = Vec::new();
+    for name in ["Mountain", "Gray Ogre"] {
+        let mut game = root.clone();
+        let chosen: Vec<_> = game
+            .state
+            .zones
+            .zone_objects(ZoneType::Library, viewer)
+            .iter()
+            .copied()
+            .filter(|&object| game.state[object].name == name)
+            .take(2)
+            .collect();
+        assert_eq!(chosen.len(), 2);
+        for &object in &chosen {
+            game.state
+                .zones
+                .reposition(ZoneType::Library, viewer, object, usize::MAX);
+        }
+        let before = game
+            .state
+            .zones
+            .zone_objects(ZoneType::Library, viewer)
+            .to_vec();
+        game.policy_history = Default::default();
+        game.run_frame(crate::flow::decision::EffectFrame::new(
+            viewer,
+            vec![Effect::Scry { count: 2 }],
+        ));
+        let inspected = game.library_top_objects(viewer, 2);
+        for object in inspected {
+            game.execute_decision_action(&Action::ScryCard {
+                player: viewer,
+                object,
+                to_bottom: false,
+            })
+            .unwrap();
+        }
+        assert_eq!(
+            game.state
+                .zones
+                .zone_objects(ZoneType::Library, viewer)
+                .to_vec(),
+            before
+        );
+        let own = Observation::for_player(&game, viewer);
+        let looks: Vec<_> = own
+            .policy_history
+            .iter()
+            .filter(|row| row.kind == HistoryKind::Look)
+            .collect();
+        assert_eq!(looks.len(), 2);
+        for row in &looks {
+            assert_eq!(row.amount, 1);
+            assert_eq!(row.source, HistoryReference::Player(viewer));
+            assert!(
+                matches!(row.target, HistoryReference::Card { definition: Some(id), context_id: None, .. }
+                if id == game.state[chosen[0]].definition_id.0)
+            );
+        }
+        // Shuffle invalidates the inspected positions, never the earlier evidence.
+        game.shuffle_library(viewer);
+        assert_ne!(
+            game.state
+                .zones
+                .zone_objects(ZoneType::Library, viewer)
+                .to_vec(),
+            before
+        );
+        // The next real decision can still recall the earlier inspection.
+        game.run_frame(crate::flow::decision::EffectFrame::new(
+            viewer,
+            vec![Effect::Modal {
+                modes: vec![vec![Effect::gain_life(1)], vec![Effect::gain_life(2)]],
+            }],
+        ));
+        let branch = game.clone();
+        for seat in [viewer, other] {
+            let obs = Observation::for_player(&game, seat);
+            assert_eq!(
+                obs.policy_history,
+                Observation::for_player(&branch, seat).policy_history
+            );
+            let rows = policy_history::encode(&obs, 32, &Default::default());
+            let config = ObservationEncoderConfig {
+                policy_history: true,
+                max_events: 32,
+                ..Default::default()
+            };
+            let encoded = encode(&obs, &config).unwrap();
+            for (row, native) in rows
+                .iter()
+                .zip(encoded.events.chunks(policy_history::HISTORY_DIM))
+            {
+                // Definition-only Look references have no current object join.
+                if row[0] == HistoryKind::Look as u8 as f32 {
+                    assert_eq!(row, native);
+                    assert_eq!(row[10], -1.0);
+                    assert_eq!(row[11], if seat == viewer { 2.0 } else { 3.0 });
+                }
+            }
+            if seat == viewer {
+                assert_eq!(
+                    game.capture_decision(seat, 32).unwrap().digest,
+                    branch.capture_decision(seat, 32).unwrap().digest
+                );
+            }
+        }
+        assert_eq!(
+            Observation::for_player(&game, viewer)
+                .policy_history
+                .iter()
+                .filter(|row| row.kind == HistoryKind::Look)
+                .collect::<Vec<_>>(),
+            looks
+        );
+        opponent_histories.push(policy_history::encode(
+            &Observation::for_player(&game, other),
+            32,
+            &Default::default(),
+        ));
+        game.determinize(other, 71).unwrap();
+        for seat in [viewer, other] {
+            for row in Observation::for_player(&game, seat)
+                .policy_history
+                .iter()
+                .filter(|row| row.kind == HistoryKind::Look)
+            {
+                assert!(matches!(
+                    row.target,
+                    HistoryReference::Card {
+                        definition: None,
+                        context_id: None,
+                        ..
+                    }
+                ));
+            }
+        }
+    }
+    assert_eq!(opponent_histories[0], opponent_histories[1]);
 }

@@ -353,7 +353,10 @@ that yields rows already projected for its viewer, and it is the only place a
 card's identity is withheld. Encoders, decision capture and the browser read
 that projection and never filter identities themselves. Clone and diagnostic
 injection must preserve its documented lifecycle; `Game::determinize` removes
-what its perspective may not know.
+what its perspective may not know. Look records retain one viewer-gated
+reference per inspected card, including cards left in place. They carry only
+the definition multiset, with no hidden order or live object links; later
+shuffles preserve those earlier records.
 
 Every match, authored or not, runs on the world's one catalog
 (`cards::content_pack::default_content_pack`): every set-file definition in name

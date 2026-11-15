@@ -382,7 +382,10 @@ def test_v10_masked_mean_forward_and_gradients_survive_object_buckets(
             torch.testing.assert_close(left, right, atol=1e-6, rtol=1e-5)
 
 
-def test_revealed_history_definition_reaches_selected_learning_tokens() -> None:
+@pytest.mark.parametrize("kind,reference", [(7, 0), (8, 1)])
+def test_history_definition_reaches_selected_learning_tokens(
+    kind: int, reference: int
+) -> None:
     space, original = _observations(11, True)
     agent = ActorCritic(
         space,
@@ -405,11 +408,13 @@ def test_revealed_history_definition_reaches_selected_learning_tokens() -> None:
     )
     obs["events"][:] = 0
     obs["events"][..., [5, 10]] = -1
-    obs["events"][0, 0, [0, 2, 3, 6]] = [7, definition, 2, 2]
+    offset = reference * 5
+    obs["events"][0, 0, 0] = kind
+    obs["events"][0, 0, [2 + offset, 3 + offset, 6 + offset]] = [definition, 2, 2]
     obs["events_valid"][0, 0] = 1
     revealed = prepare(obs, tables, select_programs=True)
     assert revealed.events is not None and revealed.programs is not None
     row = int(tables.definition_rows[definition])
-    assert revealed.events.definitions[0, 0, 0] == row
+    assert revealed.events.definitions[0, 0, reference] == row
     assert row in revealed.programs.rows
     assert revealed.programs.schedule.lengths

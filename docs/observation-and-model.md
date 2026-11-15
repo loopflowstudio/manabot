@@ -563,7 +563,7 @@ Moved: hidden card, owner Opponent, hand -> library (top).
 Moved: hidden card, owner Opponent, hand -> library (top).
 ```
 
-A move, draw or reveal is one row per card, so a count is a count of rows. The window keeps the
+A move, draw, reveal or look is one row per card, so a count is a count of rows. The window keeps the
 32 most recent rows of one game, shared by both seats, and each viewer reads
 its own projection of it.
 
@@ -577,7 +577,7 @@ its own projection of it.
 | 5 | Countered | What countered it, when public | The spell, or the countered ability's source | 0 |
 | 6 | Draw | The card, in hand | Drawing player | 1 |
 | 7 | Reveal | The revealed card | none | 0 |
-| 8 | Look | Looking player | Owner of the zone looked at | Cards seen |
+| 8 | Look | Looking player | Inspected card (owner and zone retained) | 1; empty inspection: 0 |
 | 9 | Shuffle | none | Library's owner | 0 |
 | 10 | Declined | Deciding player | Source of the optional instruction | 0 |
 
@@ -588,9 +588,14 @@ its own projection of it.
 - **Draw** replaces the Moved row of the drawn card; a draw is never two rows.
 - **Look** covers scry, surveil, look-and-select, looking at a hand and
   searching a library. It says who looked, whose zone, which zone (`from_zone`)
-  and how many cards. It never names the cards: one that is then moved or
-  revealed gets its own row, and what a player learned about cards left in
-  place is not history.
+  and the inspected definitions, including cards left in place. Each card has
+  amount 1; an empty inspection has one amount-0 row targeting the zone owner.
+  The looker and viewers sharing the looker's information get identities; a
+  hand's owner can also see their own hand.
+  Look rows are sorted by definition, with no current object links: they retain
+  the inspected multiset, never hidden zone order. Later shuffles or other
+  knowledge invalidation do not erase that historical evidence. Moves and
+  reveals still get their own rows; random placements remain anonymous.
 - **Shuffle** is written for each shuffle of a library during the game, not for
   setup.
 - **Declined** is written when a player takes none of an optional choice while
@@ -599,10 +604,11 @@ its own projection of it.
 
 Mulligans and opening hands produce no rows.
 
-**Who sees a card's identity.** It is decided once, when the row is written. A
-card that was public just before or just after the move is named for both
+**Who sees a card's identity.** It is decided once, when the row is written.
+For moves and draws, a card that was public just before or just after the move is named for both
 viewers. Otherwise it is named only for its owner and for a player who shares
-that owner's information. For every other viewer the reference keeps its owner
+that owner's information. Look entitlement follows the looker as described
+above. For every other viewer the reference keeps its owner
 and zone, with definition 0, no object link and availability 3. Later events do
 not reopen a row: a card drawn privately and revealed the next turn stays hidden
 in its Draw row and is named in its Reveal row. When a group of cards

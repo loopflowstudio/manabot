@@ -996,7 +996,7 @@ impl Game {
                         frame.controller,
                         owner,
                         ZoneType::Library,
-                        self.state.zones.size(ZoneType::Library, owner),
+                        &self.selection_zone_objects(owner, ZoneType::Library),
                     );
                     if *from == ObjectSelector::Zone(ZoneType::Library) {
                         frame.complete_with_event(GameEvent::LibrarySearched {
@@ -1330,7 +1330,7 @@ impl Game {
                     frame.controller,
                     frame.controller,
                     ZoneType::Library,
-                    self.state.zones.size(ZoneType::Library, frame.controller),
+                    &self.selection_zone_objects(frame.controller, ZoneType::Library),
                 );
                 self.emit(GameEvent::LibrarySearched {
                     player: frame.controller,
@@ -1766,7 +1766,7 @@ impl Game {
                     frame.controller,
                     player,
                     ZoneType::Hand,
-                    self.state.zones.size(ZoneType::Hand, player),
+                    &self.selection_zone_objects(player, ZoneType::Hand),
                 );
                 self.remember_hand(player);
                 crate::agent::policy_history::look(
@@ -1774,7 +1774,7 @@ impl Game {
                     frame.controller,
                     player,
                     ZoneType::Library,
-                    self.state.zones.size(ZoneType::Library, player),
+                    &self.selection_zone_objects(player, ZoneType::Library),
                 );
                 self.emit(GameEvent::LibrarySearched { player });
                 Some(Decision::SearchNamed {
@@ -1866,7 +1866,7 @@ impl Game {
                     frame.controller,
                     frame.controller,
                     ZoneType::Library,
-                    remaining.len(),
+                    &remaining,
                 );
                 if remaining.is_empty() {
                     return None;
@@ -1891,7 +1891,7 @@ impl Game {
                     frame.controller,
                     frame.controller,
                     ZoneType::Library,
-                    looked.len(),
+                    &looked,
                 );
                 (!looked.is_empty()).then_some(Decision::Surveil {
                     player: frame.controller,
@@ -1915,7 +1915,7 @@ impl Game {
                     frame.controller,
                     frame.controller,
                     ZoneType::Library,
-                    looked.len(),
+                    &looked,
                 );
                 if looked.is_empty() {
                     return None;

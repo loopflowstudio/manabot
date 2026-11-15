@@ -646,7 +646,9 @@ without inventing a feature axis. Shared headers own the detail/member slices;
 unused rows are zero. `policy_history=True` describes the 14-column
 [history rows](observation-and-model.md#optional-recent-events) of `events`
 instead of the 7-column raw events, including the `kind` codes, `from_zone` and
-`library_end`; history is bounded to 32 rows, even though its allocated event
+`library_end`; Look uses a player source and one viewer-gated inspected-card
+target per row, preserving definitions after a shuffle without hidden order or
+live object joins. History is bounded to 32 rows, even though its allocated event
 capacity is selected separately. `turn_state=True` adds policy input v10's `player_turn_state` (columns
 `life_lost`, `spells_cast`, then `nonartifact_mana_white` through
 `nonartifact_mana_colorless`) and `card_turn_state`.

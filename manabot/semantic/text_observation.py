@@ -1259,7 +1259,10 @@ class _Renderer:
                 zone = (
                     "unknown" if row.from_zone is None else _enum(_ZONES, row.from_zone)
                 )
-                line = f"Look: {source}; {target}'s {zone}, {row.amount} cards."
+                if isinstance(row.target, CardReference):
+                    line = f"Look: {source}; {target}; {row.amount} card."
+                else:
+                    line = f"Look: {source}; {target}'s {zone}, {row.amount} cards."
             elif row.kind == 9:
                 line = f"Shuffle: {target}'s library."
             elif row.kind == 10:
