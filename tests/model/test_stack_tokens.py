@@ -10,16 +10,41 @@ import torch
 
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import STACK_DEFINITION_INDEX
+import managym
 from tests.model.prepared_routes import device_input
 from tests.model.test_inference import PolicyFixture, _policy
 
 
-def _decisions(case: PolicyFixture, steps: int) -> dict[str, torch.Tensor]:
-    """Every collected decision of both environments, flattened to rows."""
-    batch = case.collector.collect(case.agent, steps)
+def _decisions(case: PolicyFixture) -> dict[str, torch.Tensor]:
+    """Encode native decisions before casting, during payment and on the stack."""
+    env = managym.Env(seed=91)
+    env.reset(
+        [
+            managym.PlayerConfig("caster", {"Mountain": 20, "Gray Ogre": 20}),
+            managym.PlayerConfig("opponent", {"Forest": 20, "Llanowar Elves": 20}),
+        ]
+    )
+    env.scenario_clear_hand(0)
+    env.scenario_force_card_in_hand(0, "Gray Ogre")
+    # Leave one source untapped after payment so trivial skipping stops at
+    # priority with the spell still on the stack.
+    for _ in range(4):
+        env.scenario_force_battlefield(0, "Mountain", ready=True)
+    raw = env.scenario_refresh()
+    space = case.agent.observation_space
+    rows = [space.encode(raw)]
+    for kind in (managym.ActionEnum.PriorityCastSpell, managym.ActionEnum.PayCost):
+        action = next(
+            index
+            for index, action in enumerate(raw.action_space.actions)
+            if action.action_type == kind
+        )
+        raw, *_ = env.step(action)
+        rows.append(space.encode(raw))
+    assert len(raw.stack_objects) == 1
     return {
-        key: torch.from_numpy(value).flatten(0, 1).float()
-        for key, value in batch.observations().observation.items()
+        key: torch.stack([torch.from_numpy(row[key]).float() for row in rows])
+        for key in rows[0]
     }
 
 
@@ -42,7 +67,10 @@ def _variants(case: PolicyFixture) -> list[ActorCritic]:
 def test_bucketed_and_live_forwards_match_plain(input_version: int) -> None:
     torch.manual_seed(344)
     case = _policy(input_version=input_version)
-    obs = _decisions(case, 48)
+    try:
+        obs = _decisions(case)
+    finally:
+        case.collector.close()
     if input_version == 11:
         assert case.agent.stack_tokens
         assert obs["stack_valid"].any(), "fixture should put a spell on the stack"
@@ -65,7 +93,10 @@ def test_stack_rows_change_the_policy() -> None:
     """A stack row is an attended token: removing it changes some output."""
     torch.manual_seed(345)
     case = _policy()
-    obs = _decisions(case, 48)
+    try:
+        obs = _decisions(case)
+    finally:
+        case.collector.close()
     rows = obs["stack_valid"].any(1)
     assert rows.any()
     model = _variants(case)[0]
