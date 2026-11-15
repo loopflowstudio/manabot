@@ -43,8 +43,8 @@ class MirrorSearch:
 
     algorithm: Literal["local_update"] = "local_update"
     belief: Literal["physical_deal"] = "physical_deal"
-    worlds: int = Field(default=16, ge=1, le=64, strict=True)
-    depth: int = Field(default=20, ge=1, le=40, strict=True)
+    worlds: int = Field(default=1, ge=1, le=64, strict=True)
+    depth: int = Field(default=1, ge=1, le=40, strict=True)
     decision_seconds: float = Field(default=30, gt=0, le=30, strict=True)
     alpha: float = Field(default=0.02, ge=0, strict=True)
     beta: float = Field(default=1, gt=0, strict=True)

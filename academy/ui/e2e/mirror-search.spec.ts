@@ -30,6 +30,10 @@ for (const theme of ['light', 'dark'] as const) {
 
     await page.goto(addresses.watch);
     await expect(page.getByRole('combobox', { name: 'Seat 1 search', exact: true })).toHaveValue('mirror');
+    await page.getByRole('combobox', { name: 'Seat 1 search', exact: true }).selectOption('none');
+    await page.getByRole('combobox', { name: 'Seat 1 search', exact: true }).selectOption('mirror');
+    await expect(page.getByRole('spinbutton', { name: 'Seat 1 search worlds', exact: true })).toHaveValue('1');
+    await expect(page.getByRole('spinbutton', { name: 'Seat 1 search depth', exact: true })).toHaveValue('1');
     await page.getByRole('button', { name: 'Start watching' }).click();
     await expect(page.getByRole('columnheader', { name: 'Raw policy', exact: true })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Updated policy', exact: true })).toBeVisible();

@@ -824,13 +824,13 @@ Search-capable policies can use the shared composition below.
 Choose a registered policy, then change its **Search** control from **None
 (raw policy)** to **Mirror search**. This works for the opponent in Play and
 for either Watch seat. The label includes the budget, for example
-`challenger + mirror search 16×20`. While a decision is pending, the table shows
+`challenger + mirror search 1×1`. While a decision is pending, the table shows
 its search budget and elapsed waiting time. Reload preserves the configuration.
 
 | Setting | Default | Range |
 |---|---|---|
-| Worlds | 16 | 1–64 |
-| Depth, including the root choice | 20 | 1–40 |
+| Worlds | 1 | 1–64 |
+| Depth, including the root choice | 1 | 1–40 |
 | Decision ceiling | 30 seconds | Greater than zero, at most 30 seconds |
 
 **Uniform belief (physical deal)** samples unseen cards with copy counts and
@@ -893,7 +893,11 @@ uv run --no-project managym academy --policy challenger.json watch \
     --player challenger --player random --mirror '[{"worlds":4,"depth":2},null]'
 ```
 
-More worlds or depth costs time and does not by itself establish stronger play.
+The initial budget tries each supported root action in one sampled world and
+uses the value evaluator immediately after that action. Increase worlds or depth
+explicitly for more search work. Even the initial budget can time out with a slow
+provider or many legal choices. More search work does not by itself establish
+stronger play.
 
 #### Independent Python policies
 

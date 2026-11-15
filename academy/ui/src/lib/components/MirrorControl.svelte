@@ -25,7 +25,7 @@
     value={value ? 'mirror' : 'none'}
     {disabled}
     onchange={(event) => onChange(event.currentTarget.value === 'mirror' ? {
-      algorithm: 'local_update', belief: 'physical_deal', worlds: 16, depth: 20,
+      algorithm: 'local_update', belief: 'physical_deal', worlds: 1, depth: 1,
       decision_seconds: 30, alpha: 0.02, beta: 1,
     } : null)}
   >

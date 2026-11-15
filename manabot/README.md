@@ -155,8 +155,10 @@ Search requires open decklists.
 
 Academy can compose the baseline provider with the framework-free
 [Mirror search](../docs/academy.md#mirror-search) owner in managym, in Play and
-either Watch seat. Other providers with compatible probabilities, signed values
-and isolated current-view forks can use the same owner. Qwen v1 remains
+either Watch seat. Academy starts with one world at depth one and a 30-second
+ceiling; its controls accept larger explicit budgets. Other providers with
+compatible probabilities, signed values and isolated current-view forks can use
+the same owner. Qwen v1 remains
 search-disabled. Arena's training-specific samplers and historical receipts stay
 here; arena execution and receipt verification share the numerical optimizer in
 `managym.mirror`.

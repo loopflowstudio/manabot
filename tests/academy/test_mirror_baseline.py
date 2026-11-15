@@ -55,7 +55,7 @@ def test_baseline_provider_search_runs_in_play_and_either_watch_seat(
     registry = PolicyRegistry(providers={})
     key = registry.register(factory)
     set_policy_registry(registry)
-    spec = MirrorSearch(worlds=1, depth=1)
+    spec = MirrorSearch()
     game = server.GameSession()
     try:
         game.new_game(
@@ -90,6 +90,7 @@ def test_baseline_provider_search_runs_in_play_and_either_watch_seat(
                 step_watch(created["id"], created["token"], revision)
                 row = inspect_watch(created["id"], revision, created["token"])
                 assert row["outputs"]["mirror"]["worlds"] == 1
+                assert row["outputs"]["mirror"]["depth"] == 1
                 assert len(row["outputs"]["probabilities"]) == len(
                     row["decision"]["frame"]["offers"]
                 )
