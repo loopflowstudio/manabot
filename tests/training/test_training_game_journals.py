@@ -26,6 +26,17 @@ from manabot.training.rollout.producers import ShardedVectorEnv
 import managym
 
 
+def _run_child(function: str, *args: str) -> None:
+    code = "import runpy,sys; runpy.run_path(sys.argv[1])[sys.argv[2]](*sys.argv[3:])"
+    child = subprocess.run(
+        [sys.executable, "-c", code, __file__, function, *args],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert child.returncode == 73, child.stderr
+
+
 def _players() -> list[managym.PlayerConfig]:
     return [managym.PlayerConfig(name, {"Mountain": 8}) for name in ("a", "b")]
 
@@ -123,14 +134,7 @@ def _interrupt_child(directory: str, mode: str, phase: str) -> None:
 def test_abrupt_exit_leaves_replayable_private_cursor(
     tmp_path: Path, mode: str, phase: str
 ) -> None:
-    code = "import runpy,sys; runpy.run_path(sys.argv[1])['_interrupt_child'](*sys.argv[2:])"
-    child = subprocess.run(
-        [sys.executable, "-c", code, __file__, str(tmp_path), mode, phase],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    assert child.returncode == 73, child.stderr
+    _run_child("_interrupt_child", str(tmp_path), mode, phase)
     directory = tmp_path / "game-journals"
     cursor = next(directory.glob("*.jsonl"))
     assert cursor.stat().st_mode & 0o777 == 0o600
@@ -254,14 +258,7 @@ def _interrupt_reset_child(directory: str, operation: str, first: str) -> None:
 def test_interrupted_reset_replays_prior_game_without_binding_claim(
     tmp_path: Path, operation: str, first: str
 ) -> None:
-    code = "import runpy,sys; runpy.run_path(sys.argv[1])['_interrupt_reset_child'](*sys.argv[2:])"
-    child = subprocess.run(
-        [sys.executable, "-c", code, __file__, str(tmp_path), operation, first],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    assert child.returncode == 73, child.stderr
+    _run_child("_interrupt_reset_child", str(tmp_path), operation, first)
     cursor = next((tmp_path / "game-journals").glob("*.jsonl"))
     evidence = read_failure(cursor)
     boundary = evidence.boundary
@@ -446,9 +443,9 @@ def test_pending_storage_error_prevents_native_step(tmp_path: Path) -> None:
         vector.set_buffers(_buffers(1))
         vector.reset_all_into_buffers(_players())
         before = vector.native.semantic_decision_frames_json()
-        assert vector._cursor is not None
-        vector._cursor.unlink()
-        vector._cursor.mkdir()
+        cursor = next(scope.journal_directory.glob("*.jsonl"))
+        cursor.unlink()
+        cursor.mkdir()
         with pytest.raises(OSError):
             vector.step_into_buffers([0])
         assert vector.native.semantic_decision_frames_json() == before
@@ -646,14 +643,7 @@ def _interrupt_execution(directory: str, phase: str) -> None:
 def test_executor_interrupt_marks_active_work_before_call(
     tmp_path: Path, phase: str
 ) -> None:
-    code = "import runpy,sys; runpy.run_path(sys.argv[1])['_interrupt_execution'](*sys.argv[2:])"
-    child = subprocess.run(
-        [sys.executable, "-c", code, __file__, str(tmp_path), phase],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    assert child.returncode == 73, child.stderr
+    _run_child("_interrupt_execution", str(tmp_path), phase)
     directory = tmp_path / "run/game-journals"
     marker = json.loads((directory / "operation.json").read_text())
     assert marker["operation"] == phase and marker["state"] == "pending"
@@ -855,7 +845,7 @@ def test_compaction_byte_allowance_has_one_record_overshoot(tmp_path: Path) -> N
 
 def _crash_journal_child(directory: str, cut: str) -> None:
     from manabot.env.failures import _TrainingJournal
-    from manabot.infra.journal import DurableJournal
+    from manabot.infra.journal import DurableJournal, json_line
 
     evidence, boundary = _synthetic_evidence(10)
     journal = _TrainingJournal(Path(directory) / "producer.jsonl")
@@ -870,8 +860,9 @@ def _crash_journal_child(directory: str, cut: str) -> None:
         os._exit(73)
 
     def crash_append(
-        writer: DurableJournal, body: bytes, *, create: bool = False
-    ) -> None:
+        writer: DurableJournal, row: object, *, create: bool = False
+    ) -> int:
+        body = json_line(row)
         with writer.path.open("ab") as output:
             output.write(body[: len(body) // 2])
             output.flush()
@@ -879,7 +870,7 @@ def _crash_journal_child(directory: str, cut: str) -> None:
         os._exit(73)
 
     if cut == "append":
-        DurableJournal._write = crash_append
+        DurableJournal.append = crash_append
     else:
         Path.replace = crash_replace
     journal.publish(evidence, boundary)
@@ -887,14 +878,7 @@ def _crash_journal_child(directory: str, cut: str) -> None:
 
 @pytest.mark.parametrize("cut", ["append", "before_replace", "after_replace"])
 def test_process_exit_during_append_and_compaction(tmp_path: Path, cut: str) -> None:
-    code = "import runpy,sys; runpy.run_path(sys.argv[1])['_crash_journal_child'](*sys.argv[2:])"
-    child = subprocess.run(
-        [sys.executable, "-c", code, __file__, str(tmp_path), cut],
-        capture_output=True,
-        text=True,
-        timeout=20,
-    )
-    assert child.returncode == 73, child.stderr
+    _run_child("_crash_journal_child", str(tmp_path), cut)
     path = tmp_path / "producer.jsonl"
     if cut == "append":
         with pytest.warns(RuntimeWarning, match="Incomplete final"):

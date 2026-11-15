@@ -412,6 +412,7 @@ publish, land or choose the next Graph step from here.
   `gh run view <id> --job <job-id> --log`. Compare install time with peers in
   the same run and inspect dependency logs for unexpected downloads.
   See `docs/development.md` (Job time) for the budget.
+- Training game journals (`--training-game-logs`): run `manabot train --recipe local --steps 200 --training-game-logs` from a supervised `Popen(start_new_session=True)`, poll `game-journals/operation.json` and `os.killpg(..., SIGKILL)` while `collection` is pending after update 1; copy `vector-N.jsonl` and replay it with `manabot.training.state.game_errors --attempt 1`. Kills land at `ready` boundaries; a pending native step is reachable only through the `os._exit` child fixtures. Compare on/off runs by safetensors tensor bytes (metadata differs by `run_id`); `execution.workers=2` in a `local_smoke` regime gives sharded files.
 - Ctrl-C a run: start it with `subprocess.Popen(..., start_new_session=True,
   preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))` and
   `os.killpg(pid, SIGINT)`. A job started with `&` from a non-interactive shell
