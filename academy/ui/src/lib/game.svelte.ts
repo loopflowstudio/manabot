@@ -1,5 +1,5 @@
 import { playerToken } from './records';
-import type { MirrorSearch, PendingMirror } from './watch';
+import type { MirrorSearch, PendingMirror } from './mirror';
 import {
   loadStoredDeckSelection,
   saveStoredDeckSelection,

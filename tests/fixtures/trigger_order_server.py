@@ -56,3 +56,26 @@ def new_game(self: server.GameSession, raw_config: Any = None) -> dict[str, Any]
 
 server.GameSession.new_game = new_game
 app = server.app
+
+
+@app.get("/api/__fixtures/recorded-evaluation")
+def recorded_evaluation() -> dict[str, Any]:
+    """One verified source game for the release replay import proof."""
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+
+    from manabot.eval.match import play_cell
+    from manabot.sim.replay import read_trace
+    from tests.eval.arena_fixture import arena_fixture
+
+    fixture = arena_fixture()
+    with TemporaryDirectory(prefix="academy-replay-source-") as directory:
+        _, trace, receipt = play_cell(
+            key=fixture.key,
+            player_a=fixture.anchors[0],
+            player_b=fixture.anchors[1],
+            deal_seeds=(777,),
+            out_dir=Path(directory),
+        )
+        assert receipt["passed"]
+        return read_trace(Path(trace["path"]))[0]

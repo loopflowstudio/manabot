@@ -437,6 +437,25 @@ publish, land or choose the next Graph step from here.
   completed result explicitly before checking Next frame. Playwright offline
   mode did not close an existing localhost WebSocket in the MTG-355 run; it
   alone does not prove disconnect/reconnect behavior.
+- Replay/Watch (one viewer for every recording): `/replay?watch=1`, pick seats
+  with the `Seat 1`/`Seat 2` comboboxes and `Deal seed`, press **Start
+  watching**, then drive the transport (`Play`/`Pause`/`Previous`/`Next`,
+  slider "Replay position", "Jump to turn and phase", Speed 16×). Random vs
+  Random at 16× reaches a result in about four minutes under load. Seed 7 on
+  the default decks fails Watch start with HTTP 500 (Task e2fbba). Use another
+  seed until that is fixed. For an imported evaluation, write a multi-game
+  trace with `play_cell(..., deal_seeds=(777, 778), legs=(0, 1))` into
+  `.runs/` (about 10 s) and pass its `.commands.jsonl.gz` to "Open a game
+  file". Then choose "Recorded game" and "Open selected game"; only
+  `/api/watch/import` may be POSTed. A Watch still producing is private to its
+  tab: a new browser context cannot open it. Measure fit at 1280×800 from
+  `.recording-viewer` scroll and `.hand-cards` bounds, not the page.
+  `PresentationStage` also carries `data-presentation-seq`, so count history
+  rows inside the "Recorded game events" list. The release Playwright config
+  serves the last static build through `vite preview`: rebuild with
+  `ACADEMY_STATIC_BUILD=1` after every UI edit before rerunning it. A release
+  spec can save a legacy JSON record into `test-results/release/traces/` to
+  read it through the real server instead of mocking endpoints.
 - For a genuine local connection interruption, put a TCP forwarder between the
   browser and the ordinary same-origin Academy CLI server. Stop its listener and
   destroy both sockets of every forwarded pair; observe disconnected/reconnecting
