@@ -976,7 +976,13 @@ class EventData:
     amount: int
     controller_id: int
 
+class UnavailableAction:
+    object: int
+    reason: str
+    message: str
+
 class Observation:
+    unavailable_actions: list[UnavailableAction] | None
     shared_effects: list[SharedEffect] | None
     continuation: list[ContinuationFrame]
 

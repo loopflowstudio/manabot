@@ -675,7 +675,14 @@ fixed while later bot actions advance the table.
 The player choosing can differ from the player whose turn it is. Target and
 cost prompts identify their source and required input. Finish a pending target
 or cost choice before trying another spell. Inspection and **Show all** keep
-the complete legal choices accessible.
+the complete legal choices accessible. Open **Why unavailable?** beside the
+prompt, or inspect a card, for the native blocking reason at this decision:
+timing, zone permission, a missing legal mode or target, complete casting cost,
+or an attack restriction. A pending cost can require a deliberate mana
+activation before **Pay cost** becomes available. Fixed sources the automatic
+payer can use are included in that native check. These explanations do not add
+or remove legal choices. Older recordings say that explanations were not recorded;
+Academy does not reconstruct them from today's rules.
 
 **What is taking time.** Live status distinguishes loading a bot, choosing its
 action, searching and advancing the live game. When a wait lasts more than a
@@ -692,6 +699,15 @@ does not retry it or select a replacement action. Costs already committed by
 earlier choices remain spent. If the bot cannot safely continue, Academy
 explains why retry is unavailable; start another game explicitly. A bot-load
 failure leaves setup available to correct the selection and try again.
+
+**Starting Watch.** Loading identifies each seat and shows elapsed time before
+the recording opens. If a start reply is lost, the next **Start watching** in
+that tab checks the retained setup attempt; it cannot create a second pair of
+bots or apply changed form choices to that attempt. A missing setup after a
+server restart is reported explicitly; choose Start again to submit a new
+attempt. While a live decision is being produced, you can read earlier saved
+positions. **Live frontier** status stays separate from the selected recorded
+position and names the revision it belongs to.
 
 **Recovering a submitted choice.** If the connection drops just after you act,
 reconnect or reload in the same tab and wait for recovery before choosing again.

@@ -20,7 +20,9 @@
       {#if context.chosen_mode !== null}<p>Chosen mode: {context.chosen_mode + 1}</p>{/if}
       {#each context.targets as target}<p>Selected target {target.clause + 1}: {subjectLabel(observation, target.object)}</p>{/each}
       {#if context.reserved_sacrifice}<p>Reserved, unpaid sacrifice: {subjectLabel(observation, context.reserved_sacrifice)}</p>{/if}
-      {#if context.mana_cost}<p>Mana to pay: {context.mana_cost} · available pools are on the board</p>{/if}
+      {#if context.mana_cost}<p>Mana to pay: {context.mana_cost} · available pools are on the board</p>
+        <p class="type-caption">Mana activations commit immediately. Only an offered cancellation can cancel; it cannot undo spent costs or revealed information.</p>
+      {/if}
     {:else}
       <p class="type-caption text-ink-2">Details not recorded.</p>
     {/if}

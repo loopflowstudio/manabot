@@ -3853,16 +3853,25 @@ async def play_socket(websocket: WebSocket) -> None:
                             _publish_work(record, status), loop
                         ).result()
 
-                    record.game.work.stage(
-                        "advance",
-                        record.game.match_id if record.game.obs is not None else None,
-                        record.game.revision if record.game.obs is not None else None,
-                    )
-                    status = record.game.work.read()
-                    assert status is not None
-                    await _cache_table(record)
-                    await _publish_work(record, status)
-                    record.game.work.publish = publish_work
+                    # Draft validation reads the same authority under this lock.
+                    # Marking it as advancement disables its caller and restarts
+                    # reactive validation before the reply can be applied.
+                    reports_work = not isinstance(parsed, ValidateDeclarationMessage)
+                    if reports_work:
+                        record.game.work.stage(
+                            "advance",
+                            record.game.match_id
+                            if record.game.obs is not None
+                            else None,
+                            record.game.revision
+                            if record.game.obs is not None
+                            else None,
+                        )
+                        status = record.game.work.read()
+                        assert status is not None
+                        await _cache_table(record)
+                        await _publish_work(record, status)
+                        record.game.work.publish = publish_work
                     failed = True
                     try:
                         response, broadcast = await asyncio.to_thread(
@@ -3874,8 +3883,9 @@ async def play_socket(websocket: WebSocket) -> None:
                         )
                         failed = record.game.mirror_retry is not None
                     finally:
-                        record.game.work.publish = None
-                        record.game.work.finish(failed=failed)
+                        if reports_work:
+                            record.game.work.publish = None
+                            record.game.work.finish(failed=failed)
                     record.touch()
                     await _send_table_response(
                         record,
@@ -4594,6 +4604,32 @@ def create_bot_watch(payload: dict[str, Any]) -> dict[str, Any]:
         return create_watch(WatchRequest.model_validate(payload))
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/watch/setups/{handle}")
+def start_watch_setup(
+    handle: str,
+    payload: dict[str, Any],
+    x_etude_participant_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    from .watch import WatchRequest, start_setup
+
+    try:
+        return start_setup(
+            handle, WatchRequest.model_validate(payload), x_etude_participant_token
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.get("/api/watch/setups/{handle}")
+def read_watch_setup(
+    handle: str,
+    x_etude_participant_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    from .watch import setup_attempt
+
+    return setup_attempt(handle, x_etude_participant_token).payload()
 
 
 @app.post("/api/watch/{trace_id}/step")

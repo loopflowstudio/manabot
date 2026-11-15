@@ -25,10 +25,14 @@ class WorkStatus:
     revision: int | None
     chooser: int | None
     state: Literal["running", "complete", "failed"] = "running"
+    scope: Literal["setup", "match"] = "match"
+    setup_id: str | None = None
+    loading_seat: int | None = None
 
 
 class Work:
-    def __init__(self) -> None:
+    def __init__(self, setup_id: str | None = None) -> None:
+        self.setup_id = setup_id or uuid4().hex
         self._lock = Lock()
         self._status: WorkStatus | None = None
         self._sequence = 0
@@ -44,11 +48,22 @@ class Work:
         match_id: str | None = None,
         revision: int | None = None,
         chooser: int | None = None,
+        *,
+        loading_seat: int | None = None,
     ) -> None:
         with self._lock:
             self._sequence += 1
             status = WorkStatus(
-                uuid4().hex, self._sequence, kind, time(), match_id, revision, chooser
+                uuid4().hex,
+                self._sequence,
+                kind,
+                time(),
+                match_id,
+                revision,
+                chooser,
+                scope="match" if match_id is not None else "setup",
+                setup_id=self.setup_id if match_id is None else None,
+                loading_seat=loading_seat,
             )
             self._status = status
         if self.publish is not None:

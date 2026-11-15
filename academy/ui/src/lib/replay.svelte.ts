@@ -17,12 +17,14 @@ export class ReplayStore {
   error = $state('');
   headUncertain = $state(false);
   work = $state<WorkStatus | null>(null);
+  workDisconnected = $state(false);
   reveal = $state(false);
   nearSeat = $state(0);
   private generation = 0;
   private id = '';
   private sourceGeneration = 0;
   private productionGeneration = 0;
+  private stopWorkPoll = (): void => {};
 
   request(path: string, init: RequestInit = {}): Promise<Response> {
     const token = sessionStorage.getItem(`etude.watch.${this.id}`);
@@ -57,8 +59,9 @@ export class ReplayStore {
 
   async open(id: string, key?: string): Promise<void> {
     const generation = ++this.generation;
+    this.stopWorkPoll();
     ++this.sourceGeneration;
-    this.id = id; this.playing = false; this.busy = true; this.current = null; this.index = null; this.producing = false; this.headUncertain = false; this.error = '';
+    this.workDisconnected = false; this.work = null; this.id = id; this.playing = false; this.busy = true; this.current = null; this.index = null; this.producing = false; this.headUncertain = false; this.error = '';
     try {
       const index = await this.readIndex(id);
       if (generation !== this.generation) return;
@@ -71,7 +74,7 @@ export class ReplayStore {
   }
 
   async seek(selected: number, animate = false): Promise<void> {
-    if (!this.index || this.producing) return;
+    if (!this.index) return;
     if (!animate) this.playing = false;
     const position = this.index.positions[selected];
     if (!position) return;
@@ -99,25 +102,34 @@ export class ReplayStore {
     if (this.headUncertain || (this.index.mirror_retry && !retry)) { this.pause(); return; }
     this.producing = true; this.error = '';
     const oldLength = this.index.positions.length;
+    const revision = this.index.revision;
     const generation = this.generation;
     const sourceGeneration = this.sourceGeneration;
     const id = this.id;
     const production = ++this.productionGeneration;
-    this.work = null;
+    this.work = null; this.workDisconnected = false;
     let polling = false;
     const poll = async (): Promise<void> => {
       if (polling) return;
       polling = true;
       try {
         const {work} = await this.api<{work: WorkStatus | null}>(`/api/watch/${encodeURIComponent(id)}/work`);
-        if (sourceGeneration === this.sourceGeneration && production === this.productionGeneration && this.producing && work?.match_id === id
-          && work.revision !== null && work.revision >= (this.index?.revision ?? 0)) this.work = work;
-      } catch { /* A status read grants no retry or authority. */ }
+        if (sourceGeneration === this.sourceGeneration && production === this.productionGeneration && this.producing) this.workDisconnected = false;
+        if (sourceGeneration === this.sourceGeneration && production === this.productionGeneration && this.producing && work?.scope === 'match' && work.match_id === id
+          && work.revision === revision && work.sequence >= (this.work?.sequence ?? 0)) this.work = work;
+      } catch {
+        // A failed read proves no outcome and grants no retry. Stop claiming
+        // verified remote progress until a subsequent status read succeeds.
+        if (sourceGeneration === this.sourceGeneration && production === this.productionGeneration && this.producing) this.workDisconnected = true;
+      }
       finally { polling = false; }
     };
     const timer = setInterval(() => void poll(), 1000);
+    const stopPoll = (): void => clearInterval(timer);
+    this.stopWorkPoll = stopPoll;
     try {
       await this.api(`/api/watch/${encodeURIComponent(this.id)}/step`, {revision: this.index.revision, ...(retry ? {retry: true} : {})});
+      if (sourceGeneration !== this.sourceGeneration) return;
       const index = await this.readIndex(id);
       if (sourceGeneration !== this.sourceGeneration) return;
       this.index = index;
@@ -141,7 +153,7 @@ export class ReplayStore {
       if (sourceGeneration !== this.sourceGeneration) return;
       this.error += ' Refresh the saved head before explicitly continuing.';
     } finally {
-      clearInterval(timer);
+      stopPoll();
       if (sourceGeneration === this.sourceGeneration) { this.producing = false; this.work = null; }
     }
   }
@@ -159,7 +171,8 @@ export class ReplayStore {
   }
 
   async next(animate = false): Promise<void> {
-    if (!this.index || this.busy || this.producing) return;
+    if (!this.index || this.busy) return;
+    if (this.producing && this.selected + 1 >= this.index.positions.length) return;
     // A paused producer can replace the old latest marker with a saved choice.
     if (this.current?.key !== this.index.positions[this.selected]?.key) await this.seek(this.selected, animate);
     else if (this.selected + 1 < this.index.positions.length) await this.seek(this.selected + 1, animate);
@@ -171,7 +184,7 @@ export class ReplayStore {
     this.playing = false;
     this.busy = false;
   }
-  cancelReads(): void { ++this.sourceGeneration; this.pause(); }
+  cancelReads(): void { this.stopWorkPoll(); ++this.sourceGeneration; this.workDisconnected = false; this.work = null; this.producing = false; this.pause(); }
   private fail(reason: unknown): void { this.error = reason instanceof Error ? reason.message : String(reason); this.playing = false; }
 }
 export function createReplayStore(): ReplayStore { return new ReplayStore(); }

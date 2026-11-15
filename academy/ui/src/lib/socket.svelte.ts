@@ -574,6 +574,7 @@ export class GameSocketController {
     if (message.type === 'work_status') {
       const work = message.work;
       if (gameStore.resumeFailed || (gameStore.sessionId && message.session_id !== gameStore.sessionId)) return;
+      if (work.scope === 'setup' && !gameStore.newGamePending) return;
       if (!gameStore.newGamePending && work.match_id && work.match_id !== gameStore.protocolFrame?.match_id) return;
       if (!gameStore.newGamePending && work.revision !== null && work.revision < (gameStore.protocolFrame?.revision ?? 0)) return;
       if (gameStore.work && work.sequence < gameStore.work.sequence) return;

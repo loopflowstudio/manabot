@@ -262,9 +262,16 @@ export interface ScheduleView {
   additional_combats: CombatView[];
 }
 
+export interface UnavailableActionView {
+  object: number;
+  reason: string;
+  message: string;
+}
+
 export interface Observation {
   /** Missing on historical captures means unknown, not an empty schedule. */
   schedule?: ScheduleView;
+  unavailable_actions?: UnavailableActionView[];
   player_controls?: PlayerControlView[];
   stack_objects?: StackEntryView[];
   decision_context?: DecisionContextView;
@@ -789,16 +796,27 @@ export interface StopsConfig {
   auto_pass: boolean;
 }
 
-export interface WorkStatus {
+export type WorkStatus = {
   operation_id: string;
   sequence: number;
   kind: 'load' | 'choose' | 'search' | 'advance';
   started_at: number;
-  match_id: string | null;
-  revision: number | null;
-  chooser: number | null;
   state: 'running' | 'complete' | 'failed';
-}
+} & ({
+  scope: 'setup';
+  setup_id: string;
+  loading_seat: number | null;
+  match_id: null;
+  revision: null;
+  chooser: null;
+} | {
+  scope: 'match';
+  setup_id: null;
+  loading_seat: null;
+  match_id: string;
+  revision: number;
+  chooser: number | null;
+});
 
 export type ServerMessage = (
   | { type: 'work_status'; session_id: string; work: WorkStatus }

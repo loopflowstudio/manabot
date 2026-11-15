@@ -498,7 +498,7 @@ it('ignores work from another table, revision or earlier operation', () => {
   gameStore.applyFrame(frameAt(43), 'table-1', 'credential');
   gameStore.newGamePending = false;
   const controller = new GameSocketController();
-  const work = {operation_id: 'op-3', sequence: 3, kind: 'choose' as const, started_at: 1,
+  const work = {scope: 'match' as const, setup_id: null, loading_seat: null, operation_id: 'op-3', sequence: 3, kind: 'choose' as const, started_at: 1,
     match_id: gameStore.protocolFrame!.match_id, revision: 43, chooser: 1, state: 'running' as const};
   deliver(controller, {type: 'work_status', session_id: 'table-1', work});
   expect(gameStore.work?.operation_id).toBe('op-3');

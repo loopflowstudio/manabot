@@ -176,3 +176,23 @@ def test_deprecated_catalog_names_warn_and_delegate(
 ) -> None:
     with pytest.warns(DeprecationWarning, match=rf"0\.3\.0.*managym\.{new}"):
         assert getattr(managym, old)(*args) == getattr(managym, new)(*args)
+
+
+def test_decision_guidance_native_python_fact_parity() -> None:
+    env = priority_root(("Gray Ogre", "Counterspell"), ("Forest",))
+    observation = env.observation_for_player(env.current_agent_index())
+    assert observation.unavailable_actions
+    assert {row.reason for row in observation.unavailable_actions} >= {
+        "TotalCost",
+        "NoLegalTarget",
+    }
+    space = ObservationSpace(ObservationConfig(policy_input_version=11))
+    native = space.encoder.allocate()
+    env.encode_observation_into(observation, native)
+    reference = space.encode(observation)
+    for key in native:
+        np.testing.assert_array_equal(native[key], reference[key], err_msg=key)
+    facts = native["facts"]
+    guidance = facts[facts[:, 1] == 15]
+    assert len(guidance) == len(observation.unavailable_actions)
+    assert (guidance[:, 0] > 0).all()

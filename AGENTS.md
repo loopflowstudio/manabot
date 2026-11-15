@@ -398,6 +398,8 @@ admission. Admission-rejection fixtures must mark the config as submitted
   `tests.academy.socket_messages.settled_message`; runner status and the early
   accepted receipt can precede the settled reply. Lifecycle proofs read the
   socket directly so they verify receipt delivery before bot work completes.
+  Browser proofs await enabled input before submitting again. Read-only combat draft validation must not publish
+  live-advancement work: it disables and restarts the reactive composer.
 
 ### Card definitions
 

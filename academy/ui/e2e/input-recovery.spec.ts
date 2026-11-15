@@ -185,3 +185,143 @@ for (const theme of ['light', 'dark'] as const) {
 async function retainedFrame(page: Page): Promise<ExperienceFrame | null> {
   return page.evaluate(() => JSON.parse(sessionStorage.getItem('etude.gui.resume') ?? 'null')?.last_frame ?? null);
 }
+
+for (const seat of [0, 1]) {
+  test(`Watch names loading seat ${seat + 1} and reconciles a lost start reply`, async ({page}) => {
+    const addresses = JSON.parse(readFileSync(proof, 'utf8')) as {watch: string; ids: {controlled: string}};
+    const url = new URL(addresses.watch);
+    url.searchParams.set('seat1', `policy:${addresses.ids.controlled}`);
+    url.searchParams.set('seat2', `policy:${addresses.ids.controlled}`);
+    const base = url.origin;
+    await page.request.post(`${base}/api/__fixtures/watch-load/${seat}/block`);
+    let lost = false;
+    let producer: {id: string; token: string} | null = null;
+    let starts = 0;
+    let dropCompleted = true;
+    await page.route('**/api/watch/setups/*', async route => {
+      if (route.request().method() !== 'POST') {
+        const response = await route.fetch();
+        const result = await response.json();
+        if (dropCompleted && result.created) return route.abort('connectionreset');
+        return route.fulfill({response});
+      }
+      starts++;
+      const response = await route.fetch();
+      producer = (await response.json()).created;
+      lost = true;
+      await route.abort('connectionreset');
+    });
+    try {
+      await page.goto(url.href);
+      await page.getByRole('button', {name: 'Start watching', exact: true}).click();
+      await expect(page.getByTestId('work-status')).toContainText(`Loading bot · Seat ${seat + 1}`);
+      await expect(page.getByTestId('work-status')).toContainText('elapsed');
+      expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem('academy.watch-setup')!).handle)).toBeTruthy();
+      await page.screenshot({path: fileURLToPath(new URL(`../test-results/policy/watch-load-seat-${seat}.png`, import.meta.url))});
+      await page.request.post(`${base}/api/__fixtures/watch-load/${seat}/release`);
+      await expect.poll(() => lost).toBe(true);
+      await expect(page.getByRole('alert')).toBeVisible();
+      // Reload retains the start envelope; explicit Start checks it, ignoring
+      // mutable form choices, rather than creating another policy pair.
+      dropCompleted = false;
+      await page.reload();
+      await page.getByRole('button', {name: 'Start watching', exact: true}).click();
+      await expect(page.getByRole('button', {name: 'Continue', exact: true})).toBeEnabled();
+      expect(new URL(page.url()).searchParams.get('trace')).toBe(producer!.id);
+      expect(starts).toBe(1);
+      expect(await page.evaluate(() => sessionStorage.getItem('academy.watch-setup'))).toBeNull();
+    } finally {
+      await page.request.post(`${base}/api/__fixtures/watch-load/${seat}/release`);
+    }
+  });
+}
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`a complete native-policy game retains its final replay (${theme})`, async ({page}) => {
+    test.setTimeout(120_000);
+    const {watch} = JSON.parse(readFileSync(proof, 'utf8')) as {watch: string};
+    const origin = new URL(watch).origin;
+    await page.setViewportSize(theme === 'light' ? {width: 1280, height: 800} : {width: 1440, height: 900});
+    await page.emulateMedia({colorScheme: theme, reducedMotion: 'reduce'});
+    await page.addInitScript(theme => localStorage.setItem('etude.theme', theme), theme);
+    const response = await page.request.post(`${origin}/api/watch`, {data: {players: ['random', 'random'], seed: 368}});
+    expect(response.ok()).toBe(true);
+    const created = await response.json() as {id: string; token: string};
+    const headers = {'x-etude-participant-token': created.token};
+    let revision = 0;
+    let finished = false;
+    while (!finished && revision < 512) {
+      const step = await page.request.post(`${origin}/api/watch/${created.id}/step`, {headers, data: {revision}});
+      expect(step.ok()).toBe(true);
+      const result = await step.json() as {revision: number; finished: boolean};
+      expect(result.revision).toBe(revision + 1);
+      revision = result.revision; finished = result.finished;
+    }
+    expect(finished).toBe(true);
+    const indexResponse = await page.request.get(`${origin}/api/traces/${created.id}/recording`, {headers});
+    const index = await indexResponse.json() as {positions: {key: string}[]; next_offset: number | null};
+    while (index.next_offset !== null) {
+      const next = await (await page.request.get(`${origin}/api/traces/${created.id}/recording?offset=${index.next_offset}`, {headers})).json();
+      index.positions.push(...next.positions); index.next_offset = next.next_offset;
+    }
+    await page.goto(`${origin}/replay?watch=1`);
+    await page.evaluate(created => sessionStorage.setItem(`etude.watch.${created.id}`, created.token), created);
+    const last = index.positions.at(-1)!.key;
+    await page.goto(`${origin}/replay?trace=${created.id}&position=${encodeURIComponent(last)}`);
+    await expect(page.getByTestId('game-result-dialog')).toBeVisible();
+    await expect(page.getByRole('button', {name: 'Continue', exact: true})).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({path: fileURLToPath(new URL(`../test-results/policy/complete-replay-${theme}.png`, import.meta.url))});
+    await page.getByRole('button', {name: 'Previous', exact: true}).focus();
+    await page.keyboard.press('Enter');
+    await page.getByRole('button', {name: 'Next', exact: true}).focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByTestId('game-result-dialog')).toBeVisible();
+  });
+}
+
+test('historical positions stay separate from blocked frontier work and late source replies', async ({page}) => {
+  const addresses = JSON.parse(readFileSync(proof, 'utf8')) as {watch: string; ids: {controlled: string}};
+  const origin = new URL(addresses.watch).origin;
+  const first = await (await page.request.post(`${origin}/api/watch`, {data: {players: [`policy:${addresses.ids.controlled}`, `policy:${addresses.ids.controlled}`], seed: 42}})).json() as {id: string; token: string};
+  const other = await (await page.request.post(`${origin}/api/watch`, {data: {players: ['random', 'random'], seed: 1}})).json() as {id: string; token: string};
+  await page.goto(`${origin}/replay?watch=1`);
+  await page.evaluate(records => { for (const record of records) sessionStorage.setItem(`etude.watch.${record.id}`, record.token); }, [first, other]);
+  await page.goto(`${origin}/replay?trace=${first.id}`);
+  await page.getByRole('button', {name: 'Continue', exact: true}).click();
+  await expect(page.getByTestId('position-counter')).toHaveText('Position 1 / 3');
+  const slider = page.getByRole('slider', {name: 'Replay position'});
+  await slider.focus(); await page.keyboard.press('End');
+  await expect(page.getByTestId('position-counter')).toHaveText('Position 3 / 3');
+  for (const seat of [0, 1]) await page.request.post(`${origin}/api/__fixtures/watch-choose/${seat}/block`);
+  let releaseStatus: (() => void) | null = null;
+  let delivered = false;
+  let statusReads = 0;
+  await page.route(`**/api/watch/${first.id}/work`, async route => {
+    const response = await route.fetch();
+    if (++statusReads > 1) { await new Promise<void>(resolve => releaseStatus = resolve); delivered = true; }
+    await route.fulfill({response});
+  });
+  try {
+    const pendingStep = page.waitForResponse(response => response.url().endsWith(`/api/watch/${first.id}/step`));
+    await page.getByRole('button', {name: 'Continue', exact: true}).click();
+    await expect(page.getByTestId('work-status')).toContainText('Choosing bot action');
+    await page.getByRole('button', {name: 'Previous', exact: true}).focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByTestId('position-counter')).toHaveText('Position 2 / 3');
+    await expect(page.getByRole('region', {name: 'Live frontier work'})).toContainText('Reading a saved position; bot work belongs to the frontier.');
+    await expect.poll(() => releaseStatus !== null).toBe(true);
+    await page.screenshot({path: fileURLToPath(new URL('../test-results/policy/historical-frontier.png', import.meta.url))});
+    await page.getByTestId('trace-select').selectOption(other.id);
+    await expect(page.getByTestId('trace-select')).toHaveValue(other.id);
+    for (const seat of [0, 1]) await page.request.post(`${origin}/api/__fixtures/watch-choose/${seat}/release`);
+    releaseStatus?.();
+    await pendingStep;
+    await expect.poll(() => delivered).toBe(true);
+    await expect(page.getByTestId('work-status')).toHaveCount(0);
+    await expect(page.getByTestId('trace-select')).toHaveValue(other.id);
+  } finally {
+    releaseStatus?.();
+    for (const seat of [0, 1]) await page.request.post(`${origin}/api/__fixtures/watch-choose/${seat}/release`);
+  }
+});

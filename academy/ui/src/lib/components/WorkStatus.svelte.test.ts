@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import WorkStatus from './WorkStatus.svelte';
 import type { WorkStatus as Status } from '../types';
 
-const work: Status = { operation_id: 'op-1', sequence: 1, kind: 'choose', started_at: 1,
+const work: Status = { scope: 'match', setup_id: null, loading_seat: null, operation_id: 'op-1', sequence: 1, kind: 'choose', started_at: 1,
   match_id: 'match-1', revision: 4, chooser: 1, state: 'running' };
 
 describe('runner work status', () => {

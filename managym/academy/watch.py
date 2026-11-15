@@ -5,7 +5,9 @@ view. The mixed canonical record and retained roots remain server-private.
 """
 
 from contextlib import ExitStack
-from dataclasses import asdict, replace
+from dataclasses import asdict, dataclass, field, replace
+from threading import Lock
+from time import monotonic
 from typing import Any, Literal, TypedDict
 
 from fastapi import HTTPException
@@ -23,6 +25,7 @@ from .launch import refuse_training_receipt
 from .opponent import policy_registry
 from .replay_index import DecisionAddressV2
 from .villain import NATIVE_WATCH_PLAYERS, build_villain_policy, player_fields
+from .work import Work
 
 
 class WatchCreated(TypedDict):
@@ -74,7 +77,10 @@ def resolve_player(
 
 
 def create_watch(
-    request: WatchRequest, recorded_players: list[RecordedPlayer] | None = None
+    request: WatchRequest,
+    recorded_players: list[RecordedPlayer] | None = None,
+    *,
+    work: Work | None = None,
 ) -> WatchCreated:
     requested_seed = request.seed is not None
     if request.seed is None:
@@ -83,6 +89,8 @@ def create_watch(
         seats: list[tuple[BotPolicy, RecordedPlayer]] = []
         try:
             for seat, kind in enumerate(request.players):
+                if work is not None:
+                    work.stage("load", loading_seat=seat)
                 policy, player = resolve_player(kind, request, seat)
                 seats.append((policy, player))
                 if isinstance(policy, PolicyRunner):
@@ -94,6 +102,8 @@ def create_watch(
                 else str(error)
             )
             raise HTTPException(400, detail) from error
+        if work is not None:
+            work.stage("advance")
         token = server.secrets.token_urlsafe(32)
         game = server.GameSession(watch_mode=True)
         game.attempt_owner = server.participant_id(token)
@@ -128,6 +138,112 @@ def create_watch(
     game.work.finish()
     server.SESSION_REGISTRY[game.match_id] = record
     return {"id": game.match_id, "token": token, "finished": False}
+
+
+@dataclass
+class WatchSetupAttempt:
+    """One tab-owned start: status reads never load or recreate its policies."""
+
+    request: WatchRequest
+    owner: str
+    work: Work
+    result: WatchCreated | None = None
+    error: str | None = None
+    finished_at: float | None = None
+    lock: Lock = field(default_factory=Lock)
+
+    def payload(self) -> dict[str, Any]:
+        with self.lock:
+            return {
+                "work": self.work.payload() or None,
+                "created": self.result,
+                "error": self.error,
+            }
+
+
+_SETUP_LOCK = Lock()
+_SETUP_ATTEMPTS: dict[str, WatchSetupAttempt] = {}
+
+
+def setup_attempt(handle: str, token: str | None) -> WatchSetupAttempt:
+    with _SETUP_LOCK:
+        attempt = _SETUP_ATTEMPTS.get(handle)
+    if attempt is None:
+        raise HTTPException(404, "Watch setup unavailable. Start again explicitly.")
+    _authorize_setup(attempt, token)
+    return attempt
+
+
+def _authorize_setup(attempt: WatchSetupAttempt, token: str | None) -> None:
+    if token is None or not server.secrets.compare_digest(
+        attempt.owner, server.participant_id(token)
+    ):
+        raise HTTPException(403, "Watch setup credential required.")
+
+
+def start_setup(
+    handle: str, request: WatchRequest, token: str | None
+) -> dict[str, Any]:
+    # The public attempt ID scopes progress; the separate tab credential never
+    # appears in work metadata, URLs or public recordings.
+    if token is None or not 32 <= len(token) <= 512:
+        raise HTTPException(403, "Watch setup credential required.")
+    if (
+        len(handle) < 32
+        or len(handle) > 128
+        or not handle.isascii()
+        or not all(c.isalnum() or c in "-_" for c in handle)
+    ):
+        raise HTTPException(400, "invalid_setup_handle")
+    with _SETUP_LOCK:
+        previous = _SETUP_ATTEMPTS.get(handle)
+        if previous is not None:
+            _authorize_setup(previous, token)
+            if previous.request != request:
+                raise HTTPException(
+                    409, "Watch setup already binds another configuration."
+                )
+            return previous.payload()
+        now = monotonic()
+        finished = sorted(
+            (
+                (key, ended)
+                for key, item in _SETUP_ATTEMPTS.items()
+                if (ended := item.finished_at) is not None
+            ),
+            key=lambda item: item[1],
+        )
+        for index, (key, ended) in enumerate(finished):
+            if now - ended > 900 or index < len(finished) - 127:
+                del _SETUP_ATTEMPTS[key]
+        if sum(item.finished_at is None for item in _SETUP_ATTEMPTS.values()) >= 16:
+            raise HTTPException(429, "Watch setup capacity reached. Try again later.")
+        attempt = WatchSetupAttempt(request, server.participant_id(token), Work(handle))
+        _SETUP_ATTEMPTS[handle] = attempt
+    try:
+        created = create_watch(request, work=attempt.work)
+        with attempt.lock:
+            attempt.result = created
+    except Exception:
+        # Providers may include local paths in exceptions. Keep those out of
+        # this progress surface; the native setup cleanup owns candidate close.
+        status = attempt.work.read()
+        operation = (
+            f"Seat {status.loading_seat + 1} bot loading"
+            if status is not None
+            and status.kind == "load"
+            and status.loading_seat is not None
+            else "Watch setup"
+        )
+        with attempt.lock:
+            attempt.error = f"{operation} failed. Your selections are unchanged. Start again explicitly."
+        attempt.work.finish(failed=True)
+    else:
+        attempt.work.finish()
+    finally:
+        with attempt.lock:
+            attempt.finished_at = monotonic()
+    return attempt.payload()
 
 
 def record_for_watch(trace_id: str, token: str | None) -> server.SessionRecord:

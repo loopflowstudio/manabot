@@ -640,3 +640,99 @@ def test_receipt_and_cached_resume_are_published_before_bot_finishes(
                     pytest.fail("Never reached the controlled bot")
     finally:
         release.set()
+
+
+@pytest.mark.parametrize("loading_seat", [0, 1])
+def test_watch_setup_reconciles_one_load_through_lost_reply(
+    registry: PolicyRegistry, loading_seat: int
+) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+    from uuid import uuid4
+
+    from managym.academy.watch import setup_attempt, start_setup
+
+    entered, release = Event(), Event()
+
+    class BarrierFactory(IndependentFactory):
+        def load(self, *, seat: int, seed: int) -> IndependentSession:
+            if seat == loading_seat:
+                entered.set()
+                assert release.wait(10)
+            return super().load(seat=seat, seed=seed)
+
+    factory = BarrierFactory()
+    key = registry.register(factory)
+    request = WatchRequest(players=[f"policy:{key}"] * 2, seed=42)
+    handle = uuid4().hex
+    credential = uuid4().hex
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(start_setup, handle, request, credential)
+        try:
+            assert entered.wait(10)
+            snapshot = setup_attempt(handle, credential).payload()
+            assert snapshot["created"] is None
+            assert snapshot["work"]["scope"] == "setup"
+            assert snapshot["work"]["setup_id"] == handle
+            assert snapshot["work"]["loading_seat"] == loading_seat
+            assert snapshot["work"]["chooser"] is None
+            assert snapshot["work"]["match_id"] is None
+            # An unresolved POST and reads reconcile without loading again.
+            assert start_setup(handle, request, credential) == snapshot
+            with pytest.raises(HTTPException) as changed:
+                start_setup(handle, request.model_copy(update={"seed": 43}), credential)
+            assert changed.value.status_code == 409
+        finally:
+            release.set()
+        created = future.result(timeout=10)["created"]
+    assert setup_attempt(handle, credential).payload()["created"] == created
+    assert start_setup(handle, request, credential)["created"] == created
+    assert len(factory.sessions) == 2
+    client = TestClient(server.app)
+    recovered = client.get(
+        f"/api/watch/setups/{handle}", headers={"x-etude-participant-token": credential}
+    ).json()
+    assert client.get(f"/api/watch/setups/{handle}").status_code == 403
+    assert (
+        client.get(
+            f"/api/watch/setups/{handle}",
+            headers={"x-etude-participant-token": "wrong"},
+        ).status_code
+        == 403
+    )
+    assert recovered["created"] == created
+    assert recovered["work"]["state"] == "complete"
+    assert recovered["work"]["scope"] == "setup"
+
+
+def test_watch_setup_failure_closes_candidates_and_never_retries_a_read(
+    registry: PolicyRegistry,
+) -> None:
+    from uuid import uuid4
+
+    from managym.academy.watch import setup_attempt, start_setup
+
+    class FailingFactory(IndependentFactory):
+        def load(self, *, seat: int, seed: int) -> IndependentSession:
+            if seat == 1:
+                raise OSError("private/local/path")
+            return super().load(seat=seat, seed=seed)
+
+    factory = FailingFactory()
+    key = registry.register(factory)
+    request = WatchRequest(players=[f"policy:{key}"] * 2, seed=42)
+    handle = uuid4().hex
+    credential = uuid4().hex
+    result = start_setup(handle, request, credential)
+    assert result["created"] is None
+    assert result["work"]["state"] == "failed"
+    assert "Seat 2 bot loading failed" in result["error"]
+    assert "private/local/path" not in result["error"]
+    assert "Start again explicitly" in result["error"]
+    assert factory.sessions[0].closed
+    assert start_setup(handle, request, credential) == result
+    assert setup_attempt(handle, credential).payload() == result
+    assert len(factory.sessions) == 1
+    assert not server.SESSION_REGISTRY
+    client = TestClient(server.app)
+    assert client.get(f"/api/watch/setups/{uuid4().hex}").status_code == 404

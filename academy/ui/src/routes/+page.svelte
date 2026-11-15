@@ -4,6 +4,9 @@
   import { page } from '$app/state';
   import GameSetup from '$lib/components/GameSetup.svelte';
   import { startConfiguredWatch } from '$lib/new-game';
+  import { onDestroy } from 'svelte';
+  onDestroy(() => watchStart.cancel());
+  import { watchStart } from '$lib/watch-start.svelte';
   import { revealWithinScrollRegions } from '$lib/scroll-regions';
   import { onMount, tick, untrack } from 'svelte';
 
@@ -17,6 +20,7 @@
   import CombatComposer from '$lib/components/CombatComposer.svelte';
   import { combatFocus, combatPlanMarkers, combatKey, newCombatDraft, objectKey, selectCombatObject, type CombatDraft } from '$lib/combat-plan';
   import DecisionContext from '$lib/components/DecisionContext.svelte';
+  import UnavailableActions from '$lib/components/UnavailableActions.svelte';
   import PlaySessionStrip from '$lib/components/PlaySessionStrip.svelte';
   import { recordFetch } from '$lib/records';
   import type { PlaySession } from '$lib/play-session';
@@ -461,6 +465,8 @@
       <button class="mt-2 rounded border border-line px-3 py-2" disabled={gameStore.commandPending || !pilotCanAct || gameStore.connection !== 'connected'} onclick={sendRetrySearch}>{(gameStore.searchRetry.code.startsWith('search_') || gameStore.searchRetry.code.startsWith('mirror_')) ? 'Retry search' : 'Retry bot decision'}</button>
     </section>
   {/if}
+  <WorkStatus work={watchStart.work} connected={!watchStart.checking} />
+  {#if watchStart.checking}<p role="status">Checking the same Watch setup; loading status is unavailable.</p>{/if}
   <WorkStatus work={gameStore.work} connected={gameStore.connection === 'connected'} />
   {#if gameStore.observation && gameStore.activeSearchConfig}
     <p class="type-caption mb-2 text-ink-2">Opponent: Search {gameStore.activeSearchConfig.worlds}×{gameStore.activeSearchConfig.depth} · Uniform belief (physical deal)</p>
@@ -628,6 +634,7 @@
         />
         {/if}
 
+        <UnavailableActions observation={gameStore.branchProjection ?? tableFrame?.projection ?? boardObservation} />
         <p data-testid="automation-status" class="type-caption text-ink-2">Priority-stop automation: {gameStore.stops.auto_pass ? `on · your turn ${gameStore.stops.my.length} / opponent ${gameStore.stops.opponent.length} · stack ${gameStore.stops.stop_on_stack ? 'on' : 'off'}` : 'off · every priority choice'}{gameStore.fastForwarding ? ' · yielding this turn' : ''}{stopsPending !== null ? ' · updating…' : ''} <button class="underline" onclick={editStops}>Edit stops</button></p>
         <details bind:open={secondaryOpen} class="secondary-panels">
           <summary class="type-rubric cursor-pointer">History and settings</summary>

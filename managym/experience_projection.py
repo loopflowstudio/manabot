@@ -470,6 +470,15 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
     """
     observation = env.observation_for_player(viewer)
     data = serialize_observation(observation, include_details=True)
+    if observation.unavailable_actions is not None:
+        data["unavailable_actions"] = [
+            {
+                "object": refusal.object,
+                "reason": refusal.reason,
+                "message": refusal.message,
+            }
+            for refusal in observation.unavailable_actions
+        ]
     data["player_controls"] = json.loads(env.player_controls_json())
     data["schedule"] = json.loads(env.public_schedule_json())
     context = json.loads(env.decision_context_json(viewer))
