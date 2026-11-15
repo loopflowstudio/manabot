@@ -1135,8 +1135,7 @@ impl Env {
             .children
             .get(index + usize::from(after))
             .map_or(&prepared.transaction.game, |child| &child.root);
-        let mut game = source.clone();
-        game.card_capture = source.card_capture.clone();
+        let mut game = source.clone_with_card_capture();
         if after && index + 1 == prepared.transaction.children.len() {
             game.take_observation_events();
         }

@@ -771,6 +771,15 @@ impl Clone for Game {
 }
 
 impl Game {
+    /// Live transaction candidates and recording roots retain author captures;
+    /// ordinary search clones deliberately omit them.
+    pub(crate) fn clone_with_card_capture(&self) -> Self {
+        Self {
+            card_capture: self.card_capture.clone(),
+            ..self.clone()
+        }
+    }
+
     pub fn take_observation_events(&mut self) -> Vec<GameEvent> {
         std::mem::take(self.state.observation_events_mut())
     }

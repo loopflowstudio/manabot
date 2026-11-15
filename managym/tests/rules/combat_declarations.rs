@@ -150,6 +150,27 @@ fn combat_declarations_rejects_singletons_without_changing_the_root() {
 }
 
 #[test]
+fn combat_declarations_rejects_duplicate_assignments_including_declines() {
+    use managym::agent::structured_offer::AtomicCommand;
+
+    let (game, _) = blockers(false, 2);
+    let offers = game.compound_offers().unwrap();
+    let before = managym::search_state::witness(&game);
+    for choice in [None, Some(0)] {
+        let mut command = offers
+            .decode(&submission(&offers, &[choice, choice]))
+            .unwrap();
+        let AtomicCommand::DeclareBlockers { assignments, .. } = &mut command else {
+            panic!("block declaration");
+        };
+        assignments[1] = assignments[0].clone();
+        let error = game.prepare_declaration(&command).err().unwrap();
+        assert!(error.to_string().contains("duplicate or already committed"));
+        assert_eq!(managym::search_state::witness(&game), before);
+    }
+}
+
+#[test]
 fn combat_declarations_two_menace_lures_offer_both_complete_alternatives() {
     let (mut game, attackers) = blockers(true, 2);
     game.skip_trivial = true;

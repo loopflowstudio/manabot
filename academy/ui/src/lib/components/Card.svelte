@@ -177,7 +177,8 @@
   {/if}
 
   {#if planMarker}
-    <span class="type-label border border-plains-ink bg-plains-wash text-plains-ink pointer-events-none absolute left-0 right-0 top-0 rounded-t-lg px-1 py-1 text-center" aria-hidden="true">{planMarker}</span>
+    <!-- Compact lanes shrink cards to 44px; the band must stay inside them. -->
+    <span class={`${size === 'normal' ? 'type-label px-1 py-1' : 'text-[10px] font-semibold leading-3 px-0.5 py-0.5'} border border-plains-ink bg-plains-wash text-plains-ink pointer-events-none absolute left-0 right-0 top-0 rounded-t-lg text-center [overflow-wrap:anywhere]`} aria-hidden="true">{planMarker}</span>
   {/if}
 
   {#if focused}

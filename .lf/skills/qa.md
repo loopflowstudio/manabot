@@ -159,6 +159,12 @@ publish, land or choose the next Graph step from here.
   result deliberately receives focus and may scroll; assert document stability
   during active decisions. After Play Again, select the completed replay by its
   result label, since the newest entry is the unfinished next game.
+  A Node `net` forwarder in the Playwright script, listening in front of the
+  `npm run preview` port, works because preview proxies `/ws/play` to the API.
+  To test a lost reply, click Confirm and cut in the same tick. Then check the
+  trace for a single commit: `attempts.trace_json` in
+  `<ACADEMY_TRACES_DIR>/play.sqlite`, `events[].action_description` by turn.
+  Forced children (one legal action) are skipped and absent from `events`.
 - First-time clone: copy tracked plus untracked non-ignored files
   (`git ls-files -co --exclude-standard`) to an empty `/tmp` directory and run
   `ACADEMY_CLEAN_API_PORT=… ACADEMY_CLEAN_FRONTEND_PORT=… ./scripts/verify-clean-machine`

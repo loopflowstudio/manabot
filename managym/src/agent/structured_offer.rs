@@ -2092,8 +2092,7 @@ impl Game {
                 (DeclarationStage::Blockers, ActionSpaceKind::DeclareBlocker)
             }
         };
-        let mut candidate = self.clone();
-        candidate.card_capture = self.card_capture.clone();
+        let mut candidate = self.clone_with_card_capture();
         let mut collector = DeclarationCollector::new(stage);
         let mut children = Vec::new();
         // Preserve the positional API's accumulated event batch while each
@@ -2127,8 +2126,7 @@ impl Game {
                 answers: Vec::new(),
                 object_preconditions: Vec::new(),
             };
-            let mut root = candidate.clone();
-            root.card_capture = candidate.card_capture.clone();
+            let root = candidate.clone_with_card_capture();
             done = candidate
                 .step_with_completion(index, Some(&mut collector))
                 .map_err(StructuredOfferError::Execution)?;
@@ -2194,11 +2192,7 @@ impl Game {
             if *kind != ActionSpaceKind::Waterbend {
                 return Err(StructuredOfferError::WrongDecision);
             }
-            let mut fork = self.clone();
-            // Search clones intentionally omit author captures. This clone is
-            // the candidate live state, so its ordinary choices must extend
-            // the same capture and publish it only with successful gameplay.
-            fork.card_capture = self.card_capture.clone();
+            let mut fork = self.clone_with_card_capture();
             let (done, _) = fork.apply_legacy_command_inner(command, &mut None)?;
             *self = fork;
             return Ok(done);

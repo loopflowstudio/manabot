@@ -305,14 +305,13 @@ impl BlockProblem {
         submitted: &[(PermanentId, Option<PermanentId>)],
     ) -> Result<(), AgentError> {
         let mut constraints = self.prefix(game, current);
-        let mut seen = std::collections::BTreeSet::new();
         for (blocker, attacker) in submitted {
             let row = self
                 .blockers
                 .iter()
                 .position(|id| id == blocker)
                 .ok_or_else(|| AgentError::Rules("submitted blocker is not eligible".into()))?;
-            if !seen.insert(*blocker) || constraints[row].is_some() {
+            if constraints[row].is_some() {
                 return Err(AgentError::Rules(
                     "duplicate or already committed blocker".into(),
                 ));
