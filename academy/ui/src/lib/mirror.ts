@@ -32,4 +32,3 @@ export function parseMirrors(value: unknown): [MirrorSearch | null, MirrorSearch
   }
   return [value[0], value[1]];
 }
-
