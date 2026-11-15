@@ -1385,9 +1385,13 @@ class GameSession:
             return "stale_revision"
         if command.prompt_id != context.prompt_id:
             return "stale_prompt"
-        if self.watch_mode or self.obs.game_over or not _is_hero_turn(self.obs):
+        if (
+            self.watch_mode
+            or self.obs.game_over
+            or not _is_hero_turn(self.obs, self.human_seat)
+        ):
             return "not_actor"
-        raw = self.env.declaration_projection_json(HERO_PLAYER_INDEX)
+        raw = self.env.declaration_projection_json(self.human_seat)
         if json.loads(raw) is None:
             return "not_declaration"
         projection = DeclarationProjection.model_validate_json(raw)
@@ -1546,21 +1550,24 @@ class GameSession:
                 )
             if not children or staged.obs is None:
                 raise RuntimeError("Prepared declaration has no committed children.")
-            if _is_hero_turn(staged.obs) and not staged.obs.game_over:
+            if (
+                _is_hero_turn(staged.obs, staged.human_seat)
+                and not staged.obs.game_over
+            ):
                 context = staged._publish_current_prompt()
                 assert context is not None
                 committed_frame = context.frame
             else:
                 committed_frame = staged._build_frame(
                     staged.obs,
-                    viewer=HERO_PLAYER_INDEX,
+                    viewer=self.human_seat,
                     prompt=None,
                     offers=[],
                     action_space="",
                 )
             receipt = CommandReceipt(
                 command_id=command.command_id,
-                actor=HERO_PLAYER_INDEX,
+                actor=self.human_seat,
                 accepted_at=self.revision,
                 resulting_revision=staged.revision,
                 resulting_frame_hash=committed_frame["frame_hash"],
@@ -2434,13 +2441,13 @@ class GameSession:
                 offers=[],
                 action_space="",
             )
-        if not _is_hero_turn(self.obs):
+        if not _is_hero_turn(self.obs, self.human_seat):
             # A policy failure can leave a committed command awaiting another
             # seat. Recovery must never publish that seat's private offers.
             self._persist_attempt()
             return self._build_frame(
                 self.obs,
-                viewer=HERO_PLAYER_INDEX,
+                viewer=self.human_seat,
                 prompt=None,
                 offers=[],
                 action_space="",
