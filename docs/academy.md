@@ -15,6 +15,7 @@ digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 - [Using the laptop table](#using-the-laptop-table)
 - [Play and Inspect modes](#play-and-inspect-modes)
 - [Choosing priority stops](#choosing-priority-stops)
+- [Playing a series against a model](#playing-a-series-against-a-model)
 - [Reading consequences and controlling narration](#reading-consequences-and-controlling-narration)
 - [Choice navigation](#choice-navigation)
 - [Presentation runtime](#presentation-runtime)
@@ -164,8 +165,10 @@ before loading; a baseline bound to specific decks refuses another matchup.
 Missing or changed policy artifacts are refused with the provider's reason.
 
 Reloading the page returns to the same game and its pending decision; it does
-not deal again. **New Game** returns to ordinary setup with the launched
-decks, opponent and decklist mode selected. For imported matchups, setup shows
+not deal again. To continue the series, use
+[Rematch or Swap sides](#playing-a-series-against-a-model). **New Game** returns
+to ordinary setup with the launched decks, opponent and decklist mode selected.
+For imported matchups, setup shows
 both selected source files and their editable lists. Uncheck **Use imported
 decks for the next game** to choose bundled decks instead.
 
@@ -402,8 +405,9 @@ The table opens with UR Lessons (you) against GW Allies. Before starting:
   **Run** and a **Checkpoint** menu
   ([Play and watch a trained checkpoint](#play-and-watch-a-trained-checkpoint)).
 - **Choose decks** assigns a deck to each seat from the bundled packs.
-- **New Game** starts the selected matchup. During a game it ends the current
-  attempt and starts another.
+- **New Game** starts a new session with the selected matchup. Replacing an
+  active game requires confirmation that it will be stopped. To keep games
+  together, use [Rematch, Swap sides or Change opponent](#playing-a-series-against-a-model).
 
 To use your own decks, open **Choose decks**, expand **Import decklist files**
 and check **Use imported decks for the next game**. Upload a UTF-8 `.txt` or
@@ -412,8 +416,9 @@ into its source box. Write one `count card name` per line, with optional
 `Main` and `Sideboard` headings. Select **Check decklists**, correct any
 reported lines, choose a built-in opponent such as **Search 64**, then select
 **New Game**. Imported decks use the development format and supported cards;
-this is not tournament legality validation. Checkpoint opponents are unavailable
-for imported decks. Uncheck the import option to return to bundled decks.
+this is not tournament legality validation. Registered policies accept imported
+decks when their provider admits the matchup; a refusal explains the mismatch.
+Uncheck the import option to return to bundled decks.
 `managym academy play` starts the same game from the command line
 ([Start in a chosen game](#start-in-a-chosen-game)).
 
@@ -423,6 +428,98 @@ the listed legal actions commits it. **Play** adds card selection and a hand-dra
 shortcut ([controls below](#play-and-inspect-modes)). Decisions with a single
 legal action are taken for you and never shown. Reloading the page restores the
 pending decision.
+
+### Playing a series against a model
+
+Choose **Registered policy**, select the intended policy, and import your decks
+through **Choose decks**. Check the matchup, decklist disclosure, priority stops
+and deal mode, then select **New Game**. After the game finishes, select
+**Rematch** to play again with that setup. After the next game, select
+**Swap sides**: you keep your deck and move from playing first to drawing first,
+or the reverse. Both games and the next one belong to the same session.
+
+A trained or independent policy must first be registered with this Academy
+server; see [Play and watch a trained checkpoint](#play-and-watch-a-trained-checkpoint).
+The provider checks that it can play the selected decks and configuration.
+Built-in opponents need no registration.
+
+The session strip at the table shows the game number, matchup, your play/draw
+seat and deal mode. Open its configuration details with a pointer or Tab and
+Enter to check the full Policy ID, model artifacts, runner and available search
+configuration. A familiar model name alone does not identify the execution.
+Each game's recording keeps the exact configuration used to start it, including
+its admitted decks, disclosure, actual seed and native seats.
+
+| Next action | What carries forward |
+|---|---|
+| **Rematch** | Both decks and imported source lists, exact opponent configuration, disclosure, stops and your seat |
+| **Swap sides** | The rematch setup, with your native play/draw seat reversed; your deck stays yours |
+| **Change opponent** | Your decks, disclosure, stops and seat/deal plan; only the explicitly edited opponent settings change |
+| **New Game** | Starts a separate session from setup |
+
+Your preferred **Play** or **Inspect** mode stays selected across games. To
+exchange decks, edit them explicitly in **Choose decks**. Changing setup affects
+the next game; it does not rewrite earlier recordings. Stop edits during play
+also carry into the next game. Replacing an unfinished game warns that it will
+be stopped; inspecting setup or opening a recording does not stop it.
+
+#### Choose the deal deliberately
+
+**Fresh deal** is the default when no seed was supplied. Each successfully
+started game gets a new random seed, recorded with that game. **Repeat seed**
+keeps an explicitly supplied seed, including one supplied with CLI `--seed` or
+Python `seed=`. Enter a seed as a decimal unsigned 64-bit integer, from `0` to
+`18446744073709551615`. The selected mode is visible before starting.
+
+Rematching or swapping sides preserves this mode. Repeating a seed does not
+repeat policy decisions, and swapping native seats changes which player gets
+each seat's deal. These controls do not establish a paired evaluation.
+
+#### Read results and return from a recording
+
+Open session history from the table to see its games in **Games**. Each entry
+links to its recording. Use Replay's return link to return to the filtered
+history, then return to Play in the same tab to continue the current game.
+Opening an earlier recording does not replace the live game.
+
+Results count wins, draws and losses from your seat only among completed games,
+with the completed-game denominator. Active, stopped and interrupted games are
+counted separately. For example, two wins, one loss and one stopped game means
+**2 wins / 0 draws / 1 loss out of 3 completed**, plus **1 stopped**. Counts cover
+the full authorized session selection, including games on other history pages.
+
+Breakdowns keep exact policy/search configuration, matchup, disclosure, native
+seat and evidence origin distinct. Changing opponent stays in the session and
+creates a separate breakdown. Human exploratory play, automated validation,
+training and evaluation recordings retain their declared origins; unknown
+origin stays unknown. An evaluation label alone does not establish a controlled
+study. These counts describe recorded games, not a strength estimate or rating.
+
+Wall elapsed time includes pauses and appears only when start/end times were
+recorded. Response measurements appear only when recorded by the provider,
+with their measured sample count; otherwise they are unavailable.
+
+#### Reloads, failures and privacy
+
+Reload in the same tab to recover the session and its actual pending decision.
+Independent tabs and launches start independently. Opening session history in
+another tab is read access and does not resume that session's live game. Keep
+using the same browser address, including its port. If browser session storage
+is unavailable, Academy explains that reload continuity is unavailable; the
+current in-memory game remains usable.
+
+If the next policy or decks cannot be admitted or loaded, Academy shows the
+reason and preserves the existing game and setup for correction and retry. A
+missing or changed policy is never silently replaced. Restore its pinned
+artifacts, or deliberately select the replacement offered by the picker.
+Retrying a continuation after a lost reply recovers the game already started
+by that request. After a backend restart, the unfinished game is interrupted;
+start the next game explicitly rather than expecting its live state to resume.
+
+Session setup, imported source lists and seeds remain owner-private. Sharing a
+completed recording follows the existing replay rules; it grants neither session
+configuration access nor control of the live table. Earlier ungrouped games stay
+in **Games** without being assigned to a session retroactively.
 
 ### Using the laptop table
 
@@ -1066,7 +1163,7 @@ Checkpoint records live in `.runs/elemental-play/checkpoints/`, attempts in
 
 The printed **Elemental deck browser** link assigns either seat from the ten
 `elemental-world-v2` setups (mirrors allowed) with **Use for me** / **Use for
-opponent**. **Choose decks** prepares the next matchup; only **New Game**
+opponent**. **Choose decks** prepares the next matchup; starting the next game
 replaces the current attempt. On a scripted seed-0 game (2026-10-26), stop and
 forced-step automation cut deliberate inputs from 289 to 73.
 
