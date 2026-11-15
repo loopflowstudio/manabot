@@ -37,7 +37,7 @@ committing them. Setup shows two native seats. For each seat, choose a **Control
 or **Bot**) and a **Deck**. A bot seat also has a player picker: choose a
 built-in bot or a **Registered policy**, with optional **Search** for a compatible
 policy. Built-in **Search 16/64/256** runs that many random playouts per
-decision without a policy; **Random** chooses uniformly among legal actions;
+legal action without a policy; **Random** chooses uniformly among legal actions;
 **Passive** passes when possible and otherwise takes the first legal action.
 One controller can be you; choosing bots in both seats starts a
 watched game through the same setup. Seat 1 plays first; seat 2 draws first.

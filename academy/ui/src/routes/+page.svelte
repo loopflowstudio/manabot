@@ -430,7 +430,6 @@
   {/if}
   <WorkStatus work={watchStart.work} connected={!watchStart.checking} />
   {#if watchStart.checking}<p role="status">Checking the same Watch setup; loading status is unavailable.</p>{/if}
-  <WorkStatus work={gameStore.work} connected={gameStore.connection === 'connected'} />
   {#if gameStore.observation && gameStore.activeSearchConfig}
     <p class="type-caption mb-2 text-ink-2">Opponent: Search {gameStore.activeSearchConfig.worlds}×{gameStore.activeSearchConfig.depth} · Uniform belief (physical deal)</p>
   {/if}
@@ -455,6 +454,8 @@
       {:else}
         <span class="type-annotation text-ink-2">No game in progress</span>
       {/if}
+      <!-- Bot work shows in the masthead's free side, so the board never shifts while a bot thinks. -->
+      <WorkStatus work={gameStore.work} connected={gameStore.connection === 'connected'} inline />
     </div>
 
     <div class="flex min-w-0 max-w-full flex-wrap items-end gap-x-5 gap-y-3">

@@ -151,6 +151,8 @@
 {/snippet}
 
 <section class="player-area" class:empty-battlefield={opponent && player.battlefield.length === 0} aria-label={`${label}${deckName ? ` — ${deckName}` : ''}`}>
+  <!-- Status and floating mana share one row so the battlefield keeps its height. -->
+  <div class="player-summaries">
   <details class="player-status type-caption"><summary>{label} status</summary>
   {#if identity.digest || identity.producer || identity.full !== identity.compact}
   <div class="identity-details" data-testid="player-identity">
@@ -197,6 +199,7 @@
   {/if}
   </details>
   <ManaPool {player} {label} />
+  </div>
   <!-- Identity and life stay above the scrolling battlefield and zones. -->
   <div
     data-player-id={player.id}
@@ -375,9 +378,12 @@
   .hand-cards > :global(*) { flex-shrink: 0; }
   .hand-staff { min-width: 0; }
   .staff { padding: 4px 0; }
+  .player-summaries { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 1.5rem; }
+  .player-summaries > :global(details[open]) { flex-basis: 100%; }
   @media (min-width: 1024px) and (min-height: 650px) {
     .player-area { display: flex; flex-direction: column; min-height: 0; }
-    .player-status { flex-shrink: 0; max-height: 90px; overflow: auto; }
+    .player-summaries { flex-shrink: 0; }
+    .player-status { max-height: 90px; overflow: auto; }
     .staves { display: flex; flex-direction: column; gap: .25rem; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 .25rem; }
     .empty-battlefield .staves { max-height: 64px; }
     .hand-staff { flex-shrink: 0; }
