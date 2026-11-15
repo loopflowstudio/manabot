@@ -71,9 +71,6 @@ pub(crate) struct PaymentProbe {
     pub hand: u64,
     pub instant: u64,
     pub tapping: Vec<Option<usize>>,
-    /// Permanents whose activated abilities were read to build this list:
-    /// only those that have any.
-    pub ability_sources: usize,
 }
 
 impl PaymentProbe {
@@ -883,7 +880,6 @@ mod tests {
             hand,
             instant,
             tapping: vec![None; 2],
-            ..PaymentProbe::default()
         };
         // {1} keeps one of the two. Equal counts: the hand card wins, then
         // the instant, then the witness's Forest tap.
@@ -908,7 +904,6 @@ mod tests {
             hand: 0b10,
             instant: 0b10,
             tapping: vec![None; 3],
-            ..PaymentProbe::default()
         };
         let model = lands(&["G", "G", "G", "R"]);
         assert_eq!(choose(&model, "1", &[], Some(abilities)).0.taps, [3]);
@@ -1181,7 +1176,6 @@ mod tests {
                 .map(|index| (index >= 20 && index % 2 == 0).then_some(index % 20))
                 .collect(),
             followups,
-            ..PaymentProbe::default()
         };
         let (choice, searched) = choose(&model, "8", &[], Some(probe));
         assert_eq!(searched, 0);

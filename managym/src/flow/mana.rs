@@ -2237,7 +2237,7 @@ impl Game {
         cost: &ManaCost,
     ) -> Result<(), AgentError> {
         let model = self.payment_model(player, None);
-        let mut path = model
+        let path = model
             .plan(
                 self.pooled_mana(player),
                 vec![Obligation::Pay {
@@ -2247,7 +2247,7 @@ impl Game {
                 SourcePolicy::FixedOnly,
             )
             .ok_or_else(|| AgentError("not enough automatic mana".into()))?;
-        // The witness proved the cost payable; the choice only renames
+        // The witness proved the cost payable; the choice selects
         // which fixed sources pay it. Only the payer's own hand and
         // permanents are read.
         let choice = model.choose_taps(
@@ -2258,17 +2258,8 @@ impl Game {
             || self.source_reluctance(&model),
             || self.payment_followups(player, cost, &model),
         );
-        let chosen: Vec<PaymentStep> = choice
-            .taps
-            .iter()
-            .map(|index| PaymentStep::Fixed(model.sources[*index].permanent))
-            .chain([PaymentStep::Spend])
-            .collect();
-        path = chosen;
-        for step in &path {
-            if let PaymentStep::Fixed(source) = step {
-                self.tap_fixed_mana_source(player, *source);
-            }
+        for index in choice.taps {
+            self.tap_fixed_mana_source(player, model.sources[index].permanent);
         }
 
         Ok(())
@@ -2396,7 +2387,6 @@ impl Game {
             if view.activated_abilities.is_empty() {
                 continue;
             }
-            probe.ability_sources += 1;
             let source = &model.sources[index];
             debug_assert_eq!(id, source.permanent);
             let Some(permanent) = self.state.permanents[source.permanent].as_ref() else {
@@ -2850,22 +2840,6 @@ mod tests {
         assert_eq!((probe.followups.len(), probe.hand), (1, 0));
         assert_eq!(probe.tapping, [None]);
         assert_eq!(tapped(&game, &lands, "1G"), [0, 2]);
-
-        // Reading follow-ups looks at abilities only where a permanent has
-        // some: sixteen lands and three Elves read none; the Dragon adds one.
-        let many = ["Forest", "Mountain"].repeat(8);
-        for (creature, sources) in [(None, 0), (Some("Shivan Dragon"), 1)] {
-            let (mut game, _) = board(&many, creature, Some("Lightning Bolt"));
-            for _ in 0..3 {
-                game.scenario_force_battlefield(player, "Llanowar Elves", true)
-                    .unwrap();
-            }
-            let model = game.payment_model(player, None);
-            assert_eq!(model.sources.len(), 19 + sources);
-            let probe = game.payment_followups(player, &ManaCost::parse("1G"), &model);
-            assert_eq!(probe.ability_sources, sources);
-            assert_eq!(probe.followups.len(), 1 + sources);
-        }
 
         // One of each kept either way: the card in hand beats the ability.
         let (game, lands) = board(
