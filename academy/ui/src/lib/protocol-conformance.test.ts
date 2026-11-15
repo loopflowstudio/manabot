@@ -255,6 +255,7 @@ describe('experience protocol v1 conformance', () => {
       LegacyCardTypesView: 'CardTypes',
       LegacyCardView: 'CardState',
       LegacyHeroObservation: 'Observation',
+      UnavailableActionView: 'UnavailableActionView',
       LegacyPermanentView: 'PermanentState',
       LegacyPlayerView: 'PlayerState',
       ObjectRenderId: 'ObjectRenderId',

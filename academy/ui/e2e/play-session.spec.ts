@@ -10,7 +10,8 @@ async function completeShortGame(page: Page): Promise<void> {
     const revision = await page.locator('main').getAttribute('data-update-seq');
     const offers = page.getByTestId('action-option');
     const pass = page.locator('[data-testid="action-option"][data-action-type="PRIORITY_PASS_PRIORITY"]');
-    await expect(offers.first()).toBeEnabled();
+    await expect(page.locator('[data-testid="action-option"]:enabled').first().or(page.getByText('Game Over', {exact: true}))).toBeVisible();
+    if (await page.getByRole('button', {name: 'Rematch', exact: true}).count() >= 2) return;
     await (await pass.count() ? pass.first() : offers.first()).click();
     await expect(page.locator('main')).not.toHaveAttribute('data-update-seq', revision!);
   }

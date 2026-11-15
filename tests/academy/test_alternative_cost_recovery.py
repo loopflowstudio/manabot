@@ -20,6 +20,7 @@ from manabot.semantic.decision_contract import SemanticDecisionContract
 import managym
 from managym.academy import server, trace as trace_store
 from managym.experience import ExperienceFrame, InteractionOffer
+from tests.academy.socket_messages import settled_message
 
 
 def _command(
@@ -66,12 +67,12 @@ def test_force_of_negation_exile_payment_reconnect_vector_and_fork(
                 socket.send_json(
                     {"type": "command", "command": _command(frame, offer, identity)}
                 )
-                result = socket.receive_json()
+                result = settled_message(socket)
                 assert result["status"] == "accepted"
                 return ExperienceFrame.model_validate(result["update"]["frame"])
 
             socket.send_json({"type": "new_game", "config": config})
-            initial = socket.receive_json()
+            initial = settled_message(socket)
             game = server.SESSION_REGISTRY[initial["session_id"]].game
             frame = ExperienceFrame.model_validate(initial["recovery"]["frame"])
             bolted = False
@@ -145,7 +146,7 @@ def test_force_of_negation_exile_payment_reconnect_vector_and_fork(
                 }
             )
             recovered = ExperienceFrame.model_validate(
-                socket.receive_json()["recovery"]["frame"]
+                settled_message(socket)["recovery"]["frame"]
             )
             assert recovered == frame
             assert game.env.state_digest() == digest == fork.state_digest()
@@ -160,17 +161,17 @@ def test_force_of_negation_exile_payment_reconnect_vector_and_fork(
             contract.apply(fork, contract.frame.offers[0]["id"], command_id="fork")
             assert game.env.state_digest() == digest
             socket.send_json({"type": "command", "command": command})
-            result = socket.receive_json()
+            result = settled_message(socket)
             assert result["status"] == "accepted"
             assert game.env.state_digest() == fork.state_digest()
             committed = game.env.state_digest()
             events = len(game.trace.events)
             socket.send_json({"type": "command", "command": command})
-            assert socket.receive_json()["status"] == "duplicate"
+            assert settled_message(socket)["status"] == "duplicate"
             socket.send_json(
                 {"type": "command", "command": command | {"command_id": "stale"}}
             )
-            rejected = socket.receive_json()
+            rejected = settled_message(socket)
             assert rejected["status"] == "rejected"
             assert rejected["rejection"]["code"] == "stale_revision"
             assert game.env.state_digest() == committed

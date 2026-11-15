@@ -6,7 +6,7 @@ const proof = new URL('../test-results/policy/addresses.json', import.meta.url);
 for (const theme of ['light', 'dark'] as const) {
   test(`independent policy Play, reload, and both Watch seats (${theme})`, async ({ page }) => {
     const addresses = JSON.parse(readFileSync(proof, 'utf8')) as {
-      refused: string; play: string; watch: string; ids: { independent: string; baseline: string; "refused-config": string }
+      refused: string; play: string; watch: string; guidance: string; ids: { independent: string; baseline: string; "refused-config": string }
     };
     const errors: string[] = [];
     page.on('pageerror', error => errors.push(error.message));
@@ -31,6 +31,15 @@ for (const theme of ['light', 'dark'] as const) {
     await page.goto(preview.href);
     await expect(page.getByTestId('policy-compatibility')).toContainText('was trained on');
     await page.screenshot({ path: fileURLToPath(new URL(`../test-results/policy/play-incompatible-${theme}.png`, import.meta.url)) });
+    await page.goto(addresses.guidance);
+    await expect(page.getByTestId('action-option').first()).toBeEnabled();
+    const unavailable = page.getByText('Why unavailable?', {exact: true});
+    await expect(unavailable).toBeVisible();
+    await unavailable.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByText(/complete casting cost cannot be paid/).first()).toBeVisible();
+    await page.screenshot({ path: fileURLToPath(new URL(`../test-results/policy/native-guidance-${theme}.png`, import.meta.url)) });
+    await page.keyboard.press('Enter');
     await page.goto(addresses.play);
     await expect(page.getByTestId('action-option').first()).toBeEnabled();
     const before = frames.at(-1)!;

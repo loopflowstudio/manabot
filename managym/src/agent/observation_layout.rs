@@ -579,6 +579,7 @@ fn fact_row_kind(kind: FactKind) -> &'static str {
         FactKind::EffectProgram => "Rules program: id: Modification token (a copy exception, with duration, timestamp and source_definition as its provenance) or PooledMana (a player's pooled mana with a spend effect or combat expiry, one program per class and expiry, no provenance); detail: signed i32 catalog token value; value: TokenKind; value_2: zero-based ordinal",
         FactKind::EffectiveColor => "id: Color token (Colorless for empty colors); value: 1",
         FactKind::KeywordCounterTimestamp => "id: CounterKind token; timestamp: counter timestamp rank",
+        FactKind::UnavailableAction => "object: visible card, permanent or payment actor; id: UnavailableReason catalog token; value: 1",
         FactKind::ContinuationProgram => "object: controller; id: frame index + 1; detail: signed i32 catalog token value; value: TokenKind; value_2: zero-based ordinal. Source program then effect execution are separate occurrences, each resetting ordinal to 0",
     }
 }

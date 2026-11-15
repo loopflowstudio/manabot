@@ -167,7 +167,8 @@ POOLED_MANA = "PooledMana"
 FACT_EFFECTIVE_COLOR = 12
 FACT_KEYWORD_COUNTER_TIMESTAMP = 13
 FACT_CONTINUATION_PROGRAM = 14
-FACT_KINDS = 14
+FACT_UNAVAILABLE_ACTION = 15
+FACT_KINDS = 15
 # Permanent columns that hold object links (joins), in model parameter order.
 PERMANENT_LINK_INDEXES = (PERMANENT_ATTACHED_INDEX, PERMANENT_BLOCKING_INDEX)
 # Decklist rows: definition id + 1, then main, unseen, sideboard and
@@ -668,6 +669,14 @@ class ObservationEncoder:
             rows.append(row)
 
         token = managym.catalog_token_value
+        if self.one_token:
+            for refusal in obs.unavailable_actions or ():
+                push(
+                    refusal.object,
+                    FACT_UNAVAILABLE_ACTION,
+                    token(f"UnavailableReason::{refusal.reason}"),
+                    (1.0, 0.0),
+                )
         permanents = [*obs.agent_permanents, *obs.opponent_permanents]
         for perm in permanents:
             if perm.plus1_counters > 0:

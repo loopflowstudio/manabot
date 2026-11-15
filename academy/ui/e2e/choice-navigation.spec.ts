@@ -15,6 +15,7 @@ declare global {
       socket: WebSocket | null;
       frame: ExperienceFrame | null;
       status: string;
+      working: boolean;
     };
   }
 }
@@ -128,7 +129,7 @@ for (const family of ['CHOOSE_TARGET', 'DISCARD'] as const) {
     const position = positions[family];
     await page.addInitScript(config => {
       const state: Window['__choiceNavigation'] = {
-        socket: null, frame: null, status: '',
+        socket: null, frame: null, status: '', working: false,
       };
       const Native = window.WebSocket;
       class TrackedSocket extends Native {
@@ -137,6 +138,7 @@ for (const family of ['CHOOSE_TARGET', 'DISCARD'] as const) {
           state.socket = this;
           this.addEventListener('message', event => {
             const message = JSON.parse(event.data);
+            if (message.work) state.working = message.work.state === 'running';
             if (message.type === 'command_outcome') state.status = message.status;
             const findFrame = (value: unknown): void => {
               if (!value || typeof value !== 'object') return;
@@ -160,6 +162,7 @@ for (const family of ['CHOOSE_TARGET', 'DISCARD'] as const) {
     await page.getByRole('button', { name: 'New Game', exact: true }).first().click();
     await expect(page.getByTestId('action-option').first()).toBeVisible();
     for (const [ordinal, step] of position.prefix.entries()) {
+      await expect.poll(() => page.evaluate(() => window.__choiceNavigation.working)).toBe(false);
       const revision = await page.evaluate(({ ordinal, step }) => {
         const state = window.__choiceNavigation;
         const frame = state.frame!;
@@ -178,11 +181,12 @@ for (const family of ['CHOOSE_TARGET', 'DISCARD'] as const) {
       )).toBeGreaterThan(revision);
     }
     await expect(page.getByTestId('action-panel')).toHaveAttribute('data-action-space-kind', family);
+    await expect(page.getByTestId('action-option').first()).toBeEnabled();
     const actual = await page.evaluate(() =>
       window.__choiceNavigation.frame!,
     );
     expect(actual.offers).toEqual(position.frame.offers);
-    expect(actual.projection).toEqual(position.frame.projection);
+    expect(actual.projection).toEqual({...position.frame.projection, unavailable_actions: []});
     if (process.env.ACADEMY_REVIEW_CHOICE === family) {
       await page.pause();
       return;

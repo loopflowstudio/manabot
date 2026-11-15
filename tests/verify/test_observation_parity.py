@@ -494,7 +494,22 @@ def test_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
     # type, used abilities, copy and its exceptions (one row per keyword).
     facts = actual["facts"]
     kinds = facts[facts[:, FACT_VALID_INDEX] == 1, FACT_KIND_INDEX].tolist()
-    assert kinds == [1, 1, 1, 2, 2, 2, 3, 4, 5, 5, 7, 8, 8, 8]
+    assert kinds == [15] * len(obs.unavailable_actions) + [
+        1,
+        1,
+        1,
+        2,
+        2,
+        2,
+        3,
+        4,
+        5,
+        5,
+        7,
+        8,
+        8,
+        8,
+    ]
     copies = facts[np.isin(facts[:, FACT_KIND_INDEX], [FACT_COPY, FACT_COPY_EXCEPTION])]
     np.testing.assert_array_equal(copies[:, FACT_OBJECT_INDEX], [own + 1] * 4)
     np.testing.assert_array_equal(
@@ -518,8 +533,10 @@ def test_fact_capacity_fills_exactly_and_rejects_overflow(capacity: int) -> None
     env.scenario_force_battlefield(0, "Mountain")
     obs = env.scenario_refresh()
     mine = obs.agent_permanents[0]
-    # Controlled transport fixture: each used ability index is one fact row.
-    mine.used_abilities = list(range(capacity))
+    # Guidance also occupies fact rows; fill the remainder with used abilities.
+    guidance_count = len(obs.unavailable_actions)
+    ability_count = capacity - guidance_count
+    mine.used_abilities = list(range(ability_count))
     obs.agent_permanents = [mine]
     encoder = ObservationEncoder(ObservationConfig(max_facts=capacity))
     native = env.encode_observation(obs, capacity)
@@ -530,14 +547,17 @@ def test_fact_capacity_fills_exactly_and_rejects_overflow(capacity: int) -> None
     assert facts.shape == (capacity, 12)
     assert len(np.unique(facts, axis=0)) == capacity
     assert facts[:, FACT_VALID_INDEX].tolist() == [1] * capacity
-    assert facts[:, FACT_KIND_INDEX].tolist() == [FACT_USED_ABILITY] * capacity
+    assert (
+        facts[:, FACT_KIND_INDEX].tolist()
+        == [15] * guidance_count + [FACT_USED_ABILITY] * ability_count
+    )
 
     buffers = encoder.allocate()
     env.encode_observation_into(obs, buffers)
     for key, value in reference.items():
         np.testing.assert_array_equal(buffers[key], value, err_msg=key)
 
-    mine.used_abilities = list(range(capacity + 1))
+    mine.used_abilities = list(range(ability_count + 1))
     obs.agent_permanents = [mine]
     message = f"observation capacity exceeded: facts {capacity + 1} > {capacity}"
     with pytest.raises(ValueError, match=message):

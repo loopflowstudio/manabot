@@ -1347,3 +1347,21 @@ def test_shared_mill_selection_reaches_text_commands_and_both_encoders() -> None
             submit_response(branch, captured, action.reference)
     assert len(outcomes) >= 2
     assert env.state_digest() == before
+
+
+def test_decision_guidance_text_and_experience_share_native_refusals() -> None:
+    env = priority_root(("Gray Ogre", "Counterspell"), ("Forest",))
+    observation = env.observation_for_player(env.current_agent_index())
+    decision = capture_text_decision(env)
+    projection = decision_surface_view(env, env.current_agent_index())
+    assert observation.unavailable_actions
+    for refusal in observation.unavailable_actions:
+        assert refusal.message in decision.text
+        assert {
+            "object": refusal.object,
+            "reason": refusal.reason,
+            "message": refusal.message,
+        } in projection["unavailable_actions"]
+    # A different viewer gets no chooser-private guidance or hidden hand facts.
+    other = decision_surface_view(env, 1 - env.current_agent_index())
+    assert other["unavailable_actions"] == []
