@@ -61,7 +61,7 @@ fn assert_known(player: &PlayerData, config: &PlayerConfig, unseen: u32) {
 #[test]
 fn open_decklists_show_both_lists_to_both_viewers() {
     let configs = configs(DecklistDisclosure::Open);
-    let game = Game::new(configs.clone(), 7, true).expect("valid game setup");
+    let game = Game::new(configs.clone(), 7, true);
     for viewer in [PlayerId(0), PlayerId(1)] {
         let opponent = PlayerId(1 - viewer.0);
         let obs = Observation::for_player(&game, viewer);
@@ -87,7 +87,7 @@ fn open_decklists_show_both_lists_to_both_viewers() {
 
 #[test]
 fn a_revealed_hand_card_leaves_unseen_counts_but_stays_in_the_pool() {
-    let mut game = Game::new(configs(DecklistDisclosure::Open), 7, true).expect("valid game setup");
+    let mut game = Game::new(configs(DecklistDisclosure::Open), 7, true);
     let (viewer, opponent) = (PlayerId(0), PlayerId(1));
     let revealed = &game.state[game.state.zones.zone_objects(ZoneType::Hand, opponent)[0]];
     let (definition, name) = (revealed.definition_id, revealed.name.clone());
@@ -117,7 +117,7 @@ fn a_revealed_hand_card_leaves_unseen_counts_but_stays_in_the_pool() {
 #[test]
 fn closed_decklists_hide_the_opponents_lists_but_never_ones_own() {
     let configs = configs(DecklistDisclosure::Closed);
-    let game = Game::new(configs.clone(), 7, true).expect("valid game setup");
+    let game = Game::new(configs.clone(), 7, true);
     for viewer in [PlayerId(0), PlayerId(1)] {
         let obs = Observation::for_player(&game, viewer);
         assert_known(
@@ -140,7 +140,7 @@ fn decklist_rows_encode_known_lists_and_zero_for_a_closed_opponent() {
     let config = ObservationEncoderConfig::default();
     let width = config.max_cards_per_player * DECKLIST_DIM;
     for disclosure in [DecklistDisclosure::Open, DecklistDisclosure::Closed] {
-        let game = Game::new(configs(disclosure), 7, true).expect("valid game setup");
+        let game = Game::new(configs(disclosure), 7, true);
         let obs = Observation::for_player(&game, PlayerId(0));
         let encoded = encode(&obs, &config).unwrap();
         let (agent, opponent) = encoded.decklists.split_at(width);
@@ -169,21 +169,18 @@ fn closed_opponent_refuses_hidden_information_sampling() {
             env.possible_world_space(viewer).err(),
             env.hidden_hand_constraints(viewer).err(),
         ] {
-            assert!(error
-                .expect("refused")
-                .to_string()
-                .starts_with("decklist closed"));
+            assert!(error.expect("refused").0.starts_with("decklist closed"));
         }
     }
     assert!(env
         .determinize(0, 3)
         .unwrap_err()
-        .to_string()
+        .0
         .starts_with("decklist closed"));
     assert!(env
         .flat_mc_scores(1, 1, 3, 10)
         .unwrap_err()
-        .to_string()
+        .0
         .starts_with("decklist closed"));
 
     let mut open = Env::new(7, true, false, false);

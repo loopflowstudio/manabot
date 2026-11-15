@@ -17,31 +17,60 @@ from managym.bots import (
     BotDecision,
     VerifiedArena,
 )
-from managym.policy import PolicyRegistry, PolicyRunner, PolicySpec
+from managym.policy import PolicyRunner, PolicySpec
 
 if TYPE_CHECKING:
     from manabot.sim.search.runtime import RetainedCheckpointRegistration
 
 
-def CheckpointVillain(
-    path: str,
-    *,
-    deterministic: bool = False,
-    player_configs: Sequence[managym.PlayerConfig] | None = None,
-) -> PolicyRunner:
-    """Deprecated checkpoint loader; use a PolicySpec (removed in 0.4.0)."""
-    from manabot.sim.policy_provider import provider
+class CheckpointVillain:
+    """Retained checkpoint loader, delegating execution to an independent provider session."""
 
-    warnings.warn(
-        "CheckpointVillain is deprecated; use PolicySpec and PolicyRegistry (removed in 0.4.0)",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    registry = PolicyRegistry(providers={"manabot": provider})
-    key = registry.register(
-        PolicySpec("manabot", path, {"deterministic": deterministic})
-    )
-    return registry.load(key, player_configs or (), seat=1, seed=0)
+    def __init__(
+        self,
+        path: str,
+        *,
+        deterministic: bool = False,
+        player_configs: Sequence[managym.PlayerConfig] | None = None,
+    ) -> None:
+        from manabot.model.world import validate_agent_setup
+        from manabot.sim.policy_provider import BaselineSession, provider
+
+        warnings.warn(
+            "CheckpointVillain is deprecated; use PolicySpec and PolicyRegistry (removed in 0.4.0)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        spec = PolicySpec("manabot", path, {"deterministic": deterministic})
+        # The retained loader permits omitted setup; Academy itself admits every
+        # explicit setup through PolicyRegistry before constructing a runner.
+        session = BaselineSession(spec, seed=0)
+        try:
+            descriptor = provider.policy(spec).describe()
+        except BaseException:
+            session.close()
+            raise
+        self._runner = PolicyRunner(session, descriptor, seat=1)
+        assert session.agent is not None and session.space is not None
+        self.agent = session.agent
+        self.obs_space = session.space
+        self.deterministic = deterministic
+        try:
+            if player_configs is not None:
+                validate_agent_setup(self.agent, player_configs)
+        except BaseException:
+            self._runner.close()
+            raise
+
+    @property
+    def last_decision(self) -> BotDecision | None:
+        return self._runner.last_decision
+
+    def __call__(self, env: managym.Env, obs: managym.Observation) -> int:
+        return self._runner(env, obs)
+
+    def close(self) -> None:
+        self._runner.close()
 
 
 class TrainingBots:

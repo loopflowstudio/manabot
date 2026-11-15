@@ -312,8 +312,7 @@ class AttemptStore:
         origin = origin or os.getenv("ACADEMY_PLAY_RECORD_ORIGIN", "unknown")
         if origin not in ORIGINS:
             raise ValueError("Unknown game record origin.")
-        # Serialize the growing trace before taking the writer lock. Declaration
-        # candidates also use this boundary before publishing their native state.
+        # Serialize the growing trace before taking the writer lock.
         world_json = json.dumps(world)
         trace_json = json.dumps(trace)
         with self.connect() as db:

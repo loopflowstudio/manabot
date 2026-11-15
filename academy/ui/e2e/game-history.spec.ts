@@ -1,6 +1,47 @@
 import { selectDeck } from './deck-selection';
-import { confirmCombat } from './combat';
 import { expect, test, type Page } from '@playwright/test';
+
+test('unauthorized session history explains access and offers to leave the session filter', async ({ page }) => {
+  await page.route('**/api/play-sessions/private-session', route => route.fulfill({ status: 403, json: { detail: 'Session not owned' } }));
+  await page.route('**/api/traces?**', route => route.fulfill({ json: [] }));
+  await page.goto('/games?session=private-session&q=Passive');
+  const alert = page.getByRole('alert');
+  await expect(alert).toContainText('browser and address (including port) where you played');
+  await expect(alert).toContainText('credentials were cleared');
+  await expect(alert.getByRole('button', { name: 'Try again' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Session results' })).toHaveCount(0);
+  await alert.getByRole('link', { name: 'Browse games outside this session' }).click();
+  await expect(page).toHaveURL(/\/games\?q=Passive$/);
+  await expect(alert).toHaveCount(0);
+});
+
+test('temporary session history failure retains retry and recovers authorized results', async ({ page }) => {
+  let unavailable = true;
+  await page.route('**/api/play-sessions/retry-session', route => route.fulfill(unavailable
+    ? { status: 503, json: { detail: 'Unavailable' } }
+    : { json: { results: [], totals: [{ origin: 'automated_validation', status: 'completed', count: 2 }], next_result_offset: null } }));
+  await page.route('**/api/traces?**', route => route.fulfill({ json: [] }));
+  await page.goto('/games?session=retry-session');
+  await expect(page.getByRole('alert')).toContainText('Session history could not be loaded.');
+  await expect(page.getByRole('alert')).not.toContainText('credentials');
+  await expect(page.getByRole('region', { name: 'Session results' })).toHaveCount(0);
+  unavailable = false;
+  await page.getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Session results' })).toContainText('2 completed');
+  await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test('session history pagination denial gives the same access guidance', async ({ page }) => {
+  await page.route('**/api/play-sessions/paged-session*', route => route.fulfill(new URL(route.request().url()).searchParams.has('result_offset')
+    ? { status: 403, json: { detail: 'Session not owned' } }
+    : { json: { results: [], totals: [{ origin: 'human', status: 'completed', count: 3 }], next_result_offset: 100 } }));
+  await page.route('**/api/traces?**', route => route.fulfill({ json: [] }));
+  await page.goto('/games?session=paged-session');
+  await page.getByRole('button', { name: 'More result configurations' }).click();
+  await expect(page.getByRole('alert')).toContainText('Copying the link does not copy access');
+  await expect(page.getByRole('region', { name: 'Session results' })).toContainText('human: 3 completed');
+  await expect(page.getByRole('alert').getByRole('button', { name: 'Try again' })).toHaveCount(0);
+});
 
 test('session result pagination ignores responses from a prior history view', async ({ page }) => {
   let releasePage!: () => void;
@@ -74,28 +115,16 @@ test('shared history identifies both players and preserves private prefixes and 
     await page.getByTestId('opponent-select').selectOption('passive');
     await selectDeck(page, 'hero', 'gw_allies');
     await selectDeck(page, 'villain', 'ur_lessons');
-    await page.getByRole('button', { name: 'New Game', exact: true }).click();
+    await page.getByRole('button', { name: 'Start game', exact: true }).click();
     await expect(page.getByTestId('game-board')).toBeVisible();
   }
   try {
     await start(alice, aliceName);
     const over = alice.getByText('Game Over', { exact: true });
     const actions = alice.getByTestId('action-option');
-    const composer = alice.getByTestId('combat-composer');
     for (let step = 0; step < 600 && !(await over.isVisible()); step++) {
-      await expect(actions.first().or(over).or(composer)).toBeVisible();
+      await expect(actions.first().or(over)).toBeVisible();
       if (await over.isVisible()) break;
-      if (await composer.isVisible()) {
-        // Finish this history fixture by attacking rather than repeatedly
-        // declining combat until a library runs out.
-        const attackAll = composer.getByRole('button', { name: /^Select all eligible to attack/ });
-        if (await attackAll.count()) {
-          await alice.getByRole('group', { name: 'Table interaction mode' }).getByRole('button', { name: 'Play', exact: true }).click();
-          await attackAll.click();
-        }
-        await confirmCombat(alice);
-        continue;
-      }
       await expect(actions.first()).toBeEnabled();
       const before = Number(await alice.locator('main').getAttribute('data-update-seq'));
       const labels = await actions.allTextContents();

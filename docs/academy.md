@@ -15,7 +15,6 @@ digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 - [Using the laptop table](#using-the-laptop-table)
 - [Play and Inspect modes](#play-and-inspect-modes)
 - [Pending input, waits and recovery](#pending-input-waits-and-recovery)
-- [Planning and confirming combat](#planning-and-confirming-combat)
 - [Choosing priority stops](#choosing-priority-stops)
 - [Playing a series against a model](#playing-a-series-against-a-model)
 - [Reading consequences and controlling narration](#reading-consequences-and-controlling-narration)
@@ -34,8 +33,13 @@ links continue to open their intended games.
 
 **New game** opens setup for a separate session, starting from retained choices.
 Edits here do not save into your current session; **Cancel** returns without
-committing them. Setup shows two native seats. Choose each controller, deck and optional
-**Search**. One controller can be you; choosing bots in both seats starts a
+committing them. Setup shows two native seats. For each seat, choose a **Controller** (**You**
+or **Bot**) and a **Deck**. A bot seat also has a player picker: choose a
+built-in bot or a **Registered policy**, with optional **Search** for a compatible
+policy. Built-in **Search 16/64/256** runs that many random playouts per
+legal action without a policy; **Random** chooses uniformly among legal actions;
+**Passive** passes when possible and otherwise takes the first legal action.
+One controller can be you; choosing bots in both seats starts a
 watched game through the same setup. Seat 1 plays first; seat 2 draws first.
 Policies are chosen directly by name and execution identity. Their provider,
 artifacts and runner remain available in details. **Browse decks and cards**
@@ -170,7 +174,7 @@ setup screen is shown, and nothing is chosen for you beyond what you named.
 | `--deck` | `ur_lessons` | Your deck: a bundled deck name or the path of a decklist file |
 | `--opponent-deck` | `gw_allies` | The opponent's deck, named the same way |
 | `--opponent` | `search` | `search`, `random`, `passive`, a registered policy alias, or `policy:<id>` |
-| `--sims` | `64` | Simulated playouts per decision for `search` |
+| `--sims` | `64` | Random playouts per legal action for `search` |
 | `--seed` | random | Deal seed, an unsigned 64-bit integer; the same seed and decks give the same deal |
 | `--decklists` | `open` | `open` or `closed`: whether each player knows the other's list |
 
@@ -427,18 +431,12 @@ it as you would share both hands.
 
 ### Play a game
 
-The table opens with UR Lessons (you) against GW Allies. Before starting:
-
-- **Opponent** chooses who you face: **Search 16**, **Search 64** or
-  **Search 256** (the engine's built-in search, with that many simulated
-  playouts per decision), **Random**, or **Passive**, which always passes.
-  It also offers **Registered policy**, which adds a **Policy** menu for
-  policies registered with this server
-  ([Play and watch a trained checkpoint](#play-and-watch-a-trained-checkpoint)).
-- **New game** assigns a deck to each seat from the bundled packs.
-- **New Game** starts a new session with the selected matchup. Replacing an
-  active game requires confirmation that it will be stopped. To keep games
-  together, use [Rematch, Swap sides or Change opponent](#playing-a-series-against-a-model).
+The table opens with UR Lessons (you) against GW Allies. Open **New game**
+to use the [two-seat setup](#one-game-from-setup-to-its-recorded-decisions):
+choose controllers, decks and bot players, then select **Start game** to start
+a separate session. Replacing an active game requires confirmation that it
+will be stopped. To keep games together, use
+[Rematch, Swap sides or Change opponent](#playing-a-series-against-a-model).
 
 To use your own decks, open **New game**, expand **Import decklist files**
 and check **Use imported decks for the next game**. Upload a UTF-8 `.txt` or
@@ -446,7 +444,7 @@ and check **Use imported decks for the next game**. Upload a UTF-8 `.txt` or
 into its source box. Write one `count card name` per line, with optional
 `Main` and `Sideboard` headings. Select **Check decklists**, correct any
 reported lines, choose a built-in opponent such as **Search 64**, then select
-**New Game**. Imported decks use the development format and supported cards;
+**Start game**. Imported decks use the development format and supported cards;
 this is not tournament legality validation. Registered policies check the complete
 setup, including imported lists, against their own admission requirements. Uncheck
 the import option to return to bundled decks.
@@ -455,9 +453,7 @@ the import option to return to bundled decks.
 
 The table reads **Who decides / What is happening / Your choices**. It starts in
 **Inspect** mode: clicking a card inspects it and sends nothing; choosing one of
-the listed legal actions commits it. Combat controls add an editable
-plan and explicit **Confirm** step ([planning combat](#planning-and-confirming-combat)).
-**Play** adds card selection and a hand-drag
+the listed legal actions commits it. **Play** adds card selection and a hand-drag
 shortcut ([controls below](#play-and-inspect-modes)). Decisions with a single
 legal action are taken for you and never shown. Reloading the page restores the
 pending decision.
@@ -466,7 +462,7 @@ pending decision.
 
 Choose **Registered policy**, select the intended policy, and import your decks
 through **New game**. Check the matchup, decklist disclosure, priority stops
-and deal mode, then select **New Game**. After the game finishes, select
+and deal mode, then select **Start game**. After the game finishes, select
 **Rematch** to play again with that setup. After the next game, select
 **Swap sides**: you keep your deck and move from playing first to drawing first,
 or the reverse. Both games and the next one belong to the same session.
@@ -488,7 +484,7 @@ its admitted decks, disclosure, actual seed and native seats.
 | **Rematch** | Both decks and imported source lists, exact opponent configuration, disclosure, stops and your seat |
 | **Swap sides** | The rematch setup, with your native play/draw seat reversed; your deck stays yours |
 | **Change opponent** | Your decks, disclosure, stops and seat/deal plan; only the explicitly edited opponent settings change |
-| **New Game** | Starts a separate session from setup |
+| **Start game** | Starts a separate session from setup |
 
 Your preferred **Play** or **Inspect** mode stays selected across games. To
 exchange decks within the series, choose **Edit next game** in the session strip.
@@ -552,7 +548,12 @@ with their measured sample count; otherwise they are unavailable.
 Reload in the same tab to recover the session and its actual pending decision.
 Independent tabs and launches start independently. Opening session history in
 another tab is read access and does not resume that session's live game. Keep
-using the same browser address, including its port. If browser session storage
+using the same browser address, including its port. Session history requires
+the owner credential stored in that browser; copying its link does not grant
+access. If access is denied, open the link in the original browser and address,
+or browse Games outside that session. Cleared owner credentials cannot be
+recovered from the link. Temporary loading failures still offer **Try again**.
+If browser session storage
 is unavailable, Academy explains that reload continuity is unavailable; the
 current in-memory game remains usable.
 
@@ -641,16 +642,17 @@ several actions, choose an explicit alternative from the list. A card with no
 current action remains available for inspection.
 
 Hover or focus previews the card; **Inspect card** opens its details without
-committing. Player targets have explicit named controls. Combat
-controls let you edit an attack or block plan, then confirm the declaration
-([planning combat](#planning-and-confirming-combat)). Mana-source choices follow the offered decisions;
+committing. Player targets have explicit named controls. During combat, choose
+for the creature named by the current prompt: attack or decline, or select one
+of its legal blocks or decline. Each choice commits separately before the next
+creature's prompt; there is no draft of a whole attack or block to edit and
+confirm. Mana-source choices likewise follow the offered decisions;
 dragging a spell does not configure manual tapping.
 
 Choose **Inspect** to examine the acting viewer's observation and every legal
 offer. Card selection narrows navigation; **Show all** restores the full list.
-Both modes retain the legal count and complete choices. Switching modes preserves
-a combat draft for the same pending decision; other uncommitted card selections
-are cleared. It sends no game action and leaves priority automation at
+Both modes retain the legal count and complete choices. Switching modes clears
+uncommitted card selections. It sends no game action and leaves priority automation at
 its configured setting. Inspect is the initial default; an explicit mode
 preference is remembered in this browser.
 
@@ -675,14 +677,13 @@ fixed while later bot actions advance the table.
 The player choosing can differ from the player whose turn it is. Target and
 cost prompts identify their source and required input. Finish a pending target
 or cost choice before trying another spell. Inspection and **Show all** keep
-the complete legal choices accessible. Open **Why unavailable?** beside the
-prompt, or inspect a card, for the native blocking reason at this decision:
-timing, zone permission, a missing legal mode or target, complete casting cost,
-or an attack restriction. A pending cost can require a deliberate mana
-activation before **Pay cost** becomes available. Fixed sources the automatic
-payer can use are included in that native check. These explanations do not add
-or remove legal choices. Older recordings say that explanations were not recorded;
-Academy does not reconstruct them from today's rules.
+the complete legal choices accessible. A pending cost can require a deliberate
+mana activation before **Pay cost** becomes available. Mana you have produced
+and not yet spent appears as a floating-mana readout beside the board, by
+color, until it is spent or empties. The list is the complete
+set of legal actions at this decision. Academy does not say why an action is
+absent from it: a card with no listed action has none right now, and its
+details show its printed text and current state, not a reason.
 
 **What is taking time.** Live status distinguishes loading a bot, choosing its
 action, searching and advancing the live game. When a wait lasts more than a
@@ -739,81 +740,6 @@ Back, Escape and clear controls discard only unsubmitted local selections.
 Once an action commits, its costs and revealed information remain committed.
 Cancellation is possible only when the current legal choices explicitly offer
 it; there is no general browser undo.
-### Planning and confirming combat
-
-At your attack declaration, choose **Play**, select an eligible creature on
-the board, then its named player destination. Repeat for another creature and
-read their assignments in **Your choices**. Each assignment names
-the exact creature and the opposing player it will attack. Remove one creature,
-inspect the other, then choose **Confirm**. Only the confirmed declaration makes
-the creature attack and taps it if required. Editing or inspecting the plan
-spends nothing and leaves the game at the same decision.
-
-The board stays in view while you plan. Drafted creatures carry a **Planned attack**
-or **Planned block** marker, also included in their accessible names. Clearing an
-assignment removes its marker; changing focus leaves the other markers in place.
-The summary lists selected creatures, their destinations, counts and current power
-totals. Power is the creatures'
-current power, not a prediction of damage or the opponent's remaining life.
-Copies with the same name remain separate selectable objects.
-
-- **Attack:** select a creature and its named attack destination using the
-  board controls or the labeled choices. The current game offers the opposing
-  player as the destination. Remove a selection to leave that creature out.
-  **Select all eligible** adds the eligible attackers to the draft; review the
-  result before confirming.
-- **Block:** select a blocker, then the attacker it should block. Use the same
-  controls to reassign it to another offered attacker or clear its assignment.
-  The summary keeps all blocker-to-attacker links visible together. Academy
-  does not choose blocker assignments for you.
-- **Clear:** removes the editable assignments so you can start again. It does
-  not submit an empty declaration. To attack or block with no creatures, clear
-  the plan and explicitly confirm it, if the rules permit that declaration.
-- **Inspect:** hover or focus a card for its preview, or open **Inspect card**
-  for details. Switching to **Inspect** lets you examine the acting viewer's
-  observation and complete legal choices without changing the draft. Return
-  to **Play** to continue editing the same pending declaration.
-- **Keyboard:** Tab to the labeled creature and destination or assignment
-  controls, then activate them with Enter or Space. The same controls support
-  pointer input; dragging is not required. Tab to **Confirm** when ready.
-
-The rules engine checks the whole declaration, including restrictions involving
-several creatures. For example, assigning only one blocker to an attacker with
-menace leaves an invalid draft visible with an explanation. Add another eligible
-blocker or change the plan before confirming. Invalid plans open the native combat
-requirements for review; these describe the board’s restrictions rather than
-claiming to identify which restriction the draft violated. Open **Rules response**
-to read the engine's rejection. A creature's presence among the available choices
-does not mean every combination is legal. Academy never drops
-an invalid assignment or substitutes another plan to make confirmation succeed.
-
-**Confirm** waits for validation of the current draft and checks it again when
-submitted. While validation or submission is pending, wait for its result.
-A correctable rules rejection keeps your draft for editing and commits none of
-it. If validation reports a capacity limit, it cannot establish legality;
-confirmation remains unavailable. Invalid and capacity results keep your draft
-editable; retrying an unchanged plan does not resolve those results. **Retry
-validation** is offered when a validation request could not be sent.
-A connection or submission failure is shown separately from a rules rejection. Recover the connection and read the current
-declaration before trying again; a lost confirmation reply does not mean the
-declaration was cancelled.
-
-If the game has advanced, Academy discards the outdated draft and shows the
-current decision. Reloading or reconnecting also discards unconfirmed local
-plans, with an explanation, and restores the game's actual pending and committed
-choices. If part of a declaration was already committed through individual
-decisions, those assignments remain visible and fixed; only the remaining part
-can be edited. **Clear** cannot remove committed assignments, untap creatures
-or undo costs and revealed information.
-
-A confirmed declaration is recorded as its exact individual game decisions.
-Replay can therefore show several decisions from one confirmation. Those are
-the choices that were committed, not additional selections made by the browser.
-Confirmation also lets forced consequences run normally. If no further choice
-is needed, the returned board may already show combat damage or a later phase;
-confirmation does not create another pause at the end of the declaration.
-Watch, recorded Replay and Study keep their own decision controls; the live
-combat plan does not submit actions there.
 
 ### Choosing priority stops
 
@@ -1008,7 +934,7 @@ appearance also close inspection.
 Opening card details or reading earlier history pauses replay. Close the details
 when ready, then press **Play** to resume. Returning to **Latest** does not start
 playback. A live decision already being produced may finish saving while you read;
-your selected board stays put. A pending mirror-search timeout is
+your selected board stays put. A pending Search timeout is
 retained across reload and shown with its message. At the live edge, **Retry
 search** explicitly retries that decision; browsing saved positions never retries
 it. The exact selected position remains selected after reload.
@@ -1125,7 +1051,7 @@ its identity's first ten characters. For example, `run/checkpoints/step_8`
 appears as `run/…/step_8 · 7ac5d442da`. Human names are never shortened this way.
 
 The same compact identity appears at the table, in Games, Replay and Watch.
-Open **status and mana** on the player's bar with a mouse or Tab and Enter to
+Open **status** on the player's bar with a mouse or Tab and Enter to
 read the full recorded name, identity, producer and available provenance.
 Registered policies also retain the runner, artifact digests and configuration.
 Their **Policy ID** binds that whole execution; historical checkpoint identities
@@ -1202,8 +1128,6 @@ pending decision intact. Qwen does not support Search. A provider's
 `supports_search` defaults false; a true flag alone is no search admission.
 Search-capable policies can use the shared composition below.
 
-<a id="mirror-search"></a>
-
 #### Search
 
 Choose a registered policy, then change its **Search** control from **None
@@ -1217,8 +1141,6 @@ its search budget and elapsed waiting time. Reload preserves the configuration.
 | Worlds | 1 | 1–64 |
 | Depth, including the root choice | 1 | 1–40 |
 | Decision ceiling | 30 seconds | Greater than zero, at most 30 seconds |
-
-<a id="mirror-search"></a>
 
 **Uniform belief (physical deal)** samples unseen cards with copy counts and
 public knowledge. Three unseen copies of one card and one of another give a
@@ -1283,11 +1205,10 @@ uv run --no-project managym academy --policy challenger.json watch \
     --player challenger --player random --search '[{"worlds":4,"depth":2},null]'
 ```
 
-`managym.mirror_search.MirrorSearch`, `configure_mirror`, Python `mirror=`
-and CLI `--mirror` remain deprecated aliases until 0.4.0 and warn when used.
-Existing serialized `mirror` fields, error codes and receipt schema names retain
-their spelling so saved games and frozen evidence remain readable. The magnetic
-mirror optimizer remains in `managym.mirror`.
+Search is the only name in the browser, Python and the CLI. Recordings store
+its summary under the serialized key `mirror`, and its error codes and receipt
+schema names keep that spelling, so saved games stay readable. `managym.search`
+holds the configuration, the summary and the magnetic mirror update.
 
 The initial budget tries each supported root action in one sampled world and
 uses the value evaluator immediately after that action. Increase worlds or depth

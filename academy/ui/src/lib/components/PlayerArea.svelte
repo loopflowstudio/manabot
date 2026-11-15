@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ManaPool from './ManaPool.svelte';
   import { getContext } from 'svelte';
   import { PRESENTATION_CONTEXT, presentationSubjects, type PresentationEvent } from '$lib/presentation';
   import { revealWithinScrollRegions } from '$lib/scroll-regions';
@@ -11,8 +12,7 @@
     CastPermission,
     PermanentState,
     PlayerState,
-    PlayerTurnHistory,
-    RestrictedMana
+    PlayerTurnHistory
   } from '$lib/types';
   import type { PlayerIdentity } from '$lib/player-identity';
   import PlayerName from './PlayerName.svelte';
@@ -31,13 +31,10 @@
     definitionNames?: Record<string, string>;
     opponent?: boolean;
     focusedIds?: Set<number>;
-    combatMarkers?: Map<number, string>;
     clickableTargets?: Map<number, number[]>;
     onSelectTarget?: (objectId: number) => void;
     onHoverTarget?: (objectId: number | null) => void;
     onPreviewCard?: (card: CardPreview | null) => void;
-    /** Fold the hand behind a disclosure while a combat declaration needs the room. */
-    compactHand?: boolean;
   }
 
   let {
@@ -47,12 +44,11 @@
     deckName = null,
     definitionNames = {},
     opponent = false,
-    focusedIds = new Set<number>(), combatMarkers = new Map<number, string>(),
+    focusedIds = new Set<number>(),
     clickableTargets = undefined,
     onSelectTarget = undefined,
     onHoverTarget = undefined,
     onPreviewCard = undefined,
-    compactHand = false,
   }: Props = $props();
 
   const label = $derived(identity.text);
@@ -99,14 +95,6 @@
     return terms.join(' ');
   }
 
-  function spendingText(restricted: RestrictedMana): string {
-    if (restricted.except_nonartifact_spells) return 'anything but nonartifact spells';
-    const parts = [];
-    if (restricted.spells?.length) parts.push(`${restricted.spells.join(' or ')} spells`);
-    if (restricted.abilities?.length) parts.push(`abilities of ${restricted.abilities.join(' or ')} sources`);
-    return parts.join(' or ');
-  }
-
   // The bar wears its deck's colors at full Magic saturation — G→W for
   // Allies, U→R for Lessons. Like the banner and the card plates it is a
   // fixed rich world in both modes: vivid ends, a whisper of scrim, and
@@ -145,9 +133,6 @@
       toughness: card.types.is_creature ? card.toughness : null,
     });
   }
-  function manaText(pool: number[]): string {
-    return pool.map((amount, index) => amount ? `${amount} {${['W', 'U', 'B', 'R', 'G', 'C'][index]}}` : '').filter(Boolean).join(' · ') || 'Empty';
-  }
 </script>
 
 {#snippet rubric(text: string)}
@@ -157,7 +142,9 @@
 {/snippet}
 
 <section class="player-area" class:empty-battlefield={opponent && player.battlefield.length === 0} aria-label={`${label}${deckName ? ` — ${deckName}` : ''}`}>
-  <details class="player-status type-caption"><summary>{label} status and mana</summary>
+  <!-- Status and floating mana share one row so the battlefield keeps its height. -->
+  <div class="player-summaries">
+  <details class="player-status type-caption"><summary>{label} status</summary>
   {#if identity.digest || identity.producer || identity.full !== identity.compact}
   <div class="identity-details" data-testid="player-identity">
     <p>{identity.full}</p>
@@ -174,21 +161,6 @@
     {/each}
   </div>
   {/if}
-  {#if player.mana}
-    <p class="type-caption py-1" data-testid="mana-pool">{label} mana: {manaText(player.mana)}
-      {#if player.restricted_mana?.length}
-        {#each player.restricted_mana as restricted}
-          · {manaText(restricted.mana)} only for {spendingText(restricted)}
-        {/each}
-      {:else if player.lesson_mana?.some(Boolean)} · Restricted mana: {manaText(player.lesson_mana)}{/if}
-      <!-- Class rows are subsets of the amounts above, not additional mana. -->
-      {#each player.pooled_mana_classes ?? [] as pooled, index}
-        {index ? '; ' : ' — including '}{manaText(pooled.mana)}{pooled.restriction ? ` only for ${pooled.restriction}` : ''}{pooled.effect ? ` that puts ${pooled.effect}` : ''}, expiring {pooled.combat ? 'at end of combat' : 'at step end'}
-      {/each}
-      {#if !player.pooled_mana_classes?.length && player.combat_mana} · {player.combat_mana} mana expires at end of combat{/if}
-      {#if player.keeps_red_mana} · Keeps unspent red mana until end of turn{/if}
-    </p>
-  {:else}<p class="type-caption text-ink-2">Mana details not recorded.</p>{/if}
   {#if player.hand_only_until !== undefined}
     <p class="type-caption py-1" data-testid="hand-only">
       {label} can cast spells only from hand until the other player's next turn.
@@ -217,6 +189,8 @@
     </p>
   {/if}
   </details>
+  <ManaPool {player} {label} />
+  </div>
   <!-- Identity and life stay above the scrolling battlefield and zones. -->
   <div
     data-player-id={player.id}
@@ -249,7 +223,7 @@
         <Battlefield
           permanents={player.battlefield}
           {tablePermanents}
-          {focusedIds} {combatMarkers}
+          {focusedIds}
           {clickableTargets}
           {onSelectTarget}
           {onHoverTarget}
@@ -348,51 +322,40 @@
   </div>
 
   {#if !opponent}
-    {#if compactHand}
-      <details class="hand-staff hand-compact" data-testid="compact-hand">
-        <summary class="type-caption cursor-pointer">Hand ({player.hand.length}) · folded while planning combat</summary>
-        {@render handCards()}
-      </details>
-    {:else}
       <div class="hand-staff">
         {@render rubric(`Hand (${player.hand.length})`)}
-        {@render handCards()}
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex (keyboard access to horizontal hand scrolling) -->
+        <div role="region" aria-label={`${label} hand`} tabindex="0" class="hand-cards"
+          onfocusin={(event) => {
+            if (event.target instanceof HTMLElement) revealWithinScrollRegions(event.target);
+          }}>
+          {#if player.hand.length === 0}
+            <div class="type-caption px-1 py-1 text-ink-3">Empty hand</div>
+          {/if}
+          {#each player.hand as card}
+            <Card
+              objectId={card.id}
+              name={card.name}
+              copyDescription={copyLabel(player.hand, card.id)}
+              power={card.types.is_creature ? card.power : null}
+              toughness={card.types.is_creature ? card.toughness : null}
+              focused={focusedIds.has(card.id)}
+              clickable={onSelectTarget !== undefined}
+              onSelect={() => onSelectTarget?.(card.id)}
+              onHoverStart={() => {
+                onHoverTarget?.(clickableTargets?.has(card.id) ? card.id : null);
+                preview(card);
+              }}
+              onHoverEnd={() => {
+                onHoverTarget?.(null);
+                onPreviewCard?.(null);
+              }}
+            />
+          {/each}
+        </div>
       </div>
-    {/if}
   {/if}
 </section>
-
-{#snippet handCards()}
-  <!-- svelte-ignore a11y_no_noninteractive_tabindex (keyboard access to horizontal hand scrolling) -->
-  <div role="region" aria-label={`${label} hand`} tabindex="0" class="hand-cards"
-    onfocusin={(event) => {
-      if (event.target instanceof HTMLElement) revealWithinScrollRegions(event.target);
-    }}>
-    {#if player.hand.length === 0}
-      <div class="type-caption px-1 py-1 text-ink-3">Empty hand</div>
-    {/if}
-    {#each player.hand as card}
-      <Card
-        objectId={card.id}
-        name={card.name}
-        copyDescription={copyLabel(player.hand, card.id)}
-        power={card.types.is_creature ? card.power : null}
-        toughness={card.types.is_creature ? card.toughness : null}
-        focused={focusedIds.has(card.id)}
-        clickable={onSelectTarget !== undefined}
-        onSelect={() => onSelectTarget?.(card.id)}
-        onHoverStart={() => {
-          onHoverTarget?.(clickableTargets?.has(card.id) ? card.id : null);
-          preview(card);
-        }}
-        onHoverEnd={() => {
-          onHoverTarget?.(null);
-          onPreviewCard?.(null);
-        }}
-      />
-    {/each}
-  </div>
-{/snippet}
 
 <style>
   [data-narrated-seq] { outline: 2px solid var(--info); outline-offset: 2px; }
@@ -402,13 +365,15 @@
   .hand-cards > :global(*) { flex-shrink: 0; }
   .hand-staff { min-width: 0; }
   .staff { padding: 4px 0; }
+  .player-summaries { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 1.5rem; }
+  .player-summaries > :global(details[open]) { flex-basis: 100%; }
   @media (min-width: 1024px) and (min-height: 650px) {
     .player-area { display: flex; flex-direction: column; min-height: 0; }
-    .player-status { flex-shrink: 0; max-height: 90px; overflow: auto; }
+    .player-summaries { flex-shrink: 0; }
+    .player-status { max-height: 90px; overflow: auto; }
     .staves { display: flex; flex-direction: column; gap: .25rem; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 .25rem; }
     .empty-battlefield .staves { max-height: 64px; }
     .hand-staff { flex-shrink: 0; }
-    .hand-compact[open] { max-height: 45%; overflow-y: auto; overscroll-behavior: contain; }
     .staff { display: flex; flex-direction: column; flex: 1 0 auto; min-height: 0; }
     .staves > :global(:not(.staff)) { flex-shrink: 0; }
   }

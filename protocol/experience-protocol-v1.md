@@ -50,12 +50,6 @@ Finished retention is bounded and aged at admission after 15 minutes;
 active attempts are never evicted, with a maximum of 16 admitted concurrently.
 The original `POST /api/watch` remains available for synchronous callers.
 
-New live projections include `unavailable_actions`, native viewer-safe reasons
-for visible objects at this decision. They are separate from legal offers.
-Absence in historical frames means explanations were not recorded; empty means
-this decision has no published refusal. Shared native observations encode each
-refusal as a fact with the exact object join and catalog reason token.
-
 ## Rust authority and wire types
 
 This is deliberately a narrow generated boundary, not a serialization of

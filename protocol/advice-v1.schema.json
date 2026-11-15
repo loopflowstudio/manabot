@@ -1941,168 +1941,6 @@
       "title": "DeckNames",
       "type": "object"
     },
-    "DeclarationBinding": {
-      "additionalProperties": false,
-      "properties": {
-        "fingerprint": {
-          "title": "Fingerprint",
-          "type": "string"
-        },
-        "revision": {
-          "maximum": 18446744073709551615,
-          "minimum": 0,
-          "title": "Revision",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "revision",
-        "fingerprint"
-      ],
-      "title": "DeclarationBinding",
-      "type": "object"
-    },
-    "DeclarationProjection": {
-      "additionalProperties": false,
-      "properties": {
-        "actor": {
-          "maximum": 255,
-          "minimum": 0,
-          "title": "Actor",
-          "type": "integer"
-        },
-        "binding": {
-          "$ref": "#/$defs/DeclarationBinding"
-        },
-        "constraints": {
-          "items": {
-            "type": "string"
-          },
-          "title": "Constraints",
-          "type": "array"
-        },
-        "destinations": {
-          "items": {
-            "$ref": "#/$defs/DecisionObjectView"
-          },
-          "title": "Destinations",
-          "type": "array"
-        },
-        "rules_player": {
-          "maximum": 255,
-          "minimum": 0,
-          "title": "Rules Player",
-          "type": "integer"
-        },
-        "stage": {
-          "enum": [
-            "attackers",
-            "blockers"
-          ],
-          "title": "Stage",
-          "type": "string"
-        },
-        "subjects": {
-          "items": {
-            "$ref": "#/$defs/DeclarationSubject"
-          },
-          "title": "Subjects",
-          "type": "array"
-        }
-      },
-      "required": [
-        "binding",
-        "stage",
-        "actor",
-        "rules_player",
-        "subjects",
-        "destinations",
-        "constraints"
-      ],
-      "title": "DeclarationProjection",
-      "type": "object"
-    },
-    "DeclarationSubject": {
-      "additionalProperties": false,
-      "properties": {
-        "assigned_to": {
-          "anyOf": [
-            {
-              "discriminator": {
-                "mapping": {
-                  "object": "#/$defs/ObjectSubject",
-                  "player": "#/$defs/PlayerSubject",
-                  "stack": "#/$defs/StackSubject"
-                },
-                "propertyName": "kind"
-              },
-              "oneOf": [
-                {
-                  "$ref": "#/$defs/ObjectSubject"
-                },
-                {
-                  "$ref": "#/$defs/StackSubject"
-                },
-                {
-                  "$ref": "#/$defs/PlayerSubject"
-                }
-              ]
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Assigned To"
-        },
-        "destinations": {
-          "items": {
-            "discriminator": {
-              "mapping": {
-                "object": "#/$defs/ObjectSubject",
-                "player": "#/$defs/PlayerSubject",
-                "stack": "#/$defs/StackSubject"
-              },
-              "propertyName": "kind"
-            },
-            "oneOf": [
-              {
-                "$ref": "#/$defs/ObjectSubject"
-              },
-              {
-                "$ref": "#/$defs/StackSubject"
-              },
-              {
-                "$ref": "#/$defs/PlayerSubject"
-              }
-            ]
-          },
-          "title": "Destinations",
-          "type": "array"
-        },
-        "fixed": {
-          "title": "Fixed",
-          "type": "boolean"
-        },
-        "object": {
-          "$ref": "#/$defs/DecisionObjectView"
-        },
-        "power": {
-          "maximum": 2147483647,
-          "minimum": -2147483648,
-          "title": "Power",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "object",
-        "power",
-        "destinations",
-        "fixed"
-      ],
-      "title": "DeclarationSubject",
-      "type": "object"
-    },
     "EvidenceProvenance": {
       "additionalProperties": false,
       "properties": {
@@ -2176,17 +2014,6 @@
           "anyOf": [
             {
               "$ref": "#/$defs/DeckNames"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "declaration": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/DeclarationProjection"
             },
             {
               "type": "null"
@@ -2730,21 +2557,6 @@
         },
         "turn": {
           "$ref": "#/$defs/LegacyTurnView"
-        },
-        "unavailable_actions": {
-          "anyOf": [
-            {
-              "items": {
-                "$ref": "#/$defs/UnavailableActionView"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Unavailable Actions"
         },
         "won": {
           "title": "Won",
@@ -4484,30 +4296,6 @@
       "title": "TableAudience",
       "type": "object"
     },
-    "UnavailableActionView": {
-      "additionalProperties": false,
-      "properties": {
-        "message": {
-          "title": "Message",
-          "type": "string"
-        },
-        "object": {
-          "title": "Object",
-          "type": "integer"
-        },
-        "reason": {
-          "title": "Reason",
-          "type": "string"
-        }
-      },
-      "required": [
-        "object",
-        "reason",
-        "message"
-      ],
-      "title": "UnavailableActionView",
-      "type": "object"
-    },
     "UnavailableQuantity": {
       "additionalProperties": false,
       "properties": {
@@ -4564,11 +4352,8 @@
       "additionalProperties": false,
       "properties": {
         "rules_viewer": {
+          "const": 0,
           "default": 0,
-          "enum": [
-            0,
-            1
-          ],
           "title": "Rules Viewer",
           "type": "integer"
         },

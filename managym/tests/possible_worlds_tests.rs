@@ -45,7 +45,7 @@ fn authored_match() -> Game {
             semantic.decklist("gw_allies").expect("GW deck compiles"),
         ),
     ];
-    Game::new(configs, 0, true).expect("valid game setup")
+    Game::new(configs, 0, true)
 }
 
 /// Step the authored match deterministically until GW Allies (player 1) is

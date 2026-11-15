@@ -19,7 +19,7 @@ async function completeShortGame(page: Page): Promise<void> {
 }
 
 for (const [theme, width, height] of [['light', 1280, 800], ['dark', 1440, 900]] as const) {
-  test(`repeated imported model session (${theme}, ${width}x${height})`, async ({page, context}, testInfo) => {
+  test(`repeated imported model session (${theme}, ${width}x${height})`, async ({page, context, browser}, testInfo) => {
     await page.setViewportSize({width, height});
     await page.addInitScript(theme => localStorage.setItem('etude.theme', theme), theme);
     await page.emulateMedia({colorScheme: theme, reducedMotion:'reduce'});
@@ -45,7 +45,7 @@ for (const [theme, width, height] of [['light', 1280, 800], ['dark', 1440, 900]]
     await page.getByTestId('checkpoint-select').selectOption(`policy:${first.sha256}`);
     await page.getByRole('combobox', {name:'Deal mode', exact:true}).selectOption('repeat');
     await page.getByLabel('Seed', {exact:true}).fill('18446744073709551615');
-    await page.getByRole('button', {name:'New Game', exact:true}).click();
+    await page.getByRole('button', {name:'Start game', exact:true}).click();
     const strip = page.getByRole('region', {name:'Play session', exact:true});
     await expect(strip).toContainText('Game 1');
     await completeShortGame(page);
@@ -73,6 +73,14 @@ for (const [theme, width, height] of [['light', 1280, 800], ['dark', 1440, 900]]
     await page.route('**/api/traces?*', async route => { const url = new URL(route.request().url()); if (url.searchParams.has('session')) url.searchParams.set('limit','2'); await route.continue({url:url.href}); });
     await page.goto(history!);
     await expect(page.getByRole('region', {name:'Session results'})).toContainText('out of 2 completed');
+    // A copied link carries no owner access; the original tab still recovers.
+    const visitor = await browser.newContext();
+    try {
+      const visitorPage = await visitor.newPage();
+      await visitorPage.goto(new URL(history!, page.url()).href);
+      await expect(visitorPage.getByRole('alert')).toContainText('This browser cannot access this session history.');
+      await expect(visitorPage.getByRole('button', {name:'Try again', exact:true})).toHaveCount(0);
+    } finally { await visitor.close(); }
     const summaries = page.getByRole('region', {name:'Session results'}).locator('summary');
     await expect(summaries.filter({hasText:first.name})).toHaveCount(2);
     await expect(summaries.filter({hasText:other.name})).toHaveCount(1);
@@ -96,7 +104,7 @@ for (const [theme, width, height] of [['light', 1280, 800], ['dark', 1440, 900]]
     await independent.close();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
     await page.getByRole('link', {name:'New game', exact:true}).first().click();
-    await page.getByRole('button', {name:'New Game', exact:true}).click();
+    await page.getByRole('button', {name:'Start game', exact:true}).click();
     await expect(strip).toContainText('Game 1');
     await page.goto(history!);
     await expect(page.getByRole('region', {name:'Session results'})).toContainText('1 stopped');
@@ -142,7 +150,7 @@ test('session storage failure leaves current Play usable with an honest warning'
   await page.goto('/');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByTestId('opponent-select').selectOption('passive');
-  await page.getByRole('button',{name:'New Game',exact:true}).click();
+  await page.getByRole('button',{name:'Start game',exact:true}).click();
   await expect(page.getByText(/Reload continuity is unavailable/)).toBeVisible();
   await expect(page.getByTestId('action-option').first()).toBeEnabled();
   const before = await page.locator('main').getAttribute('data-frame-revision');
@@ -160,7 +168,7 @@ for (const [theme, width, height] of [['light',1280,800], ['dark',1440,900]] as 
     await page.getByTestId('opponent-select').selectOption('passive');
     await page.getByRole('combobox',{name:'Deal mode',exact:true}).selectOption('repeat');
     await page.getByLabel('Seed',{exact:true}).fill('18446744073709551615');
-    await page.getByRole('button',{name:'New Game',exact:true}).click();
+    await page.getByRole('button',{name:'Start game',exact:true}).click();
     const strip = page.getByRole('region',{name:'Play session',exact:true});
     await expect(strip).toContainText('Game 1');
     const history = await strip.getByRole('link',{name:'Session history'}).getAttribute('href');
@@ -168,7 +176,7 @@ for (const [theme, width, height] of [['light',1280,800], ['dark',1440,900]] as 
     await strip.getByRole('button',{name:'Edit next game',exact:true}).focus();
     await page.keyboard.press('Enter');
     const next = page.getByRole('region',{name:'Next game setup',exact:true});
-    await expect(next.getByRole('button',{name:'New Game',exact:true})).toHaveCount(0);
+    await expect(next.getByRole('button',{name:'Start game',exact:true})).toHaveCount(0);
     await page.screenshot({path:testInfo.outputPath(`next-session-${theme}.png`)});
     await next.getByLabel('Seed',{exact:true}).fill('7');
     await next.getByRole('button',{name:'Save next setup',exact:true}).click();
@@ -214,14 +222,14 @@ for (const [theme, width, height] of [['light',1280,800], ['dark',1440,900]] as 
     await fresh.getByLabel('Use imported decks for the next game').check();
     await fresh.getByLabel('Your deck source',{exact:true}).fill('8 Definitely not a Magic card');
     await fresh.getByLabel('Opponent deck source',{exact:true}).fill('8 Mountain');
-    await fresh.getByRole('button',{name:'New Game',exact:true}).click();
+    await fresh.getByRole('button',{name:'Start game',exact:true}).click();
     await expect(page.getByRole('alert')).toBeVisible();
     await expect(fresh).toBeVisible();
     await expect(fresh.getByLabel('Your deck source',{exact:true})).toHaveValue('8 Definitely not a Magic card');
     await page.reload();
     await expect(fresh.getByLabel('Seed',{exact:true})).toHaveValue('7');
     await expect(strip).toContainText('Game 2');
-    await fresh.getByRole('button',{name:'New Game',exact:true}).click();
+    await fresh.getByRole('button',{name:'Start game',exact:true}).click();
     await expect(strip).toContainText('Game 1');
     await expect(strip.getByRole('link',{name:'Session history'})).not.toHaveAttribute('href',history!);
     await strip.getByRole('button',{name:'Edit next game',exact:true}).click();

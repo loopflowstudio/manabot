@@ -34,7 +34,7 @@ test('Learn modes, previews, Back, reconnect and three ordinary outcomes', async
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
 
   for (const outcome of ['LEARN_TAKE_LESSON', 'LEARN_DISCARD', 'DECLINE_CHOICE']) {
-    await page.getByRole('button', { name: 'New Game', exact: true }).first().click();
+    await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
     await expect.poll(() => page.evaluate(() => (window as any).__learn.frame?.revision)).toBe(0);
     for (const step of prefix.prefix) {
       const button = page.locator(`[data-testid="action-option"][data-offer-id="${step.offer_id}"]`);
@@ -82,7 +82,7 @@ test('Learn modes, previews, Back, reconnect and three ordinary outcomes', async
 test('checked Learn demo opens directly into normal browser controls', async ({ page }) => {
   await page.goto('/?demo=learn');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-  await page.getByRole('button', { name: 'New Game', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
   await expect(page.getByRole('button', { name: 'Take a Lesson', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Take a Lesson', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Take Accumulate Wisdom', exact: true })).toBeVisible();

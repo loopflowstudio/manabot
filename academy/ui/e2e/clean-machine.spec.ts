@@ -266,7 +266,7 @@ test('clean command reaches pinned play and reloads without public network', asy
   await expect(page.getByTestId('opponent-select')).toHaveValue('search-64');
   await expect(page.getByTestId('selected-deck-hero')).toHaveAttribute('data-deck-id', 'ur_lessons');
   await expect(page.getByTestId('selected-deck-villain')).toHaveAttribute('data-deck-id', 'gw_allies');
-  await page.getByRole('button', { name: 'New Game' }).first().click();
+  await page.getByRole('button', { name: 'Start game' }).first().click();
 
   const board = page.getByTestId('game-board');
   await expect(page.getByTestId('deck-names')).toHaveText('You (UR Lessons) vs Search 64 (GW Allies)', {

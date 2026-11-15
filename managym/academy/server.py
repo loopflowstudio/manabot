@@ -8,7 +8,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Iterable
 from contextlib import ExitStack, suppress
-from copy import copy, deepcopy
+from copy import deepcopy
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 import hashlib
@@ -51,11 +51,6 @@ from managym.experience import (
     PROTOCOL_VERSION,
     UNVERSIONED_CONTENT_HASH,
     Command,
-    CommandReceipt,
-    DeclarationCommand,
-    DeclarationCommitment,
-    DeclarationProjection,
-    DeclarationReceipt,
     ExperienceFrame,
     InteractionOffer,
 )
@@ -144,9 +139,6 @@ from .shared_table_protocol import (
     BranchPreviewMessage,
     BranchRevealMessage,
     CommandMessage,
-    DeclarationCapacity,
-    DeclarationMessage,
-    DeclarationValidationEvent,
     JoinTableMessage,
     NewGameMessage,
     PassTurnMessage,
@@ -162,7 +154,6 @@ from .shared_table_protocol import (
     TableCapability,
     TableSnapshot,
     TransferPilotMessage,
-    ValidateDeclarationMessage,
     ViewerAccess,
     ViewerIdentity,
     ViewerRole,
@@ -824,6 +815,21 @@ def _parse_game_config(config: Any) -> GameConfig:
     return parsed
 
 
+def _academy_actions(obs: managym.Observation, human_seat: int) -> list[dict[str, Any]]:
+    """Relabel player targets by role without changing card names or native offers."""
+    actions = describe_actions(obs)
+    labels = {
+        int(player.id): "Hero" if int(player.player_index) == human_seat else "Villain"
+        for player in (obs.agent, obs.opponent)
+    }
+    for row in actions:
+        focus = row["focus"]
+        if row["type"] == "CHOOSE_TARGET" and len(focus) == 1 and focus[0] in labels:
+            if row["description"] in {"Target Hero", "Target Villain"}:
+                row["description"] = f"Target {labels[focus[0]]}"
+    return actions
+
+
 def observe_policies(
     policies: Iterable[BotPolicy | None], env: managym.Env, obs: managym.Observation
 ) -> None:
@@ -919,7 +925,6 @@ class GameSession:
         self._next_prompt_id = 1
         self.published_prompt: PublishedPrompt | None = None
         self.accepted_commands: dict[str, dict[str, Any]] = {}
-        self._declaration_receipts: list[CommandReceipt] = []
         self.presentation = PresentationProjector()
         self.presentation_events: list[dict[str, Any]] = []
         self._last_presentation_cursor = 0
@@ -1122,7 +1127,6 @@ class GameSession:
         self.presentation_events = []
         self._last_presentation_cursor = 0
         self.canonical_decisions = []
-        self._declaration_receipts = []
         self.canonical_presentation = {0: [], 1: []}
         self._authority_command_seq = 0
         self._study_roots = {}
@@ -1386,296 +1390,6 @@ class GameSession:
             },
         }
 
-    def _declaration_precondition(self, command: DeclarationCommand) -> str | None:
-        if not command.command_id:
-            return "invalid_command"
-        if command.command_id.startswith(("authority.", "compound-")):
-            return "reserved_command_id"
-        if command.match_id != self.match_id:
-            return "wrong_match"
-        context = self.published_prompt
-        if (
-            context is None
-            or self.env is None
-            or self.obs is None
-            or self.trace is None
-        ):
-            return "authority_busy"
-        if command.expected_revision != context.revision:
-            return "stale_revision"
-        if command.prompt_id != context.prompt_id:
-            return "stale_prompt"
-        if (
-            self.watch_mode
-            or self.obs.game_over
-            or not _is_hero_turn(self.obs, self.human_seat)
-        ):
-            return "not_actor"
-        raw = self.env.declaration_projection_json(self.human_seat)
-        if json.loads(raw) is None:
-            return "not_declaration"
-        projection = DeclarationProjection.model_validate_json(raw)
-        if projection.binding != command.plan.binding:
-            return "stale_declaration"
-        return None
-
-    def validate_declaration(
-        self, command: DeclarationCommand, request_id: str
-    ) -> dict[str, Any]:
-        """Read-only draft validation; it never publishes a prompt or saves a trace."""
-        status: Literal["valid", "invalid", "stale", "capacity", "unavailable"] = (
-            "valid"
-        )
-        message = "Declaration is legal."
-        capacity: DeclarationCapacity | None = None
-        try:
-            reason = self._declaration_precondition(command)
-            if reason is not None:
-                status = (
-                    "stale"
-                    if reason
-                    in {
-                        "wrong_match",
-                        "stale_revision",
-                        "stale_prompt",
-                        "stale_declaration",
-                    }
-                    else "unavailable"
-                )
-                message = reason.replace("_", " ").capitalize() + "."
-            else:
-                assert self.env is not None
-                self.env.validate_declaration_plan_json(command.plan.model_dump_json())
-        except managym.CapacityError as error:
-            status = "capacity"
-            message = (
-                "Rules validation reached its capacity limit. Nothing was committed."
-            )
-            capacity = DeclarationCapacity(
-                resource=error.resource, limit=error.limit, visited=error.visited
-            )
-        except managym.AgentError as error:
-            status, message = "invalid", str(error)
-        return DeclarationValidationEvent(
-            type="declaration_validation",
-            request_id=request_id,
-            match_id=self.match_id,
-            revision=self.revision,
-            prompt_id=None
-            if self.published_prompt is None
-            else self.published_prompt.prompt_id,
-            status=status,
-            message=message,
-            capacity=capacity,
-        ).model_dump(mode="json")
-
-    def _declaration_recording_candidate(
-        self, prepared: managym.PreparedDeclaration
-    ) -> GameSession:
-        """Share immutable history, copy append owners, and retain actual native roots."""
-        assert self.trace is not None
-        staged = copy(self)
-        staged.env = prepared.root(0)
-        staged.trace = replace(self.trace, events=list(self.trace.events))
-        staged.presentation = deepcopy(self.presentation)
-        staged.presentation_events = list(self.presentation_events)
-        staged.canonical_decisions = list(self.canonical_decisions)
-        staged.canonical_presentation = {
-            viewer: list(events)
-            for viewer, events in self.canonical_presentation.items()
-        }
-        staged.authority_transitions = list(self.authority_transitions)
-        staged._study_roots = dict(self._study_roots)
-        staged._decision_source_sha256 = dict(self._decision_source_sha256)
-        staged._decision_rules_revision = dict(self._decision_rules_revision)
-        staged._pending_action_log = list(self._pending_action_log)
-        staged.accepted_commands = dict(self.accepted_commands)
-        staged._declaration_receipts = list(self._declaration_receipts)
-        staged.authority_fallback_counters = dict(self.authority_fallback_counters)
-        return staged
-
-    def hero_declaration(
-        self,
-        raw: dict[str, Any],
-        *,
-        committed: Callable[[dict[str, Any]], None] | None = None,
-    ) -> dict[str, Any]:
-        """Commit a full plan under the table lock, then run opponent policies.
-
-        The lock owns the source through candidate execution, recording and the
-        durable save. Only private candidates are touched before that save; no
-        policy is observed or called. The source therefore cannot change between
-        persistence and native publication. Parent receipts name that commit's
-        frame; later policy/automation steps can advance the response frame.
-        """
-        command_id = raw.get("command_id")
-        if not isinstance(command_id, str) or not command_id:
-            raise ValueError("command_id must be a non-empty string.")
-        if command_id in self.accepted_commands:
-            return {
-                "type": "command_outcome",
-                "status": "duplicate",
-                "receipt": deepcopy(self.accepted_commands[command_id]),
-                "recovery": self.current_recovery("duplicate_command"),
-            }
-        try:
-            command = DeclarationCommand.model_validate(raw)
-        except ValidationError:
-            return self._reject_command(raw, "invalid_command", recover=False)
-        try:
-            reason = self._declaration_precondition(command)
-            if reason is not None:
-                return self._reject_command(
-                    raw,
-                    reason,
-                    recover=reason
-                    in {
-                        "wrong_match",
-                        "stale_revision",
-                        "stale_prompt",
-                        "stale_declaration",
-                    },
-                )
-            assert self.env is not None and self.published_prompt is not None
-            live_env = self.env
-            prepared = live_env.prepare_declaration_plan_json(
-                command.plan.model_dump_json()
-            )
-            evidence = json.loads(prepared.to_json())
-            children = [
-                SemanticCommand.from_payload(child) for child in evidence["commands"]
-            ]
-            completion = DeclarationCommitment.model_validate(evidence["completion"])
-            staged = self._declaration_recording_candidate(prepared)
-            batch_cursor = self.presentation.next_seq
-            for index, child in enumerate(children):
-                context = staged._publish_current_prompt()
-                if context is None:
-                    raise RuntimeError("Prepared declaration child has no prompt.")
-                action_index = context.action_by_offer.get(child.offer_id)
-                if action_index is None or child.answers or child.object_preconditions:
-                    raise RuntimeError(
-                        "Prepared declaration child is not an ordinary bound choice."
-                    )
-                staged._step_and_record(
-                    actor="hero",
-                    action_index=action_index,
-                    actions=context.actions,
-                    context=context,
-                    source="client",
-                    command=Command(
-                        command_id=child.command_id,
-                        match_id=self.match_id,
-                        expected_revision=context.revision,
-                        prompt_id=context.prompt_id,
-                        offer_id=child.offer_id,
-                        answers=[],
-                    ).model_dump(mode="json"),
-                    prepared_child=prepared.result(index),
-                )
-            if not children or staged.obs is None:
-                raise RuntimeError("Prepared declaration has no committed children.")
-            if (
-                _is_hero_turn(staged.obs, staged.human_seat)
-                and not staged.obs.game_over
-            ):
-                context = staged._publish_current_prompt()
-                assert context is not None
-                committed_frame = context.frame
-            else:
-                committed_frame = staged._build_frame(
-                    staged.obs,
-                    viewer=self.human_seat,
-                    prompt=None,
-                    offers=[],
-                    action_space="",
-                )
-            receipt = CommandReceipt(
-                command_id=command.command_id,
-                actor=self.human_seat,
-                accepted_at=self.revision,
-                resulting_revision=staged.revision,
-                resulting_frame_hash=committed_frame["frame_hash"],
-                declaration=DeclarationReceipt(
-                    command=command,
-                    child_command_ids=[child.command_id for child in children],
-                    completion=completion,
-                ),
-            )
-            staged._declaration_receipts.append(receipt)
-            staged.accepted_commands[command.command_id] = receipt.model_dump(
-                mode="json"
-            )
-            while len(staged.accepted_commands) > MAX_ACCEPTED_COMMANDS:
-                staged.accepted_commands.pop(next(iter(staged.accepted_commands)))
-        except managym.CapacityError:
-            rejected = self._reject_command(raw, "capacity", recover=False)
-            rejected["rejection"]["message"] = (
-                "Combat confirmation reached its capacity limit. Nothing was committed."
-            )
-            return rejected
-        except managym.AgentError as error:
-            rejected = self._reject_command(raw, "invalid_declaration", recover=False)
-            rejected["rejection"]["message"] = str(error)
-            return rejected
-        # JSON/schema, retained roots, parent linkage and the durable row all
-        # succeed before publication. SQLite failures leave the live game alone.
-        # The table lock prevents a source change between this save and publish;
-        # an ownership violation must not be mislabeled a correctable rules error.
-        staged._persist_attempt(
-            end_reason="game_over" if staged.obs.game_over else None
-        )
-        prepared.publish()
-        # Publish append owners together. The original Env object and its capture
-        # origin survive; only its successfully prepared native state was replaced.
-        for name in (
-            "obs",
-            "trace",
-            "revision",
-            "_next_prompt_id",
-            "published_prompt",
-            "_pending_decision",
-            "presentation",
-            "presentation_events",
-            "canonical_decisions",
-            "canonical_presentation",
-            "authority_transitions",
-            "authority_fallback_counters",
-            "_study_roots",
-            "_decision_source_sha256",
-            "_decision_rules_revision",
-            "_pending_action_log",
-            "_bot_decision",
-            "accepted_commands",
-            "_declaration_receipts",
-            "_trace_saved",
-            "_study_provider",
-        ):
-            setattr(self, name, getattr(staged, name))
-        self.env = live_env
-        if committed is not None:
-            committed(
-                self._accepted_outcome(
-                    command.expected_revision,
-                    batch_cursor,
-                    receipt.model_dump(mode="json"),
-                )
-            )
-            batch_cursor = self.presentation.next_seq
-        response_base = (
-            self.revision if committed is not None else command.expected_revision
-        )
-        try:
-            self._observe_policies()
-            self._advance()
-        finally:
-            if self.obs is not None and self.obs.game_over:
-                self._close_policies()
-        self._last_presentation_cursor = batch_cursor
-        return self._accepted_outcome(
-            response_base, batch_cursor, receipt.model_dump(mode="json")
-        )
-
     def retry_mirror(self, match_id: str, expected_revision: int) -> dict[str, Any]:
         """Retry only the bound, uncommitted bot decision after a deadline."""
         if (
@@ -1819,7 +1533,6 @@ class GameSession:
         context: DecisionContext | None = None,
         command: dict[str, Any] | None = None,
         source: str | None = None,
-        prepared_child: managym.DeclarationChild | None = None,
     ) -> None:
         if self.env is None or self.obs is None or self.trace is None:
             raise RuntimeError("Cannot step without an active game.")
@@ -1887,9 +1600,7 @@ class GameSession:
                     "command": command,
                 }
             )
-            retained_root = (
-                self.env if prepared_child is not None else self.env.clone_env()
-            )
+            retained_root = self.env.clone_env()
             if actor_index == self.human_seat:
                 pending = self._pending_decision
                 if pending is None:
@@ -1905,8 +1616,7 @@ class GameSession:
                     raise RuntimeError(
                         "Committed decision identity drifted from live prompt."
                     )
-                if prepared_child is None:
-                    retained_root = pending.root.clone_env()
+                retained_root = pending.root.clone_env()
                 self._decision_source_sha256[committed_address.serialize()] = (
                     pending.source_sha256
                 )
@@ -1931,15 +1641,9 @@ class GameSession:
             expected_revision=int(semantic_frame["revision"]),
             offer_id=int(command["offer_id"]),
         )
-        if prepared_child is None:
-            transition_json, next_obs, reward, _, _, _ = self.env.step_semantic_command(
-                semantic_command.to_json()
-            )
-        else:
-            transition_json = prepared_child.transition_json
-            next_obs = prepared_child.observation
-            reward = prepared_child.reward
-            self.env = prepared_child.env
+        transition_json, next_obs, reward, _, _, _ = self.env.step_semantic_command(
+            semantic_command.to_json()
+        )
         semantic_transition = SemanticTransition.from_json(transition_json)
         if semantic_transition.receipt.command_id != str(command["command_id"]):
             raise RuntimeError("Semantic receipt command identity drifted.")
@@ -2032,12 +1736,11 @@ class GameSession:
                 )
             )
 
-        if prepared_child is None:
-            try:
-                self._observe_policies()
-            finally:
-                if next_obs.game_over:
-                    self._close_policies()
+        try:
+            self._observe_policies()
+        finally:
+            if next_obs.game_over:
+                self._close_policies()
 
     def _choose_bot(self, policy: BotPolicy) -> BotDecision | None:
         """Retain failed proposals on the same native decision and policy session.
@@ -2164,7 +1867,7 @@ class GameSession:
                 raise RuntimeError("Hero automatic play exceeded safety step limit.")
             hero_steps += 1
 
-            actions = describe_actions(self.obs, hero_seat=self.human_seat)
+            actions = _academy_actions(self.obs, self.human_seat)
             action_index = _pass_priority_index(actions)
             if action_index is None:
                 return
@@ -2322,7 +2025,7 @@ class GameSession:
         viewer: int,
     ) -> DecisionContext:
         """Build one exact actor-safe frame and raw-action lowering map."""
-        actions = describe_actions(obs, hero_seat=self.human_seat)
+        actions = _academy_actions(obs, self.human_seat)
         action_space = enum_name(
             ActionSpaceEnum, int(obs.action_space.action_space_type)
         )
@@ -2431,9 +2134,6 @@ class GameSession:
             "log": None,
             "auto_passed": None,
         }
-        declaration = json.loads(self.env.declaration_projection_json(viewer))
-        if declaration is not None:
-            frame_without_hash["declaration"] = declaration
         frame_without_hash["frame_hash"] = hashlib.sha256(
             json.dumps(
                 frame_without_hash,
@@ -2660,7 +2360,6 @@ class GameSession:
         copy so they cannot change retained frames, offers or Command bindings.
         """
         return CanonicalReplayV1(
-            command_receipts=list(self._declaration_receipts),
             version=CANONICAL_REPLAY_VERSION,
             replay_id=f"replay.{self.match_id}",
             match_id=self.match_id,
@@ -3321,8 +3020,6 @@ DISPATCH_CAPABILITIES: dict[str, TableCapability] = {
     "new_game": TableCapability.CONFIGURE_MATCH,
     "rematch": TableCapability.CONFIGURE_MATCH,
     "command": TableCapability.SUBMIT_LIVE_COMMAND,
-    "declaration": TableCapability.SUBMIT_LIVE_COMMAND,
-    "validate_declaration": TableCapability.SUBMIT_LIVE_COMMAND,
     "action": TableCapability.SUBMIT_LIVE_COMMAND,
     "pass_turn": TableCapability.SUBMIT_LIVE_COMMAND,
     "retry_mirror": TableCapability.SUBMIT_LIVE_COMMAND,
@@ -3439,7 +3136,7 @@ def _dispatch_table_request(
     committed: Callable[[dict[str, Any]], None] | None = None,
 ) -> tuple[dict[str, Any], bool]:
     """Authorize and execute one closed operation under the table lock."""
-    if isinstance(request, (CommandMessage, DeclarationMessage)):
+    if isinstance(request, CommandMessage):
         command_id = request.command.command_id
         if command_id in record.game.accepted_commands:
             submitter = record.accepted_command_submitters.get(command_id)
@@ -3475,16 +3172,11 @@ def _dispatch_table_request(
             candidate.study_attempts.clear()
         record.table_revision += 1
         return response, True
-    if isinstance(request, (CommandMessage, DeclarationMessage)):
+    if isinstance(request, CommandMessage):
         command_id = request.command.command_id
         record.accepted_command_submitters[command_id] = participant.viewer_id
         try:
-            apply = (
-                record.game.hero_declaration
-                if isinstance(request, DeclarationMessage)
-                else record.game.hero_command
-            )
-            response = apply(
+            response = record.game.hero_command(
                 request.command.model_dump(mode="json"), committed=committed
             )
         finally:
@@ -3492,10 +3184,6 @@ def _dispatch_table_request(
             if command_id not in record.game.accepted_commands:
                 record.accepted_command_submitters.pop(command_id, None)
         return response, True
-    if isinstance(request, ValidateDeclarationMessage):
-        return record.game.validate_declaration(
-            request.command, request.request_id
-        ), False
     if isinstance(request, ActionMessage):
         return record.game.hero_action(request.index), True
     if isinstance(request, PassTurnMessage):
@@ -3697,12 +3385,6 @@ async def _send_table_response(
                 recipient.websocket = None
 
 
-def _current_table_response(record: SessionRecord) -> dict[str, Any]:
-    if record.game.obs is None:
-        return {"type": "table_snapshot"}
-    return record.game.current_message()
-
-
 @app.websocket("/ws/play")
 async def play_socket(websocket: WebSocket) -> None:
     _cleanup_expired_sessions()
@@ -3819,25 +3501,16 @@ async def play_socket(websocket: WebSocket) -> None:
                             _publish_work(record, status), loop
                         ).result()
 
-                    # Draft validation reads the same authority under this lock.
-                    # Marking it as advancement disables its caller and restarts
-                    # reactive validation before the reply can be applied.
-                    reports_work = not isinstance(parsed, ValidateDeclarationMessage)
-                    if reports_work:
-                        record.game.work.stage(
-                            "advance",
-                            record.game.match_id
-                            if record.game.obs is not None
-                            else None,
-                            record.game.revision
-                            if record.game.obs is not None
-                            else None,
-                        )
-                        status = record.game.work.read()
-                        assert status is not None
-                        _cache_table_recovery(record)
-                        await _publish_work(record, status)
-                        record.game.work.publish = publish_work
+                    record.game.work.stage(
+                        "advance",
+                        record.game.match_id if record.game.obs is not None else None,
+                        record.game.revision if record.game.obs is not None else None,
+                    )
+                    status = record.game.work.read()
+                    assert status is not None
+                    _cache_table_recovery(record)
+                    await _publish_work(record, status)
+                    record.game.work.publish = publish_work
                     failed = True
                     dispatched = False
                     try:
@@ -3851,15 +3524,14 @@ async def play_socket(websocket: WebSocket) -> None:
                         failed = record.game.mirror_retry is not None
                         dispatched = True
                     finally:
-                        if reports_work:
-                            record.game.work.publish = None
-                            record.game.work.finish(failed=failed)
-                            if not dispatched:
-                                # Request errors reply only to their sender. End
-                                # the broadcast wait for every other participant.
-                                status = record.game.work.read()
-                                assert status is not None
-                                await _publish_work(record, status)
+                        record.game.work.publish = None
+                        record.game.work.finish(failed=failed)
+                        if not dispatched:
+                            # Request errors reply only to their sender. End
+                            # the broadcast wait for every other participant.
+                            status = record.game.work.read()
+                            assert status is not None
+                            await _publish_work(record, status)
                     record.touch()
                     await _send_table_response(
                         record,

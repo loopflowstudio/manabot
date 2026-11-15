@@ -44,7 +44,7 @@ test('browse every exact deck and Lesson pool, choose both seats, and keep a run
   await page.screenshot({ path: testInfo.outputPath('deck-browser-mobile.png'), fullPage: true });
   await page.setViewportSize(viewport);
   await page.getByTestId('opponent-select').selectOption('passive');
-  await page.getByRole('button', { name: 'New Game', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
   await expect(page.getByTestId('action-option').first()).toBeVisible();
   const revision = await page.locator('main').getAttribute('data-frame-revision');
   await page.getByRole('button', { name: 'Edit next game', exact: true }).click();
@@ -99,7 +99,7 @@ test('a pinned local model link selects the model and both Elemental decks', asy
   await page.setViewportSize({ width: 390, height: 844 });
   const bounds = await page.getByTestId('opponent-select').boundingBox();
   expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
-  await page.getByRole('button', { name: 'New Game', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
   await expect(page.getByTestId('action-option').first()).toBeVisible();
   await expect(page.getByTestId('deck-names')).toContainText('MTG-183');
   await page.reload();
@@ -122,7 +122,7 @@ test('priority automation advances into a real choice and remains visible in the
   });
   await page.goto('/?hero=elemental_ur&villain=elemental_gw');
   await page.getByTestId('opponent-select').selectOption('passive');
-  await page.getByRole('button', { name: 'New Game', exact: true }).click();
+  await page.getByRole('button', { name: 'Start game', exact: true }).click();
   await expect.poll(() => page.getByTestId('action-option').count()).toBeGreaterThan(1);
   await page.getByText('History and settings', { exact: true }).click();
   await page.getByText('Decision log', { exact: true }).click();

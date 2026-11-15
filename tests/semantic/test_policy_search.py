@@ -8,7 +8,6 @@ import pytest
 
 import managym
 from managym import search
-from managym.mirror import regularized_update
 from managym.policy import (
     PolicyDecision,
     PolicyDescriptor,
@@ -20,6 +19,7 @@ from managym.policy import (
 from managym.search import (
     SearchConfig,
     SearchError,
+    regularized_update,
     search_decision,
     search_descriptor,
 )

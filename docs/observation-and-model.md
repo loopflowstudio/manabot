@@ -461,15 +461,6 @@ Equivalent units and permutations of a single forced payment need no choice.
 Submitting a spending Command commits that unit; replay, forks and stale
 rejection use the same authority as other decisions.
 
-Current v11 observations include `unavailable_actions`: the native first
-blocking reason for a visible card's cast/play, an attacker, or the current
-payment prompt. These are explanations, separate from legal offers. Fact kind
-15 joins the exact public object (the rules actor for a payment) and names
-`UnavailableReason::<variant>` through the catalog vocabulary, with value 1.
-Native and Python encoders write the same rows; LLM text uses the native reason
-message. Historical absence means explanations were not recorded. The deprecated
-v9/v10 encoders do not add these rows.
-
 Fact rows carry source, duration and timestamp rank. The model divides
 timestamp ranks by 128, independent of fact capacity.
 

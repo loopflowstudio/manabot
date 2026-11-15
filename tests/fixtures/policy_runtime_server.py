@@ -86,7 +86,6 @@ def main() -> None:
             json.dumps(
                 {
                     "refused": refused_url,
-                    "guidance": academy.new_game(opponent="independent", seed=0).url,
                     "play": academy.new_game(opponent="independent", seed=7).url,
                     "watch": academy.watch(players=("independent", "baseline")).url,
                     "ids": {

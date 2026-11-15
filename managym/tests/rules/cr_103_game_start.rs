@@ -27,5 +27,5 @@ fn cr_103_4_players_start_at_twenty_life() {
 #[should_panic(expected = "game supports exactly two players")]
 fn cr_103_negative_rejects_non_two_player_game() {
     let p0 = PlayerConfig::new("solo", BTreeMap::from([("Mountain".to_string(), 40)]));
-    let _ = Game::new(vec![p0], 1, false).expect("valid game setup");
+    let _ = Game::new(vec![p0], 1, false);
 }

@@ -1,8 +1,7 @@
-"""Transformers inference for pinned Hub models and local saved Qwen policies.
+"""Pinned, untouched Transformers causal-LM inference for the text harness.
 
-TransformersRuntime keeps the text harness's untouched Hub snapshots pinned to
-commits. LocalQwenRuntime loads provider-verified fine-tuned local artifacts in
-process. Both refuse remote Python code; neither performs training.
+Only the worker imports this module. Hub snapshots bind both sets of bytes to
+explicit commit IDs; remote Python code, adapters and training are not enabled.
 """
 
 import platform
@@ -162,63 +161,3 @@ class TransformersRuntime:
         return (
             torch.cuda.max_memory_allocated() if self.config.device == "cuda" else None
         )
-
-
-class LocalQwenRuntime:
-    """Fine-tuned local Qwen safetensors, with bounded greedy generation.
-
-    The provider verifies the entire saved model/tokenizer tree before loading.
-    No Hub resolution, remote code or automatic model substitution is allowed.
-    """
-
-    def __init__(self, path: str, *, device: str, precision: str) -> None:
-        from transformers import AutoTokenizer
-
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            path, local_files_only=True, trust_remote_code=False
-        )
-        config = AutoConfig.from_pretrained(
-            path, local_files_only=True, trust_remote_code=False
-        )
-        if not str(config.model_type).startswith("qwen"):
-            raise ValueError("Qwen provider requires a Qwen model configuration.")
-        self.model = (
-            AutoModelForCausalLM.from_pretrained(
-                path,
-                config=config,
-                local_files_only=True,
-                trust_remote_code=False,
-                use_safetensors=True,
-                dtype=getattr(torch, precision),
-            )
-            .to(device)
-            .eval()
-        )
-
-    def choose(self, prompt: str, *, max_new_tokens: int, seconds: float) -> str:
-        text = self.tokenizer.apply_chat_template(
-            [{"role": "user", "content": prompt}],
-            tokenize=False,
-            add_generation_prompt=True,
-            enable_thinking=False,
-        )
-        inputs = self.tokenizer(text, return_tensors="pt").to(self.model.device)
-        limit = getattr(self.model.config, "max_position_embeddings", None)
-        if limit is not None and inputs.input_ids.shape[1] + max_new_tokens > limit:
-            raise ValueError("The complete decision exceeds the Qwen context window.")
-        started = time.monotonic()
-        with torch.inference_mode():
-            output = self.model.generate(
-                **inputs,
-                do_sample=False,
-                num_beams=1,
-                max_new_tokens=max_new_tokens,
-                max_time=seconds,
-            )
-        if time.monotonic() - started > seconds:
-            raise TimeoutError(
-                "Qwen decision deadline exhausted; decision remains pending."
-            )
-        return self.tokenizer.decode(
-            output[0, inputs.input_ids.shape[1] :], skip_special_tokens=True
-        ).strip()

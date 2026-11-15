@@ -105,8 +105,12 @@
 
     {:else if replacement}The runner changed since this was selected. Reselect the policy to use the current runner.
     {:else if custom && value !== 'policy:'}The selected policy is no longer available.
-    {:else if catalogError}{catalogError}
-    {:else if !trained.length && extension !== undefined}No policies registered on this server. Supply a Python policy factory or a saved specification.{/if}
+    {:else if value.startsWith('search-')}Built-in: {value.slice(7)} random playouts per legal action, no policy
+    {:else if value === 'random'}Built-in: uniform random legal action
+    {:else if value === 'passive'}Built-in: passes when possible, otherwise takes the first legal action
+    {/if}
+    {#if !selected && catalogError}{' '}{catalogError}
+    {:else if !selected && !trained.length && extension !== undefined}{' '}No policies registered on this server. Supply a Python policy factory or a saved specification.{/if}
   </p>
   {#if checking || compatibility}
     <p role="status" data-testid="policy-compatibility" class="type-caption w-full text-mountain-ink">{checking ? 'Checking setup compatibility…' : compatibility}</p>

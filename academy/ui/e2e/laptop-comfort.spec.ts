@@ -1,7 +1,6 @@
 import { tableSnapshot } from './fixtures/table';
 import { writeFile } from 'node:fs/promises';
 import { finishBoardNarration } from './presentation-readiness';
-import { confirmCombat } from './combat';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import boltJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type { Command, ExperienceFrame, FrameUpdate, PresentationEvent, RecoveryEnvelope, Trace } from '../src/lib/types';
@@ -102,7 +101,7 @@ async function installTable(page: Page, options: TableOptions = {}): Promise<{
   await page.route('**/api/card-art/**', route => route.fulfill({ status: 404 }));
   await page.goto('/');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-  await page.getByRole('button', { name: 'New Game', exact: true }).click();
+  await page.getByRole('button', { name: 'Start game', exact: true }).click();
   await expect(page.getByTestId('action-option')).toHaveCount(frame.offers.length);
   return { commands, frame, rejectPending: () => rejectPending(), publish: (advance = true) => publish(advance), control: message => control(message), closeSocket: () => closeSocket() };
 }
@@ -382,14 +381,14 @@ for (const [seed, viewport] of [
     await page.goto('/');
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
     await page.getByTestId('opponent-select').selectOption('random');
-    await page.getByRole('button', { name: 'New Game', exact: true }).click();
+    await page.getByRole('button', { name: 'Start game', exact: true }).click();
     await page.getByRole('group', { name: 'Table interaction mode' }).getByRole('button', { name: 'Play', exact: true }).click();
     const receipts: { kind: string | null; label: string | null; scroll: number }[] = [];
     try {
       for (let input = 0; input < 120; input += 1) {
         const options = page.getByTestId('action-option');
         const result = page.getByTestId('game-result');
-        await expect(page.locator('[data-testid="action-option"], [data-testid="learn-mode"]:not(:disabled), [data-testid="game-result"], [data-testid="combat-composer"]').first()).toBeVisible();
+        await expect(page.locator('[data-testid="action-option"], [data-testid="learn-mode"]:not(:disabled), [data-testid="game-result"]').first()).toBeVisible();
         // An early immutable receipt can precede bot/automation frames. Bind
         // inspection and the next input to the settled, enabled authority.
         await expect.poll(() => !working).toBe(true);
@@ -438,11 +437,6 @@ for (const [seed, viewport] of [
             commands: submitted,
           }, null, 2));
           return;
-        }
-        const composer = page.getByTestId('combat-composer');
-        if (await composer.isVisible()) {
-          await confirmCombat(page);
-          continue;
         }
         // Live offers stay usable while optional narration catches up.
         if (await options.count() === 0) {

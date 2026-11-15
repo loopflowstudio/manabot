@@ -15,7 +15,7 @@
     humanActionLabel?: string;
     showStart?: boolean;
   }
-  let { setup, onStart, disabled = false, opponentOnly = false, humanActionLabel = 'New Game', showStart = true }: Props = $props();
+  let { setup, onStart, disabled = false, opponentOnly = false, humanActionLabel = 'Start game', showStart = true }: Props = $props();
   let trained = $state<TrainedOpponent[]>([]);
   let catalogError = $state<string | null>(null);
   let extension = $state<string | null | undefined>(undefined);

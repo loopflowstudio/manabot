@@ -35,20 +35,20 @@ it.each([0, 1])('keeps viewer seat %i in place across delegated search, own resp
     expect(context).toContain(instruction);
     expect(context).toContain(whole_turn ? 'for this turn' : 'for this combat phase');
     expect(board).toContain("Island · opponent's library · private inspection");
-    expect(board).toContain('You mana: 3 {U}');
-    expect(board).toContain('Opponent mana: 1 {U}');
-    expect(board.indexOf('Opponent mana')).toBeLessThan(board.indexOf('You mana'));
+    expect(board).toContain('You floating mana: 3 {U}');
+    expect(board).toContain('Opponent floating mana: 1 {U}');
+    expect(board.indexOf('Opponent floating mana')).toBeLessThan(board.indexOf('You floating mana'));
   }
   // A control record can remain active while its chooser makes their own choice.
   observation.decision_context.stage = 'priority';
   observation.decision_context.instruction = 'Choose an explicit legal offer to commit one decision.';
   expect(render(DecisionContext, { props: { observation } }).body).not.toContain('chooses for');
-  expect(render(GameBoard, { props: { observation, heroIdentity: playerIdentity({ name: 'You' }) } }).body).toContain('You mana: 3 {U}');
+  expect(render(GameBoard, { props: { observation, heroIdentity: playerIdentity({ name: 'You' }) } }).body).toContain('You floating mana: 3 {U}');
   observation.player_controls = [];
   observation.agent.inspected = [];
   const expired = render(GameBoard, { props: { observation, heroIdentity: playerIdentity({ name: 'You' }) } }).body;
   expect(expired).not.toContain('aria-label="Private inspection"');
-  expect(expired).toContain('Opponent mana: 1 {U}');
+  expect(expired).toContain('Opponent floating mana: 1 {U}');
   expect(render(DecisionContext, { props: { observation } }).body).not.toContain('aria-label="Player control"');
 });
 

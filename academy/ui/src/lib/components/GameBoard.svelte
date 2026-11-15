@@ -17,7 +17,6 @@
   interface Props {
     observation: Observation;
     focusedIds?: Set<number>;
-    combatMarkers?: Map<number, string>;
     clickableTargets?: Map<number, number[]>;
     onSelectTarget?: (objectId: number) => void;
     onInspect?: () => void;
@@ -31,7 +30,6 @@
     presentationPlayer?: PresentationPlayer;
     workspace?: boolean;
     playMode?: boolean;
-    combatPlanning?: boolean;
     canSelectForPlay?: boolean;
     selectedId?: number | null;
     gestureActive?: boolean;
@@ -45,7 +43,7 @@
 
   let {
     observation,
-    focusedIds = new Set<number>(), combatMarkers = new Map<number, string>(),
+    focusedIds = new Set<number>(),
     clickableTargets = undefined,
     onSelectTarget = undefined,
     onInspect = undefined,
@@ -59,7 +57,6 @@
     presentationPlayer = undefined,
     workspace = false,
     playMode = false,
-    combatPlanning = false,
     canSelectForPlay = true,
     selectedId = null,
     gestureActive = false,
@@ -148,9 +145,9 @@
   onclickcapture={onHandClickCapture} onpointerdown={onHandPointerDown} onpointermove={onHandPointerMove} onpointerup={onHandPointerUp}
   onpointercancel={onHandPointerCancel} onlostpointercapture={onHandPointerCancel}>
   {#if playMode}
-    <div class="play-controls" class:combat-controls={combatPlanning}>
+    <div class="play-controls">
     <div class="play-drop-area type-caption border-b border-line py-1" class:dragging={gestureActive} data-testid="play-drop-area" aria-live="polite">
-      {combatPlanning ? 'Plan combat · select a creature, then its destination.' : gestureActive && dragLabel ? `Release to ${dragLabel}` : 'Play area · select a card, then choose its labeled action; drag a single hand play here.'}
+      {gestureActive && dragLabel ? `Release to ${dragLabel}` : 'Play area · select a card, then choose its labeled action; drag a single hand play here.'}
       {#if selectedId !== null && selectedId !== observation.agent.id && selectedId !== observation.opponent.id}<button class="btn btn-ghost btn-sm" onclick={() => inspectTarget(selectedId!)}>Inspect card</button>{/if}
     </div>
     <div class="flex flex-wrap gap-2" role="group" aria-label="Player targets">
@@ -185,7 +182,7 @@
     {tablePermanents}
     deckName={deckNames?.villain ?? null}
     opponent={true}
-    {focusedIds} {combatMarkers}
+    {focusedIds}
     {clickableTargets}
     onSelectTarget={selectTarget}
     {onHoverTarget}
@@ -257,8 +254,7 @@
       player={observation.agent}
       {tablePermanents}
       deckName={deckNames?.hero ?? null}
-      compactHand={combatPlanning && workspace}
-      {focusedIds} {combatMarkers}
+      {focusedIds}
       {clickableTargets}
       onSelectTarget={selectTarget}
       {onHoverTarget}
@@ -279,10 +275,6 @@
     <section aria-label="Inspected card" class="border-y border-line py-3">
       <h3 class="font-medium">{visibleCardLabel(observation, inspected.id) ?? inspected.name}</h3>
       <p class="type-caption whitespace-pre-line">{inspected.text_box}</p>
-      {#each observation.unavailable_actions?.filter(item => item.object === inspected?.id) ?? [] as refusal}
-        <p class="type-caption mt-2" data-testid="unavailable-action">{refusal.message}</p>
-      {/each}
-      {#if observation.unavailable_actions === undefined}<p class="type-caption text-ink-2">Unavailable-action explanations not recorded.</p>{/if}
       <p class="type-caption text-ink-2">Legal offers determine what this card can do now.</p>
       <button class="btn btn-secondary mt-2" onclick={() => inspected = null}>Close inspection</button>
     </section>
@@ -343,8 +335,6 @@
   }
 
   .play-controls { display: contents; }
-  .combat-controls { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; flex-shrink: 0; }
-  .combat-controls .play-drop-area { border: 0; }
   .play-drop-area { flex-shrink: 0; min-height: 32px; }
   .play-drop-area.dragging { outline: 2px dashed var(--accent); background: var(--bg-field); }
   .tempo[data-narrated] { background: var(--bg-field); }

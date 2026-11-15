@@ -1,6 +1,5 @@
 /** Ordinary release-SPA work. Old DOM-response baselines remain frozen separately. */
 import { writeFile } from 'node:fs/promises';
-import { confirmCombat } from './combat';
 import { expect, test, type Request } from '@playwright/test';
 
 interface Sample {
@@ -101,9 +100,8 @@ for (const [seed, width, height, motion] of [
     await page.goto('/');
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
     await page.getByTestId('opponent-select').selectOption(seed === 0 ? 'random' : 'search-64');
-    await page.getByRole('button', { name: 'New Game', exact: true }).click();
+    await page.getByRole('button', { name: 'Start game', exact: true }).click();
     await page.getByRole('button', { name: 'Play', exact: true }).click();
-    let declarations = 0;
     for (let input = 0; input < 30; input += 1) {
       // The receipt can render before following bot work finishes. Keep that
       // render sample, but wait for settled authority before choosing again.
@@ -111,15 +109,8 @@ for (const [seed, width, height, motion] of [
         if (!window.academyTiming.working) resolve();
         else window.addEventListener('academy-timing-settled', () => resolve(), {once: true});
       }));
-      await expect.poll(async () => await page.getByTestId('action-option').count() > 0 || await page.getByTestId('learn-mode').count() > 0 || await page.getByTestId('game-result').isVisible() || await page.getByTestId('combat-composer').isVisible()).toBe(true);
+      await expect.poll(async () => await page.getByTestId('action-option').count() > 0 || await page.getByTestId('learn-mode').count() > 0 || await page.getByTestId('game-result').isVisible()).toBe(true);
       if (await page.getByTestId('game-result').isVisible()) break;
-      if (await page.getByTestId('combat-composer').isVisible()) {
-        // Declarations are whole-plan confirmations, not timed offer inputs.
-        expect(++declarations).toBeLessThan(60);
-        await confirmCombat(page);
-        input -= 1;
-        continue;
-      }
       const actions = page.getByTestId('action-option');
       if (await actions.count() === 0) { await page.getByTestId('learn-mode').first().click(); continue; }
       if (input === 15) await page.getByRole('button', { name: 'Inspect', exact: true }).click();
@@ -188,7 +179,7 @@ test('cold visible-art delivery receipt', async ({ page, browser }, info) => {
   await page.goto('/');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByTestId('opponent-select').selectOption('random');
-  await page.getByRole('button', { name: 'New Game', exact: true }).click();
+  await page.getByRole('button', { name: 'Start game', exact: true }).click();
   await expect(page.getByTestId('action-option').first()).toBeVisible();
   await page.waitForLoadState('networkidle');
   await expect.poll(() => delivered.length, { timeout: 30_000 }).toBe(started.size);

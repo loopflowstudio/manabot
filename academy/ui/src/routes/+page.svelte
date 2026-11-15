@@ -17,10 +17,7 @@
   import { visibleCardLabel } from '$lib/decision-labels';
   import { offerFocus, offerTargets } from '$lib/offer-map';
   import DecisionSurface from '$lib/components/DecisionSurface.svelte';
-  import CombatComposer from '$lib/components/CombatComposer.svelte';
-  import { combatFocus, combatPlanMarkers, combatKey, newCombatDraft, objectKey, selectCombatObject, type CombatDraft } from '$lib/combat-plan';
   import DecisionContext from '$lib/components/DecisionContext.svelte';
-  import UnavailableActions from '$lib/components/UnavailableActions.svelte';
   import PlaySessionStrip from '$lib/components/PlaySessionStrip.svelte';
   import { recordFetch } from '$lib/records';
   import type { PlaySession } from '$lib/play-session';
@@ -63,7 +60,6 @@
 
   let tableMode = $state<TableMode>('inspect');
   let selection = $state<PlaySelection | null>(null);
-  let combatDraft = $state<CombatDraft | null>(null);
   let drag = $state<HandDrag | null>(null);
   let suppressClick = false;
   let stopsPending = $state<number | null>(null);
@@ -216,35 +212,6 @@
   const canSubmitLive = $derived(gameActive && pilotCanAct && !participantStudying
     && !gameStore.branchProjection && !gameStore.newGamePending && inputReady);
   const canPassTurn = $derived(canSubmitLive && tableFrame?.action_space === 'PRIORITY' && offers.length > 0);
-  const combatProjection = $derived(!gameStore.resumeFailed && !participantStudying && !gameStore.branchProjection ? tableFrame?.declaration ?? null : null);
-  const combatScope = $derived(tableFrame ? combatKey(tableFrame, gameStore.updateSeq) : '');
-  const boardFocus = $derived(new Set([...gameStore.focusIds, ...combatFocus(combatDraft, combatProjection)]));
-  const boardCombatMarkers = $derived(combatPlanMarkers(combatDraft, combatProjection));
-  const combatSelected = $derived(combatProjection?.subjects.find(row => row.object.subject.kind === 'object' && objectKey(row.object.subject.id) === combatDraft?.active)?.object.display_id ?? null);
-  const boardTargets = $derived.by(() => {
-    if (!combatProjection) return clickableTargets;
-    // These keys navigate a native draft; no positional offer ID is invented.
-    const targets = new Map<number, number[]>();
-    for (const row of combatProjection.subjects) if (!row.fixed) targets.set(row.object.display_id, []);
-    for (const row of combatProjection.destinations) targets.set(row.display_id, []);
-    return targets;
-  });
-  $effect(() => {
-    const projection = combatProjection;
-    const key = combatScope;
-    untrack(() => {
-      if (!projection) combatDraft = null;
-      else if (combatDraft?.key !== key) combatDraft = newCombatDraft(projection, key);
-    });
-  });
-
-  function editCombatDraft(next: CombatDraft): void {
-    if (JSON.stringify(next.assignments) !== JSON.stringify(combatDraft?.assignments)) {
-      gameStore.setError(null);
-      gameStore.lastCommandRejection = null;
-    }
-    combatDraft = next;
-  }
   const boardObservation = $derived(
     gameStore.branchProjection
       ?? gameStore.restoredDecision?.frame.projection
@@ -417,10 +384,6 @@
   }
 
   function handleBoardTargetSelect(objectId: number): void {
-    if (combatProjection && combatDraft && liveInput) {
-      editCombatDraft(selectCombatObject(combatDraft, combatProjection, objectId));
-      return;
-    }
     if (tableMode === 'play' && !participantStudying && pilotCanAct) {
       if (!liveInput || !tableFrame) return;
       selection = selectForPlay(tableFrame, objectId);
@@ -467,7 +430,6 @@
   {/if}
   <WorkStatus work={watchStart.work} connected={!watchStart.checking} />
   {#if watchStart.checking}<p role="status">Checking the same Watch setup; loading status is unavailable.</p>{/if}
-  <WorkStatus work={gameStore.work} connected={gameStore.connection === 'connected'} />
   {#if gameStore.observation && gameStore.activeSearchConfig}
     <p class="type-caption mb-2 text-ink-2">Opponent: Search {gameStore.activeSearchConfig.worlds}×{gameStore.activeSearchConfig.depth} · Uniform belief (physical deal)</p>
   {/if}
@@ -492,12 +454,14 @@
       {:else}
         <span class="type-annotation text-ink-2">No game in progress</span>
       {/if}
+      <!-- Bot work shows in the masthead's free side, so the board never shifts while a bot thinks. -->
+      <WorkStatus work={gameStore.work} connected={gameStore.connection === 'connected'} inline />
     </div>
 
     <div class="flex min-w-0 max-w-full flex-wrap items-end gap-x-5 gap-y-3">
-      {#if learnDemo}<p class="type-caption">Learn demo · UR Lessons vs Random GW Allies. Automated checked setup; New Game repeats it.</p>
-      {:else if demoName}<p class="type-caption" data-testid="demo-origin">Precision demo · custom stress decks · automated checked setup. Choose actions from the legal choices below. New Game repeats setup.</p>{/if}
-      {#if demoName}<button class="btn btn-primary" disabled={gameStore.newGamePending} onclick={startNewGame}>{gameStore.newGamePending ? 'Preparing game…' : 'New Game'}</button>{/if}
+      {#if learnDemo}<p class="type-caption">Learn demo · UR Lessons vs Random GW Allies. Automated checked setup; Start game repeats it.</p>
+      {:else if demoName}<p class="type-caption" data-testid="demo-origin">Precision demo · custom stress decks · automated checked setup. Choose actions from the legal choices below. Start game repeats setup.</p>{/if}
+      {#if demoName}<button class="btn btn-primary" disabled={gameStore.newGamePending} onclick={startNewGame}>{gameStore.newGamePending ? 'Preparing game…' : 'Start game'}</button>{/if}
       <div class="flex items-center gap-4">
         <div role="group" aria-label="Table interaction mode" class="flex gap-1">
           <button class="btn btn-secondary btn-sm" aria-pressed={tableMode === 'play'} onclick={() => changeMode('play')}>Play</button>
@@ -563,15 +527,13 @@
     </section>
   {/if}
   {#if gameStore.observation && boardObservation}
-    <div class="play-workspace" class:combat-planning={combatProjection !== null} data-testid="play-workspace">
+    <div class="play-workspace" data-testid="play-workspace">
       <div id="table-board" class="board-region" tabindex="-1"><a href="#table-choices" class="table-jump type-caption underline">Choose a play</a>
       <GameBoard
         workspace
-        combatPlanning={combatProjection !== null}
-        combatMarkers={boardCombatMarkers}
         playMode={tableMode === 'play' && !participantStudying}
         canSelectForPlay={liveInput}
-        selectedId={combatProjection ? combatSelected : selection?.object ?? null}
+        selectedId={selection?.object ?? null}
         onHandClickCapture={suppressDragClick}
         onHandPointerDown={startHandDrag}
         onHandPointerMove={moveHandDrag}
@@ -580,8 +542,8 @@
         gestureActive={drag?.moved ?? false}
         dragLabel={draggingOffer?.confirm_label ?? draggingOffer?.label ?? null}
         observation={boardObservation}
-        focusedIds={boardFocus}
-        clickableTargets={boardTargets}
+        focusedIds={gameStore.focusIds}
+        {clickableTargets}
         onSelectTarget={handleBoardTargetSelect}
         onHoverTarget={handleBoardTargetHover}
         winner={gameStore.winner}
@@ -614,9 +576,6 @@
         {#if gameStore.branchProjection}
           <DecisionContext observation={gameStore.branchProjection} actor={gameStore.branchProjection.decision_context?.actor ?? null} />
           <p class="type-caption">Alternate action played. Return to recorded decision to try another choice.</p>
-        {:else if tableFrame && combatProjection && combatDraft}
-          <CombatComposer frame={tableFrame} projection={combatProjection} draft={combatDraft}
-            disabled={!canSubmitLive} readOnly={!pilotCanAct} inspect={tableMode !== 'play'} onChange={editCombatDraft} />
         {:else if tableFrame}
         <DecisionSurface
           workspace
@@ -635,14 +594,13 @@
         />
         {/if}
 
-        <UnavailableActions observation={gameStore.branchProjection ?? tableFrame?.projection ?? boardObservation} />
         <p data-testid="automation-status" class="type-caption text-ink-2">Priority-stop automation: {gameStore.stops.auto_pass ? `on · your turn ${gameStore.stops.my.length} / opponent ${gameStore.stops.opponent.length} · stack ${gameStore.stops.stop_on_stack ? 'on' : 'off'}` : 'off · every priority choice'}{gameStore.fastForwarding ? ' · yielding this turn' : ''}{stopsPending !== null ? ' · updating…' : ''} <button class="underline" onclick={editStops}>Edit stops</button></p>
         <details bind:open={secondaryOpen} class="secondary-panels">
           <summary class="type-rubric cursor-pointer">History and settings</summary>
           <div class="secondary-content space-y-4" tabindex="0" role="region" aria-label="History and settings">
             <PresentationHistory player={tablePresentation} observation={boardObservation} />
             {#if tableFrame && !gameStore.branchProjection}
-              <DecisionContext observation={tableFrame.projection} actor={tableFrame.prompt?.actor ?? null} declaration={combatProjection} interrupted={gameStore.resumeFailed} />
+              <DecisionContext observation={tableFrame.projection} actor={tableFrame.prompt?.actor ?? null} interrupted={gameStore.resumeFailed} />
             {/if}
 
             <div class="border-t border-line pt-4">
@@ -729,9 +687,6 @@
     .board-region :global([data-testid="game-board"]) { flex: 1; min-height: 0; }
     .choices-region { min-height: 0; overflow-y: auto; gap: .5rem; border-top: 0; border-left: 1px solid var(--border); padding: 0 .5rem 1rem 1rem; scrollbar-gutter: stable; }
     .choices-region > :global(*) { flex-shrink: 0; }
-    /* Both seats' creatures share the board while combat is planned; the hand folds. */
-    .combat-planning :global(.workspace-board .hero-area) { flex-basis: 0; }
-    .choices-region > :global(.combat-composer) { flex: 1; min-height: 0; }
     .choices-region > :global(.workspace-decision) { flex: 1; min-height: min-content; }
     .secondary-panels { flex-shrink: 1; min-height: 2rem; overflow-y: auto; overscroll-behavior: contain; }
     [data-testid="current-decision"] { max-height: 3rem; overflow-y: auto; overscroll-behavior: contain; }

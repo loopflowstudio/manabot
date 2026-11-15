@@ -491,22 +491,6 @@ it('retains retry and work metadata when first recovery resets match state', () 
   expect(gameStore.work).toEqual(work);
 });
 
-it('draft validation never completes an outstanding submission or changes the frame', () => {
-  gameStore.prepareForNewGame();
-  gameStore.applyFrame(frameAt(42));
-  gameStore.beginCommand();
-  const controller = new GameSocketController();
-  deliver(controller, { type: 'declaration_validation', request_id: 'draft.1',
-    match_id: frameAt(42).match_id, revision: 42, prompt_id: frameAt(42).prompt!.id,
-    status: 'capacity', message: 'Rules capacity reached.',
-    capacity: { resource: 'combat_solver', limit: 1, visited: 2 }, table: null });
-  expect(gameStore.commandPending).toBe(true);
-  expect(gameStore.protocolFrame?.revision).toBe(42);
-  expect(gameStore.declarationValidation?.capacity?.visited).toBe(2);
-  gameStore.applyFrame(frameAt(43));
-  expect(gameStore.declarationValidation).toBeNull();
-});
-
 it('ends a watcher wait when a newer setup stage fails without replacing authority', () => {
   const controller = new GameSocketController();
   gameStore.prepareForNewGame();

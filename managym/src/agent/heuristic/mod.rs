@@ -230,15 +230,11 @@ impl Heuristic {
         max_actions: Option<usize>,
     ) -> Result<usize, AgentError> {
         if max_actions == Some(0) {
-            return Err(AgentError::Rules(
-                "heuristic max_actions must be positive".into(),
-            ));
+            return Err(AgentError("heuristic max_actions must be positive".into()));
         }
         let b = Board::new(obs, max_actions);
         if b.actions.is_empty() {
-            return Err(AgentError::Rules(
-                "heuristic received no legal offers".into(),
-            ));
+            return Err(AgentError("heuristic received no legal offers".into()));
         }
         self.observe(obs);
         let choice = match obs.action_space.action_space_type {

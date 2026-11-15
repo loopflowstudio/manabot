@@ -233,15 +233,6 @@ describe('experience protocol v1 conformance', () => {
       CandidateSource: 'CandidateSource',
       Command: 'Command',
       CommandReceipt: 'CommandReceipt',
-      DeclarationBinding: 'DeclarationBinding',
-      DeclarationSubject: 'DeclarationSubject',
-      DeclarationProjection: 'DeclarationProjection',
-      DeclarationAnswer: 'DeclarationAnswer',
-      DeclarationPlan: 'DeclarationPlan',
-      DeclarationCommitment: 'DeclarationCommitment',
-      DeclarationCommand: 'DeclarationCommand',
-      DeclarationReceipt: 'DeclarationReceipt',
-
       DeckNames: 'DeckNames',
       ExperienceFrame: 'ExperienceFrame',
       ScheduleView: 'ScheduleView',
@@ -255,7 +246,6 @@ describe('experience protocol v1 conformance', () => {
       LegacyCardTypesView: 'CardTypes',
       LegacyCardView: 'CardState',
       LegacyHeroObservation: 'Observation',
-      UnavailableActionView: 'UnavailableActionView',
       LegacyPermanentView: 'PermanentState',
       LegacyPlayerView: 'PlayerState',
       ObjectRenderId: 'ObjectRenderId',
@@ -341,13 +331,4 @@ describe('experience protocol v1 conformance', () => {
     kindWithDrift.client_only = true;
     expect(validate(unknownKindField)).toBe(false);
   });
-});
-
-
-it('round-trips the actual combat plan and rejects an omitted decline', () => {
-  const source = JSON.parse(readFileSync(new URL('../../../../protocol/fixtures/combat-declaration.json', import.meta.url), 'utf8'));
-  expect(validate(source), JSON.stringify(validate.errors)).toBe(true);
-  expect(source.declaration_receipt.declaration.child_command_ids).toHaveLength(3);
-  delete source.declaration_command.plan.assignments[0].destination;
-  expect(validate(source)).toBe(false);
 });

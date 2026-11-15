@@ -34,7 +34,7 @@ def test_replacement_preserves_authority_and_records_prefix(tmp_path):
             game.new_game({"villain_type": "random", **invalid})
     assert game.match_id == match
     assert game.current_recovery("explicit_resync")["frame"] == initial["frame"]
-    game.new_game({"villain_type": "random", "request_id": "first"})
+    game.new_game({"villain_type": "random", "seed": 79, "request_id": "first"})
     assert game.match_id == match
     assert len(rows(tmp_path)) == 1
     game.new_game({"villain_type": "random"})

@@ -611,7 +611,7 @@ def test_launch_uses_the_same_explicit_search_spec_for_play_and_watch(
         academy.watch(players=("random", "random"), search=(search, None))
 
 
-@pytest.mark.parametrize("option", ["--search", "--mirror"])
+@pytest.mark.parametrize("option", ["--search"])
 def test_cli_search_specs_reach_the_shared_python_launch_api(
     academy: Academy,
     monkeypatch: pytest.MonkeyPatch,
@@ -657,48 +657,4 @@ def test_cli_search_specs_reach_the_shared_python_launch_api(
     )
     query = parse_qs(urlparse(targets[-1]).query)
     assert json.loads(query["search"][0]) == [config["mirror"], None]
-    assert ("removed in 0.4.0" in capsys.readouterr().err) == (option == "--mirror")
-
-
-def test_legacy_search_launch_keywords_warn_and_preserve_wire_config(
-    academy: Academy,
-) -> None:
-    policy_registry().register(SearchFactory(), name="legacy-search")
-    spec = SearchConfig(worlds=2)
-    with pytest.warns(DeprecationWarning, match="removed in 0.4.0"):
-        legacy = academy.new_game(opponent="legacy-search", mirror=spec)
-    current = academy.new_game(opponent="legacy-search", search=spec)
-    old_config = server.LAUNCH_CONFIGS[_launch_id(legacy.url)]
-    new_config = server.LAUNCH_CONFIGS[_launch_id(current.url)]
-    assert old_config["mirror"] == new_config["mirror"] == asdict(spec)
-    with pytest.warns(DeprecationWarning, match="removed in 0.4.0"):
-        old_watch = academy.watch(
-            players=("legacy-search", "random"), mirror=(spec, None)
-        )
-    assert (
-        old_watch.url
-        == academy.watch(players=("legacy-search", "random"), search=(spec, None)).url
-    )
-    with pytest.warns(DeprecationWarning), pytest.raises(ValueError, match="combine"):
-        academy.new_game(opponent="legacy-search", search=spec, mirror=spec)
-
-
-def test_registry_legacy_search_keyword_warns_and_configures_same_runner(
-    academy: Academy,
-) -> None:
-    registry = policy_registry()
-    key = registry.register(SearchFactory())
-    setup = server._parse_game_config({"villain_type": "random"}).to_rust()
-    spec = SearchConfig()
-    with pytest.warns(DeprecationWarning, match="removed in 0.4.0"):
-        runner = registry.load(key, setup, seat=0, seed=7, mirror=spec)
-    try:
-        assert runner.search == spec
-        assert "+ search 1×1" in runner.descriptor.name
-        with (
-            pytest.warns(DeprecationWarning),
-            pytest.raises(ValueError, match="combine"),
-        ):
-            registry.load(key, setup, seat=0, seed=7, search=spec, mirror=spec)
-    finally:
-        runner.close()
+    assert "removed in 0.4.0" not in capsys.readouterr().err

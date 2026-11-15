@@ -16,11 +16,10 @@ import subprocess
 import sys
 import tempfile
 from threading import Thread
-from typing import Any
 from urllib.parse import parse_qs, urlparse
 from urllib.request import urlopen
 
-from websockets.sync.client import ClientConnection, connect
+from websockets.sync.client import connect
 
 import managym
 
@@ -29,21 +28,6 @@ INSTALL_COMMAND = (
 )
 LAUNCH_COMMAND = "uv run --no-project managym academy"
 DEFAULT_URL = "http://127.0.0.1:8000"
-
-
-def settled_reply(ws: ClientConnection) -> dict[str, Any]:
-    """Read the settled authority after progress and early Command receipts."""
-    while True:
-        message: dict[str, Any] = json.loads(ws.recv(timeout=30))
-        if message["type"] == "work_status":
-            continue
-        if (
-            message["type"] == "command_outcome"
-            and message.get("status") == "accepted"
-            and (message.get("work") or {}).get("state") == "running"
-        ):
-            continue
-        return message
 
 
 def main() -> None:
@@ -124,7 +108,7 @@ def main() -> None:
                         }
                     )
                 )
-                payload = settled_reply(ws)
+                payload = json.loads(ws.recv(timeout=30))
                 assert payload["launch"] == launch_id
                 assert payload["frame"]["prompt"]
                 ws.send(
@@ -141,7 +125,7 @@ def main() -> None:
                         }
                     )
                 )
-                payload = settled_reply(ws)
+                payload = json.loads(ws.recv(timeout=30))
                 frame = payload["frame"]
                 for step in range(300):
                     if frame["projection"]["game_over"]:
@@ -162,7 +146,7 @@ def main() -> None:
                             }
                         )
                     )
-                    payload = settled_reply(ws)
+                    payload = json.loads(ws.recv(timeout=30))
                     assert payload["status"] == "accepted", payload
                     frame = payload["update"]["frame"]
                 else:

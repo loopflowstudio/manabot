@@ -1,7 +1,7 @@
 <script lang="ts">
   import { stageLabel, subjectLabel } from '$lib/decision-labels';
-  import type { DeclarationProjection, Observation } from '$lib/types';
-  let { observation, actor = null, declaration = null, interrupted = false }: { observation: Observation; actor?: number | null; declaration?: DeclarationProjection | null; interrupted?: boolean } = $props();
+  import type { Observation } from '$lib/types';
+  let { observation, actor = null, interrupted = false }: { observation: Observation; actor?: number | null; interrupted?: boolean } = $props();
   const context = $derived(observation.decision_context);
 </script>
 
@@ -13,8 +13,6 @@
       <p class="type-caption capitalize">{stageLabel(context.stage)}</p>
       {#if interrupted}
         <p class="type-caption">The live session is unavailable. This is the last recorded decision.</p>
-      {:else if declaration}
-        <p class="type-caption">Plan the remaining {declaration.stage}, then confirm once. Draft edits are uncommitted; already committed assignments stay fixed.</p>
       {:else}
         <p class="type-caption">{context.instruction}</p>
       {/if}

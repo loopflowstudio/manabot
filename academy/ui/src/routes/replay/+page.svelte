@@ -13,7 +13,6 @@
   import DecisionSurface from '$lib/components/DecisionSurface.svelte';
   import RecordedDecisionEvidence from '$lib/components/RecordedDecisionEvidence.svelte';
   import DecisionContext from '$lib/components/DecisionContext.svelte';
-  import UnavailableActions from '$lib/components/UnavailableActions.svelte';
   import StudyPanel from '$lib/components/StudyPanel.svelte';
   import Timeline from '$lib/components/Timeline.svelte';
   import { createReplayStore } from '$lib/replay.svelte';
@@ -425,7 +424,6 @@
             {#if current.history_before && !inStudy}<button class="btn btn-secondary btn-sm" disabled={historyBusy} onclick={() => void earlierHistory()}>Load earlier recorded history</button>{/if}
             <PresentationHistory onRead={inStudy ? undefined : () => replayStore.pause()} player={presentationPlayer} observation={historyBoard} externallyDriven={!inStudy} />
             {#if !current.consequences_recorded}<p class="type-caption">Consequences not recorded.</p>{/if}
-            {#if informationBoard}<UnavailableActions observation={informationBoard} />{/if}
             {#if inStudy && studyStore.restored}
               {#if studyStore.branchObservation}<DecisionContext observation={studyStore.branchObservation} actor={studyStore.branchObservation.decision_context?.actor ?? null} />{/if}
               <StudyPanel phase={studyStore.phase} restored={studyStore.restored} plans={studyStore.plans} selectedPlan={studyStore.selectedPlan} busy={studyStore.busy} errorMessage={studyStore.errorMessage}
