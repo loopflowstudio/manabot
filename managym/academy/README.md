@@ -252,7 +252,10 @@ one seat or both, and the random, greedy, heuristic and search anchors use
 GameSession's normal Command authority. Step advances one native decision;
 Play/Pause and speed control that same operation. Previous decisions read saved
 outputs without rerunning the policy. Completed watched games open from Games
-in this same table. Reloading retains the watch credential in the browser.
+in this same table. Reloading retains the watch credential in the browser and
+opens the latest recorded decision, including any pending search retry and its
+message. A `decision` URL parameter opens that historical decision instead.
+Inspection never retries the pending search; **Retry search** does so explicitly.
 
 `watch.py` admits controllers and verified exported training games or evaluation
 traces through **Open a game file**; choose a game when a trace contains several.

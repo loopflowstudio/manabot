@@ -185,6 +185,7 @@ def step_watch(trace_id: str, token: str | None, expected_revision: int) -> Watc
 def inspect_watch(
     trace_id: str, ordinal: int, token: str | None, reveal: bool = False
 ) -> dict[str, Any]:
+    """Read a recorded decision; -1 restores the latest without advancing play."""
     payload = load_trace(trace_id)
     watched = payload["config"].get("watch_players")
     finished = (
@@ -208,6 +209,10 @@ def inspect_watch(
     }
     mirrors = [mirror_by_seat.get(seat) for seat in (0, 1)]
     replay = load_canonical_replay(payload)
+    if ordinal == -1:
+        ordinal = max(0, len(replay.decisions) - 1)
+    if ordinal < 0:
+        raise HTTPException(404, "decision_not_found")
     if ordinal >= len(replay.decisions):
         if record is not None and not replay.decisions:
             pending = record.game.mirror_retry

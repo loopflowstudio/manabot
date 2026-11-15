@@ -100,8 +100,8 @@
       id = selected;
       token = localStorage.getItem(`etude.watch.${id}`) ?? '';
       busy = true;
-      const selectedDecision = Number(params.get('decision') ?? 0);
-      const initialDecision = Number.isSafeInteger(selectedDecision) && selectedDecision >= 0 ? selectedDecision : 0;
+      const selectedDecision = params.has('decision') ? Number(params.get('decision')) : -1;
+      const initialDecision = Number.isSafeInteger(selectedDecision) && selectedDecision >= 0 ? selectedDecision : -1;
       void inspect(initialDecision).catch(fail).finally(() => busy = false);
     }
   });
@@ -119,13 +119,14 @@
     const next = await api<WatchDecision>(`/api/watch/${id}/decisions/${index}?reveal=${reveal}`);
     current = next;
     retryMirror = next.mirror_retry?.code === 'mirror_deadline_exceeded';
+    error = retryMirror ? next.mirror_retry!.message : '';
     activeMirrors = next.mirror ? parseMirrors(next.mirror) : [null, null];
     // Use the decision's permitted view even when spectator reveal is enabled.
     presentationPlayer.loadPrefix([{
       events: next.presentation ?? [],
       labels: presentationLabelsFromObservation(next.decision.frame.projection),
     }], `watch:${id}:viewer:${next.decision.viewer}`, false);
-    ordinal = index;
+    ordinal = index === -1 ? next.count - 1 : index;
     count = next.count;
     finished = next.finished;
     revision = next.count;

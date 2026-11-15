@@ -34,7 +34,7 @@ from managym.policy import (
 )
 
 if TYPE_CHECKING:
-    from manabot.backends.torch.policy import ActorCritic
+    from manabot.backends.torch.policy import ActorCritic, PolicyInference
     from manabot.env.env import Env
     from manabot.env.observation import ObservationSpace
     from manabot.model.catalog import CheckpointSummary
@@ -212,6 +212,10 @@ class BaselineSession:
         self.agent: ActorCritic | None
         self.space: ObservationSpace | None
         self.agent, self.space = load_checkpoint(spec.artifact)
+        # One inference scope per loaded policy caches the card-program table;
+        # forks share it and only this loading session closes it.
+        self._scope: PolicyInference | None = self.agent.inference_scope()
+        self._owns_scope = True
 
     def observe(self, view: PolicyView) -> None:
         pass
@@ -233,25 +237,32 @@ class BaselineSession:
     def evaluate(self, view: PolicyView) -> PolicyEvaluation:
         from manabot.backends.torch.bot import evaluate_observation
 
-        if self.agent is None or self.space is None:
+        if self.agent is None or self.space is None or self._scope is None:
             raise ValueError("Policy session is closed.")
         probabilities, value = evaluate_observation(
-            self.agent, self.space, view.observation
+            self._scope, self.space, view.observation
         )
+        semantic = self.agent.value_semantic or "undeclared critic units"
+        if semantic == "signed_outcome":
+            # A scalar head regressed on signed outcomes can overshoot its
+            # targets; an expected outcome lies in [-1, 1], so project the
+            # estimate there. W/D/L expectations are already inside it.
+            value = min(1.0, max(-1.0, value))
         return PolicyEvaluation(
-            probabilities,
-            ValueEstimate(
-                value, view.seat, self.agent.value_semantic or "undeclared critic units"
-            ),
+            probabilities, ValueEstimate(value, view.seat, semantic)
         )
 
     def fork(self, *, seed: int) -> BaselineSession:
         # Model parameters are read-only; history-free evaluation mutates no model state.
         branch = copy.copy(self)
         branch._rng = random.Random(seed)
+        branch._owns_scope = False
         return branch
 
     def close(self) -> None:
+        if self._owns_scope and self._scope is not None:
+            self._scope.__exit__(None, None, None)
+        self._scope = None
         self.agent = None
         self.space = None
 

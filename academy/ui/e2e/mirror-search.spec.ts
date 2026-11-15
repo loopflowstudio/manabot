@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 interface Addresses { play: string; timeout: string; watch: string; watch_timeout: string;
+  pending_watch: { id: string; token: string };
   saved: string; saved_ordinal: number; ids: Record<string, string>; }
 const proof = new URL('../test-results/mirror/addresses.json', import.meta.url);
 for (const theme of ['light', 'dark'] as const) {
@@ -86,6 +87,43 @@ test('timeouts retain Play and initial Watch choices across reload and explicit 
   await expect(page.getByRole('button', { name: 'Retry search', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Retry search', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Retry search', exact: true })).toBeEnabled();
+});
+
+test('Watch reload restores latest timeout and explicit retry while history stays navigable', async ({ page }) => {
+  const { pending_watch: watch } = JSON.parse(readFileSync(proof, 'utf8')) as Addresses;
+  await page.addInitScript(watch => localStorage.setItem(`etude.watch.${watch.id}`, watch.token), watch);
+  const steps: number[] = [];
+  page.on('request', request => {
+    if (request.url().endsWith(`/api/watch/${watch.id}/step`)) steps.push(request.postDataJSON().revision);
+  });
+  const url = `/replay?watch=1&trace=${watch.id}`;
+  await page.goto(url);
+  await expect(page.getByText(/^Decision 3 of 3/)).toBeVisible();
+  const retry = page.getByRole('button', { name: 'Retry search', exact: true });
+  await expect(retry).toBeEnabled();
+  await expect(page.getByRole('alert')).toContainText(/time|deadline/i);
+  await page.reload();
+  await expect(page.getByText(/^Decision 3 of 3/)).toBeVisible();
+  await expect(retry).toBeEnabled();
+  await expect(page.getByRole('alert')).toContainText(/time|deadline/i);
+  await page.getByRole('button', { name: 'Previous decision', exact: true }).click();
+  await expect(page.getByText(/^Decision 2 of 3/)).toBeVisible();
+  await page.getByRole('button', { name: 'Step decision', exact: true }).click();
+  await expect(page.getByText(/^Decision 3 of 3/)).toBeVisible();
+  await expect(retry).toBeEnabled();
+  // An explicit historical URL remains historical, even with a pending retry.
+  await page.goto(`${url}&decision=0`);
+  await expect(page.getByText(/^Decision 1 of 3/)).toBeVisible();
+  await page.reload();
+  await expect(page.getByText(/^Decision 1 of 3/)).toBeVisible();
+  expect(steps).toEqual([]);
+  await page.goto(url);
+  await expect(retry).toBeEnabled();
+  await retry.click();
+  await expect(page.getByText(/^Decision 4 of 4/)).toBeVisible();
+  expect(steps).toEqual([3]);
+  await expect(retry).toHaveCount(0);
+  await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
 test('the waiting line remains legible while a real response awaits delivery', async ({ page }) => {

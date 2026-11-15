@@ -166,7 +166,7 @@ def mirror_decision(
     # Native constraints enforce open decklists before any model work. The
     # retained digest contains public constraints, never the actual hidden deal.
     try:
-        constraints = env.hidden_hand_constraints_json(viewer)
+        constraints = json.loads(env.hidden_hand_constraints_json(viewer))
     except managym.AgentError as exc:
         raise MirrorSearchError("mirror_world_unavailable", str(exc)) from exc
     frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
@@ -357,7 +357,7 @@ def mirror_decision(
         "viewer": viewer,
         "viewer_state_hash": viewer_hash,
         "belief": NATIVE_PHYSICAL_BELIEF,
-        "constraints": json.loads(constraints),
+        "constraints": constraints,
         "base": base.tolist(),
         "values": scores,
         "reference": reference.tolist(),
@@ -374,7 +374,7 @@ def mirror_decision(
         value_semantic="signed_outcome",
         search_scores=scores,
         belief=BeliefSummary(
-            NATIVE_PHYSICAL_BELIEF, _digest(json.loads(constraints)), 1.0, spec.worlds
+            NATIVE_PHYSICAL_BELIEF, _digest(constraints), 1.0, spec.worlds
         ),
         mirror=MirrorSummary(
             algorithm=MIRROR_METHOD,

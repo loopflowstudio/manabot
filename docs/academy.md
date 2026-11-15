@@ -665,6 +665,9 @@ Every game you start is recorded as you play.
 A finished bot recording shows **Replay**, its actual players and decision
 controls first. A game still being played keeps the **Watch two bots** heading,
 including when reopened. Expand **Watch another matchup** to set up a new bot game.
+Reload opens the latest recorded decision and restores a pending **Retry search**
+with its timeout message. Retrying requires an explicit click; browsing previous
+decisions sends no action. A `decision` URL parameter keeps its historical selection.
 
 Games are stored in `play.sqlite` under the traces directory, which defaults
 to `academy/traces` in the directory you launched from. Launch from the same

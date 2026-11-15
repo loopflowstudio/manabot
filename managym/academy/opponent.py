@@ -82,6 +82,7 @@ def opponent_catalog() -> dict[str, Any]:
         error = "; ".join(registry.discovery_errors) or None
         for descriptor in registry.descriptors():
             record = descriptor.record()
+            search_reason = descriptor_mirror_unavailable(descriptor)
             entries.append(
                 {
                     "sha256": descriptor.id,
@@ -91,9 +92,8 @@ def opponent_catalog() -> dict[str, Any]:
                     "details": record["details"],
                     "available": descriptor.incompatibility is None,
                     "reason": descriptor.incompatibility,
-                    "supports_search": descriptor_mirror_unavailable(descriptor)
-                    is None,
-                    "search_reason": descriptor_mirror_unavailable(descriptor),
+                    "supports_search": search_reason is None,
+                    "search_reason": search_reason,
                     "policy": record,
                 }
             )

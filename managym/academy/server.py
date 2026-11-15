@@ -3155,36 +3155,18 @@ async def play_socket(websocket: WebSocket) -> None:
                 }:
                     _parse_presentation_cursor(request.get("presentation_cursor"))
                 parsed = _parse_table_request(request)
-                if isinstance(parsed, JoinTableMessage):
+                if isinstance(parsed, (JoinTableMessage, ResumeMessage)):
                     presentation_cursor = _parse_presentation_cursor(
                         parsed.presentation_cursor
                     )
-                    record, participant = _participant_from_invite(
-                        parsed.table_id, parsed.invite_token
-                    )
-                    await _attach_participant_websocket(record, participant, websocket)
-                    attached_table_id = record.session_id
-                    attached_viewer_id = participant.viewer_id
-                    # A Command from the previous socket may still be advancing
-                    # the game (a searched bot reply takes seconds); snapshot
-                    # only after it commits, never from a half-applied step.
-                    async with record.lock:
-                        response = (
-                            record.game.current_message(presentation_cursor)
-                            if record.game.obs is not None
-                            else {"type": "table_snapshot"}
+                    if isinstance(parsed, JoinTableMessage):
+                        record, participant = _participant_from_invite(
+                            parsed.table_id, parsed.invite_token
                         )
-                        await _send_table_response(
-                            record, participant, response, broadcast=True
+                    else:
+                        record, participant = _participant_from_resume(
+                            parsed.session_id, parsed.resume_token
                         )
-                    continue
-                if isinstance(parsed, ResumeMessage):
-                    presentation_cursor = _parse_presentation_cursor(
-                        parsed.presentation_cursor
-                    )
-                    record, participant = _participant_from_resume(
-                        parsed.session_id, parsed.resume_token
-                    )
                     await _attach_participant_websocket(record, participant, websocket)
                     attached_table_id = record.session_id
                     attached_viewer_id = participant.viewer_id
@@ -3748,7 +3730,7 @@ def inspect_bot_watch(
 ) -> dict[str, Any]:
     from .watch import inspect_watch
 
-    if ordinal < 0:
+    if ordinal < -1:
         raise HTTPException(400, "invalid_ordinal")
     try:
         return inspect_watch(trace_id, ordinal, x_etude_participant_token, reveal)

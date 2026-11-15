@@ -2,6 +2,7 @@
 
 from dataclasses import asdict
 from pathlib import Path
+from typing import cast
 
 import pytest
 import torch
@@ -10,14 +11,14 @@ from manabot.backends.torch.checkpoint import save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.sim.policy_provider import BaselineFactory
+from manabot.sim.policy_provider import BaselineFactory, BaselineSession
 import managym
 from managym.academy import server
 from managym.academy.opponent import set_policy_registry
 from managym.academy.watch import WatchRequest, create_watch, inspect_watch, step_watch
 from managym.bots import passive_policy
 from managym.mirror_search import MirrorSearch
-from managym.policy import PolicyRegistry, PolicySpec
+from managym.policy import PolicyRegistry, PolicySpec, PolicyView
 
 
 def write_search_checkpoint(path: Path) -> None:
@@ -103,3 +104,56 @@ def test_baseline_provider_search_runs_in_play_and_either_watch_seat(
     finally:
         game.close("test")
         set_policy_registry(None)
+
+
+def test_baseline_session_encodes_the_card_catalog_once_per_loaded_policy(
+    tmp_path: Path,
+) -> None:
+    """Search evaluates many forks; re-encoding every card program per call
+    made one-world, depth-one decisions exceed the 30-second ceiling."""
+    path = tmp_path / "untrained-smoke.pt"
+    write_search_checkpoint(path)
+    session = BaselineSession(PolicySpec("manabot", str(path)), seed=0)
+    env = managym.Env(seed=3, skip_trivial=True)
+    obs, _ = env.reset(
+        [
+            managym.authored_deck_setup("ur-lessons-vs-gw-allies", key)
+            for key in ("ur_lessons", "gw_allies")
+        ]
+    )
+    view = PolicyView(
+        obs,
+        int(obs.agent.player_index),
+        "binding",
+        tuple(str(i) for i in range(len(obs.action_space.actions))),
+    )
+    assert session.agent is not None
+    expected = session.evaluate(view)
+    cache = session.agent._program_cache
+    assert cache is not None
+    branch = session.fork(seed=1)
+    assert branch.evaluate(view) == expected
+    assert session.agent._program_cache is cache
+    branch.close()
+    assert session.evaluate(view) == expected
+    agent = session.agent
+    session.close()
+    assert agent._program_cache is None
+
+
+def test_baseline_session_projects_signed_outcome_estimates_onto_their_range(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A scalar head declared signed_outcome can overshoot; search must not
+    fail the decision (and end a Play game) on a -1.01 estimate."""
+    path = tmp_path / "untrained-smoke.pt"
+    write_search_checkpoint(path)
+    session = BaselineSession(PolicySpec("manabot", str(path)), seed=0)
+    monkeypatch.setattr(
+        "manabot.backends.torch.bot.evaluate_observation",
+        lambda scope, space, observation: ((1.0,), -1.0149),
+    )
+    view = PolicyView(cast(managym.Observation, None), 1, "binding", ("0",))
+    value = session.evaluate(view).value
+    assert (value.value, value.seat, value.semantic) == (-1.0, 1, "signed_outcome")
+    session.close()

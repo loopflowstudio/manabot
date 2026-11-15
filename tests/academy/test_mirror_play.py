@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 import pytest
 
 import managym
@@ -312,6 +313,66 @@ def test_first_watch_search_timeout_survives_inspection_and_retries_same_choice(
         result = step_watch(created["id"], created["token"], 0)
         assert result["revision"] == 1
         assert game.mirror_retry is None
+    finally:
+        server._drop_session(created["id"], "test")
+        set_policy_registry(None)
+
+
+def test_watch_latest_reconnect_preserves_timeout_history_and_explicit_retry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(server.trace_store, "TRACES_DIR", tmp_path)
+    clock = Clock()
+    monkeypatch.setattr(mirror_search, "time", clock)
+    registry = PolicyRegistry(providers={})
+    factory = SearchFactory()
+    key = registry.register(factory)
+    set_policy_registry(registry)
+    created = create_watch(
+        WatchRequest(
+            players=[f"policy:{key}"] * 2,
+            mirror=[MirrorSearch(), MirrorSearch()],
+            seed=42,
+        )
+    )
+    game = server.SESSION_REGISTRY[created["id"]].game
+    client = TestClient(server.app)
+    headers = {"x-etude-participant-token": created["token"]}
+    url = f"/api/watch/{created['id']}"
+    try:
+        for revision in range(3):
+            step_watch(created["id"], created["token"], revision)
+        assert game.env is not None and game.obs is not None
+        original = game.env.state_digest()
+        seat = int(game.obs.agent.player_index)
+        factory.sessions[seat].clock = clock
+        response = client.post(f"{url}/step", headers=headers, json={"revision": 3})
+        assert response.status_code == 409
+        assert response.json()["detail"]["code"] == "mirror_deadline_exceeded"
+        for ordinal in (-1, 0, -1):
+            recovered = client.get(f"{url}/decisions/{ordinal}", headers=headers)
+            assert recovered.status_code == 200
+            row = recovered.json()
+            assert (
+                row["decision"]
+                == inspect_watch(
+                    created["id"], 2 if ordinal == -1 else 0, created["token"]
+                )["decision"]
+            )
+            assert row["mirror_retry"] == game.mirror_retry
+            assert row["mirror_retry"]["expected_revision"] == 3
+            assert game.revision == 3 and game.env.state_digest() == original
+        assert client.get(f"{url}/decisions/-1").status_code == 403
+        assert client.get(f"{url}/decisions/-2", headers=headers).status_code == 400
+        stale = client.post(f"{url}/step", headers=headers, json={"revision": 2})
+        assert stale.status_code == 409
+        assert game.env.state_digest() == original
+        factory.sessions[seat].clock = None
+        response = client.post(f"{url}/step", headers=headers, json={"revision": 3})
+        assert response.status_code == 200
+        assert response.json()["revision"] == 4
+        recovered = client.get(f"{url}/decisions/-1", headers=headers).json()
+        assert recovered["count"] == 4 and recovered["mirror_retry"] is None
     finally:
         server._drop_session(created["id"], "test")
         set_policy_registry(None)
