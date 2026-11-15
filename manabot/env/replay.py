@@ -107,7 +107,38 @@ def require_replay_runtime(
 
 def replay_failure_inputs(evidence: FailureEvidence) -> list[dict[str, object]]:
     """Replay only retained inputs. The CLI supplies the process wall-time bound."""
-    return [_replay_game_inputs(evidence, game) for game in evidence.games]
+    boundary = evidence.boundary
+    if boundary is None:
+        return [_replay_game_inputs(evidence, game) for game in evidence.games]
+    retained = evidence.model_copy(deep=True)
+    if boundary.phase != "executing":
+        retained.operation = "step"
+        for game in retained.games:
+            game.frame = None
+    results: list[dict[str, object]] = []
+    for game in retained.games:
+        if not game.players:
+            result: dict[str, object] = {
+                "stream": game.stream,
+                "status": "setup_unavailable",
+            }
+        else:
+            result = _replay_game_inputs(retained, game)
+        result.update(
+            boundary_phase=boundary.phase,
+            native_returned=boundary.returned,
+            setup_known=boundary.setup_known,
+            original_outcome="execution_outcome_unknown",
+            diagnostic="Replay cannot settle the original interrupted call's outcome",
+        )
+        if boundary.phase != "executing":
+            result.update(
+                at_retained_failure=False,
+                matches_binding=None,
+                diagnostic="Reconstructed last-known prefix; pending binding or current setup unavailable",
+            )
+        results.append(result)
+    return results
 
 
 def _replay_game_inputs(

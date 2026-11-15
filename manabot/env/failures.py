@@ -25,6 +25,7 @@ import traceback
 from typing import Any, Literal
 from uuid import uuid4
 import warnings
+from weakref import WeakValueDictionary
 
 import numpy as np
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
@@ -128,11 +129,35 @@ class FailureEvidence(BaseModel):
     execution_outcome: Literal[
         "failed", "execution_outcome_unknown", "last_command_succeeded"
     ] = "execution_outcome_unknown"
+    boundary: "NativeBoundary | None" = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @property
     def resolved_player_policies(self) -> tuple[str, str]:
         """Read either receipt spelling without deprecating retained evidence."""
         return self.player_policies or _retained_player_policies(self.opponent_policy)
+
+
+class NativeBoundary(BaseModel):
+    """Durable call state; cached games never imply an unobserved reset setup."""
+
+    operation: str
+    phase: Literal["preparing", "executing", "synchronizing", "ready"]
+    sequence: int
+    timestamp: float
+    returned: bool = False
+    active: list[bool] = []
+    pending_actions: list[int] = []
+    committed_counts: list[int] = []
+    setup_known: bool = True
+    proposed_seeds: list[int] = []
+    proposed_players: list[list[PlayerSetup] | None] = []
+    last_known_frames: list[str | None] = []
+    frame_prefix_lengths: list[int | None] = []
+
+
+FailureEvidence.model_rebuild()
 
 
 class NativeTrainingTrace(BaseModel):
@@ -242,6 +267,55 @@ class CaptureScope:
     paths: list[Path] = field(default_factory=list)
     training_exposure: bool = False
     exposure_directory: Path | None = None
+    training_game_logs: bool = False
+    _operation_sequence: int = 0
+    _operations: list[str] = field(default_factory=list)
+    _writers: WeakValueDictionary[str, "_Capture"] = field(
+        default_factory=WeakValueDictionary
+    )
+
+    def retire_cursors(self) -> None:
+        """Retire settled producers when a stage replaces its collector."""
+        if self.training_game_logs:
+            for path in self.journal_directory.glob("*.jsonl"):
+                path.unlink()
+
+    @property
+    def journal_directory(self) -> Path:
+        return self.directory.parent / "game-journals"
+
+    @contextmanager
+    def operation(self, name: str) -> Iterator[None]:
+        """Owner-thread operation stack, restoring collection after inference."""
+        if not self.training_game_logs:
+            yield
+            return
+        self._operations.append(name)
+        self._mark_operation(name, "pending")
+        try:
+            yield
+        except BaseException:
+            # Preserve the interrupted boundary if an exception unwinds it.
+            self._operations.pop()
+            raise
+        else:
+            self._operations.pop()
+            self._mark_operation(name, "returned")
+            if self._operations:
+                self._mark_operation(self._operations[-1], "pending")
+
+    def _mark_operation(self, name: str, state: str) -> None:
+        self._operation_sequence += 1
+        atomic_private_json(
+            self.journal_directory / "operation.json",
+            {
+                "operation": name,
+                "state": state,
+                "sequence": self._operation_sequence,
+                "timestamp": time.time(),
+                "context": self.context(),
+            },
+        )
 
 
 _scope: ContextVar[CaptureScope | None] = ContextVar("game_failure_scope", default=None)
@@ -297,6 +371,23 @@ def _append(path: Path, row: dict[str, object], *, create: bool = False) -> None
             os.close(descriptor)
 
 
+def atomic_private_json(path: Path, row: dict[str, object]) -> None:
+    """Replace a complete private snapshot, including durable directory entry."""
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(path.parent, 0o700)
+    temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+    try:
+        _append(temporary, row, create=True)
+        temporary.replace(path)
+        descriptor = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 class _Capture:
     def __init__(self) -> None:
         self.scope = _scope.get()
@@ -307,6 +398,98 @@ class _Capture:
         self._policy_counts: dict[str, ActionCutoffCounts] = {}
         self._policy_samples: list[ActionCutoffSample] = []
         self._policy_path: Path | None = None
+        self._cursor: Path | None = None
+        self._boundary: NativeBoundary | None = None
+        self._call_evidence: FailureEvidence | None = None
+        self.frozen_context: dict[str, object] | None = None
+
+    def _start_cursor(self, name: str) -> None:
+        if self.scope is not None and self.scope.training_game_logs:
+            base = name
+            index = 0
+            while name in self.scope._writers:
+                index += 1
+                name = f"{base}-{index}"
+            self.scope._writers[name] = self
+            self._cursor = self.scope.journal_directory / f"{name}.jsonl"
+            self._cursor.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            for path in self._cursor.parent.glob(f".{self._cursor.name}.*.tmp"):
+                path.unlink(missing_ok=True)
+
+    def _publish(
+        self,
+        evidence: FailureEvidence,
+        phase: Literal["preparing", "executing", "synchronizing", "ready"],
+    ) -> None:
+        if self._cursor is None:
+            return
+        assert self._boundary is not None
+        self._boundary.phase = phase
+        self._boundary.timestamp = time.time()
+        if phase == "executing":
+            self._boundary.last_known_frames = [game.frame for game in evidence.games]
+            self._boundary.frame_prefix_lengths = [
+                len(game.actions) - 1 if game.frame is not None else None
+                for game in evidence.games
+            ]
+        evidence = evidence.model_copy(deep=True)
+        evidence.boundary = self._boundary.model_copy(deep=True)
+        if phase != "executing":
+            for game in evidence.games:
+                game.frame = None
+        evidence.execution_outcome = (
+            "last_command_succeeded"
+            if self._boundary.returned and evidence.mode == "scalar"
+            else "execution_outcome_unknown"
+        )
+        atomic_private_json(
+            self._cursor, evidence.model_dump(mode="json", by_alias=True)
+        )
+
+    def _begin_boundary(
+        self,
+        evidence: FailureEvidence,
+        operation: str,
+        *,
+        actions: list[int] | None = None,
+        active: list[bool] | None = None,
+        setup_known: bool = True,
+        seeds: list[int] | None = None,
+        players: list[list[PlayerSetup] | None] | None = None,
+    ) -> None:
+        if self._cursor is None:
+            return
+        self._call_evidence = evidence.model_copy(deep=True)
+        self._boundary = NativeBoundary(
+            operation=operation,
+            phase="preparing",
+            timestamp=time.time(),
+            sequence=1 if self._boundary is None else self._boundary.sequence + 1,
+            pending_actions=actions or [],
+            active=active or [],
+            committed_counts=[len(game.actions) for game in evidence.games],
+            setup_known=setup_known,
+            proposed_seeds=seeds or [],
+            proposed_players=players or [],
+            last_known_frames=[game.frame for game in evidence.games],
+            frame_prefix_lengths=[
+                len(game.actions) - 1 if game.frame is not None else None
+                for game in evidence.games
+            ],
+        )
+        self._publish(evidence, "preparing")
+
+    def _returned(self, evidence: FailureEvidence) -> None:
+        if self._cursor is not None:
+            assert self._boundary is not None
+            self._boundary.returned = True
+            try:
+                self._publish(self._call_evidence or evidence, "synchronizing")
+            except OSError as error:
+                error.add_note(
+                    "Native operation returned; its durable journal acknowledgment failed"
+                )
+                raise
 
     def record_policy_actions(
         self, count: int, kind: str, capacity: int, game: GameInputs
@@ -399,7 +582,16 @@ class _Capture:
         """Read live owner coordinates equally for failures and pending Commands."""
         scope = _scope.get() or self.scope
         return {
-            "context": {**(scope.context() if scope else {}), **self.context},
+            "context": {
+                **(
+                    self.frozen_context
+                    if self.frozen_context is not None
+                    else scope.context()
+                    if scope
+                    else {}
+                ),
+                **self.context,
+            },
             "seconds": time.perf_counter() - self.started,
         }
 
@@ -450,17 +642,31 @@ class ScalarCapture(_Capture):
         self.skip_trivial = skip_trivial
         self.inputs = GameInputs(seed=seed, players=[])
         self.journal: Path | None = None
+        self._start_cursor("scalar")
 
     def reset(self, env: managym.Env, players: list[managym.PlayerConfig]) -> Any:
         # The heterogeneous native observation/info tuple stays at this boundary.
         self.started = time.perf_counter()
+        if self._cursor is not None:
+            self._begin_boundary(
+                self.evidence(),
+                "reset",
+                seeds=[self.seed],
+                players=[[PlayerSetup.retain(p) for p in players]],
+            )
         self.inputs = GameInputs(
             seed=self.seed, players=[PlayerSetup.retain(p) for p in players]
         )
         self.journal = None
         with self._guard(lambda: self.evidence("reset")):
+            if self._cursor is not None:
+                self._publish(self.evidence("reset"), "executing")
             result = env.reset(players)
+            if self._cursor is not None:
+                self._returned(self.evidence("reset"))
             self.identities["content_manifest"] = env.content_pack_manifest()
+            if self._cursor is not None:
+                self._publish(self.evidence("reset"), "ready")
             return result
 
     def evidence(self, operation: Literal["reset", "step"] = "step") -> FailureEvidence:
@@ -478,11 +684,22 @@ class ScalarCapture(_Capture):
             yield
 
     def step(self, env: managym.Env, action: int) -> Any:
+        if self._cursor is not None:
+            self._begin_boundary(
+                self.evidence(), "step", actions=[int(action)], active=[True]
+            )
         self.inputs.actions.append(int(action))
         self.inputs.actor = env.current_agent_index()
         self.inputs.frame = env.semantic_decision_frame_json()
         with self.guard():
-            return env.step(action)
+            if self._cursor is not None:
+                self._publish(self.evidence(), "executing")
+            result = env.step(action)
+            if self._cursor is not None:
+                self._returned(self.evidence())
+            if self._cursor is not None:
+                self._publish(self.evidence(), "ready")
+            return result
 
     def command(
         self, env: managym.Env, command: str, *, transition_only: bool = True
@@ -627,6 +844,7 @@ class CapturedVector(_Capture):
         # Sampled roots pick setups natively at reset; evidence reads them back.
         self._sampled_roots = False
         self._action_cutoff: int | None = None
+        self._start_cursor(f"vector-{stream_offset}")
 
     def __getattr__(self, name: str) -> Any:
         # Only reads delegate: an undelegated mutation would leave the retained
@@ -756,17 +974,36 @@ class CapturedVector(_Capture):
     def reset_each_into_buffers(
         self, players: list[list[managym.PlayerConfig]]
     ) -> None:
+        if self._cursor is not None:
+            self._begin_boundary(
+                self._evidence_for(self.games, "reset"),
+                "reset_each",
+                setup_known=not self._sampled_roots,
+                seeds=self.next_seeds,
+                players=[[PlayerSetup.retain(p) for p in setup] for setup in players],
+            )
         for game, setup, seed in zip(self.games, players, self.next_seeds, strict=True):
             game.players = [PlayerSetup.retain(p) for p in setup]
             game.restart(seed)
         with self._guard(lambda: self._evidence_for(self.games, "reset")):
             self.native.reset_each_into_buffers(players)
+        if self._cursor is not None:
+            self._returned(self._evidence_for(self.games, "reset"))
         self._synchronize()
 
     def reassign_roots_into_buffers(
         self, players: list[list[managym.PlayerConfig] | None]
     ) -> None:
         """Retain new setups only after native atomic fresh-root validation."""
+        if self._cursor is not None:
+            self._begin_boundary(
+                self._evidence_for(self.games, "reset"),
+                "reassign_roots",
+                players=[
+                    None if setup is None else [PlayerSetup.retain(p) for p in setup]
+                    for setup in players
+                ],
+            )
         proposed = [game.model_copy(deep=True) for game in self.games]
         for game, setup, seed in zip(
             proposed, players, self.native.current_game_seeds(), strict=True
@@ -776,15 +1013,26 @@ class CapturedVector(_Capture):
                 game.restart(seed)
         with self._guard(lambda: self._evidence_for(proposed, "reset")):
             self.native.reassign_roots_into_buffers(players)
+        if self._cursor is not None:
+            self._returned(self._evidence_for(self.games, "reset"))
         self.games = proposed
         self._synchronize()
 
     def reset_seeds_into_buffers(self, seeds: list[int]) -> None:
+        if self._cursor is not None:
+            self._begin_boundary(
+                self._evidence_for(self.games, "reset"),
+                "reset_seeds",
+                setup_known=not self._sampled_roots,
+                seeds=seeds,
+            )
         self.next_seeds = list(seeds)
         for game, seed in zip(self.games, seeds, strict=True):
             game.restart(seed)
         with self._guard(lambda: self._evidence_for(self.games, "reset")):
             self.native.reset_seeds_into_buffers(seeds)
+        if self._cursor is not None:
+            self._returned(self._evidence_for(self.games, "reset"))
         self._synchronize()
 
     def _synchronize(self) -> None:
@@ -813,6 +1061,10 @@ class CapturedVector(_Capture):
         self.next_seeds = [
             min(game.seed + self.stride, 2**64 - 1) for game in self.games
         ]
+        if self._boundary is not None:
+            self._boundary.setup_known = True
+        if self._cursor is not None:
+            self._publish(self._evidence_for(self.games, "step"), "ready")
 
     def step_into_buffers(
         self, actions: list[int], active: list[bool] | None = None
@@ -828,7 +1080,16 @@ class CapturedVector(_Capture):
         self._step(actions, active, isolated=True, recover_capacity=recover_capacity)
 
     def replace_failed_into_buffers(self, active: list[bool]) -> None:
+        if self._cursor is not None:
+            self._begin_boundary(
+                self._evidence_for(self.games, "reset"),
+                "replace_failed",
+                active=active,
+                setup_known=not self._sampled_roots,
+            )
         self.native.replace_failed_into_buffers(active)
+        if self._cursor is not None:
+            self._returned(self._evidence_for(self.games, "reset"))
         self._synchronize()
 
     def _step(
@@ -840,6 +1101,14 @@ class CapturedVector(_Capture):
         recover_capacity: bool = False,
     ) -> None:
         enabled = active if active is not None else [True] * len(self.games)
+        if self._cursor is not None:
+            self._begin_boundary(
+                self._evidence_for(self.games, "step"),
+                "step_isolated" if isolated else "step",
+                actions=[int(action) for action in actions],
+                active=enabled,
+                setup_known=not self._sampled_roots,
+            )
         actors = self.native.current_agent_indices()
         frames = self.native.semantic_decision_frames_json(active)
         summaries = (
@@ -858,12 +1127,16 @@ class CapturedVector(_Capture):
                 game.actions.append(int(action))
                 attempted.append(game)
         with self._guard(lambda: self._evidence_for(attempted, "step")):
+            if self._cursor is not None:
+                self._publish(self._evidence_for(self.games, "step"), "executing")
             if isolated:
                 self.native.step_isolated_into_buffers(
                     actions, enabled, recover_capacity
                 )
             else:
                 self.native.step_into_buffers(actions, active)
+        if self._cursor is not None:
+            self._returned(self._evidence_for(self.games, "step"))
         self._synchronize()
 
 
