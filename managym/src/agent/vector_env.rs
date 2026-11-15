@@ -201,14 +201,7 @@ impl VectorEnv {
                 "uniform roster requires every exact Elemental setup once".into(),
             ));
         }
-        if let Some(first) = roster.first() {
-            if let Some(other) = roster.iter().find(|p| p.disclosure != first.disclosure) {
-                return Err(AgentError(format!(
-                    "training roster requires the same disclosure: {} has {:?}, {} has {:?}",
-                    first.name, first.disclosure, other.name, other.disclosure
-                )));
-            }
-        }
+        require_uniform_disclosure(&roster)?;
         self.uniform_roster = RootRoster {
             players: roster,
             distinct: false,
@@ -259,14 +252,7 @@ impl VectorEnv {
                 ));
             }
         }
-        if let Some(first) = decks.first() {
-            if let Some(other) = decks.iter().find(|p| p.disclosure != first.disclosure) {
-                return Err(AgentError(format!(
-                    "training roster requires the same disclosure: {} has {:?}, {} has {:?}",
-                    first.name, first.disclosure, other.name, other.disclosure
-                )));
-            }
-        }
+        require_uniform_disclosure(&decks)?;
         self.uniform_roster = RootRoster {
             players: decks,
             distinct: distinct_pairs,
@@ -906,6 +892,21 @@ fn uniform_pair(seed: u64, size: usize) -> (usize, usize) {
     assert!(size > 0);
     let mut rng = ChaCha8Rng::seed_from_u64(seed ^ 0x656c656d70616972);
     (rng.gen_range(0..size), rng.gen_range(0..size))
+}
+
+/// A training roster draws every game from one disclosure, so a mixed roster
+/// is refused before it replaces the installed one.
+fn require_uniform_disclosure(players: &[PlayerConfig]) -> Result<(), AgentError> {
+    let Some(first) = players.first() else {
+        return Ok(());
+    };
+    match players.iter().find(|p| p.disclosure != first.disclosure) {
+        Some(other) => Err(AgentError(format!(
+            "training roster requires the same disclosure: {} has {:?}, {} has {:?}",
+            first.name, first.disclosure, other.name, other.disclosure
+        ))),
+        None => Ok(()),
+    }
 }
 
 #[cfg(test)]

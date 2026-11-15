@@ -440,6 +440,12 @@ class SeatRoutedCollector:
                 raise ValueError("a deck source cannot be combined with a curriculum")
             if match.config.world != WORLD_SETUP:
                 raise ValueError("deck-source games play in the world")
+            if match.config.decklists != deck_source.decklists:
+                raise ValueError(
+                    "the deck source's disclosure decides every game: match has "
+                    f"decklists={match.config.decklists!r}, deck source has "
+                    f"decklists={deck_source.decklists!r}"
+                )
             self._uniform_roster = deck_source.players()
         elif matchup_curriculum == "elemental-uniform":
             self._uniform_roster = elemental_roster(match)

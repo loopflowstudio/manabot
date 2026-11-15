@@ -606,3 +606,23 @@ def test_closed_fixed_roots_survive_auto_reset_and_restore(decks: UniformDecks) 
     finally:
         first.close()
         restored.close()
+
+
+def test_collector_rejects_match_disclosure_its_source_would_ignore(
+    decks: UniformDecks,
+) -> None:
+    closed = decks.model_copy(update={"decklists": "closed"})
+    with pytest.raises(ValueError, match="decklists='closed'.*decklists='open'"):
+        SeatRoutedCollector(
+            ObservationSpace(),
+            Match(closed.match_config()),
+            Reward(RewardConfig()),
+            num_envs=2,
+            seed=17402,
+            opponent_mode="self",
+            games_per_stream=2,
+            deck_source=decks,
+            numerics=TorchCollectionSession(
+                device="cpu", seed=17402, precision="float32"
+            ),
+        )
