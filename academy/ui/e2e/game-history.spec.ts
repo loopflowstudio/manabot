@@ -1,6 +1,45 @@
 import { selectDeck } from './deck-selection';
 import { expect, test, type Page } from '@playwright/test';
 
+test('unauthorized session history explains access and offers to leave the session filter', async ({ page }) => {
+  await page.route('**/api/play-sessions/private-session', route => route.fulfill({ status: 403, json: { detail: 'Session not owned' } }));
+  await page.route('**/api/traces?**', route => route.fulfill({ json: [] }));
+  await page.goto('/games?session=private-session&q=Passive');
+  const alert = page.getByRole('alert');
+  await expect(alert).toContainText('browser and address (including port) where you played');
+  await expect(alert).toContainText('credentials were cleared');
+  await expect(alert.getByRole('button', { name: 'Try again' })).toHaveCount(0);
+  await alert.getByRole('link', { name: 'Browse games outside this session' }).click();
+  await expect(page).toHaveURL(/\/games\?q=Passive$/);
+  await expect(alert).toHaveCount(0);
+});
+
+test('temporary session history failure retains retry and recovers authorized results', async ({ page }) => {
+  let unavailable = true;
+  await page.route('**/api/play-sessions/retry-session', route => route.fulfill(unavailable
+    ? { status: 503, json: { detail: 'Unavailable' } }
+    : { json: { results: [], totals: [{ origin: 'automated_validation', status: 'completed', count: 2 }], next_result_offset: null } }));
+  await page.route('**/api/traces?**', route => route.fulfill({ json: [] }));
+  await page.goto('/games?session=retry-session');
+  await expect(page.getByRole('alert')).toContainText('Session history could not be loaded.');
+  await expect(page.getByRole('alert')).not.toContainText('credentials');
+  unavailable = false;
+  await page.getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Session results' })).toContainText('2 completed');
+  await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test('session history pagination denial gives the same access guidance', async ({ page }) => {
+  await page.route('**/api/play-sessions/paged-session*', route => route.fulfill(new URL(route.request().url()).searchParams.has('result_offset')
+    ? { status: 403, json: { detail: 'Session not owned' } }
+    : { json: { results: [], totals: [], next_result_offset: 100 } }));
+  await page.route('**/api/traces?**', route => route.fulfill({ json: [] }));
+  await page.goto('/games?session=paged-session');
+  await page.getByRole('button', { name: 'More result configurations' }).click();
+  await expect(page.getByRole('alert')).toContainText('Copying the link does not copy access');
+  await expect(page.getByRole('alert').getByRole('button', { name: 'Try again' })).toHaveCount(0);
+});
+
 test('session result pagination ignores responses from a prior history view', async ({ page }) => {
   let releasePage!: () => void;
   let requestedPage!: () => void;

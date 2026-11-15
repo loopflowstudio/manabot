@@ -548,7 +548,12 @@ with their measured sample count; otherwise they are unavailable.
 Reload in the same tab to recover the session and its actual pending decision.
 Independent tabs and launches start independently. Opening session history in
 another tab is read access and does not resume that session's live game. Keep
-using the same browser address, including its port. If browser session storage
+using the same browser address, including its port. Session history requires
+the owner credential stored in that browser; copying its link does not grant
+access. If access is denied, open the link in the original browser and address,
+or browse Games outside that session. Cleared owner credentials cannot be
+recovered from the link. Temporary loading failures still offer **Try again**.
+If browser session storage
 is unavailable, Academy explains that reload continuity is unavailable; the
 current in-memory game remains usable.
 

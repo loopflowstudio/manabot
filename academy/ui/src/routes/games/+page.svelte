@@ -17,6 +17,7 @@
   let games = $state<GameSummary[]>([]);
   let loading = $state(false);
   let error = $state('');
+  let sessionAccessDenied = $state(false);
   let nextCursor = $state<string | null>(null);
   let mounted = $state(false);
   let name = $state('');
@@ -44,6 +45,7 @@
     const sequence = ++requestSequence;
     loading = true;
     error = '';
+    sessionAccessDenied = false;
     sessionResults = [];
     sessionTotals = [];
     nextResultOffset = null;
@@ -54,7 +56,7 @@
       const session = params.get('session');
       if (session) {
         const summary = await recordFetch(`/api/play-sessions/${encodeURIComponent(session)}`);
-        if (!summary.ok) throw new Error('Session history requires its owner credential.');
+        checkSessionResponse(summary, sequence);
         const data = await summary.json();
         if (sequence === requestSequence) { sessionResults = data.results; sessionTotals = data.totals; nextResultOffset = data.next_result_offset; }
       } else sessionResults = [];
@@ -74,6 +76,15 @@
     }
   }
 
+  function checkSessionResponse(response: Response, sequence: number): void {
+    if (response.ok) return;
+    const denied = response.status === 403;
+    if (sequence === requestSequence) sessionAccessDenied = denied;
+    throw new Error(denied
+      ? 'This browser cannot access this session history. Open it in the browser and address (including port) where you played. Copying the link does not copy access; if that browser’s stored credentials were cleared, access cannot be recovered from the link.'
+      : 'Session history could not be loaded.');
+  }
+
   async function moreResults(): Promise<void> {
     const session = page.url.searchParams.get('session');
     if (!session || nextResultOffset === null || moreResultsPending) return;
@@ -81,7 +92,7 @@
     moreResultsPending = true;
     try {
       const response = await recordFetch(`/api/play-sessions/${encodeURIComponent(session)}?result_offset=${nextResultOffset}`);
-      if (!response.ok) throw new Error('More result configurations could not be loaded. Try again.');
+      checkSessionResponse(response, sequence);
       const data = await response.json();
       if (sequence !== requestSequence) return;
       sessionResults = [...sessionResults, ...data.results];
@@ -165,7 +176,7 @@
 {result.matchup_json}</pre>
         </details>
       {/each}
-      {#if nextResultOffset !== null}<button class="btn btn-secondary mt-2" disabled={moreResultsPending} onclick={moreResults}>More result configurations</button>{/if}
+      {#if nextResultOffset !== null && !sessionAccessDenied}<button class="btn btn-secondary mt-2" disabled={moreResultsPending} onclick={moreResults}>More result configurations</button>{/if}
       {#if currentGame.href}<a href={currentGame.href} class="mt-2 inline-block underline">Return to current game</a>{/if}
     </section>
   {/if}
@@ -230,7 +241,10 @@
     <button type="button" onclick={() => void load(page.url.search)} disabled={loading} class="btn btn-secondary ml-auto">Refresh</button>
   </div>
 
-  {#if error}<p role="alert" class="rounded border border-mountain p-4">{error} <button class="underline" onclick={() => void load(page.url.search)}>Try again</button></p>{/if}
+  {#if error}<p role="alert" class="rounded border border-mountain p-4">{error}
+    {#if sessionAccessDenied}<a class="underline" href={filterUrl('session', null)}>Browse games outside this session</a>
+    {:else}<button class="underline" onclick={() => void load(page.url.search)}>Try again</button>{/if}
+  </p>{/if}
   <p role="status" class="mb-3 text-ink-2">{loading ? 'Loading games…' : `${games.length} ${games.length === 1 ? 'game' : 'games'} on this page`}</p>
   {#if !loading && !error && !games.length}<p class="rounded border border-line bg-panel p-8 text-center">No games match these filters. Try another player or clear the filters.</p>{/if}
   {#if games.length}

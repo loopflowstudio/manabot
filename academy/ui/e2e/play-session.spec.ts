@@ -19,7 +19,7 @@ async function completeShortGame(page: Page): Promise<void> {
 }
 
 for (const [theme, width, height] of [['light', 1280, 800], ['dark', 1440, 900]] as const) {
-  test(`repeated imported model session (${theme}, ${width}x${height})`, async ({page, context}, testInfo) => {
+  test(`repeated imported model session (${theme}, ${width}x${height})`, async ({page, context, browser}, testInfo) => {
     await page.setViewportSize({width, height});
     await page.addInitScript(theme => localStorage.setItem('etude.theme', theme), theme);
     await page.emulateMedia({colorScheme: theme, reducedMotion:'reduce'});
@@ -73,6 +73,14 @@ for (const [theme, width, height] of [['light', 1280, 800], ['dark', 1440, 900]]
     await page.route('**/api/traces?*', async route => { const url = new URL(route.request().url()); if (url.searchParams.has('session')) url.searchParams.set('limit','2'); await route.continue({url:url.href}); });
     await page.goto(history!);
     await expect(page.getByRole('region', {name:'Session results'})).toContainText('out of 2 completed');
+    // A copied link carries no owner access; the original tab still recovers.
+    const visitor = await browser.newContext();
+    try {
+      const visitorPage = await visitor.newPage();
+      await visitorPage.goto(new URL(history!, page.url()).href);
+      await expect(visitorPage.getByRole('alert')).toContainText('This browser cannot access this session history.');
+      await expect(visitorPage.getByRole('button', {name:'Try again', exact:true})).toHaveCount(0);
+    } finally { await visitor.close(); }
     const summaries = page.getByRole('region', {name:'Session results'}).locator('summary');
     await expect(summaries.filter({hasText:first.name})).toHaveCount(2);
     await expect(summaries.filter({hasText:other.name})).toHaveCount(1);
