@@ -3385,12 +3385,6 @@ async def _send_table_response(
                 recipient.websocket = None
 
 
-def _current_table_response(record: SessionRecord) -> dict[str, Any]:
-    if record.game.obs is None:
-        return {"type": "table_snapshot"}
-    return record.game.current_message()
-
-
 @app.websocket("/ws/play")
 async def play_socket(websocket: WebSocket) -> None:
     _cleanup_expired_sessions()

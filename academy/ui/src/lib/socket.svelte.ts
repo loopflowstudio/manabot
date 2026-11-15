@@ -397,17 +397,6 @@ export class GameSocketController {
     return true;
   }
 
-  recoverCurrentGame(): void {
-    const credentials = loadResumeCredentials();
-    if (credentials && this.socket?.readyState === WebSocket.OPEN) {
-      this.pendingResume = true;
-      this.socket.send(JSON.stringify({ type: 'resume', ...credentials } satisfies SharedTableRequest));
-    } else {
-      this.disconnect();
-      this.connect();
-    }
-  }
-
   sendRetrySearch(): void {
     const pending = gameStore.searchRetry;
     if (!pending || gameStore.commandPending) return;
@@ -1012,10 +1001,6 @@ export function sendAction(offerId: number): boolean {
   return controller.sendAction(offerId);
 }
 
-
-export function recoverCurrentGame(): void {
-  controller.recoverCurrentGame();
-}
 
 export function sendSetStops(): void {
   controller.sendSetStops();
