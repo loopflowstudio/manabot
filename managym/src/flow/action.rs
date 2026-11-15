@@ -9,7 +9,6 @@ use crate::state::ability::LibraryEnd;
 use crate::cards::names::NameOption;
 use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
-    agent::guidance::UnavailableReason,
     cards::content_pack::default_content_pack,
     flow::game::{ActivationSource, CastChoices, Game, Payment, PendingChoice},
     state::{
@@ -247,10 +246,7 @@ impl Game {
     /// Cards `player` might play at priority: their hand and graveyard, and
     /// exiled cards they hold grants for, and a library top a permanent lets
     /// them cast. `priority_action_for_card` decides.
-    pub(crate) fn priority_candidate_cards(
-        &self,
-        player: PlayerId,
-    ) -> impl Iterator<Item = CardId> + '_ {
+    fn priority_candidate_cards(&self, player: PlayerId) -> impl Iterator<Item = CardId> + '_ {
         self.state
             .zone_cards(ZoneType::Hand, player)
             .chain(self.state.zone_cards(ZoneType::Graveyard, player))
@@ -421,69 +417,46 @@ impl Game {
     }
 
     fn priority_action_for_card(&self, player: PlayerId, card: CardId) -> Option<Action> {
-        self.priority_card_action(player, card).ok()
-    }
-
-    pub(crate) fn priority_card_action(
-        &self,
-        player: PlayerId,
-        card: CardId,
-    ) -> Result<Action, UnavailableReason> {
-        let object_id = self.state.object_of(card);
-        let object = &self.state[object_id];
-        if !self.may_play_from_zone(player, object_id) {
-            return Err(UnavailableReason::ZonePermission);
+        let object = &self.state[self.state.object_of(card)];
+        if !self.may_play_from_zone(player, self.state.object_of(card)) {
+            return None;
         }
         if object.types.is_land() {
-            if !self.can_cast_sorceries(player) {
-                return Err(UnavailableReason::Timing);
-            }
-            return self
-                .can_play_land(player)
-                .then_some(Action::PlayLand {
-                    player,
-                    object: object_id,
-                })
-                .ok_or(UnavailableReason::LandPlay);
+            return self.can_play_land(player).then_some(Action::PlayLand {
+                player,
+                object: self.state.object_of(card),
+            });
         }
         if !object.types.is_castable() {
-            return Err(UnavailableReason::NotPlayable);
+            return None;
         }
-        let can_cast_now = if self.has_instant_timing(player, object_id) {
+
+        let can_cast_now = if self.has_instant_timing(player, self.state.object_of(card)) {
             self.can_cast_instants(player)
         } else {
             self.can_cast_sorceries(player)
         };
         if !can_cast_now {
-            return Err(UnavailableReason::Timing);
+            return None;
         }
-        self.cast_eligibility(player, card, Default::default())?;
-        Ok(Action::CastSpell {
-            player,
-            object: object_id,
-        })
+        self.can_cast_with(player, card, Default::default())
+            .then_some(Action::CastSpell {
+                player,
+                object: self.state.object_of(card),
+            })
     }
 
     /// Whether `card_id`'s modes and mandatory targets admit casting it and
     /// `player` can pay its total cost with `cast`'s choices. Timing and zone
     /// permission are the caller's.
     pub(crate) fn can_cast_with(&self, player: PlayerId, card: CardId, cast: CastChoices) -> bool {
-        self.cast_eligibility(player, card, cast).is_ok()
-    }
-
-    pub(crate) fn cast_eligibility(
-        &self,
-        player: PlayerId,
-        card: CardId,
-        cast: CastChoices,
-    ) -> Result<(), UnavailableReason> {
         let object = &self.state[self.state.object_of(card)];
         if object.spell_modes().is_some()
             && self
                 .legal_spell_modes(player, self.state.object_of(card))
                 .is_empty()
         {
-            return Err(UnavailableReason::NoLegalMode);
+            return false;
         }
         // Every mandatory targeting requirement needs a legal target.
         for requirement in object.target_requirements() {
@@ -492,18 +465,18 @@ impl Game {
                     .legal_targets_for_requirement(player, self.state.object_of(card), &requirement)
                     .is_empty()
             {
-                return Err(UnavailableReason::NoLegalTarget);
+                return false;
             }
         }
 
         let Some(cost) = self.effective_spell_cost(player, self.state.object_of(card), cast, None)
         else {
-            return Ok(());
+            return true;
         };
         // Castability gating sees pooled mana too — until-end-of-combat mana
         // (firebending) must make spells castable.
         let Some(additional) = object.sacrifice_cost() else {
-            return (self.can_pay_cast(player, self.state.object_of(card), cast)
+            return self.can_pay_cast(player, self.state.object_of(card), cast)
                 || (object.exile_alternative().is_some()
                     && self.can_pay_cast(
                         player,
@@ -512,9 +485,7 @@ impl Game {
                             kicked: true,
                             ..cast
                         },
-                    )))
-            .then_some(())
-            .ok_or(UnavailableReason::TotalCost);
+                    ));
         };
         let payment = Payment::Spell {
             object: self.state.object_of(card),
@@ -523,15 +494,12 @@ impl Game {
             targets: Vec::new(),
             target_req_indices: Vec::new(),
         };
-        (self
-            .payment_candidates(player, &payment, additional)
+        self.payment_candidates(player, &payment, additional)
             .into_iter()
             .any(|id| self.can_pay_with_mana_abilities(player, &cost, Some(id)))
             || additional.or_mana.as_ref().is_some_and(|extra| {
                 self.can_pay_with_mana_abilities(player, &cost.plus(extra), None)
-            }))
-        .then_some(())
-        .ok_or(UnavailableReason::TotalCost)
+            })
     }
 
     pub(crate) fn pending_choice_action_space(&self) -> Option<ActionSpace> {
@@ -844,7 +812,7 @@ impl Game {
     fn chosen_card(&self, object: ObjectId) -> Result<CardId, AgentError> {
         self.state
             .card_of(object)
-            .ok_or_else(|| AgentError::Rules("choice must name a card".into()))
+            .ok_or_else(|| AgentError("choice must name a card".into()))
     }
 
     pub(crate) fn execute_action(&mut self, action: &Action) -> Result<(), AgentError> {
@@ -878,9 +846,7 @@ impl Game {
             } => self.activate_card_ability_action(*player, *object, *ability_index),
             Action::Foretell { player, object } => {
                 if self.state.priority.holder != *player {
-                    return Err(AgentError::Rules(
-                        "player does not have priority".to_string(),
-                    ));
+                    return Err(AgentError("player does not have priority".to_string()));
                 }
                 self.foretell(*player, self.chosen_card(*object)?)
             }
@@ -906,14 +872,12 @@ impl Game {
                 } else if self.state.suspended_decision.is_some() {
                     self.execute_decision_action(action)
                 } else {
-                    Err(AgentError::Rules("no pending target choice".to_string()))
+                    Err(AgentError("no pending target choice".to_string()))
                 }
             }
             Action::PassPriority { player } => {
                 if self.state.priority.holder != *player {
-                    return Err(AgentError::Rules(
-                        "player does not have priority".to_string(),
-                    ));
+                    return Err(AgentError("player does not have priority".to_string()));
                 }
                 let next = self.next_player(*player);
                 self.state.priority_mut().on_pass(next);
@@ -1014,7 +978,7 @@ impl Game {
                         // choosing a target.
                         self.decline_trigger_target(*player)
                     }
-                    _ => Err(AgentError::Rules("nothing to decline".to_string())),
+                    _ => Err(AgentError("nothing to decline".to_string())),
                 }
             }
             Action::PayCost { player } => {
@@ -1032,7 +996,7 @@ impl Game {
                     Some(PendingChoice::Waterbend { .. }) => {
                         self.waterbend_pay_remainder_action(*player)
                     }
-                    _ => Err(AgentError::Rules("no cost payment is pending".to_string())),
+                    _ => Err(AgentError("no cost payment is pending".to_string())),
                 }
             }
             Action::WaterbendTap { player, permanent } => {
@@ -1096,8 +1060,7 @@ mod identity_tests {
             ],
             400_715,
             false,
-        )
-        .expect("valid game setup");
+        );
         let player = game.active_player();
         game.state.turn.current_phase = 1;
         game.state.turn.current_step = 0;

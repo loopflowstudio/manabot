@@ -10,11 +10,9 @@ import sqlite3
 from fastapi.testclient import TestClient
 import pytest
 
+# Local imports
 from managym.academy import server, trace as trace_store
 from managym.academy.server import app
-
-# Local imports
-from tests.academy.socket_messages import settled_message
 
 MAX_HERO_MOVES = 3000
 
@@ -87,7 +85,7 @@ def _lands_then_pass_policy(payload: dict) -> int:
 def _play_game(websocket, config: dict, policy, on_payload=None) -> dict:
     """Drive a full game; returns the terminal payload."""
     websocket.send_json({"type": "new_game", "config": config})
-    payload = settled_message(websocket)
+    payload = websocket.receive_json()
     for _ in range(MAX_HERO_MOVES):
         assert payload["type"] in {"observation", "game_over"}, payload
         if on_payload is not None:
@@ -95,7 +93,7 @@ def _play_game(websocket, config: dict, policy, on_payload=None) -> dict:
         if payload["type"] == "game_over":
             return payload
         websocket.send_json({"type": "action", "index": policy(payload)})
-        payload = settled_message(websocket)
+        payload = websocket.receive_json()
     pytest.fail("Game did not reach a terminal state within the move budget")
 
 
@@ -275,7 +273,7 @@ def test_set_stops_mid_game_takes_effect(isolated_traces):
                     },
                 }
             )
-            payload = settled_message(websocket)
+            payload = websocket.receive_json()
             assert payload["type"] == "observation"
             # Default stops: game opens at my main1, with the config echoed.
             assert payload["data"]["turn"]["step"] == "PRECOMBAT_MAIN_STEP"
@@ -292,7 +290,7 @@ def test_set_stops_mid_game_takes_effect(isolated_traces):
             websocket.send_json(
                 {"type": "action", "index": _lands_then_pass_policy(payload)}
             )
-            payload = settled_message(websocket)
+            payload = websocket.receive_json()
             assert payload["data"]["turn"]["step"] == "PRECOMBAT_MAIN_STEP"
 
             # Drop the main stops mid-window: the server fast-forwards off the
@@ -303,7 +301,7 @@ def test_set_stops_mid_game_takes_effect(isolated_traces):
                     "stops": {"my": ["end_step"], "opponent": []},
                 }
             )
-            payload = settled_message(websocket)
+            payload = websocket.receive_json()
             assert payload["type"] == "observation"
             assert payload["stops"]["my"] == ["end_step"]
             assert payload["stops"]["opponent"] == []
@@ -315,18 +313,18 @@ def test_set_stops_mid_game_takes_effect(isolated_traces):
 
             # Partial update: only stop_on_stack; the stop set is preserved.
             websocket.send_json({"type": "set_stops", "stop_on_stack": False})
-            payload = settled_message(websocket)
+            payload = websocket.receive_json()
             assert payload["stops"]["my"] == ["end_step"]
             assert payload["stops"]["stop_on_stack"] is False
 
             # Validation errors leave the session playable.
             websocket.send_json({"type": "set_stops", "stops": {"my": ["untap"]}})
-            payload = settled_message(websocket)
+            payload = websocket.receive_json()
             assert payload["type"] == "error"
             assert "Unknown stop step" in payload["message"]
 
             websocket.send_json({"type": "set_stops", "stops": {"theirs": []}})
-            payload = settled_message(websocket)
+            payload = websocket.receive_json()
             assert payload["type"] == "error"
             assert "my" in payload["message"]
 
@@ -345,7 +343,7 @@ def test_pass_turn_yields_until_end_of_turn(isolated_traces):
                     },
                 }
             )
-            payload = settled_message(websocket)
+            payload = websocket.receive_json()
             assert payload["data"]["turn"]["turn_number"] == 1
             assert payload["data"]["turn"]["step"] == "PRECOMBAT_MAIN_STEP"
 
@@ -354,14 +352,14 @@ def test_pass_turn_yields_until_end_of_turn(isolated_traces):
             websocket.send_json(
                 {"type": "action", "index": _lands_then_pass_policy(payload)}
             )
-            payload = settled_message(websocket)
+            payload = websocket.receive_json()
             assert payload["data"]["turn"]["step"] == "PRECOMBAT_MAIN_STEP"
 
             # F6: skips the rest of MY turn — through the my-main2 stop — and
             # clears at the turn boundary, so the next surfaced window is the
             # opponent-end-step stop of turn 2.
             websocket.send_json({"type": "pass_turn"})
-            payload = settled_message(websocket)
+            payload = websocket.receive_json()
             assert payload["type"] == "observation"
             assert payload["data"]["turn"]["turn_number"] == 2
             assert payload["data"]["turn"]["step"] == "ENDING_END"
@@ -370,7 +368,7 @@ def test_pass_turn_yields_until_end_of_turn(isolated_traces):
 
             # F6 cleared: normal stops apply again on turn 3.
             websocket.send_json({"type": "action", "index": _pass_index(payload)})
-            payload = settled_message(websocket)
+            payload = websocket.receive_json()
             assert payload["data"]["turn"]["turn_number"] == 3
             assert payload["data"]["turn"]["step"] == "PRECOMBAT_MAIN_STEP"
             assert _turn_side(payload) == "my"
@@ -437,7 +435,7 @@ def test_new_game_rejects_bad_stops_configs(isolated_traces):
         with client.websocket_connect("/ws/play") as websocket:
             for config, expected_fragment in cases:
                 websocket.send_json({"type": "new_game", "config": config})
-                payload = settled_message(websocket)
+                payload = websocket.receive_json()
                 assert payload["type"] == "error", (config, payload)
                 assert expected_fragment.lower() in payload["message"].lower()
 
@@ -446,6 +444,6 @@ def test_pass_turn_requires_active_game(isolated_traces):
     with TestClient(app) as client:
         with client.websocket_connect("/ws/play") as websocket:
             websocket.send_json({"type": "pass_turn"})
-            payload = settled_message(websocket)
+            payload = websocket.receive_json()
             assert payload["type"] == "error"
             assert "No active game session" in payload["message"]

@@ -27,7 +27,7 @@ fn aggro_deck() -> BTreeMap<String, usize> {
 fn make_game(seed: u64, skip_trivial: bool) -> Game {
     let p1 = PlayerConfig::new("gaea", mixed_deck());
     let p2 = PlayerConfig::new("urza", mixed_deck());
-    Game::new(vec![p1, p2], seed, skip_trivial).expect("valid game setup")
+    Game::new(vec![p1, p2], seed, skip_trivial)
 }
 
 fn reset_env(seed: u64, skip_trivial: bool) -> (Env, Observation) {
@@ -75,7 +75,7 @@ fn full_game_loop_completes() {
 fn win_by_empty_library() {
     let p1 = PlayerConfig::new("empty", BTreeMap::new());
     let p2 = PlayerConfig::new("loaded", aggro_deck());
-    let mut game = Game::new(vec![p1, p2], 11, true).expect("valid game setup");
+    let mut game = Game::new(vec![p1, p2], 11, true);
 
     let mut steps = 0;
     while !game.is_game_over() && steps < 100 {
@@ -135,7 +135,7 @@ fn combat_damage_reduces_life() {
     // skip_trivial=false so we control every decision.
     let p1 = PlayerConfig::new("attacker", aggro_deck());
     let p2 = PlayerConfig::new("defender", aggro_deck());
-    let mut game = Game::new(vec![p1, p2], 42, false).expect("valid game setup");
+    let mut game = Game::new(vec![p1, p2], 42, false);
 
     let mut damage_dealt = false;
 
@@ -292,7 +292,7 @@ fn random_smoke_tla_proof_cards() {
     for seed in 0..200_u64 {
         let p0 = PlayerConfig::new("ally", tla_deck.clone());
         let p1 = PlayerConfig::new("penguin", tla_deck.clone());
-        let mut game = Game::new(vec![p0, p1], seed, true).expect("valid game setup");
+        let mut game = Game::new(vec![p0, p1], seed, true);
         let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed ^ 0x5eed);
 
         let mut steps = 0_usize;
@@ -351,7 +351,7 @@ fn random_smoke_stage2_cards() {
     for seed in 0..200_u64 {
         let p0 = PlayerConfig::new("decisions", ur_deck.clone());
         let p1 = PlayerConfig::new("costs", gw_deck.clone());
-        let mut game = Game::new(vec![p0, p1], seed, true).expect("valid game setup");
+        let mut game = Game::new(vec![p0, p1], seed, true);
         let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed ^ 0x57a6e2);
 
         let mut steps = 0_usize;
@@ -422,7 +422,7 @@ fn random_smoke_milestone1_decklists() {
     for seed in 0..200_u64 {
         let p0 = PlayerConfig::new("lessons", ur_lessons_deck());
         let p1 = PlayerConfig::new("allies", gw_allies_deck());
-        let mut game = Game::new(vec![p0, p1], seed, true).expect("valid game setup");
+        let mut game = Game::new(vec![p0, p1], seed, true);
         let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed ^ 0x3a6e3);
 
         let mut steps = 0_usize;

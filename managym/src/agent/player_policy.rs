@@ -11,9 +11,7 @@ pub enum PlayerPolicy {
 impl PlayerPolicy {
     pub fn select_action(self, env: &mut Env, obs: &Observation) -> Result<i64, AgentError> {
         match self {
-            Self::Agent => Err(AgentError::Rules(
-                "agent requires an external action".into(),
-            )),
+            Self::Agent => Err(AgentError("agent requires an external action".into())),
             Self::Random => Ok(env.random_action_index()? as i64),
             Self::Heuristic => env.heuristics[obs.agent.player_index as usize]
                 .get_or_insert_with(Default::default)

@@ -1,16 +1,14 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
-  import type { GameStore } from '$lib/game.svelte';
+  import { gameStore } from '$lib/game.svelte';
 
-  let {setup, heroLabel = 'Your deck', villainLabel = 'Opponent deck'}: {setup:GameStore;heroLabel?:string;villainLabel?:string} = $props();
-  const seats = $derived([
-    { key: 'hero', label: heroLabel },
-    { key: 'villain', label: villainLabel },
-  ] as const);
+  const seats = [
+    { key: 'hero', label: 'Your deck' },
+    { key: 'villain', label: 'Opponent deck' },
+  ] as const;
   // Setup that arrives with imported decks opens on them; later toggles leave the panel alone.
-  const imported = untrack(() => setup.deckImport !== null);
+  const imported = gameStore.deckImport !== null;
   let enabled = $state(imported);
-  let draft = $state(untrack(() => setup.deckImport) ?? {
+  let draft = $state(gameStore.deckImport ?? {
     hero: { source: '', filename: 'hero.txt' },
     villain: { source: '', filename: 'villain.txt' },
   });
@@ -21,7 +19,7 @@
   function update(): void {
     revision += 1;
     messages = [];
-    setup.deckImport = enabled ? draft : null;
+    gameStore.deckImport = enabled ? draft : null;
   }
 
   async function loadFile(event: Event, seat: 'hero' | 'villain'): Promise<void> {
@@ -46,13 +44,13 @@
     try {
       const response = await fetch('/api/decklists/validate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(setup.deckImport),
+        body: JSON.stringify(gameStore.deckImport),
       });
       const result = await response.json();
       if (started !== revision) return;
       if (!response.ok) throw new Error(typeof result.detail === 'string' ? result.detail : 'Could not validate decklists.');
       if (result.admitted) {
-        messages = [`Ready — ${result.ruleset}, ${result.world_version}. Start a game to play these decks.`];
+        messages = [`Ready — ${result.ruleset}, ${result.world_version}. Choose New Game to play these decks.`];
       } else {
         const documents = result.documents as Partial<Record<'hero' | 'villain', {
           issues: { line: number | null; message: string }[];
@@ -71,7 +69,7 @@
 
 <details open={imported} class="mt-4 rounded-lg border border-line bg-panel p-4">
   <summary class="cursor-pointer font-medium">Import decklist files</summary>
-  <p class="mt-2 text-sm text-ink-2">Development format — supported cards only, no tournament legality claim. Sideboards are fixed outside-game copies. Registered policies check the complete imported matchup before starting.</p>
+  <p class="mt-2 text-sm text-ink-2">Development format — supported cards only, no tournament legality claim. Sideboards are fixed outside-game copies. Checkpoint opponents are not available for imported decks.</p>
   <label class="mt-3 flex items-center gap-2"><input type="checkbox" bind:checked={enabled} onchange={update} /> Use imported decks for the next game</label>
   {#if enabled}
     <p class="mt-2 text-sm text-ink-2">One “count card name” per line. Optional Main and Sideboard headings; # starts a full-line comment.</p>

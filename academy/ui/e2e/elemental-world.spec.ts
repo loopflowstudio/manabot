@@ -17,7 +17,6 @@ for (const [hero, villain] of [['elemental_ug', 'elemental_bg'], ['elemental_bg'
     });
     await page.goto('/');
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-    await page.getByText('Browse decks and cards', { exact: true }).click();
     for (const deck of manifest.roster) {
       await expect(page.getByTestId(`browse-${deck.deck_id}`)).toBeVisible();
     }

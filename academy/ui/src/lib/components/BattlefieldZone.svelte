@@ -13,13 +13,12 @@
     allPermanents: PermanentState[];
     tablePermanents: PermanentState[];
     focusedIds?: Set<number>;
-    combatMarkers?: Map<number, string>;
     clickableTargets?: Map<number, number[]>;
     onSelectTarget?: (id: number) => void;
     onHoverTarget?: (id: number | null) => void;
     onPreviewCard?: (card: CardPreview | null) => void;
   }
-  let { label, lane, permanents, allPermanents, tablePermanents, focusedIds = new Set<number>(), combatMarkers = new Map<number, string>(),
+  let { label, lane, permanents, allPermanents, tablePermanents, focusedIds = new Set<number>(),
     clickableTargets, onSelectTarget, onHoverTarget, onPreviewCard }: Props = $props();
   let box: HTMLDivElement;
   let width = $state(120);
@@ -61,7 +60,7 @@
   </div>
   <div bind:this={box} class="min-h-0 overflow-hidden p-1">
     <PermanentRow permanents={visible} {allPermanents} {tablePermanents} cardWidth={layout.cardWidth}
-      {focusedIds} {combatMarkers} {clickableTargets} {onSelectTarget} {onHoverTarget} {onPreviewCard} />
+      {focusedIds} {clickableTargets} {onSelectTarget} {onHoverTarget} {onPreviewCard} />
   </div>
 </div>
 

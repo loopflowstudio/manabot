@@ -91,7 +91,7 @@ def test_named_layout_describes_tagged_rows_and_history() -> None:
     history = managym.observation_layout(policy_history=True)
     assert raw["agent_cards"]["columns"]["valid"]["index"] == 55
     assert raw["facts"]["shape"] == [None, 12]
-    assert set(raw["facts"]["row_kinds"]) == set(range(1, 16)) - {6}
+    assert set(raw["facts"]["row_kinds"]) == set(range(1, 15)) - {6}
     assert raw["effect_details"]["shape"] == [4096, 3]
     assert set(raw["relations"]["row_kinds"]) == set(range(1, 11))
     assert raw["name_candidates"]["columns"]["group_last"]["index"] == 3
@@ -176,23 +176,3 @@ def test_deprecated_catalog_names_warn_and_delegate(
 ) -> None:
     with pytest.warns(DeprecationWarning, match=rf"0\.3\.0.*managym\.{new}"):
         assert getattr(managym, old)(*args) == getattr(managym, new)(*args)
-
-
-def test_decision_guidance_native_python_fact_parity() -> None:
-    env = priority_root(("Gray Ogre", "Counterspell"), ("Forest",))
-    observation = env.observation_for_player(env.current_agent_index())
-    assert observation.unavailable_actions
-    assert {row.reason for row in observation.unavailable_actions} >= {
-        "TotalCost",
-        "NoLegalTarget",
-    }
-    space = ObservationSpace(ObservationConfig(policy_input_version=11))
-    native = space.encoder.allocate()
-    env.encode_observation_into(observation, native)
-    reference = space.encode(observation)
-    for key in native:
-        np.testing.assert_array_equal(native[key], reference[key], err_msg=key)
-    facts = native["facts"]
-    guidance = facts[facts[:, 1] == 15]
-    assert len(guidance) == len(observation.unavailable_actions)
-    assert (guidance[:, 0] > 0).all()

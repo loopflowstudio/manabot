@@ -3,7 +3,6 @@ import { render } from 'svelte/server';
 import { expect, it } from 'vitest';
 import type { ExperienceFrame } from '$lib/types';
 import DecisionContext from './DecisionContext.svelte';
-import combatFixture from '../../../../../protocol/fixtures/combat-declaration.json';
 
 it('renders native pending resolution without adding a choice', () => {
   const fixture = JSON.parse(readFileSync(new URL('../../../../../managym/academy/fixtures/choice-navigation-w17-token-cards.json', import.meta.url), 'utf8'));
@@ -16,14 +15,4 @@ it('renders native pending resolution without adding a choice', () => {
   expect(body).toContain('create 2 Food tokens');
   expect(body).toContain('gain 3 life');
   expect(body).not.toContain('<button');
-});
-
-it('explains whole-plan confirmation only when a declaration composer is available', () => {
-  const frame = combatFixture.recovery.frame as ExperienceFrame;
-  const { body } = render(DecisionContext, { props: { observation: frame.projection, declaration: frame.declaration } });
-  expect(body).toContain('then confirm once');
-  expect(body).toContain('already committed assignments stay fixed');
-  expect(body).not.toContain(frame.projection.decision_context!.instruction);
-  const child = render(DecisionContext, { props: { observation: frame.projection } }).body;
-  expect(child).toContain(frame.projection.decision_context!.instruction);
 });

@@ -81,9 +81,6 @@ fn variant(name: &str) -> RecordName {
 pub fn record_names() -> Vec<RecordName> {
     use RecordNamespace::{Name, Restriction, Token};
     let mut out = Vec::new();
-    for reason in crate::agent::guidance::UnavailableReason::ALL {
-        out.push(variant(&format!("UnavailableReason::{}", reason.name())));
-    }
     for keyword in Keyword::ALL {
         // Effects name a keyword bare; card text serializes the enum variant.
         let printed = format!("Keyword::{}", keyword.name());

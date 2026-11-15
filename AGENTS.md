@@ -48,8 +48,7 @@ checkpoint fields and frozen evidence keep their spelling.
 
 Code dependencies flow `managym.academy` → `managym` and `manabot` → `managym`.
 Academy never imports manabot or Torch; optional bot capabilities are discovered
-through the `managym.bots` provider entry points; optional historical replay/advice
-capabilities use `managym.academy.bots`. manabot never imports Academy.
+through the `managym.academy.bots` entry point. manabot never imports Academy.
 PyPI distributes the engine as `managym` and training as `manabot`, released
 together at the same version. Release builds use `scripts/release/prepare.py`
 to stage self-contained source archives; direct engine sdists from the workspace
@@ -73,14 +72,9 @@ reconnect, replay/fork identity and accessibility. Cancellation or undo needs an
 explicit shared action and cannot erase committed costs or revealed information.
 Configured priority-stop automation must remain identifiable as automation,
 separate from deliberate human decisions.
-Play's retained `hero_*`/`villain_*` setup fields name human/opponent roles;
-`GameConfig.human_seat` orders them at the native boundary. Record and project
-actual native seats; Watch keeps its two-seat acting-view contract.
 Academy resume credentials and the started-launch marker live in browser
 `sessionStorage`. Keep them scoped together; a launch must not resume another
 tab's or another launch's game.
-Game-file imports send original JSON source spans: JavaScript numeric parsing and
-re-encoding can round u64 identities and invalidate retained digests.
 Watch history is the selected acting viewer's recorded track strictly before
 that decision's `presentation_cursor`; spectator reveal never supplies history
 labels. Event emphasis stays separate from choice focus and lane navigation.
@@ -149,7 +143,7 @@ checkpoints or experiment evidence.
 - Library code receives a framework backend (the module for an update, a
   `BackendPolicy` for simulation and evaluation) and never imports
   `manabot.backends.*`. Only composition roots choose one: `experiments/`,
-  `scripts/`, recipe entry points, the CLI and child-process entry points, `manabot/sim/policy_provider.py` and the
+  `scripts/`, recipe entry points, the CLI and child-process entry points, `manabot/sim/table_bots.py` and the
   backends' tests, by import or `manabot.backends.resolve("torch")`.
   `tests/test_package_boundaries.py` enforces roots and named entry-point scopes
   in mixed CLI/library modules ([who chooses a backend](manabot/backends/README.md#who-chooses-a-backend)).
@@ -306,10 +300,6 @@ from rules/deck PlayerConfig and world identity.
 Every game runner, benchmark and Academy session uses native trivial-decision
 skipping (`skip_trivial`, on by default); a decision with one legal action is
 never shown to a person or sent to a model or policy (Jack Heart, 2026-10-28).
-With trivial skipping, an ordinary Command returns at the next nontrivial
-decision, which can be in a later turn: its final declaration choice may also
-resolve forced combat damage.
-The returned game state is not a snapshot of the declaration boundary.
 Turning it off is for explicit debugging only. Outside tests, the only code
 that does is the constructed-position fixtures listed in
 `tests/env/test_skip_forced_decisions.py`; they play no game for a person,
@@ -344,11 +334,6 @@ admission. Admission-rejection fixtures must mark the config as submitted
   Replay compares these through
   `manabot.env.replay.matches_retained_error`, retaining original class names and
   full vector diagnostic payloads in evidence.
-  Capacity is the typed `AgentError::Capacity` payload (Python
-  `managym.CapacityError`, an `AgentError` subtype): preserve resource, limit and
-  visited counts through semantic/search/vector wrappers. Failed in-place
-  progression quarantines the stream until reset; it is no successful terminal
-  transition. Declaration candidates roll back by being discarded.
 - Frozen experiment scheduling/analysis tests use an explicit compatible-world
   fixture for synthetic outcomes, with separate real-runtime rejection tests.
   Pin declared input capacities rather than inheriting fresh defaults; never
@@ -391,15 +376,6 @@ admission. Admission-rejection fixtures must mark the config as submitted
   Vite dev servers. Running `svelte-kit sync` or a build during browser proofs
   can reload active pages and destroy in-page revision probes; use isolated
   ports and stable generated files for concurrent headless runs.
-- Give each Academy browser-proof subprocess its own proof/artifact directory,
-  including checkpoints and traces. Policy registration freezes artifact identity;
-  another process rewriting the same checkpoint makes a live selection stale.
-- Academy WebSocket tests that inspect settled results use
-  `tests.academy.socket_messages.settled_message`; runner status and the early
-  accepted receipt can precede the settled reply. Lifecycle proofs read the
-  socket directly so they verify receipt delivery before bot work completes.
-  Browser proofs await enabled input before submitting again. Read-only combat draft validation must not publish
-  live-advancement work: it disables and restarts the reactive composer.
 
 ### Card definitions
 
@@ -557,9 +533,7 @@ across `&self` code that reads the board per source or per ability. Continuous-e
 live in `EffectRecords` (indexed by affected object and player); trigger
 sources are looked up per event kind through `TriggerIndex`
 (`flow/triggers.rs`), invalidated by trigger and layer dependencies; departed-object
-facts are an `ObjectLkiLog`. A cloned `Game` carries these caches. Search clones
-omit card/exposure capture; a transactional candidate for the live game must
-explicitly preserve that capture and publish it only on success.
+facts are an `ObjectLkiLog`. A cloned `Game` carries these caches.
 Layer rebuilds reuse immutable copiable source objects and static plans, bound to
 exact definition identity, appearance and timestamp; copy/transform definition
 changes invalidate that source. Intermediate layer objects detach on writes.

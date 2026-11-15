@@ -1144,14 +1144,6 @@ class _Renderer:
         if self.state.shared_effects:
             lines.extend(("", "SHARED CONTINUOUS EFFECTS"))
             lines.extend(self._shared_effect_lines())
-        lines += ["", "Unavailable actions at this decision:"]
-        if state.unavailable_actions is None:
-            lines.append("Explanations not recorded.")
-        elif not state.unavailable_actions:
-            lines.append("No unavailable-action explanations at this decision.")
-        else:
-            for refusal in state.unavailable_actions:
-                lines.append(f"{self.name(refusal.object)}: {refusal.message}")
         lines += ["", "Stack (native order, top to bottom):"]
         for index, item in enumerate(state.stack_objects):
             stack_frame = capture.frames[index]

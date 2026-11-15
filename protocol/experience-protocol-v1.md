@@ -26,36 +26,6 @@ The non-negotiable invariants are:
 5. recovery always has a complete viewer-safe frame;
 6. the client never receives or reconstructs hidden authoritative state.
 
-Academy's live transport publishes the committed human transition as an accepted
-outcome before subsequent bot work. Later updates may carry that same immutable
-receipt with later frames; they do not revise its resulting revision/hash or
-execute the Command again. Presentation batches remain contiguous and contain
-only the events since the preceding publication.
-
-Runner work is ephemeral transport metadata, outside canonical frames, world
-identity and replay evidence. `work_status` names an operation, sequence, kind,
-wall-clock start and running/complete/failed state. Its scope is `setup`
-(with setup ID and optional loading seat, no chooser) or `match` (with exact
-match/revision and optional chooser). It proves no submission outcome. A reconnect during mutable work receives
-only its participant's cached safe recovery envelope plus that status. It cannot
-inspect the Env or enable another submission until authority is confirmed and
-work finishes. Watch status reads do not produce decisions; a failed frontier
-requires an explicit revision-bound retry. Watch progressive setup uses
-`POST /api/watch/setups/{handle}` once, binding a tab-owned high-entropy handle
-to one configuration. A separate tab credential in `x-etude-participant-token`
-authorizes setup reads and starts; it never appears in public work metadata.
-Repeated identical POSTs reconcile it; changed setup is
-rejected. GET reads the retained work/result without starting or retrying work.
-Finished retention is bounded and aged at admission after 15 minutes;
-active attempts are never evicted, with a maximum of 16 admitted concurrently.
-The original `POST /api/watch` remains available for synchronous callers.
-
-New live projections include `unavailable_actions`, native viewer-safe reasons
-for visible objects at this decision. They are separate from legal offers.
-Absence in historical frames means explanations were not recorded; empty means
-this decision has no published refusal. Shared native observations encode each
-refusal as a fact with the exact object join and catalog reason token.
-
 ## Rust authority and wire types
 
 This is deliberately a narrow generated boundary, not a serialization of
@@ -482,11 +452,6 @@ pub struct PresentationEvent {
     pub sound: Option<String>,
     pub kind: PresentationKind,
 }
-
-// A receipt identifies the committed deliberate Command transition. Its
-// resulting revision and hash are fixed before subsequent automation or bot
-// work. An update may coalesce later transitions into a newer frame; the
-// receipt still names the original commitment and never changes on retry.
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct CommandReceipt {

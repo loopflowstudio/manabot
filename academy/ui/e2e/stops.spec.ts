@@ -5,11 +5,10 @@ import { expect, test, type Page } from '@playwright/test';
 // scripted deterministic hero) is played twice —
 // first with auto-pass disabled (the old surface-every-window behavior),
 // then with stops on main phases only. The stops run must need dramatically
-// fewer deliberate inputs to reach the same turn boundary, while the log narrates what
+// fewer deliberate inputs to reach game over, while the log keeps narrating what
 // happened inside the fast-forwarded stretches.
 
-const MAX_ACTIONS = 120;
-const COMPARISON_TURN = 7;
+const MAX_ACTIONS = 1200;
 
 test.beforeEach(async ({ page }) => {
   // Ordinary play generates a new seed; this comparison needs a fixed deal.
@@ -28,9 +27,6 @@ async function setCheckbox(page: Page, testId: string, checked: boolean): Promis
   const box = page.getByTestId(testId);
   if ((await box.isChecked()) !== checked) {
     await box.click();
-    if (await page.getByTestId('automation-status').count()) {
-      await expect(page.getByTestId('automation-status')).not.toContainText('updating…');
-    }
   }
 }
 
@@ -56,18 +52,16 @@ async function updateSeq(page: Page): Promise<number> {
 // applied observation) before choosing again, so the action list is never
 // mid-swap and the input count is exact. Keyboard play avoids repeated pointer
 // scrolling/layout waits; pointer submission is covered by the release suite.
-async function playUntilComparisonTurn(page: Page): Promise<number> {
+async function playUntilGameOver(page: Page): Promise<number> {
   const actionButtons = page.getByTestId('action-option');
   const gameOverOverlay = page.getByText('Game Over', { exact: true });
   let inputs = 0;
 
   for (let i = 0; i < MAX_ACTIONS; i += 1) {
     await expect(actionButtons.first().or(gameOverOverlay)).toBeVisible({ timeout: 30_000 });
-    await expect(gameOverOverlay).not.toBeVisible();
-    await expect(page.locator('[data-testid="action-option"]:enabled').first().or(gameOverOverlay)).toBeVisible();
-    await expect(gameOverOverlay).not.toBeVisible();
-    const board = await page.getByTestId('game-board').textContent();
-    if (board?.includes(`Turn ${COMPARISON_TURN} · Your turn · Precombat Main`)) return inputs;
+    if (await gameOverOverlay.isVisible()) {
+      return inputs;
+    }
 
     const seqBefore = await updateSeq(page);
     const labels = await actionButtons.allTextContents();
@@ -90,10 +84,12 @@ async function playUntilComparisonTurn(page: Page): Promise<number> {
       .toBeGreaterThan(seqBefore);
   }
 
-  throw new Error(`game did not reach turn ${COMPARISON_TURN} within ${MAX_ACTIONS} actions`);
+  throw new Error(`game did not finish within ${MAX_ACTIONS} actions`);
 }
 
-test('stops cut inputs to the same turn boundary, log keeps narrating', async ({ page }) => {
+test('stops cut the inputs needed to finish a game, log keeps narrating', async ({ page }) => {
+  test.setTimeout(300_000);
+
   await page.goto('/');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
     timeout: 15_000,
@@ -111,7 +107,7 @@ test('stops cut inputs to the same turn boundary, log keeps narrating', async ({
 
   await page.getByRole('button', { name: 'New Game' }).first().click();
   await expect(page.getByTestId('game-board')).toBeVisible({ timeout: 15_000 });
-  const baselineInputs = await playUntilComparisonTurn(page);
+  const baselineInputs = await playUntilGameOver(page);
 
   // ---- Run 2: same seed, stops on main phases only. ----
   await openStopsPanel(page);
@@ -120,19 +116,17 @@ test('stops cut inputs to the same turn boundary, log keeps narrating', async ({
   await setCheckbox(page, 'stop-my-main2', true);
   await setCheckbox(page, 'stop-opponent-end_step', false);
 
-  page.once('dialog', dialog => dialog.accept());
-  await page.getByRole('button', { name: 'Rematch', exact: true }).first().click();
-  // The unfinished baseline remains mounted until the replacement is accepted.
-  await expect(page.getByRole('region', { name: 'Play session' })).toContainText('Game 2');
+  await page.getByRole('button', { name: 'Play Again' }).click();
+  // The prior game's board remains mounted while the new request is pending.
   await expect(page.getByTestId('action-option').first()).toBeVisible({ timeout: 15_000 });
-  const stopsInputs = await playUntilComparisonTurn(page);
+  const stopsInputs = await playUntilGameOver(page);
 
   // The hero holds instants (INTERACTIVE_DECK), so the baseline surfaces
   // priority at every step of both turns; main-phase stops must remove the
   // bulk of them. The deal is fixed, though priority automation can change
   // the random opponent's sampling sequence.
   console.log(
-    `inputs to turn ${COMPARISON_TURN}, same seed: baseline=${baselineInputs} stops=${stopsInputs}`,
+    `inputs to finish, same seed: baseline=${baselineInputs} stops=${stopsInputs}`,
   );
   expect(baselineInputs).toBeGreaterThan(stopsInputs * 2);
   expect(stopsInputs).toBeGreaterThan(0);

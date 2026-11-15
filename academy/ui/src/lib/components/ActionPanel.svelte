@@ -11,7 +11,6 @@
     describeSubject?: (object: DecisionObjectView) => string;
     instruction?: string;
     readOnly?: boolean;
-    interrupted?: boolean;
     gameOver?: boolean;
     totalOffers?: number;
     chosenOffer?: number | null;
@@ -34,7 +33,6 @@
     describeSubject = object => object.label,
     instruction = '',
     readOnly = false,
-    interrupted = false,
     gameOver = false,
     totalOffers = offers.length,
     chosenOffer = null,
@@ -53,8 +51,7 @@
   }: Props = $props();
 
   const decisionPrompt = $derived(
-    interrupted ? 'The live session is unavailable. These choices belong to the last recorded decision and cannot be submitted.' :
-      instruction || (offers.length > 0 ? DECISION_PROMPTS[actionSpaceKind] ?? null : null),
+    instruction || (offers.length > 0 ? DECISION_PROMPTS[actionSpaceKind] ?? null : null),
   );
   let actionList: HTMLDivElement | null = $state(null);
   let lastFocusKey = '';
@@ -99,7 +96,7 @@
 
   $effect(() => {
     const nextFocusKey = focusKey;
-    const shouldFocus = nextFocusKey !== '' && nextFocusKey !== lastFocusKey && offers.length > 0 && !disabled && !readOnly && !interrupted;
+    const shouldFocus = nextFocusKey !== '' && nextFocusKey !== lastFocusKey && offers.length > 0 && !disabled;
     if (!shouldFocus) {
       return;
     }
@@ -123,11 +120,9 @@
   <div class="decision-controls">
     <div class="mb-2 flex flex-wrap items-baseline justify-between gap-3">
       <div class="flex min-w-0 flex-wrap items-baseline gap-2.5">
-        <h2 id="action-panel-heading" class="type-title text-display">{interrupted ? 'Last recorded choices' : 'Your choices'}</h2>
+        <h2 id="action-panel-heading" class="type-title text-display">Your choices</h2>
         {#if gameOver}
           <span role="status" class="type-label text-ink-2">Game over</span>
-        {:else if interrupted}
-          <span class="type-label text-ink-2">Interrupted · read-only</span>
         {:else if readOnly}
           <span class="type-label text-ink-2">Recorded decision</span>
         {:else if disabled}
@@ -144,7 +139,7 @@
             Show all
           </button>
         {/if}
-        {#if !readOnly && !interrupted}<button
+        {#if !readOnly}<button
           data-testid="pass-turn"
           class="btn btn-secondary btn-sm"
           disabled={!canPassTurn || fastForwarding}
@@ -169,7 +164,7 @@
       </p>
     {/if}
 
-    <p data-testid="legal-choice-count" role="status" class="type-caption mb-2 text-ink-2">{isLearn && !learnMode ? offers.length : visibleOffers.length} of {totalOffers} {interrupted ? 'recorded choices' : 'legal choices'}</p>
+    <p data-testid="legal-choice-count" role="status" class="type-caption mb-2 text-ink-2">{isLearn && !learnMode ? offers.length : visibleOffers.length} of {totalOffers} legal choices</p>
     {#if selectedTargetId !== null}
       <p class="type-caption mb-3 text-ink-2">Showing choices for the selected subject.</p>
     {/if}
@@ -221,7 +216,7 @@
     class="offer-list space-y-2"
     role="group"
     tabindex="0"
-    aria-label={interrupted ? 'Last recorded choices' : 'Legal choices'}
+    aria-label="Legal choices"
     aria-describedby={decisionPrompt ? 'decision-prompt' : undefined}
   >
     {#if offers.length === 0}
@@ -244,7 +239,7 @@
       {#each offers.filter(action => action.action_type === 'DECLINE_CHOICE') as action}
         <button class="btn btn-secondary w-full" data-testid="action-option"
           data-action-type={action.action_type} data-offer-id={action.id}
-          onclick={() => onSelectAction?.(action)} disabled={disabled || readOnly || interrupted}>Decline Learn</button>
+          onclick={() => onSelectAction?.(action)} disabled={disabled || readOnly}>Decline Learn</button>
       {/each}
     {:else}
       {#each visibleOffers as action}
@@ -261,14 +256,14 @@
           onfocus={() => onHoverAction?.(action)}
           onblur={() => onHoverAction?.(null)}
           onclick={() => onSelectAction?.(action)}
-          disabled={disabled || readOnly || interrupted}
+          disabled={disabled || readOnly}
         >
           {#if isLearn && previewNames[action.focus[0]]}
             <div class="relative mx-auto mb-2 w-40 aspect-[5/7]" data-testid="learn-card-preview">
               <CardImage name={previewNames[action.focus[0]]} className="h-full w-full" />
             </div>
           {/if}
-          <div class="font-medium">{action.label}{#if chosenOffer === action.id}{' · '}Chosen action{/if}</div>
+          <div class="font-medium">{action.label}{#if chosenOffer === action.id} · Chosen action{/if}</div>
           {#if action.subjects?.length}<div id={`offer-subjects-${action.id}`} class="type-caption mt-1 text-ink-2">{action.subjects.map(subject => `${subject.role === 'source' ? 'From' : subject.role === 'target' ? 'Target' : 'Choice'}: ${describeSubject(subject.object)}`).join('; ')}</div>{/if}
         </button>
       {/each}

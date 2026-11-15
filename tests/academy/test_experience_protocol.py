@@ -26,14 +26,6 @@ STRUCT_MODELS = (
     "CandidateSource",
     "Command",
     "CommandReceipt",
-    "DeclarationBinding",
-    "DeclarationSubject",
-    "DeclarationProjection",
-    "DeclarationAnswer",
-    "DeclarationPlan",
-    "DeclarationCommitment",
-    "DeclarationCommand",
-    "DeclarationReceipt",
     "DeckNames",
     "ExperienceFrame",
     "ScheduleView",
@@ -237,17 +229,3 @@ def test_version_unknown_field_and_presentation_discriminant_drift_are_rejected(
     unknown_presentation = deepcopy(FIXTURE)
     unknown_presentation["recovery"]["presentation_tail"][0]["kind"]["kind"] = "opaque"
     _assert_both_reject(unknown_presentation)
-
-
-def test_combat_fixture_retains_complete_plan_and_required_explicit_declines() -> None:
-    source = json.loads((PROTOCOL_DIR / "fixtures/combat-declaration.json").read_text())
-    RUST_VALIDATOR.validate(source)
-    bundle = ProtocolV1ConformanceBundle.model_validate(source)
-    assert bundle.model_dump(mode="json", exclude_unset=True) == source
-    assert bundle.declaration_command is not None
-    assert bundle.declaration_receipt is not None
-    assert len(bundle.declaration_command.plan.assignments) == 3
-    assert len(bundle.declaration_receipt.declaration.child_command_ids) == 3
-    invalid = deepcopy(source)
-    del invalid["declaration_command"]["plan"]["assignments"][0]["destination"]
-    _assert_both_reject(invalid)

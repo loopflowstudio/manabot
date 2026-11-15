@@ -11,8 +11,6 @@ import pytest
 
 from managym.academy import server, trace as trace_store
 from managym.academy.server import app
-from managym.academy.work import WorkStatus
-from tests.academy.socket_messages import settled_message
 
 CONFIG = {
     "hero_deck": {"Mountain": 12, "Lightning Bolt": 12},
@@ -133,7 +131,7 @@ def _open_table(client: TestClient):
     pilot = client.websocket_connect("/ws/play")
     pilot_socket = pilot.__enter__()
     pilot_socket.send_json({"type": "new_game", "config": CONFIG})
-    initial = settled_message(pilot_socket)
+    initial = pilot_socket.receive_json()
     table_id, invite_token = _invite(initial["table"])
 
     watcher = client.websocket_connect("/ws/play")
@@ -145,8 +143,8 @@ def _open_table(client: TestClient):
             "invite_token": invite_token,
         }
     )
-    joined = settled_message(watcher_socket)
-    pilot_presence = settled_message(pilot_socket)
+    joined = watcher_socket.receive_json()
+    pilot_presence = pilot_socket.receive_json()
     assert joined["recovery"]["frame"] == pilot_presence["recovery"]["frame"]
     assert joined["table"]["access"]["role"] == "watcher"
     assert pilot_presence["table"]["access"]["role"] == "pilot"
@@ -154,8 +152,8 @@ def _open_table(client: TestClient):
 
 
 def test_closed_dispatch_denies_every_watcher_live_mutation_without_state_change(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+    monkeypatch, tmp_path
+):
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
     server.SESSION_REGISTRY.clear()
     with TestClient(app) as client:
@@ -169,21 +167,10 @@ def test_closed_dispatch_denies_every_watcher_live_mutation_without_state_change
             frame = joined["recovery"]["frame"]
             watcher_id = watcher_access["identity"]["viewer_id"]
             entered_game_methods: list[str] = []
-            published_work: list[WorkStatus] = []
-            publish_work = server._publish_work
-
-            async def capture_work(
-                record: server.SessionRecord, status: WorkStatus
-            ) -> None:
-                published_work.append(status)
-                await publish_work(record, status)
-
-            monkeypatch.setattr(server, "_publish_work", capture_work)
             for method_name in (
                 "hero_command",
                 "hero_action",
                 "pass_turn",
-                "retry_mirror",
                 "set_stops",
                 "new_game",
             ):
@@ -206,12 +193,6 @@ def test_closed_dispatch_denies_every_watcher_live_mutation_without_state_change
                     "index": 0,
                 },
                 {"type": "pass_turn", "grant_revision": watcher_grant},
-                {
-                    "type": "retry_mirror",
-                    "grant_revision": watcher_grant,
-                    "match_id": frame["match_id"],
-                    "expected_revision": frame["revision"],
-                },
                 {
                     "type": "set_stops",
                     "grant_revision": watcher_grant,
@@ -237,27 +218,16 @@ def test_closed_dispatch_denies_every_watcher_live_mutation_without_state_change
             ]
             for mutation in mutations:
                 before = _authority_fingerprint(record)
-                published_work.clear()
                 watcher_socket.send_json(mutation)
-                denied = settled_message(watcher_socket)
+                denied = watcher_socket.receive_json()
                 assert denied["type"] == "control_error"
                 assert denied["code"] == "forbidden"
                 assert _authority_fingerprint(record) == before
                 assert entered_game_methods == []
-                assert [status.state for status in published_work] == [
-                    "running",
-                    "failed",
-                ]
-                # The pilot must also leave the broadcast wait, even though
-                # only the watcher receives the authorization refusal.
-                for state in ("running", "failed"):
-                    status_message = pilot_socket.receive_json()
-                    assert status_message["type"] == "work_status"
-                    assert status_message["work"]["state"] == state
 
             before = _authority_fingerprint(record)
             watcher_socket.send_json({"type": "chat", "message": "hello"})
-            unsupported = settled_message(watcher_socket)
+            unsupported = watcher_socket.receive_json()
             assert unsupported == {
                 "type": "control_error",
                 "code": "unsupported_message",
@@ -286,7 +256,7 @@ def test_personal_belief_is_private_until_explicit_table_share(monkeypatch, tmp_
                     "scenario_id": "advice-scenario-a",
                 }
             )
-            personal = settled_message(watcher_socket)
+            personal = watcher_socket.receive_json()
             assert personal["type"] == "belief_changed"
             assert personal["belief"]["audience"] == {"kind": "personal"}
             assert personal["table"]["beliefs"] == [personal["belief"]]
@@ -298,8 +268,8 @@ def test_personal_belief_is_private_until_explicit_table_share(monkeypatch, tmp_
                     "belief_id": personal["belief"]["id"],
                 }
             )
-            pilot_shared = settled_message(pilot_socket)
-            watcher_shared = settled_message(watcher_socket)
+            pilot_shared = pilot_socket.receive_json()
+            watcher_shared = watcher_socket.receive_json()
             for shared in (pilot_shared, watcher_shared):
                 assert shared["type"] == "belief_changed"
                 assert shared["belief"]["audience"]["kind"] == "table"
@@ -330,8 +300,8 @@ def test_watcher_branch_is_owner_only_while_pilot_advances_live_match(
                     "command": _command_for_verb(frame, "pilot-first", "pass_priority"),
                 }
             )
-            pilot_update = settled_message(pilot_socket)
-            watcher_update = settled_message(watcher_socket)
+            pilot_update = pilot_socket.receive_json()
+            watcher_update = watcher_socket.receive_json()
             assert pilot_update["update"]["frame"] == watcher_update["update"]["frame"]
             decision = watcher_update["table"]["decisions"][0]
 
@@ -342,7 +312,7 @@ def test_watcher_branch_is_owner_only_while_pilot_advances_live_match(
                     "address": decision["address"],
                 }
             )
-            restored_event = settled_message(watcher_socket)
+            restored_event = watcher_socket.receive_json()
             restored = restored_event["restored"]
             retry_command = deepcopy(restored["command"])
             retry_command["command_id"] = "watcher-retry"
@@ -356,7 +326,7 @@ def test_watcher_branch_is_owner_only_while_pilot_advances_live_match(
                     "command": retry_command,
                 }
             )
-            branch = settled_message(watcher_socket)
+            branch = watcher_socket.receive_json()
             assert branch["type"] == "branch_updated", branch
             assert branch["phase"] == "retry"
             authority_after = _authority_fingerprint(record)
@@ -381,7 +351,7 @@ def test_watcher_branch_is_owner_only_while_pilot_advances_live_match(
                     "attempt_id": branch["attempt_id"],
                 }
             )
-            wrong_owner = settled_message(pilot_socket)
+            wrong_owner = pilot_socket.receive_json()
             assert wrong_owner["type"] == "control_error"
             assert wrong_owner["code"] == "not_found"
             assert branch["attempt_id"] in record.game._study_attempts
@@ -394,10 +364,10 @@ def test_watcher_branch_is_owner_only_while_pilot_advances_live_match(
                     "command": _command(live_frame, "pilot-second"),
                 }
             )
-            next_pilot = settled_message(pilot_socket)
+            next_pilot = pilot_socket.receive_json()
             assert next_pilot["type"] == "command_outcome"
             assert branch["attempt_id"] not in str(next_pilot)
-            next_watcher = settled_message(watcher_socket)
+            next_watcher = watcher_socket.receive_json()
             assert next_watcher["type"] == "command_outcome"
 
             watcher_socket.send_json(
@@ -407,7 +377,7 @@ def test_watcher_branch_is_owner_only_while_pilot_advances_live_match(
                     "attempt_id": branch["attempt_id"],
                 }
             )
-            returned = settled_message(watcher_socket)
+            returned = watcher_socket.receive_json()
             assert returned["type"] == "branch_returned"
             assert returned["restored"] == restored
         finally:
@@ -435,8 +405,8 @@ def test_role_transfer_rejects_old_grant_and_preserves_both_leases(
                     "target_viewer_id": watcher_id,
                 }
             )
-            old_access = settled_message(pilot_socket)
-            new_access = settled_message(watcher_socket)
+            old_access = pilot_socket.receive_json()
+            new_access = watcher_socket.receive_json()
             assert old_access["table"]["access"]["role"] == "watcher"
             assert new_access["table"]["access"]["role"] == "pilot"
             assert old_access["table"]["access"]["grant_revision"] == 2
@@ -450,7 +420,7 @@ def test_role_transfer_rejects_old_grant_and_preserves_both_leases(
                     "command": _command(old_frame, "old-grant"),
                 }
             )
-            denied = settled_message(pilot_socket)
+            denied = pilot_socket.receive_json()
             assert denied["type"] == "control_error"
             assert denied["code"] == "stale_grant"
 
@@ -461,8 +431,8 @@ def test_role_transfer_rejects_old_grant_and_preserves_both_leases(
                     "command": _command(old_frame, "new-pilot-command"),
                 }
             )
-            accepted = settled_message(watcher_socket)
-            old_pilot_update = settled_message(pilot_socket)
+            accepted = watcher_socket.receive_json()
+            old_pilot_update = pilot_socket.receive_json()
             assert accepted["status"] == "accepted"
             assert old_pilot_update["update"]["frame"] == accepted["update"]["frame"]
 
@@ -477,8 +447,8 @@ def test_role_transfer_rejects_old_grant_and_preserves_both_leases(
                         "resume_token": old_pilot_token,
                     }
                 )
-                resumed_old = settled_message(resumed)
-                current_new = settled_message(watcher_socket)
+                resumed_old = resumed.receive_json()
+                current_new = watcher_socket.receive_json()
                 assert (
                     resumed_old["table"]["access"]["identity"]["viewer_id"]
                     == old_pilot_id
@@ -510,8 +480,8 @@ def test_both_roles_continue_in_place_to_same_study_table(monkeypatch, tmp_path)
                         "index": payload["actions"][0]["index"],
                     }
                 )
-                pilot_payload = settled_message(pilot_socket)
-                watcher_payload = settled_message(watcher_socket)
+                pilot_payload = pilot_socket.receive_json()
+                watcher_payload = watcher_socket.receive_json()
                 assert (
                     pilot_payload["recovery"]["frame"]
                     == watcher_payload["recovery"]["frame"]

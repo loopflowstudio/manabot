@@ -1233,8 +1233,7 @@ mod tests {
             ],
             23,
             false,
-        )
-        .expect("valid game setup");
+        );
         let permanent = game
             .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
             .unwrap();
@@ -1271,8 +1270,7 @@ mod tests {
             ],
             23,
             false,
-        )
-        .expect("valid game setup");
+        );
         let actor = game.agent_player();
         game.suspend_rule_decision(Decision::ManaChoice {
             player: actor,
@@ -1315,8 +1313,7 @@ mod tests {
             ],
             23,
             false,
-        )
-        .expect("valid game setup");
+        );
         let predicate = CardPredicate::default();
         // One value per variant. `decision_code`'s exhaustive match makes a
         // new variant fail to compile until it has a code; add it here too.

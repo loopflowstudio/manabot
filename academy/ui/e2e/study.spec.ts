@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 import {
   collectStudyConsoleErrors,
   createCompletedStudyTrace,
-  openPriorityStudyDecision,
+  openFirstStudyDecision,
 } from './study-helpers';
 
 const FORBIDDEN_BEFORE_REVEAL = [
@@ -23,7 +23,7 @@ test('Retry before reveal compares bounded plans and returns to the Score', asyn
   const consoleErrors = collectStudyConsoleErrors(page);
   const traceId = await createCompletedStudyTrace(page);
 
-  const decision = await openPriorityStudyDecision(page, traceId);
+  const decision = await openFirstStudyDecision(page, traceId);
   const recordedBoard = await page.getByTestId('game-board').innerHTML();
   const retryResponse = page.waitForResponse(
     (response) => response.url().includes('/retry') && response.request().method() === 'POST',

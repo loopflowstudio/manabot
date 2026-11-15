@@ -14,7 +14,7 @@ use sha2::{Digest, Sha256};
 
 use crate::experience::{
     AssetManifestHash, Command, CommandId, ContentHash, ExperienceFrame, InteractionOffer, MatchId,
-    OfferId, PlayerId, PresentationEvent, PresentationSeq, PromptId, Revision, SubjectRef,
+    OfferId, PlayerId, PresentationEvent, PresentationSeq, PromptId, Revision,
 };
 
 #[derive(Clone, Copy, Debug, Eq, JsonSchema, PartialEq, Serialize)]
@@ -163,10 +163,6 @@ impl ViewerPresentationTrack {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CanonicalReplayV1 {
-    /// Parent confirmations and ordered ordinary children, retained with the
-    /// canonical authority record rather than a second combat log.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub command_receipts: Vec<crate::experience::CommandReceipt>,
     pub version: CanonicalReplayVersion,
     pub replay_id: String,
     pub match_id: MatchId,
@@ -219,121 +215,6 @@ impl CanonicalReplayV1 {
                 .is_some_and(|previous| previous > row.presentation_cursor.0)
             {
                 return Err("decision cursor moves backwards".into());
-            }
-        }
-        self.validate_declaration_receipts()
-    }
-
-    fn validate_declaration_receipts(&self) -> Result<(), String> {
-        let rows: BTreeMap<_, _> = self
-            .decisions
-            .iter()
-            .map(|row| (row.command_id.0.as_str(), row))
-            .collect();
-        let mut parents = BTreeSet::new();
-        let mut grouped = BTreeSet::new();
-        for receipt in &self.command_receipts {
-            let declaration = receipt
-                .declaration
-                .as_ref()
-                .ok_or("canonical parent receipt has no declaration")?;
-            let command = &declaration.command;
-            if declaration.child_command_ids.is_empty()
-                || !parents.insert(receipt.command_id.0.as_str())
-                || rows.contains_key(receipt.command_id.0.as_str())
-                || receipt.command_id != command.command_id
-                || command.match_id != self.match_id
-                || command.expected_revision != receipt.accepted_at
-            {
-                return Err("canonical parent command identity drifted".into());
-            }
-            let children = declaration
-                .child_command_ids
-                .iter()
-                .map(|id| {
-                    let child = rows
-                        .get(id.0.as_str())
-                        .copied()
-                        .ok_or("canonical declaration child is absent")?;
-                    if !grouped.insert(id.0.as_str()) || child.viewer != receipt.actor {
-                        return Err(
-                            "canonical declaration child is repeated or has another viewer",
-                        );
-                    }
-                    Ok(child)
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-            let first = children[0];
-            let last = children[children.len() - 1];
-            if first.revision != receipt.accepted_at
-                || first.prompt_id != command.prompt_id
-                || last.revision.0.checked_add(1) != Some(receipt.resulting_revision.0)
-                || children
-                    .windows(2)
-                    .any(|pair| pair[0].ordinal.checked_add(1) != Some(pair[1].ordinal))
-            {
-                return Err("canonical declaration children are not one ordered commit".into());
-            }
-            let projection = first
-                .frame
-                .declaration
-                .as_ref()
-                .ok_or("canonical declaration root has no projection")?;
-            let completion = &declaration.completion;
-            if projection.binding != command.plan.binding
-                || projection.actor != receipt.actor.0
-                || projection.stage != completion.stage
-                || projection.rules_player != completion.rules_player.0
-            {
-                return Err("canonical declaration binding or stage drifted".into());
-            }
-            let mut expected = BTreeMap::new();
-            let mut pending = BTreeMap::new();
-            for subject in &projection.subjects {
-                let SubjectRef::Object { id } = subject.object.subject else {
-                    return Err("declaration subject is not a creature".into());
-                };
-                let key = (id.entity, id.incarnation);
-                if expected.insert(key, subject.assigned_to).is_some() {
-                    return Err("canonical declaration domain repeats a creature".into());
-                }
-                if !subject.fixed {
-                    pending.insert(key, subject);
-                }
-            }
-            let mut answered = BTreeSet::new();
-            for answer in &command.plan.assignments {
-                let key = (answer.subject.entity, answer.subject.incarnation);
-                let subject = pending
-                    .get(&key)
-                    .ok_or("canonical declaration plan differs from its pending domain")?;
-                if !answered.insert(key)
-                    || answer
-                        .destination
-                        .0
-                        .is_some_and(|destination| !subject.destinations.contains(&destination))
-                {
-                    return Err("canonical declaration plan differs from its pending domain".into());
-                }
-                expected.insert(key, answer.destination.0);
-            }
-            let actual: BTreeMap<_, _> = completion
-                .assignments
-                .iter()
-                .map(|answer| {
-                    (
-                        (answer.subject.entity, answer.subject.incarnation),
-                        answer.destination.0,
-                    )
-                })
-                .collect();
-            if answered.len() != pending.len()
-                || actual.len() != completion.assignments.len()
-                || actual != expected
-            {
-                return Err(
-                    "canonical declaration completion differs from its plan or fixed prefix".into(),
-                );
             }
         }
         Ok(())

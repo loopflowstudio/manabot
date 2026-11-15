@@ -1,25 +1,10 @@
-import { tableSnapshot } from './fixtures/table';
 import { writeFile } from 'node:fs/promises';
 import { finishBoardNarration } from './presentation-readiness';
-import { confirmCombat } from './combat';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import boltJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type { Command, ExperienceFrame, FrameUpdate, PresentationEvent, RecoveryEnvelope, Trace } from '../src/lib/types';
 import type { SharedTableControlEvent, TableSnapshot } from '../src/lib/shared-table-protocol';
-import type { RecordedPosition, RecordingIndex } from '../src/lib/recording';
 import { denseFrame } from './fixtures/laptop-table';
-
-/** Serve one recorded position through the shared Replay viewer's read API. */
-async function routeRecording(page: Page, index: Partial<RecordingIndex> & Pick<RecordingIndex, 'id' | 'players'>,
-  position: Partial<RecordedPosition> & Pick<RecordedPosition, 'observation'>): Promise<void> {
-  const row = { key: 'latest', kind: 'state' as const, turn: 1, phase: null, step: null, actor: null, automatic: false, can_reveal: false, ...position };
-  await page.route(`**/api/traces/${index.id}/recording**`, route => route.fulfill({ json: {
-    positions: [row], total: 1, next_offset: null, revision: 1, status: 'finished', can_produce: false, can_study: false,
-    winner: null, source_kind: null, watch: false, can_feedback: false, ...index } }));
-  await page.route(`**/api/traces/${index.id}/positions/**`, route => route.fulfill({ json: {
-    description: null, note_key: `${index.id}:${row.key}`, decision: null, outputs: null, viewer: 0, revealed: false,
-    history: [], history_labels: [], history_before: null, cursor: 0, transition_start: 0, consequences_recorded: true, ...row } }));
-}
 
 interface TableOptions {
   sparse?: boolean;
@@ -81,7 +66,7 @@ async function installTable(page: Page, options: TableOptions = {}): Promise<{
       const message = JSON.parse(String(raw));
       if (message.type === 'new_game' || message.type === 'resume') {
         socket.send(JSON.stringify({ type: 'observation', data: frame.projection, actions: [],
-          table: tableSnapshot(), session_id: 'laptop', resume_token: 'laptop', recovery: recover() }));
+          session_id: 'laptop', resume_token: 'laptop', recovery: recover() }));
       } else if (message.type === 'set_stops') {
         frame.stops = { ...message.stops, auto_pass: message.auto_pass, stop_on_stack: message.stop_on_stack };
         publish();
@@ -358,15 +343,13 @@ for (const [seed, viewport] of [
     const observed = new Map<number, PresentationEvent>();
     let matchId = '';
     let liveFrame: ExperienceFrame | null = null;
-    let working = false;
     const submitted: Command[] = [];
     let reloadedTarget = false;
     let selectedSources = 0;
     await page.routeWebSocket('**/ws/play', socket => {
       const server = socket.connectToServer();
       server.onMessage(raw => {
-        const message = JSON.parse(String(raw)) as { recovery?: RecoveryEnvelope; update?: FrameUpdate; work?: {state: string} | null };
-        if ('work' in message) working = message.work?.state === 'running';
+        const message = JSON.parse(String(raw)) as { recovery?: RecoveryEnvelope; update?: FrameUpdate };
         const frame = message.recovery?.frame ?? message.update?.frame;
         if (frame) { matchId = frame.match_id; liveFrame = frame; }
         for (const event of message.recovery?.presentation_tail ?? message.update?.presentation ?? []) observed.set(event.seq, event);
@@ -389,11 +372,7 @@ for (const [seed, viewport] of [
       for (let input = 0; input < 120; input += 1) {
         const options = page.getByTestId('action-option');
         const result = page.getByTestId('game-result');
-        await expect(page.locator('[data-testid="action-option"], [data-testid="learn-mode"]:not(:disabled), [data-testid="game-result"], [data-testid="combat-composer"]').first()).toBeVisible();
-        // An early immutable receipt can precede bot/automation frames. Bind
-        // inspection and the next input to the settled, enabled authority.
-        await expect.poll(() => !working).toBe(true);
-        await expect(page.locator('main')).toHaveAttribute('data-frame-revision', String(liveFrame!.revision));
+        await expect(page.locator('[data-testid="action-option"], [data-testid="learn-mode"]:not(:disabled), [data-testid="game-result"]').first()).toBeVisible();
         if (await result.isVisible()) {
           expect(selectedSources).toBeGreaterThan(0);
           expect(reloadedTarget).toBe(true);
@@ -422,15 +401,13 @@ for (const [seed, viewport] of [
           expect(saved.events.flatMap(event => event.presentation ?? [])).toEqual(sourceEvents);
           await page.goto(`/replay?trace=${encodeURIComponent(matchId)}`);
           await expect(page.getByRole('slider', { name: 'Replay position' })).toBeVisible();
-          const slider = page.getByRole('slider', { name: 'Replay position' });
-          await slider.fill((await slider.getAttribute('max'))!);
+          await page.getByRole('slider', { name: 'Replay position' }).fill(String(saved.events.length));
           await expect(page.getByTestId('game-result-dialog')).toHaveAttribute('role', 'status');
           await history.locator('summary').click();
           const replayHand = page.getByTestId('game-board').locator('.hand-cards').last();
           const handBounds = (await replayHand.boundingBox())!;
           const historyBounds = (await history.boundingBox())!;
-          // The score rail's history sits beside the board; neither covers the hand.
-          expect(handBounds.x >= historyBounds.x + historyBounds.width || handBounds.y + handBounds.height <= historyBounds.y).toBe(true);
+          expect(handBounds.y + handBounds.height).toBeLessThanOrEqual(historyBounds.y);
           await expect.poll(sequences).toEqual(sourceEvents.slice(-100).map(event => event.seq));
           await writeFile(testInfo.outputPath('history-source.json'), JSON.stringify({
             matchId, events: sourceEvents.length, kinds: [...new Set(sourceEvents.map(event => event.kind.kind))],
@@ -439,18 +416,13 @@ for (const [seed, viewport] of [
           }, null, 2));
           return;
         }
-        const composer = page.getByTestId('combat-composer');
-        if (await composer.isVisible()) {
-          await confirmCombat(page);
-          continue;
-        }
         // Live offers stay usable while optional narration catches up.
         if (await options.count() === 0) {
           await page.getByTestId('learn-mode').first().click();
           continue;
         }
         expect(await page.evaluate(() => scrollY)).toBe(0);
-        const before = await page.locator('main').getAttribute('data-frame-revision');
+        const before = await page.getByTestId('decision-surface').getAttribute('data-revision');
         const labels = await options.allTextContents();
         let pick = labels.findIndex(label => /Play (Island|Mountain)|Cast /.test(label));
         if (pick < 0) pick = input % labels.length;
@@ -493,7 +465,7 @@ for (const [seed, viewport] of [
           await chosen.focus();
           await chosen.press('Enter');
         }
-        await expect.poll(() => page.locator('main').getAttribute('data-frame-revision')).not.toBe(before);
+        await expect.poll(() => page.getByTestId('decision-surface').getAttribute('data-revision')).not.toBe(before);
         expect(submitted).toHaveLength(count + 1);
         expect(submitted.at(-1)).toMatchObject({ match_id: authority!.match_id, expected_revision: authority!.revision,
           prompt_id: authority!.prompt!.id, offer_id: offer!.id });
@@ -745,11 +717,14 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900
       }
       const humanName = 'H'.repeat(60);
       await page.route('**/api/traces', route => route.fulfill({ json: [{ id: 'identity-human' }] }));
-      await routeRecording(page, { id: 'identity-human', status: 'interrupted',
-        opponent: table.opponent, opponent_checkpoint: { source: 'runs', world: 'w6', model: 'Transformer', step: 8 },
-        players: [{ seat: 0, name: humanName, kind: 'human', player_id: 'human', deck: 'ur_lessons', version: null, inference: null },
-          { seat: 1, name: checkpointName, kind: 'bot', player_id: `checkpoint:${checkpointDigest}`, deck: 'gw_allies', version: checkpointDigest, inference: null }],
-      }, { observation: frame.projection });
+      await page.route('**/api/traces/identity-human/decisions', route => route.fulfill({ status: 404 }));
+      await page.route('**/api/traces/identity-human', route => route.fulfill({ json: {
+        config: { hero_deck: {}, villain_deck: {}, villain_type: 'checkpoint',
+          opponent: table.opponent, opponent_checkpoint: { source: 'runs', world: 'w6', model: 'Transformer', step: 8 } },
+        players: [{ seat: 0, name: humanName, kind: 'human', player_id: 'human', deck: 'ur_lessons', version: null },
+          { seat: 1, name: checkpointName, kind: 'bot', player_id: `checkpoint:${checkpointDigest}`, deck: 'gw_allies', version: checkpointDigest }],
+        events: [], final_observation: frame.projection, winner: null, end_reason: 'active', timestamp: '2026-11-14T00:00:00Z',
+      } }));
       await page.goto('/replay?trace=identity-human');
       const heroBar = page.locator(`[data-player-id="${frame.projection.agent.id}"]`);
       await expect(heroBar.locator('h2')).toContainText(humanName);
@@ -768,27 +743,29 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900
   }
 }
 
-test('Watch keeps recorded identities attached to their seats under stable seating', async ({ page }) => {
+test('Watch keeps recorded identities attached to the acting viewer seat', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   const frame = denseFrame();
-  // Seat 2 is acting; seating stays physical, so identities follow seats, not the actor.
+  // Seat 2 is acting: its identity belongs on the hero region.
   frame.projection.agent.player_index = 1;
   frame.projection.opponent.player_index = 0;
-  const players = [
-    { seat: 0, player_id: 'reference', name: 'Reference', kind: 'bot' as const, deck: 'gw_allies', version: null, inference: null },
-    { seat: 1, player_id: `checkpoint:${checkpointDigest}`, name: checkpointName, kind: 'bot' as const, deck: 'ur_lessons', version: checkpointDigest, inference: null },
+  const identities = [
+    { seat: 0, player_id: 'reference', name: 'Reference', kind: 'bot', deck: 'gw_allies', version: null, inference: null },
+    { seat: 1, player_id: `checkpoint:${checkpointDigest}`, name: checkpointName, kind: 'bot', deck: 'ur_lessons', version: checkpointDigest, inference: null },
   ];
   await page.route('**/api/card-art/**', route => route.fulfill({ status: 404 }));
-  await routeRecording(page, { id: 'identity-watch', players, watch: true, winner: 1 },
-    { key: 'choice:0', kind: 'choice', actor: 1, viewer: 1, observation: frame.projection });
+  await page.route('**/api/watch/identity-watch/decisions/0?**', route => route.fulfill({ json: {
+    id: 'identity-watch', players: ['random', 'checkpoint'], identities,
+    decision: { address: 'recorded', ordinal: 0, viewer: 1, source: 'policy', revision: frame.revision,
+      prompt_id: frame.prompt!.id, offer_id: frame.offers[0].id, command_id: 'recorded', presentation_cursor: 0,
+      frame, offer: frame.offers[0], command: { command_id: 'recorded', match_id: frame.match_id,
+        expected_revision: frame.revision, prompt_id: frame.prompt!.id, offer_id: frame.offers[0].id, answers: [] } },
+    observation: frame.projection, outputs: null, count: 1, finished: true, revealed: false, revision: 1, winner: 1,
+  } }));
   await page.goto('/replay?watch=1&trace=identity-watch');
   const regions = page.locator('.player-area');
-  await expect(page.getByText('Near: seat 1', { exact: true })).toBeVisible();
-  await expect(regions.last().locator('h2')).toContainText('Reference');
-  await expect(regions.first().locator('h2')).toContainText('ci-fix-528/…/learner_transitions-8');
-  await expect(regions.first().locator('h2')).toContainText('7ac5d442da');
-  await page.getByRole('button', { name: 'Swap seats' }).click();
   await expect(regions.last().locator('h2')).toContainText('ci-fix-528/…/learner_transitions-8');
+  await expect(regions.last().locator('h2')).toContainText('7ac5d442da');
   await expect(regions.first().locator('h2')).toContainText('Reference');
   await expect(regions.last().locator('h2 .player-name')).toHaveAttribute('title', `${checkpointName} · ${checkpointDigest}`);
 });

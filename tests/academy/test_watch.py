@@ -3,16 +3,11 @@
 from collections.abc import Iterator
 from pathlib import Path
 
-from fastapi import HTTPException
 from fastapi.testclient import TestClient
 import pytest
 
 from managym.academy import server
-from managym.academy.replay_index import (
-    canonical_projection_sha256,
-    project_replay,
-    restore_decision,
-)
+from managym.academy.replay_index import restore_decision
 from managym.academy.watch import (
     WatchCreated,
     WatchRequest,
@@ -28,28 +23,6 @@ def watch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[WatchCrea
     result = create_watch(WatchRequest(players=["random", "random"], seed=42))
     yield result
     server._drop_session(result["id"], "test")
-
-
-def test_watch_starting_at_second_seat_preserves_acting_view(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(server.trace_store, "TRACES_DIR", tmp_path)
-    result = create_watch(WatchRequest(players=["random", "passive"], seed=7))
-    try:
-        game = server._live_record_for_trace(result["id"]).game
-        assert game.obs is not None
-        assert game.obs.agent.player_index == 1
-        recovery = game.current_recovery("explicit_resync")
-        assert recovery["frame"]["projection"]["agent"]["player_index"] == 0
-        assert recovery["frame"]["prompt"] is None
-        assert recovery["frame"]["offers"] == []
-        step_watch(result["id"], result["token"], 0)
-        row = inspect_watch(result["id"], 0, result["token"])
-        assert row["decision"]["viewer"] == 1
-        assert row["observation"]["agent"]["player_index"] == 1
-        assert row["observation"]["opponent"]["hand"] == []
-    finally:
-        server._drop_session(result["id"], "test")
 
 
 def test_watch_steps_are_exact_and_actor_safe(watch: WatchCreated) -> None:
@@ -290,14 +263,9 @@ def test_checkpoint_outputs_are_from_the_chosen_inference(
         with pytest.raises(ValueError, match="no longer executable"):
             CheckpointVillain(str(checkpoint), player_configs=config.to_rust())
         return
-    from manabot.sim.policy_provider import provider
-    from managym.policy import PolicyRegistry, PolicySpec
-
-    registry = PolicyRegistry(providers={"manabot": provider})
-    key = registry.register(
-        PolicySpec("manabot", str(checkpoint), {"deterministic": True})
+    policy = CheckpointVillain(
+        str(checkpoint), deterministic=True, player_configs=config.to_rust()
     )
-    policy = registry.load(key, config.to_rust(), seat=0, seed=42)
     engine = server.managym.Env(seed=42)
     observation, _ = engine.reset(config.to_rust())
     digest = engine.state_digest()
@@ -325,152 +293,6 @@ def test_training_watch_players_keep_their_declared_identity(
             kind.title(),
             kind.title(),
         ]
-        assert row["outputs"]["probabilities"] == []
+        assert row["outputs"]["probabilities"][row["outputs"]["action"]] == 1
     finally:
         server._drop_session(result["id"], "test")
-
-
-@pytest.mark.parametrize(
-    "players",
-    [
-        ("checkpoint", "heuristic"),
-        ("checkpoint", "checkpoint"),
-        ("heuristic", "checkpoint"),
-    ],
-)
-def test_checkpoint_watch_records_exact_seats_and_policy_outputs(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, players: tuple[str, str]
-) -> None:
-    from managym.academy.opponent import policy_registry
-    from managym.policy import PolicySpec
-    from tests.academy.test_play_modes import _write_tiny_checkpoint
-
-    checkpoint = tmp_path / "model.pt"
-    _write_tiny_checkpoint(checkpoint)
-    digest = policy_registry().register(PolicySpec("manabot", str(checkpoint)))
-    monkeypatch.setenv("ACADEMY_PLAY_CHECKPOINTS", str(checkpoint))
-    monkeypatch.setenv("MANABOT_RUNS_DIR", str(tmp_path / "absent"))
-    monkeypatch.setattr(server.trace_store, "TRACES_DIR", tmp_path / "traces")
-    selected = [f"policy:{digest}" if p == "checkpoint" else p for p in players]
-    created = create_watch(WatchRequest(players=selected, seed=42))
-    try:
-        seen: set[int] = set()
-        for revision in range(24):
-            step_watch(created["id"], created["token"], revision)
-            row = inspect_watch(created["id"], revision, created["token"])
-            seat = row["decision"]["viewer"]
-            seen.add(seat)
-            assert row["players"] == selected
-            if players[seat] == "checkpoint":
-                assert row["identities"][seat]["version"] == digest
-                assert row["identities"][seat]["inference"]["sha256"] == digest
-                assert row["outputs"]["value"] is not None
-                assert sum(row["outputs"]["probabilities"]) == pytest.approx(1)
-            assert (
-                inspect_watch(created["id"], revision, created["token"])["outputs"]
-                == row["outputs"]
-            )
-        assert seen == {0, 1}
-    finally:
-        server._drop_session(created["id"], "test")
-
-
-def test_checkpoint_watch_refuses_incompatible_and_wrong_decks(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from fastapi import HTTPException
-
-    from managym.academy.opponent import policy_registry
-    from managym.policy import PolicySpec
-    from tests.academy.test_play_modes import _write_tiny_checkpoint
-    from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
-
-    checkpoint = tmp_path / "model.pt"
-    _write_tiny_checkpoint(checkpoint)
-    monkeypatch.setenv("ACADEMY_PLAY_CHECKPOINTS", str(checkpoint))
-    monkeypatch.setenv("MANABOT_RUNS_DIR", str(tmp_path / "absent"))
-    digest = policy_registry().register(PolicySpec("manabot", str(checkpoint)))
-    with pytest.raises(HTTPException, match="was trained on"):
-        create_watch(
-            WatchRequest(
-                players=["random", f"policy:{digest}"],
-                hero_deck="interactive",
-                villain_deck="interactive",
-            )
-        )
-    data = read_checkpoint(checkpoint, weights_only=True)
-    data["world_binding"]["world"] = "w5"
-    write_checkpoint(data, checkpoint)
-    digest = policy_registry().register(PolicySpec("manabot", str(checkpoint)))
-    with pytest.raises(HTTPException, match="trained in w5"):
-        create_watch(WatchRequest(players=[f"policy:{digest}", "random"]))
-
-
-def test_unified_watch_reads_are_bounded_authorized_and_do_not_produce(
-    watch: WatchCreated,
-) -> None:
-    trace_id, token = watch["id"], watch["token"]
-    client = TestClient(server.app)
-    headers = {"x-etude-participant-token": token}
-    game = server._live_record_for_trace(trace_id).game
-    for revision in range(2):
-        step_watch(trace_id, token, revision)
-    url = f"/api/traces/{trace_id}"
-    assert client.get(f"{url}/recording").status_code == 403
-    response = client.get(f"{url}/recording?limit=2", headers=headers)
-    assert response.status_code == 200
-    index = response.json()
-    assert index["can_produce"]
-    assert index["revision"] == game.revision
-    assert index["next_offset"] == 2
-    assert len(index["positions"]) == 2
-    key = index["positions"][0]["key"]
-    choice = client.get(f"{url}/positions/{key}", headers=headers).json()
-    assert choice["kind"] == "choice"
-    assert not choice["observation"]["opponent"]["hand"]
-    assert all(event["seq"] < choice["cursor"] for event in choice["history"])
-    assert len(choice["history"]) <= 100
-    assert len(choice["history_labels"]) == len(choice["history"])
-    source = client.get(f"{url}/positions/{key}?study=true", headers=headers).json()[
-        "study_source"
-    ]
-
-    assert source["sha256"] == canonical_projection_sha256(
-        project_replay(game.canonical_replay(), choice["viewer"])
-    )
-    assert "decisions" not in source and "presentation" not in source
-    reveal = client.get(f"{url}/positions/{key}?reveal=true", headers=headers).json()
-    assert reveal["revealed"]
-    assert reveal["history"] == choice["history"]
-    assert reveal["history_labels"] == choice["history_labels"]
-    assert reveal["outputs"] == choice["outputs"]
-    assert (
-        client.get(f"{url}/positions/after:1", headers=headers).json()["kind"]
-        == "consequences"
-    )
-    assert (
-        client.get(f"{url}/positions/latest?reveal=true", headers=headers).status_code
-        == 409
-    )
-    assert client.get(f"{url}/positions/absent", headers=headers).status_code == 404
-    assert len(game.canonical_decisions) == 2
-    server._drop_session(trace_id, "expired")
-    interrupted = client.get(f"{url}/recording", headers=headers).json()
-    assert interrupted["status"] == "interrupted"
-    assert not interrupted["can_produce"] and not interrupted["can_study"]
-    assert (
-        client.get(f"{url}/positions/{key}", headers=headers).json()["decision"]
-        == choice["decision"]
-    )
-    # Cache hits must still enforce changed visibility, including the old URL.
-    with game.attempt_store.connect() as db:
-        db.execute(
-            "UPDATE attempts SET visibility='private',status='completed' WHERE id=?",
-            (trace_id,),
-        )
-    assert client.get(f"{url}/recording").status_code == 403
-    assert client.get(f"{url}/positions/{key}").status_code == 403
-    assert client.get(f"/api/watch/{trace_id}/decisions/0").status_code == 403
-    with pytest.raises(HTTPException) as denied:
-        inspect_watch(trace_id, 0, None)
-    assert denied.value.status_code == 403

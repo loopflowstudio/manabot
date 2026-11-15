@@ -95,21 +95,14 @@ export async function createCompletedStudyTrace(page: Page): Promise<string> {
   }, MAX_HERO_MOVES);
 }
 
-export async function openPriorityStudyDecision(page: Page, traceId: string) {
-  // Trivial decisions are skipped. The first real choice can be cleanup, so
-  // choose a retained priority root for the fixture's explicit pass plan.
-  const address = await page.evaluate(async id => {
-    const credentials = localStorage.getItem('etude.play.record-credentials') ?? '[]';
-    const response = await fetch(`/api/traces/${id}/decisions`, {headers: {'x-etude-participant-tokens': JSON.parse(credentials).join(',')}});
-    if (!response.ok) throw new Error('Study fixture decisions unavailable');
-    const projection = await response.json();
-    const row = projection.decisions.find((decision: {frame: {offers: {verb: string}[]}}) => decision.frame.offers.some(offer => offer.verb === 'pass_priority'));
-    if (!row) throw new Error('Study fixture has no recorded priority choice');
-    return row.address as string;
-  }, traceId);
-  await page.goto(`/replay?trace=${encodeURIComponent(traceId)}&position=${encodeURIComponent(address)}`);
-  const decision = page.getByRole('button', {name: 'Try another line', exact: true});
-  await expect(decision).toBeEnabled();
+export async function openFirstStudyDecision(page: Page, traceId: string) {
+  await page.goto('/replay');
+  const traceSelect = page.getByTestId('trace-select');
+  await expect(traceSelect).toBeVisible({ timeout: 15_000 });
+  await traceSelect.selectOption(traceId);
+  await expect(page.getByTestId('study-score')).toBeVisible({ timeout: 15_000 });
+
+  const decision = page.getByTestId('study-decision').first();
   await decision.click();
   await expect(page.getByTestId('study-panel')).toBeVisible();
   await expect(page.getByTestId('study-reveal')).toHaveCount(0);

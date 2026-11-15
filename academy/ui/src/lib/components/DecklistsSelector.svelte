@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { isSearchChoice, type PlayerChoice } from '$lib/game.svelte';
+  import { isSearchChoice, type OpponentChoice } from '$lib/game.svelte';
   import type { Decklists } from '$lib/types';
 
   interface Props {
     value?: Decklists;
     // A search opponent keeps Closed listed, disabled, with why.
-    opponent?: PlayerChoice;
+    opponent?: OpponentChoice;
     disabled?: boolean;
     onChange?: (value: Decklists) => void;
   }

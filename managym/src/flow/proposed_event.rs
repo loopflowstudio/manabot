@@ -1529,8 +1529,7 @@ mod tests {
             ],
             614_900,
             false,
-        )
-        .expect("valid game setup");
+        );
         let permanent = game
             .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
             .expect("scenario ogre");
