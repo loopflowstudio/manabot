@@ -368,7 +368,7 @@ def test_watch_latest_reconnect_preserves_timeout_history_and_explicit_retry(
         index = client.get(index_url, headers=headers)
         assert index.status_code == 200
         assert index.json()["mirror_retry"] == game.mirror_retry
-        assert index.json()["mirror"] == [asdict(MirrorSearch())] * 2
+        assert index.json()["mirror"] == [asdict(SearchConfig())] * 2
         assert index.json()["can_produce"]
         assert len(index.json()["positions"]) == 7
         assert client.get(f"{url}/decisions/-1").status_code == 403
