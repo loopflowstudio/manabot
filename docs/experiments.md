@@ -46,18 +46,21 @@ play under and the tags a report selects them by. A `Benchmark` holds
 `seatings`, and a checkpoint says where it stood on each clock in
 `CheckpointRecord.at`, as in `checkpoint.at["updates"]`. A file may declare only
 `eval_jobs`: `experiments/llm_claude.py` and `llm_qwen.py` seat a language model
-against a frozen checkpoint, and are not runnable until Etude EXP-70 lands.
+against a frozen checkpoint of another run, and are not runnable until Etude
+EXP-70 lands. A seat names a checkpoint from any experiment, by its policy
+(`PolicyKey(experiment=..., job=..., seed=..., role=...)`, or `experiment=` on
+a relative seat such as `Final`) or by an outside address.
 
 Use the repository's locked Etude revision for these commands
 ([development dependency](development.md#environment-and-commands)). Launch,
 status and eval commands keep their state in a launcher database named for its
-schema version: the development revision uses `~/.etude/launcher-19.db`
+schema version: the development revision uses `~/.etude/launcher-20.db`
 (released 0.3.2 uses `launcher-17.db`). A database an
 older client wrote, such as the unversioned `~/.etude/launcher.db` of 0.2.x,
 stays where it is and is never opened, so both clients work from one home:
 
 ```sh
-uv run etude status                                        # launcher-19.db
+uv run etude status                                        # launcher-20.db
 uv run --with "etude-sdk[s3,eval]==0.2.15" etude status    # launcher.db
 ```
 

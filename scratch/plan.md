@@ -77,3 +77,41 @@ only names released 0.4.0 has.
   `input not given: 'start'` (`etude/local.py:_prepare` carries no job inputs);
   an `EvalJob` cannot choose its command or uv extras, so the frontier pass
   sets `UV_NO_SYNC=1` through `environment`, unproved on a rental.
+
+## 2026-11-14: repin to Etude main 6090a771a43f
+
+`[tool.uv.sources]` pins Etude main 6090a771a43f (#113, #115, #116); no Etude
+release carries these names, so requirement strings stay `etude-sdk>=0.4.0`
+and a Manabot release must wait for the Etude release that does
+(`checkpoint_id` is gone on main; `CheckpointRef(address=...)` is new).
+
+Applied: `read_job_file` -> `read_training_jobs`; `CheckpointRef(key=
+checkpoint_id(...))` -> `address=` (legacy manabot run ids keep their exact
+`RUN/checkpoints/NAME` key, so retained matches keep their identity; the 0.2.5
+migration test still resumes playing nothing); frontier and Claude evals
+declare `extras=` instead of `UV_NO_SYNC=1` (Qwen keeps it: its setup places a
+prebuilt engine without the workspace); `launcher-20.db` in docs; the frontier's
+launcher check skips runs the pass has only queued.
+
+Gaps re-tried (temporary `ETUDE_HOME`):
+1. `etude train experiments/belief.py --job policy` then `--job sampler`:
+   fixed; sampler trained from `start`. #116 not adopted: Etude's docs keep
+   checkpoints on `start=`, outs are for other stored files.
+2. `etude train experiments/belief.py` twice: fixed (pass 1 policy, pass 2
+   reports it finished and trains the sampler, pass 3 trains nothing).
+3. round-robin `enter=`: fixed (synthetic eval-only probe played 1 match, a
+   second pass printed `nothing to play`). No kept file uses a round robin.
+4. outside checkpoint: fixed; `launch llm_claude.py --quote` and
+   `llm_qwen.py --quote` (with `--extra llm`) plan 100 matches. MTG-183's final
+   is a manabot run, not an Etude policy, so it stays an outside address.
+5. eval-only smoke: fixed (probe smoke passed eval and report).
+6. EvalJob extras: fixed on main; frontier and Claude use `extras=`.
+7. docstrings: Etude-side.
+
+Remaining: LLM files stay not runnable (EXP-70: secret, API dollar limit,
+job-lifetime server, per-game limit; MTG-360). Qwen's setup installs no
+`evaluation` extra (duckdb), unproved. Quotes read an empty temporary store, not
+r2; the frontier's stored runs live in `launcher-19.db`, which launcher-20 does
+not read, so its eval pass against r2 is unproved. AGENTS.md still names
+`etude.declarations.read_job_file` (needs a person's edit). No smoke of a
+training file (each prepares the engine build).

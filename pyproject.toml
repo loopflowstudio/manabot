@@ -115,7 +115,7 @@ members = ["managym"]
 [tool.uv.sources]
 managym = { workspace = true }
 # Unreleased Etude experiment-file API; remove this source at the Etude release that carries it.
-etude-sdk = { git = "https://github.com/loopflowstudio/etude", rev = "9e8fec1268ed4782c138f6f9806a9bf6a96eabf7" }
+etude-sdk = { git = "https://github.com/loopflowstudio/etude", rev = "6090a771a43f8e41c0c4200a3e05f84457a62134" }
 torch = [
     { index = "pytorch-cpu", group = "play-runtime" },
     { index = "pytorch-cuda", group = "training-runtime", marker = "sys_platform == 'linux'" },

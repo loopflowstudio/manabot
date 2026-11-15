@@ -8,7 +8,6 @@ import json
 import os
 from pathlib import Path
 
-from etude.checkpoints import checkpoint_id
 from etude.eval.records import (
     Benchmark,
     CheckpointPlayer,
@@ -216,10 +215,14 @@ def summarize(directory: Path) -> dict[str, ScoreGroup]:
 
 
 def _checkpoint(result: MonitorResult) -> CheckpointRef:
-    """A training run's export, keyed by its run and file, read from where it lies."""
+    """A training run's export, keyed by its run and file, read from where it lies.
+
+    A manabot run is no Etude policy: its address is the key it was always
+    seated under, so retained matches keep their identity.
+    """
     path = Path(result.artifact["path"]).resolve()
     return CheckpointRef(
-        key=checkpoint_id(run=result.run_id, name=path.name),
+        address=f"{result.run_id}/checkpoints/{path.name}",
         artifact=ArtifactRef(
             uri=path.as_uri(),
             sha256=result.artifact["sha256"],

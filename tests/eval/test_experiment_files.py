@@ -13,7 +13,7 @@ from pathlib import Path
 from types import ModuleType
 
 from etude.checkpoints import CheckpointRecord
-from etude.declarations import asked, read_experiment, read_job_file
+from etude.declarations import asked, read_experiment, read_training_jobs
 from etude.errors import EtudeError
 from etude.eval.records import Match
 from etude.experiment_file import defined_functions
@@ -23,6 +23,7 @@ from etude.jobs import (
     ExperimentState,
     TrainingJob,
     TrainingRunSummary,
+    checkpoint_inputs,
     evaluation_spec,
 )
 from etude.page import experiment_files
@@ -33,6 +34,7 @@ from experiments import (
     batched_baseline,
     belief,
     elemental,
+    llm_claude,
     seat_comparison,
     tla_frontier,
 )
@@ -59,9 +61,11 @@ DECLARED: list[tuple[ModuleType, tuple[str, ...], dict[str, int]]] = [
 ]
 
 
-# Eval-only files Etude cannot hold yet (EXP-70): a seated checkpoint no run of
-# the experiment stored, a served or hosted player and what its job needs. They
-# are found as experiments and declare `eval_jobs`; nothing here reads them.
+# Eval-only files Etude cannot run yet (EXP-70): a served or hosted player and
+# what its job needs (a secret, an API dollar limit, a server for the job's
+# lifetime, a per-game time limit). They are found as experiments and declare
+# `eval_jobs`; only Claude's declaration is read below, since Qwen's imports
+# need the `llm` extra.
 NOT_YET_RUNNABLE = {"llm_claude", "llm_qwen"}
 
 
@@ -94,6 +98,14 @@ def test_not_yet_runnable_files_are_eval_only() -> None:
         assert "training_jobs" not in defined
 
 
+def test_claude_seats_the_outside_checkpoint_with_its_extras() -> None:
+    (job,) = llm_claude.eval_jobs(ExperimentState(experiment="llm_claude"))
+    assert "--extra evaluation --extra openrouter" in job.plain().command
+    matches = evaluation_spec(job).tournament.seatings[0].matches()
+    (seated,) = checkpoint_inputs(matches, ExperimentState(experiment="llm_claude"))
+    assert seated == llm_claude.MTG183_FINAL
+
+
 @pytest.mark.parametrize(
     ("module", "given", "jobs"), DECLARED, ids=[_name(each[0]) for each in DECLARED]
 )
@@ -101,7 +113,7 @@ def test_training_jobs_read_as_addressed_runs(
     module: ModuleType, given: tuple[str, ...], jobs: dict[str, int]
 ) -> None:
     name = _name(module)
-    requests = read_job_file(EXPERIMENTS / f"{name}.py", given)
+    requests = read_training_jobs(EXPERIMENTS / f"{name}.py", given)
     assert Counter(request.job.name for request in requests) == jobs
     assert {request.job.experiment for request in requests} == {name}
     assert {request.id for request in requests} == {
@@ -171,15 +183,17 @@ def test_belief_declares_the_sampler_once_the_policy_has_finished(
 ) -> None:
     file = EXPERIMENTS / "belief.py"
     empty = ExperimentState(experiment="belief")
-    first = read_job_file(file, local=True, state=empty)
+    first = read_training_jobs(file, local=True, state=empty)
     assert [request.id for request in first] == ["belief/policy@0"]
 
     policy = _finished_run(tmp_path, range(0, 2), name="policy@0", job=belief.POLICY)
     running = replace(policy, state="running")
-    waiting = read_job_file(file, local=True, state=replace(empty, runs=(running,)))
+    waiting = read_training_jobs(
+        file, local=True, state=replace(empty, runs=(running,))
+    )
     assert [request.id for request in waiting] == ["belief/policy@0"]
 
-    both = read_job_file(file, local=True, state=replace(empty, runs=(policy,)))
+    both = read_training_jobs(file, local=True, state=replace(empty, runs=(policy,)))
     assert [request.id for request in both] == ["belief/policy@0", "belief/sampler@0"]
     (start,) = both[1].job.inputs
     final = policy.checkpoints[-1]
@@ -245,7 +259,8 @@ def test_frontier_eval_jobs_declare_one_typed_pass(tmp_path: Path) -> None:
     assert isinstance(job, EvalJob)
     plain = job.plain()
     assert plain.name == "tla-frontier-c5fba4-paired-v1"
-    assert ("UV_NO_SYNC", "1") in {(v.name, v.value) for v in plain.environment}
+    assert "UV_NO_SYNC" not in {v.name for v in plain.environment}
+    assert "--extra evaluation" in plain.command
     assert plain.setup is not None and "--extra evaluation" in plain.setup
     seatings = evaluation_spec(job).tournament.seatings
     assert {tag for seating in seatings for tag in seating.tags} >= {
@@ -269,6 +284,12 @@ def test_frontier_keeps_its_recorded_lost_endpoint_without_a_launcher(
     assert closed.runs[0].checkpoints == lost.checkpoints
     assert closed.runs[1] == stored
     assert lost.state == "running"
+
+    # A run this pass only queues is not asked about: the launcher has no record yet.
+    queued = replace(stored, name="unknown-run", state="queued")
+    assert tla_frontier.with_launcher_ends(replace(state, runs=(queued,))).runs == (
+        queued,
+    )
 
     unknown = replace(lost, name="unknown-run")
     with pytest.raises(EtudeError, match="unknown-run"):

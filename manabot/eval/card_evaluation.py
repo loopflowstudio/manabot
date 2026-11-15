@@ -18,7 +18,6 @@ from pathlib import Path
 import tempfile
 from typing import Literal
 
-from etude.checkpoints import checkpoint_id
 from etude.eval.records import (
     CheckpointPlayer,
     CheckpointRef,
@@ -194,7 +193,7 @@ def _entrants(spec: CardEvaluationSpec) -> tuple[Player, ...]:
         if player.runner_kind == "checkpoint":
             path = spec.checkpoints[player.player_id].resolve()
             checkpoint = CheckpointRef(
-                key=checkpoint_id(address=path.as_uri()),
+                address=path.as_uri(),
                 artifact=ArtifactRef(
                     uri=path.as_uri(),
                     sha256=player.checkpoint_sha256,

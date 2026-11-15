@@ -8,11 +8,12 @@ experiment's stored state shows that run finished, it also declares `sampler`
 Etude delivers that checkpoint to the sampler run as its input `start` and
 records the lineage.
 
-    uv run etude train experiments/belief.py --job policy
-    uv run etude train experiments/belief.py --job sampler
+    uv run etude train experiments/belief.py   # the policy
+    uv run etude train experiments/belief.py   # again: the sampler from its final
 
-Under `etude launch experiments/belief.py`, the first pass launches the policy
-and a later pass, typed again once it has finished, launches the sampler.
+Each pass trains only what is new. Under `etude launch experiments/belief.py`,
+the first pass launches the policy and a later pass, typed again once it has
+finished, launches the sampler.
 """
 
 from decimal import Decimal

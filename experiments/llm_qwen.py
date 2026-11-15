@@ -1,12 +1,11 @@
 """Qwen3.5-9B on one vLLM server against MTG-183's final checkpoint.
 
 Not runnable yet. An `EvalJob` cannot hold a resource for its lifetime, so
-nothing here starts the vLLM server its games share, and Etude refuses a
-seated checkpoint that no training run of the experiment stored
-(`checkpoint_not_stored`); Etude EXP-70 ("Evaluate players served by an
-inference server, and players with no checkpoint") and the Manabot Task "Run
-the Claude and Qwen evaluation experiments on Etude" carry the rest. The
-seated checkpoint is also bound to world w13 and does not load in the current
+nothing here starts the vLLM server its games share, nor give a game its own
+time limit; Etude EXP-70 ("Evaluate players served by an inference server, and
+players with no checkpoint") and the Manabot Task "Run the Claude and Qwen
+evaluation experiments on Etude" carry the rest. The seated checkpoint, an
+outside address, is also bound to world w13 and does not load in the current
 world.
 
 An evaluation with no training: `eval_jobs` seats the served model and one
@@ -31,7 +30,7 @@ from functools import partial
 import os
 from pathlib import Path
 
-from etude.checkpoints import CheckpointRef, checkpoint_id
+from etude.checkpoints import CheckpointRef
 from etude.eval.match import environment
 from etude.eval.records import (
     Benchmark,
@@ -88,7 +87,7 @@ def players() -> tuple[Code, CheckpointPlayer]:
     checkpoint = CheckpointPlayer(
         name="mtg183-u5950",
         checkpoint=CheckpointRef(
-            key=checkpoint_id(address=MTG183_FINAL),
+            address=MTG183_FINAL,
             artifact=ArtifactRef(
                 uri=MTG183_FINAL, sha256=MTG183_SHA256, size_bytes=MTG183_BYTES
             ),
@@ -142,6 +141,8 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
             workers=WORKERS,
             setup="sh scripts/qwen-mtg183-vllm-setup.sh",
             environment=(
+                # Setup installs no workspace package and places a prebuilt
+                # native engine, which a syncing `uv run` would rebuild.
                 Variable(name="UV_NO_SYNC", value="1"),
                 Variable(name="HF_HUB_OFFLINE", value="1"),
                 Variable(name="OMP_NUM_THREADS", value="1"),

@@ -12,7 +12,6 @@ from collections.abc import Sequence
 import os
 from pathlib import Path
 
-from etude.checkpoints import checkpoint_id
 from etude.eval.records import (
     Benchmark,
     CheckpointRef,
@@ -251,9 +250,11 @@ def evaluate(
         with evaluating(
             benchmark(manifest),
             experiment=BENCHMARK,
-            # The training run's export, wherever its bytes are read from.
+            # The training run's export, wherever its bytes are read from. A
+            # manabot run is no Etude policy: its address is the key it was
+            # always seated under, so retained matches keep their identity.
             checkpoint=CheckpointRef(
-                key=checkpoint_id(run=manifest.run_id, name=path.name),
+                address=f"{manifest.run_id}/checkpoints/{path.name}",
                 artifact=ArtifactRef(
                     uri=path.as_uri(),
                     sha256=manifest.artifact["sha256"],

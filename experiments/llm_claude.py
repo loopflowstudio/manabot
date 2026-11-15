@@ -1,11 +1,11 @@
 """Claude Haiku against MTG-183's final checkpoint over the Elemental decks.
 
-Not runnable yet. Etude refuses a seated checkpoint that no training run of
-the experiment stored (`checkpoint_not_stored`), and an `EvalJob` has nowhere
-to name an API key or an API dollar limit apart from its rental's; Etude
-EXP-70 ("Evaluate players served by an inference server, and players with no
-checkpoint") and the Manabot Task "Run the Claude and Qwen evaluation
-experiments on Etude" carry the rest. The seated checkpoint is also bound to
+Not runnable yet. `etude launch experiments/llm_claude.py --quote` plans the
+pass, but an `EvalJob` has nowhere to name an API key, an API dollar limit
+apart from its rental's or a per-game time limit; Etude EXP-70 ("Evaluate
+players served by an inference server, and players with no checkpoint") and
+the Manabot Task "Run the Claude and Qwen evaluation experiments on Etude"
+carry the rest. The seated checkpoint, an outside address, is also bound to
 world w13 and does not load in the current world.
 
 An evaluation with no training: `eval_jobs` seats a hosted language model and
@@ -15,7 +15,7 @@ game each, the model's seat alternating. `play` is one game through
 `configs/llm/openrouter-haiku-high.json`.
 
 ```bash
-uv run --extra openrouter etude eval experiments/llm_claude.py
+uv run --extra evaluation --extra openrouter etude eval experiments/llm_claude.py
 uv run etude report experiments/llm_claude.py --serve
 ```
 
@@ -31,7 +31,7 @@ from decimal import Decimal
 import os
 from pathlib import Path
 
-from etude.checkpoints import CheckpointRef, checkpoint_id
+from etude.checkpoints import CheckpointRef
 from etude.eval.match import environment
 from etude.eval.records import (
     Benchmark,
@@ -92,7 +92,7 @@ def players() -> tuple[Code, CheckpointPlayer]:
     checkpoint = CheckpointPlayer(
         name="mtg183-u5950",
         checkpoint=CheckpointRef(
-            key=checkpoint_id(address=MTG183_FINAL),
+            address=MTG183_FINAL,
             artifact=ArtifactRef(
                 uri=MTG183_FINAL, sha256=MTG183_SHA256, size_bytes=MTG183_BYTES
             ),
@@ -140,7 +140,14 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
             Seating(name="claude-v-mtg183", players=players(), configs=games, games=1),
         ),
     )
-    return [EvalJob(play=play, tournament=tournament, max_hours=12)]
+    return [
+        EvalJob(
+            play=play,
+            tournament=tournament,
+            extras=("evaluation", "openrouter"),
+            max_hours=12,
+        )
+    ]
 
 
 def report() -> Report:

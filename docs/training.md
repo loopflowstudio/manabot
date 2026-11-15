@@ -402,13 +402,15 @@ Ogre match, whose rates follow the horizon the recipe states
 
 ```bash
 uv run etude launch experiments/belief.py --rent l4   # the policy; again once it finishes, the sampler
-uv run etude train experiments/belief.py --job policy # the policy stage on this computer
+uv run etude train experiments/belief.py              # the same staging on this computer
 ```
 
-Local training does not yet deliver a job's inputs:
-`uv run etude train experiments/belief.py --job sampler` fails with
-`input not given: 'start'`. Manabot provides no scheduler or input-delivery
-fallback.
+On this computer the first `etude train` trains the policy; the second reports
+it finished and trains the sampler from its final checkpoint, delivered as the
+input `start`; a third trains nothing. `--job sampler` selects that stage
+alone, and refuses an address already taken unless given `--resume`. A
+checkpoint is handed down by `start=`, not as one of the policy run's stored
+files (`out.matching(...)`): the checkpoint record carries its lineage.
 
 The defaults are a pilot's: one policy update, three games and a small
 sampler. Each stage's files are in its own run:

@@ -10,7 +10,7 @@ changes them.
 from pathlib import Path
 import shutil
 
-from etude.checkpoints import CheckpointRef, checkpoint_id
+from etude.checkpoints import CheckpointRef
 from etude.eval.convert import convert
 from etude.eval.query import statsdb
 from etude.eval.records import Environment, Match
@@ -34,7 +34,7 @@ def _scheduled() -> tuple[str, list[Match]]:
     )
     definition = benchmark.benchmark(manifest)
     checkpoint = CheckpointRef(
-        key=checkpoint_id(run="migration-fixture", name="u000050"),
+        address="migration-fixture/checkpoints/u000050",
         artifact=ArtifactRef(
             uri="file:///fixture/u000050.pt", sha256="2" * 64, size_bytes=10
         ),

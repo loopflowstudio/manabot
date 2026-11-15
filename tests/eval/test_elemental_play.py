@@ -4,7 +4,7 @@ import hashlib
 from pathlib import Path
 from typing import Literal
 
-from etude.checkpoints import CheckpointRef, checkpoint_id
+from etude.checkpoints import CheckpointRef
 from etude.eval.records import Inference, Match
 from etude.records import ArtifactRef
 import pytest
@@ -28,7 +28,10 @@ def test_failed_group_is_stored_as_invalid_games(
     path = tmp_path / "updates-0.pt"
     path.write_bytes(body)
     checkpoint = CheckpointRef(
-        key=checkpoint_id(run="seed-1", name=path.name),
+        experiment="elemental",
+        job="elemental",
+        seed=1,
+        name=path.name,
         artifact=ArtifactRef(
             uri=path.as_uri(),
             sha256=hashlib.sha256(body).hexdigest(),

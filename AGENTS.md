@@ -641,7 +641,7 @@ while keeping new dependency imports (including Torch lazy registrations).
 Etude discovers experiment files with `runpy`; pass evaluation callbacks from
 their canonical importable module, not the discovery file's `<run_path>`
 namespace. Exercise discovery with `etude.declarations.read_experiment` in runner tests,
-or `etude.declarations.read_job_file` for a file's `training_jobs()`. Local
+or `etude.declarations.read_training_jobs` for a file's `training_jobs()`. Local
 evaluation must supply `ETUDE_OUTPUT_DIR` when its callback writes replay evidence;
 only launched jobs receive that directory automatically.
 

@@ -80,7 +80,6 @@ from etude.eval.run import Row, Tables
 from etude.jobs import EvalJob, ExperimentState, TrainingJob, TrainingRunSummary
 from etude.launch import client
 from etude.report import Report, Score
-from etude.spec import Variable
 from etude.storage import Storage
 from etude.train.read import RunData
 from etude.train.tracking import track
@@ -577,10 +576,11 @@ def with_launcher_ends(state: ExperimentState) -> ExperimentState:
     no end state is delivery lag and stays running. A running run the launcher
     does not know raises, except for the frozen lost-run record above, so a read
     away from the launcher fails loudly rather than taking a dead pod for a live one.
+    A run the pass is about to queue is not the launcher's yet and stays queued.
     """
 
     def lost(run: TrainingRunSummary) -> bool:
-        if run.ended:
+        if run.state != "running":
             return False
         if run.name in LOST_RUNS:
             return True
@@ -963,11 +963,10 @@ def evaluation_jobs(
             # Etude retries a machine lost or refused after admission, resuming the
             # same run and skipping stored matches, so no game result can be replaced.
             max_attempts=EVALUATION_ATTEMPTS,
+            # Setup installs the locked environment with the evaluation extra (the
+            # result writer's duckdb); the job's command runs with the same extra.
             setup=machine_setup(" --extra evaluation"),
-            # Etude's command is `uv run python`, which would sync the default
-            # environment. Setup installed the locked one with the evaluation
-            # extra (the result writer's duckdb), so the job runs in it as built.
-            environment=(Variable(name="UV_NO_SYNC", value="1"),),
+            extras=("evaluation",),
         )
     ]
 
