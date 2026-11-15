@@ -266,6 +266,25 @@ publish, land or choose the next Graph step from here.
   (`zone`, `is_token`) at every decision. A token in the graveyard during a
   mana ability's color choice is correct: SBAs wait for priority. Academy's
   game end is a "Game Over" dialog with "Play Again".
+  Battlefield permanents are `agent_permanents`, with their own ids (the ones
+  activation offers focus) and an integer `registry_key`; join them to a name
+  through `agent_cards` rows that have the same `registry_key`.
+- Policy vocabulary/admission changes (`record_vocabulary.rs`, token kinds,
+  `manabot/policy/admission.py`): the consumer is training's catalog policy.
+  Script a directed `managym.Env` game that reaches the runtime program,
+  `space.encode` each decision at `ObservationConfig(policy_input_version=10)`
+  and pass it through `manabot.verify.record_coverage._embed` with a tiny
+  catalog `ActorCritic`, as `coverage_sweep` does. Find decisions carrying a
+  token by scanning encoded buffers for its u32 as adjacent 16-bit halves
+  (hi, lo). For Koh's `HaveAbilitiesOf`: Swamps plus Koh against Forests plus
+  Giant Spider, Koh cast once, always targeting with its ETB, the villain
+  playing randomly, and one Pay-1-life activation per turn. The choice
+  is a Modal decision only with two or more cards exiled with Koh (one is
+  skipped as forced). 3 of 6 games reached it (8 decisions, about 7 minutes at load ~110).
+  For the negative, build a mutated release wheel with
+  `-o /tmp/<dir>/wheels`, restore the source at once, unzip the wheel into
+  `/tmp/<dir>/site` and run with `PYTHONPATH=/tmp/<dir>/site` (print
+  `managym.__file__`); admission must then fail at the first such decision.
 - "No behavior change" engine claims: `git worktree add --detach /tmp/<x>
   <before>`, build it with `uv run --extra play maturin build --release -i .venv/bin/python -m
   /tmp/<x>/managym/Cargo.toml` (about 4-5 min), drop its `.so` into

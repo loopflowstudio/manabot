@@ -59,7 +59,7 @@ use managym::{
 };
 use managym::{
     cards::content_pack::default_content_pack,
-    cards::tokens::{catalog_tokens, definition_tokens, name_value, TokenKind},
+    cards::tokens::{catalog_tokens, definition_tokens, name_value, rules_tokens, TokenKind},
     state::{
         ability::{
             Ability, Actor, AttackSize, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency,
@@ -1869,11 +1869,77 @@ fn every_effect_variant_reaches_the_learning_tokens() {
     names.sort_unstable();
     names.dedup();
     assert_eq!(names.len(), EFFECT_VARIANTS, "one witness per variant");
+    let pack = default_content_pack();
+    let catalog = catalog_tokens(pack).unwrap();
+    let known: std::collections::BTreeSet<_> = catalog
+        .token_kind
+        .into_iter()
+        .zip(catalog.token_value)
+        .chain(
+            managym::agent::record_vocabulary::record_names()
+                .into_iter()
+                .filter_map(|entry| entry.token),
+        )
+        .collect();
+    let mut missing = std::collections::BTreeSet::new();
+    let kinds = [
+        TokenKind::Structure,
+        TokenKind::Field,
+        TokenKind::Variant,
+        TokenKind::Integer,
+        TokenKind::Boolean,
+        TokenKind::Text,
+        TokenKind::DefinitionRef,
+        TokenKind::Null,
+        TokenKind::ProgramKind,
+    ];
     for effect in witnesses {
         let tokens = tokens_of(&spell(vec![effect.clone()]));
-        let expected = (TokenKind::Variant, name_value(effect_token(&effect)));
+        let name = effect_token(&effect);
+        let expected = (TokenKind::Variant, name_value(name));
         assert!(tokens.contains(&expected), "{effect:?}");
+        for (path, tokens) in [
+            ("spell", tokens),
+            (
+                "rules",
+                rules_tokens(&effect, pack)
+                    .unwrap()
+                    .into_iter()
+                    .map(|(kind, value)| {
+                        let kind = *kinds
+                            .iter()
+                            .find(|candidate| **candidate as u16 == kind)
+                            .expect("known token kind");
+                        (kind, value)
+                    })
+                    .collect(),
+            ),
+        ] {
+            for (kind, value) in tokens {
+                let requires_lookup = match kind {
+                    TokenKind::Integer | TokenKind::Boolean => false,
+                    TokenKind::Structure
+                    | TokenKind::Field
+                    | TokenKind::Variant
+                    | TokenKind::Text
+                    | TokenKind::DefinitionRef
+                    | TokenKind::Null
+                    | TokenKind::ProgramKind => true,
+                };
+                if requires_lookup && !known.contains(&(kind as u16, value)) {
+                    missing.insert(format!(
+                        "{name} ({path}): {kind:?} (kind {}), value {value} (0x{:08x})",
+                        kind as u16, value as u32
+                    ));
+                }
+            }
+        }
     }
+    assert!(
+        missing.is_empty(),
+        "unregistered effect tokens:\n{}",
+        missing.into_iter().collect::<Vec<_>>().join("\n")
+    );
 }
 
 #[test]

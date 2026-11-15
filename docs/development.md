@@ -142,7 +142,12 @@ closure treats the transition quota as a minimum.
 Run the existing encoder tests alongside cutoff/parity fixtures so callers of
 changed private helpers are checked too. Action overflow is checked at the
 public encoder boundary, before the retained action list reaches row encoding.
-Changes to retained execution or its record vocabulary also require
+Changes to effects or runtime token registration require the
+[effect vocabulary checks](../managym/cards/tests/cards/README.md#effect-vocabulary-checks):
+the exhaustive debug Rust witness guard and the rebuilt-extension Python
+admission checks. These check token membership independently of which effects
+a game happens to reach. Changes to retained execution or its record vocabulary
+also require
 `uv run --extra dev pytest tests/model/test_record_coverage.py -q` after rebuilding
 the native extension. This bounded sweep checks that emitted execution tokens
 have catalog rows, including decisions reached through changed game paths.

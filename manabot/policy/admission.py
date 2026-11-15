@@ -173,7 +173,12 @@ def _require_keys(keys: np.ndarray, query: np.ndarray, message: str) -> None:
         return
     indexes = np.searchsorted(keys, query).clip(max=len(keys) - 1)
     if not len(keys) or not np.array_equal(keys[indexes], query):
-        raise ValueError(message)
+        missing = query if not len(keys) else query[keys[indexes] != query]
+        detail = ", ".join(
+            f"({int(key) >> 32}, 0x{int(key) & 0xFFFFFFFF:08x})"
+            for key in np.unique(missing)[:8]
+        )
+        raise ValueError(f"{message}; missing keys: {detail}")
 
 
 @dataclass(frozen=True)
