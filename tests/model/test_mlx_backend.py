@@ -40,6 +40,7 @@ from manabot.infra.config import (  # noqa: E402
     BF16_MIN_HIDDEN_DIM,
     MatchConfig,
     ModelConfig,
+    ObservationConfig,
 )
 from manabot.policy.checkpoint import (  # noqa: E402
     canonical_parameters,
@@ -128,7 +129,7 @@ def test_sequential_children_move_under_layers() -> None:
 
 
 def _converted(tmp_path: Path) -> tuple[Path, Path, ActorCritic]:
-    space = ObservationSpace()
+    space = ObservationSpace(ObservationConfig(policy_input_version=9))
     agent = ActorCritic(
         space,
         ModelConfig(
@@ -406,7 +407,7 @@ def test_omitted_precision_follows_the_shared_width_rule(
 
     assert default_precision(width) == expected
     assert (ladder_precision("mps", width) == "bf16") == (expected == "bfloat16")
-    space = ObservationSpace()
+    space = ObservationSpace(ObservationConfig(policy_input_version=9))
     agent = ActorCritic(
         space,
         ModelConfig(

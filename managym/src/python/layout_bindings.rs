@@ -1,7 +1,10 @@
 //! Dictionary discovery of native observation encodings, without constructing an Env.
 // PyO3's #[pyfunction] wrappers trigger false-positive `useless_conversion`.
 #![allow(clippy::useless_conversion)]
-use crate::agent::observation_layout::{self as native_layout, ValueLayout};
+use crate::agent::{
+    observation_encoder::InputLayout,
+    observation_layout::{self as native_layout, ValueLayout},
+};
 use pyo3::{prelude::*, types::PyDict};
 
 fn value_dict<'py>(py: Python<'py>, layout: &ValueLayout) -> PyResult<Bound<'py, PyDict>> {
@@ -15,18 +18,26 @@ fn value_dict<'py>(py: Python<'py>, layout: &ValueLayout) -> PyResult<Bound<'py,
 /// Column names, value encodings and fixed extents of each encoded array.
 ///
 /// Keys are the encoder's array names; `policy_history` selects the public
-/// history rows of `events`; `turn_state` adds the input v10
-/// `player_turn_state` and `card_turn_state` arrays. A `None` extent is a caller-selected capacity.
+/// history rows of `events`; `turn_state` adds the `player_turn_state` and
+/// `card_turn_state` arrays (inputs v10 and v11); `legacy` selects the
+/// deprecated v9/v10 object rows (removed in 0.4.0) instead of input v11's
+/// one-token rows and `stack`. A `None` extent is a caller-selected capacity.
 /// Seats are viewer-relative. No game or buffer is created.
 #[pyfunction]
-#[pyo3(signature = (*, policy_history=false, turn_state=false))]
+#[pyo3(signature = (*, policy_history=false, turn_state=true, legacy=false))]
 fn observation_layout(
     py: Python<'_>,
     policy_history: bool,
     turn_state: bool,
+    legacy: bool,
 ) -> PyResult<PyObject> {
     let out = PyDict::new_bound(py);
-    for (key, array) in native_layout::observation_layout(policy_history, turn_state) {
+    let layout = if legacy {
+        InputLayout::Legacy
+    } else {
+        InputLayout::OneToken
+    };
+    for (key, array) in native_layout::observation_layout(policy_history, turn_state, layout) {
         let value = PyDict::new_bound(py);
         value.set_item("axes", array.axes)?;
         value.set_item("shape", array.shape)?;

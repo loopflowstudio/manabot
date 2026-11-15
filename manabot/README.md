@@ -153,6 +153,16 @@ must match the match's world, use observation-only inputs, and supply either a
 categorical win/draw/loss value or a scalar declared as `signed_outcome`.
 Search requires open decklists.
 
+Academy can compose the baseline provider with the framework-free
+[Mirror search](../docs/academy.md#mirror-search) owner in managym, in Play and
+either Watch seat. Academy starts with one world at depth one and a 30-second
+ceiling; its controls accept larger explicit budgets. Other providers with
+compatible probabilities, signed values and isolated current-view forks can use
+the same owner. Qwen v1 remains
+search-disabled. Arena's training-specific samplers and historical receipts stay
+here; arena execution and receipt verification share the numerical optimizer in
+`managym.mirror`.
+
 At each decision, search samples 16 worlds and rolls out every root action with
 positive base-policy probability in each world, for up to 20 policy choices
 including the root action. Native trivial-decision skipping remains enabled.
@@ -486,10 +496,11 @@ their gradients, including duplicate memberships. An unused continuation module
 keeps absent gradients so Adam does not update its momentum spuriously.
 
 The input version is explicit in saved observation and configuration
-identities, and main loads only v9; see
+identities. Main defaults to v11 and loads deprecated v9/v10 checkpoints
+until 0.4.0; see
 [policy inputs](../docs/observation-and-model.md#policy-inputs) for the layout
 and the saved-checkpoint and world admission requirements. Text representation
-`manabot-text-6` renders each native payload once with exact public source and
+`manabot-text-7` renders each native payload once with exact public source and
 member labels and timestamp ranks. Its within-observation token reducer is not
 persistent game memory.
 

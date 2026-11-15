@@ -665,6 +665,9 @@ Every game you start is recorded as you play.
 A finished bot recording shows **Replay**, its actual players and decision
 controls first. A game still being played keeps the **Watch two bots** heading,
 including when reopened. Expand **Watch another matchup** to set up a new bot game.
+Reload opens the latest recorded decision and restores a pending **Retry search**
+with its timeout message. Retrying requires an explicit click; browsing previous
+decisions sends no action. A `decision` URL parameter keeps its historical selection.
 
 Games are stored in `play.sqlite` under the traces directory, which defaults
 to `academy/traces` in the directory you launched from. Launch from the same
@@ -817,7 +820,87 @@ and uses the complete native text decision. It returns a single legal action;
 probabilities and a critic stay absent. Invalid or late output leaves the
 pending decision intact. Qwen does not support Mirror search. A provider's
 `supports_search` defaults false; a true flag alone is no search admission.
-Generic Mirror composition is the separate MTG-363 change.
+Search-capable policies can use the shared composition below.
+
+#### Mirror search
+
+Choose a registered policy, then change its **Search** control from **None
+(raw policy)** to **Mirror search**. This works for the opponent in Play and
+for either Watch seat. The label includes the budget, for example
+`challenger + mirror search 1×1`. While a decision is pending, the table shows
+its search budget and elapsed waiting time. Reload preserves the configuration.
+
+| Setting | Default | Range |
+|---|---|---|
+| Worlds | 1 | 1–64 |
+| Depth, including the root choice | 1 | 1–40 |
+| Decision ceiling | 30 seconds | Greater than zero, at most 30 seconds |
+
+**Uniform belief (physical deal)** samples unseen cards with copy counts and
+public knowledge. Three unseen copies of one card and one of another give a
+hidden card a three-in-four chance of being the first. It ignores behavioral
+history; it does not mean uniform actions or uniform distinct hands. Native
+sampling preserves the bot's information and full legal choices. Retained belief
+identity `managym.determinize/physical-deal/v1` names native determinization,
+including foretold slots and rejection against retained selection commitments;
+it is distinct from the historical `physical-compatible-hand/v1` sampler.
+
+Every sampled world is tried under each root action with positive base-policy
+probability. Both rollout seats use that base evaluator from their own views.
+Finished branches use the actual result; cutoffs use the declared signed
+expected-outcome value. The existing regularized mirror update shifts the
+decision distribution without training weights. Exact base zeros stay zero.
+The regularization defaults remain alpha 0.02 and beta 1.
+
+Search requires open decklists, complete legal-action probabilities, a compatible
+signed-outcome or W/D/L value evaluator, and isolated forks. V1 evaluation must
+depend on the current view alone. Recurrent and action-only policies still play
+and Watch, with search unavailable and a reason. Qwen v1 does not support search.
+No missing capability is replaced by a synthetic distribution, terminal rollout,
+raw-policy fallback.
+
+On a timeout, no bot action commits. The pending decision remains on the table
+with **Retry search**. Only an explicit retry tries it again; reconnecting or
+changing priority stops does not. The retry checks the match, revision and
+pilot authority. Other search failures report their reason without substituting
+another policy.
+
+Watch shows **Raw policy**, **Search values** and **Updated policy**, alongside
+belief, budget, elapsed/ceiling seconds, rollouts, regularization, the exact
+hexadecimal seed and receipt digest. The full receipt is not retained and no
+verifier ships; recomputing its digest requires the same provider, position and seed.
+A completed Play replay offers **Inspect bot search** for the same retained evidence. The human opponent's live view and
+viewer export do not contain these outputs. Sampled hands and private branch
+audits are not stored in the summary. Replay needs no provider or new inference.
+Raw, searched and differently budgeted configurations have distinct recorded
+player identities, binding the base provider, artifacts, runner and configuration.
+
+Python and the CLI accept the same explicit settings:
+
+```python
+from managym.academy.launch import serve
+from managym.mirror_search import MirrorSearch
+from managym.policy import PolicySpec
+
+with serve(policies={"challenger": PolicySpec("manabot", "/models/self-play-raw.pt")}) as academy:
+    mirror = MirrorSearch(worlds=4, depth=2)
+    print(academy.new_game(opponent="challenger", mirror=mirror).url)
+    print(academy.watch(players=("challenger", "random"), mirror=(mirror, None)).url)
+    academy.wait()
+```
+
+```bash
+uv run --no-project managym academy --policy challenger.json play \
+    --opponent challenger --mirror '{"worlds":4,"depth":2}'
+uv run --no-project managym academy --policy challenger.json watch \
+    --player challenger --player random --mirror '[{"worlds":4,"depth":2},null]'
+```
+
+The initial budget tries each supported root action in one sampled world and
+uses the value evaluator immediately after that action. Increase worlds or depth
+explicitly for more search work. Even the initial budget can time out with a slow
+provider or many legal choices. More search work does not by itself establish
+stronger play.
 
 #### Independent Python policies
 

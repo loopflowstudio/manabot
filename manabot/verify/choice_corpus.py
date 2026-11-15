@@ -100,11 +100,11 @@ def _signatures(raw: managym.Observation) -> list[str]:
                 permanent.is_summoning_sick,
                 permanent.plus1_counters,
                 permanent.cant_be_blocked_this_turn,
-                permanent.power,
-                permanent.toughness,
+                permanent.characteristics.power,
+                permanent.characteristics.toughness,
                 permanent.is_animated,
                 permanent.has_exile_link,
-                _keywords(permanent.keywords),
+                _keywords(permanent.characteristics.keywords),
             ]
     for card in raw.agent_sideboard:
         objects[card.candidate_id] = ["outside", "self", card.registry_key]

@@ -3,15 +3,20 @@
 import numpy as np
 import torch
 
-from manabot.backends.torch.arrays import device_of, on_device
-from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.policy import PolicyInference
 from manabot.env.observation import ObservationSpace
 import managym
 
 
 def evaluate_observation(
-    agent: ActorCritic, space: ObservationSpace, observation: managym.Observation
+    scope: PolicyInference, space: ObservationSpace, observation: managym.Observation
 ) -> tuple[tuple[float, ...], float]:
+    """Return legal-action probabilities and the acting viewer's value.
+
+    The open scope caches the full card-program table once for its unchanged
+    policy, so repeated evaluations (Mirror search calls this per rollout ply)
+    run only the observation forward instead of re-encoding the catalog.
+    """
     count = len(observation.action_space.actions)
     if count > space.encoder.max_actions:
         space = ObservationSpace(
@@ -19,16 +24,13 @@ def evaluate_observation(
         )
     encoded = space.encode(observation)
     with torch.no_grad():
-        inputs = on_device(
-            agent.prepare(
+        logits, value = scope.agent(
+            scope.prepare(
                 {
                     key: np.asarray(value, dtype=np.float32)[None]
                     for key, value in encoded.items()
-                },
-                inference=True,
-            ),
-            device_of(agent),
+                }
+            )
         )
-        logits, value = agent(inputs)
         probabilities = tuple(torch.softmax(logits, dim=-1)[0, :count].tolist())
     return probabilities, float(value.item())

@@ -261,8 +261,9 @@ alone at w160l8 and 1.91× at w384l8, where it falls from 386 ms to 202 ms
 
 ## Policy inputs
 
-Main carries policy input v9, the fresh default, and explicit input v10
-([below](#input-v10-turn-history-and-powerstone-mana)).
+Main carries policy input v11, the fresh default, and the deprecated inputs v9
+and v10 that earlier checkpoints read
+([below](#deprecated-inputs-v9-and-v10)).
 `ObservationConfig.policy_input_version` is always serialized. A checkpoint,
 replay or saved configuration bound to any other version, or omitting it,
 raises `UnsupportedPolicyInput`, which names the revision to run it from
@@ -278,6 +279,65 @@ differ and the revision to run it from. Loading an architecture does not
 admit a checkpoint to the current world; see
 [world identity](../manabot/README.md#world-identity).
 
+### Input v11: one row per game thing
+
+Each game thing the viewer sees is one row of the object table, and every
+pointer (action focus, permanent and stack links, facts, effect members,
+relation references, history contexts) names that row:
+
+| Segment | One row is |
+| --- | --- |
+| `agent_player`, `opponent_player` | a player |
+| `agent_cards`, `opponent_cards` | a card outside the battlefield and stack (hand, inspected library, revealed or searched cards, graveyard, exile, pending public entrants in their current zone; the agent's sideboard after its cards) |
+| `agent_permanents`, `opponent_permanents` | a permanent, by controller, with its characteristics: mana value, six card types, legendary, token, Ally, Lesson and ward beside its state |
+| `stack` | a spell, activated ability or triggered ability, top first, one segment with `is_mine` for its controller; a spell's characteristics, an ability's index and source link, mode, X and kicker |
+
+The published observation exposes `card.characteristics` and
+`permanent.characteristics` as `ObservationCharacteristics`. Effective P/T,
+name, types, keywords and ward come from one layered projection on a permanent;
+rules text and mana cost describe its definition. This is a viewer projection,
+not the engine's full `Characteristics` type or dynamic rules text.
+
+```python
+permanent = obs.agent_permanents[0]
+name = permanent.characteristics.name
+power = permanent.characteristics.power
+is_token = permanent.is_token
+object_id = permanent.object_id  # selection, payment and history identity
+```
+
+A spell's `stack_object.characteristics` is present even for a copy;
+`object_id`, `owner_id`, `is_copy` and `announced_x` belong to the stack object.
+An ability has no spell characteristics and retains its captured source
+definition/reference after the source leaves. `Permanent.name` keeps its old
+override meaning (`None` while the printed name applies).
+
+The old Python `.card` accessors and flat characteristic getters are derived
+compatibility aliases, warn, and are removed in 0.4.0. Frozen viewer JSON
+keeps its existing fields and bytes; those wire records are normalized on read.
+Historical captures whose object identity is missing or ambiguous are refused.
+Academy's retained `base_power`/`base_toughness` fields still mean effective
+P/T, matching their existing serialized meaning.
+
+The object table is players, agent cards, opponent cards, agent permanents,
+opponent permanents, then the stack. The encoders index a battlefield object's
+`object_id` and a spell's `object_id` to its permanent or stack row. Selection,
+payment, a spell's costs and modes, and history contexts reach the row that
+holds the object's state. V11 carries v10's turn state (`player_turn_state`,
+`card_turn_state`) and refuses nothing a v10 encoder holds. Unambiguous
+historical JSON is normalized to this observation shape before encoding.
+
+### Deprecated inputs v9 and v10
+
+Checkpoints trained before v11 read the v9/v10 rows: a battlefield object or a
+stack spell was also a card row, permanent rows (38 columns) had no
+characteristics and stack abilities had no row. Selecting v9 or v10 warns
+(`DeprecationWarning`) and is removed in 0.4.0. Their rows are rebuilt from
+the same observation by `agent/legacy_input.rs` and
+`manabot/env/legacy_input.py`, and match the encoders of 452d7b5357 byte for
+byte; the model reads them through the same `ActorCritic`, without a stack
+segment. Nothing else depends on those modules.
+
 ### Input v10: turn history and Powerstone mana
 
 Three TLE bonus-sheet cards read state v9 has no place for:
@@ -288,7 +348,8 @@ Three TLE bonus-sheet cards read state v9 has no place for:
 | Brought Back | Which graveyard cards were put there from the battlefield this turn |
 | Cityscape Leveler | Mana that can't be spent to cast nonartifact spells (its Powerstone tokens) |
 
-Select v10 explicitly before constructing the collector and model:
+V10 adds this state to v9, and v11 keeps it. To train on v10 rows, select v10
+explicitly before constructing the collector and model:
 
 ```python
 from manabot.env.observation import ObservationSpace
@@ -317,8 +378,7 @@ the native encoders:
 The model appends each seat's row to its player row and each card value to its
 card row before embedding them.
 
-V9 and its checkpoints are unchanged: w17 checkpoints keep loading, and fresh
-configurations stay v9. A v9 encoder refuses a position that needs v10 state:
+V9 and its checkpoints are unchanged: w17 checkpoints keep loading. A v9 encoder refuses a position that needs v10 state:
 a card visible to the viewer reads life lost this turn or graveyard cards put
 there from the battlefield and that state is present, or a pool holds mana
 that can't be spent to cast nonartifact spells. `managym.input_v10_state(obs)`
@@ -332,14 +392,16 @@ one.
 
 ### Layout
 
-A fresh `ObservationConfig` gives these float32 buffers. Capacities are
-configuration; widths are the layout.
+A fresh `ObservationConfig` (input v11) gives these float32 buffers.
+Capacities are configuration; widths are the layout.
 
 | Key | Shape | Holds |
 | --- | --- | --- |
 | `agent_player`, `opponent_player` | 1 × 73 | Player state |
-| `agent_cards`, `opponent_cards` | 60 × 56 | Cards outside the battlefield |
-| `agent_permanents`, `opponent_permanents` | 40 × 38 | Permanents |
+| `agent_cards`, `opponent_cards` | 60 × 56 | Cards outside the battlefield and stack |
+| `agent_permanents`, `opponent_permanents` | 40 × 51 | Permanents with their characteristics |
+| `stack`, `stack_valid` | 32 × 37 (`max_stack_objects`), 32 | Spells and abilities, top first |
+| `player_turn_state`, `card_turn_state` | 2 × 8, 2 × 60 | Turn state (above) |
 | `relations` | 64 × 49 | Stack entries, targets, clauses, modes, costs, suspended payments, waiting triggers |
 | `facts` | 512 × 12 (`max_facts`) | One row per object and detail of an open vocabulary |
 | `effects`, `effect_details`, `effect_members` | 128 × 18, 4096 × 3, 2048 × 2 | Each active effect once, with its payload tokens and affected objects |

@@ -25,7 +25,12 @@ from manabot.eval.evaluation import EvaluationRequest
 from manabot.eval.execution import bind_execution
 from manabot.eval.match import play_cell
 from manabot.eval.models import EvaluationKey
-from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
+from manabot.infra.config import (
+    POLICY_INPUT_VERSION,
+    MatchConfig,
+    ModelConfig,
+    ObservationConfig,
+)
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.sim import child, serving
@@ -168,7 +173,9 @@ def test_served_checkpoint_records_its_input_version(tmp_path: Path) -> None:
     assert replay["passed"]
     for game in read_trace(Path(trace["path"])):
         assert len(game["decisions"]) == 2, game.get("failure")
-        assert game["observation_hypers"]["policy_input_version"] == 9
+        assert game["observation_hypers"]["policy_input_version"] == (
+            POLICY_INPUT_VERSION
+        )
         env, observation = replay_prefix(game, 1)
         try:
             assert "relations" in observation

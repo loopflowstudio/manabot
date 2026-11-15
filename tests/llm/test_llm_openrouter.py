@@ -390,7 +390,7 @@ def test_checkpoint_opponent_records_its_inputs_and_replays(
     assert summary.mode == "random-v-checkpoint-control"
     assert summary.origins["checkpoint-opponent"] > 0
     identity = json.loads((tmp_path / "game/opponent.json").read_text())
-    assert identity["policy_input_version"] == 9
+    assert identity["policy_input_version"] == 11
     assert identity["policy_history_version"] == 0
     assert identity["sha256"]
 
