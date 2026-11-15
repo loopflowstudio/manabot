@@ -1,6 +1,6 @@
 # One policy token per game thing (MTG-344)
 
-Status: one-token layout in PR #521; reviewed characteristics correction implemented locally, ready for gate and demo/review. Evidence: `scratch/encoding-study.md`
+Status: one-token layout and the reviewed characteristics correction are on PR #521, synced onto main 83406110db (merge 84f61948c5, pushed). Next: gate (native rebuild, CI), then demo/review. Evidence: `scratch/encoding-study.md`
 (read-only study of origin/main 452d7b5357; `file:line` citations there).
 
 ## Direction
@@ -151,7 +151,11 @@ Resolved:
   history. Facts, effects, relations and actions share the surviving encoder.
   Removal release: 0.4.0; MTG-353 owns broader portability.
 - Torch attends stack rows with catalog programs and controller ownership.
-  Framework backends (MLX, `manabot.policy.prepare`) stay v9-only.
+  Since the sync, v11 stack features, routes, ownership and catalog
+  references are built once in main's shared host preparation
+  (`manabot/policy/prepare.py`, `Prepared.stack*`); Torch consumes them. MLX
+  still admits v9 only (`manabot/backends/mlx/checkpoint.py:require_supported`),
+  so a fresh default config does not run on MLX until it is ported.
 - The characteristics correction below replaces the initial nested `.card`
   implementation; older implementation detail remains in HEAD `72a7b4df80`.
 
@@ -322,7 +326,10 @@ choice seed 93; C=128; 20 Mountain / 10 Lightning Bolt / 10 Gray Ogre versus
 - v11: `efaac464056ddbc52ba88238dc276c1365ae36038660ff462b6416234e72db28`
 
 Remaining: gate/CI, the interactive token/copy walkthrough and retained-checkpoint
-demonstration, then review. No merge or auto-merge. Publication belongs to the
+demonstration, then review. After the sync, the installed extension predates
+main's `managym.ObservationRead` (`manabot.env.failures` needs it), so no
+Python test has run on the merged tree; gate rebuilds the extension and reruns
+the focused Rust (debug) and Python checks above. No merge or auto-merge. Publication belongs to the
 caller's delivery step. No retained receipts or checkpoint weights changed.
 
 ## Compress pass (2026-11-14)

@@ -17,9 +17,9 @@ Each is reversible before the PR lands.
    so new permanent/stack roles would refuse v9/v10 checkpoints. Battlefield
    objects and spells reach it under the card roles in v9/v10 row order. New
    roles belong to the next world freeze.
-5. Framework backends (MLX, `manabot.policy.prepare`) stay v9-only;
-   `require_supported` refuses v11 by name. A fresh default config therefore
-   does not run on MLX until it is ported.
+5. MLX stays v9-only; `require_supported` refuses v11 by name, so a fresh
+   default config does not run on MLX until it is ported. (Shared
+   preparation now handles v11; see 14.)
 6. Saved regime observation settings that omit `policy_input_version` retain
    v9 through `TrainingRegime.read_saved_stages`; fresh configs default to v11.
    Checkpoints go through `from_checkpoint`, keeping their bound version.
@@ -54,3 +54,10 @@ Each is reversible before the PR lands.
     host preparation; Torch consumes prepared stack features and routes.
     MLX keeps its explicit v9 admission. This supersedes assumption 5's
     statement that shared preparation stays v9-only.
+
+Sync validation (2026-11-14): merge 84f61948c5 is committed and on the
+remote branch. The one focused invocation,
+`uv run --no-sync --extra dev pytest tests/model/test_stack_tokens.py::test_bucketed_and_live_forwards_match_plain -q`,
+stopped during collection: the installed extension lacks
+`managym.ObservationRead`, which main's `manabot.env.failures` requires. No
+test ran on the merged tree; the rebuild and rerun belong to gate.
