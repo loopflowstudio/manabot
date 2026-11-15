@@ -11,6 +11,7 @@ import pytest
 
 from managym.academy import server, trace as trace_store
 from managym.academy.server import app
+from managym.academy.work import WorkStatus
 from tests.academy.socket_messages import settled_message
 
 CONFIG = {
@@ -168,6 +169,16 @@ def test_closed_dispatch_denies_every_watcher_live_mutation_without_state_change
             frame = joined["recovery"]["frame"]
             watcher_id = watcher_access["identity"]["viewer_id"]
             entered_game_methods: list[str] = []
+            published_work: list[WorkStatus] = []
+            publish_work = server._publish_work
+
+            async def capture_work(
+                record: server.SessionRecord, status: WorkStatus
+            ) -> None:
+                published_work.append(status)
+                await publish_work(record, status)
+
+            monkeypatch.setattr(server, "_publish_work", capture_work)
             for method_name in (
                 "hero_command",
                 "hero_action",
@@ -226,12 +237,23 @@ def test_closed_dispatch_denies_every_watcher_live_mutation_without_state_change
             ]
             for mutation in mutations:
                 before = _authority_fingerprint(record)
+                published_work.clear()
                 watcher_socket.send_json(mutation)
                 denied = settled_message(watcher_socket)
                 assert denied["type"] == "control_error"
                 assert denied["code"] == "forbidden"
                 assert _authority_fingerprint(record) == before
                 assert entered_game_methods == []
+                assert [status.state for status in published_work] == [
+                    "running",
+                    "failed",
+                ]
+                # The pilot must also leave the broadcast wait, even though
+                # only the watcher receives the authorization refusal.
+                for state in ("running", "failed"):
+                    status_message = pilot_socket.receive_json()
+                    assert status_message["type"] == "work_status"
+                    assert status_message["work"]["state"] == state
 
             before = _authority_fingerprint(record)
             watcher_socket.send_json({"type": "chat", "message": "hello"})

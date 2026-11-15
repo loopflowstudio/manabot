@@ -3839,6 +3839,7 @@ async def play_socket(websocket: WebSocket) -> None:
                         await _publish_work(record, status)
                         record.game.work.publish = publish_work
                     failed = True
+                    dispatched = False
                     try:
                         response, broadcast = await asyncio.to_thread(
                             _dispatch_table_request,
@@ -3848,10 +3849,17 @@ async def play_socket(websocket: WebSocket) -> None:
                             committed,
                         )
                         failed = record.game.mirror_retry is not None
+                        dispatched = True
                     finally:
                         if reports_work:
                             record.game.work.publish = None
                             record.game.work.finish(failed=failed)
+                            if not dispatched:
+                                # Request errors reply only to their sender. End
+                                # the broadcast wait for every other participant.
+                                status = record.game.work.read()
+                                assert status is not None
+                                await _publish_work(record, status)
                     record.touch()
                     await _send_table_response(
                         record,
