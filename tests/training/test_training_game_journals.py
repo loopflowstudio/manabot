@@ -329,7 +329,7 @@ def test_disabled_logging_has_no_writer_or_extra_native_reads(
 @pytest.mark.parametrize("operation", ["step", "step_isolated"])
 @pytest.mark.parametrize("binding", ["fresh", "missing", "inactive"])
 def test_executing_replay_requires_active_fresh_step_binding(
-    tmp_path: Path, operation: str, binding: str
+    tmp_path: Path, operation: str, binding: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
     scope = CaptureScope(tmp_path / "failures", training_game_logs=True)
     with capture_scope(scope):
@@ -353,6 +353,18 @@ def test_executing_replay_requires_active_fresh_step_binding(
     assert result["at_retained_failure"] == (binding == "fresh")
     assert result["matches_binding"] is (True if binding == "fresh" else None)
     assert evidence.games[0].actions == [0]
+    # The operator reads the turn from replay; a bound attempt names it first.
+    reached = result["reached"]
+    assert isinstance(reached, dict) and reached["turn"] >= 1
+    attempts = [
+        json.loads(line)["replay_attempt"]
+        for line in capsys.readouterr().err.splitlines()
+        if line.startswith('{"replay_attempt"')
+    ]
+    assert len(attempts) == (1 if binding == "fresh" else 0)
+    if attempts:
+        assert attempts[0]["action_index"] == 0
+        assert attempts[0]["position"]["turn"] >= 1
 
 
 @pytest.mark.parametrize("seed", [24, 2**64 - 1])

@@ -58,6 +58,18 @@ def matches_retained_error(
     )
 
 
+def _position(observation: managym.Observation) -> dict[str, object]:
+    """Name the reached decision's turn so an operator can locate it in the game."""
+    turn = observation.turn
+    return {
+        "turn": int(turn.turn_number),
+        "phase": str(turn.phase).rsplit(".", 1)[-1],
+        "step": str(turn.step).rsplit(".", 1)[-1],
+        "active_player": int(turn.active_player_id),
+        "game_over": bool(observation.game_over),
+    }
+
+
 class _FrameMismatch(ValueError):
     """Reconstruction diverged before the retained native call was attempted."""
 
@@ -155,7 +167,11 @@ def replay_failure_inputs(evidence: FailureEvidence) -> list[dict[str, object]]:
                 at_retained_failure=False,
                 matches_binding=None,
                 matches_error=None,
-                diagnostic="Reconstructed last-known prefix; pending binding or current setup unavailable",
+                diagnostic=(
+                    "Reconstructed the current known prefix; no native call was pending"
+                    if boundary.phase == "ready"
+                    else "Reconstructed last-known prefix; pending binding or current setup unavailable"
+                ),
             )
         results.append(result)
     return results
@@ -194,12 +210,14 @@ def _replay_game_inputs(
     )
     index = -1
     phase = "reset"
+    # The last decision reconstruction reached, before any failing call.
+    reached: managym.Observation | None = None
     try:
         agreement.at_retained_failure = retained_phase == "reset"
         if evidence.mode == "vector":
-            env.reset_all([p.native() for p in game.players])
+            reached = env.reset_all([p.native() for p in game.players])[0][0]
         else:
-            env.reset([p.native() for p in game.players])
+            reached = env.reset([p.native() for p in game.players])[0]
         phase = "prefix"
         for index, action in enumerate(game.actions):
             if (
@@ -215,15 +233,32 @@ def _replay_game_inputs(
                 agreement.matches_binding = frame == game.frame
                 if not agreement.matches_binding:
                     raise _FrameMismatch("retained pre-command frame differs")
+                if reached is not None:
+                    # Printed before the attempt, so a replay that never returns
+                    # still names the decision its retained call was made at.
+                    print(
+                        json.dumps(
+                            {
+                                "replay_attempt": {
+                                    "stream": game.stream,
+                                    "action_index": index,
+                                    "position": _position(reached),
+                                }
+                            }
+                        ),
+                        file=sys.stderr,
+                        flush=True,
+                    )
             agreement.at_retained_failure = (
                 phase == retained_phase and index == retained_index
             )
             if evidence.mode == "vector":
-                env.step([action])
+                reached = env.step([action])[0][0]
             elif isinstance(action, str):
                 env.execute_semantic_command_json(action)
+                reached = None
             else:
-                env.step(action)
+                reached = env.step(action)[0]
         if evidence.search is not None:
             if game.frame is not None:
                 agreement.matches_binding = (
@@ -271,4 +306,6 @@ def _replay_game_inputs(
         }
     else:
         result = {"status": "advanced", "actions": len(game.actions)}
+    if reached is not None:
+        result["reached"] = _position(reached)
     return {**asdict(agreement), "stream": game.stream, **result}

@@ -889,7 +889,9 @@ where progress stopped.
 
 Each producer snapshot retains the known seed and actual decks, committed
 action prefix, selected pending actions, active streams and last-known
-turn/phase/decision context. Its native boundary distinguishes:
+decision frames (actor and offers); replay below names their turn and phase.
+Collector construction, which resets each producer's first games, is part of the
+`collection` operation. Its native boundary distinguishes:
 
 | Phase | Interpretation |
 | --- | --- |
@@ -924,6 +926,10 @@ reconstructs the last-known prefix and reports its new setup unavailable; it
 never replays proposed seeds or decks as observed native state. Preparation and synchronization snapshots reconstruct the last-known
 prefix where possible and report unavailable binding or setup; replay cannot
 reconstruct an unobserved sampled root or settle the original unknown outcome.
+Each reconstructed stream reports `reached`: the turn, phase, step and active
+player of the last decision replay reached. Before attempting a bound pending
+action, replay prints a `replay_attempt` line to stderr with that decision's
+position, so a replay that also stops before its time limit still names the turn.
 These journals are diagnostic inputs, not optimizer or process-recovery
 checkpoints. Choose a [recovery contract](#recovery) separately to resume work.
 

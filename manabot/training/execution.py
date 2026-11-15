@@ -1243,41 +1243,43 @@ def _execute_regime(
                         assert game_ledger is not None
                         return game_ledger.record(attempt, failures.context())
 
-                    collector = SeatRoutedCollector(
-                        space,
-                        Match(regime.root_match),
-                        Reward(RewardConfig()),
-                        num_envs=stage.streams,
-                        seed=seeds["collection"],
-                        opponent_mode="frozen"
-                        if stage.opponent is not None
-                        else "random"
-                        if stage.behavior == "random"
-                        else "self",
-                        opponent_agent=opponent_agent,
-                        learning_seats=stage.learning_seats,
-                        batch_closure=stage.batch_closure,
-                        games_per_stream=stage.games_per_stream,
-                        recovery_max_microsteps=regime.recovery_max_microsteps,
-                        game_errors=stage.game_errors,
-                        record_attempt=record_game_attempt
-                        if stage.game_errors
-                        else None,
-                        recovery_max_game_microsteps=regime.recovery.max_game_microsteps
-                        if regime.recovery
-                        else None,
-                        root=stage.root,
-                        matchup_curriculum=stage.matchup_curriculum,
-                        deck_source=regime.deck_source,
-                        workers=stage.execution.workers,
-                        adaptive=stage.adaptive,
-                        operation=operation,
-                        numerics=backend.collection.CollectionSession(
-                            device=stage.execution.device,
+                    # Construction resets every producer's first games natively.
+                    with operation("collection"):
+                        collector = SeatRoutedCollector(
+                            space,
+                            Match(regime.root_match),
+                            Reward(RewardConfig()),
+                            num_envs=stage.streams,
                             seed=seeds["collection"],
-                            precision=stage.execution.resolved_precision,
-                        ),
-                    )
+                            opponent_mode="frozen"
+                            if stage.opponent is not None
+                            else "random"
+                            if stage.behavior == "random"
+                            else "self",
+                            opponent_agent=opponent_agent,
+                            learning_seats=stage.learning_seats,
+                            batch_closure=stage.batch_closure,
+                            games_per_stream=stage.games_per_stream,
+                            recovery_max_microsteps=regime.recovery_max_microsteps,
+                            game_errors=stage.game_errors,
+                            record_attempt=record_game_attempt
+                            if stage.game_errors
+                            else None,
+                            recovery_max_game_microsteps=regime.recovery.max_game_microsteps
+                            if regime.recovery
+                            else None,
+                            root=stage.root,
+                            matchup_curriculum=stage.matchup_curriculum,
+                            deck_source=regime.deck_source,
+                            workers=stage.execution.workers,
+                            adaptive=stage.adaptive,
+                            operation=operation,
+                            numerics=backend.collection.CollectionSession(
+                                device=stage.execution.device,
+                                seed=seeds["collection"],
+                                precision=stage.execution.resolved_precision,
+                            ),
+                        )
                     producers.callback(collector.close)
                     experiment = RunContext(
                         RuntimeConfig(

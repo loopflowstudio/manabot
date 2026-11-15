@@ -104,6 +104,24 @@ class SearchInputs(BaseModel):
     capacity: int = 0
 
 
+class NativeBoundary(BaseModel):
+    """Durable call state; cached games never imply an unobserved reset setup."""
+
+    operation: str
+    phase: Literal["preparing", "executing", "synchronizing", "ready"]
+    sequence: int
+    timestamp: float
+    returned: bool = False
+    active: list[bool] = []
+    pending_actions: list[int] = []
+    committed_counts: list[int] = []
+    setup_known: bool = True
+    proposed_seeds: list[int] = []
+    proposed_players: list[list[PlayerSetup] | None] = []
+    last_known_frames: list[str | None] = []
+    frame_prefix_lengths: list[int | None] = []
+
+
 class FailureEvidence(BaseModel):
     model_config = ConfigDict(extra="forbid")
     schema_version: Literal["native-failure-v1"] = Field(
@@ -129,7 +147,7 @@ class FailureEvidence(BaseModel):
     execution_outcome: Literal[
         "failed", "execution_outcome_unknown", "last_command_succeeded"
     ] = "execution_outcome_unknown"
-    boundary: "NativeBoundary | None" = Field(
+    boundary: NativeBoundary | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
 
@@ -137,27 +155,6 @@ class FailureEvidence(BaseModel):
     def resolved_player_policies(self) -> tuple[str, str]:
         """Read either receipt spelling without deprecating retained evidence."""
         return self.player_policies or _retained_player_policies(self.opponent_policy)
-
-
-class NativeBoundary(BaseModel):
-    """Durable call state; cached games never imply an unobserved reset setup."""
-
-    operation: str
-    phase: Literal["preparing", "executing", "synchronizing", "ready"]
-    sequence: int
-    timestamp: float
-    returned: bool = False
-    active: list[bool] = []
-    pending_actions: list[int] = []
-    committed_counts: list[int] = []
-    setup_known: bool = True
-    proposed_seeds: list[int] = []
-    proposed_players: list[list[PlayerSetup] | None] = []
-    last_known_frames: list[str | None] = []
-    frame_prefix_lengths: list[int | None] = []
-
-
-FailureEvidence.model_rebuild()
 
 
 class NativeTrainingTrace(BaseModel):
@@ -479,12 +476,18 @@ class _Capture:
         )
         self._publish(evidence, "preparing")
 
-    def _returned(self, evidence: FailureEvidence) -> None:
+    def _executing(self) -> None:
+        """Publish a reset mutation using its cached, previously observed inputs."""
         if self._cursor is not None:
-            assert self._boundary is not None
+            assert self._call_evidence is not None
+            self._publish(self._call_evidence, "executing")
+
+    def _returned(self) -> None:
+        if self._cursor is not None:
+            assert self._boundary is not None and self._call_evidence is not None
             self._boundary.returned = True
             try:
-                self._publish(self._call_evidence or evidence, "synchronizing")
+                self._publish(self._call_evidence, "synchronizing")
             except OSError as error:
                 error.add_note(
                     "Native operation returned; its durable journal acknowledgment failed"
@@ -581,17 +584,11 @@ class _Capture:
     def _coordinates(self) -> dict[str, object]:
         """Read live owner coordinates equally for failures and pending Commands."""
         scope = _scope.get() or self.scope
+        context = self.frozen_context
+        if context is None:
+            context = scope.context() if scope else {}
         return {
-            "context": {
-                **(
-                    self.frozen_context
-                    if self.frozen_context is not None
-                    else scope.context()
-                    if scope
-                    else {}
-                ),
-                **self.context,
-            },
+            "context": {**context, **self.context},
             "seconds": time.perf_counter() - self.started,
         }
 
@@ -659,12 +656,9 @@ class ScalarCapture(_Capture):
         )
         self.journal = None
         with self._guard(lambda: self.evidence("reset")):
-            if self._cursor is not None:
-                assert self._call_evidence is not None
-                self._publish(self._call_evidence, "executing")
+            self._executing()
             result = env.reset(players)
-            if self._cursor is not None:
-                self._returned(self.evidence("reset"))
+            self._returned()
             self.identities["content_manifest"] = env.content_pack_manifest()
             if self._cursor is not None:
                 self._publish(self.evidence("reset"), "ready")
@@ -696,8 +690,7 @@ class ScalarCapture(_Capture):
             if self._cursor is not None:
                 self._publish(self.evidence(), "executing")
             result = env.step(action)
-            if self._cursor is not None:
-                self._returned(self.evidence())
+            self._returned()
             if self._cursor is not None:
                 self._publish(self.evidence(), "ready")
             return result
@@ -987,12 +980,9 @@ class CapturedVector(_Capture):
             game.players = [PlayerSetup.retain(p) for p in setup]
             game.restart(seed)
         with self._guard(lambda: self._evidence_for(self.games, "reset")):
-            if self._cursor is not None:
-                assert self._call_evidence is not None
-                self._publish(self._call_evidence, "executing")
+            self._executing()
             self.native.reset_each_into_buffers(players)
-        if self._cursor is not None:
-            self._returned(self._evidence_for(self.games, "reset"))
+        self._returned()
         self._synchronize()
 
     def reassign_roots_into_buffers(
@@ -1016,12 +1006,9 @@ class CapturedVector(_Capture):
                 game.players = [PlayerSetup.retain(p) for p in setup]
                 game.restart(seed)
         with self._guard(lambda: self._evidence_for(proposed, "reset")):
-            if self._cursor is not None:
-                assert self._call_evidence is not None
-                self._publish(self._call_evidence, "executing")
+            self._executing()
             self.native.reassign_roots_into_buffers(players)
-        if self._cursor is not None:
-            self._returned(self._evidence_for(self.games, "reset"))
+        self._returned()
         self.games = proposed
         self._synchronize()
 
@@ -1037,12 +1024,9 @@ class CapturedVector(_Capture):
         for game, seed in zip(self.games, seeds, strict=True):
             game.restart(seed)
         with self._guard(lambda: self._evidence_for(self.games, "reset")):
-            if self._cursor is not None:
-                assert self._call_evidence is not None
-                self._publish(self._call_evidence, "executing")
+            self._executing()
             self.native.reset_seeds_into_buffers(seeds)
-        if self._cursor is not None:
-            self._returned(self._evidence_for(self.games, "reset"))
+        self._returned()
         self._synchronize()
 
     def _synchronize(self) -> None:
@@ -1097,12 +1081,9 @@ class CapturedVector(_Capture):
                 active=active,
                 setup_known=not self._sampled_roots,
             )
-        if self._cursor is not None:
-            assert self._call_evidence is not None
-            self._publish(self._call_evidence, "executing")
+        self._executing()
         self.native.replace_failed_into_buffers(active)
-        if self._cursor is not None:
-            self._returned(self._evidence_for(self.games, "reset"))
+        self._returned()
         self._synchronize()
 
     def _step(
@@ -1148,8 +1129,7 @@ class CapturedVector(_Capture):
                 )
             else:
                 self.native.step_into_buffers(actions, active)
-        if self._cursor is not None:
-            self._returned(self._evidence_for(self.games, "step"))
+        self._returned()
         self._synchronize()
 
 
