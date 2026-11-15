@@ -1,10 +1,14 @@
 # Combat and mana decision shapes on the Small TLA model
 
-**Restart in progress: `mtg265-study-20261115`, source `b3b47e82d31b`.**
+**Training restart, source `b3b47e82d31b`.** Baselines are in
+`mtg265-study-20261115`; combat and mana are in `mtg265-study-20261115-l4-48`.
 Repaired combat calibration `1fa799261cc9` completed two updates on seed
 26501, which had failed before its first update on the earlier source.
-The supervisor is preparing six fresh 500-update jobs, then acquiring two
-additional capped L4s beside the one used for calibration. Population and
+Two baseline jobs are active on the original acquired L4. The other four
+jobs were re-admitted to a less restrictive L4 placement after three 80 GB
+create requests returned HTTP400. Their original unstarted requests were
+cancelled at USD0. Read fresh status for placement and update counts; admission
+is not a completed training result. Population and
 arms are unchanged: 900 training/100 held-out decks, 256 streams, common v10,
 baseline/combat-pick/mana-taps at seeds 26501 and 26502. No deck exclusion
 has been needed. Prior cohorts remain failed operational attempts.
@@ -16,11 +20,24 @@ for evaluation, this stays within USD55. Jobs retain the 500-update damping
 horizon with a 21-hour maximum job window and USD15.50 job allowance. This
 shorter allowance fits the first lease after calibration and source setup;
 it does not change the update target. The supply permits no automatic rental.
-The single supervisor `.runs/decision-shapes-restart.py` waits for calibration,
-launches the cohort only on success, waits for terminal outcomes and terminates
-its leases. Machine timers independently cap their windows.
+Calibration succeeded before full submission. The single current supervisor
+`.runs/decision-shapes-watch.py` waits for both study cohorts to terminate, then
+cleans up the leases listed in its machine file. The earlier restart supervisor
+is stopped. Machine timers independently cap their windows.
 
 Read current progress with `uv run etude status mtg265-study-20261115`.
+
+| Arm | Seed 26501 | Seed 26502 |
+| --- | --- | --- |
+| Baseline | `38b377941f9d` | `4218e16c4678` |
+| Combat pick-then-done | `957298cf5b02` | `0bbba4c6eb90` |
+| Manual mana taps | `06b0117497fc` | `a1e699cc6f54` |
+
+Three study leases are provider-confirmed: `mtg265-l4-held-9e942f7adbee`,
+`mtg265-l4-48-held-a8e5905a3b0f`, `mtg265-l4-48-held-57d34622f6b2`.
+The two newer L4s request 8 vCPUs and 48 GB instead of 12 vCPUs and 80 GB; GPU model,
+price, code, model, streams, decks and updates remain unchanged. The manual
+supplies have max 0 and cannot automatically acquire additional machines.
 
 ## Earlier failed full cohort
 
@@ -202,7 +219,17 @@ its prevention proposals are not implemented by this patch.
 
 Repaired calibration evidence: `1fa799261cc9` (combat-pick seed26501)
 completed two updates. Its TrainingRun records 168.26 seconds collecting
-and41.31 seconds learning (212.38 seconds for the stage including other
+and 41.31 seconds learning (212.38 seconds for the stage including other
 work). This is a short single-job placement check, not sustained two-job
 throughput or a learning result. It remains excluded from scored tags by
 its `-calibration` regime ID.
+
+Placement repair, 2026-11-15 UTC: 80 GB requests c3ff7d1f1284 and83ceff99814a
+returned HTTP 400; complete provider inventory found no corresponding pods,
+and termination was requested. A later 80 GB request ff6caf3f30c5 also returned
+HTTP400 and inventory confirmed no pod; its cleanup remains in the supervisor
+list after a manual termination call encountered a busy supply. Those are
+failed create receipts, not additional acquired GPUs. The 48 GB requests acquired
+provider pods opsg4qsv72e1o8 and iz9foqpir9vv9v. The exact reason for the
+provider's 400 replies is not established. No scientific or deck-selection
+change was required for this capacity workaround.
