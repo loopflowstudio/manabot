@@ -1457,6 +1457,7 @@ impl Game {
                             .zones
                             .size(ZoneType::Library, owner)
                             .saturating_sub(2);
+                        self.state.known_library_mut(owner).forget_order();
                         self.state
                             .zones
                             .reposition(ZoneType::Library, owner, object, below_top);
@@ -2457,12 +2458,15 @@ impl Game {
                     top.push(*object_id);
                 }
                 if remaining.is_empty() {
+                    self.state.known_library_mut(*player).forget_order();
                     for object in bottom.iter().rev() {
                         self.state
                             .zones
                             .reposition(ZoneType::Library, *player, *object, 0);
                     }
                     self.put_on_top_of_library(*player, top);
+                    self.remember_library_objects(*player, top);
+                    self.remember_library_objects(*player, bottom);
                     self.run_frame(suspended.frame);
                 } else {
                     *self.state.suspended_decision_mut() = Some(suspended);
@@ -2581,6 +2585,7 @@ impl Game {
                     LibraryEnd::Bottom => self.put_on_bottom_of_library(*object_id),
                     LibraryEnd::Top => self.put_on_top_of_library(*player, object_ids),
                 }
+                self.remember_library_objects(*player, &object_ids[..*next]);
                 if *next == object_ids.len() {
                     self.run_frame(suspended.frame);
                 } else {
@@ -3235,6 +3240,9 @@ impl Game {
             }
             LibraryEnd::Top => self.put_on_top_of_library(player, &objects),
         }
+        if random_order {
+            self.state.known_library_mut(player).forget_order();
+        }
         None
     }
 
@@ -3285,11 +3293,14 @@ impl Game {
     /// Reorder inspected library cards, first to draw first. Their exact
     /// objects survive: placement within a zone emits no zone-change events.
     fn put_on_top_of_library(&mut self, player: PlayerId, objects: &[ObjectId]) {
+        self.state.known_library_mut(player).forget_order();
         for object in objects.iter().rev() {
             self.state
                 .zones
                 .reposition(ZoneType::Library, player, *object, usize::MAX);
         }
+        self.remember_library_objects(player, objects);
+        self.assert_library_knowledge();
     }
 
     /// Put each of `cards` still in exile on the bottom of its owner's
@@ -3318,6 +3329,7 @@ impl Game {
             LibraryEnd::Bottom => 0,
             LibraryEnd::Top => usize::MAX,
         };
+        self.state.known_library_mut(owner).forget_order();
         self.state
             .zones
             .reposition(ZoneType::Library, owner, object, index);

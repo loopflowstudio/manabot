@@ -140,9 +140,23 @@ impl Game {
 
     /// Whether `player` may look at the top card of their library (CR 401.2).
     pub(crate) fn looks_at_library_top(&self, player: PlayerId) -> bool {
-        self.active_permanent_has(player, |ability| {
+        let revisions = self.state.revisions();
+        if let Some(visible) = self
+            .derived
+            .borrow_mut()
+            .at(revisions)
+            .library_top_visibility[player.0]
+        {
+            return visible;
+        }
+        let visible = self.active_permanent_has(player, |ability| {
             *ability == StaticAbility::LookAtLibraryTop
-        })
+        });
+        self.derived
+            .borrow_mut()
+            .at(revisions)
+            .library_top_visibility[player.0] = Some(visible);
+        visible
     }
 
     /// The top card of `player`'s library, when a permanent they control

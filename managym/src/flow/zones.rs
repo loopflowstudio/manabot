@@ -46,11 +46,30 @@ impl Game {
         definition: CardDefId,
         count: u32,
     ) {
-        let known = &mut self.state.players[player.0].known_hand;
+        let known = self.state.known_hand_mut(player);
         if count == 0 {
             known.remove(&definition);
         } else {
             known.insert(definition, count);
+        }
+    }
+
+    /// Retain only independent minima after a hand departure. A definition
+    /// is supplied only when the opponent can identify the departing card.
+    pub(crate) fn forget_hand_card(&mut self, player: PlayerId, definition: Option<CardDefId>) {
+        let known = self.state.known_hand_mut(player);
+        if let Some(definition) = definition {
+            if let Some(count) = known.get_mut(&definition) {
+                *count = count.saturating_sub(1);
+                if *count == 0 {
+                    known.remove(&definition);
+                }
+            }
+        } else {
+            known.retain(|_, count| {
+                *count = count.saturating_sub(1);
+                *count > 0
+            });
         }
     }
 
@@ -109,10 +128,12 @@ impl Game {
     }
 
     pub(crate) fn shuffle_library(&mut self, player: PlayerId) {
+        self.state.known_library_mut(player).forget_order();
         let state = &mut *self.state;
         state
             .zones
             .shuffle(ZoneType::Library, player, &mut state.rng);
+        self.assert_library_knowledge();
     }
 
     /// Reveal before moving; public hand knowledge retains definition counts,
@@ -123,16 +144,16 @@ impl Game {
             owner: player,
             definition,
         });
+        let before = self.state.players[player.0]
+            .known_hand
+            .get(&definition)
+            .copied()
+            .unwrap_or(0);
         let moved = self.move_object(object, ZoneType::Hand);
         if self.state.object(moved).is_ok()
             && self.state.zones.contains(moved, ZoneType::Hand, player)
         {
-            let count = self.state.players[player.0]
-                .known_hand
-                .get(&definition)
-                .copied()
-                .unwrap_or(0);
-            self.set_known_hand_count(player, definition, count + 1);
+            self.set_known_hand_count(player, definition, before + 1);
         }
     }
 
@@ -265,7 +286,14 @@ impl Game {
                 if let Some(capture) = &mut self.card_capture {
                     capture.drawing = Some(object);
                 }
-                self.move_object(object, ZoneType::Hand);
+                self.move_object_with_entry(
+                    object,
+                    ZoneType::Hand,
+                    ZoneEntry {
+                        library_top_departure: true,
+                        ..Default::default()
+                    },
+                );
                 if let Some(capture) = &mut self.card_capture {
                     capture.drawing = None;
                 }
@@ -574,28 +602,24 @@ impl Game {
         let departing_ref = old_zone.map(|_| object_id);
         let owner = self.state.entry_object(object_id).owner;
 
-        if old_zone == Some(ZoneType::Hand) && to_zone != ZoneType::Hand {
-            let definition = self.state[object_id].definition_id;
-            let count = self.state.players[owner.0]
-                .known_hand
-                .get(&definition)
-                .copied()
-                .unwrap_or(0);
-            // Public departures remove one known minimum, regardless of which
-            // identical copy left. A secret departure invalidates all facts:
-            // retaining a definition-specific decrement would leak that card.
-            if to_zone == ZoneType::Library || entry.face_down {
-                let definitions: Vec<_> = self.state.players[owner.0]
-                    .known_hand
-                    .keys()
-                    .copied()
-                    .collect();
-                for definition in definitions {
-                    self.set_known_hand_count(owner, definition, 0);
-                }
-            } else if count > 0 {
-                self.set_known_hand_count(owner, definition, count - 1);
+        let definition = self.state.entry_object(object_id).definition_id;
+        let public_source = old_zone.is_some_and(|zone| {
+            !matches!(zone, ZoneType::Hand | ZoneType::Library)
+                && !(zone == ZoneType::Exile && self.is_foretold(object_id))
+        });
+        let known_top = if old_zone == Some(ZoneType::Library) {
+            if entry.library_top_departure {
+                self.state.known_library_mut(owner).remove_top()
+            } else {
+                self.state.known_library_mut(owner).forget_order();
+                None
             }
+        } else {
+            None
+        };
+        if old_zone == Some(ZoneType::Hand) && to_zone != ZoneType::Hand {
+            let seen = (to_zone != ZoneType::Library && !entry.face_down).then_some(definition);
+            self.forget_hand_card(owner, seen);
         }
 
         let mut event_controller = owner;
@@ -636,6 +660,23 @@ impl Game {
         let object_id = self
             .state
             .mint_appearance(object_id, holder, to_zone, entry.entry_copy);
+        let entered_definition = self.state[object_id].definition_id;
+        if to_zone == ZoneType::Library {
+            // A copied or transformed source can restore a different printing.
+            // Never carry its old visible definition into the hidden zone.
+            let same_definition = entered_definition == definition;
+            let public = (public_source && same_definition).then_some(entered_definition);
+            let own = ((public_source || old_zone == Some(ZoneType::Hand)) && same_definition)
+                .then_some(entered_definition);
+            self.state.known_library_mut(owner).insert_top(public, own);
+        }
+        if to_zone == ZoneType::Hand && known_top == Some(entered_definition) {
+            *self
+                .state
+                .known_hand_mut(owner)
+                .entry(entered_definition)
+                .or_default() += 1;
+        }
         if old_zone == Some(ZoneType::Battlefield) && to_zone == ZoneType::Graveyard {
             self.state.turn.graveyard_from_battlefield.push(object_id);
         }
@@ -716,6 +757,7 @@ impl Game {
             self.invalidate_mana_cache(PlayerId(0));
             self.invalidate_mana_cache(PlayerId(1));
         }
+        self.assert_library_knowledge();
         true
     }
 

@@ -16,8 +16,8 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from managym.decision import SEMANTIC_DECISION_VERSION
 
-POSSIBLE_WORLD_SPACE_VERSION: int = 3
-WORLD_SCHEMA_IDENTITY: str = "managym.possible-world-space/v3"
+POSSIBLE_WORLD_SPACE_VERSION: int = 4
+WORLD_SCHEMA_IDENTITY: str = "managym.possible-world-space/v4"
 
 
 class PossibleWorldError(ValueError):
@@ -115,6 +115,7 @@ class PossibleWorldSpace:
     total_weight: int
     worlds: tuple[PossibleWorld, ...]
     known_hand: tuple[tuple[str, int], ...] = ()
+    known_library: tuple[tuple[str, int], ...] = ()
     # Public count of the opponent's face-down foretold cards; the pool holds
     # their names, so they are neither in hand nor in the library.
     foretold: int = 0
@@ -155,6 +156,17 @@ class PossibleWorldSpace:
         ):
             raise PossibleWorldError(
                 "known_hand must contain positive definition counts"
+            )
+        known_library = payload.get("known_library", {})
+        if not isinstance(known_library, dict) or any(
+            not isinstance(name, str)
+            or not name
+            or type(count) is not int
+            or count <= 0
+            for name, count in known_library.items()
+        ):
+            raise PossibleWorldError(
+                "known_library must contain positive definition counts"
             )
         foretold = payload["foretold"]
         if type(foretold) is not int or foretold < 0:
@@ -198,6 +210,7 @@ class PossibleWorldSpace:
             total_weight=int(payload["total_weight"]),
             worlds=rows,
             known_hand=tuple(sorted(known_hand.items())),
+            known_library=tuple(sorted(known_library.items())),
             foretold=foretold,
             content_manifest_identity=content_manifest_identity,
             _engine=engine,
@@ -313,7 +326,22 @@ class PossibleWorldSpace:
             count <= 0 or count > pool.get(name, 0) for name, count in self.known_hand
         ):
             raise PossibleWorldError("known hand is outside the pool or hand size")
+        for name, count in self.known_library:
+            if (
+                not isinstance(name, str)
+                or type(count) is not int
+                or count <= 0
+                or count > pool.get(name, 0)
+            ):
+                raise PossibleWorldError("known library is outside the unseen pool")
         for world in self.worlds:
+            if any(
+                dict(world.hand).get(name, 0) + count > pool.get(name, 0)
+                for name, count in self.known_library
+            ):
+                raise PossibleWorldError(
+                    "a canonical world consumes known library cards"
+                )
             if sum(count for _, count in world.hand) != self.hand_size:
                 raise PossibleWorldError("a canonical world has the wrong hand size")
             if any(
@@ -350,7 +378,7 @@ class PossibleWorldSpace:
                 self.content_manifest_identity,
             )
         )
-        for counts in (self.pool, self.known_hand):
+        for counts in (self.pool, self.known_hand, self.known_library):
             total += sys.getsizeof(counts)
             for name, count in counts:
                 total += sys.getsizeof((name, count))

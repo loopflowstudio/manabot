@@ -96,6 +96,7 @@ impl Game {
         }
         for player in [&agent.agent, &agent.opponent] {
             ids.extend(player.known_hand.keys());
+            ids.extend(player.known_library.values());
             for counts in [
                 &player.main_counts,
                 &player.unseen_counts,

@@ -194,6 +194,14 @@ impl Default for ObservationEncoderConfig {
 
 impl ObservationEncoderConfig {
     /// Candidate rows share the action axis, but never consume object capacity.
+    pub fn known_library_len(&self) -> usize {
+        if self.layout == InputLayout::OneToken {
+            4 * crate::state::knowledge::KNOWN_LIBRARY_ROWS
+        } else {
+            0
+        }
+    }
+
     pub fn name_candidates_len(&self) -> usize {
         NAME_DIM * self.max_actions
     }
@@ -300,6 +308,7 @@ pub struct EncodedObservation {
     pub facts: Vec<f32>,
     pub semantic_cards: Vec<f32>,
     pub known_hand: Vec<f32>,
+    pub known_library: Vec<f32>,
     pub decklists: Vec<f32>,
     pub player_turn_state: Vec<f32>,
     pub card_turn_state: Vec<f32>,
@@ -333,6 +342,7 @@ pub struct EncodedObservationMut<'a> {
     pub facts: &'a mut [f32],
     pub semantic_cards: &'a mut [f32],
     pub known_hand: &'a mut [f32],
+    pub known_library: &'a mut [f32],
     pub decklists: &'a mut [f32],
     pub player_turn_state: &'a mut [f32],
     pub card_turn_state: &'a mut [f32],
@@ -369,6 +379,7 @@ impl EncodedObservation {
             facts: &mut self.facts,
             semantic_cards: &mut self.semantic_cards,
             known_hand: &mut self.known_hand,
+            known_library: &mut self.known_library,
             decklists: &mut self.decklists,
             player_turn_state: &mut self.player_turn_state,
             card_turn_state: &mut self.card_turn_state,
@@ -472,6 +483,7 @@ pub fn encode(
         facts: vec![0.0; config.facts_len()],
         semantic_cards: vec![0.0; 2 * config.max_cards_per_player],
         known_hand: vec![0.0; 4 * config.max_cards_per_player],
+        known_library: vec![0.0; config.known_library_len()],
         decklists: vec![0.0; config.decklists_len()],
         player_turn_state: vec![0.0; config.player_turn_state_len()],
         card_turn_state: vec![0.0; config.card_turn_state_len()],
@@ -533,6 +545,18 @@ pub fn encode_into(
         out.known_hand.len(),
         4 * config.max_cards_per_player,
     )?;
+    validate_buffer_len(
+        "known_library",
+        out.known_library.len(),
+        config.known_library_len(),
+    )?;
+    if config.layout == InputLayout::Legacy
+        && (!obs.agent.known_library.is_empty() || !obs.opponent.known_library.is_empty())
+    {
+        return Err(ObservationEncodeError::Unrepresentable(
+            "known library positions require the current policy input".into(),
+        ));
+    }
     validate_buffer_len("decklists", out.decklists.len(), config.decklists_len())?;
     validate_buffer_len(
         "player_turn_state",
@@ -712,6 +736,7 @@ pub fn encode_into(
     out.player_turn_state.fill(0.0);
     out.card_turn_state.fill(0.0);
     out.known_hand.fill(0.0);
+    out.known_library.fill(0.0);
     out.decklists.fill(0.0);
     out.agent_player.fill(0.0);
     out.opponent_player.fill(0.0);
@@ -751,6 +776,21 @@ pub fn encode_into(
         for (slot, card) in cards.iter().enumerate() {
             out.semantic_cards[seat * config.max_cards_per_player + slot] =
                 (card.registry_key + 1) as f32;
+        }
+        if config.layout == InputLayout::OneToken {
+            let capacity = crate::state::knowledge::KNOWN_LIBRARY_ROWS;
+            if player.known_library.len() > capacity {
+                return Err(ObservationEncodeError::Capacity {
+                    field: "known library",
+                    capacity,
+                    actual: player.known_library.len(),
+                });
+            }
+            for (slot, (position, definition)) in player.known_library.iter().enumerate() {
+                let offset = (seat * capacity + slot) * 2;
+                out.known_library[offset] = (definition + 1) as f32;
+                out.known_library[offset + 1] = (position + 1) as f32;
+            }
         }
         for (slot, (definition, count)) in player.known_hand.iter().enumerate() {
             let offset = (seat * config.max_cards_per_player + slot) * known_hand::WIDTH;
@@ -2070,6 +2110,7 @@ mod tests {
                 zone_counts: [40, 2, 1, 0, 0, 0, 0],
                 graveyard_lessons: 0,
                 known_hand: Default::default(),
+                known_library: Default::default(),
                 main_counts: Default::default(),
                 unseen_counts: Default::default(),
                 sideboard_counts: Default::default(),
@@ -2107,6 +2148,7 @@ mod tests {
                 zone_counts: [39, 3, 1, 0, 0, 0, 0],
                 graveyard_lessons: 0,
                 known_hand: Default::default(),
+                known_library: Default::default(),
                 main_counts: Default::default(),
                 unseen_counts: Default::default(),
                 sideboard_counts: Default::default(),
@@ -2576,6 +2618,7 @@ mod tests {
             relations: &mut relations,
             semantic_cards: &mut semantic_cards,
             known_hand: &mut known_hand,
+            known_library: &mut [0.0; 80],
             decklists: &mut decklists,
             player_turn_state: &mut player_turn_state,
             card_turn_state: &mut card_turn_state,

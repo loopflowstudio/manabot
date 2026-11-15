@@ -2000,6 +2000,17 @@ fn own_ordered_library_top_survives_hidden_world_sampling() {
         );
         game.resolve_top_of_stack();
         game.publish_action_space(game.suspended_decision_action_space().unwrap());
+        let observation = crate::agent::observation::Observation::for_player(&game, player);
+        assert_eq!(
+            observation
+                .agent
+                .unseen_counts
+                .as_ref()
+                .unwrap()
+                .values()
+                .sum::<u32>() as usize,
+            game.state.zones.size(ZoneType::Library, player) - 4
+        );
         checked_command(&mut game, Action::Decline { player });
         while game.state.suspended_decision.is_some() {
             let choice = game
@@ -2020,7 +2031,16 @@ fn own_ordered_library_top_survives_hidden_world_sampling() {
                 .collect()
         };
         let known = definitions(&game);
-        for seed in 0..16 {
+        game.refresh_priority_actions(player);
+        let space = crate::possible_worlds::PossibleWorldSpace::for_viewer(&game, player);
+        assert_eq!(
+            crate::agent::observation::Observation::for_player(&game, player)
+                .agent
+                .known_library
+                .len(),
+            4
+        );
+        for seed in 0..64 {
             let mut sampled = game.clone();
             sampled.determinize(player, seed).unwrap();
             assert_eq!(
@@ -2028,7 +2048,24 @@ fn own_ordered_library_top_survives_hidden_world_sampling() {
                 known,
                 "seed {seed} sampled a library top its owner knows is impossible"
             );
+            let materialized = space
+                .materialize_index(
+                    &game,
+                    0,
+                    seed,
+                    crate::possible_worlds::MaterializeMode::PreserveViewerRoot,
+                )
+                .unwrap();
+            assert_eq!(definitions(&materialized), known);
         }
+        game.draw_cards(player, 1);
+        for seed in 0..16 {
+            let mut sampled = game.clone();
+            sampled.determinize(player, seed).unwrap();
+            assert_eq!(&definitions(&sampled)[..3], &known[1..]);
+        }
+        game.shuffle_library(player);
+        assert!(game.state.players[player.0].known_library.is_empty());
     }
 }
 
@@ -3544,6 +3581,10 @@ fn hidden_selection_foretold_measure_preserves_every_committed_slot() {
                 ..ExileCastGrant::new(object, player)
             });
     }
+    // The constructed root starts with unknown library positions. The
+    // visible setup moves above would otherwise disclose all three Bolts.
+    assert_eq!(root.state.players[player.0].known_library.public.len(), 3);
+    root.state.players[player.0].known_library.forget_order();
     root.run_frame(EffectFrame::new(
         player,
         vec![Effect::search_library(
@@ -3986,6 +4027,7 @@ fn hidden_knowledge_private_selection_does_not_disclose_departing_position() {
         let (mut root, _, _) = fixture(player);
         // Publicly place three cards on top before the private inspection.
         // A knowledge implementation must retain these exact positions.
+        let mut visible = Vec::new();
         for name in ["Gray Ogre", "Lightning Bolt", "Mountain"] {
             let object = root
                 .state
@@ -3995,9 +4037,12 @@ fn hidden_knowledge_private_selection_does_not_disclose_departing_position() {
                 .copied()
                 .find(|object| root.state[*object].name == name)
                 .expect("fixture has each definition in the library");
-            let public = root.move_object(object, ZoneType::Graveyard);
-            root.move_object(public, ZoneType::Library);
+            visible.push(root.move_object(object, ZoneType::Graveyard));
         }
+        for object in visible {
+            root.move_object(object, ZoneType::Library);
+        }
+        assert_eq!(root.state.players[player.0].known_library.public.len(), 3);
         root.run_frame(EffectFrame::new(
             player,
             vec![Effect::LookAndSelect {
@@ -4032,5 +4077,250 @@ fn hidden_knowledge_private_selection_does_not_disclose_departing_position() {
         }
         assert_eq!(observations[0], observations[1]);
         assert_eq!(observations[1], observations[2]);
+    }
+}
+
+#[test]
+fn hidden_knowledge_public_positions_survive_both_samplers_and_private_refresh() {
+    use crate::{agent::observation::Observation, possible_worlds::PossibleWorldSpace};
+    for owner in [PlayerId(0), PlayerId(1)] {
+        let viewer = PlayerId(1 - owner.0);
+        let (mut game, _, _) = fixture(owner);
+        let mut visible = Vec::new();
+        for name in ["Lightning Bolt", "Mountain"] {
+            let object = game
+                .state
+                .zones
+                .zone_objects(ZoneType::Library, owner)
+                .iter()
+                .copied()
+                .find(|object| game.state[*object].name == name)
+                .unwrap();
+            visible.push(game.move_object(object, ZoneType::Graveyard));
+        }
+        for object in visible {
+            game.move_object(object, ZoneType::Library);
+        }
+        game.refresh_priority_actions(viewer);
+        let original = Observation::for_player(&game, viewer);
+        assert_eq!(original.opponent.known_library.len(), 2);
+        let space = PossibleWorldSpace::for_viewer(&game, viewer);
+        assert_eq!(space.projection().known_library.values().sum::<u32>(), 2);
+        let before = game.state.deterministic_hash();
+        for seed in 0..16 {
+            let mut sampled = game.clone();
+            sampled.determinize(viewer, seed).unwrap();
+            assert_eq!(
+                Observation::for_player(&sampled, viewer)
+                    .opponent
+                    .known_library,
+                original.opponent.known_library
+            );
+            let knowledge = &sampled.state.players[owner.0].known_library;
+            assert_eq!(knowledge.own, knowledge.public);
+            sampled.determinize(owner, seed).unwrap();
+            sampled.assert_library_knowledge();
+        }
+        for index in 0..space.worlds().len() {
+            let mut branch = space
+                .materialize_index(
+                    &game,
+                    index,
+                    index as u64,
+                    crate::possible_worlds::MaterializeMode::PreserveViewerRoot,
+                )
+                .unwrap();
+            assert_eq!(
+                Observation::for_player(&branch, viewer)
+                    .opponent
+                    .known_library,
+                original.opponent.known_library
+            );
+            branch.determinize(owner, index as u64).unwrap();
+            branch.assert_library_knowledge();
+        }
+        assert_eq!(game.state.deterministic_hash(), before);
+        let definition = game.state[game.library_top_objects(owner, 1)[0]].definition_id;
+        let count = game.state.players[owner.0]
+            .known_hand
+            .get(&definition)
+            .copied()
+            .unwrap_or(0);
+        game.draw_cards(owner, 1);
+        assert_eq!(
+            game.state.players[owner.0].known_hand.get(&definition),
+            Some(&(count + 1))
+        );
+        assert_eq!(
+            Observation::for_player(&game, viewer)
+                .opponent
+                .known_library
+                .len(),
+            1
+        );
+        game.shuffle_library(owner);
+        assert!(game.state.players[owner.0].known_library.is_empty());
+        assert_eq!(
+            game.state.players[owner.0].known_hand.get(&definition),
+            Some(&(count + 1))
+        );
+    }
+}
+
+#[test]
+fn hidden_knowledge_secret_hand_departure_weakens_each_minimum_without_identifying_it() {
+    for owner in [PlayerId(0), PlayerId(1)] {
+        let (mut game, _, _) = fixture(owner);
+        game.remember_hand(owner);
+        let before = game.state.players[owner.0].known_hand.clone();
+        let hand = game
+            .state
+            .zones
+            .zone_objects(ZoneType::Hand, owner)
+            .to_vec();
+        let mut views = Vec::new();
+        for object in hand {
+            let mut branch = game.clone();
+            branch.move_object(object, ZoneType::Library);
+            let expected: BTreeMap<_, _> = before
+                .iter()
+                .filter_map(|(definition, count)| (*count > 1).then_some((*definition, count - 1)))
+                .collect();
+            assert_eq!(branch.state.players[owner.0].known_hand, expected);
+            views.push(
+                crate::agent::observation::Observation::for_player(&branch, PlayerId(1 - owner.0))
+                    .to_json(),
+            );
+        }
+        assert!(views.windows(2).all(|pair| pair[0] == pair[1]));
+    }
+}
+
+#[test]
+fn hidden_knowledge_private_cap_keeps_complete_public_facts() {
+    for owner in [PlayerId(0), PlayerId(1)] {
+        let (mut game, _, _) = fixture(owner);
+        let objects = game.library_top_objects(owner, 30);
+        let public: BTreeMap<_, _> = objects
+            .iter()
+            .enumerate()
+            .skip(10)
+            .take(10)
+            .map(|(position, object)| (position, game.state[*object].definition_id))
+            .collect();
+        let private: BTreeMap<_, _> = objects
+            .iter()
+            .enumerate()
+            .skip(20)
+            .take(10)
+            .map(|(position, object)| (position, game.state[*object].definition_id))
+            .collect();
+        game.state.players[owner.0].known_library.public = public.clone();
+        game.state.players[owner.0].known_library.own = private;
+        game.remember_library_objects(owner, &objects[..1]);
+        assert_eq!(game.state.players[owner.0].known_library.public, public);
+        let facts = game.library_facts(owner, owner);
+        assert_eq!(facts.len(), 20);
+        assert!(public
+            .iter()
+            .all(|(position, definition)| facts.get(position) == Some(definition)));
+        for seed in 0..16 {
+            let mut branch = game.clone();
+            branch.determinize(owner, seed).unwrap();
+            branch.assert_library_knowledge();
+            assert_eq!(branch.library_facts(owner, owner), facts);
+        }
+    }
+}
+
+#[test]
+fn hidden_knowledge_public_prefix_survives_a_private_pending_inspection() {
+    use crate::{
+        agent::observation::Observation,
+        flow::decision::EffectFrame,
+        possible_worlds::{MaterializeMode, PossibleWorldSpace},
+    };
+    for owner in [PlayerId(0), PlayerId(1)] {
+        let viewer = PlayerId(1 - owner.0);
+        let (mut game, _, _) = fixture(owner);
+        let mut visible = Vec::new();
+        for name in ["Gray Ogre", "Lightning Bolt", "Mountain"] {
+            let object = game
+                .state
+                .zones
+                .zone_objects(ZoneType::Library, owner)
+                .iter()
+                .copied()
+                .find(|object| game.state[*object].name == name)
+                .unwrap();
+            visible.push(game.move_object(object, ZoneType::Graveyard));
+        }
+        for object in visible {
+            game.move_object(object, ZoneType::Library);
+        }
+        game.run_frame(EffectFrame::new(owner, vec![Effect::Surveil { count: 3 }]));
+        game.publish_action_space(game.suspended_decision_action_space().unwrap());
+        let known = Observation::for_player(&game, viewer)
+            .opponent
+            .known_library;
+        assert_eq!(known.len(), 3);
+        for seed in 0..16 {
+            let mut branch = game.clone();
+            branch.determinize(viewer, seed).unwrap();
+            assert_eq!(
+                Observation::for_player(&branch, viewer)
+                    .opponent
+                    .known_library,
+                known
+            );
+        }
+        let space = PossibleWorldSpace::for_viewer(&game, viewer);
+        for index in 0..space.worlds().len() {
+            let branch = space
+                .materialize_index(
+                    &game,
+                    index,
+                    index as u64,
+                    MaterializeMode::RefreshOpponentCommitment,
+                )
+                .unwrap();
+            assert_eq!(
+                Observation::for_player(&branch, viewer)
+                    .opponent
+                    .known_library,
+                known
+            );
+        }
+    }
+}
+
+#[test]
+fn hidden_knowledge_transient_departures_cannot_leave_false_hidden_zone_facts() {
+    for owner in [PlayerId(0), PlayerId(1)] {
+        for zone in [ZoneType::Library, ZoneType::Hand] {
+            let (mut game, _, _) = fixture(owner);
+            let inspected = game.library_top_objects(owner, 3);
+            game.remember_library_objects(owner, &inspected);
+            let token = game.create_token("token.ally", owner, false).unwrap();
+            let object = game.permanent_object(token).unwrap();
+            game.move_object(object, zone);
+            if zone == ZoneType::Hand {
+                game.reveal_hand(owner);
+            }
+            let before = game.state.players[owner.0].known_hand.clone();
+            game.finish_state_based_batch();
+            game.assert_library_knowledge();
+            if zone == ZoneType::Library {
+                assert!(game.state.players[owner.0].known_library.is_empty());
+            } else {
+                let expected: BTreeMap<_, _> = before
+                    .into_iter()
+                    .filter_map(|(definition, count)| {
+                        (count > 1).then_some((definition, count - 1))
+                    })
+                    .collect();
+                assert_eq!(game.state.players[owner.0].known_hand, expected);
+            }
+        }
     }
 }

@@ -463,7 +463,12 @@ not block previously playable cards from play; track those defects as bug
 Tasks. Playable does not mean bug-free. A test about one card goes in
 `managym/cards/tests/cards/<set>.rs`, the set file of that card; engine rules
 stay in `managym/tests/rules/`, and shared scenario helpers live in
-`managym/tests/support/`. Keep decklists separate from behavior. Keep long printed text in
+`managym/tests/support/`. Keep decklists separate from behavior. Constructed
+position helpers discard facts their injections can invalidate: direct library
+reorders clear positional knowledge, and removing hand cards clears hand
+minima. Ordinary rules moves update facts through the engine hooks. Viewer-knowledge writes use
+`TrackedState`'s narrow accessors: they do not invalidate layered-characteristic
+or mana caches. Keep long printed text in
 a local `text_box` binding so rustfmt can format the definition.
 The default pack registers every definition in name order (`cards/content_pack.rs`).
 Card tests mirror the set files: `managym/cards/tests/cards/<set>.rs`, one module

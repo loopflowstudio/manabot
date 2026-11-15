@@ -128,6 +128,8 @@ pub(crate) struct DerivedCache {
     /// Indexed by PermanentId, as are the authoritative permanent slots.
     characteristics: Vec<Option<Arc<Characteristics>>>,
     pub(super) trigger_index: Option<Arc<TriggerIndex>>,
+    /// Layered permission, shared by knowledge updates and viewer projections.
+    pub(super) library_top_visibility: [Option<bool>; 2],
     /// Live `BoardScan`s of this game; a fork starts with none.
     #[cfg(debug_assertions)]
     scans: ScanCount,
@@ -211,6 +213,7 @@ impl DerivedCache {
             self.trigger_index = None;
         }
         if board_changed {
+            self.library_top_visibility = [None; 2];
             self.board = None;
         }
         self.revisions = revisions;

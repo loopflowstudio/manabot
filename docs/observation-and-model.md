@@ -28,7 +28,7 @@ filters hidden information.
 | Local facts and links | Open-ended details such as counters, plus attachment and blocking links. |
 | Current continuation | The pending decision: stack entries, targets, modes and suspended payments. |
 | Shared effects | Each active effect once, with the objects it affects. |
-| Disclosed decklists and hidden-card knowledge | What this seat is allowed to know: the lists, and which hidden cards it has placed in a hand or a stretch of a library. |
+| Known hand, library positions and disclosed decklists | What this seat is allowed to know. |
 | Legal actions and focus objects | Every offered action and up to two objects it refers to. |
 | Card definitions | Typed rules tokens derived from each card's native definition. |
 
@@ -405,8 +405,8 @@ Capacities are configuration; widths are the layout.
 | `relations` | 64 × 49 | Stack entries, targets, clauses, modes, costs, suspended payments, waiting triggers |
 | `facts` | 512 × 12 (`max_facts`) | One row per object and detail of an open vocabulary |
 | `effects`, `effect_details`, `effect_members` | 128 × 18, 4096 × 3, 2048 × 2 | Each active effect once, with its payload tokens and affected objects |
+| `known_library` | 2 × 20 × 2 | Exact library facts: definition + 1, position from top + 1; zero padding |
 | `decklists`, `known_hand`, `semantic_cards` | 2 × 60 × 5, 2 × 60 × 2, 2 × 60 | Disclosed lists, known-hand minima, definition joins |
-| `knowledge_segments`, `knowledge_bags`, `unknown_cards` | 2 × 13 × 3, 2 × 60 × 15, 2 | [Hidden-card knowledge](#hidden-card-knowledge) beyond the known hand |
 | `actions`, `action_focus`, `name_candidates` | 512 × 22, 512 × 2, 512 × 4 | Legal actions, the objects each names, name choices |
 | `events` | 32 × 7, or 32 × 12 with recent events | Public events |
 
@@ -529,57 +529,28 @@ definitions; this is exercised only by the offline large-vocabulary fixture.
 This does not claim that the supported catalog exhausts every name legal under
 Magic's rules, and does not broaden deck admission.
 
-### Hidden-card knowledge
+### Exact library knowledge
 
-**Proposed (Task f1a44c; not implemented).** These buffers and backend reads
-are the intended next layout, pending native state and sampler implementation.
-The disjoint-bag inspection rule is under review: revealing a hand can leave
-correlated library constraints that these rows cannot express exactly. The
-proposal needs an explicit coarsening rule or a richer constraint model before
-implementation can continue.
+The native observation's `known_library` maps a zero-based library position
+from the top to a card definition. The owner sees the union of public and
+private facts; an opponent sees public facts only. The current policy input
+carries twenty rows per seat (ten public plus ten private, with coinciding
+positions represented once). Deprecated inputs v9/v10 refuse an observation
+that requires these facts. No old checkpoint is relabeled compatible: the new
+buffer shape is part of world binding.
 
-The engine keeps what each seat knows about hidden cards as segments and bags
-([the engine guide](engine.md#hidden-card-knowledge) has the rules and a worked
-example). The policy input carries it per seat, agent first: the agent's row
-holds what the agent knows about its own library, and the opponent's row what
-the agent knows about the opponent's hidden cards.
+Native and Python encoders use the same definition joins and one-based
+position encoding. Prepared resolves definitions once and weights each by the
+reciprocal of its one-based position. Torch adds this pooled vector, divided
+by 60, beside hand and decklist knowledge. MLX currently admits only input v9 and continues to refuse v11;
+these rows do not extend the deprecated layout. It is a minimal live
+read, with no measured claim about learning or an ability to infer joint
+constraints. The text observation states each exact position in words.
 
-| Key | One row is | Columns |
-| --- | --- | --- |
-| `known_hand` | a definition known to be in the hand | `definition`, `count` |
-| `knowledge_segments` | a segment, top of library to bottom, then hand and face-down exile | `kind`, `size`, `order` |
-| `knowledge_bags` | one definition of one bag that reaches beyond the hand | `definition`, `count`, then one flag per segment row |
-| `unknown_cards` | (one value per seat) | hidden cards that no disclosed list or bag accounts for |
-
-After an opponent whose hand was seen to hold A, B and C draws three and puts
-two cards on top of their library, the opponent's seat has a hand segment of
-size 4, a top segment of size 2, the rest of the library, and three
-`knowledge_bags` rows (A, B and C, count 1 each) with the hand and top flags
-set. `known_hand` is empty for that seat until the two cards are drawn again.
-
-- Hand-only bags stay in `known_hand` and are not repeated in
-  `knowledge_bags`, so every known card is counted once.
-- `unknown_cards` is zero for a seat whose list the viewer knows. It is what
-  separates a closed list (every hidden card unknown) from a disclosed list
-  with no rows, which the `decklists` block alone cannot.
-- Definitions are catalog joins, as elsewhere. No row or token carries an
-  object or card id, and a segment flag names a row of `knowledge_segments`,
-  never a library slot.
-- Thirteen segment rows hold the engine's bound (8 from the top, the rest, 2
-  from the bottom, hand, face-down exile). The engine merges knowledge past its
-  own bounds without error; more bag rows than the buffer holds is a typed
-  Capacity error, never truncation.
-- Native and Python encoders write the same rows on the scalar and vector
-  paths, the LLM text observation states them in words, and the learning tokens
-  name the segment kinds.
-
-The model sums definition embeddings weighted by count, once per segment flag,
-and joins the result to the seat's knowledge vector beside the known-hand and
-decklist sums. That read is the minimum that makes the rows live. Whether a
-per-definition or attention read learns more from them is unmeasured.
-
-Because these buffers change the layout, a checkpoint written before them is
-refused by its world binding, which names the buffers that differ.
+A private return can erase independent facts; it never creates a claim that a
+card occupies several possible places. Models may infer such relationships
+from their available observations and history. Native sampling honors every
+retained single-place fact ([engine knowledge](engine.md#remembered-library-positions)).
 
 ### Optional recent public events
 
@@ -615,7 +586,7 @@ does not make hidden cards observable or the game fully observed.
 
 | Layer | Holds | Shipped | Must not carry |
 | --- | --- | --- | --- |
-| Effective state | Current characteristics from `Game::characteristics`, zones, stack, suspended decisions, waiting triggers, hidden-card knowledge, deck disclosure | Object rows and the 64 × 49 relation table | Raw effect bookkeeping a consumer must replay to learn the current value |
+| Effective state | Current characteristics from `Game::characteristics`, zones, stack, suspended decisions, waiting triggers, hand minima, exact library positions, deck disclosure | Object rows and the 64 × 49 relation table | Raw effect bookkeeping a consumer must replay to learn the current value |
 | Shared records | Each active effect once: payload, duration, timestamp rank, controller, source definition, exact visible source, exact memberships | `effects`, `effect_details`, `effect_members`; local facts for copy exceptions and other per-object kinds | A recomputed layer result, or a merged record that loses a future difference |
 | History | Chronological public events, explicitly bounded | At most 32 rows of arrival, damage, life, cast, resolved and countered; optional and off by default | Anything needed to know the current rules state. Effect creation is not an event kind, and an activation adds no row |
 | Memory | Inference from everything the seat has been shown | Nothing | A fact the current observation should carry, or anything the viewer may not see |
@@ -693,7 +664,7 @@ is not evidence for any of them:
 - **Hidden information.** Updates read only that seat's authorized observations
   and the public events since its committed cursor. Opponent private frames,
   sampled possible worlds and future trajectory facts never enter.
-- **Eviction.** Current effects, hidden-card knowledge, disclosure and pending
+- **Eviction.** Current effects, hand minima, retained library positions, disclosure and pending
   obligations stay in native state regardless of memory or window. Old history
   rows disappear explicitly and never change a legal decision.
 - **Fork.** A fork clones state and cursor, then evolves independently. Replay

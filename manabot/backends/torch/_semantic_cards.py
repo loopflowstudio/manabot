@@ -272,6 +272,11 @@ class SemanticCardEncoder(nn.Module):
             * batch.known_counts[..., None]
             / 60.0
         ).sum(dim=2)
+        known = known + (
+            self.lookup(definitions, batch.library_rows)
+            * batch.library_weights[..., None]
+            / 60.0
+        ).sum(dim=2)
         if self.decklist_projection is not None:
             pooled = torch.einsum(
                 "bsrh,bsrc->bsch",

@@ -97,9 +97,7 @@ action_space.player = action_space
 
 The acting seat gets an observation of what it may see: its hand, both
 boards, the stack, the pending decision, public history and the legal actions.
-The opponent's hand and both library orders are absent, not masked later; what
-the seat has learned about them is stated as
-[hidden-card knowledge](#hidden-card-knowledge).
+The opponent's hand and both library orders are absent, not masked later.
 
 From `Observation::for_player` in
 [`managym/src/agent/observation.rs`](../managym/src/agent/observation.rs):
@@ -133,98 +131,6 @@ pub fn for_player(game: &Game, viewer: PlayerId) -> Self {
 
 Consumers read the encoded arrays by name; see
 [encoded observations](#encoded-observations).
-
-### Hidden-card knowledge
-
-**Proposed (Task f1a44c; not implemented).** The following contract describes
-the next implementation. Current native state retains public hand minima only.
-The disjoint-bag inspection rule is under review: revealing a hand can leave
-correlated library constraints that these rows cannot express exactly. The
-proposal needs an explicit coarsening rule or a richer constraint model before
-implementation can continue.
-
-A seat that has seen a hidden card keeps what it learned for as long as the
-rules let it stay true. Suppose the opponent reveals a hand of A, B and C,
-draws three cards, puts two cards of their choice from hand on top of their
-library, draws and later shuffles. The viewer's text observation says, at each
-point:
-
-```
-after the return : opponent holds at least 3 of {A, B, C} across hand (4) and top 2 of library
-after one draw   : opponent holds at least 3 of {A, B, C} across hand (5) and top 1 of library
-after two draws  : opponent's hand holds A, B, C
-```
-
-A shuffle before both cards are drawn widens the fact to "A, B, C somewhere in
-hand or library". The viewer never learns which two cards went back. The same
-state records what a player knows about their own library: after they order
-its top four cards, their observation names those four positions until a draw,
-shuffle or move disturbs them.
-
-Each player's hidden cards have two views, the opponent's (`public`) and the
-owner's (`own`). A view is made of:
-
-| Part | Meaning |
-| --- | --- |
-| Segment | A place hidden cards can be: the hand, face-down exile, a run of library positions counted from the top or the bottom, and the rest of the library between them. Each has a size. |
-| Bag | "These cards are somewhere in these segments": a multiset of card definitions and the set of segments that holds them. Two bags never name the same physical card. |
-| Unknown cards | How many of the player's hidden cards no disclosed list or bag accounts for. Zero when the list is open. |
-
-A position known exactly is a one-card segment with a one-card bag. A known
-hand card is a bag over the hand alone, which is what `known_hand` reports. The
-knowledge changes only where the game does:
-
-| Event | Effect on a view |
-| --- | --- |
-| Shuffle | Every library segment joins the rest. |
-| A card leaves a segment to where the viewer sees it | The segment shrinks and a bag that held that definition there loses a copy. |
-| A card moves from one hidden segment to another (a draw, hand to library top, foretell) | The viewer-authorized source shrinks, the destination grows, and every bag over the source also covers the destination. A private choice from several positions first merges that interval; the selected object's true position never identifies the public source. |
-| The viewer sees a card enter a hidden segment | Refine existing bags; add a one-card bag only for a newly accounted-for copy. |
-| A hand is revealed or inspected | Refine the hand multiset jointly with existing bags; repeated inspection never counts a copy twice. |
-| The owner looks at the top N and orders them | `own`: N exact positions, or one N-card bag when the order is random. `public`: merge the affected interval before any private selection, including intermediate Commands before the final reorder. |
-
-- **One state, three readers.** The observation, `Game::determinize` and the
-  [exact possible-world space](#forks-replay-and-determinization) read this
-  state and nothing else. A world is possible exactly when it satisfies what
-  the observation says, so search never plays out a deal the seat knows is
-  impossible.
-- **Sightings, not objects.** Each view is updated from what its viewer saw
-  of a move: the scope it came from and went to (an exact position, the top or
-  bottom N, the whole library, the hand) and the definition if it was shown.
-  A hand or library write that states no sighting is treated as the widest
-  scope with nothing seen, so a forgotten site loses knowledge and cannot leak
-  it.
-- **Which view constrains whom.** A viewer reads the other player's `public`
-  view, and their own `own` view. Both span all hidden segments, and `own`
-  implies complete `public`, including bags spanning hand and library. Every
-  public sighting also reaches `own`. Public updates and caps depend only on
-  public information. If private refinements cannot retain that implication
-  within the caps, discard them back to complete updated `public`.
-  A sampled unshared opponent's `own` becomes a clone of complete `public`;
-  their sampled visible hand and face-down cards jointly satisfy cross-zone
-  bags, with distinct witnesses within each view. A shared private view stays
-  available through `shares_information`. Ordinary clones retain both views.
-- **Player control.** A player controlling another reads that player's `own`
-  view through `shares_information`, as it reads their hand.
-- **Choices are not deals.** Which cards a player chose to return is their
-  decision, not a random event. A bag rules out worlds; it never makes one
-  hand likelier than another. Probability over the remaining worlds belongs to
-  `manabot.belief`.
-- **Bounded.** A view tracks up to 8 segments from the top of a library, 2 from
-  the bottom and 16 bags. Past that, the two deepest segments or the two bags
-  with the closest segment sets merge. Merging only forgets detail: every
-  remaining statement stays true and more worlds become possible. It is counted
-  in the view's `coarsened` diagnostic and is never an error, and it never
-  changes legality or a deal.
-- **Closed decklists.** Knowledge from reveals is independent of disclosure.
-  Against a closed list the bags are everything the viewer knows about the
-  hidden cards, and `unknown_cards` counts the rest.
-- **Not history.** This is what is true now. Who cast what, and when, is the
-  public event record.
-
-A game in which nothing is ordered, returned or revealed has only hand bags:
-its deals, state hashes and benchmark digests are those of an engine without
-this state.
 
 ### Executing an action
 
@@ -323,26 +229,34 @@ pub fn determinize(&mut self, perspective: PlayerId, seed: u64) {
 ```
 
 The unseen pool is the opponent's unknown hand cards, library and face-down
-foretold cards. Everything the viewer can see is preserved, and so is
-everything it knows about what it cannot see
-([hidden-card knowledge](#hidden-card-knowledge)): each bag's cards are dealt
-into that bag's segments, positions the viewer knows exactly keep their cards,
-and only the rest is redrawn. A viewer who ordered the top of their own library
-gets that order in every sampled world. With no library knowledge the redraw
-consumes its seed exactly as a plain shuffle of both libraries does, so an
-ordinary game samples the same worlds as before.
+foretold cards. Public hand minima and exact viewer-known library positions
+reserve distinct definition witnesses; the remaining cards are shuffled.
+Everything the viewer can see is preserved.
+[`possible_worlds.rs`](../managym/src/possible_worlds.rs) defines the same domain exactly, with compatible-deal counts as weights, for beliefs that
+want more than a uniform redraw ([beside the loop](../README.md#beside-the-loop)).
 
-[`possible_worlds.rs`](../managym/src/possible_worlds.rs) defines the same
-domain exactly, with compatible-deal counts as weights, for beliefs that want
-more than a uniform redraw ([beside the loop](../README.md#beside-the-loop)).
-Its `HiddenHandConstraints` carry the bags and segment sizes. A bag removes
-hands that no placement of its cards can complete and leaves every other
-hand's weight unchanged. Constraints that reach a library segment set
-`segment_constraints`; a sampler that models hand counts alone refuses such a
-root, as it refuses a retained selection, and never answers as if the
-constraint were absent. This is possible-world space version 4
-(`POSSIBLE_WORLD_SPACE_VERSION`), which is part of space and world identity:
-receipts recorded under version 3 are not recomputed.
+### Remembered library positions
+
+Native knowledge retains public hand minima and exact card definitions at
+library positions counted from the top. Each player has an opponent-visible
+and an owner-visible position map. Inspection and chosen ordering record only
+what that viewer sees. A draw shifts known positions; a known top card drawn
+into hand becomes a hand minimum. A shuffle or an unspecified private reorder
+forgets the affected order. Public and private maps independently retain ten
+positions: eight nearest the top and two nearest the bottom among known facts.
+The owner reads their union, so private retention cannot erase a public fact.
+
+Facts never claim several possible locations. After a secret hand departure,
+each independent hand minimum decreases by one (to a minimum of zero). Seeing
+A, B and C, then returning two cards privately, therefore preserves no
+individual hand fact. Joint deductions belong to the model. This information
+loss is deliberate; an observation must never assert something false.
+
+Observations, determinization and exact-world materialization read the same
+native facts. Samplers reserve distinct definition witnesses for known library
+positions before dealing the remaining hand and library. An unshared sampled
+opponent's private position map resets to their public map. Clones preserve
+both maps. Closed opposing decklists still refuse hidden-world sampling.
 
 ## Batched games
 
@@ -610,9 +524,8 @@ observation capacities never truncate snapshots.
 
 Snapshots contain hidden information, including with closed decklists. They
 remain separate from policy inputs, viewer-safe observations, shared decision
-captures and viewer trace exports. Public `known_hand` counts and the other
-[hidden-card knowledge](#hidden-card-knowledge) describe only what a viewer has
-been shown. Reading snapshots does not change deck disclosure or what a
+captures and viewer trace exports. Public `known_hand` counts describe only
+revealed knowledge. Reading snapshots does not change deck disclosure or what a
 player may observe, and requires no policy-input version or checkpoint migration.
 
 ### Fixed-seat observations
@@ -1415,7 +1328,6 @@ saved training corpora or change their split assignments.
 | Batched games | [`agent/vector_env.rs`](../managym/src/agent/vector_env.rs), [`manabot/env/vector_env.py`](../manabot/env/vector_env.py) |
 | Replay verification and records | [`manabot/sim/replay.py`](../manabot/sim/replay.py), [`canonical_replay.rs`](../managym/src/canonical_replay.rs) (record shape) |
 | Possible worlds | [`possible_worlds.rs`](../managym/src/possible_worlds.rs) |
-| Hidden-card knowledge | `Player.knowledge` in [`state/player.rs`](../managym/src/state/player.rs), updated in [`flow/zones.rs`](../managym/src/flow/zones.rs) |
 | Cards and rules types | [`managym/cards/src/`](../managym/cards/src/), [`managym/state/`](../managym/state/) |
 | Worlds | [`world.rs`](../managym/src/world.rs), [WORLDS.md](../WORLDS.md) |
 | Python bindings | [`managym/src/python/`](../managym/src/python/), `manabot.managym` |

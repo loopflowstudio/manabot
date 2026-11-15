@@ -482,6 +482,9 @@ class LegacyPlayerView(ProtocolModel):
     known_hand: dict[str, UInt32] = Field(
         default_factory=dict, exclude_if=lambda value: not value
     )
+    known_library: dict[str, UInt32] = Field(
+        default_factory=dict, exclude_if=lambda value: not value
+    )
     # Decklist counts, present only when the frame's viewer knows this
     # player's decklist. Absent means hidden; {} means known and empty.
     main_counts: dict[str, UInt32] | None = Field(

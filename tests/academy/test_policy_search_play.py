@@ -117,7 +117,7 @@ def test_independent_adapter_search_plays_watches_and_retains_private_evidence(
             if event.get("bot_decision")
         )
         assert outputs["mirror"]["worlds"] == 1
-        assert outputs["belief"]["model"] == "managym.determinize/physical-deal/v1"
+        assert outputs["belief"]["model"] == "managym.determinize/physical-deal/v2"
         assert sum(outputs["probabilities"]) == pytest.approx(1)
         assert outputs["probabilities"][outputs["action"]] > 0
         assert all(

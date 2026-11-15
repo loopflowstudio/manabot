@@ -94,6 +94,8 @@ impl Game {
 
     /// Move every card in `player`'s hand to the bottom of their library.
     pub fn scenario_clear_hand(&mut self, player: PlayerId) {
+        self.state.known_library_mut(player).forget_order();
+        self.state.known_hand_mut(player).clear();
         self.policy_history = Default::default();
         let hand: Vec<ObjectId> = self
             .state
@@ -126,6 +128,8 @@ impl Game {
                 .copied()
                 .find(|object| self.state[*object].name == name);
             if let Some(object) = found {
+                self.state.known_library_mut(player).forget_order();
+                self.state.known_hand_mut(player).clear();
                 self.policy_history = Default::default();
                 self.state.place_object(object, player, ZoneType::Hand);
                 return Ok(());
@@ -164,6 +168,8 @@ impl Game {
             )));
         };
 
+        self.state.known_library_mut(player).forget_order();
+        self.state.known_hand_mut(player).clear();
         self.policy_history = Default::default();
         self.state
             .place_object(object_id, player, ZoneType::Battlefield);

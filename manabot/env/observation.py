@@ -346,6 +346,7 @@ class ObservationEncoder:
             **SHARED_EFFECT_SHAPES,
             "semantic_cards": (2, self.cards_per_player),
             "known_hand": (2, self.cards_per_player, 2),
+            **({"known_library": (2, 20, 2)} if self.one_token else {}),
             "decklists": (2, self.cards_per_player, DECKLIST_DIM),
             **(
                 {
@@ -455,6 +456,13 @@ class ObservationEncoder:
             "known_hand": np.zeros((2, self.cards_per_player, 2), dtype=np.float32),
         }
 
+        if self.one_token:
+            out["known_library"] = np.zeros(
+                self.shapes["known_library"], dtype=np.float32
+            )
+        elif obs.agent.known_library or obs.opponent.known_library:
+            raise ValueError("known library positions require the current policy input")
+
         ## NOTE: It is very important that we encode in this exact
         ## order.
         # 1. ActorCritic player
@@ -489,6 +497,17 @@ class ObservationEncoder:
         for seat, (cards, player) in enumerate(
             ((agent_cards, obs.agent), (opponent_cards, obs.opponent))
         ):
+            if self.one_token:
+                capacity = self.shapes["known_library"][1]
+                if len(player.known_library) > capacity:
+                    raise ValueError("known library exceeds observation capacity")
+                for slot, (position, definition) in enumerate(
+                    sorted(player.known_library.items())
+                ):
+                    out["known_library"][seat, slot] = (
+                        int(definition) + 1,
+                        int(position) + 1,
+                    )
             if len(player.known_hand) > self.cards_per_player:
                 raise ValueError("known hand exceeds observation capacity")
             for slot, card in enumerate(cards):
