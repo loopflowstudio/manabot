@@ -1137,8 +1137,6 @@ class GameSession:
         if not self.watch_mode:
             session_id = player_config.get("play_session_id")
             session_revision = player_config.get("setup_revision", 0)
-            if session_id is not None:
-                self.attempt_store.session(session_id, {self.attempt_owner})
             self._session_start = SessionStart(
                 session_id=session_id or secrets.token_urlsafe(16),
                 owner=self.attempt_owner,
@@ -1820,7 +1818,7 @@ class GameSession:
                 raise RuntimeError("Hero automatic play exceeded safety step limit.")
             hero_steps += 1
 
-            actions = describe_actions(self.obs)
+            actions = describe_actions(self.obs, hero_seat=self.human_seat)
             action_index = _pass_priority_index(actions)
             if action_index is None:
                 return
@@ -1978,7 +1976,7 @@ class GameSession:
         viewer: int,
     ) -> DecisionContext:
         """Build one exact actor-safe frame and raw-action lowering map."""
-        actions = describe_actions(obs)
+        actions = describe_actions(obs, hero_seat=self.human_seat)
         action_space = enum_name(
             ActionSpaceEnum, int(obs.action_space.action_space_type)
         )

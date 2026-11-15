@@ -137,18 +137,14 @@ class GameConfig:
                     raise ValueError(
                         f"Recorded setup for {name!r} differs from compiled deck/sideboard setup"
                     )
-                expected.disclosure = self.decklists
                 configs.append(expected)
             return configs
         return [
-            managym.PlayerConfig(
-                "Hero", self.hero_deck, self.hero_sideboard, disclosure=self.decklists
-            ),
+            managym.PlayerConfig("Hero", self.hero_deck, self.hero_sideboard),
             managym.PlayerConfig(
                 "Villain",
                 self.villain_deck,
                 self.villain_sideboard,
-                disclosure=self.decklists,
             ),
         ]
 

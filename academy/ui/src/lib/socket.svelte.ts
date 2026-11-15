@@ -488,7 +488,7 @@ export class GameSocketController {
         gameStore.observation = null;
         gameStore.gameOver = true;
         gameStore.newGamePending = false;
-        try { writeTabValue('academy.continuation', null); } catch { /* No automatic redeal. */ }
+        writeTabValue('academy.continuation', null);
       }
       this.pendingResume = false;
       this.persistControlCredentials(message);
@@ -533,7 +533,7 @@ export class GameSocketController {
     }
 
     if (message.type === 'control_error') {
-      try { writeTabValue('academy.continuation', null); } catch { /* Optional persistence. */ }
+      writeTabValue('academy.continuation', null);
       gameStore.newGamePending = false;
       gameStore.endFastForward();
       gameStore.setError(message.message);
@@ -550,7 +550,7 @@ export class GameSocketController {
           else writeTabValue('academy.continuation', null);
         } catch { /* No durable continuation to retry. */ }
       } else {
-        try { writeTabValue('academy.continuation', null); } catch { /* Optional persistence. */ }
+        writeTabValue('academy.continuation', null);
       }
       gameStore.newGamePending = false;
       if ('launch' in message && message.launch && message.launch_setup) {
@@ -628,7 +628,7 @@ export class GameSocketController {
       return;
     }
 
-    try { writeTabValue('academy.continuation', null); } catch { /* No retry after an explicit refusal. */ }
+    writeTabValue('academy.continuation', null);
     gameStore.endFastForward();
     gameStore.endCommand();
     gameStore.newGamePending = false;

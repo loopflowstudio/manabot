@@ -13,6 +13,10 @@ describe('repeated play setup', () => {
     expect(store.newGameConfig().seed).toBe('18446744073709551615');
     store.dealMode = 'fresh';
     expect(store.newGameConfig().seed).toBeNull();
+    store.seed = 'invalid';
+    expect(store.seedError).toBeNull();
+    store.dealMode = 'repeat';
+    expect(store.seedError).not.toBeNull();
   });
 
   it('restores private imported setup while keeping local edits on ordinary updates', () => {
@@ -36,6 +40,8 @@ describe('repeated play setup', () => {
       mirror, decklists:'closed', stops:{my:['main1'], opponent:['end_step']}, auto_pass:false, stop_on_stack:true,
       deck_import:{hero:{source:'8 Island',filename:'a.txt'},villain:{source:'8 Mountain',filename:'b.txt'}}};
     const editor = store.editableSetup(draft);
+    expect(editor.setupConfig()).not.toHaveProperty('request_id');
+    expect(editor.setupConfig()).not.toHaveProperty('player_token');
     expect(editor.newGameConfig()).toMatchObject(draft);
     editor.deckImport!.hero.source = '8 Forest';
     editor.searchConfig!.depth = 3;

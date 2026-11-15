@@ -13,6 +13,8 @@ export interface SessionResult {
   human_seat: number;
   human_deck: string;
   opponent_deck: string;
+  opponent_name: string;
+  opponent_id: string;
   version: string;
   inference_json: string;
   matchup_json: string;

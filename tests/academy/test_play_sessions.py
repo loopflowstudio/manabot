@@ -153,6 +153,13 @@ def test_session_summary_is_private_complete_and_paginated(
                 finish(record.game)
         store = record.game.attempt_store
         rows = store.session_results(session["id"], {owner})
+        opponent = next(
+            player
+            for player in store.metadata(record.game.match_id)["players"]
+            if player["kind"] == "bot"
+        )
+        assert all(row["opponent_name"] == opponent["name"] for row in rows)
+        assert all(row["opponent_id"] == opponent["player_id"] for row in rows)
         assert sum(r["completed"] for r in rows) == 2
         assert sum(r["active"] for r in rows) == 1
         headers = {"x-etude-participant-tokens": token}
@@ -444,3 +451,52 @@ def test_invalid_seed_never_retires_current_game(tmp_path: Path, seed: object) -
     assert game.match_id == identifier
     assert game.attempt_store.load(identifier)["end_reason"] == "active"
     game.close("new_game")
+
+
+@pytest.mark.parametrize("seat", [0, 1])
+def test_player_targets_name_roles_at_either_native_seat(
+    tmp_path: Path, seat: int
+) -> None:
+    game = server.GameSession(tmp_path)
+    game.new_game(
+        {
+            **CONFIG,
+            "hero_deck": {"Mountain": 10, "Lightning Bolt": 10},
+            "villain_deck": {"Plains": 20},
+            "human_seat": seat,
+        }
+    )
+    for index in range(100):
+        frame = game.current_message()["frame"]
+        targets = {
+            subject["object"]["subject"]["id"]: offer["label"]
+            for offer in frame["offers"]
+            for subject in offer.get("subjects", [])
+            if subject["role"] == "target"
+            and subject["object"]["subject"]["kind"] == "player"
+        }
+        if targets:
+            assert targets == {seat: "Target Hero", 1 - seat: "Target Villain"}
+            game.close("new_game")
+            return
+        offer = next(
+            (
+                o
+                for prefix in ("Cast Lightning Bolt", "Play Mountain", "Pass")
+                for o in frame["offers"]
+                if o["label"].startswith(prefix)
+            ),
+            frame["offers"][0],
+        )
+        result = game.hero_command(
+            {
+                "command_id": f"target.{index}",
+                "match_id": frame["match_id"],
+                "expected_revision": frame["revision"],
+                "prompt_id": frame["prompt"]["id"],
+                "offer_id": offer["id"],
+                "answers": [],
+            }
+        )
+        assert result["status"] == "accepted"
+    raise AssertionError("no player target was offered")

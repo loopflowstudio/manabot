@@ -29,6 +29,8 @@ for (const [theme, width, height] of [['light', 1280, 800], ['dark', 1440, 900]]
     page.on('dialog', dialog => dialog.accept());
     await page.goto('/');
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
+    await expect(page.getByRole('region', {name:'New session setup'})).toContainText('Choose your setup to start a new session.');
+    await expect(page.getByRole('region', {name:'New session setup'})).not.toContainText('current session draft');
     await page.getByText('Import decklist files', {exact:true}).click();
     await page.getByLabel('Use imported decks for the next game').check();
     await page.getByLabel('Your deck source', {exact:true}).fill('8 Island');
@@ -70,6 +72,10 @@ for (const [theme, width, height] of [['light', 1280, 800], ['dark', 1440, 900]]
     await page.route('**/api/traces?*', async route => { const url = new URL(route.request().url()); if (url.searchParams.has('session')) url.searchParams.set('limit','2'); await route.continue({url:url.href}); });
     await page.goto(history!);
     await expect(page.getByRole('region', {name:'Session results'})).toContainText('out of 2 completed');
+    const summaries = page.getByRole('region', {name:'Session results'}).locator('summary');
+    await expect(summaries.filter({hasText:first.name})).toHaveCount(2);
+    await expect(summaries.filter({hasText:other.name})).toHaveCount(1);
+    await expect(summaries.filter({hasText:other.name})).toContainText(other.sha256.slice(0,10));
     await expect(page.getByTestId('game-history-row')).toHaveCount(2);
     await page.getByRole('link',{name:'Older games',exact:true}).click();
     await expect(page.getByRole('region',{name:'Session results'})).toContainText('out of 2 completed');
@@ -171,6 +177,7 @@ for (const [theme, width, height] of [['light',1280,800], ['dark',1440,900]] as 
 
     await page.getByRole('link',{name:'New game',exact:true}).first().click();
     const fresh = page.getByRole('region',{name:'New session setup',exact:true});
+    await expect(fresh).toContainText('These edits do not change your current session draft.');
     await expect(fresh.getByRole('button',{name:'Save next setup',exact:true})).toHaveCount(0);
     await expect(fresh.getByRole('button',{name:'Start next game',exact:true})).toHaveCount(0);
     await page.screenshot({path:testInfo.outputPath(`new-session-${theme}.png`)});

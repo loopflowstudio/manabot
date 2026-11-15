@@ -428,8 +428,8 @@ The table opens with UR Lessons (you) against GW Allies. Before starting:
 - **Opponent** chooses who you face: **Search 16**, **Search 64** or
   **Search 256** (the engine's built-in search, with that many simulated
   playouts per decision), **Random**, or **Passive**, which always passes.
-  With manabot installed it also offers **Registered policy**, which adds a
-  **Run** and a **Checkpoint** menu
+  It also offers **Registered policy**, which adds a **Policy** menu for
+  policies registered with this server
   ([Play and watch a trained checkpoint](#play-and-watch-a-trained-checkpoint)).
 - **New game** assigns a deck to each seat from the bundled packs.
 - **New Game** starts a new session with the selected matchup. Replacing an
@@ -534,6 +534,9 @@ training and evaluation recordings retain their declared origins; unknown
 origin stays unknown. An evaluation label alone does not establish a controlled
 study. These counts describe recorded games, not a strength estimate or rating.
 
+Each collapsed breakdown names its recorded opponent and policy identity, where
+available. Expand it for decks and the full execution configuration.
+
 Wall elapsed time includes pauses and appears only when start/end times were
 recorded. Response measurements appear only when recorded by the provider,
 with their measured sample count; otherwise they are unavailable.
@@ -571,8 +574,8 @@ action.
 At laptop widths and heights, the board and hand sit beside the current
 decision. Scroll the legal choices while the current instruction, legal count,
 **Show all** and filter controls remain available. Long instructions scroll
-independently. Open **History and settings** for decision details, consequences,
-recorded consequences and stop configuration without losing the pending decision. The current
+independently. Open **History and settings** for decision details, recorded
+consequences and stop configuration without losing the pending decision. The current
 priority-stop automation setting and **Edit stops** remain visible beside the choices. At narrow or short windows, board and
 choices stack; use the board/choices jump links to move between them. Changing decisions
 moves focus within the choices region without pulling the page away from the

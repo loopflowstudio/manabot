@@ -18,7 +18,6 @@
   import PlaySessionStrip from '$lib/components/PlaySessionStrip.svelte';
   import { recordFetch } from '$lib/records';
   import type { PlaySession } from '$lib/play-session';
-  import { seedError } from '$lib/play-session';
   import DeckIdentity from '$lib/components/DeckIdentity.svelte';
   import { checkpointIdentity, playerIdentity } from '$lib/player-identity';
   import GameBoard from '$lib/components/GameBoard.svelte';
@@ -133,7 +132,7 @@
     if (demoName) { sendNewGame({demo:demoName}); return; }
     if (editor.kind === 'closed') { openEditor('new'); return; }
     const setup = editor.setup;
-    if (setup.dealMode === 'repeat' && seedError(setup.seed)) { gameStore.setError(seedError(setup.seed)); return; }
+    if (setup.seedError) { gameStore.setError(setup.seedError); return; }
     if (setup.watchMode) {
       gameStore.newGamePending = true;
       gameStore.setError(null);
@@ -150,16 +149,14 @@
   function editorConfig(): Record<string, unknown> {
     if (editor.kind === 'closed') return {};
     const setup = editor.setup;
-    const config = editor.opponentOnly ? {...setup.opponentConfig(), mirror:setup.searchConfig} : setup.newGameConfig();
-    delete config.request_id;
-    return config;
+    return editor.opponentOnly ? {...setup.opponentConfig(), mirror:setup.searchConfig} : setup.setupConfig();
   }
 
   async function saveNextSetup(): Promise<void> {
     const session = gameStore.playSession;
     const table = gameStore.table;
     if (editor.kind !== 'next' || editor.setup.watchMode || !session || !table || !gameStore.resumeToken) return;
-    if (editor.setup.dealMode === 'repeat' && seedError(editor.setup.seed)) { gameStore.setError(seedError(editor.setup.seed)); return; }
+    if (editor.setup.seedError) { gameStore.setError(editor.setup.seedError); return; }
     gameStore.setError(null);
     try {
       const response = await recordFetch(`/api/play-sessions/${encodeURIComponent(session.id)}`, {
@@ -176,7 +173,7 @@
 
   function continueWithSetup(): void {
     if (editor.kind !== 'next' || editor.setup.watchMode || gameStore.newGamePending) return;
-    if (editor.setup.dealMode === 'repeat' && seedError(editor.setup.seed)) { gameStore.setError(seedError(editor.setup.seed)); return; }
+    if (editor.setup.seedError) { gameStore.setError(editor.setup.seedError); return; }
     if (gameActive && !window.confirm('Stop the current game and start the next game in this session?')) return;
     editor.pendingAttempt = gameStore.table?.attempt_id ?? null;
     sendContinuation(editor.opponentOnly ? 'change_opponent' : 'rematch', editorConfig());
@@ -497,7 +494,9 @@
     <section aria-label={editor.kind === 'new' ? 'New session setup' : 'Next game setup'} class="mt-4 border-b border-line pb-4">
       <h2 class="type-title">{editor.kind === 'new' ? 'New session' : editor.opponentOnly ? 'Change opponent' : 'Edit next game'}</h2>
       <p class="type-caption mt-2">{editor.kind === 'new'
-        ? 'Start a separate session. These edits do not change your current session draft.'
+        ? gameStore.playSession
+          ? 'Start a separate session. These edits do not change your current session draft.'
+          : 'Choose your setup to start a new session.'
         : 'Setup for the next game in this Play session. Earlier games keep their recorded configuration.'}</p>
       {#key editor.setup}
         <GameSetup setup={editor.setup} onStart={startNewGame} disabled={gameStore.newGamePending}

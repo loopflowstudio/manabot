@@ -1,4 +1,4 @@
-import type { PlaySession } from './play-session';
+import { seedError, type PlaySession } from './play-session';
 import { playerToken } from './records';
 import { parseSearchConfigs, type SearchConfig, type PendingSearch } from './search';
 import {
@@ -68,7 +68,7 @@ export class GameStore {
   constructor(private readonly persistPreferences = true) {}
 
   /** An isolated editor: nested source/search values must not mutate live setup. */
-  editableSetup(draft: Record<string, unknown> = this.newGameConfig()): GameStore {
+  editableSetup(draft: Record<string, unknown> = this.setupConfig()): GameStore {
     const editor = new GameStore(false);
     editor.applySetupDraft(JSON.parse(JSON.stringify(draft)));
     editor.watchMode = this.watchMode;
@@ -86,6 +86,7 @@ export class GameStore {
   watchSearchConfig = $state<SearchConfig | null>(null);
   dealMode = $state<'fresh' | 'repeat'>('fresh');
   seed = $state('0');
+  seedError = $derived(this.dealMode === 'repeat' ? seedError(this.seed) : null);
 
   applyPlaySession(session: PlaySession): void {
     const changed = session.game_number !== this.playSession?.game_number || session.id !== this.playSession?.id;
@@ -247,11 +248,18 @@ export class GameStore {
 
   newGameConfig(): Record<string, unknown> {
     return {
-      ...this.opponentConfig(),
+      ...this.setupConfig(),
       request_id: crypto.randomUUID(),
+      player_token: playerToken(),
+    };
+  }
+
+  /** Setup data has no request identity or participant credential. */
+  setupConfig(): Record<string, unknown> {
+    return {
+      ...this.opponentConfig(),
       human_seat: this.humanSeat,
       seed: this.dealMode === 'repeat' ? this.seed : null,
-      player_token: playerToken(),
       ...(this.deckImport ? { deck_import: this.deckImport } : {}),
       hero_deck: this.decks.hero,
       villain_deck: this.decks.villain,

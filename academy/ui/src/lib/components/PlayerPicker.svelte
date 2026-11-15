@@ -16,13 +16,12 @@
     setup?: Record<string, unknown>;
     disabled?: boolean;
     label?: string;
-    referencePlayers?: string[];
     onChange?: (value: PlayerChoice) => void;
     search?: SearchConfig | null;
     onSearchChange?: (value: SearchConfig | null) => void;
   }
   let { value = 'search-64', trained = [], extension = undefined, catalogError = null,
-    setup, decklists = 'open', disabled = false, label = 'Opponent', referencePlayers,
+    setup, decklists = 'open', disabled = false, label = 'Opponent',
     onChange, search = null, onSearchChange }: Props = $props();
   const uid = $props.id();
   const selected = $derived(trained.find(entry => policyChoice(entry.sha256) === value));
@@ -63,9 +62,7 @@
     return () => { clearTimeout(timer); controller.abort(); };
   });
   const replacement = $derived(prior ? runnerReplacement(prior, trained) : null);
-  const native = $derived(referencePlayers
-    ? ['random', 'search-16', 'search-64', 'search-256', ...referencePlayers.filter(p => !['random', 'search'].includes(p))]
-    : ['search-16', 'search-64', 'search-256', 'random', 'passive']);
+  const native = ['search-16', 'search-64', 'search-256', 'random', 'passive'];
   function title(entry: TrainedOpponent): string {
     return `${entry.name} · ${entry.sha256.slice(0, 10)}${entry.available ? '' : ` — ${entry.reason ?? 'unavailable'}`}`;
   }

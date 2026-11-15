@@ -434,6 +434,11 @@ publish, land or choose the next Graph step from here.
   otherwise a reload comparison uses a stale opening frame. For a short real
   target/recovery game, import `20 Mountain\n40 Lightning Bolt` against
   `40 Plains`, select Passive, play Mountains and cast Bolts at Villain.
+  The ordinary server also lists manabot's Heuristic and Greedy as Registered
+  policies; after a restart `/api/opponents` can stay empty for a while, so
+  poll it before selecting one. Repeated sessions: after **Swap sides** the
+  human sits at native seat 1, so check whose life a "Target …" offer lowers
+  and confirm the session's swapped game is a win, not just completed.
   Replay's newest entry can be an unfinished Play Again attempt: select the
   completed result explicitly before checking Next frame. Playwright offline
   mode did not close an existing localhost WebSocket in the MTG-355 run; it

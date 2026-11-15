@@ -147,7 +147,7 @@
       <p class="mt-2 text-sm">{sessionTotals.map(row => `${row.origin}: ${row.count} ${row.status}`).join(' · ')}</p>
       {#each sessionResults as result}
         <details class="mt-3 border-t border-line pt-2">
-          <summary class="cursor-pointer">{result.origin} · {result.human_seat === 0 ? 'Play first' : 'Draw first'} · {result.wins} wins / {result.draws} draws / {result.losses} losses out of {result.completed} completed · {result.active} active · {result.stopped} stopped · {result.interrupted} interrupted</summary>
+          <summary class="cursor-pointer">vs <PlayerName identity={recordedIdentity({name:result.opponent_name, player_id:result.opponent_id, kind:'bot', version:result.version})} /> · {result.origin} · {result.human_seat === 0 ? 'Play first' : 'Draw first'} · {result.wins} wins / {result.draws} draws / {result.losses} losses out of {result.completed} completed · {result.active} active · {result.stopped} stopped · {result.interrupted} interrupted</summary>
           <p>{result.human_deck} vs {result.opponent_deck} · {result.decklists} decklists</p>
           <p>Wall elapsed: {result.wall_elapsed_seconds == null ? 'unavailable' : `${Math.round(result.wall_elapsed_seconds)} seconds including pauses`} ({result.elapsed_samples} recorded). Response measurements unavailable.</p>
           <pre class="max-h-48 overflow-auto whitespace-pre-wrap break-all text-xs">{result.version}

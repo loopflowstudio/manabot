@@ -486,6 +486,7 @@ class AttemptStore:
             rows = db.execute(
                 """
                 SELECT a.origin,h.seat AS human_seat,h.deck AS human_deck,
+                    b.name AS opponent_name,b.player_id AS opponent_id,
                     b.deck AS opponent_deck,b.version,b.inference_json,
                     json_extract(g.matchup_json,'$.decklists') AS decklists,g.matchup_json,
                     count(*) AS total,
@@ -501,8 +502,8 @@ class AttemptStore:
                 JOIN attempt_players h ON h.attempt_id=a.id AND h.kind='human'
                 JOIN attempt_players b ON b.attempt_id=a.id AND b.kind='bot'
                 WHERE g.session_id=?
-                GROUP BY a.origin,h.seat,h.deck,b.deck,b.version,b.inference_json,g.matchup_json
-                ORDER BY a.origin,h.seat,b.version,g.matchup_json,h.deck,b.deck,b.inference_json
+                GROUP BY a.origin,h.seat,h.deck,b.deck,b.version,b.inference_json,g.matchup_json,b.player_id,b.name
+                ORDER BY a.origin,h.seat,b.version,g.matchup_json,h.deck,b.deck,b.inference_json,b.player_id,b.name
                 LIMIT ? OFFSET ?
             """,
                 (identifier, limit, offset),
