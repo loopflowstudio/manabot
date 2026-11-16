@@ -18,7 +18,7 @@ from pathlib import Path
 import platform
 import time
 import traceback
-from typing import Any, BinaryIO, Literal, TypedDict, Unpack
+from typing import TYPE_CHECKING, Any, BinaryIO, Literal, TypedDict, Unpack
 from uuid import uuid4
 import warnings
 
@@ -27,8 +27,12 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 import managym
 from managym.card_capture import CapturedCards
+from managym.decision import Command, DecisionFrame
 from managym.journal import DurableJournal, json_line
 from managym.statistics import GameStatistics, Reducer
+
+if TYPE_CHECKING:
+    from managym.replay import RecordedDecision
 
 
 class RecordingOptions(TypedDict, total=False):
@@ -98,6 +102,9 @@ class GameInputs(BaseModel):
     committed: int | None = Field(default=None, ge=0)
     digests: list[str] = []
     annotations: list[DecisionAnnotation | None] = []
+    command_frames: list[str | None] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     end: GameEnd | None = None
     actor: int | None = None
     frame: str | None = None
@@ -109,6 +116,7 @@ class GameInputs(BaseModel):
         self.committed = 0
         self.digests = []
         self.annotations = []
+        self.command_frames = []
         self.end = None
         self.actor = None
         self.frame = None
@@ -198,6 +206,9 @@ class GameChange(BaseModel):
     annotations: list[DecisionAnnotation | None] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
+    command_frames: list[str | None] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     end: GameEnd | None = None
     actor: int | None = None
     frame: str | None = None
@@ -241,6 +252,13 @@ class JournalChange(BaseModel):
                 game.actions.extend(change.append)
                 game.digests = game.digests[: change.keep] + change.digests
                 game.annotations = game.annotations[: change.keep] + change.annotations
+                if game.command_frames or change.command_frames:
+                    frames = game.command_frames[: change.keep]
+                    game.command_frames = (
+                        frames
+                        + [None] * (change.keep - len(frames))
+                        + change.command_frames
+                    )
                 game.end = change.end
                 game.committed = change.committed
                 game.actor, game.frame = change.actor, change.frame
@@ -340,6 +358,7 @@ class _GameJournal:
                             committed=game.committed,
                             digests=game.digests[keep:count],
                             annotations=game.annotations[keep:count],
+                            command_frames=game.command_frames[keep:count],
                             end=game.end,
                             actor=game.actor,
                             frame=frame,
@@ -680,7 +699,6 @@ class ScalarCapture(_Capture):
         self.seed = seed
         self.skip_trivial = skip_trivial
         self.inputs = GameInputs(seed=seed, players=[])
-        self.journal: Path | None = None
         self._start_cursor("scalar")
 
     def reset(self, env: managym.Env, players: list[managym.PlayerConfig]) -> Any:
@@ -707,7 +725,6 @@ class ScalarCapture(_Capture):
             committed=0,
             players=[PlayerSetup.retain(p) for p in players],
         )
-        self.journal = None
         with self._guard(lambda: self.evidence("reset")):
             self._executing()
             result = env.reset(players)
@@ -791,6 +808,8 @@ class ScalarCapture(_Capture):
                 if annotation is None
                 else DecisionAnnotation.model_validate(annotation)
             )
+        if self.inputs.command_frames:
+            self.inputs.command_frames.append(None)
         self.inputs.actions.append(int(action))
         self.inputs.actor = env.current_agent_index()
         self.inputs.frame = env.semantic_decision_frame_json()
@@ -803,91 +822,100 @@ class ScalarCapture(_Capture):
                 else None
             )
             result = env.step(action)
-            if observation is not None:
-                for reducer in self.reducers:
-                    reducer.decision(observation, action)
-            self.inputs.committed = len(self.inputs.actions)
-            if env.is_game_over():
-                self._finish_reducers(
-                    env, GameEnd(status="complete", winner=env.winner_index())
+            from managym.replay import RecordedDecision
+
+            decision = (
+                RecordedDecision(
+                    len(self.inputs.actions) - 1,
+                    observation,
+                    action,
+                    DecisionAnnotation.model_validate(annotation)
+                    if annotation is not None
+                    else None,
                 )
-                self._write_game(
-                    self.inputs,
-                    GameEnd(
-                        status="complete",
-                        winner=env.winner_index(),
-                        digest=env.state_digest()
-                        if self._selected(self.inputs)
-                        else None,
-                    ),
-                )
-            self._returned()
-            if self._game_journal is not None:
-                self._publish(self.evidence(), "ready")
+                if observation is not None
+                else None
+            )
+            self._commit(env, decision)
             return result
 
+    def _commit(self, env: managym.Env, decision: "RecordedDecision | None") -> None:
+        """Acknowledge a returned native commitment before invoking consumers."""
+        self.inputs.committed = len(self.inputs.actions)
+        self._returned()
+        if decision is not None:
+            for reducer in self.reducers:
+                reducer.decision(decision)
+        if env.is_game_over():
+            end = GameEnd(
+                status="complete",
+                winner=env.winner_index(),
+                digest=env.state_digest() if self._selected(self.inputs) else None,
+            )
+            self._finish_reducers(env, end)
+            self._write_game(self.inputs, end)
+        if self._game_journal is not None:
+            self._publish(self.evidence(), "ready")
+
     def command(
-        self, env: managym.Env, command: str, *, transition_only: bool = True
+        self,
+        env: managym.Env,
+        command: str,
+        *,
+        transition_only: bool = True,
+        annotation: DecisionAnnotation | dict[str, object] | None = None,
     ) -> Any:
-        """Fsync exact pending Command and full offer frame before native execution."""
+        """Retain and execute one original atomic Command, including its answers."""
+        from managym.replay import RecordedDecision
+
         self._activate_journal(env)
         if self._game_journal is not None:
             self._begin_boundary(
                 self.evidence(), "command", actions=[command], active=[True]
             )
-            self.inputs.actor = env.current_agent_index()
-            self.inputs.frame = env.semantic_decision_frame_json()
-            self.inputs.actions.append(command)
-            with self.guard():
-                self._publish(self.evidence(), "executing")
-                result = (
-                    env.execute_semantic_command_json(command)
-                    if transition_only
-                    else env.step_semantic_command(command)
-                )
-                self.inputs.committed = len(self.inputs.actions)
-                self._returned()
-                self._publish(self.evidence(), "ready")
-                return result
         self.inputs.actor = env.current_agent_index()
         self.inputs.frame = env.semantic_decision_frame_json()
-        if self.journal is None:
-            self.journal = self._retain(self.evidence())
-        _append(
-            self.journal,
-            {
-                "pending": command,
-                "frame": self.inputs.frame,
-                "actor": self.inputs.actor,
-                **self._coordinates(),
-            },
+        frame = DecisionFrame.from_json(self.inputs.frame)
+        commitment = Command(**json.loads(command))
+        retained = (
+            DecisionAnnotation.model_validate(annotation)
+            if annotation is not None
+            else None
         )
+        if self._selected(self.inputs):
+            self.inputs.digests.append(env.state_digest())
+            self.inputs.annotations.append(retained)
+        self.inputs.command_frames.extend(
+            [None] * (len(self.inputs.actions) - len(self.inputs.command_frames))
+        )
+        self.inputs.command_frames.append(self.inputs.frame)
         self.inputs.actions.append(command)
-        try:
+        observation = (
+            env.observation_for_player(self.inputs.actor or 0)
+            if self.reducers
+            else None
+        )
+        with self.guard():
+            if self._game_journal is not None:
+                self._publish(self.evidence(), "executing")
             result = (
                 env.execute_semantic_command_json(command)
                 if transition_only
                 else env.step_semantic_command(command)
             )
-        except BaseException as error:
-            try:
-                _append(
-                    self.journal,
-                    {
-                        "error_class": type(error).__name__,
-                        "error": str(error),
-                        "traceback": "".join(traceback.format_exception(error)),
-                    },
+            decision = (
+                RecordedDecision(
+                    len(self.inputs.actions) - 1,
+                    observation,
+                    commitment,
+                    retained,
+                    frame,
                 )
-                error.add_note(f"Private native failure evidence: {self.journal}")
-            except Exception as capture_error:
-                error.add_note(
-                    f"Failure evidence could not be retained: {capture_error}"
-                )
-            raise
-        _append(self.journal, {"success": True})
-        self.inputs.committed = len(self.inputs.actions)
-        return result
+                if observation is not None
+                else None
+            )
+            self._commit(env, decision)
+            return result
 
 
 # Native vector reads CapturedVector delegates; everything else it owns or rejects.

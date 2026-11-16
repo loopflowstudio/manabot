@@ -58,7 +58,7 @@ def reduce_cards(cards: CapturedCards) -> list[CardCounts]:
 
 if TYPE_CHECKING:
     from managym.recording import GameRecord, PlayerSetup
-    from managym.replay import ReplayStop
+    from managym.replay import RecordedDecision, ReplayStop
 
 
 class Reducer[T]:
@@ -71,7 +71,7 @@ class Reducer[T]:
     def start(self, setup: list["PlayerSetup"]) -> None:
         pass
 
-    def decision(self, observation: managym.Observation, chosen: int) -> None:
+    def decision(self, decision: "RecordedDecision") -> None:
         pass
 
     def end(self, result: "ReplayStop", capture: CapturedCards) -> list[T]:
@@ -110,7 +110,8 @@ class Behaviour(Reducer[BehaviourRow]):
     def start(self, setup: list["PlayerSetup"]) -> None:
         self._seats = [BehaviourRow(0), BehaviourRow(1)]
 
-    def decision(self, observation: managym.Observation, chosen: int) -> None:
+    def decision(self, decision: "RecordedDecision") -> None:
+        observation, chosen = decision.observation, decision.chosen
         actions = observation.action_space.actions
         if chosen < 0 or len(actions) < 2:
             return
@@ -252,7 +253,7 @@ def reduce(
                 reducer.start(game.players)
             for decision in replay:
                 for reducer in reducers:
-                    reducer.decision(decision.observation, decision.chosen)
+                    reducer.decision(decision)
             assert replay.stop is not None
             captured = CapturedCards.model_validate_json(replay.env.card_capture_json())
             for reducer, output in zip(reducers, rows, strict=True):

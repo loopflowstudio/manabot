@@ -344,19 +344,24 @@ class HeldSpells(Reducer):
     def start(self, setup):
         self.able = self.passed = 0
 
-    def decision(self, observation, chosen):
-        actions = observation.action_space.actions
+    def decision(self, decision):
+        actions = decision.observation.action_space.actions
         if any(a.action_type == ActionEnum.PRIORITY_CAST_SPELL for a in actions):
             self.able += 1
-            self.passed += actions[chosen].action_type == ActionEnum.PRIORITY_PASS_PRIORITY
+            self.passed += actions[decision.chosen].action_type == ActionEnum.PRIORITY_PASS_PRIORITY
 
     def end(self, result, capture):
         return [{"able": self.able, "passed": self.passed}]
 ```
 
-`start(setup)` receives both players' setups; `decision(observation, chosen)`
-receives the chooser's observation, with its legal actions, and the index
-chosen; `end(result, capture)` receives the winner or the stop and the game's
+`start(setup)` receives both players' setups. `decision(decision)` receives
+one `RecordedDecision`: the chooser's observation, original positional index
+or native Command (`commitment`), the legal semantic `frame` for a Command,
+and optional annotation. `chosen` gives its aligned action index. The native
+semantic executor currently accepts action-aligned Commands with empty
+answers; compound-offer submissions use a separate API and cannot be recorded
+through `ScalarCapture.command`. Rejected inputs never reach reducers.
+`end(result, capture)` receives the winner or stop and the game's
 card movements and resolutions, and returns that game's rows. `reduce` returns
 one list of rows per reducer, in the order given. A judgement such as "attacked
 when the attack was good" belongs in a reducer of your own, since the engine

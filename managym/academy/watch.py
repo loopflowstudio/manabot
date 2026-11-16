@@ -488,6 +488,7 @@ def import_arena(game_record: dict[str, Any]) -> dict[str, Any]:
 def import_record(record: "GameRecord") -> dict[str, Any]:
     """Project the verified prefix through GameSession's Command authority."""
     from managym.bots import BotDecision
+    from managym.decision import Command
     from managym.replay import RecordedDecision, walk
 
     from .trace import GameConfig
@@ -566,10 +567,18 @@ def import_record(record: "GameRecord") -> dict[str, Any]:
                 for key, action in context.action_by_offer.items()
                 if action == decision.chosen
             )
+            bound = session._authority_command(context, offer, "policy")
+            native = decision.commitment
+            if isinstance(native, Command):
+                bound["command_id"] = native.command_id
+                bound["answers"] = list(native.answers)
             session._apply_bound_command(
                 context,
-                session._authority_command(context, offer, "policy"),
+                bound,
                 source="policy",
+                native_command=native.to_json()
+                if isinstance(native, Command)
+                else None,
             )
 
         for _ in replay.run(apply):

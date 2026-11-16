@@ -295,6 +295,15 @@ Env dispatch, observations and Command/offer actors read that chooser directly;
 never remap it again. Player control grants in-game inspection through native
 `shares_information`, never private sideboard access or outside-game selection.
 
+Native `semantic_decision_frame_json` and `execute_semantic_command_json`
+use action-aligned `structured_search_offers`: these offers have no choices
+and reject nonempty `Command.answers`. Compound submissions belong to the
+separate `compound_offers` / `step_structured` API. Do not infer supported
+atomic answers from the `Command` field alone, or pass compound offer ids to
+the semantic executor. Recording preserves the original native Command and
+its object preconditions; Academy's presentation Command has a separate
+revision scope.
+
 Native heuristic selection consumes the live viewer `Observation`, including
 `action_space.focus` (source identity for target/cost decisions). Canonical viewer
 JSON omits that focus; a `toJSON`/`from_json` round trip is not an equivalent

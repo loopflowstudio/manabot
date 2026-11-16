@@ -103,6 +103,10 @@ class ReplayDecision(ProtocolModel):
     frame: ExperienceFrame
     offer: InteractionOffer
     command: Command
+    # Original rules commitment; presentation Command has its own revision scope.
+    native_command: str | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @model_validator(mode="after")
     def validate_bindings(self) -> "ReplayDecision":

@@ -18,6 +18,7 @@ from typing import Literal, Never
 import numpy as np
 
 import managym
+from managym.decision import Command, DecisionFrame, SemanticContractError
 from managym.recording import (
     DecisionAnnotation,
     GameInputs,
@@ -39,8 +40,28 @@ class ReplayStop:
 class RecordedDecision:
     index: int
     observation: managym.Observation
-    chosen: int
+    commitment: int | Command
     annotation: DecisionAnnotation | None
+    frame: DecisionFrame | None = None
+
+    @property
+    def chosen(self) -> int:
+        """Action aligned with the commitment; answers remain on commitment."""
+        if isinstance(self.commitment, int):
+            return self.commitment
+        if self.frame is None:
+            raise ValueError("a semantic commitment needs its legal frame")
+        return next(
+            i
+            for i, offer in enumerate(self.frame.offers)
+            if offer["id"] == self.commitment.offer_id
+        )
+
+    def apply(self, env: managym.Env) -> managym.Observation:
+        if isinstance(self.commitment, int):
+            return env.step(self.commitment)[0]
+        env.execute_semantic_command_json(self.commitment.to_json())
+        return env.observation_for_player(env.current_agent_index() or 0)
 
 
 def _build_name(identities: Mapping[str, object]) -> str:
@@ -120,26 +141,42 @@ class RecordWalker:
                     and self.env.state_digest() != game.digests[index]
                 ):
                     raise ValueError("pre-decision digest differs")
-                if not isinstance(action, int):
-                    raise ValueError(
-                        "semantic Command records require retained trace replay"
-                    )
                 observation = self.observation
-                if action != -1 and not 0 <= action < len(
+                frame = None
+                commitment: int | Command = (
+                    action if isinstance(action, int) else Command(**json.loads(action))
+                )
+                if isinstance(commitment, Command):
+                    live_frame = self.env.semantic_decision_frame_json()
+                    retained_frame = (
+                        game.command_frames[index]
+                        if index < len(game.command_frames)
+                        else None
+                    )
+                    if retained_frame is not None and json.loads(
+                        retained_frame
+                    ) != json.loads(live_frame):
+                        raise ValueError("recorded legal semantic frame differs")
+                    frame = DecisionFrame.from_json(live_frame)
+                    if commitment.expected_revision != frame.revision:
+                        raise ValueError("stale recorded Command")
+                    frame.offer(commitment.offer_id)
+                elif action != -1 and not 0 <= action < len(
                     observation.action_space.actions
                 ):
                     raise ValueError("recorded action is not offered")
                 decision = RecordedDecision(
                     index,
                     observation,
-                    action,
+                    commitment,
                     game.annotations[index] if index < len(game.annotations) else None,
+                    frame,
                 )
                 # A consumer such as Academy commits presentation data together
                 # with its Command. Validate the transition on an exact fork
                 # before letting that consumer retain any consequences.
                 target = self.env if apply is None else self.env.clone_env()
-                next_observation = target.step(action)[0]
+                next_observation = decision.apply(target)
                 after = (
                     game.digests[index + 1]
                     if index + 1 < count and index + 1 < len(game.digests)
@@ -177,7 +214,7 @@ class RecordWalker:
                 self.stop = ReplayStop(
                     "interrupted", count, end.reason if end else "saved prefix only"
                 )
-        except (ValueError, managym.AgentError) as error:
+        except (ValueError, TypeError, SemanticContractError, managym.AgentError) as error:
             self.stop = ReplayStop("diverged", index, f"{error}; {self.builds}")
 
 

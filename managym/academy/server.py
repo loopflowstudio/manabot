@@ -1499,6 +1499,7 @@ class GameSession:
         raw_command: dict[str, Any],
         *,
         source: str,
+        native_command: str | None = None,
     ) -> None:
         """Validate, capture, and lower one deliberate authority command."""
         command = Command.model_validate(raw_command)
@@ -1522,6 +1523,7 @@ class GameSession:
             context=context,
             command=command.model_dump(mode="json"),
             source=source,
+            native_command=native_command,
         )
 
     def _step_and_record(
@@ -1533,6 +1535,7 @@ class GameSession:
         context: DecisionContext | None = None,
         command: dict[str, Any] | None = None,
         source: str | None = None,
+        native_command: str | None = None,
     ) -> None:
         if self.env is None or self.obs is None or self.trace is None:
             raise RuntimeError("Cannot step without an active game.")
@@ -1598,6 +1601,7 @@ class GameSession:
                     "frame": context.frame,
                     "offer": selected_offer,
                     "command": command,
+                    "native_command": native_command,
                 }
             )
             retained_root = self.env.clone_env()
@@ -1636,10 +1640,15 @@ class GameSession:
             != int(command["offer_id"])
         ):
             raise RuntimeError("Academy decision drifted from semantic authority.")
-        semantic_command = SemanticCommand(
-            command_id=str(command["command_id"]),
-            expected_revision=int(semantic_frame["revision"]),
-            offer_id=int(command["offer_id"]),
+        semantic_command = (
+            SemanticCommand(**json.loads(native_command))
+            if native_command is not None
+            else SemanticCommand(
+                command_id=str(command["command_id"]),
+                expected_revision=int(semantic_frame["revision"]),
+                offer_id=int(command["offer_id"]),
+                answers=tuple(command["answers"]),
+            )
         )
         transition_json, next_obs, reward, _, _, _ = self.env.step_semantic_command(
             semantic_command.to_json()
