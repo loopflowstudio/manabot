@@ -38,7 +38,7 @@ ARMS: dict[str, RunSettings] = {
     "record-01": RunSettings(diagnostics="off", record_games=0.01),
     "record-10": RunSettings(diagnostics="off", record_games=0.1),
     "record-all": RunSettings(diagnostics="off", record_games=1),
-    "journals": RunSettings(diagnostics="escalated"),
+    "journals": RunSettings(diagnostics="detailed"),
     "marker": RunSettings(diagnostics="standard"),
 }
 
