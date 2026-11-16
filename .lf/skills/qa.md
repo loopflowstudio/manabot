@@ -392,12 +392,7 @@ publish, land or choose the next Graph step from here.
   `self._env.current_player_configs()`, `self.stream_matches` and
   `self._buffers` (e.g. `decklists`, `[streams, 2, cards, 5]`) after each
   batch. The native `VectorEnv.set_training_decks(decks, distinct)` differs
-  from the collector wrapper's `(decks, digest, sampling)`. Without a driver,
-  `--training-game-logs` writes `game-journals/vector-0.jsonl`: full rows
-  carry `evidence` (`FailureEvidence`), delta rows carry `games[].replacement`
-  (`GameInputs`). Reset a `VectorEnv(num_envs=1, seed=game.seed,
-  seed_stride=…, skip_trivial=…, player_policies=evidence.resolved_player_policies)`
-  with `game.setup()` and step `game.actions` to replay each retained game.
+  from the collector wrapper's `(decks, digest, sampling)`.
 - TLA Limited decks (the MTG-282 pool corpus) overflow default observation
   capacities within a few dozen games; copy the `observation` block and the
   `game_errors` policy (`recover_capacity: true`) of
