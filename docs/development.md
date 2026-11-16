@@ -331,8 +331,9 @@ When a job passes 8 minutes, in order of preference:
 
 Never skip, deselect or delete a test to fit, and never raise the five-minute
 single-test limit ([TESTING.md](../TESTING.md)). Groups select directories,
-files and individual tests. If a new file is not covered by a directory
-selection, add it to the group with the most room.
+files and individual tests. Before publishing, check that every new or changed
+test file is covered by a directory or explicit file selection; add missing
+files to the group with the most room.
 Engine Budget is the exception: it builds and measures the change and its
 reference on one runner and keeps that shape, whatever it takes. The macOS
 nightly reuses the same groups without this limit.
