@@ -218,6 +218,32 @@ def test_opponent_memory_rejects_missing_companions_and_unowned_details() -> Non
         model.prepare(obs)
 
 
+def test_memory_preparation_keeps_detail_ownership_across_empty_viewers() -> None:
+    space, one = memory_input()
+    obs = {key: np.repeat(value, 3, axis=0) for key, value in one.items()}
+    headers, details = obs["opponent_records"], obs["opponent_details"]
+    count = int(headers[0, 0, 15])
+    # Two unequal record slices, an empty viewer, then one record. The extra
+    # numeric detail must belong to the second record, never the next viewer.
+    headers[0, 1] = headers[0, 0]
+    headers[0, 1, [1, 7, 9, 14, 15]] = [1, 1, 1, count, count + 1]
+    details[0, count : 2 * count] = details[0, :count]
+    details[0, 2 * count] = details[0, 0]
+    details[0, 2 * count, 6] = 7
+    for key in ("opponent_records", "opponent_details"):
+        obs[key][1].fill(0)
+    memory = policy(space, "gru", 1).prepare(obs).memory
+    assert memory is not None
+    np.testing.assert_array_equal(memory.record_batches, [0, 0, 2])
+    np.testing.assert_array_equal(
+        memory.detail_records, [0] * count + [1] * (count + 1) + [2] * count
+    )
+    assert memory.detail_numbers[2 * count, 3] == pytest.approx(np.log1p(7) / 10)
+    np.testing.assert_array_equal(
+        memory.detail_numbers[:count], memory.detail_numbers[2 * count + 1 :]
+    )
+
+
 def test_opponent_memory_rejects_noncanonical_words_with_the_same_catalog_join() -> (
     None
 ):

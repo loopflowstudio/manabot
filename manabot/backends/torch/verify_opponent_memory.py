@@ -87,8 +87,8 @@ def prove_policies(
                 assert gradients[name] > 0
             path = out / f"{encoder}-k{summaries}.safetensors"
             save_checkpoint(model, space, path, player_configs=player_configs)
-            restored, space = load_checkpoint(str(path))
-            assert space == space
+            restored, restored_space = load_checkpoint(str(path))
+            assert restored_space == space
             actual = restored.forward_distribution(
                 on_device(restored.prepare(obs), "cpu")
             )

@@ -257,7 +257,12 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, default=Path(".runs/opponent-memory-demo"))
-    run_demo(parser.parse_args().out, verify_opponent_memory)
+    out = parser.parse_args().out
+    # The training proof creates a new run store; refuse before any proof
+    # replaces part of an earlier receipt.
+    if out.exists() and any(out.iterdir()):
+        parser.error(f"--out {out} is not empty; choose a fresh output directory")
+    run_demo(out, verify_opponent_memory)
 
 
 if __name__ == "__main__":

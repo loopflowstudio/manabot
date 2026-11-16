@@ -8,6 +8,7 @@ recovery policy, private state, or writable model memory lives here.
 
 from dataclasses import dataclass, field, replace
 from hashlib import sha256
+from itertools import groupby
 import json
 import re
 from typing import Callable
@@ -1301,10 +1302,23 @@ def _memory_lines(memory: list[OpponentDecisionRecord]) -> list[str]:
     snapshots: dict[str, str] = {}
     references_seen: dict[str, str] = {}
 
-    def alias(reference: DecisionReference) -> str:
-        if not reference.description:
-            return "rules snapshot unavailable"
-        return snapshots.setdefault(reference.description, f"H{len(snapshots) + 1}")
+    def reference_alias(reference: DecisionReference) -> str:
+        rules = (
+            snapshots.setdefault(reference.description, f"H{len(snapshots) + 1}")
+            if reference.description
+            else "rules snapshot unavailable"
+        )
+        snapshot = _memory_reference(reference, rules)
+        return references_seen.setdefault(snapshot, f"M{len(references_seen) + 1}")
+
+    def reference_group(references: list[DecisionReference]) -> str:
+        # Compress adjacent equals only: order and multiplicity remain exact.
+        groups = groupby(reference_alias(reference) for reference in references)
+        parts: list[str] = []
+        for key, group in groups:
+            count = sum(1 for _ in group)
+            parts.append(key if count == 1 else f"{count}× {key}")
+        return ", ".join(parts) or "none"
 
     records: list[str] = []
     previous: dict[str, str] = {}
@@ -1321,34 +1335,8 @@ def _memory_lines(memory: list[OpponentDecisionRecord]) -> list[str]:
             "board": " | ".join(
                 "/".join(map(str, counts)) for counts in context.board_counts
             ),
+            "mana": reference_group(context.mana_sources),
         }
-        groups_text: list[str] = []
-        for label, references in (
-            ("mana", context.mana_sources),
-            ("Response", record.response),
-            ("Chosen subjects", choice.references),
-        ):
-            # Consecutive equal snapshots retain multiplicity and ordering.
-            groups: list[tuple[str, int]] = []
-            for reference in references:
-                snapshot = _memory_reference(reference, alias(reference))
-                text = references_seen.setdefault(
-                    snapshot, f"M{len(references_seen) + 1}"
-                )
-                if groups and groups[-1][0] == text:
-                    groups[-1] = (text, groups[-1][1] + 1)
-                else:
-                    groups.append((text, 1))
-            value = (
-                ", ".join(
-                    text if count == 1 else f"{count}× {text}" for text, count in groups
-                )
-                or "none"
-            )
-            if label == "mana":
-                fields[label] = value
-            else:
-                groups_text.append(f"{label}: {value}")
         changes = [
             f"{label}: {value}"
             for label, value in fields.items()
@@ -1368,7 +1356,14 @@ def _memory_lines(memory: list[OpponentDecisionRecord]) -> list[str]:
         records.append(
             f"{record.ordinal + 1}. {record.kind}/{choice.kind or 'unavailable'}; "
             f"count: {record.count}; span: {record.first_position}..{record.last_position}; "
-            + "; ".join([*changes, *selectors, *groups_text])
+            + "; ".join(
+                [
+                    *changes,
+                    *selectors,
+                    f"Response: {reference_group(record.response)}",
+                    f"Chosen subjects: {reference_group(choice.references)}",
+                ]
+            )
         )
     return [
         "",

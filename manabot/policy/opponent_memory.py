@@ -130,13 +130,21 @@ def prepare_memory(
         -1,
     ).astype(np.float32)
     kinds = tables.names(1, record_word(selected[:, 12:14], 0))
-    owned: list[np.ndarray] = []
-    routes: list[np.ndarray] = []
-    for index, (batch, header) in enumerate(zip(batches, selected, strict=True)):
-        start, count = map(int, header[14:16])
-        owned.append(obs["opponent_details"][batch, start : start + count])
-        routes.append(np.full(count, index, np.int64))
-    details = np.concatenate(owned) if owned else np.zeros((0, 8), np.float32)
+    # Admitted record slices partition each viewer's detail prefix. Gather once
+    # per viewer, in the same batch/chronological order as the selected headers.
+    detail_lengths = headers[..., 15].sum(1).astype(np.int64)
+    details = (
+        np.concatenate(
+            [
+                rows[:length]
+                for rows, length in zip(
+                    obs["opponent_details"], detail_lengths, strict=True
+                )
+            ]
+        )
+        if len(headers)
+        else np.zeros((0, 8), np.float32)
+    )
     detail_names = tables.names(1, record_word(details[:, 2:4], 0))
     payloads = record_word(details[:, 5:7], 0)
     token_kinds = details[:, 4].astype(np.int64)
@@ -172,7 +180,9 @@ def prepare_memory(
         ).astype(np.float32),
         definitions,
         name_rows,
-        np.concatenate(routes) if routes else np.zeros(0, np.int64),
+        np.repeat(
+            np.arange(len(selected), dtype=np.int64), selected[:, 15].astype(np.int64)
+        ),
         batches.astype(np.int64),
         slots.astype(np.int64),
         np.flatnonzero(lengths).astype(np.int64),

@@ -47,12 +47,14 @@ def test_memory_prefix_tail_fork_reset_and_duplicate_gather() -> None:
     dense["opponent_records"][0, 0, 3] = 2
     dense["opponent_records"][0, 0, 9] = 1
     after = store.capture(dense, 0, identity)
-    assert before.details[0] is after.details[0]
+    assert before.tail is not None and after.tail is not None
+    assert before.tail.detail is after.tail.detail
     assert store.capture(dense, 0, identity).tail is after.tail
-    assert before.records[0] is not after.records[0]
+    assert before.tail.record is not after.tail.record
     dense["opponent_details"][0, 0, 6] = 9
     fork = store.capture(dense, 0, PrefixIdentity("game-1", 0, "fork"))
-    assert fork.details[0] is not after.details[0]
+    assert fork.tail is not None
+    assert fork.tail.detail is not after.tail.detail
     for key in MEMORY_FIELDS:
         dense[key].fill(0)  # Later games overwrite native buffers.
     empty = store.capture(dense, 0, PrefixIdentity("game-2", 1, "root"))
@@ -83,7 +85,7 @@ def test_memory_prefix_tail_fork_reset_and_duplicate_gather() -> None:
     with pytest.raises(ValueError, match="missing"):
         restore_memory(replace(archive, chunks=archive.chunks[:-1]))
     with pytest.raises(ValueError):
-        before.details[0].rows.setflags(write=True)
+        before.tail.detail.rows.setflags(write=True)
     assert space.encoder.shapes["opponent_records"] == (4, 18)
 
 

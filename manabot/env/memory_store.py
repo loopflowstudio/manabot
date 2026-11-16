@@ -61,14 +61,6 @@ class Prefix:
             yield node.record, node.detail
 
     @property
-    def records(self) -> tuple[Chunk, ...]:
-        return tuple(record for record, _ in self.chunks())
-
-    @property
-    def details(self) -> tuple[Chunk, ...]:
-        return tuple(detail for _, detail in self.chunks())
-
-    @property
     def record_count(self) -> int:
         return self.tail.record_count if self.tail is not None else 0
 
