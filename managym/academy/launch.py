@@ -9,7 +9,7 @@ operation chooses a game action.
 from __future__ import annotations
 
 from collections.abc import Collection, Mapping, Sequence
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 import errno
 import gzip
 import json
@@ -21,6 +21,7 @@ import threading
 import time
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlencode
+import warnings
 import webbrowser
 
 from managym.disclosure import DecklistDisclosure
@@ -38,37 +39,47 @@ _TRACE_SUFFIXES = {".json", ".jsonl", ".gz"}
 @dataclass(frozen=True)
 class RecordedGame:
     index: int
-    deal_seed: int
-    leg: int
+    seed: int
+    stream: int
     players: tuple[str, str]
-    decks: tuple[str, str]
-    game_trace_sha256: str
+    decisions: int
+    ended: str
+    digest: str
     _record: dict[str, Any] = field(repr=False, compare=False)
 
     @property
-    def seed(self) -> int:
-        return self.deal_seed
+    def deal_seed(self) -> int:
+        _warn_listing_field("deal_seed", "seed")
+        return self.seed
 
     @property
-    def stream(self) -> int:
-        games = self._record.get("games")
-        return int(games[0]["stream"]) if games else self.leg
+    def leg(self) -> int:
+        _warn_listing_field("leg", "stream")
+        return self.stream
 
     @property
-    def digest(self) -> str:
-        return self.game_trace_sha256
+    def game_trace_sha256(self) -> str:
+        _warn_listing_field("game_trace_sha256", "digest")
+        return self.digest
 
     @property
-    def decisions(self) -> int:
-        games = self._record.get("games")
-        return len(games[0]["actions"]) if games else len(self._record["decisions"])
-
-    @property
-    def ended(self) -> str:
+    def decks(self) -> tuple[str, str]:
+        _warn_listing_field("decks", "the original record's setups")
+        if "seat_decks" in self._record:
+            return _seat_pair(self._record, "seat_decks")
         games = self._record.get("games")
         if games:
-            return (games[0].get("end") or {}).get("status", "interrupted")
-        return "complete" if self._record.get("terminated") else "interrupted"
+            names = [player["name"] for player in games[0]["players"]]
+            return names[0], names[1]
+        return "interactive", "interactive"
+
+
+def _warn_listing_field(name: str, replacement: str) -> None:
+    warnings.warn(
+        f"RecordedGame.{name} is deprecated; use {replacement}; removal in 0.4.0",
+        DeprecationWarning,
+        stacklevel=3,
+    )
 
 
 class AcademyLaunchError(ValueError):
@@ -108,17 +119,7 @@ def read_games(path: Path) -> list[RecordedGame]:
         games: list[RecordedGame] = []
         for child in sorted(path.glob("*.jsonl")):
             for game in read_games(child):
-                games.append(
-                    RecordedGame(
-                        len(games),
-                        game.deal_seed,
-                        game.leg,
-                        game.players,
-                        game.decks,
-                        game.game_trace_sha256,
-                        game._record,
-                    )
-                )
+                games.append(replace(game, index=len(games)))
         if not games:
             raise AcademyLaunchError("replay.unreadable", f"{path}: no game records")
         return games
@@ -141,39 +142,33 @@ def read_games(path: Path) -> list[RecordedGame]:
         except json.JSONDecodeError:
             records = [json.loads(line) for line in source.splitlines() if line.strip()]
         games = []
-        for index, record in enumerate(records):
-            if isinstance(record, dict) and record.get("schema") in {
-                "managym-game-v1",
-                "native-failure-v1",
-                "training-exposure-v1",
-                "training-game-checkpoint-v1",
-            }:
-                from managym.recording import read_record, record_from_row
+        for record in records:
+            from managym.recording import records_from_source
 
-                native = (
-                    read_record(path)
-                    if record["schema"] == "training-game-checkpoint-v1"
-                    else record_from_row(record)
-                )
-                for inputs in native.games:
-                    one = native.model_copy(update={"games": [inputs]})
-                    payload = one.model_dump(mode="json", by_alias=True)
-                    digest = one.sha256
-                    names = tuple(p.name for p in inputs.players)
-                    if len(names) != 2:
-                        raise ValueError("record setup unavailable")
-                    games.append(
-                        RecordedGame(
-                            len(games),
-                            inputs.seed,
-                            inputs.stream,
-                            (names[0], names[1]),
-                            (names[0], names[1]),
-                            digest,
-                            payload,
+            native_records = records_from_source(record, journal_path=path)
+            if native_records is not None:
+                for native in native_records:
+                    for inputs in native.games:
+                        one = native.model_copy(update={"games": [inputs]})
+                        names = tuple(p.name for p in inputs.players)
+                        if len(names) != 2:
+                            raise ValueError("record setup unavailable")
+                        games.append(
+                            RecordedGame(
+                                index=len(games),
+                                seed=inputs.seed,
+                                stream=inputs.stream,
+                                players=(names[0], names[1]),
+                                decisions=len(inputs.actions),
+                                ended=inputs.end.status
+                                if inputs.end
+                                else "interrupted",
+                                digest=one.sha256,
+                                _record=one.model_dump(mode="json", by_alias=True),
+                            )
                         )
-                    )
-                if record["schema"] == "training-game-checkpoint-v1":
+                # A journal's subsequent rows are changes, not separate games.
+                if record.get("schema") == "training-game-checkpoint-v1":
                     break
                 continue
             if not isinstance(record, dict) or not isinstance(
@@ -187,17 +182,14 @@ def read_games(path: Path) -> list[RecordedGame]:
                 raise ValueError("deal_seed and leg must be integers")
             games.append(
                 RecordedGame(
-                    index,
-                    record["deal_seed"],
-                    record["leg"],
-                    _seat_pair(record, "seat_players"),
-                    # Interactive evaluation traces omit seat_decks, as in the
-                    # browser importer; their match_hypers still bind the real lists.
-                    _seat_pair(
-                        {"seat_decks": ["interactive"] * 2, **record}, "seat_decks"
-                    ),
-                    digest,
-                    record,
+                    index=len(games),
+                    seed=record["deal_seed"],
+                    stream=record["leg"],
+                    players=_seat_pair(record, "seat_players"),
+                    decisions=len(record["decisions"]),
+                    ended="complete" if record.get("terminated") else "interrupted",
+                    digest=digest,
+                    _record=record,
                 )
             )
         if not games:
@@ -245,11 +237,7 @@ def _select_game(path: Path, game: int | str | None) -> RecordedGame:
     matches = [
         row
         for row in games
-        if (
-            row.index == game
-            if isinstance(game, int)
-            else row.game_trace_sha256.startswith(game)
-        )
+        if (row.index == game if isinstance(game, int) else row.digest.startswith(game))
     ]
     if len(matches) != 1:
         raise AcademyLaunchError(

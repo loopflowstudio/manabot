@@ -8,7 +8,7 @@ from contextlib import ExitStack
 from dataclasses import asdict, dataclass, field, replace
 from threading import Lock
 from time import monotonic
-from typing import TYPE_CHECKING, Any, Literal, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 if TYPE_CHECKING:
     from managym.recording import GameRecord
@@ -372,16 +372,15 @@ def import_arena(game_record: dict[str, Any]) -> dict[str, Any]:
     Source digests and receipt stay in their original namespace; the imported
     Academy match gets its own identity and retained Study roots.
     """
+    from managym.recording import records_from_source
+
     from .trace import GameConfig
 
-    if game_record.get("schema") in {
-        "managym-game-v1",
-        "native-failure-v1",
-        "training-exposure-v1",
-    }:
-        from managym.recording import record_from_row
-
-        return import_record(record_from_row(game_record))
+    records = records_from_source(game_record)
+    if records is not None:
+        if len(records) != 1:
+            raise ValueError("select exactly one game record")
+        return import_record(records[0])
     extension = bot_extension()
     if extension is None:
         raise HTTPException(400, "arena_import_unavailable")
@@ -492,7 +491,7 @@ def import_record(record: "GameRecord") -> dict[str, Any]:
     from managym.decision import Command
     from managym.replay import RecordedDecision, walk
 
-    from .trace import GameConfig
+    from .trace import GameConfig, RecordingImport
 
     if not record.skip_trivial:
         raise ValueError("Academy requires forced-decision skipping")
@@ -587,10 +586,7 @@ def import_record(record: "GameRecord") -> dict[str, Any]:
         assert replay.stop is not None
         stop = replay.stop
         reason = "game_over" if stop.status == "complete" else f"record_{stop.status}"
-        session.trace.config.opponent.update(
-            stop={"status": stop.status, "index": stop.index, "reason": stop.reason},
-            build_differs=replay.build_differs,
-        )
+        session.trace.recording_import = RecordingImport(stop, replay.build_differs)
         session._persist_attempt(end_reason=reason)
         return {
             **created,

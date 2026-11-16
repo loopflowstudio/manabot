@@ -428,18 +428,20 @@ from pathlib import Path
 
 from managym.diagnostics import Diagnostics
 
-diagnostics = Diagnostics(Path("run/diagnostics"), captures=[vector])
-with diagnostics.operation("collection"):
-    vector.step_into_buffers(actions)
-with diagnostics.operation("learning"):
-    update(batch)
+with Diagnostics(Path("run/diagnostics"), captures=[vector]) as diagnostics:
+    with diagnostics.operation("collection") as operation:
+        vector.step_into_buffers(actions)
+        operation.progress(len(actions))
+    with diagnostics.operation("learning"):
+        update(batch)
 ```
 
 If a phase stops returning, `run/diagnostics` already holds `operation.json`
 (the phase, pending or returned, when it began and its sequence number),
-`stall.json` (when the watchdog noticed and why), `stacks.txt` (every Python
-thread's stack) and one `PRODUCER.jsonl` per capture with the games that were
-in progress, readable with `read_record`. Nothing has to be switched on first.
+`escalations.jsonl` (an appended history of when diagnostics escalated and why),
+`stacks.txt` (every Python thread's stack) and `PRODUCER.snapshot.json` for each
+capture's cached games. Later calls write `PRODUCER.jsonl`, readable with
+`read_record`. Nothing has to be switched on first.
 
 | Level | What runs |
 |---|---|
@@ -449,9 +451,12 @@ in progress, readable with `read_record`. Nothing has to be switched on first.
 
 The watchdog raises the level to `"detailed"` and records the reason when no
 operation returns within `stall_seconds`, or when the rate you report with
-`diagnostics.progress(decisions)` falls below `slow_fraction` of its trailing
+`operation.progress(decisions)` falls below `slow_fraction` of its trailing
 rate. You can raise it yourself with `diagnostics.escalate("reason")`, or start
-at `Diagnostics(..., level="detailed")`.
+at `Diagnostics(..., level="detailed")`. Mark inference microsteps with
+`operation("inference", per_step=True)`; only detailed diagnostics writes those
+markers. Progress reported by an operation measures that phase alone, excluding
+time spent learning or exporting between collections.
 
 What a stall leaves depends on the call that hung. The buffered `VectorEnv`
 calls, the rollout pool and flat-MC scoring release Python's interpreter lock

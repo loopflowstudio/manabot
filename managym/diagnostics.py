@@ -7,6 +7,7 @@ state, so it can run while a buffered call has released the interpreter lock.
 
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
+from dataclasses import dataclass
 import faulthandler
 import json
 from pathlib import Path
@@ -16,6 +17,7 @@ import time
 from typing import BinaryIO, Literal, Protocol
 import weakref
 
+from managym.journal import DurableJournal
 from managym.recording import GameRecord, atomic_private_json
 
 type Level = Literal["off", "standard", "detailed"]
@@ -24,8 +26,21 @@ _SIGNAL_OWNER = threading.Lock()
 
 
 class Capture(Protocol):
+    producer: str
+
     def snapshot(self) -> GameRecord: ...
     def enable_journal(self, path: Path) -> None: ...
+
+
+@dataclass
+class Operation:
+    """Progress belongs to this phase's elapsed time, independent of its name."""
+
+    diagnostics: "Diagnostics"
+    started: float
+
+    def progress(self, decisions: int) -> None:
+        self.diagnostics._progress(decisions, self.diagnostics._clock() - self.started)
 
 
 class Diagnostics:
@@ -52,7 +67,9 @@ class Diagnostics:
         self.slow_fraction = slow_fraction
         self._context_provider = context_provider
         self._clock = clock
-        self._captures = [weakref.ref(capture) for capture in captures]
+        self._captures: dict[str, weakref.ReferenceType[Capture]] = {}
+        for capture in captures:
+            self._register_capture(capture)
         self._lock = threading.RLock()
         self._stop = threading.Event()
         self._operations: list[tuple[str, float]] = []
@@ -87,13 +104,24 @@ class Diagnostics:
         )
         self._thread.start()
 
+    def _register_capture(self, capture: Capture) -> str:
+        for name, reference in self._captures.items():
+            if reference() is capture:
+                return name
+        base = capture.producer
+        name = base
+        suffix = 1
+        while name in self._captures:
+            name = f"{base}-{suffix}"
+            suffix += 1
+        self._captures[name] = weakref.ref(capture)
+        return name
+
     def add_capture(self, capture: Capture) -> None:
         with self._lock:
-            self._captures.append(weakref.ref(capture))
+            name = self._register_capture(capture)
             if self.level == "detailed":
-                capture.enable_journal(
-                    self.directory / f"{len(self._captures) - 1}.jsonl"
-                )
+                capture.enable_journal(self.directory / f"{name}.jsonl")
 
     def _mark(self, name: str, state: str) -> None:
         self._sequence += 1
@@ -109,17 +137,16 @@ class Diagnostics:
         )
 
     @contextmanager
-    def operation(self, name: str) -> Iterator[None]:
-        if self.level == "off":
-            yield
+    def operation(self, name: str, *, per_step: bool = False) -> Iterator[Operation]:
+        operation = Operation(self, self._clock())
+        if self.level == "off" or (per_step and self.level == "standard"):
+            yield operation
             return
         with self._lock:
             self._operations.append((name, self._clock()))
-            if name == "collection":
-                self._progress_at = self._clock()
             self._mark(name, "pending")
         try:
-            yield
+            yield operation
         except BaseException:
             with self._lock:
                 self._operations.pop()
@@ -132,14 +159,15 @@ class Diagnostics:
                     self._mark(self._operations[-1][0], "pending")
 
     def progress(self, decisions: int) -> None:
-        if self.level == "off":
+        """Report progress since the preceding report outside a phase context."""
+        now = self._clock()
+        self._progress(decisions, now - self._progress_at)
+        self._progress_at = now
+
+    def _progress(self, decisions: int, elapsed: float) -> None:
+        if self.level == "off" or elapsed <= 0 or decisions <= 0:
             return
         with self._lock:
-            now = self._clock()
-            elapsed = now - self._progress_at
-            self._progress_at = now
-            if elapsed <= 0 or decisions <= 0:
-                return
             rate = decisions / elapsed
             if self._rate is not None and rate < self.slow_fraction * self._rate:
                 self.escalate(
@@ -152,23 +180,23 @@ class Diagnostics:
             return
         with self._lock:
             self.level = "detailed"
-            atomic_private_json(
-                self.directory / "stall.json",
+            DurableJournal(self.directory / "escalations.jsonl").append(
                 {
                     "reason": reason,
                     "timestamp": time.time(),
                     "operation": self._operations[-1][0] if self._operations else None,
                 },
+                create=not (self.directory / "escalations.jsonl").exists(),
             )
-            for index, reference in enumerate(self._captures):
+            for name, reference in self._captures.items():
                 capture = reference()
                 if capture is None:
                     continue
                 atomic_private_json(
-                    self.directory / f"{index}.snapshot.jsonl",
+                    self.directory / f"{name}.snapshot.json",
                     capture.snapshot().model_dump(mode="json", by_alias=True),
                 )
-                capture.enable_journal(self.directory / f"{index}.jsonl")
+                capture.enable_journal(self.directory / f"{name}.jsonl")
             if self._stacks is not None:
                 faulthandler.dump_traceback(file=self._stacks, all_threads=True)
 

@@ -72,6 +72,11 @@ def test_interrupted_record_import_is_closed_and_readable(
     selected = read_games(path)[0]
     imported = import_arena(selected._record)
     assert imported["stop"] == "interrupted"
+    from managym.academy.attempts import AttemptStore
+
+    retained = AttemptStore(trace.TRACES_DIR / "play.sqlite").load(imported["id"])
+    assert retained["recording_import"]["stop"]["status"] == "interrupted"
+    assert "stop" not in retained["config"]["opponent"]
     assert imported["id"] not in server.SESSION_REGISTRY
     shown = inspect_watch(imported["id"], 0, imported["token"])
     assert shown["count"] == 1
@@ -210,3 +215,40 @@ def test_original_command_import_and_stale_rejection(
         == 15
     )
     assert rejected["id"] not in server.SESSION_REGISTRY
+
+
+def test_journal_listing_projects_the_complete_file(tmp_path: Path) -> None:
+    from managym.recording import read_record, records_from_source
+
+    path = tmp_path / "journal.jsonl"
+    capture = ScalarCapture(seed=7, journal_path=path)
+    env = managym.Env(seed=7)
+    capture.reset(
+        env,
+        [managym.PlayerConfig(name=str(i), decklist={"Mountain": 12}) for i in (0, 1)],
+    )
+    capture.step(env, 0)
+    capture.close()
+    rows = read_games(path)
+    assert len(rows) == 1
+    row = rows[0]
+    assert (row.seed, row.stream, row.players, row.decisions, row.ended) == (
+        7,
+        0,
+        ("0", "1"),
+        1,
+        "interrupted",
+    )
+    assert row.digest == read_record(path).sha256
+    with pytest.warns(DeprecationWarning, match="removal in 0.4.0"):
+        assert row.deal_seed == row.seed
+    with pytest.warns(DeprecationWarning, match="removal in 0.4.0"):
+        assert row.game_trace_sha256 == row.digest
+    checkpoint = json.loads(path.read_text().splitlines()[0])
+    with pytest.raises(ValueError, match="complete file"):
+        records_from_source(checkpoint)
+
+
+def test_malformed_native_row_never_falls_back_to_bot_import() -> None:
+    with pytest.raises(ValueError):
+        import_arena({"schema": "managym-game-v1", "decisions": []})

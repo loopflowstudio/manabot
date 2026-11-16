@@ -1,5 +1,6 @@
 """Durable training cursors survive native/learner interruption without cleanup."""
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 import json
 import math
@@ -28,6 +29,12 @@ from managym.recording import (
     read_failure,
 )
 from managym.replay import replay_failure_inputs
+
+
+def _cursors(directory: Path) -> Iterator[Path]:
+    return (
+        path for path in directory.glob("*.jsonl") if path.name != "escalations.jsonl"
+    )
 
 
 def _run_child(function: str, *args: str) -> None:
@@ -140,7 +147,7 @@ def test_abrupt_exit_leaves_replayable_private_cursor(
 ) -> None:
     _run_child("_interrupt_child", str(tmp_path), mode, phase)
     directory = tmp_path / "game-journals"
-    cursor = next(directory.glob("*.jsonl"))
+    cursor = next(_cursors(directory))
     assert cursor.stat().st_mode & 0o777 == 0o600
     assert directory.stat().st_mode & 0o777 == 0o700
     evidence = read_failure(cursor)
@@ -263,7 +270,7 @@ def test_interrupted_reset_replays_prior_game_without_binding_claim(
     tmp_path: Path, operation: str, first: str
 ) -> None:
     _run_child("_interrupt_reset_child", str(tmp_path), operation, first)
-    cursor = next((tmp_path / "game-journals").glob("*.jsonl"))
+    cursor = next(_cursors(tmp_path / "game-journals"))
     evidence = read_failure(cursor)
     boundary = evidence.boundary
     assert boundary is not None
@@ -341,7 +348,7 @@ def test_executing_replay_requires_active_fresh_step_binding(
         vector.reset_all_into_buffers(_players())
         frame = vector.semantic_decision_frames_json()[0]
         vector.step_into_buffers([0])
-        evidence = read_failure(next(scope.journal_directory.glob("*.jsonl")))
+        evidence = read_failure(next(_cursors(scope.journal_directory)))
         vector.close()
     boundary = evidence.boundary
     assert boundary is not None
@@ -397,7 +404,7 @@ def test_enabled_logging_preserves_buffers_prefixes_and_reset_identity(
                 )
             )
             if enabled:
-                retained = read_failure(next(scope.journal_directory.glob("*.jsonl")))
+                retained = read_failure(next(_cursors(scope.journal_directory)))
                 assert (
                     retained.boundary is not None and retained.boundary.phase == "ready"
                 )
@@ -431,7 +438,7 @@ def test_shards_keep_independent_paths_and_owner_coordinates(
             vector.step_into_buffers([0] * 4, [True, False, True, False])
         finally:
             vector.close()
-    paths = list(scope.journal_directory.glob("*.jsonl"))
+    paths = list(_cursors(scope.journal_directory))
     assert len(paths) == workers
     receipts = [read_failure(path) for path in paths]
     assert sorted(game.stream for row in receipts for game in row.games) == [0, 1, 2, 3]
@@ -446,7 +453,7 @@ def test_pending_storage_error_prevents_native_step(tmp_path: Path) -> None:
         vector.set_buffers(_buffers(1))
         vector.reset_all_into_buffers(_players())
         before = vector.native.semantic_decision_frames_json()
-        cursor = next(scope.journal_directory.glob("*.jsonl"))
+        cursor = next(_cursors(scope.journal_directory))
         cursor.unlink()
         cursor.mkdir()
         with pytest.raises(OSError):
@@ -558,7 +565,7 @@ def test_reassignment_and_failed_replacement_retain_current_inputs(
         vector.set_buffers(_buffers(2))
         vector.reset_all_into_buffers(_players())
         vector.reassign_roots_into_buffers([list(reversed(_players())), None])
-        cursor = next(scope.journal_directory.glob("*.jsonl"))
+        cursor = next(_cursors(scope.journal_directory))
         reassigned = read_failure(cursor)
         assert reassigned.games[0].players[0].name == "b"
         vector.step_isolated_into_buffers([-1, 0], [True, True])
@@ -590,16 +597,16 @@ def test_auto_reset_replaces_prefix_and_bounds_retained_files(tmp_path: Path) ->
                 break
         else:
             pytest.fail("tiny native game did not settle")
-        cursor = next(scope.journal_directory.glob("*.jsonl"))
+        cursor = next(_cursors(scope.journal_directory))
         evidence = read_failure(cursor)
         assert evidence.games[0].seed == 25
         assert evidence.games[0].actions == []
         assert evidence.boundary is not None and evidence.boundary.phase == "ready"
-        assert len(list(scope.journal_directory.glob("*.jsonl"))) == 1
+        assert len(list(_cursors(scope.journal_directory))) == 1
         vector.close()
         assert cursor.exists()
         scope.retire_cursors()
-        assert not list(scope.journal_directory.glob("*.jsonl"))
+        assert not list(_cursors(scope.journal_directory))
 
 
 def _interrupt_execution(directory: str, phase: str) -> None:
@@ -652,7 +659,7 @@ def test_executor_interrupt_marks_active_work_before_call(
     assert marker["operation"] == phase and marker["state"] == "pending"
     assert marker["context"]["stage"]
     assert marker["context"]["coordinates"]["updates"] == 0
-    for cursor in directory.glob("*.jsonl"):
+    for cursor in _cursors(directory):
         evidence = read_failure(cursor)
         assert evidence.boundary is not None and evidence.boundary.phase == "ready"
         assert evidence.boundary.returned

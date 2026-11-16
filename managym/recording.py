@@ -36,6 +36,12 @@ if TYPE_CHECKING:
     from managym.replay import RecordedDecision
 
 
+def semantic_frame_sha256(frame: str) -> str:
+    """Hash legal-frame JSON independently of whitespace and object key order."""
+    body = json.dumps(json.loads(frame), sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(body.encode()).hexdigest()
+
+
 class RecordingOptions(TypedDict, total=False):
     games_path: Path | None
     record_fraction: float
@@ -115,7 +121,7 @@ class GameInputs(BaseModel):
     committed: int | None = Field(default=None, ge=0)
     digests: list[str] = []
     annotations: list[DecisionAnnotation | None] = []
-    command_frames: list[str | None] = Field(
+    command_frame_hashes: list[str | None] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
     end: GameEnd | None = None
@@ -147,7 +153,7 @@ class GameInputs(BaseModel):
         self.committed = 0
         self.digests = []
         self.annotations = []
-        self.command_frames = []
+        self.command_frame_hashes = []
         self.end = None
         self.actor = None
         self.frame = None
@@ -237,7 +243,7 @@ class GameChange(BaseModel):
     annotations: list[DecisionAnnotation | None] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
-    command_frames: list[str | None] = Field(
+    command_frame_hashes: list[str | None] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
     end: GameEnd | None = None
@@ -283,12 +289,12 @@ class JournalChange(BaseModel):
                 game.actions.extend(change.append)
                 game.digests = game.digests[: change.keep] + change.digests
                 game.annotations = game.annotations[: change.keep] + change.annotations
-                if game.command_frames or change.command_frames:
-                    frames = game.command_frames[: change.keep]
-                    game.command_frames = (
+                if game.command_frame_hashes or change.command_frame_hashes:
+                    frames = game.command_frame_hashes[: change.keep]
+                    game.command_frame_hashes = (
                         frames
                         + [None] * (change.keep - len(frames))
-                        + change.command_frames
+                        + change.command_frame_hashes
                     )
                 game.end = change.end
                 game.committed = change.committed
@@ -389,7 +395,7 @@ class _GameJournal:
                             committed=game.committed,
                             digests=game.digests[keep:count],
                             annotations=game.annotations[keep:count],
-                            command_frames=game.command_frames[keep:count],
+                            command_frame_hashes=game.command_frame_hashes[keep:count],
                             end=game.end,
                             actor=game.actor,
                             frame=frame,
@@ -485,6 +491,7 @@ class _Capture:
     ) -> None:
         if not 0 <= record_fraction <= 1:
             raise ValueError("record_fraction must be in [0, 1]")
+        self.producer = "capture"
         self.games_path = games_path
         self.record_fraction = record_fraction
         self._output: BinaryIO | None = None
@@ -502,12 +509,21 @@ class _Capture:
         self._pending_journal_path: Path | None = None
         self._profiler_requested = False
 
-    def evidence(self) -> GameRecord:
+    def _snapshot(self) -> GameRecord:
         raise NotImplementedError
+
+    def evidence(self) -> GameRecord:
+        """Deprecated spelling of snapshot, removed in 0.4.0."""
+        warnings.warn(
+            "evidence() is deprecated; use snapshot(); removal in 0.4.0",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.snapshot()
 
     def snapshot(self) -> GameRecord:
         """Copy cached cursors only; never enter the native library from a watchdog."""
-        evidence = self.evidence()
+        evidence = self._snapshot()
         return evidence.model_copy(update={"boundary": self._boundary}, deep=True)
 
     def enable_journal(self, path: Path) -> None:
@@ -543,7 +559,7 @@ class _Capture:
             )
             os.fchmod(descriptor, 0o600)
             self._output = os.fdopen(descriptor, "ab")
-        record = self.evidence()
+        record = self._snapshot()
         record = record.model_copy(update={"games": [game], "boundary": None})
         self._output.write(json_line(record.model_dump(mode="json", by_alias=True)))
         self._output.flush()
@@ -558,6 +574,7 @@ class _Capture:
                 self._output = None
 
     def _start_cursor(self, name: str) -> None:
+        self.producer = name
         if self._game_journal is not None:
             cursor = self._game_journal.writer.path
             cursor.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -745,7 +762,7 @@ class ScalarCapture(_Capture):
         self._activate_journal(env)
         if self._game_journal is not None:
             self._begin_boundary(
-                self.evidence(),
+                self._snapshot(),
                 "reset",
                 seeds=[self.seed],
                 players=[_retain_players(players, self.seed)],
@@ -756,7 +773,7 @@ class ScalarCapture(_Capture):
             committed=0,
             players=_retain_players(players, self.seed),
         )
-        with self._guard(lambda: self.evidence("reset")):
+        with self._guard(lambda: self._snapshot("reset")):
             self._executing()
             result = env.reset(players)
             self._env = env
@@ -766,10 +783,10 @@ class ScalarCapture(_Capture):
             self._returned()
             self.identities["content_manifest"] = env.content_pack_manifest()
             if self._game_journal is not None:
-                self._publish(self.evidence("reset"), "ready")
+                self._publish(self._snapshot("reset"), "ready")
             return result
 
-    def evidence(self, operation: Literal["reset", "step"] = "step") -> GameRecord:
+    def _snapshot(self, operation: Literal["reset", "step"] = "step") -> GameRecord:
         return self._evidence(
             mode="scalar",
             operation=operation,
@@ -780,7 +797,7 @@ class ScalarCapture(_Capture):
     @contextmanager
     def guard(self) -> Iterator[None]:
         """Retain policy/cap/deadline failures outside the native call too."""
-        with self._guard(self.evidence):
+        with self._guard(self._snapshot):
             yield
 
     def rows(self) -> list[list[Any]]:
@@ -830,7 +847,7 @@ class ScalarCapture(_Capture):
         self._activate_journal(env)
         if self._game_journal is not None:
             self._begin_boundary(
-                self.evidence(), "step", actions=[int(action)], active=[True]
+                self._snapshot(), "step", actions=[int(action)], active=[True]
             )
         if self._selected(self.inputs):
             self.inputs.digests.append(env.state_digest())
@@ -839,14 +856,14 @@ class ScalarCapture(_Capture):
                 if annotation is None
                 else DecisionAnnotation.model_validate(annotation)
             )
-        if self.inputs.command_frames:
-            self.inputs.command_frames.append(None)
+        if self.inputs.command_frame_hashes:
+            self.inputs.command_frame_hashes.append(None)
         self.inputs.actions.append(int(action))
         self.inputs.actor = env.current_agent_index()
         self.inputs.frame = env.semantic_decision_frame_json()
         with self.guard():
             if self._game_journal is not None:
-                self._publish(self.evidence(), "executing")
+                self._publish(self._snapshot(), "executing")
             observation = (
                 env.observation_for_player(env.current_agent_index() or 0)
                 if self.reducers
@@ -886,7 +903,7 @@ class ScalarCapture(_Capture):
             self._finish_reducers(env, end)
             self._write_game(self.inputs, end)
         if self._game_journal is not None:
-            self._publish(self.evidence(), "ready")
+            self._publish(self._snapshot(), "ready")
 
     def command(
         self,
@@ -906,7 +923,7 @@ class ScalarCapture(_Capture):
         self._activate_journal(env)
         if self._game_journal is not None:
             self._begin_boundary(
-                self.evidence(), "command", actions=[command], active=[True]
+                self._snapshot(), "command", actions=[command], active=[True]
             )
         self.inputs.actor = env.current_agent_index()
         self.inputs.frame = env.semantic_decision_frame_json()
@@ -920,10 +937,12 @@ class ScalarCapture(_Capture):
         if self._selected(self.inputs):
             self.inputs.digests.append(env.state_digest())
             self.inputs.annotations.append(retained)
-        self.inputs.command_frames.extend(
-            [None] * (len(self.inputs.actions) - len(self.inputs.command_frames))
+        self.inputs.command_frame_hashes.extend(
+            [None] * (len(self.inputs.actions) - len(self.inputs.command_frame_hashes))
         )
-        self.inputs.command_frames.append(self.inputs.frame)
+        self.inputs.command_frame_hashes.append(
+            semantic_frame_sha256(self.inputs.frame)
+        )
         self.inputs.actions.append(command)
         observation = (
             env.observation_for_player(self.inputs.actor or 0)
@@ -932,7 +951,7 @@ class ScalarCapture(_Capture):
         )
         with self.guard():
             if self._game_journal is not None:
-                self._publish(self.evidence(), "executing")
+                self._publish(self._snapshot(), "executing")
             result = (
                 env.execute_semantic_command_json(command)
                 if transition_only
@@ -1119,7 +1138,7 @@ class CapturedVector(_Capture):
     def recording_mask(self) -> list[bool]:
         return [self._selected(game) for game in self.games]
 
-    def evidence(self) -> GameRecord:
+    def _snapshot(self) -> GameRecord:
         return self._evidence_for(self.games, "step")
 
     def _evidence_for(
@@ -1160,9 +1179,7 @@ class CapturedVector(_Capture):
     def reset_all_into_buffers(self, players: managym.GameSetup) -> None:
         self.reset_each_into_buffers([players for _ in self.games])
 
-    def reset_each_into_buffers(
-        self, players: list[managym.GameSetup]
-    ) -> None:
+    def reset_each_into_buffers(self, players: list[managym.GameSetup]) -> None:
         self._reset_each(players, lambda: self.native.reset_each_into_buffers(players))
 
     def reset_all(self, players: managym.GameSetup) -> Any:
@@ -1207,7 +1224,7 @@ class CapturedVector(_Capture):
                 players=[
                     None if setup is None else _retain_players(setup, seed)
                     for setup, seed in zip(
-                        players, self.native.current_game_seeds(), strict=True
+                        players, (game.seed for game in self.games), strict=True
                     )
                 ],
             )
@@ -1491,10 +1508,10 @@ class CapturedSearch(_Capture):
         self.game.frame = env.semantic_decision_frame_json()
         self.skip_trivial = root.skip_trivial
         self.search = SearchInputs(method=method, arguments=arguments)
-        with self._guard(self.evidence):
+        with self._guard(self._snapshot):
             self.native = getattr(env, method)(*arguments)
 
-    def evidence(self) -> GameRecord:
+    def _snapshot(self) -> GameRecord:
         return self._evidence(
             mode="search",
             operation="step",
@@ -1517,12 +1534,12 @@ class CapturedSearch(_Capture):
 
     def step_active(self, actions: list[int]) -> list[int]:
         self.search.operations.append(list(actions))
-        with self._guard(self.evidence):
+        with self._guard(self._snapshot):
             return self.native.step_active(actions)
 
     def finish_random(self) -> None:
         self.search.operations.append("finish_random")
-        with self._guard(self.evidence):
+        with self._guard(self._snapshot):
             self.native.finish_random()
 
 
@@ -1599,6 +1616,28 @@ def record_from_row(row: dict[str, Any]) -> GameRecord:
             )
         ],
     )
+
+
+def records_from_source(
+    source: object, *, journal_path: Path | None = None
+) -> list[GameRecord] | None:
+    """Admit record rows or files; None identifies another format, never bad evidence.
+
+    A journal checkpoint needs its complete file to project subsequent changes.
+    Recognized but malformed records raise rather than falling back to a trace.
+    """
+    if isinstance(source, Path):
+        return list(read_records(source))
+    if not isinstance(source, dict):
+        return None
+    schema = source.get("schema")
+    if schema == "training-game-checkpoint-v1":
+        if journal_path is None:
+            raise ValueError("a journal requires its complete file")
+        return [read_record(journal_path)]
+    if schema in {"managym-game-v1", "native-failure-v1", "training-exposure-v1"}:
+        return [record_from_row(source)]
+    return None
 
 
 def read_records(path: Path) -> Iterator[GameRecord]:

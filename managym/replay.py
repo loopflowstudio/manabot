@@ -25,6 +25,7 @@ from managym.recording import (
     GameRecord,
     read_records,
     runtime_identities,
+    semantic_frame_sha256,
 )
 
 
@@ -149,13 +150,14 @@ class RecordWalker:
                 if isinstance(commitment, Command):
                     live_frame = self.env.semantic_decision_frame_json()
                     retained_frame = (
-                        game.command_frames[index]
-                        if index < len(game.command_frames)
+                        game.command_frame_hashes[index]
+                        if index < len(game.command_frame_hashes)
                         else None
                     )
-                    if retained_frame is not None and json.loads(
-                        retained_frame
-                    ) != json.loads(live_frame):
+                    if (
+                        retained_frame is not None
+                        and retained_frame != semantic_frame_sha256(live_frame)
+                    ):
                         raise ValueError("recorded legal semantic frame differs")
                     frame = DecisionFrame.from_json(live_frame)
                     if commitment.expected_revision != frame.revision:
@@ -214,7 +216,12 @@ class RecordWalker:
                 self.stop = ReplayStop(
                     "interrupted", count, end.reason if end else "saved prefix only"
                 )
-        except (ValueError, TypeError, SemanticContractError, managym.AgentError) as error:
+        except (
+            ValueError,
+            TypeError,
+            SemanticContractError,
+            managym.AgentError,
+        ) as error:
             self.stop = ReplayStop("diverged", index, f"{error}; {self.builds}")
 
 

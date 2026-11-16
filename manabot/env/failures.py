@@ -18,7 +18,6 @@ import platform
 from typing import Any, Literal
 from uuid import uuid4
 import warnings
-from weakref import WeakValueDictionary
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -27,7 +26,7 @@ from manabot.infra.log import getLogger
 import managym
 from managym import recording
 from managym.card_capture import CapturedCards
-from managym.diagnostics import Diagnostics, Level
+from managym.diagnostics import Diagnostics, Level, Operation
 from managym.recording import (
     GameInputs as _GameInputs,
     GameRecord as _GameRecord,
@@ -169,9 +168,6 @@ class CaptureScope:
     diagnostics: Level = "standard"
     stall_seconds: float = 600
     _diagnostics: Diagnostics | None = field(default=None, init=False, repr=False)
-    _writers: WeakValueDictionary[str, "_TrainingCapture"] = field(
-        default_factory=WeakValueDictionary
-    )
 
     def retire_cursors(self) -> None:
         """Retire settled producers when a stage replaces its collector."""
@@ -179,25 +175,23 @@ class CaptureScope:
             self._diagnostics is not None and self._diagnostics.level == "detailed"
         ):
             for path in self.journal_directory.glob("*.jsonl"):
-                path.unlink()
+                if path.name != "escalations.jsonl":
+                    path.unlink()
 
     @property
     def journal_directory(self) -> Path:
         return self.directory.parent / "game-journals"
 
     @contextmanager
-    def operation(self, name: str) -> Iterator[None]:
+    def operation(self, name: str, *, per_step: bool = False) -> Iterator[Operation]:
         diagnostics = self._diagnostics
         if diagnostics is None:
             with capture_scope(self):
-                with self.operation(name):
-                    yield
+                with self.operation(name, per_step=per_step) as operation:
+                    yield operation
             return
-        if name.endswith("inference") and diagnostics.level == "standard":
-            yield
-        else:
-            with diagnostics.operation(name):
-                yield
+        with diagnostics.operation(name, per_step=per_step) as operation:
+            yield operation
 
 
 _scope: ContextVar[CaptureScope | None] = ContextVar("game_failure_scope", default=None)
@@ -278,16 +272,6 @@ class _TrainingCapture:
         return super()._retain(evidence)
 
     def _start_cursor(self, name: str) -> None:
-        if self.scope is not None and self.scope.training_game_logs:
-            base = name
-            index = 0
-            while name in self.scope._writers:
-                index += 1
-                name = f"{base}-{index}"
-            self.scope._writers[name] = self
-            self._game_journal = recording._GameJournal(
-                self.scope.journal_directory / f"{name}.jsonl"
-            )
         super()._start_cursor(name)
         if self.scope is not None and self.scope._diagnostics is not None:
             self.scope._diagnostics.add_capture(self)

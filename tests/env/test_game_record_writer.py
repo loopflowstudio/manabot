@@ -102,3 +102,13 @@ def test_vector_record_replays_scalar(tmp_path: Path) -> None:
     replay = walk(read_record(path))
     assert len(list(replay)) == 1
     assert replay.stop is not None and replay.stop.status == "interrupted"
+
+
+def test_evidence_warns_and_returns_the_cached_snapshot() -> None:
+    import pytest
+
+    capture = ScalarCapture(seed=7)
+    with pytest.warns(DeprecationWarning, match="snapshot.*0.4.0"):
+        assert capture.evidence().model_dump(
+            exclude={"seconds"}
+        ) == capture.snapshot().model_dump(exclude={"seconds"})

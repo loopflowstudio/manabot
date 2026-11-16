@@ -394,7 +394,7 @@ class SeatRoutedCollector:
         game_errors: GameErrorPolicy | None = None,
         record_attempt: Callable[[GameAttempt], GameErrorState] | None = None,
         adaptive: AdaptiveConfig | None = None,
-        operation: Callable[[str], AbstractContextManager[None]] = lambda name: (
+        operation: Callable[[str], AbstractContextManager[object]] = lambda name: (
             nullcontext()
         ),
     ) -> None:

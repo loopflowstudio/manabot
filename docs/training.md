@@ -881,9 +881,9 @@ receipts; retained ones still open in Academy.
 A run that stops making progress has already left what locates it:
 
 ```sh
-cat .runs/demo/game-journals/operation.json   # the phase that did not return
-cat .runs/demo/game-journals/stall.json       # when it was noticed, and why
-less .runs/demo/game-journals/stacks.txt      # every thread's stack
+cat .runs/demo/game-journals/operation.json      # the phase that did not return
+cat .runs/demo/game-journals/escalations.jsonl   # when it was noticed, and why
+less .runs/demo/game-journals/stacks.txt         # every thread's stack
 ```
 
 No flag is needed for these. Training runs
@@ -896,10 +896,11 @@ No flag is needed for these. Training runs
 | `off` | No marker, watchdog, journal or per-step read. |
 
 The run moves itself from `standard` to `detailed`, and records the reason in
-`stall.json`, when no operation returns for `--stall-seconds` (default 600) or
-collection falls below a quarter of its trailing decisions per second. On a
+`escalations.jsonl`, when no operation returns for `--stall-seconds` (default
+600) or collection falls below a quarter of its trailing decisions per second. On a
 stall the watchdog first writes each producer's games in progress to its
-`PRODUCER.jsonl` and dumps the stacks, then journals every later call. You can
+`PRODUCER.snapshot.json` and dumps the stacks, then journals later calls to
+`PRODUCER.jsonl`. You can
 ask for the same at any time:
 
 ```sh
@@ -936,7 +937,7 @@ the watchdog keeps running during a hung collection call and writes the games
 and stacks itself. Evaluation children step a scalar `Env`, which holds the
 lock: a hang there leaves the phase marker, and the stack comes from
 `kill -USR1` or from the parent process. A journal cannot be written
-afterwards for the call that was already hung; the games in `PRODUCER.jsonl`
+afterwards for the call that was already hung; the games in the snapshot
 are known up to the last call that returned. The producer files are the
 [same record](engine-python.md#keep-a-durable-journal) finished games use, and
 are superseded as games finish; use `--record-games` to keep games.

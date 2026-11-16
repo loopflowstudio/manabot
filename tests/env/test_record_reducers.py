@@ -96,7 +96,8 @@ def test_original_command_and_preconditions_survive_live_and_replayed_reducers(
     capture.close()
     record = read_record(path)
     journal = read_record(tmp_path / "journal.jsonl")
-    assert journal.games[0].command_frames == record.games[0].command_frames
+    assert journal.games[0].command_frame_hashes == record.games[0].command_frame_hashes
+    assert len(record.games[0].command_frame_hashes[-1]) == 64
     assert len(list(walk(journal))) == 16
     replay = walk(record)
     decisions = list(replay)
@@ -106,6 +107,13 @@ def test_original_command_and_preconditions_survive_live_and_replayed_reducers(
     assert decisions[-1].frame == frame
     assert decisions[-1].annotation.value == 0.25
     assert reduce([record], [Behaviour(), Choices()]) == capture.rows()
+
+    edited = record.model_copy(deep=True)
+    edited.games[0].command_frame_hashes[-1] = "0" * 64
+    mismatched = walk(edited)
+    assert len(list(mismatched)) == 15
+    assert mismatched.stop is not None and mismatched.stop.status == "diverged"
+    assert "legal semantic frame differs" in mismatched.stop.reason
 
     stale = json.loads(record.games[0].actions[-1])
     stale["expected_revision"] -= 1

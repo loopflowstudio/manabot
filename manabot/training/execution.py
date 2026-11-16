@@ -94,6 +94,7 @@ from manabot.training.update_metrics import (
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
 import managym
+from managym.diagnostics import Operation
 
 from .clock import boot_identity, watchdog_seconds
 
@@ -535,12 +536,12 @@ def _execute_regime(
     failures: CaptureScope | None = None
 
     @contextmanager
-    def operation(name: str) -> Iterator[None]:
+    def operation(name: str, *, per_step: bool = False) -> Iterator[Operation | None]:
         if failures is None:
             yield
         else:
-            with failures.operation(name):
-                yield
+            with failures.operation(name, per_step=per_step) as phase_operation:
+                yield phase_operation
 
     last_export = float("-inf")
     export_wait = PROGRESS_EXPORT_SECONDS
@@ -1285,7 +1286,7 @@ def _execute_regime(
                             deck_source=regime.deck_source,
                             workers=stage.execution.workers,
                             adaptive=stage.adaptive,
-                            operation=operation,
+                            operation=lambda name: operation(name, per_step=True),
                             numerics=backend.collection.CollectionSession(
                                 device=stage.execution.device,
                                 seed=seeds["collection"],
@@ -1445,7 +1446,7 @@ def _execute_regime(
                     assert behavior_agent is not None
                     batch = None
                     try:
-                        with operation("collection"):
+                        with operation("collection") as collection_operation:
                             previous_decisions = collector.stats.micro_steps
                             batch = collector.collect(
                                 behavior_agent,
@@ -1453,8 +1454,8 @@ def _execute_regime(
                                 deadline_monotonic=deadline,
                                 check=check,
                             )
-                            if failures._diagnostics is not None:
-                                failures._diagnostics.progress(
+                            if collection_operation is not None:
+                                collection_operation.progress(
                                     collector.stats.micro_steps - previous_decisions
                                 )
                     finally:

@@ -428,7 +428,7 @@ def test_evaluation_replay_reuses_recording_and_rejects_tampering(
     records = read_games(source)
     launched = academy.replay(source, game=0)
     assert source.read_bytes() == original
-    assert academy.replay(source, game=records[0].game_trace_sha256[:12]) == launched
+    assert academy.replay(source, game=records[0].digest[:12]) == launched
     trace_id = parse_qs(urlparse(launched.url).query)["trace"][0]
     inspected = inspect_watch(trace_id, 0, None)
     assert inspected["count"] == len(read_trace(source)[0]["decisions"])

@@ -4033,9 +4033,7 @@ def get_recording_index(
         "can_study": study_available,
         "winner": payload.get("winner") if finished else None,
         "players": players,
-        "record_stop": opponent.get("stop")
-        if opponent.get("kind") == "record"
-        else None,
+        "record_stop": (payload.get("recording_import") or {}).get("stop"),
         "source_kind": "play"
         if recording.completed_mirror
         else opponent.get("source_kind"),
