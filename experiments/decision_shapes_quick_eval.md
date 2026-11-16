@@ -28,3 +28,10 @@ planning was USD32.11969780140406483881217442; this fits the existing USD55
 total authorization. Do not automatically acquire replacements or retry a
 failed admission without inspecting it. This small one-seed comparison has
 limited precision and cannot establish a general training-method benefit.
+
+2026-11-16 placement change: the user suggested the laptop or Mac mini for
+this small panel. GPU run e9589a885adf was cancelled during setup, with no
+games delivered. Move the same checkpoint pair and schedule to an isolated
+source/runtime directory on mini-heart, using CPU inference and two active
+games. Do not replace another checkout's environment. Source changes only
+placement/device and concurrency; report it as the same exploratory check.

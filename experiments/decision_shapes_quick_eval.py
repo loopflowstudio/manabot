@@ -1,6 +1,6 @@
 """Exploratory equal-update head-to-head, with each native decision mode explicit.
 
-Run on a bounded Etude worker, never on the laptop. The parent launches one
+Run on a bounded worker or the Mac mini. The parent launches one
 subprocess per decision mode so native switches are set before engine import.
 Each pair retains ordinary evaluation requests, Commands and replay results.
 """
@@ -113,9 +113,9 @@ def panel(mode: str, output: Path, deadline: float) -> None:
             ),
             out_dir=output / f"pair-{number:02d}",
             execution=EvalExecution(
-                device="cuda",
+                device="cuda" if os.environ.get("QUICK_EVAL_DEVICE") == "cuda" else "cpu",
                 deadline_unix=deadline,
-                max_active_games=4,
+                max_active_games=2,
                 max_batch_rows=16,
             ),
         )
