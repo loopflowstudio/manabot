@@ -488,15 +488,12 @@ and `manabot export-game` warn and are removed in 0.4.0. The
 [Academy guide](../docs/academy.md#watch-a-game-from-your-training-loop) covers
 selection, naming the seats and failures.
 
-The reference league's TrainingJob enables private exposure capture through the
-ordinary native vector collector. Digest-bound game receipts preserve actual
-sampled decks, seed/action replay inputs, per-seat nontrivial options and choices,
-card draws and completed effect frames. They live under `training/exposure`,
-separate from checkpoints and evaluation evidence. The offline analysis accepts
-these downloaded directories with `--training-evidence`; missing or interrupted
-capture leaves the report incomplete. Focus opportunities and completed frames
-are measurements of decisions/program completion, not strategic benefit. Other
-jobs keep capture disabled unless they explicitly select it.
+`TrainingJob(training_exposure=True)` is a deprecated alias for recording all
+games. New jobs write `training/games` records; sampled card and choice facts
+are obtained by replaying those records with `walk(..., capture_cards=True)`
+and reading `cards()`, or through the built-in reducers. Retained
+`training/exposure` receipts remain readable. Native counters are independent:
+use `--statistics` to enable them on every training game.
 
 The retired behavioral-study and structural/opcode experiment tools are retained
 in Git history. Their archived inputs and receipts are indexed in

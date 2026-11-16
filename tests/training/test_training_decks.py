@@ -29,10 +29,9 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.infra.provenance import authored_matchup_sha256, runtime_fingerprints
+from manabot.infra.run_settings import RunSettings
 from manabot.model.catalog import checkpoint_incompatibility, inspect_checkpoint
 from manabot.model.world import checkpoint_world, validate_agent_setup
-from manabot.sim.recording import record_games
-from manabot.sim.replay import read_trace, replay_games
 from manabot.sim.rollout import allocate_buffers
 from manabot.training.decks import UniformDecks
 from manabot.training.execution import _runtime_identities, validate_regime
@@ -50,7 +49,8 @@ from manabot.training.state.recovery import admit_recovery_identities
 import managym
 from managym import MAX_DECKLIST_BYTES, Deck, DeckImportError, Decklist
 from managym.disclosure import DecklistSampling
-from managym.recording import FailureEvidence
+from managym.recording import FailureEvidence, read_records
+from managym.replay import walk
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
 WORLD = managym.WORLD_SETUP
@@ -688,20 +688,21 @@ def test_mixed_training_games_export_the_resolved_disclosure(
     decks: UniformDecks, tmp_path: Path
 ) -> None:
     source = decks.model_copy(update={"decklists": "mixed"})
-    with record_games(tmp_path / "receipts") as games:
+    with capture_scope(
+        CaptureScope(tmp_path / "failures", settings=RunSettings(record_games=1))
+    ):
         collector = _collector(source)
         try:
             collector.collect(_agent(), 1)
         finally:
             collector.close()
     settings: set[str] = set()
-    for index, game in enumerate(games.games()):
-        retained = json.loads(game.path.read_bytes())["game"]["trace"]["player_configs"]
-        disclosure = retained[0].get("disclosure", "open")
-        assert {seat.get("disclosure", "open") for seat in retained} == {disclosure}
-        path = game.export(tmp_path / f"{index}.game.jsonl.gz")
-        exported = read_trace(path)[0]
-        assert exported["match_hypers"].get("decklists", "open") == disclosure
-        assert replay_games([exported]).passed
+    for record in read_records(tmp_path / "games"):
+        inputs = record.games[0]
+        disclosure = inputs.setup().decklists
+        replay = walk(record)
+        list(replay)
+        assert replay.stop.status == inputs.end.status
+        assert replay.game.setup().decklists == disclosure
         settings.add(disclosure)
     assert settings == {"open", "closed"}

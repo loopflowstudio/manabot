@@ -4350,11 +4350,11 @@ def inspect_bot_watch(
 
 
 @app.post("/api/watch/import")
-def import_arena_watch(payload: dict[str, Any]) -> dict[str, Any]:
-    from .watch import import_arena
+def import_game_watch(payload: dict[str, Any]) -> dict[str, Any]:
+    from .watch import import_game
 
     try:
-        return import_arena(payload)
+        return import_game(payload)
     except ValueError as exc:
         raise HTTPException(400, f"Game file rejected: {exc}") from exc
     except (KeyError, TypeError) as exc:

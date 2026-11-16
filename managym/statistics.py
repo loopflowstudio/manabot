@@ -245,19 +245,16 @@ def reduce(
 
     rows: list[list[Any]] = [[] for _ in reducers]
     for record in records:
-        for game in record.games:
-            replay = walk(
-                record.model_copy(update={"games": [game]}), capture_cards=True
-            )
+        replay = walk(record, capture_cards=True)
+        for reducer in reducers:
+            reducer.start(replay.game.players)
+        for decision in replay:
             for reducer in reducers:
-                reducer.start(game.players)
-            for decision in replay:
-                for reducer in reducers:
-                    reducer.decision(decision)
-            assert replay.stop is not None
-            captured = CapturedCards.model_validate_json(replay.env.card_capture_json())
-            for reducer, output in zip(reducers, rows, strict=True):
-                output.extend(reducer.end(replay.stop, captured))
+                reducer.decision(decision)
+        assert replay.stop is not None
+        captured = replay.cards()
+        for reducer, output in zip(reducers, rows, strict=True):
+            output.extend(reducer.end(replay.stop, captured))
     return [
         reducer.finish(output) for reducer, output in zip(reducers, rows, strict=True)
     ]

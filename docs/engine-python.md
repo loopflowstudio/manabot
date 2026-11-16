@@ -204,8 +204,9 @@ print(replay.stop)   # complete, winner 0
 ```
 
 `read_records` takes a file or a directory of them and yields one `GameRecord`
-per game; `read_record(path)` reads a file that holds exactly one, such as a
-journal or a failure receipt. `walk` plays the game in a scalar `Env` and
+per game, including each stream of a vector snapshot or journal.
+`read_record(path)` reads exactly one row or projected journal and keeps all its
+streams together for failure reproduction. `walk` plays the game in a scalar `Env` and
 yields each decision only after its digest matched. It ends with a typed
 `stop`:
 
@@ -215,8 +216,9 @@ yields each decision only after its digest matched. It ends with a typed
 | `interrupted` | The recording ended before the game did. The decisions before it are verified; there is no winner. |
 | `diverged` | At this index the digest differed, the recorded action was not offered, or the engine raised. Nothing after it is produced. |
 
-Statistics, the Arena-style export, Academy and the bounded command-line
-replay all read games through `walk`, so they agree on where a game stops:
+Statistics, the Arena-style export and Academy read games through `walk`, so
+they agree on where a game stops. The bounded command-line replay also uses
+this walker for game history:
 
 ```bash
 uv run --no-project --python .venv/bin/python python -m managym.replay games.jsonl --seconds 30
@@ -269,6 +271,13 @@ acknowledgment: it may not have entered native code, or may have returned before
 the acknowledgment could be saved. Batch return does not prove each row
 succeeded. Sampled reset inputs remain unknown until observed; previous decks
 are never substituted as the new setup.
+
+The command chooses failure reproduction when the record has an error, a
+pending boundary or a search call. It reconstructs the original scalar, vector
+or search execution and tries the retained failing call. This requires the same
+native bytes and recording source; `--allow-changed-runtime` explicitly permits
+a different build of the same world. Viewing through `walk` or Academy instead
+uses the world/card admission above and never attempts a pending call.
 
 Copy the file to a private location before inspecting a live writer, then read
 it with `read_record` and replay it with the command above. Replay reconstructs

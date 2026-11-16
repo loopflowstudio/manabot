@@ -7,7 +7,6 @@ pinned client consequently reports its unavailable mulligan count (-1)."""
 
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 from typing import Literal
@@ -286,15 +285,12 @@ def export_log(
         pass
     if replay.stop is None or replay.stop.status != "complete":
         raise ValueError(f"export requires a completed verified game: {replay.stop}")
-    cards = CapturedCards.model_validate_json(replay.env.card_capture_json())
-    identity = hashlib.sha256(
-        record.model_dump_json(by_alias=True).encode()
-    ).hexdigest()
+    cards = replay.cards()
     return export_capture(
         cards,
         viewer,
         mapping or _world_mapping(),
-        match_id=identity,
+        match_id=record.sha256,
         winner=replay.stop.winner,
         reason=record.games[0].end.reason if record.games[0].end else None,
     )

@@ -26,7 +26,10 @@ capture.reset(env, [managym.PlayerConfig(name=str(i), decklist={'Mountain': 12})
 while not env.is_game_over():
     capture.step(env, 0)
 capture.close()
-(path / 'game.log').write_text(export_log(read_record(path / 'game.jsonl')))
+record = read_record(path / 'game.jsonl')
+log = export_log(record)
+assert record.sha256 in log
+(path / 'game.log').write_text(log)
 assert coverage()['definitions'] == coverage()['mapped'] + coverage()['unmapped']
 """
     subprocess.run(

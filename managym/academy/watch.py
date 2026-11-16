@@ -366,7 +366,7 @@ def inspect_watch(
     }
 
 
-def import_arena(game_record: dict[str, Any]) -> dict[str, Any]:
+def import_game(game_record: dict[str, Any]) -> dict[str, Any]:
     """Verify a training or evaluation game, then project its Commands without policies.
 
     Source digests and receipt stay in their original namespace; the imported

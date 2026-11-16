@@ -26,7 +26,7 @@ import numpy as np
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 import managym
-from managym.card_capture import CapturedCards
+from managym.card_capture import captured_cards
 from managym.decision import Command, DecisionFrame
 from managym.disclosure import DecklistDisclosure
 from managym.journal import DurableJournal, json_line
@@ -812,7 +812,7 @@ class ScalarCapture(_Capture):
             return
         from managym.replay import ReplayStop
 
-        captured = CapturedCards.model_validate_json(env.card_capture_json())
+        captured = captured_cards(env)
         result = ReplayStop(
             "complete" if end.status == "complete" else "interrupted",
             len(self.inputs.actions),
@@ -1115,22 +1115,16 @@ class CapturedVector(_Capture):
         if self._closed:
             return
         self._closed = True
-        try:
-            self._retain_exposure(current=not self._failed)
-        finally:
-            for game in self.games:
-                self._write_game(
-                    game,
-                    GameEnd(
-                        status="failed" if self._failed else "interrupted",
-                        reason="capture closed",
-                    ),
-                )
-            self._close_output()
-            self.flush_policy_actions()
-
-    def _retain_exposure(self, *, current: bool = False) -> None:
-        """Consumer hook at synchronized boundaries and close."""
+        for game in self.games:
+            self._write_game(
+                game,
+                GameEnd(
+                    status="failed" if self._failed else "interrupted",
+                    reason="capture closed",
+                ),
+            )
+        self._close_output()
+        self.flush_policy_actions()
 
     def capture_failure(self, error: BaseException) -> None:
         self._failure(error, lambda: self._evidence_for(self.games, "step"))
@@ -1266,7 +1260,6 @@ class CapturedVector(_Capture):
         self._synchronize()
 
     def _synchronize(self, *, completed: bool = False) -> None:
-        self._retain_exposure()
         seeds = self.native.current_game_seeds()
         # Generations, not seeds, mark a new game: saturated seed succession and
         # same-seed resets repeat a seed. They are process-local, never evidence.
@@ -1634,17 +1627,45 @@ def records_from_source(
     if schema == "training-game-checkpoint-v1":
         if journal_path is None:
             raise ValueError("a journal requires its complete file")
-        return [read_record(journal_path)]
+        return list(read_records(journal_path))
     if schema in {"managym-game-v1", "native-failure-v1", "training-exposure-v1"}:
-        return [record_from_row(source)]
+        return list(_games_from_snapshot(record_from_row(source)))
     return None
 
 
+def _games_from_snapshot(record: GameRecord) -> Iterator[GameRecord]:
+    """Project stream-local boundaries together with each game's inputs."""
+    for index, game in enumerate(record.games):
+        boundary = record.boundary
+        if boundary is not None:
+            fields = {
+                name: [values[index]] if index < len(values) else []
+                for name in (
+                    "active",
+                    "pending_actions",
+                    "committed_counts",
+                    "proposed_seeds",
+                    "proposed_players",
+                    "last_known_frames",
+                    "frame_prefix_lengths",
+                )
+                if (values := getattr(boundary, name))
+            }
+            boundary = boundary.model_copy(update=fields)
+        yield record.model_copy(update={"games": [game], "boundary": boundary})
+
+
 def read_records(path: Path) -> Iterator[GameRecord]:
-    """Read archives or project journals; ignore only a torn final append."""
+    """Yield one game at a time, including each stream of a projected journal."""
+    for snapshot in _read_snapshots(path):
+        yield from _games_from_snapshot(snapshot)
+
+
+def _read_snapshots(path: Path) -> Iterator[GameRecord]:
+    """Read retained rows without splitting failure-reproduction batches."""
     if path.is_dir():
         for child in sorted(path.glob("*.jsonl")):
-            yield from read_records(child)
+            yield from _read_snapshots(child)
         return
     with path.open("rb") as source:
         first = source.readline()
@@ -1687,7 +1708,7 @@ def read_records(path: Path) -> Iterator[GameRecord]:
 
 def read_record(path: Path) -> GameRecord:
     """Read exactly one record or one projected journal, retaining all streams."""
-    records = iter(read_records(path))
+    records = iter(_read_snapshots(path))
     record = next(records, None)
     if record is None or next(records, None) is not None:
         raise ValueError("expected exactly one game record")

@@ -42,6 +42,7 @@ import signal
 import time
 from types import FrameType
 from typing import Literal
+import warnings
 
 from etude.jobs import TrainingJob as EtudeTrainingJob
 from etude.launch.records import Input, Job
@@ -49,6 +50,7 @@ from etude.storage import SAFE_NAME
 from pydantic import Field, model_validator
 
 from manabot.experiment.numerics import check_numerics
+from manabot.infra.run_settings import RunSettings
 from manabot.infra.source import SourceBundle, bind_etude_source, bundle_at
 from manabot.policy.protocol import Backend
 from manabot.training.execution import execute_regime, validate_regime
@@ -190,6 +192,7 @@ class TrainingJob(Strict):
     )
     diagnostics: Literal["off", "standard", "detailed"] = "standard"
     stall_seconds: float = Field(default=600, gt=0)
+    statistics: bool = False
     training_exposure: bool = Field(default=False, exclude_if=lambda value: not value)
     training_game_logs: bool = Field(default=False, exclude_if=lambda value: not value)
     # Frozen by `job` from the exact revision; absent only for local workers,
@@ -203,6 +206,30 @@ class TrainingJob(Strict):
     continuation: LearnerContinuation | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
+
+    @model_validator(mode="after")
+    def instrumentation_aliases(self) -> "TrainingJob":
+        for alias, replacement in (
+            ("training_exposure", "record_games=1"),
+            ("training_game_logs", "diagnostics=detailed"),
+        ):
+            if alias in self.model_fields_set:
+                warnings.warn(
+                    f"{alias} is deprecated; use {replacement}; removal in 0.4.0",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+        return self
+
+    @property
+    def run_settings(self) -> RunSettings:
+        """Resolve retained flat options at the worker boundary."""
+        return RunSettings(
+            record_games=1.0 if self.training_exposure else self.record_games,
+            diagnostics="detailed" if self.training_game_logs else self.diagnostics,
+            stall_seconds=self.stall_seconds,
+            statistics=self.statistics,
+        )
 
     @model_validator(mode="after")
     def admit(self) -> "TrainingJob":
@@ -434,11 +461,7 @@ def _run_worker(spec: TrainingJob, *, backend: Backend) -> TrainingRun:
             checkpoint_updates=spec.milestones,
             stop_path=stop,
             stop_reserve_seconds=spec.stop_reserve,
-            training_exposure=spec.training_exposure,
-            training_game_logs=spec.training_game_logs,
-            record_games=spec.record_games,
-            diagnostics=spec.diagnostics,
-            stall_seconds=spec.stall_seconds,
+            settings=spec.run_settings,
             backend=backend,
         )
     finished = run.status == "completed" and run.updates_through() == spec.updates

@@ -1,7 +1,7 @@
 """Training adapters for managym recording.
 
 CaptureScope owns live run coordinates, producer destinations and outer phase
-markers. Adapters retain exposure receipts and policy cutoff accounting; the
+markers. Adapters retain policy cutoff accounting; the
 engine owns replay inputs, native boundaries and durable journal projection.
 """
 
@@ -23,15 +23,15 @@ import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from manabot.infra.log import getLogger
+from manabot.infra.run_settings import RunSettings
 import managym
 from managym import recording
 from managym.card_capture import CapturedCards
-from managym.diagnostics import Diagnostics, Level, Operation
+from managym.diagnostics import Diagnostics, Operation
 from managym.recording import (
     GameInputs as _GameInputs,
     GameRecord as _GameRecord,
     PlayerSetup as _PlayerSetup,
-    _append,
     _game_disclosure,
     _jsonl,
 )
@@ -161,19 +161,20 @@ class CaptureScope:
     directory: Path
     context: Callable[[], dict[str, object]] = dict
     paths: list[Path] = field(default_factory=list)
-    record_games: float = 0.0
-    training_exposure: bool = False
-    exposure_directory: Path | None = None
-    training_game_logs: bool = False
-    diagnostics: Level = "standard"
-    stall_seconds: float = 600
+    settings: RunSettings = RunSettings()
     _diagnostics: Diagnostics | None = field(default=None, init=False, repr=False)
+
+    @property
+    def detailed(self) -> bool:
+        return (
+            self._diagnostics.level
+            if self._diagnostics is not None
+            else self.settings.diagnostics
+        ) == "detailed"
 
     def retire_cursors(self) -> None:
         """Retire settled producers when a stage replaces its collector."""
-        if self.training_game_logs or (
-            self._diagnostics is not None and self._diagnostics.level == "detailed"
-        ):
+        if self.detailed:
             for path in self.journal_directory.glob("*.jsonl"):
                 if path.name != "escalations.jsonl":
                     path.unlink()
@@ -203,8 +204,8 @@ def capture_scope(scope: CaptureScope) -> Iterator[None]:
     try:
         scope._diagnostics = Diagnostics(
             scope.journal_directory,
-            level="detailed" if scope.training_game_logs else scope.diagnostics,
-            stall_seconds=scope.stall_seconds,
+            level=scope.settings.diagnostics,
+            stall_seconds=scope.settings.stall_seconds,
             context_provider=lambda: {
                 key: value
                 for key, value in scope.context().items()
@@ -248,13 +249,13 @@ class _TrainingCapture:
         if self.scope is not None:
             kwargs.setdefault("failure_directory", self.scope.directory)
             kwargs.setdefault("on_retained", self.scope.paths.append)
-        if self.scope is not None and self.scope.record_games:
+        if self.scope is not None and self.scope.settings.record_games:
             kwargs["context"] = {**kwargs.get("context", {}), "source_kind": "training"}
             kwargs.setdefault(
                 "games_path",
                 self.scope.directory.parent / "games" / f"{uuid4().hex}.jsonl",
             )
-            kwargs.setdefault("record_fraction", self.scope.record_games)
+            kwargs.setdefault("record_fraction", self.scope.settings.record_games)
         self._policy_counts: dict[str, ActionCutoffCounts] = {}
         self._policy_samples: list[ActionCutoffSample] = []
         self._policy_path: Path | None = None
@@ -356,48 +357,21 @@ class _TrainingCapture:
 class ScalarCapture(_TrainingCapture, recording.ScalarCapture):
     """Engine recording with run scope and policy accounting."""
 
+    def reset(self, env: managym.Env, players: managym.GameSetup) -> Any:
+        if (
+            self._env is None
+            and self.scope is not None
+            and self.scope.settings.statistics
+        ):
+            env.enable_statistics()
+        return super().reset(env, players)
+
 
 class CapturedVector(_TrainingCapture, recording.CapturedVector):
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        self._exposure = bool(self.scope and self.scope.training_exposure)
-        if self._exposure:
-            if self.player_policies != ("agent", "agent") or not self.skip_trivial:
-                raise ValueError(
-                    "training exposure requires surfaced seats and trivial skipping"
-                )
-            self.native.enable_exposure_capture()
-
-    def _retain_exposure(self, *, current: bool = False) -> None:
-        if not self._exposure or not any(game.players for game in self.games):
-            return
-        assert self.scope is not None
-        retained = self.native.take_exposure()
-        if current:
-            for rows, raw in zip(retained, self.native.current_exposure(), strict=True):
-                rows.append(raw)
-        directory = (
-            self.scope.exposure_directory or self.scope.directory.parent / "exposure"
-        )
-        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-        for inputs, rows in zip(self.games, retained, strict=True):
-            for raw in rows:
-                game = NativeTrainingGame.model_validate_json(raw)
-                # Auto-reset prepares a fresh unused root; it is not an attempted game.
-                if not game.trace.actions and not game.terminal:
-                    continue
-                receipt = TrainingExposureReceipt(
-                    stream=inputs.stream,
-                    game=game,
-                    skip_trivial=self.skip_trivial,
-                    identities=self.identities,
-                    **self._coordinates(),
-                )
-                body = receipt.model_dump(mode="json", by_alias=True)
-                path = directory / f"{receipt.sha256}.jsonl"
-                if not path.exists():
-                    _append(path, body, create=True)
-                    self.scope.paths.append(path)
+        if self.scope is not None and self.scope.settings.statistics:
+            self.native.enable_statistics()
 
 
 class CapturedSearch(_TrainingCapture, recording.CapturedSearch):

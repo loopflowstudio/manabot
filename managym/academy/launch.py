@@ -148,25 +148,22 @@ def read_games(path: Path) -> list[RecordedGame]:
             native_records = records_from_source(record, journal_path=path)
             if native_records is not None:
                 for native in native_records:
-                    for inputs in native.games:
-                        one = native.model_copy(update={"games": [inputs]})
-                        names = tuple(p.name for p in inputs.players)
-                        if len(names) != 2:
-                            raise ValueError("record setup unavailable")
-                        games.append(
-                            RecordedGame(
-                                index=len(games),
-                                seed=inputs.seed,
-                                stream=inputs.stream,
-                                players=(names[0], names[1]),
-                                decisions=len(inputs.actions),
-                                ended=inputs.end.status
-                                if inputs.end
-                                else "interrupted",
-                                digest=one.sha256,
-                                _record=one.model_dump(mode="json", by_alias=True),
-                            )
+                    inputs = native.games[0]
+                    names = tuple(p.name for p in inputs.players)
+                    if len(names) != 2:
+                        raise ValueError("record setup unavailable")
+                    games.append(
+                        RecordedGame(
+                            index=len(games),
+                            seed=inputs.seed,
+                            stream=inputs.stream,
+                            players=(names[0], names[1]),
+                            decisions=len(inputs.actions),
+                            ended=inputs.end.status if inputs.end else "interrupted",
+                            digest=native.sha256,
+                            _record=native.model_dump(mode="json", by_alias=True),
                         )
+                    )
                 # A journal's subsequent rows are changes, not separate games.
                 if record.get("schema") == "training-game-checkpoint-v1":
                     break
@@ -442,12 +439,12 @@ class Academy:
         from fastapi import HTTPException
 
         from managym.academy.attempts import AttemptStore
-        from managym.academy.watch import import_arena
+        from managym.academy.watch import import_game
 
         if isinstance(source, Path):
             selected = _select_game(source, game)
             try:
-                imported = import_arena(selected._record)
+                imported = import_game(selected._record)
             except HTTPException as exc:
                 if exc.detail == "arena_import_unavailable":
                     raise AcademyLaunchError(

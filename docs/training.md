@@ -858,8 +858,13 @@ game is written to `<out>/games/PRODUCER.jsonl` when it ends, as a
 state digests and the collector's annotations. Selection hashes the game's
 seed and stream, so it draws on no training randomness and the same run
 records the same games. An unselected game adds no native read; a selected one
-reads one state digest per decision. Python callers pass `record_games=` to
-`execute_regime`, and remote declarations set `TrainingJob(record_games=0.25)`.
+reads one state digest per decision. Python callers pass
+`settings=RunSettings(record_games=0.25)` to `execute_regime`, importing
+`RunSettings` from `manabot.infra.run_settings`; remote declarations keep the
+flat fields, such as `TrainingJob(record_games=0.25)`.
+`RunSettings` also holds `diagnostics`, `stall_seconds` and `statistics`.
+Use `--statistics` or `TrainingJob(statistics=True)` for native counters on every
+game, independently of recording.
 Like the diagnostics level it is a runtime option: outside the recipe's
 digest and checkpoint bindings, and free to differ between attempts. The
 directory is registered with the run's outputs. Games in progress when the run
@@ -928,7 +933,7 @@ job = TrainingJob(
 Use the imports and launch setup in [remote training](#remote-training). The
 level is a runtime option: it does not edit the `TrainingRegime`, its digest
 or checkpoint bindings, and may differ between attempts.
-`--training-game-logs` and `training_game_logs=True` are the former spelling
+`--training-game-logs` and `TrainingJob(training_game_logs=True)` are the former spelling
 of `detailed`; they warn and are removed in 0.4.0.
 
 What a stall can leave depends on where it hangs. Training collects through

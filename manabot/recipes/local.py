@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
+from manabot.infra.run_settings import RunSettings
 from manabot.recipes.baseline import baseline, baseline_test
 from manabot.recipes.device import accelerator
 from manabot.training.execution import execute_regime
@@ -59,10 +60,7 @@ def local_smoke(
 
 def run_local(
     *,
-    training_game_logs: bool = False,
-    record_games: float = 0.0,
-    diagnostics: Literal["off", "standard", "detailed"] = "standard",
-    stall_seconds: float = 600,
+    settings: RunSettings = RunSettings(),
     steps: int = LOCAL_STEPS,
     seed: int = 197,
     out: Path | None = None,
@@ -91,8 +89,5 @@ def run_local(
             destination,
             store,
             backend=resolve("torch"),
-            training_game_logs=training_game_logs,
-            record_games=record_games,
-            diagnostics=diagnostics,
-            stall_seconds=stall_seconds,
+            settings=settings,
         )

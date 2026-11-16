@@ -112,3 +112,106 @@ def test_evidence_warns_and_returns_the_cached_snapshot() -> None:
         assert capture.evidence().model_dump(
             exclude={"seconds"}
         ) == capture.snapshot().model_dump(exclude={"seconds"})
+
+
+def test_snapshot_admission_keeps_each_stream_boundary(tmp_path: Path) -> None:
+    from managym.academy.launch import read_games
+    from managym.recording import CapturedVector, NativeBoundary, records_from_source
+
+    vector = CapturedVector(num_envs=2, seed=7)
+    vector.reset_all(players())
+    vector.step([0, 0])
+    snapshot = vector.snapshot()
+    vector.close()
+    snapshot.boundary = NativeBoundary(
+        operation="step",
+        phase="executing",
+        sequence=2,
+        timestamp=1,
+        active=[False, True],
+        pending_actions=[0, 0],
+        committed_counts=[1, 0],
+        proposed_seeds=[7, 8],
+        last_known_frames=[None, "pending"],
+        frame_prefix_lengths=[1, 0],
+    )
+    path = tmp_path / "snapshot.jsonl"
+    path.write_text(snapshot.model_dump_json(by_alias=True) + "\n")
+    assert len(read_record(path).games) == 2
+    admitted = list(read_records(path))
+    from_row = records_from_source(snapshot.model_dump(mode="json", by_alias=True))
+    assert admitted == from_row
+    assert [record.games[0].stream for record in admitted] == [0, 1]
+    assert [record.boundary.committed_counts for record in admitted] == [[1], [0]]
+    assert admitted[1].boundary.last_known_frames == ["pending"]
+    assert [len(list(walk(record))) for record in admitted] == [1, 0]
+    listed = read_games(path)
+    assert [game.digest for game in listed] == [record.sha256 for record in admitted]
+    assert len(list(read_records(path))) == 2  # reading never changes the snapshot
+
+
+@pytest.mark.parametrize("boundary_ready", [False, True])
+def test_cli_views_prefix_on_changed_build(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    boundary_ready: bool,
+) -> None:
+    import json
+    import sys
+
+    from managym.recording import NativeBoundary
+    from managym.replay import main
+
+    path = tmp_path / "prefix.jsonl"
+    capture = ScalarCapture(seed=7, games_path=path)
+    env = managym.Env(seed=7)
+    capture.reset(env, players())
+    capture.step(env, 0)
+    capture.close()
+    record = read_record(path)
+    record.games[0].end = None
+    record.identities["engine_extension_sha256"] = "another-platform"
+    record.identities["engine_recording_source_sha256"] = "another-build"
+    if boundary_ready:
+        record.boundary = NativeBoundary(
+            operation="step",
+            phase="ready",
+            sequence=1,
+            timestamp=1,
+            committed_counts=[1],
+            returned=True,
+        )
+    path.write_text(record.model_dump_json(by_alias=True) + "\n")
+    monkeypatch.setattr(sys, "argv", ["replay", str(path), "--worker", "--statistics"])
+    main()
+    result = json.loads(capsys.readouterr().out)["results"][0]
+    assert result["status"] == "interrupted"
+    assert result["index"] == 1
+    assert result["build_differs"]
+    assert result["statistics"] is not None
+
+
+def test_cli_failure_requires_runtime_admission(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    import sys
+
+    from managym.replay import main
+
+    path = tmp_path / "failure.jsonl"
+    capture = ScalarCapture(seed=7, games_path=path)
+    env = managym.Env(seed=7)
+    capture.reset(env, players())
+    capture.close()
+    record = read_record(path)
+    record.error_class, record.error = "AgentError", "retained error"
+    record.identities["engine_extension_sha256"] = "another-platform"
+    path.write_text(record.model_dump_json(by_alias=True) + "\n")
+    monkeypatch.setattr(sys, "argv", ["replay", str(path), "--worker"])
+    with pytest.raises(SystemExit) as error:
+        main()
+    assert error.value.code == 2
+    assert "--allow-changed-runtime required" in capsys.readouterr().err

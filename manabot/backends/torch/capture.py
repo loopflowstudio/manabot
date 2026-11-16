@@ -146,7 +146,6 @@ def capture(out: Path, regime: TrainingRegime, seed: int, *, experiment: str) ->
                 out / "execution",
                 store,
                 experiment=experiment,
-                training_exposure=False,
                 backend=resolve("torch"),
             )
     finally:

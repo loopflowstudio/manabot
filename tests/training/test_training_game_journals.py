@@ -20,6 +20,7 @@ from manabot.env.failures import (
     capture_scope,
 )
 from manabot.env.observation import ObservationSpace
+from manabot.infra.run_settings import RunSettings
 from manabot.training.rollout.producers import ShardedVectorEnv
 import managym
 from managym.recording import (
@@ -84,7 +85,9 @@ class _ExitNative:
 
 def _interrupt_child(directory: str, mode: str, phase: str) -> None:
     scope = CaptureScope(
-        Path(directory) / "failures", lambda: {"update": 7}, training_game_logs=True
+        Path(directory) / "failures",
+        lambda: {"update": 7},
+        settings=RunSettings(diagnostics="detailed"),
     )
     with capture_scope(scope):
         if mode == "scalar":
@@ -205,7 +208,9 @@ def test_abrupt_exit_leaves_replayable_private_cursor(
 
 
 def test_nested_operation_restores_parent_and_records_return(tmp_path: Path) -> None:
-    scope = CaptureScope(tmp_path / "failures", training_game_logs=True)
+    scope = CaptureScope(
+        tmp_path / "failures", settings=RunSettings(diagnostics="detailed")
+    )
     marker = scope.journal_directory / "operation.json"
     with scope.operation("collection"):
         with scope.operation("learner_inference"):
@@ -218,7 +223,9 @@ def test_nested_operation_restores_parent_and_records_return(tmp_path: Path) -> 
 
 
 def _interrupt_reset_child(directory: str, operation: str, first: str) -> None:
-    scope = CaptureScope(Path(directory) / "failures", training_game_logs=True)
+    scope = CaptureScope(
+        Path(directory) / "failures", settings=RunSettings(diagnostics="detailed")
+    )
     with capture_scope(scope):
         if operation == "scalar_reset":
             capture = ScalarCapture(24)
@@ -324,7 +331,11 @@ def test_disabled_logging_has_no_writer_or_extra_native_reads(
         raise AssertionError("disabled journal invoked writer")
 
     monkeypatch.setattr("managym.journal.DurableJournal.__init__", forbidden)
-    scope = CaptureScope(tmp_path / "failures", context=forbidden, diagnostics="off")
+    scope = CaptureScope(
+        tmp_path / "failures",
+        context=forbidden,
+        settings=RunSettings(diagnostics="off"),
+    )
     with capture_scope(scope):
         vector = CapturedVector(num_envs=1)
         vector.set_buffers(_buffers(1))
@@ -341,7 +352,9 @@ def test_disabled_logging_has_no_writer_or_extra_native_reads(
 def test_executing_replay_requires_active_fresh_step_binding(
     tmp_path: Path, operation: str, binding: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    scope = CaptureScope(tmp_path / "failures", training_game_logs=True)
+    scope = CaptureScope(
+        tmp_path / "failures", settings=RunSettings(diagnostics="detailed")
+    )
     with capture_scope(scope):
         vector = CapturedVector(num_envs=1, seed=24)
         vector.set_buffers(_buffers(1))
@@ -385,7 +398,8 @@ def test_enabled_logging_preserves_buffers_prefixes_and_reset_identity(
     snapshots: list[tuple[dict[str, np.ndarray], list[dict[str, object]]]] = []
     for enabled in (False, True):
         scope = CaptureScope(
-            tmp_path / str(enabled) / "failures", training_game_logs=enabled
+            tmp_path / str(enabled) / "failures",
+            settings=RunSettings(diagnostics="detailed" if enabled else "standard"),
         )
         with capture_scope(scope):
             vector = CapturedVector(num_envs=2, seed=seed)
@@ -427,7 +441,9 @@ def test_shards_keep_independent_paths_and_owner_coordinates(
 ) -> None:
     point = {"update": 1}
     scope = CaptureScope(
-        tmp_path / "failures", lambda: dict(point), training_game_logs=True
+        tmp_path / "failures",
+        lambda: dict(point),
+        settings=RunSettings(diagnostics="detailed"),
     )
     with capture_scope(scope):
         vector = ShardedVectorEnv(4, 24, workers)
@@ -447,7 +463,9 @@ def test_shards_keep_independent_paths_and_owner_coordinates(
 
 
 def test_pending_storage_error_prevents_native_step(tmp_path: Path) -> None:
-    scope = CaptureScope(tmp_path / "failures", training_game_logs=True)
+    scope = CaptureScope(
+        tmp_path / "failures", settings=RunSettings(diagnostics="detailed")
+    )
     with capture_scope(scope):
         vector = CapturedVector(num_envs=1, seed=24)
         vector.set_buffers(_buffers(1))
@@ -492,7 +510,7 @@ def test_cli_forwards_runtime_flag(
     seen: list[bool] = []
 
     def execute(*args: object, **kwargs: object) -> SimpleNamespace:
-        seen.append(kwargs["training_game_logs"] is True)
+        seen.append(kwargs["settings"].diagnostics == "detailed")
         return SimpleNamespace(
             status="completed",
             id="test",
@@ -522,7 +540,21 @@ def test_job_option_is_runtime_only() -> None:
     plain = TrainingJob(regime=local_smoke(device="cpu"), experiment="fixture")
     enabled = plain.model_copy(update={"training_game_logs": True})
     assert "training_game_logs" not in plain.model_dump(mode="json")
-    assert TrainingJob.model_validate_json(enabled.model_dump_json()).training_game_logs
+    with pytest.warns(DeprecationWarning, match="training_game_logs.*0.4.0"):
+        restored = TrainingJob.model_validate_json(enabled.model_dump_json())
+    assert restored.run_settings.diagnostics == "detailed"
+    with pytest.warns(DeprecationWarning, match="training_exposure.*0.4.0"):
+        exposure = TrainingJob(
+            regime=plain.regime,
+            experiment="fixture",
+            training_exposure=True,
+            statistics=True,
+        )
+    assert exposure.run_settings.record_games == 1
+    assert exposure.run_settings.statistics
+    assert exposure.run_settings == RunSettings.model_validate_json(
+        exposure.run_settings.model_dump_json()
+    )
     assert enabled.regime.model_dump_json() == plain.regime.model_dump_json()
 
 
@@ -531,7 +563,9 @@ def test_return_acknowledgment_storage_error_names_executed_call(
 ) -> None:
     from managym.journal import DurableJournal
 
-    scope = CaptureScope(tmp_path / "failures", training_game_logs=True)
+    scope = CaptureScope(
+        tmp_path / "failures", settings=RunSettings(diagnostics="detailed")
+    )
     with capture_scope(scope):
         vector = CapturedVector(num_envs=1, seed=24)
         vector.set_buffers(_buffers(1))
@@ -559,7 +593,9 @@ def test_return_acknowledgment_storage_error_names_executed_call(
 def test_reassignment_and_failed_replacement_retain_current_inputs(
     tmp_path: Path,
 ) -> None:
-    scope = CaptureScope(tmp_path / "failures", training_game_logs=True)
+    scope = CaptureScope(
+        tmp_path / "failures", settings=RunSettings(diagnostics="detailed")
+    )
     with capture_scope(scope):
         vector = CapturedVector(num_envs=2, seed=24)
         vector.set_buffers(_buffers(2))
@@ -585,7 +621,9 @@ def test_reassignment_and_failed_replacement_retain_current_inputs(
 
 
 def test_auto_reset_replaces_prefix_and_bounds_retained_files(tmp_path: Path) -> None:
-    scope = CaptureScope(tmp_path / "failures", training_game_logs=True)
+    scope = CaptureScope(
+        tmp_path / "failures", settings=RunSettings(diagnostics="detailed")
+    )
     with capture_scope(scope):
         vector = CapturedVector(num_envs=1, seed=24)
         buffers = _buffers(1)
@@ -644,7 +682,7 @@ def _interrupt_execution(directory: str, phase: str) -> None:
             Path(directory) / "run",
             store,
             backend=resolve("torch"),
-            training_game_logs=True,
+            settings=RunSettings(diagnostics="detailed"),
         )
     raise AssertionError("injected training operation not reached")
 
@@ -1035,3 +1073,42 @@ def test_suffix_changes_and_one_root_replacement_leave_other_prefixes_out(
     assert row["games"][0]["replacement"]["actions"] == []
     assert len(journal.writer.path.read_bytes().splitlines()) == 3
     assert read_failure(journal.writer.path).games == evidence.games
+
+
+def test_native_statistics_preserve_recorded_choices(tmp_path: Path) -> None:
+    from managym.recording import read_records
+
+    records = []
+    for enabled in (False, True):
+        root = tmp_path / str(enabled)
+        settings = RunSettings(record_games=1, diagnostics="off", statistics=enabled)
+        with capture_scope(CaptureScope(root / "failures", settings=settings)):
+            vector = CapturedVector(num_envs=1, seed=24)
+            try:
+                vector.reset_all(_players())
+                for _ in range(10):
+                    vector.step([0])
+                assert (vector.statistics()[0] is not None) is enabled
+            finally:
+                vector.close()
+        records.append(next(read_records(root / "games")))
+    assert records[0].games == records[1].games
+    assert records[0].identities == records[1].identities
+
+
+def test_statistics_survive_scalar_reset(tmp_path: Path) -> None:
+    with capture_scope(
+        CaptureScope(
+            tmp_path / "failures",
+            settings=RunSettings(statistics=True, diagnostics="off"),
+        )
+    ):
+        env = managym.Env(seed=24)
+        capture = ScalarCapture(seed=24)
+        try:
+            capture.reset(env, _players())
+            capture.step(env, 0)
+            capture.reset(env, _players())
+            assert env.statistics() is not None
+        finally:
+            capture.close()

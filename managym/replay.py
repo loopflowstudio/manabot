@@ -1,8 +1,10 @@
-"""Policy-free replay of private native inputs and shared CLI admission.
+"""Two policy-free reconstructions of private native inputs.
 
-Capture owns immutable evidence; this module only reconstructs it. Both replay
-CLIs use the same subprocess deadline and runtime checks, while their distinct
-receipt formats retain their own validation and result semantics.
+RecordWalker verifies what happened, never attempts pending calls, and admits
+any build of the same world and cards. Failure reproduction reconstructs the
+original execution mode and attempts the retained call, requiring identical
+native bytes and source unless changed-runtime admission is explicit. Its
+prefix loop remains separate because it measures failure agreement, not history.
 """
 
 import argparse
@@ -18,11 +20,13 @@ from typing import Literal, Never
 import numpy as np
 
 import managym
+from managym.card_capture import CapturedCards, captured_cards
 from managym.decision import Command, DecisionFrame, SemanticContractError
 from managym.recording import (
     DecisionAnnotation,
     GameInputs,
     GameRecord,
+    read_record,
     read_records,
     runtime_identities,
     semantic_frame_sha256,
@@ -80,7 +84,13 @@ class RecordWalker:
     other consumer uses the native step. No pending journal call is attempted.
     """
 
-    def __init__(self, record: GameRecord, *, capture_cards: bool = False) -> None:
+    def __init__(
+        self,
+        record: GameRecord,
+        *,
+        capture_cards: bool = False,
+        statistics: bool = False,
+    ) -> None:
         if len(record.games) != 1 or record.mode == "search":
             raise ValueError("walk requires one game, not a batch or a search")
         current = runtime_identities()
@@ -105,11 +115,22 @@ class RecordWalker:
             skip_trivial=record.skip_trivial,
             player_policies=record.resolved_player_policies,
         )
+        self._capture_cards = capture_cards
+        if statistics:
+            self.env.enable_statistics()
         if capture_cards:
             self.env.enable_exposure_capture()
         self.observation = self.env.reset(self.game.setup())[0]
         self.stop: ReplayStop | None = None
         self._used = False
+
+    def cards(self) -> CapturedCards:
+        """Private facts strictly through the last verified commitment."""
+        if not self._capture_cards:
+            raise ValueError("walk requires capture_cards=True to collect card facts")
+        if self.stop is None:
+            raise ValueError("card facts require a finished verified traversal")
+        return captured_cards(self.env)
 
     def __iter__(self) -> Iterator[RecordedDecision]:
         return self.run()
@@ -174,11 +195,11 @@ class RecordWalker:
                     game.annotations[index] if index < len(game.annotations) else None,
                     frame,
                 )
-                # A consumer such as Academy commits presentation data together
-                # with its Command. Validate the transition on an exact fork
-                # before letting that consumer retain any consequences.
-                target = self.env if apply is None else self.env.clone_env()
-                next_observation = decision.apply(target)
+                # Check the transition on a search fork before committing it to
+                # the Env owning the retained card facts or consumer presentation.
+                # A divergent action must contribute to neither history nor rows.
+                target = self.env.clone_env()
+                decision.apply(target)
                 after = (
                     game.digests[index + 1]
                     if index + 1 < count and index + 1 < len(game.digests)
@@ -189,7 +210,7 @@ class RecordWalker:
                 if after is not None and target.state_digest() != after:
                     raise ValueError("transition digest differs")
                 if apply is None:
-                    self.observation = next_observation
+                    self.observation = decision.apply(self.env)
                 else:
                     apply(decision)
                     if self.env.state_digest() != target.state_digest():
@@ -225,8 +246,10 @@ class RecordWalker:
             self.stop = ReplayStop("diverged", index, f"{error}; {self.builds}")
 
 
-def walk(record: GameRecord, *, capture_cards: bool = False) -> RecordWalker:
-    return RecordWalker(record, capture_cards=capture_cards)
+def walk(
+    record: GameRecord, *, capture_cards: bool = False, statistics: bool = False
+) -> RecordWalker:
+    return RecordWalker(record, capture_cards=capture_cards, statistics=statistics)
 
 
 @dataclass
@@ -554,24 +577,40 @@ def main() -> None:
         evidence = next(read_records(args.path))
     except (OSError, ValueError, StopIteration) as error:
         parser.error(f"cannot read journal {args.path}: {error}")
-    if (
-        evidence.schema_version == "managym-game-v1"
-        and evidence.boundary is None
-        and evidence.mode != "search"
-        and any(game.end is not None for game in evidence.games)
-    ):
+    reproduce = (
+        evidence.error is not None
+        or evidence.error_class is not None
+        or evidence.execution_outcome == "failed"
+        or evidence.mode == "search"
+        or (evidence.boundary is not None and evidence.boundary.phase != "ready")
+        or (
+            evidence.boundary is None
+            and evidence.execution_outcome != "last_command_succeeded"
+            and any(
+                game.frame is not None
+                and (game.committed is None or game.committed < len(game.actions))
+                for game in evidence.games
+            )
+        )
+    )
+    if not reproduce:
         results = []
         for record in read_records(args.path):
-            for game in record.games:
-                replay = walk(record.model_copy(update={"games": [game]}))
-                for _ in replay:
-                    pass
-                assert replay.stop is not None
-                results.append(
-                    {**asdict(replay.stop), "build_differs": replay.build_differs}
+            replay = walk(record, statistics=args.statistics)
+            for _ in replay:
+                pass
+            assert replay.stop is not None
+            result = {**asdict(replay.stop), "build_differs": replay.build_differs}
+            if args.statistics:
+                summary = replay.env.statistics()
+                result["statistics"] = (
+                    None if summary is None else summary.model_dump(mode="json")
                 )
+            results.append(result)
         print(json.dumps({"status": "replayed", "results": results}))
         return
+    # Reproduction needs every stream and its original batch boundary.
+    evidence = read_record(args.path)
     try:
         require_replay_runtime(
             evidence.identities,

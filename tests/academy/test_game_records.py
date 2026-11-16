@@ -8,7 +8,7 @@ import pytest
 import managym
 from managym.academy import server, trace
 from managym.academy.launch import read_games
-from managym.academy.watch import import_arena, inspect_watch
+from managym.academy.watch import import_game, inspect_watch
 from managym.recording import ScalarCapture, runtime_identities
 
 
@@ -52,7 +52,7 @@ def test_mixed_disclosure_record_replays_and_imports(
         assert replay.stop is not None
         assert game.end is not None
         assert replay.stop.status == game.end.status
-        imported = import_arena(record.model_dump(mode="json", by_alias=True))
+        imported = import_game(record.model_dump(mode="json", by_alias=True))
         assert imported["id"] not in server.SESSION_REGISTRY
 
 
@@ -70,7 +70,7 @@ def test_interrupted_record_import_is_closed_and_readable(
     capture.step(env, 0, annotation={"value": 0.31})
     capture.close()
     selected = read_games(path)[0]
-    imported = import_arena(selected._record)
+    imported = import_game(selected._record)
     assert imported["stop"] == "interrupted"
     from managym.academy.attempts import AttemptStore
 
@@ -113,7 +113,7 @@ def test_retained_exposure_receipt_opens_without_export(
     }
     path = tmp_path / "receipt.jsonl"
     path.write_text(json.dumps(receipt) + "\n")
-    imported = import_arena(read_games(path)[0]._record)
+    imported = import_game(read_games(path)[0]._record)
     assert imported["stop"] == "complete"
     assert imported["id"] not in server.SESSION_REGISTRY
 
@@ -251,4 +251,4 @@ def test_journal_listing_projects_the_complete_file(tmp_path: Path) -> None:
 
 def test_malformed_native_row_never_falls_back_to_bot_import() -> None:
     with pytest.raises(ValueError):
-        import_arena({"schema": "managym-game-v1", "decisions": []})
+        import_game({"schema": "managym-game-v1", "decisions": []})

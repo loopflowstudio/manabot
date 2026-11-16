@@ -12,7 +12,7 @@ import shutil
 import socket
 import sys
 import time
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 import uuid
 
 import numpy as np
@@ -34,6 +34,7 @@ from manabot.infra.host import host_facts
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.profiler import Profiler
 from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
+from manabot.infra.run_settings import RunSettings
 from manabot.infra.runtime import RunContext
 from manabot.infra.source import source_commit
 from manabot.model.architecture import architecture_identity
@@ -252,11 +253,7 @@ def execute_regime(
     stop_path: Path | None = None,
     stop_reserve_seconds: float | None = None,
     experiment: str | None = None,
-    training_exposure: bool = False,
-    training_game_logs: bool = False,
-    record_games: float = 0.0,
-    diagnostics: Literal["off", "standard", "detailed"] = "standard",
-    stall_seconds: float = 600,
+    settings: RunSettings = RunSettings(),
 ) -> TrainingRun:
     """Execute under a local lease, including admission and crash settlement.
 
@@ -398,11 +395,7 @@ def execute_regime(
             stop_reserve_seconds=stop_reserve_seconds,
             initial_admission=initial_admission,
             experiment=experiment,
-            training_exposure=training_exposure,
-            training_game_logs=training_game_logs,
-            record_games=record_games,
-            diagnostics=diagnostics,
-            stall_seconds=stall_seconds,
+            settings=settings,
         )
 
 
@@ -424,11 +417,7 @@ def _execute_regime(
     stop_reserve_seconds: float | None = None,
     initial_admission: Path | None = None,
     experiment: str | None = None,
-    training_exposure: bool = False,
-    training_game_logs: bool = False,
-    record_games: float = 0.0,
-    diagnostics: Literal["off", "standard", "detailed"] = "standard",
-    stall_seconds: float = 600,
+    settings: RunSettings = RunSettings(),
 ) -> TrainingRun:
     """Execute admitted inputs while the caller holds both recovery writer leases."""
     # A retry can fail during setup before reaching its stage. Walk the retained
@@ -738,14 +727,10 @@ def _execute_regime(
                 "allocation_deadline": run.allocation_deadline,
                 "parent_run_id": run.parent_run_id,
             },
-            training_exposure=training_exposure,
-            training_game_logs=training_game_logs,
-            record_games=record_games,
-            diagnostics=diagnostics,
-            stall_seconds=stall_seconds,
+            settings=settings,
         )
         resources.enter_context(capture_scope(failures))
-        if training_game_logs or diagnostics != "off":
+        if settings.diagnostics != "off":
             failures.journal_directory.mkdir(parents=True, exist_ok=True, mode=0o700)
             run.game_journal_directory = str(failures.journal_directory)
             persist()
@@ -1810,7 +1795,7 @@ def _execute_regime(
         primary_error = sys.exception()
         resources.close()
         failures = None
-        if (training_game_logs or diagnostics != "off") and run.stages:
+        if settings.diagnostics != "off" and run.stages:
             try:
                 for path in sorted((out / "game-journals").glob("*")):
                     if path.is_file() and not path.name.startswith("."):
@@ -1824,12 +1809,8 @@ def _execute_regime(
                 primary_error.add_note(
                     f"Terminal game journals could not be registered: {capture_error}"
                 )
-        if record_games and run.stages:
+        if settings.record_games and run.stages:
             for path in sorted((out / "games").glob("*.jsonl")):
                 run.stages[-1].artifacts[f"games/{path.name}"] = artifact(path)
-            persist()
-        if training_exposure and run.stages:
-            for path in sorted((out / "exposure").glob("*.jsonl")):
-                run.stages[-1].artifacts[f"exposure/{path.name}"] = artifact(path)
             persist()
     return run

@@ -43,6 +43,15 @@ def test_live_reducers_equal_replayed_tables(tmp_path: Path) -> None:
     capture.close()
     replayed = reduce(read_records(path), [CardPerformance(), Behaviour(), Choices()])
     assert replayed == capture.rows()
+    replay = walk(read_record(path), capture_cards=True)
+    with pytest.raises(ValueError, match="verified traversal"):
+        replay.cards()
+    list(replay)
+    assert replay.cards().capture.exposure.choices
+    uncaptured = walk(read_record(path))
+    list(uncaptured)
+    with pytest.raises(ValueError, match="capture_cards=True"):
+        uncaptured.cards()
     cards, behaviour, custom = replayed
     assert cards and all(row.games == 1 for row in cards)
     assert any(row.land_opportunities for row in behaviour)
@@ -114,6 +123,16 @@ def test_original_command_and_preconditions_survive_live_and_replayed_reducers(
     assert len(list(mismatched)) == 15
     assert mismatched.stop is not None and mismatched.stop.status == "diverged"
     assert "legal semantic frame differs" in mismatched.stop.reason
+
+    # A post-transition mismatch must leave native card facts at the verified
+    # prefix too, rather than counting the rejected transition's choices/moves.
+    altered = record.model_copy(deep=True)
+    altered.games[0].digests[1] = "0" * 64
+    prefix = walk(altered, capture_cards=True)
+    assert list(prefix) == []
+    assert prefix.stop.status == "diverged"
+    assert not prefix.cards().capture.exposure.choices
+    assert reduce([altered], [Choices()]) == [[0]]
 
     stale = json.loads(record.games[0].actions[-1])
     stale["expected_revision"] -= 1

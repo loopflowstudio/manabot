@@ -377,7 +377,7 @@ def test_cli_selects_decimal_digest(
     monkeypatch.setattr("managym.academy.cli.serve", lambda **kwargs: academy)
     monkeypatch.setattr(Academy, "wait", lambda self: None)
     monkeypatch.setattr(
-        "managym.academy.watch.import_arena",
+        "managym.academy.watch.import_game",
         lambda record: {"id": str(record["deal_seed"])},
     )
     assert launch_cli(["replay", str(path), "--game", "111111111111", "--no-open"]) == 0
