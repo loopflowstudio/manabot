@@ -864,7 +864,8 @@ reads one state digest per decision. Python callers pass
 flat fields, such as `TrainingJob(record_games=0.25)`.
 `RunSettings` also holds `diagnostics`, `stall_seconds` and `statistics`.
 Use `--statistics` or `TrainingJob(statistics=True)` for native counters on every
-game, independently of recording.
+game, written privately to `<out>/statistics/` as stage artifacts, independently
+of recording.
 Like the diagnostics level it is a runtime option: outside the recipe's
 digest and checkpoint bindings, and free to differ between attempts. The
 directory is registered with the run's outputs. Games in progress when the run

@@ -256,6 +256,11 @@ class _TrainingCapture:
                 self.scope.directory.parent / "games" / f"{uuid4().hex}.jsonl",
             )
             kwargs.setdefault("record_fraction", self.scope.settings.record_games)
+        if self.scope is not None and self.scope.settings.statistics:
+            kwargs.setdefault(
+                "statistics_path",
+                self.scope.directory.parent / "statistics" / f"{uuid4().hex}.jsonl",
+            )
         self._policy_counts: dict[str, ActionCutoffCounts] = {}
         self._policy_samples: list[ActionCutoffSample] = []
         self._policy_path: Path | None = None
@@ -357,21 +362,9 @@ class _TrainingCapture:
 class ScalarCapture(_TrainingCapture, recording.ScalarCapture):
     """Engine recording with run scope and policy accounting."""
 
-    def reset(self, env: managym.Env, players: managym.GameSetup) -> Any:
-        if (
-            self._env is None
-            and self.scope is not None
-            and self.scope.settings.statistics
-        ):
-            env.enable_statistics()
-        return super().reset(env, players)
-
 
 class CapturedVector(_TrainingCapture, recording.CapturedVector):
-    def __init__(self, **kwargs: Any) -> None:
-        super().__init__(**kwargs)
-        if self.scope is not None and self.scope.settings.statistics:
-            self.native.enable_statistics()
+    """Engine recording with run scope and policy accounting."""
 
 
 class CapturedSearch(_TrainingCapture, recording.CapturedSearch):

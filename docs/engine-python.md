@@ -66,7 +66,37 @@ arrays by column name and joining card definition IDs.
 
 ## Collect in-game statistics
 
-Enable statistics before the first reset, then play through the ordinary API:
+Give a capture a private statistics file to count every game, independently of
+record sampling. It enables the native counters before reset and drains them
+at game boundaries and close:
+
+```python
+from pathlib import Path
+import managym
+from managym.recording import ScalarCapture
+from managym.statistics import CardPerformance, read_statistics
+
+game = managym.Env(seed=42)
+capture = ScalarCapture(seed=42, statistics_path=Path("statistics/worker.jsonl"))
+players = [managym.PlayerConfig(str(seat), {"Mountain": 12}) for seat in (0, 1)]
+capture.reset(game, players)
+while not game.is_game_over():
+    capture.step(game, 0)
+capture.close()
+performance = CardPerformance()
+print(performance.from_statistics(read_statistics(Path("statistics"))))
+print(performance.excluded_games)
+```
+
+The same `statistics_path` option works on `CapturedVector`. Use one file per
+producer. Rows carry the card digest, use mode 0600, flush at each game boundary
+and fsync at close. The reader accepts a file or directory and ignores a torn
+last line. Partial summaries from replaced or closed games are counted in
+`excluded_games` and excluded from the table. These private every-game rows
+never join audited evaluation populations automatically.
+
+For low-level counters without a capture, enable statistics before the first
+reset and own the drain yourself:
 
 ```python
 import managym
@@ -102,8 +132,9 @@ retains a partial summary, never a fabricated result. The same enable/read/drain
 methods apply to `VectorEnv`, with each summary identifying its stream and game
 generation. Drain regularly: queued summaries accumulate until consumed.
 
-Statistics require neither detailed recording nor replay, perform no file
-writes, and do not enable card/exposure history capture. Counter storage grows
+Native counters require neither detailed recording nor replay and do not
+enable card/exposure history capture. Direct Env calls perform no file writes;
+a capture with `statistics_path` owns the drain and persists summaries. Counter storage grows
 with encountered card definitions and physical copies, rather than decisions;
 generated copies can still grow during a game. The Env's existing action trace
 remains independent, so this is not a constant-memory promise for the whole
@@ -161,12 +192,13 @@ Keep the capture's seed and trivial-decision setting equal to the Env's, and
 use the capture for every later mutation; a direct Env call leaves the record
 behind. Call `capture.reset` again to start the next game in the same file.
 Recording changes no action, seed, legal choice or outcome, and does not enable
-statistics; call `game.enable_statistics()` before `capture.reset` for those.
+statistics; add `statistics_path` to collect those independently.
 
 | Option | Meaning |
 |---|---|
 | `games_path` | File that receives one row per finished game. Without it nothing is written at game end. Give each producer its own file. |
 | `record_fraction` | Share of games to record, `1.0` by default. A game is selected at reset from its seed and stream, never from engine or policy randomness, so the same run selects the same games. An unselected game costs no extra native read. |
+| `statistics_path` | Private native summaries for every game, independent of record selection. |
 | `journal_path` | [Durable journal](#keep-a-durable-journal) of the game in progress. |
 | `context` | Your own labels (run, update, attempt), kept with every row and never shown to an Academy viewer. |
 

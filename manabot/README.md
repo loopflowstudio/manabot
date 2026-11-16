@@ -493,7 +493,9 @@ games. New jobs write `training/games` records; sampled card and choice facts
 are obtained by replaying those records with `walk(..., capture_cards=True)`
 and reading `cards()`, or through the built-in reducers. Retained
 `training/exposure` receipts remain readable. Native counters are independent:
-use `--statistics` to enable them on every training game.
+use `--statistics` to write every game’s native summary to private
+`<out>/statistics/` stage artifacts. `managym.statistics.read_statistics` and
+`CardPerformance.from_statistics` produce the card table without replay.
 
 The retired behavioral-study and structural/opcode experiment tools are retained
 in Git history. Their archived inputs and receipts are indexed in

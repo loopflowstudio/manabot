@@ -31,9 +31,10 @@ record durably around every native call, for a call that may never return.
 `managym.diagnostics` marks the phases of your loop and leaves the phase,
 stacks and games in progress when one stalls.
 
-Call `game.enable_statistics()` before `game.reset(players)` for native
-per-game card counts on every game, with no recording, replay or disk writes;
-read `game.statistics()` and drain with `game.take_statistics()`.
+Give the capture `statistics_path=Path("statistics/worker.jsonl")` for native
+per-game card counts on every game, independent of record sampling. Read them
+with `read_statistics` and `CardPerformance.from_statistics`. Low-level callers
+can enable/read/drain counters directly on the Env.
 
 All of it works without manabot, Torch or Etude. Records and statistics hold
 hidden information: keep them private; Academy shows each viewer only what

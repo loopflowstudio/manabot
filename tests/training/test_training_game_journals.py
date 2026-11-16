@@ -1094,6 +1094,14 @@ def test_native_statistics_preserve_recorded_choices(tmp_path: Path) -> None:
         records.append(next(read_records(root / "games")))
     assert records[0].games == records[1].games
     assert records[0].identities == records[1].identities
+    from managym.statistics import read_statistics
+
+    assert not (tmp_path / "False" / "statistics").exists()
+    rows = list(read_statistics(tmp_path / "True" / "statistics"))
+    games = [record.games[0] for record in read_records(tmp_path / "True" / "games")]
+    assert [(row.seed, row.terminal) for row in rows] == [
+        (game.seed, game.end.status == "complete") for game in games
+    ]
 
 
 def test_statistics_survive_scalar_reset(tmp_path: Path) -> None:
@@ -1112,3 +1120,32 @@ def test_statistics_survive_scalar_reset(tmp_path: Path) -> None:
             assert env.statistics() is not None
         finally:
             capture.close()
+
+
+def test_scalar_env_close_persists_statistics_without_recording(tmp_path: Path) -> None:
+    from manabot.env.env import Env
+    from manabot.env.match import Match, Reward
+    from manabot.infra.config import MatchConfig, RewardConfig
+    from managym.statistics import read_statistics
+
+    with capture_scope(
+        CaptureScope(
+            tmp_path / "failures",
+            settings=RunSettings(statistics=True, diagnostics="off"),
+        )
+    ):
+        env = Env(
+            Match(
+                MatchConfig(hero_deck={"Mountain": 12}, villain_deck={"Mountain": 12})
+            ),
+            ObservationSpace(),
+            Reward(RewardConfig()),
+            seed=7,
+        )
+        env.reset()
+        env.step(0)
+        env.close()
+        env.close()
+    rows = list(read_statistics(tmp_path / "statistics"))
+    assert len(rows) == 1 and not rows[0].terminal
+    assert not (tmp_path / "games").exists()

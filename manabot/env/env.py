@@ -7,15 +7,15 @@ from typing import Any, Dict, Optional
 
 import gymnasium as gym
 from gymnasium import spaces
+
+# Local imports
+from manabot.infra.log import getLogger
+import managym
 from managym.decision import (
     Command,
     SemanticContractError,
     SemanticTransition,
 )
-
-# Local imports
-from manabot.infra.log import getLogger
-import managym
 
 # Local directory imports
 from .failures import CapturedSearch, ScalarCapture
@@ -269,6 +269,7 @@ class Env(gym.Env):
             )
 
     def close(self) -> None:
+        self._capture.close()
         self._capture.flush_policy_actions()
 
     @property

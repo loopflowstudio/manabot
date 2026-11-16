@@ -44,6 +44,7 @@ def semantic_frame_sha256(frame: str) -> str:
 
 class RecordingOptions(TypedDict, total=False):
     games_path: Path | None
+    statistics_path: Path | None
     record_fraction: float
     journal_path: Path | None
     context: dict[str, object] | None
@@ -218,6 +219,30 @@ class GameRecord(BaseModel):
     boundary: NativeBoundary | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
+
+    @property
+    def needs_reproduction(self) -> bool:
+        """A failed, pending or search call needs exact-runtime reproduction.
+
+        Acknowledged prefixes are viewed with the walker on the same world;
+        reproduction may attempt the unacknowledged call, including its failure.
+        """
+        return (
+            self.error is not None
+            or self.error_class is not None
+            or self.execution_outcome == "failed"
+            or self.mode == "search"
+            or (self.boundary is not None and self.boundary.phase != "ready")
+            or (
+                self.boundary is None
+                and self.execution_outcome != "last_command_succeeded"
+                and any(
+                    game.frame is not None
+                    and (game.committed is None or game.committed < len(game.actions))
+                    for game in self.games
+                )
+            )
+        )
 
     @property
     def sha256(self) -> str:
@@ -482,6 +507,7 @@ class _Capture:
         self,
         *,
         games_path: Path | None = None,
+        statistics_path: Path | None = None,
         record_fraction: float = 1.0,
         journal_path: Path | None = None,
         context: dict[str, object] | None = None,
@@ -494,7 +520,9 @@ class _Capture:
         self.producer = "capture"
         self.games_path = games_path
         self.record_fraction = record_fraction
-        self._output: BinaryIO | None = None
+        self.statistics_path = statistics_path
+        self._outputs: dict[Path, BinaryIO] = {}
+        self._statistics_generations: dict[int, int] = {}
         self.started = time.perf_counter()
         self._failed = False
         self.identities = runtime_identities().copy()
@@ -551,27 +579,50 @@ class _Capture:
         if not self._selected(game) or game.end is not None or not game.players:
             return
         game.end = end
-        if self._output is None:
-            assert self.games_path is not None
-            self.games_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-            descriptor = os.open(
-                self.games_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600
-            )
-            os.fchmod(descriptor, 0o600)
-            self._output = os.fdopen(descriptor, "ab")
         record = self._snapshot()
         record = record.model_copy(update={"games": [game], "boundary": None})
-        self._output.write(json_line(record.model_dump(mode="json", by_alias=True)))
-        self._output.flush()
+        assert self.games_path is not None
+        self._append_row(self.games_path, record.model_dump(mode="json", by_alias=True))
+
+    def _append_row(self, path: Path, row: object) -> None:
+        output = self._outputs.get(path)
+        if output is None:
+            path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+            os.fchmod(descriptor, 0o600)
+            output = self._outputs[path] = os.fdopen(descriptor, "ab")
+        output.write(json_line(row))
+        output.flush()
+
+    def _write_statistics(self, rows: list[GameStatistics]) -> None:
+        if self.statistics_path is None:
+            return
+        for row in rows:
+            # Native drains omit the running generation. Close/failure also reads
+            # it; remember only the latest generation per stream to avoid repeats.
+            if self._statistics_generations.get(row.stream) == row.generation:
+                continue
+            self._append_row(
+                self.statistics_path,
+                {
+                    **row.model_dump(mode="json"),
+                    "card_digest": self.identities["card_digest"],
+                },
+            )
+            self._statistics_generations[row.stream] = row.generation
+
+    def _flush_statistics(self, *, partial: bool = False) -> None:
+        pass
 
     def _close_output(self) -> None:
-        if self._output is not None:
-            try:
-                self._output.flush()
-                os.fsync(self._output.fileno())
-            finally:
-                self._output.close()
-                self._output = None
+        try:
+            for output in self._outputs.values():
+                output.flush()
+                os.fsync(output.fileno())
+        finally:
+            for output in self._outputs.values():
+                output.close()
+            self._outputs.clear()
 
     def _start_cursor(self, name: str) -> None:
         self.producer = name
@@ -719,6 +770,7 @@ class _Capture:
         # Capture failures must never disguise the original native failure.
         try:
             self.flush_policy_actions()
+            self._flush_statistics(partial=True)
             retained = evidence()
             retained.execution_outcome = "failed"
             retained.error_class = type(error).__name__
@@ -751,6 +803,9 @@ class ScalarCapture(_Capture):
 
     def reset(self, env: managym.Env, players: managym.GameSetup) -> Any:
         # The heterogeneous native observation/info tuple stays at this boundary.
+        if self.statistics_path is not None and self._env is not env:
+            self._flush_statistics(partial=True)
+            env.enable_statistics()
         if self.reducers:
             if self._env is None:
                 env.enable_exposure_capture()
@@ -777,6 +832,7 @@ class ScalarCapture(_Capture):
             self._executing()
             result = env.reset(players)
             self._env = env
+            self._flush_statistics()
             self._reducers_finished = False
             for reducer in self.reducers:
                 reducer.start(self.inputs.players)
@@ -823,6 +879,13 @@ class ScalarCapture(_Capture):
             rows.extend(reducer.end(result, captured))
         self._reducers_finished = True
 
+    def _flush_statistics(self, *, partial: bool = False) -> None:
+        if self.statistics_path is not None and self._env is not None:
+            rows = self._env.take_statistics()
+            if partial and (current := self._env.statistics()) is not None:
+                rows.append(current)
+            self._write_statistics(rows)
+
     def close(self) -> None:
         if self._env is not None:
             self._finish_reducers(
@@ -835,6 +898,7 @@ class ScalarCapture(_Capture):
                 reason="capture closed",
             ),
         )
+        self._flush_statistics(partial=True)
         self._close_output()
 
     def step(
@@ -902,6 +966,7 @@ class ScalarCapture(_Capture):
             )
             self._finish_reducers(env, end)
             self._write_game(self.inputs, end)
+            self._flush_statistics()
         if self._game_journal is not None:
             self._publish(self._snapshot(), "ready")
 
@@ -1053,6 +1118,8 @@ class CapturedVector(_Capture):
             player_policies=self.player_policies,
             seed_stride=self.stride,
         )
+        if self.statistics_path is not None:
+            self.native.enable_statistics()
         self._closed = False
         self.games = [
             GameInputs(
@@ -1111,6 +1178,13 @@ class CapturedVector(_Capture):
         if self._action_cutoff is not None:
             self.identities["action_overflow"] = action_overflow
 
+    def _flush_statistics(self, *, partial: bool = False) -> None:
+        if self.statistics_path is not None:
+            rows = self.take_statistics()
+            if partial:
+                rows.extend(row for row in self.statistics() if row is not None)
+            self._write_statistics(rows)
+
     def close(self) -> None:
         if self._closed:
             return
@@ -1123,6 +1197,7 @@ class CapturedVector(_Capture):
                     reason="capture closed",
                 ),
             )
+        self._flush_statistics(partial=True)
         self._close_output()
         self.flush_policy_actions()
 
@@ -1272,6 +1347,8 @@ class CapturedVector(_Capture):
             if old != new
         ]
         self._generations = generations
+        if restarted:
+            self._flush_statistics()
         players = self.native.current_player_configs() if restarted else []
         infos = self.native.get_last_info() if self.games_path is not None else []
         for index in restarted:

@@ -215,3 +215,156 @@ def test_cli_failure_requires_runtime_admission(
         main()
     assert error.value.code == 2
     assert "--allow-changed-runtime required" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("vectorized", [False, True])
+def test_statistics_sink_repeated_drains_preserve_games(
+    tmp_path: Path, vectorized: bool
+) -> None:
+    from managym.recording import CapturedVector
+    from managym.statistics import CardPerformance, read_statistics, reduce
+
+    recordings = []
+    for enabled in (False, True):
+        root = tmp_path / str(enabled)
+        stats_path = root / "statistics" / "producer.jsonl"
+        games_path = root / "games.jsonl"
+        options = {"statistics_path": stats_path} if enabled else {}
+        if vectorized:
+            vector = CapturedVector(
+                num_envs=1, seed=7, stream_offset=3, games_path=games_path, **options
+            )
+            vector.reset_all(players())
+            for _ in range(500):
+                vector.step([0])
+                if games_path.exists() and len(list(read_records(games_path))) >= 3:
+                    break
+            else:
+                pytest.fail("three small games did not finish")
+            if enabled:
+                assert vector.take_statistics() == []
+            vector.close()
+            vector.close()
+        else:
+            env = managym.Env(seed=7)
+            capture = ScalarCapture(seed=7, games_path=games_path, **options)
+            for _ in range(3):
+                capture.reset(env, players())
+                for _ in range(500):
+                    capture.step(env, 0)
+                    if env.is_game_over():
+                        break
+                assert env.is_game_over()
+                if enabled:
+                    assert env.take_statistics() == []
+            capture.reset(env, players())
+            capture.close()
+            capture.close()
+        records = list(read_records(games_path))
+        recordings.append(records)
+        if enabled:
+            summaries = list(read_statistics(stats_path))
+            assert len(summaries) == 4
+            assert sum(row.terminal for row in summaries) == 3
+            assert len({(row.stream, row.generation) for row in summaries}) == 4
+            assert {row.stream for row in summaries} == ({3} if vectorized else {0})
+            table = CardPerformance()
+            assert (
+                table.from_statistics(summaries)
+                == reduce(records, [CardPerformance()])[0]
+            )
+            assert table.excluded_games == 1
+            assert stats_path.stat().st_mode & 0o777 == 0o600
+            with stats_path.open("ab") as output:
+                output.write(b'{"torn":')
+            with pytest.warns(RuntimeWarning, match="Incomplete final statistics"):
+                assert list(read_statistics(stats_path.parent)) == summaries
+        else:
+            assert not stats_path.exists()
+    assert [record.games for record in recordings[0]] == [
+        record.games for record in recordings[1]
+    ]
+
+
+def test_statistics_failure_retains_partial_once(tmp_path: Path) -> None:
+    from managym.statistics import CardPerformance, read_statistics
+
+    path = tmp_path / "statistics.jsonl"
+    env = managym.Env(seed=7)
+    capture = ScalarCapture(seed=7, statistics_path=path, failure_directory=tmp_path)
+    capture.reset(env, players())
+    with pytest.raises(managym.AgentError):
+        capture.step(env, 99999)
+    capture.close()
+    rows = list(read_statistics(path))
+    assert len(rows) == 1 and not rows[0].terminal
+    table = CardPerformance()
+    assert table.from_statistics(rows) == []
+    assert table.excluded_games == 1
+
+
+def test_walker_card_counts_equal_native_statistics(tmp_path: Path) -> None:
+    from managym.statistics import reduce_cards
+
+    path = tmp_path / "game.jsonl"
+    env = managym.Env(seed=7)
+    env.enable_statistics()
+    capture = ScalarCapture(seed=7, games_path=path)
+    capture.reset(env, players())
+    capture.step(env, 0)
+    capture.close()
+    replay = walk(read_record(path), capture_cards=True)
+    list(replay)
+    native = env.statistics()
+    assert native is not None
+    assert reduce_cards(replay.cards()) == list(native.cards)
+
+
+def test_statistics_sink_without_training_or_recording(tmp_path: Path) -> None:
+    import subprocess
+    import sys
+
+    script = """
+import builtins
+from pathlib import Path
+import sys
+original = builtins.__import__
+def guarded(name: str, *args: object, **kwargs: object) -> object:
+    if name.split('.')[0] in {'manabot', 'torch', 'etude'}:
+        raise AssertionError(name)
+    return original(name, *args, **kwargs)
+builtins.__import__ = guarded
+import managym
+from managym.recording import ScalarCapture, CapturedVector
+from managym.statistics import CardPerformance, read_statistics
+root = Path(sys.argv[1])
+players = [managym.PlayerConfig(str(i), {'Mountain': 12}) for i in (0, 1)]
+capture = ScalarCapture(seed=7, statistics_path=root / 'scalar.jsonl')
+# A capture can move to another fresh Env; both partial games must survive.
+for _ in range(2):
+    env = managym.Env(seed=7)
+    capture.reset(env, players)
+    capture.step(env, 0)
+capture.reset(env, players)
+for _ in range(500):
+    capture.step(env, 0)
+    if env.is_game_over():
+        break
+assert env.is_game_over()
+capture.close()
+vector = CapturedVector(num_envs=2, seed=7, stream_offset=4, statistics_path=root / 'vector.jsonl')
+vector.reset_all(players)
+vector.step([0, 0])
+vector.reset_all(players)
+vector.close()
+rows = list(read_statistics(root))
+assert len(rows) == 7
+assert sum(row.terminal for row in rows) == 1
+assert {row.stream for row in rows} == {0, 4, 5}
+performance = CardPerformance()
+assert performance.from_statistics(rows)
+assert performance.excluded_games == 6
+"""
+    subprocess.run(
+        [sys.executable, "-c", script, str(tmp_path)], check=True, timeout=30
+    )

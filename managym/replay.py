@@ -89,7 +89,6 @@ class RecordWalker:
         record: GameRecord,
         *,
         capture_cards: bool = False,
-        statistics: bool = False,
     ) -> None:
         if len(record.games) != 1 or record.mode == "search":
             raise ValueError("walk requires one game, not a batch or a search")
@@ -116,8 +115,6 @@ class RecordWalker:
             player_policies=record.resolved_player_policies,
         )
         self._capture_cards = capture_cards
-        if statistics:
-            self.env.enable_statistics()
         if capture_cards:
             self.env.enable_exposure_capture()
         self.observation = self.env.reset(self.game.setup())[0]
@@ -246,10 +243,8 @@ class RecordWalker:
             self.stop = ReplayStop("diverged", index, f"{error}; {self.builds}")
 
 
-def walk(
-    record: GameRecord, *, capture_cards: bool = False, statistics: bool = False
-) -> RecordWalker:
-    return RecordWalker(record, capture_cards=capture_cards, statistics=statistics)
+def walk(record: GameRecord, *, capture_cards: bool = False) -> RecordWalker:
+    return RecordWalker(record, capture_cards=capture_cards)
 
 
 @dataclass
@@ -577,35 +572,25 @@ def main() -> None:
         evidence = next(read_records(args.path))
     except (OSError, ValueError, StopIteration) as error:
         parser.error(f"cannot read journal {args.path}: {error}")
-    reproduce = (
-        evidence.error is not None
-        or evidence.error_class is not None
-        or evidence.execution_outcome == "failed"
-        or evidence.mode == "search"
-        or (evidence.boundary is not None and evidence.boundary.phase != "ready")
-        or (
-            evidence.boundary is None
-            and evidence.execution_outcome != "last_command_succeeded"
-            and any(
-                game.frame is not None
-                and (game.committed is None or game.committed < len(game.actions))
-                for game in evidence.games
-            )
-        )
-    )
-    if not reproduce:
+    if not evidence.needs_reproduction:
         results = []
         for record in read_records(args.path):
-            replay = walk(record, statistics=args.statistics)
+            replay = walk(record, capture_cards=args.statistics)
             for _ in replay:
                 pass
             assert replay.stop is not None
             result = {**asdict(replay.stop), "build_differs": replay.build_differs}
             if args.statistics:
-                summary = replay.env.statistics()
-                result["statistics"] = (
-                    None if summary is None else summary.model_dump(mode="json")
-                )
+                from managym.statistics import reduce_cards
+
+                result["statistics"] = {
+                    "terminal": replay.stop.status == "complete",
+                    "winner": replay.stop.winner,
+                    "cards": [
+                        row.model_dump(mode="json")
+                        for row in reduce_cards(replay.cards())
+                    ],
+                }
             results.append(result)
         print(json.dumps({"status": "replayed", "results": results}))
         return

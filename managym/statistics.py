@@ -4,11 +4,13 @@ Live summaries are partial until terminal. Retained capture reduction validates
 copy continuity, but says nothing about experiment eligibility or replay success.
 """
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
+import warnings
 
-from pydantic import BaseModel, ConfigDict, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 import managym
 from managym.card_capture import CapturedCards
@@ -35,6 +37,34 @@ class GameStatistics(BaseModel):
     terminal: bool
     winner: int | None
     cards: tuple[CardCounts, ...]
+    card_digest: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{64}$", exclude_if=lambda value: value is None
+    )
+
+
+def read_statistics(path: Path) -> Iterator[GameStatistics]:
+    """Read private capture summaries; ignore only a torn final row.
+
+    The content digest binds native definition indices to their card catalog.
+    Malformed complete rows fail instead of silently dropping game evidence.
+    """
+    if path.is_dir():
+        for child in sorted(path.glob("*.jsonl")):
+            yield from read_statistics(child)
+        return
+    with path.open("rb") as source:
+        for line in source:
+            if not line.endswith(b"\n"):
+                warnings.warn(
+                    "Incomplete final statistics row; ignored",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+                return
+            row = GameStatistics.model_validate_json(line)
+            if row.card_digest is None:
+                raise ValueError("statistics row requires card_digest")
+            yield row
 
 
 def summary(raw: str) -> GameStatistics | None:
@@ -180,32 +210,21 @@ class CardPerformance(Reducer[CardRow]):
         if result.status != "complete" or result.winner is None:
             self.excluded_games += 1
             return []
-        rows = []
-        for count in reduce_cards(capture):
-            if not (count.deck_copies or count.opening_copies or count.drawn_copies):
+        return _card_rows(
+            reduce_cards(capture), result.winner, capture.capture.content_digest
+        )
+
+    def from_statistics(self, summaries: Iterable[GameStatistics]) -> list[CardRow]:
+        """The every-game table, separate from sampled or audited populations."""
+        rows: list[CardRow] = []
+        for summary in summaries:
+            if not summary.terminal or summary.winner is None:
+                self.excluded_games += 1
                 continue
-            win = int(result.winner == count.seat)
-            gih = count.opening_copies + count.drawn_copies
-            gp = int(count.deck_copies > 0)
-            gns = int(gp and gih == 0)
-            rows.append(
-                CardRow(
-                    count.seat,
-                    f"{capture.capture.content_digest}:{count.definition}",
-                    count.name,
-                    games=gp,
-                    wins=gp * win,
-                    opening_hand=count.opening_copies,
-                    opening_won=count.opening_copies * win,
-                    drawn=count.drawn_copies,
-                    drawn_won=count.drawn_copies * win,
-                    gih=gih,
-                    gih_won=gih * win,
-                    not_seen=gns,
-                    not_seen_won=gns * win,
-                )
-            )
-        return rows
+            if summary.card_digest is None:
+                raise ValueError("statistics table requires card_digest")
+            rows.extend(_card_rows(summary.cards, summary.winner, summary.card_digest))
+        return self.finish(rows)
 
     def finish(self, rows: list[CardRow]) -> list[CardRow]:
         merged: dict[tuple[int, str], CardRow] = {}
@@ -231,6 +250,37 @@ class CardPerformance(Reducer[CardRow]):
                     old.not_seen_won + row.not_seen_won,
                 )
         return sorted(merged.values(), key=lambda row: (row.seat, row.name, row.card))
+
+
+def _card_rows(
+    counts: Iterable[CardCounts], winner: int, card_digest: str
+) -> list[CardRow]:
+    rows = []
+    for count in counts:
+        if not (count.deck_copies or count.opening_copies or count.drawn_copies):
+            continue
+        win = int(winner == count.seat)
+        gih = count.opening_copies + count.drawn_copies
+        gp = int(count.deck_copies > 0)
+        gns = int(gp and gih == 0)
+        rows.append(
+            CardRow(
+                count.seat,
+                f"{card_digest}:{count.definition}",
+                count.name,
+                games=gp,
+                wins=gp * win,
+                opening_hand=count.opening_copies,
+                opening_won=count.opening_copies * win,
+                drawn=count.drawn_copies,
+                drawn_won=count.drawn_copies * win,
+                gih=gih,
+                gih_won=gih * win,
+                not_seen=gns,
+                not_seen_won=gns * win,
+            )
+        )
+    return rows
 
 
 def reduce(

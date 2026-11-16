@@ -1809,8 +1809,14 @@ def _execute_regime(
                 primary_error.add_note(
                     f"Terminal game journals could not be registered: {capture_error}"
                 )
-        if settings.record_games and run.stages:
-            for path in sorted((out / "games").glob("*.jsonl")):
-                run.stages[-1].artifacts[f"games/{path.name}"] = artifact(path)
-            persist()
+        for enabled, directory in (
+            (settings.record_games, "games"),
+            (settings.statistics, "statistics"),
+        ):
+            if enabled and run.stages:
+                for path in sorted((out / directory).glob("*.jsonl")):
+                    run.stages[-1].artifacts[f"{directory}/{path.name}"] = artifact(
+                        path
+                    )
+                persist()
     return run
