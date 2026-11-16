@@ -439,3 +439,45 @@ def test_native_error_remains_native_in_journal(tmp_path: Path) -> None:
     assert record.execution_outcome == "failed"
     assert record.needs_reproduction
     assert record.games[0].committed == 0
+
+
+def test_journal_recovers_after_a_native_error(tmp_path: Path) -> None:
+    path = tmp_path / "journal.jsonl"
+    capture = ScalarCapture(
+        seed=7, journal_path=path, failure_directory=tmp_path / "failures"
+    )
+    env = managym.Env(seed=7)
+    capture.reset(env, players())
+    with pytest.raises(managym.AgentError):
+        capture.step(env, 99999)
+    # Reset starts a fresh root; its returned boundary supersedes the failed call.
+    capture.reset(env, players())
+    capture.step(env, 0)
+    capture.close()
+    record = read_record(path)
+    assert record.error_class is None
+    assert record.execution_outcome == "last_command_succeeded"
+    replay = walk(record)
+    assert len(list(replay)) == 1
+    assert replay.stop is not None and replay.stop.status == "interrupted"
+
+
+def test_late_journal_does_not_invent_a_digest_prefix(tmp_path: Path) -> None:
+    path = tmp_path / "journal.jsonl"
+    capture = ScalarCapture(seed=7)
+    env = managym.Env(seed=7)
+    capture.reset(env, players())
+    capture.step(env, 0)
+    capture.enable_journal(path)
+    capture.step(env, 0)
+    capture.close()
+    record = read_record(path)
+    assert len(record.games[0].actions) == 2
+    assert record.games[0].digests == []
+    replay = walk(record)
+    assert len(list(replay)) == 2
+    capture.reset(env, players())
+    capture.step(env, 0)
+    capture.close()
+    record = read_record(path)
+    assert len(record.games[0].digests) == 1

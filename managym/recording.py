@@ -589,6 +589,10 @@ class _Capture:
             self.games_path is None and self._game_journal is None
         ) or self.record_fraction == 0:
             return False
+        # A journal enabled mid-game cannot invent earlier state digests. Keep
+        # that root as diagnostic inputs; record from the next complete root.
+        if game.actions and not game.digests:
+            return False
         value = hashlib.sha256(f"{game.seed}:{game.stream}".encode()).digest()
         return int.from_bytes(value[:8], "big") < self.record_fraction * 2**64
 
@@ -813,10 +817,10 @@ class _Capture:
             retained.error = str(error)
             retained.traceback = "".join(traceback.format_exception(error))
             self._raised = retained
-            if self._game_journal is not None and self._boundary is not None:
-                self._publish(retained, self._boundary.phase)
             path = self._retain(retained)
             error.add_note(f"Private native failure evidence: {path}")
+            if self._game_journal is not None and self._boundary is not None:
+                self._publish(retained, self._boundary.phase)
         except Exception as capture_error:
             error.add_note(f"Failure evidence could not be retained: {capture_error}")
 
@@ -939,6 +943,7 @@ class ScalarCapture(_Capture):
                     self._env.state_digest()
                     if self._env is not None
                     and not self._failed
+                    and self.inputs.end is None
                     and self._selected(self.inputs)
                     else None
                 ),
