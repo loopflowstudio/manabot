@@ -41,5 +41,22 @@ No CUDA observations, ratios, spread or evidence-based default recommendation
 exist. Do not substitute CPU timings or the rental quote. Resume this same
 exploratory question on an admitted host; retain this failed attempt.
 
+2026-11-16 follow-up: `uv run etude logs --run recording_cost/6bffcb5ff678`
+and `uv run etude logs --machine mtg338-a6000-2e3aec59e889` both retain only
+`ProviderUnavailable: POST pods: status 400`, with no response body. Inspection
+of the pinned launcher's `etude.launch.providers.http.send_to_provider` explains
+why: its `HTTPError` handler returns `HTTPReply(status=error.code, body=b"")`;
+`PodHTTP._ask` then raises a status-only error. The provider's refusal reason
+cannot be recovered from those logs. No new create was sent: the review's
+prerequisite to read that reason before repeating the request remains unmet.
+This requires provider-side evidence for the original request, or a revised
+retry direction that permits a fresh request with error-body capture.
+
+A read-only availability check at 23:04:26 UTC again reported the A6000 shape
+rentable at $0.69/hour, with 0 of 1 in use. It does not establish successful
+admission or explain the 400. Provider and storage credentials were injected
+from Doppler `etude/prd` and `manabot/prd` respectively; no auth was changed.
+The frozen source, $5 job cap and prior $0.00 settlement remain unchanged.
+
 The all-off arm includes existing capture frame reads; this comparison measures
 incremental option cost and does not separately attribute those baseline reads.
