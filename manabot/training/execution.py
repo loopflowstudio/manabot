@@ -196,7 +196,7 @@ def validate_regime(
     return regime
 
 
-def _checkpoint_setups(regime: TrainingRegime) -> list[managym.PlayerConfig] | None:
+def _checkpoint_setups(regime: TrainingRegime) -> managym.GameSetup | None:
     """Setups a checkpoint binds; a deck-source run binds the world (`None`)."""
     if regime.deck_source is not None:
         return None

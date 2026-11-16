@@ -11,7 +11,7 @@ serialized keys remain unchanged; these are not training snapshots.
 beside the native torch API (see the protocol section below).
 """
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 import importlib
 import json
@@ -257,7 +257,7 @@ def save_checkpoint(
     obs_space: ObservationSpace,
     path: str | Path,
     *,
-    player_configs: list[managym.PlayerConfig] | None,
+    player_configs: Sequence[managym.PlayerConfig] | None,
     extra: dict[str, Any] | None = None,
     belief_schema: BeliefEncodingSchema | None = None,
 ) -> None:
