@@ -595,3 +595,53 @@ def test_monitoring_continuation_stages_raw_alone_and_resets_learner_state(
     assert origin is not None and origin.iteration == 2
     assert origin.reset == ("ema", "optimizer")
     assert run.status == "completed" and run.updates_through() == 4
+
+
+@pytest.mark.parametrize("failed", [False, True])
+def test_worker_retains_journals_inside_launcher_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failed: bool
+) -> None:
+    spec = specification()
+    stage = spec.regime.stages[0]
+    assert isinstance(stage, TrainSelfPlay)
+    stage.updates = 1
+    stage.streams = 2
+    stage.transitions = 2
+    stage.learning_seats = "one"
+    stage.batch_closure = "exact-quota"
+    spec = spec.model_copy(update={"training_game_logs": True, "milestones": ()})
+    frozen = spec.regime.model_dump_json()
+    worker_environment(tmp_path, monkeypatch, spec)
+    if failed:
+
+        def fail_learning(*args: object, **kwargs: object) -> None:
+            raise RuntimeError("injected learning failure")
+
+        monkeypatch.setattr(execution, "update_damped_iteration", fail_learning)
+        with pytest.raises(RuntimeError, match="injected learning failure"):
+            run_worker()
+        run = TrainingRun.model_validate_json(
+            (tmp_path / "output/training/run.json").read_text()
+        )
+        assert run.status == "failed"
+    else:
+        run = run_worker()
+    directory = tmp_path / "output/training/game-journals"
+    assert Path(run.game_journal_directory or "").resolve() == directory.resolve()
+    assert list(directory.glob("*.jsonl"))
+    assert (directory / "operation.json").exists()
+    assert spec.regime.model_dump_json() == frozen
+    references = {
+        key: value
+        for key, value in run.stages[-1].artifacts.items()
+        if key.startswith("game-journals/")
+    }
+    assert len(references) == 2
+    for reference in references.values():
+        path = Path(reference["path"])
+        assert path.is_relative_to(tmp_path / "output")
+        assert reference["sha256"] == file_sha256(path)
+    persisted = TrainingRun.model_validate_json(
+        (tmp_path / "output/training/run.json").read_text()
+    )
+    assert persisted.game_journal_directory == run.game_journal_directory

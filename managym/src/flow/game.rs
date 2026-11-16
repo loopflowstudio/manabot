@@ -715,7 +715,12 @@ pub(crate) enum CombatDamagePass {
 
 #[derive(Debug)]
 pub struct Game {
-    /// Evaluation-only facts. Never cloned, hashed, or exposed to policies.
+    /// Optional private counters and facts. Search clones omit them; rollback
+    /// snapshots preserve them. Never hashed or exposed to policies.
+    pub(crate) statistics: Option<crate::flow::statistics::Statistics>,
+    pub(crate) capture_originals:
+        std::collections::BTreeMap<usize, crate::flow::card_capture::CardSnapshot>,
+    pub(crate) capture_drawing: Option<ObjectId>,
     pub(crate) card_capture: Option<crate::flow::card_capture::CardCapture>,
     pub state: TrackedState,
     /// Characteristics, static sources and trigger sources derived from
@@ -764,6 +769,9 @@ impl Clone for Game {
             skip_trivial_count: self.skip_trivial_count,
             trackers: self.trackers.clone(),
             card_capture: None,
+            statistics: None,
+            capture_drawing: None,
+            capture_originals: Default::default(),
         }
     }
 }

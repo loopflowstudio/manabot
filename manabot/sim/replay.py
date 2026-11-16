@@ -14,12 +14,7 @@ from typing import Any
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
-from manabot.env.replay import (
-    ReplayAgreement,
-    matches_retained_error,
-    require_replay_runtime,
-    run_bounded_replay,
-)
+from manabot.env.replay import require_replay_runtime
 from manabot.infra.config import MatchConfig, ObservationConfig, RewardConfig
 from manabot.infra.identity import canonical_json, canonical_sha256, file_sha256
 from manabot.infra.provenance import RECORDED_ASSET_MANIFEST_HASH
@@ -30,6 +25,7 @@ from manabot.verify.scenario_validation import scenario_identity
 from manabot.verify.scenarios import SCENARIOS, build_scenario_env
 import managym
 from managym.experience import UNVERSIONED_CONTENT_HASH, Command
+from managym.replay import ReplayAgreement, matches_retained_error, run_bounded_replay
 
 
 @dataclass(frozen=True)

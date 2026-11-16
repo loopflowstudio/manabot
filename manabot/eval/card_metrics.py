@@ -1,6 +1,6 @@
 """Copy-weighted card counts per game, and their normalized table rows.
 
-`reduce_cards` owns the counting rules. `normalize` splits its rows into the
+`managym.statistics` owns the counting rules. `normalize` splits its rows into the
 three author tables an evaluation delivers: `card_plays` (one row per game and
 seat, with the game's facts), `card_counts` (per card in that game) and
 `cards` (names for card keys). `CARD_ROLLUPS` are the per-deal totals of
@@ -10,12 +10,11 @@ card rows."""
 
 from __future__ import annotations
 
-from collections import Counter
-
 from etude.eval.records import Rollup
 
 from manabot.infra.identity import StrictModel
 from manabot.sim.card_evidence import GameEvidence, Seat
+from managym.statistics import reduce_cards as count_cards
 
 METRIC_VERSION = "gih-copies-v1"
 
@@ -52,25 +51,17 @@ def reduce_cards(game: GameEvidence, participants: tuple[str, str]) -> list[Card
     if set(participants) != set(game.seat_players) or len(set(participants)) != 2:
         raise ValueError("participants differ from engine seating")
     capture = game.cards.capture
-    cards = {c.copy_id: c for c in capture.initial}
-    cards.update({m.card.copy_id: m.card for m in capture.moves})
+    counts = count_cards(game.cards)
     rows: list[CardGame] = []
     eligible = game.outcome == "win_loss" and game.replay.get("passed") is True
     for game_seat in (0, 1):
         seat = participants.index(game.seat_players[game_seat])
-        deck = Counter(
-            c.definition
-            for c in capture.initial
-            if c.owner == game_seat and c.origin == "deck"
-        )
-        opening = Counter(cards[c].definition for c in capture.opening[game_seat])
-        drawn = Counter(
-            m.card.definition
-            for m in capture.moves
-            if m.card.owner == game_seat and m.cause == "draw"
-        )
-        definitions = {c.definition: c for c in cards.values() if c.owner == game_seat}
-        for definition in sorted(deck.keys() | opening.keys() | drawn.keys()):
+        for count in counts:
+            if count.seat != game_seat or not (
+                count.deck_copies or count.opening_copies or count.drawn_copies
+            ):
+                continue
+            definition = count.definition
             rows.append(
                 CardGame(
                     seat=seat,
@@ -78,16 +69,16 @@ def reduce_cards(game: GameEvidence, participants: tuple[str, str]) -> list[Card
                     game=game.game,
                     deal=game.deal,
                     card=f"{capture.content_digest}:{definition}",
-                    name=definitions[definition].name,
+                    name=count.name,
                     definition=definition,
                     content=capture.content_digest,
                     deck=game.seat_decks[game_seat],
                     opponent_deck=game.seat_decks[1 - game_seat],
                     on_play=game_seat == 0,
-                    deck_copies=deck[definition],
-                    opening_copies=opening[definition],
-                    drawn_copies=drawn[definition],
-                    gih_copies=opening[definition] + drawn[definition],
+                    deck_copies=count.deck_copies,
+                    opening_copies=count.opening_copies,
+                    drawn_copies=count.drawn_copies,
+                    gih_copies=count.opening_copies + count.drawn_copies,
                     eligible=eligible,
                     outcome=game.outcome,
                     win=int(game.winner == game_seat) if eligible else None,

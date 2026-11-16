@@ -84,7 +84,12 @@ class TrainingRecipe(Strict):
         )
 
     def run(
-        self, *, seed: int = 197, out: Path | None = None, backend: Backend
+        self,
+        *,
+        seed: int = 197,
+        out: Path | None = None,
+        backend: Backend,
+        training_game_logs: bool = False,
     ) -> ExperimentRun:
         """Train, export and evaluate with one reserved CPU evaluator thread."""
         destination = out or Path(".runs") / (
@@ -101,7 +106,11 @@ class TrainingRecipe(Strict):
         )
         try:
             result = run_experiment(
-                self.experiment(seed), hardware, destination, backend=backend
+                self.experiment(seed),
+                hardware,
+                destination,
+                backend=backend,
+                training_game_logs=training_game_logs,
             )
         except Exception:
             if (destination / "experiment.json").exists():
@@ -231,6 +240,7 @@ def _baseline(
 
 def run_baseline(
     *,
+    training_game_logs: bool = False,
     steps: int = BASELINE_STEPS,
     seed: int = 197,
     out: Path | None = None,
@@ -249,4 +259,9 @@ def run_baseline(
         device=device,
         padded_shapes=padded_shapes,
     )
-    return plan.run(seed=seed, out=out, backend=resolve("torch"))
+    return plan.run(
+        seed=seed,
+        out=out,
+        backend=resolve("torch"),
+        training_game_logs=training_game_logs,
+    )

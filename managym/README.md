@@ -11,6 +11,22 @@ each native seat can use an external agent, random play or the built-in
 heuristic, without installing `manabot`. See
 [per-seat players](https://github.com/loopflowstudio/manabot/blob/main/docs/engine.md#per-seat-players).
 
+## Statistics and private recording
+
+Call `game.enable_statistics()` before `game.reset(players)`, play normally,
+then read `game.statistics()` for per-game card counts and completion state.
+Drain completed/replaced summaries with `game.take_statistics()`. Statistics
+need no detailed logs, replay or disk writes; both statistics and recording
+default off.
+
+For durable diagnostic inputs, use `managym.recording.ScalarCapture` or
+`CapturedVector` with an explicit journal path before reset. These retain
+pending native calls even if the engine never returns. They work without
+manabot, Torch or Etude. Private journals contain hidden information and must
+not be used as Academy viewer exports. See the
+[standalone examples and recovery guide](https://github.com/loopflowstudio/manabot/blob/main/docs/engine-python.md#collect-in-game-statistics)
+for independent options, costs, partial counts and replay.
+
 ## Play in the browser
 
 The distribution includes Academy, a browser table for playing a game against

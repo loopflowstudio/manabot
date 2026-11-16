@@ -160,6 +160,42 @@ impl VectorEnv {
         }
     }
 
+    pub fn enable_statistics(&mut self) -> Result<(), AgentError> {
+        if !self.player_configs.is_empty() {
+            return Err(AgentError("statistics must be enabled before reset".into()));
+        }
+        for env in &mut self.envs {
+            env.enable_statistics()?;
+        }
+        Ok(())
+    }
+
+    pub fn statistics(&self) -> Vec<Option<crate::flow::statistics::GameStatistics>> {
+        self.envs
+            .iter()
+            .enumerate()
+            .map(|(stream, env)| {
+                env.statistics().map(|mut s| {
+                    s.stream = stream;
+                    s
+                })
+            })
+            .collect()
+    }
+
+    pub fn take_statistics(&mut self) -> Vec<crate::flow::statistics::GameStatistics> {
+        self.envs
+            .iter_mut()
+            .enumerate()
+            .flat_map(|(stream, env)| {
+                env.take_statistics().into_iter().map(move |mut s| {
+                    s.stream = stream;
+                    s
+                })
+            })
+            .collect()
+    }
+
     pub fn enable_exposure_capture(&mut self) -> Result<(), AgentError> {
         if !self.player_configs.is_empty() {
             return Err(AgentError(

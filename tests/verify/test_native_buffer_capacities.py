@@ -10,15 +10,14 @@ import pytest
 from manabot.env.failures import (
     CapturedVector,
     CaptureScope,
-    GameInputs,
     ScalarCapture,
     capture_scope,
-    read_failure,
 )
 from manabot.env.observation import RELATION_ROWS, ObservationEncoder
 from manabot.infra.config import ObservationConfig
 from manabot.training.rollout.producers import ShardedVectorEnv
 import managym
+from managym.recording import GameInputs, read_failure
 from tests.retained_decision import assert_retained_frame
 
 

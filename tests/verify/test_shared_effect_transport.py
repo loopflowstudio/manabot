@@ -7,7 +7,6 @@ import numpy as np
 from pydantic import BaseModel
 import pytest
 
-from manabot.env.failures import GameInputs
 from manabot.env.observation import ObservationEncoder
 from manabot.env.shared_effects import SHARED_EFFECT_SHAPES
 from manabot.infra.config import ObservationConfig
@@ -18,6 +17,7 @@ from manabot.verify.representation import (
     source_effect_root,
 )
 import managym
+from managym.recording import GameInputs
 from tests.retained_decision import assert_retained_frame
 
 

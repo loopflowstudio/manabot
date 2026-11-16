@@ -4016,6 +4016,34 @@ impl PyEnv {
         Ok((PyObservation::from(obs), py_dict.into_any().unbind()))
     }
 
+    fn enable_statistics(&self) -> PyResult<()> {
+        self.reject_guarded_mutation("Env.enable_statistics")?;
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .enable_statistics()
+            .map_err(map_agent_err)
+    }
+
+    fn statistics(&self, py: Python<'_>) -> PyResult<PyObject> {
+        let summary = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .statistics();
+        statistics_object(py, &summary, "summary")
+    }
+
+    fn take_statistics(&self, py: Python<'_>) -> PyResult<PyObject> {
+        self.reject_guarded_mutation("Env.take_statistics")?;
+        let summaries = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .take_statistics();
+        statistics_object(py, &summaries, "summaries")
+    }
+
     fn enable_card_capture(&self) -> PyResult<()> {
         self.reject_guarded_mutation("Env.enable_card_capture")?;
         self.inner
@@ -5351,6 +5379,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(naming_catalog, m)?)?;
     m.add_class::<crate::cards::names::NameCandidate>()?;
     m.add_function(wrap_pyfunction!(card_definitions_json, m)?)?;
+    m.add_function(wrap_pyfunction!(reduce_card_capture_json, m)?)?;
     m.add_function(wrap_pyfunction!(catalog_token_value, m)?)?;
     m.add_function(wrap_pyfunction!(record_vocabulary, m)?)?;
     crate::python::layout_bindings::register(m)?;
@@ -5479,9 +5508,31 @@ pub(crate) fn python_game_setup(
 }
 
 #[cfg(feature = "python")]
+pub(crate) fn statistics_object(
+    py: Python<'_>,
+    value: &impl serde::Serialize,
+    parser: &str,
+) -> PyResult<PyObject> {
+    let raw = serde_json::to_string(value).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    Ok(py
+        .import_bound("managym.statistics")?
+        .getattr(parser)?
+        .call1((raw,))?
+        .unbind())
+}
+
+#[cfg(feature = "python")]
 #[pyfunction]
 fn resolve_decklists(player_configs: Bound<'_, PyAny>, seed: u64) -> PyResult<&'static str> {
     Ok(disclosure_name(
         game_setup(&player_configs)?.decklists.resolve(seed),
     ))
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+fn reduce_card_capture_json(raw: &str) -> PyResult<String> {
+    let rows = crate::flow::statistics::reduce_capture(raw)
+        .map_err(|e| PyValueError::new_err(e.to_string()))?;
+    serde_json::to_string(&rows).map_err(|e| PyValueError::new_err(e.to_string()))
 }

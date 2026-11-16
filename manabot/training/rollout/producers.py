@@ -83,6 +83,13 @@ class ShardedVectorEnv:
     def _run[T](self, calls: Sequence[Callable[[], T]]) -> list[T]:
         self._check()
         try:
+            # Freeze owner coordinates before dispatch; ContextVars do not cross threads.
+            for shard in self._shards:
+                if (
+                    shard.native.scope is not None
+                    and shard.native.scope.training_game_logs
+                ):
+                    shard.native.frozen_context = shard.native.scope.context().copy()
             futures = [self._pool.submit(call) for call in calls]
             # Settle every writer before propagating failure or exposing buffers.
             wait(futures)

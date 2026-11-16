@@ -2,7 +2,7 @@
 // Private game facts at setup and committed boundaries; no rule events or RNG.
 
 use crate::agent::{
-    action::{ActionSpace, ActionType},
+    action::{Action, ActionSpace, ActionType},
     observation::Observation,
 };
 use crate::flow::decision::EffectFrame;
@@ -14,11 +14,11 @@ use crate::{
         zone::ZoneType,
     },
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// One consumed, nontrivial native choice. Focus is the shared action projection,
 /// not a claim that each focused card caused or benefited from the action.
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct ExposureChoice {
     pub revision: u64,
     pub actor: usize,
@@ -27,7 +27,7 @@ pub struct ExposureChoice {
     pub selected: usize,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct ExposureOption {
     pub action_type: ActionType,
     pub objects: Vec<CardSnapshot>,
@@ -35,7 +35,7 @@ pub struct ExposureOption {
 
 /// A completed effect frame, including untargeted and suspended resolutions.
 /// Completion does not assert an effect changed state or a strategy succeeded.
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct ExposureResolution {
     pub revision: u64,
     pub controller: usize,
@@ -44,13 +44,13 @@ pub struct ExposureResolution {
     pub definition: Option<u32>,
 }
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Clone, Debug, Default, Serialize)]
 pub struct ExposureCapture {
     pub choices: Vec<ExposureChoice>,
     pub resolutions: Vec<ExposureResolution>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CardSnapshot {
     pub copy: usize,
     pub definition: u32,
@@ -58,10 +58,10 @@ pub struct CardSnapshot {
     pub incarnation: u32,
     pub owner: usize,
     pub zone: Option<ZoneType>,
-    pub origin: &'static str,
+    pub origin: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct CardMove {
     pub sequence: usize,
     #[serde(rename = "card")]
@@ -72,7 +72,7 @@ pub struct CardMove {
     pub turn: u32,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct CardCapture {
     pub version: u32,
     pub content_digest: String,
@@ -81,8 +81,6 @@ pub struct CardCapture {
     pub moves: Vec<CardMove>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exposure: Option<ExposureCapture>,
-    #[serde(skip)]
-    pub(crate) drawing: Option<ObjectId>,
 }
 
 fn snapshot(game: &Game, object: ObjectId) -> CardSnapshot {
@@ -93,10 +91,7 @@ fn snapshot(game: &Game, object: ObjectId) -> CardSnapshot {
         .provenance(object)
         .expect("captured provenance");
     let player = &game.state.players[owner.0];
-    let original = game
-        .card_capture
-        .as_ref()
-        .and_then(|capture| capture.original(object));
+    let original = game.capture_originals.get(&object.slot());
     CardSnapshot {
         copy: object.slot(),
         definition: original.map_or(definition.0, |object| object.definition),
@@ -108,7 +103,8 @@ fn snapshot(game: &Game, object: ObjectId) -> CardSnapshot {
             Some(card) if player.deck.contains(&card) => "deck",
             Some(card) if player.sideboard.contains(&card) => "outside",
             _ => "generated",
-        },
+        }
+        .into(),
     }
 }
 
@@ -121,14 +117,6 @@ pub(crate) fn snapshots(game: &Game) -> Vec<CardSnapshot> {
 }
 
 impl CardCapture {
-    /// Physical-copy identity is fixed at setup/creation, not by its current face.
-    fn original(&self, object: ObjectId) -> Option<&CardSnapshot> {
-        self.initial
-            .iter()
-            .chain(self.moves.iter().map(|m| &m.object))
-            .find(|snapshot| snapshot.copy == object.slot())
-    }
-
     pub(crate) fn new(game: &Game) -> Self {
         Self {
             version: 1,
@@ -143,19 +131,46 @@ impl CardCapture {
                     .collect()
             }),
             moves: Vec::new(),
-            drawing: None,
             exposure: None,
         }
     }
 }
 
 impl Game {
+    /// Transactions preserve diagnostic sinks; search clones deliberately omit them.
+    pub(crate) fn rollback_snapshot(&self) -> Self {
+        let mut snapshot = self.clone();
+        snapshot.card_capture = self.card_capture.clone();
+        snapshot.statistics = self.statistics.clone();
+        snapshot.capture_originals = self.capture_originals.clone();
+        snapshot.capture_drawing = self.capture_drawing;
+        snapshot
+    }
+
+    /// Bind an atomic action to the same published choice as indexed stepping.
+    pub(crate) fn exposure_for_action(&self, action: &Action) -> Option<ExposureChoice> {
+        let space = self.current_action_space.as_ref()?;
+        let index = space
+            .actions
+            .iter()
+            .position(|candidate| candidate == action)?;
+        self.exposure_choice(space, index)
+    }
+
     pub(crate) fn exposure_choice(
         &self,
         space: &ActionSpace,
         selected: usize,
     ) -> Option<ExposureChoice> {
-        self.card_capture.as_ref()?.exposure.as_ref()?;
+        if self.statistics.is_none()
+            && self
+                .card_capture
+                .as_ref()
+                .and_then(|c| c.exposure.as_ref())
+                .is_none()
+        {
+            return None;
+        }
         if space.actions.len() <= 1 {
             return None;
         }
@@ -195,13 +210,26 @@ impl Game {
         })
     }
 
+    pub(crate) fn commit_capture_choice(&mut self, choice: ExposureChoice) {
+        if let Some(stats) = &mut self.statistics {
+            stats.choice(&choice);
+        }
+        if let Some(exposure) = self.card_capture.as_mut().and_then(|c| c.exposure.as_mut()) {
+            exposure.choices.push(choice);
+        }
+    }
+
     pub(crate) fn capture_resolution(&mut self, frame: &EffectFrame) {
         // Attribute to the captured physical copy's initial definition. Copy/face
         // changes do not turn this into a count of executed mechanic programs.
         let definition = frame.source().and_then(|source| {
-            let capture = self.card_capture.as_ref()?;
-            capture.original(source).map(|object| object.definition)
+            self.capture_originals
+                .get(&source.slot())
+                .map(|card| card.definition)
         });
+        if let Some(stats) = &mut self.statistics {
+            stats.resolution(frame.controller.0, definition);
+        }
         if let Some(exposure) = self
             .card_capture
             .as_mut()
@@ -223,20 +251,26 @@ impl Game {
         to: Option<ZoneType>,
         controller: PlayerId,
     ) {
-        if self.card_capture.is_none() {
+        if self.card_capture.is_none() && self.statistics.is_none() {
             return;
         }
         let data = snapshot(self, object);
+        self.capture_originals
+            .entry(data.copy)
+            .or_insert_with(|| data.clone());
         let zones = &self.state.zones;
-        let capture = self.card_capture.as_mut().expect("capture enabled");
+
         // Only the actual committed movement caused by draw_cards consumes this
         // marker: `object` is what the marked library card became (CR 400.7).
         // Triggered movements during its processing cannot inherit it.
-        let drawn = capture.drawing.and_then(|drawing| zones.successor(drawing)) == Some(object)
+        let drawn = self
+            .capture_drawing
+            .and_then(|drawing| zones.successor(drawing))
+            == Some(object)
             && from == Some(ZoneType::Library)
             && to == Some(ZoneType::Hand);
         if drawn {
-            capture.drawing = None;
+            self.capture_drawing = None;
         }
         let cause = if drawn {
             "draw"
@@ -250,6 +284,12 @@ impl Game {
             }
         } else {
             "move"
+        };
+        if let Some(stats) = &mut self.statistics {
+            stats.movement(&data, drawn);
+        }
+        let Some(capture) = self.card_capture.as_mut() else {
+            return;
         };
         capture.moves.push(CardMove {
             sequence: capture.moves.len(),
@@ -357,6 +397,10 @@ mod tests {
                 .keywords
                 .insert(crate::state::card::Keyword::Flash);
             game.card_capture = Some(CardCapture::new(&game));
+            game.statistics = Some(crate::flow::statistics::Statistics::new(
+                &snapshots(&game),
+                true,
+            ));
             game.card_capture.as_mut().unwrap().exposure = Some(ExposureCapture::default());
             game.publish_action_space(ActionSpace {
                 player: Some(PlayerId(0)),
@@ -405,6 +449,16 @@ mod tests {
                 exposure.resolutions.len(),
                 usize::from(outcome == "completed")
             );
+            let rows = game.statistics.as_ref().unwrap().rows();
+            assert_eq!(
+                rows.iter().map(|r| r.resolutions.unwrap()).sum::<u64>(),
+                u64::from(outcome == "completed")
+            );
+            assert_eq!(
+                rows.iter().map(|r| r.selections.unwrap()).sum::<u64>(),
+                u64::from(outcome != "declined")
+            );
+
             if let Some(resolution) = exposure.resolutions.first() {
                 // CR 400.7g: the spell is the object the hand card became.
                 let spell = resolution.source.unwrap();

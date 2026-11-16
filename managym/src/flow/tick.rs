@@ -41,14 +41,7 @@ impl Game {
         }
 
         if let Some(choice) = exposure {
-            self.card_capture
-                .as_mut()
-                .unwrap()
-                .exposure
-                .as_mut()
-                .unwrap()
-                .choices
-                .push(choice);
+            self.commit_capture_choice(choice);
         }
         Ok(self.finish_action_step())
     }
