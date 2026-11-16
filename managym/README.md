@@ -596,7 +596,7 @@ determines which mana units are spent; source preference adds no new option
 to configure.
 
 Automatic payment removes unnecessary fixed-source taps and uses a bounded
-mana-cost heuristic to prefer the remaining sources (`flow/mana/tap_choice.rs`).
+mana-cost heuristic to prefer the remaining sources (`flow/mana/autotapper.rs`).
 It scores up to 64 distinct hand-cost and ability records, with hand costs then
 instant-timing hand costs breaking ties. Targets and other costs can still
 prevent a follow-up; alternatives can be affordable under different possible

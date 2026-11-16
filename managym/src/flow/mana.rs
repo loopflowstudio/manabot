@@ -14,7 +14,7 @@
 // player's sources across the questions of a `PaymentScan`. Pool arithmetic
 // and spend-purpose restrictions belong to state/mana.rs.
 
-mod tap_choice;
+mod autotapper;
 
 use std::num::NonZeroUsize;
 
@@ -2280,8 +2280,8 @@ impl Game {
     /// a cost among them, then a land without the basic supertype, then a
     /// basic land. Static and triggered abilities do not count: tapping the
     /// land for mana gives none of them up.
-    fn source_reluctance(&self, model: &PaymentModel) -> Vec<tap_choice::Reluctance> {
-        use tap_choice::Reluctance;
+    fn source_reluctance(&self, model: &PaymentModel) -> Vec<autotapper::Reluctance> {
+        use autotapper::Reluctance;
         let _scan = self.board_scan();
         self.characteristics_many(model.sources.iter().map(|source| source.permanent))
             .zip(&model.sources)
@@ -2333,12 +2333,12 @@ impl Game {
         player: PlayerId,
         cost: &ManaCost,
         model: &PaymentModel,
-    ) -> tap_choice::PaymentProbe {
+    ) -> autotapper::PaymentProbe {
         let mut paying = match &cost.purpose {
             SpendingContext::Cast(spell) => Some(spell.clone()),
             _ => None,
         };
-        let mut probe = tap_choice::PaymentProbe::default();
+        let mut probe = autotapper::PaymentProbe::default();
         let mut instant = Vec::new();
         for card in self.state.zone_cards(ZoneType::Hand, player) {
             let object_id = self.state.object_of(card);
@@ -2367,14 +2367,14 @@ impl Game {
                 }
             }
         }
-        probe.followups.truncate(tap_choice::FOLLOWUPS);
+        probe.followups.truncate(autotapper::FOLLOWUPS);
         probe.instant = instant
             .iter()
-            .take(tap_choice::FOLLOWUPS)
+            .take(autotapper::FOLLOWUPS)
             .enumerate()
             .fold(0, |set, (i, timing)| set | u64::from(*timing) << i);
         probe.hand = match probe.followups.len() {
-            tap_choice::FOLLOWUPS => u64::MAX,
+            autotapper::FOLLOWUPS => u64::MAX,
             cards => (1 << cards) - 1,
         };
         probe.tapping = vec![None; probe.followups.len()];
@@ -2396,7 +2396,7 @@ impl Game {
                 continue;
             }
             for (ability_index, ability) in view.activated_abilities.iter().enumerate() {
-                if probe.followups.len() == tap_choice::FOLLOWUPS {
+                if probe.followups.len() == autotapper::FOLLOWUPS {
                     return probe;
                 }
                 let single_use = ability.tap_source
@@ -2855,7 +2855,7 @@ mod tests {
     /// Elves, which pay when that keeps a card in hand castable.
     #[test]
     fn smart_tap_prefers_basic_lands_until_a_follow_up_needs_them() {
-        use super::tap_choice::Reluctance;
+        use super::autotapper::Reluctance;
         use crate::flow::game::Game;
         use crate::state::{game_object::PlayerId, player::PlayerConfig};
         use std::collections::BTreeMap;
