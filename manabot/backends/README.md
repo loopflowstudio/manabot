@@ -10,6 +10,7 @@ every backend is checked against.
 
 | Backend | Status | Guide |
 | --- | --- | --- |
+| `torch` | the reference: training, evaluation and the CLI run it | [training loops](../../docs/training-loop.md) |
 | `mlx` | policy and learner step, parity-checked; measurement only | [mlx.md](mlx.md) |
 
 ## Layout
@@ -21,15 +22,57 @@ Every backend is one package, `manabot/backends/<name>/`, with the same files:
 | `__init__.py` | the import guard naming the optional extra; nothing else |
 | `arrays.py` | conversion to and from NumPy and the float dtype |
 | `policy.py` | the forward over a `Prepared` batch: logits and values |
-| `rl.py` | the loss terms of `manabot.training.learning` over the framework's arrays |
-| `learner.py` | the optimizer, gradient step and precision |
+| `rl.py` | the array math of the shared updates: policy terms, losses, returns and selection |
+| `learner.py` | the optimizer, gradient step, EMA and precision context |
 | `checkpoint.py` | the map from canonical names to the backend's layout, loading, and `BACKEND` |
 
 `BACKEND` in `checkpoint.py` implements `manabot.policy.protocol.Backend`, the
 one object `parity` needs. A backend imports its own framework,
 `manabot.policy` and the configuration and observation modules; it never
-imports another backend, and nothing outside `manabot/backends/` imports a
-backend (`tests/test_package_boundaries.py` enforces both).
+imports another backend. Outside `manabot/backends/`, only code that chooses
+a backend imports one: the executor and the loops in
+`manabot.training.loops` import `manabot.backends.torch`, and an update
+imports none (`tests/test_package_boundaries.py` enforces these).
+
+## Algorithms are written once
+
+An update or a loop is written once and takes the backend as an argument:
+the backend's module itself, not a class to subclass or a configuration
+string. The maintained updates in `manabot/training/updates/` take it first:
+
+```python
+import manabot.backends.torch as backend
+
+diagnostics = update_damped_iteration(
+    backend, learner, batch, move_learning(), iteration=1
+)
+```
+
+Running the update in MLX changes the import to `manabot.backends.mlx`, with
+a learner from that backend. Inside an update, array math goes only through
+the backend's modules:
+
+- `backend.arrays`: moving host rows in and out (NumPy to the framework's
+  arrays and back) and the float dtype.
+- `backend.rl`: the policy terms (`legal_mask`, `policy_logs`,
+  `damped_policy_loss`), the losses (`clipped_surrogate`, `reverse_kl`,
+  `squared_value_loss`, `categorical_value_loss`, `entropy`), returns
+  (`transition_gae`, `standardized_advantages`, `categorical_lambda_returns`)
+  and selection (`selected_rows`, `selection_mask`, `selected_mean`).
+- `backend.learner`: `gradient_step`, `update_ema` and the
+  `forward_precision` context.
+
+NumPy keeps the host-side bookkeeping: admitted rollouts, action rows, health
+records and diagnostics. Policy logic that is pure NumPy or index logic, such
+as `reference_distribution`, lives once in `manabot.policy`.
+
+A function has the same name, arguments, shapes and per-row results in every
+backend; the torch backend's signatures are the reference, and
+[training loops](../../docs/training-loop.md#standard-methods-kept-local)
+documents them. Where a framework cannot match a dtype (MLX's GPU has no
+float64, so its surrogate ratio is float32), the backend's guide states the
+difference and its bound. A backend never carries its own copy of an update's
+loss: the parity check runs the shared update on each backend.
 
 ## Convert a PyTorch checkpoint
 
@@ -88,8 +131,8 @@ parity: pass (mlx)
 ```
 
 The check runs the PyTorch model in float32 on CPU as the reference, with the
-training code's own loss, and every installed backend on the same inputs: a
-capture directory written by `experiments/mlx_pilot.py capture` (real learner
+shared update over the torch backend, and the same update over every installed
+backend on the same inputs: a capture directory written by `experiments/mlx_pilot.py capture` (real learner
 minibatches with their targets and settings, and real collection calls). Each
 backend loads the reference's weights through the canonical names and is
 compared in its own parameter layout. The check compares logits on legal
