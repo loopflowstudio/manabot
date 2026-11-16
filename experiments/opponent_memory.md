@@ -773,3 +773,62 @@ prompt. This is text fidelity/size evidence, not a CUDA, throughput or strength
 result. No paid run or new retained artifact was created; the fixtures above
 and checked-in test source reproduce the checks. CUDA admission, calibration,
 wiring, gate and the capped pilot remain outstanding.
+
+### CPU construction baseline, 2026-11-16
+
+**Worse:** same-host collection with retained tensor logs took **3.432 s
+[3.029, 4.547]**, versus incumbent **0.986 s [0.683, 1.076]**, for identical
+250-decision/two-game batches, five alternating runs per side and zero errors.
+The ratio of medians is 3.48×; paired ratios have median 4.11× [2.99, 5.31].
+The [baseline report](data/opponent-memory/20261116-cpu-baseline/report.md),
+[phase table](data/opponent-memory/20261116-cpu-baseline/measure.html) and
+[raw receipt](data/opponent-memory/20261116-cpu-baseline/instrumented/receipt.json)
+retain exact commands, source/binary identities, all repeats and semantic checks.
+No production optimization was made; the code Graph remains at demo.
+
+At clean `194f20120f0a`, the bounded production collector uses two streams,
+one producer, both learning seats, seed 1, complete-game closure, float32 CPU,
+one Torch thread, local-smoke's normal width-64 attention/FiLM policy and 2-row
+execution on both sides. Control capacities remain 1,024/1,048,576; all 250
+prefixes are retained (largest 82 records/76,103 details). All ten runs have
+identical action/value/logprob/reward/done and ordinary-observation digests.
+Native stepping includes unconditional viewer-log capture on both sides, so
+this is a tensor-retention comparison, not capture cost against a pre-feature
+engine. Native build flags are unrecorded; both sides use the same extension
+hash as the earlier headless proof. Background load averages rose from 27 to 39;
+no load was induced. This large separation survives observed timing ranges,
+but small component differences remain inconclusive.
+
+Control phase medians are native stepping/capture 0.046 s, native observation
+encoding 0.666 s, host prefix transport 1.384 s, host preparation 0.567 s
+(including nested validation 0.301 s), Torch forward 0.577 s and residual
+0.143 s. Native encoding and host prefix transport account for median per-run
+shares of 20.7% and 42.7%. Component medians need not sum. Residual is computed
+per run without assigning sampling, recording or orchestration speculatively.
+Native stepping and no-head forward ranges overlap those of the incumbent.
+Construction, bootstrap, optimizer and checkpoint IO are outside these timers.
+
+The existing 160-choice seed-0 probe reproduces its original state digest and
+67/87 viewer counts. Native curated seed 166 supplies retained real prefixes
+at 0/34/52/484 records and 0/9,460/17,901/546,812 details. Each agrees with the
+independent Python encoder and exact prefix gather. Five warmed repetitions
+per operation and all six policy configurations separate native scalar encoding,
+dense/compact admission, transport, production-cached preparation and forward.
+Long-prefix learned preparation/forward costs are material; overlapping ranges
+do not rank GRU/transformer or one/four summaries. Profiled timings are excluded
+from these summaries. Separate cProfile attribution puts 1.907 of 2.209 seconds
+inside prefix capture into admission across its mixed probe workload; native
+sample stacks expose repeated per-detail field-name formatting/BLAKE3 hashing
+inside full-prefix encoding. Dense zero-prefix admission still costs about
+2.3 ms versus 0.07 ms compact admission. These are existing-path diagnostics,
+not a measured production optimization.
+
+For optimize-plan, investigate a typed compact native transport/admission
+boundary that preserves the dense reference ABI and every complete immutable
+prefix, plus static field-token reuse. Removing all prefix transport alone
+would still leave roughly twice the incumbent collection time; forward tuning
+alone cannot recover the common log overhead. Full capacities, privacy,
+coalesced-tail versions, typed overflow and fork/replay identity stay required.
+The unchanged-contract checks passed 16 tests. This is CPU attribution, not
+256-stream admission, a whole training update, CUDA throughput, learning or
+strength evidence. No rental, paid calibration or pilot ran.

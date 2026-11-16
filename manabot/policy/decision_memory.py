@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from manabot.env.decision_memory import MEMORY_FIELDS, MEMORY_WIDTHS, integer_words
+from managym.decision_memory import decision_name_values, definition_programs
 
 if TYPE_CHECKING:
     from manabot.env.observation import ObservationBuffers
@@ -220,15 +221,14 @@ def admit_memory(obs: "ObservationBuffers") -> None:
 def validate_memory_vocabulary(obs: "ObservationBuffers", tables: "Tables") -> None:
     """Validate only owned values, including for a control without learned heads."""
     from manabot.policy.prepare import record_word
-    from managym.decision_memory import decision_name_values, definition_programs
 
     if _FIELDS[0] not in obs:
         return
+    programs = definition_programs()
     for batch in range(obs[_FIELDS[0]].shape[0]):
         count, detail_count, reference_count, _ = memory_lengths(obs, batch)
         references = obs[_FIELDS[2]][batch, :reference_count]
         for definition in references[references[:, 13] == 1, 1].astype(np.int64):
-            programs = definition_programs()
             if (
                 not 0 < definition <= len(programs)
                 or not programs[int(definition) - 1].eligible
@@ -310,8 +310,6 @@ def prepare_memory(
         _, detail_count, reference_count, member_count = memory_lengths(obs, batch)
         references = obs[_FIELDS[2]][batch, :reference_count]
         references_list.append(references)
-        from managym.decision_memory import definition_programs
-
         raw_details = obs[_FIELDS[1]][batch, :detail_count]
         for index, reference in enumerate(references):
             start, count = map(int, reference[10:12])

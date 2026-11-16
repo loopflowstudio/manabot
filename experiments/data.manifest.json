@@ -40958,6 +40958,234 @@
    "sha256": "c54ae47466062250860c0fbbe2e4c408fb8e2daf642f94bc7cb1a2f4b2d9f3cf",
    "bytes": 668
   },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/README.md": {
+   "sha256": "cf7743856e034e25f6a07a7eda2c270911905219f962b56c266788764afec487",
+   "bytes": 2876
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/attribution/attribution.prof": {
+   "sha256": "027c0cde2c81eaca30a9a16d5a00bb57394afdd5f85ee1ada2c8465b3dd1b58f",
+   "bytes": 566464
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/attribution/attribution.txt": {
+   "sha256": "8ec2272d7e961f62701119ee65746170bf0da2612337244498e11cb138e8209b",
+   "bytes": 5411
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/attribution/launch_sample.py": {
+   "sha256": "c75c6c6ad8c5ab9da6ac2db436ee864d7a54646ff68d468da84c59e05879a0d4",
+   "bytes": 754
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/attribution/measure_cpu.py": {
+   "sha256": "24bc75627099cae833e2dd56f5d7e7fa96d4099cff35d571c49029510501e1d8",
+   "bytes": 13811
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/attribution/native-sample.txt": {
+   "sha256": "bbaa32548534883c6efcf06f64de3ccde8b4c83237614a76d56214b3e01421c3",
+   "bytes": 5417858
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/attribution/prefix-0-records.json": {
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+   "bytes": 2
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/attribution/prefix-0.npz": {
+   "sha256": "ae756f9f7efdab863066b8ebe2cbcb87d14f2e4a702623a8a524027fc4db2623",
+   "bytes": 7560
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/attribution/prefix-160-records.json": {
+   "sha256": "830d6ba9c4d8f1f08e3b67e1d5655b63df9b99c576805d530dd65fb69d11e7f7",
+   "bytes": 361256
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/attribution/prefix-160.npz": {
+   "sha256": "192aaff8e53b2b90d14ff98647da9034619d59c41c013bbe3b4a2992c97b88ad",
+   "bytes": 37153
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/attribution/prefix-600-records.json": {
+   "sha256": "8e47c9c5f589f9fa75c22d646761e247cd0414fd689c28e9cec129757c628b4a",
+   "bytes": 11118386
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/attribution/prefix-600.npz": {
+   "sha256": "57310871fc001c5ee17cfd16d9a7cfba9567cc5b6b1fd165513c3bee463586e0",
+   "bytes": 1821137
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/attribution/prefix-80-records.json": {
+   "sha256": "ff44434cd94879d989cf5916a236ec83576ead288b070ca650848216100e1d8c",
+   "bytes": 190869
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/attribution/prefix-80.npz": {
+   "sha256": "fac987c9324b8f91f2c1df69d667dd1cda653dcac363db7ed2c3857a67b63fd1",
+   "bytes": 23573
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/attribution/profile.json": {
+   "sha256": "6fd5ebece82c60080cba72eda15e58f41b0e28d0ebb76c89f97fb17adcf28d6c",
+   "bytes": 23576
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/attribution/profile.log": {
+   "sha256": "3b5591f8b0d1fa9f58156f138f6de59a420dc154687f4c81beaa9f77f9e46bbd",
+   "bytes": 172
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/attribution/sample-command.log": {
+   "sha256": "2cfb43121da7b3f37838751ea9e2f3d8c3f298adfff65636f768321b39524e85",
+   "bytes": 235
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/instrumented/analysis.json": {
+   "sha256": "d9152af82a4235a715771616d886f0df01d58e5e7e3cf869caffbfc85cc20f67",
+   "bytes": 21654
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/instrumented/analyze.py": {
+   "sha256": "a940eac3b7e783927cfd988beee344793db5f368688979e047013296cd8ff48f",
+   "bytes": 2674
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/instrumented/capture_identity.py": {
+   "sha256": "8386c5a44b45837533b4c59ec6ec8223089bdb7e6ef1a6450581fe612282daf7",
+   "bytes": 1567
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/instrumented/identity.json": {
+   "sha256": "36e300cae51f1bfa5a7daeb11d2a7911d43760271df4faf66a2a77afa26fa070",
+   "bytes": 1963
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/instrumented/measure_cpu.py": {
+   "sha256": "24bc75627099cae833e2dd56f5d7e7fa96d4099cff35d571c49029510501e1d8",
+   "bytes": 13811
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/instrumented/prefix-0-records.json": {
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+   "bytes": 2
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/instrumented/prefix-0.npz": {
+   "sha256": "ae756f9f7efdab863066b8ebe2cbcb87d14f2e4a702623a8a524027fc4db2623",
+   "bytes": 7560
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/instrumented/prefix-160-records.json": {
+   "sha256": "830d6ba9c4d8f1f08e3b67e1d5655b63df9b99c576805d530dd65fb69d11e7f7",
+   "bytes": 361256
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/instrumented/prefix-160.npz": {
+   "sha256": "192aaff8e53b2b90d14ff98647da9034619d59c41c013bbe3b4a2992c97b88ad",
+   "bytes": 37153
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/instrumented/prefix-600-records.json": {
+   "sha256": "8e47c9c5f589f9fa75c22d646761e247cd0414fd689c28e9cec129757c628b4a",
+   "bytes": 11118386
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/instrumented/prefix-600.npz": {
+   "sha256": "57310871fc001c5ee17cfd16d9a7cfba9567cc5b6b1fd165513c3bee463586e0",
+   "bytes": 1821137
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/instrumented/prefix-80-records.json": {
+   "sha256": "ff44434cd94879d989cf5916a236ec83576ead288b070ca650848216100e1d8c",
+   "bytes": 190869
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/instrumented/prefix-80.npz": {
+   "sha256": "fac987c9324b8f91f2c1df69d667dd1cda653dcac363db7ed2c3857a67b63fd1",
+   "bytes": 23573
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/instrumented/profile-callers.json": {
+   "sha256": "a5c2572dea6aae5879c820e43cbda408f47c75126bdeb5eb1568dabf118caf30",
+   "bytes": 874
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/instrumented/receipt.json": {
+   "sha256": "c02c5b3872338e4cda188b830129958981788f696fbfc36d8b57fe7b79bd6a28",
+   "bytes": 108518
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/instrumented/report.py": {
+   "sha256": "0d97895b4b367d9dce33c5e9942a91a4523604fee5135b8af154cbb934a2a003",
+   "bytes": 18045
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/instrumented/source/manabot/backends/torch/collection.py": {
+   "sha256": "c01c9db81ccf716605efa92bcbda0a8e3b5b8a81b58e449e86c70f4d7fe47649",
+   "bytes": 7749
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/instrumented/source/manabot/backends/torch/policy.py": {
+   "sha256": "b57dc0ad0891e568cf7d3b9a87efe039caa0d5d4d4a4cc78cd9a4e9944f3f798",
+   "bytes": 58165
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/instrumented/source/manabot/env/memory_store.py": {
+   "sha256": "2a602f5e937dc2df5875fda07701987f2b8aab46b4f0fabf97cc10730d54d69e",
+   "bytes": 13731
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/instrumented/source/manabot/policy/admission.py": {
+   "sha256": "dd26ecdc985931ee052b5427aedb82905f9da9536fbc8ae490bfffcb8bd72ca2",
+   "bytes": 22497
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/instrumented/source/manabot/policy/opponent_memory.py": {
+   "sha256": "7e72f81ccabfeb94971c4c552978102d310d7e14968e97f7f674e9a492b85578",
+   "bytes": 7790
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/instrumented/source/manabot/policy/prepare.py": {
+   "sha256": "2bf64f8ce0398c7ce6395819876c907bd0b44c8a68546869f573c18710741727",
+   "bytes": 36659
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/instrumented/source/manabot/training/rollout/collection.py": {
+   "sha256": "690c68f227b61a8a0ff36a63631e4e5b895a0cd8e21bc37e184b6a7cbe119bbd",
+   "bytes": 70483
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/instrumented/source/managym/src/agent/observation_encoder.rs": {
+   "sha256": "cc3a33a0c3f8ecf27124fe1fa45c09e4f4b5b573860b12dbfd3ab72f575da6fe",
+   "bytes": 101884
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/instrumented/source/managym/src/agent/opponent_memory.rs": {
+   "sha256": "f35ea07b119f193358f25aca4ba812ed21c2d7382ded72637f983483f06f9a7a",
+   "bytes": 32871
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/instrumented/source/managym/src/flow/tick.rs": {
+   "sha256": "b7ebd52baf74b8b8c0ae7c8af8db626721a907b9d688d6e02decb3d782df7509",
+   "bytes": 22752
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/instrumented/source/managym/src/python/bindings.rs": {
+   "sha256": "ff195fb30163e96fa1afd0991bdb3855bde334d3620038a50695305fa9e1a229",
+   "bytes": 178262
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/instrumented/source/managym/src/python/vector_env_bindings.rs": {
+   "sha256": "d8ba191440d4493e95965f8dfcff1b85f0fe21333a439449250e6f33aa2ee551",
+   "bytes": 69906
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/instrumented/timing.log": {
+   "sha256": "a2d242401a6896cdc93c04938514de7648c87c9e4ac6487d94a16289ff14f8f6",
+   "bytes": 871
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/instrumented/validation.log": {
+   "sha256": "3653ee7a12aa18cfef08747f73035ed44d1d0d638f225a7e06f7e7fe67862633",
+   "bytes": 2178
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/measure.html": {
+   "sha256": "33ef25b6eaa0099a0b8bef1214fedfae03e48b0e36a29f7c89deab18d765b3bc",
+   "bytes": 8694
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/preliminary/attribution.prof": {
+   "sha256": "da19164d2930fe5f8dda367964cd2f50204543e3dace9a934e4bf66c7d898573",
+   "bytes": 553134
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/preliminary/attribution.txt": {
+   "sha256": "0a08246327fa42908d4688a86088cb7081cf77492223969d089b8bfa4b5eab19",
+   "bytes": 5371
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/preliminary/measure_cpu.py": {
+   "sha256": "e82eab44dacd2f29529d7b08cb4c1fb9983ba1f2d6bdfb5e9bc1951eae6abfbd",
+   "bytes": 12801
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/preliminary/profile.json": {
+   "sha256": "49809db2aa362832511b658a45c82f77f05ce8c7ae4a4d2c3a4709cc3daf34ae",
+   "bytes": 13496
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/preliminary/profile.log": {
+   "sha256": "51e178249d2572886b7ef8761161626a9d956c07e3e0b4faac7ce225080b2387",
+   "bytes": 173
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/preliminary/receipt.json": {
+   "sha256": "6fd907e3cf96ebdab607d0058f0b0c0ceb2d777aabb28803cf019b102f40495b",
+   "bytes": 58210
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/preliminary/summarize.py": {
+   "sha256": "f8adf21fe96db1bfcee2d5999ca28cbc0203e840af62de2e8aa84185da57b71d",
+   "bytes": 883
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/preliminary/timing.log": {
+   "sha256": "569e93e9e7c3a79c896cad91a397a5109695e6ef3dc9ca95eb02b4cccf098121",
+   "bytes": 870
+  },
+  "experiments/data/opponent-memory/20261116-cpu-baseline/report.md": {
+   "sha256": "39f00cb819302b65281fe1f646376fe431c710d120d67e216dfb04cebe3ef01a",
+   "bytes": 14191
+  },
   "experiments/data/opponent-memory/20261116-execution-final/receipt.json": {
    "sha256": "449ca7150e12e0ceabc7c547923cb940620e987096bd7c5f0d45cadbd91eac3f",
    "bytes": 15172

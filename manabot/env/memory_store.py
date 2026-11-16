@@ -66,12 +66,13 @@ class Prefix:
     tail: Tail | None
 
     @property
+    def tables(self) -> tuple[TableTail | None, ...]:
+        """One tail per memory field; an empty history owns none."""
+        return self.tail.tables if self.tail else (None,) * len(MEMORY_FIELDS)
+
+    @property
     def counts(self) -> tuple[int, ...]:
-        return (
-            tuple(node.count if node else 0 for node in self.tail.tables)
-            if self.tail
-            else (0,) * len(MEMORY_FIELDS)
-        )
+        return tuple(node.count if node else 0 for node in self.tables)
 
     @property
     def record_count(self) -> int:
@@ -163,11 +164,7 @@ def gather_memory(prefixes: Sequence[Prefix]) -> dict[str, np.ndarray]:
         for i, key in enumerate(MEMORY_FIELDS)
     }
     for row, prefix in enumerate(prefixes):
-        for key, table in zip(
-            MEMORY_FIELDS,
-            prefix.tail.tables if prefix.tail else (None,) * len(MEMORY_FIELDS),
-            strict=True,
-        ):
+        for key, table in zip(MEMORY_FIELDS, prefix.tables, strict=True):
             cursor = 0
             for chunk in table.chunks() if table else ():
                 result[key][row, cursor : cursor + len(chunk.rows)] = chunk.rows
@@ -265,9 +262,7 @@ class MemoryStore:
         tables: dict[str, TableTail] = {}
         tails = {p.tail.key: p.tail for p in prefixes if p.tail is not None}
         for prefix in prefixes:
-            for table in (
-                prefix.tail.tables if prefix.tail else (None,) * len(MEMORY_FIELDS)
-            ):
+            for table in prefix.tables:
                 while table is not None and table.key not in tables:
                     tables[table.key] = table
                     chunks[table.chunk.key] = table.chunk
@@ -339,9 +334,7 @@ def archive_memory(
     offsets = [0]
     references: list[int] = []
     for prefix in prefixes:
-        for table in (
-            prefix.tail.tables if prefix.tail else (None,) * len(MEMORY_FIELDS)
-        ):
+        for table in prefix.tables:
             for chunk in table.chunks() if table else ():
                 if chunk.key not in indexes:
                     indexes[chunk.key] = len(chunks)
