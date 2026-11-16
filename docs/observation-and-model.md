@@ -617,10 +617,10 @@ incumbent. Checkpoints retain the declared observation capacities in every arm.
 The LLM text observation lists every opponent record chronologically. Repeated
 historical references and rules descriptions appear once in alias tables; the
 aliases resolve snapshots at the choice, never today's objects. Paired life and
-hand values, and the two board rows, are ordered You/Opponent. This keeps the
-595-record census-length and 1,024-record repeated-snapshot fixtures within the
-default 256 KiB prompt budget. Distinct snapshots and larger states can still
-exceed a byte or tokenizer budget: `RepresentationOverflow` reports the complete
+hand values, and the two board rows, are ordered You/Opponent. A prompt costs
+roughly 40 KB plus 380 bytes per record in uniform-play curated games, so
+ordinary games fit the default 256 KiB budget and games near 600 records, or
+the 1,024-record capacity, can exceed it: `RepresentationOverflow` reports the complete
 size rather than trimming history. A byte fit does not establish a model's token
 fit; the LLM harness must check its tokenizer and chat-template budget.
 

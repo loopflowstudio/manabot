@@ -694,6 +694,16 @@ can still exceed a byte/token budget and fail with `RepresentationOverflow`;
 no history is hidden, truncated or silently retried. Tokenizer and chat-template
 admission remain the harness's responsibility.
 
+Real-game text size, 2026-11-16: uniform legal play (`random.Random(seed)`,
+not the census schedule) in the curated UR Lessons versus GW Allies matchup,
+rendering the acting view every 100 steps over the seeds reached in 200 seconds,
+sampled 616 decisions with no overflow. The largest was 484 records at 209,614
+bytes; a least-squares fit gives about 40 KB plus 382 bytes per record. That
+projects the budget being crossed near 580–600 records, at the census maximum
+(595; p99 442), and about 430 KB at 1,024 records. The repeated-snapshot
+fixtures fit because they cycle 87 records' references; they understate
+distinct long games. This was an unretained laptop check, not a receipt.
+
 The earlier QA result (control collection 13.9 s versus incumbent 2.3 s) remains
 an uncontrolled CPU observation, not a CUDA throughput estimate. A bounded
 [attribution probe](data/opponent-memory/20261116-control-cost/attribute_cost.py)
