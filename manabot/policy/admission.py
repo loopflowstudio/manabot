@@ -86,6 +86,24 @@ def check(obs: ObservationBuffers, spec: Spec, legal: np.ndarray) -> None:
         key not in obs for key in ("stack", "stack_valid")
     ):
         raise ValueError("policy input v11 requires stack and stack_valid")
+    if spec.space.encoder.one_token:
+        if "known_library" not in obs:
+            raise ValueError("policy input v11 requires known_library")
+        library = obs["known_library"]
+        shape = spec.space.encoder.shapes["known_library"]
+        if library.shape != (len(legal), *shape):
+            raise ValueError("known_library must match the declared observation shape")
+        positions = library[..., 1]
+        if not (
+            np.isfinite(positions)
+            & (positions == np.floor(positions))
+            & (positions >= 0)
+            & ((library[..., 0] == 0) == (positions == 0))
+        ).all():
+            raise ValueError(
+                "known_library requires whole positive positions or zero padding"
+            )
+
     size = spec.definition_count if lookup is None else len(lookup)
     ids = [
         obs["semantic_cards"],
@@ -99,6 +117,8 @@ def check(obs: ObservationBuffers, spec: Spec, legal: np.ndarray) -> None:
     ]
     if lookup is not None:
         ids.extend((obs["known_hand"][..., 0], obs["decklists"][..., 0]))
+        if "known_library" in obs:
+            ids.append(obs["known_library"][..., 0])
     if spec.space.encoder.one_token:
         ids.append(obs["stack"][..., STACK_DEFINITION_INDEX])
     for values in ids:

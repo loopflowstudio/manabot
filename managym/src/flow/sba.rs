@@ -265,7 +265,25 @@ impl Game {
         }
         for (object_id, owner) in tokens_to_remove {
             let from = self.state.zones.zone_of(object_id);
+            match from {
+                Some(ZoneType::Library) => {
+                    // A token's departure is public. Shift known positions at
+                    // that position without forgetting unrelated identities.
+                    let position = self
+                        .library_from_top(owner)
+                        .position(|object| object == object_id)
+                        .unwrap();
+                    self.state
+                        .known_library_mut(owner)
+                        .remove_position(position);
+                }
+                Some(ZoneType::Hand) => {
+                    self.forget_hand_card(owner, Some(self.state[object_id].definition_id));
+                }
+                _ => {}
+            }
             self.state.zones.remove_object(object_id);
+            self.assert_library_knowledge();
             self.capture_object_move(object_id, from, None, owner);
             performed = true;
         }

@@ -62,6 +62,8 @@ impl Game {
     /// Publish a newly computed external decision and invalidate commands
     /// decoded from every previously published structured offer set.
     pub(crate) fn publish_action_space(&mut self, mut action_space: ActionSpace) {
+        self.refresh_visible_library_tops();
+        self.assert_library_knowledge();
         self.decision_epoch = self
             .decision_epoch
             .checked_add(1)

@@ -361,6 +361,16 @@ def _serialize_player(
         "known_hand": {
             str(key): int(count) for key, count in player.known_hand.items()
         },
+        **(
+            {
+                "known_library": {
+                    str(position): int(definition)
+                    for position, definition in player.known_library.items()
+                }
+            }
+            if player.known_library
+            else {}
+        ),
         **{
             name: {str(key): int(count) for key, count in counts.items()}
             for name in (
@@ -455,6 +465,8 @@ def _definitions_known_to_viewer(observation: managym.Observation) -> set[int]:
         *(observation.agent.sideboard_counts or {}),
         *observation.agent.known_hand,
         *observation.opponent.known_hand,
+        *observation.agent.known_library.values(),
+        *observation.opponent.known_library.values(),
         *(observation_definition_id(card) for card in object_records(observation)),
         *(card.registry_key for card in observation.agent_sideboard),
         *(entry.source_card_registry_key for entry in observation.stack_objects),

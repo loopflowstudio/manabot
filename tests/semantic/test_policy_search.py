@@ -135,7 +135,7 @@ def test_independent_search_preserves_live_game_rng_and_zero_support() -> None:
     assert decision.mirror is not None and decision.belief is not None
     assert decision.mirror.worlds == decision.belief.sampled_worlds == 2
     assert decision.mirror.rollouts == 2 * sum(p > 0 for p in decision.mirror.prior)
-    assert decision.belief.model == "managym.determinize/physical-deal/v1"
+    assert decision.belief.model == "managym.determinize/physical-deal/v2"
     prior = np.array(decision.mirror.prior)
     np.testing.assert_allclose(
         decision.probabilities,

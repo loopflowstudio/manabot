@@ -256,6 +256,14 @@
         {/each}
       </div>
     {/if}
+    {#if Object.keys(player.known_library ?? {}).length > 0}
+      <div class="type-caption py-2" data-testid="known-library">
+        Known in library:
+        {#each Object.entries(player.known_library ?? {}).sort(([a], [b]) => Number(a) - Number(b)) as [position, definition]}
+          <span>{definitionNames[definition] ?? `Card ${definition}`} ({Number(position) + 1} from top)</span>
+        {/each}
+      </div>
+    {/if}
     {#if opponent}
       <details class="type-caption text-ink-2">
         <summary>Hand ({hiddenHandCount}) · hidden</summary>

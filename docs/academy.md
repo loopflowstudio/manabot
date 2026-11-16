@@ -1129,7 +1129,7 @@ public knowledge. Three unseen copies of one card and one of another give a
 hidden card a three-in-four chance of being the first. It ignores behavioral
 history; it does not mean uniform actions or uniform distinct hands. Native
 sampling preserves the bot's information and full legal choices. Retained belief
-identity `managym.determinize/physical-deal/v1` names native determinization,
+identity `managym.determinize/physical-deal/v2` names native determinization,
 including foretold slots and rejection against retained selection commitments;
 it is distinct from the historical `physical-compatible-hand/v1` sampler.
 

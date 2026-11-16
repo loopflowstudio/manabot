@@ -100,6 +100,8 @@ pub struct Player {
     pub disclosure: DecklistDisclosure,
     /// Public minimum counts in hand, without physical-copy or slot identity.
     pub known_hand: BTreeMap<CardDefId, u32>,
+    #[serde(skip_serializing_if = "super::knowledge::LibraryKnowledge::is_empty")]
+    pub known_library: super::knowledge::LibraryKnowledge,
     pub name: String,
     pub life: i32,
     pub drew_when_empty: bool,
@@ -119,6 +121,7 @@ impl Player {
             sideboard: Vec::new(),
             disclosure: DecklistDisclosure::Open,
             known_hand: BTreeMap::new(),
+            known_library: Default::default(),
             name: name.into(),
             life: 20,
             drew_when_empty: false,

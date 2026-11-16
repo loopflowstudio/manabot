@@ -11,7 +11,7 @@ use managym::conformance::{
 
 const ROOT: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../conformance/semantic-kernel-w17-v3"
+    "/../conformance/semantic-kernel-w17-v4"
 );
 
 // Each frozen game owns its regeneration, replay and 300-second timeout.
@@ -45,14 +45,14 @@ frozen_cases! {
 
 fn manifest() -> Manifest {
     serde_json::from_slice(include_bytes!(
-        "../../conformance/semantic-kernel-w17-v3/manifest.json"
+        "../../conformance/semantic-kernel-w17-v4/manifest.json"
     ))
     .expect("pinned manifest")
 }
 
 fn evidence() -> Evidence {
     serde_json::from_slice(include_bytes!(
-        "../../conformance/semantic-kernel-w17-v3/evidence.json"
+        "../../conformance/semantic-kernel-w17-v4/evidence.json"
     ))
     .expect("pinned evidence")
 }

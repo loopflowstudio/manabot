@@ -674,6 +674,7 @@ class Player:
     zone_counts: List[int]
     graveyard_lessons: int
     known_hand: Dict[int, int]
+    known_library: Dict[int, int]
     # Decklist counts by definition id; None when the viewer's opponent has a
     # closed decklist. Unseen counts the library, plus an opponent's hand and
     # face-down foretold cards; remaining counts sideboard copies outside the game.
