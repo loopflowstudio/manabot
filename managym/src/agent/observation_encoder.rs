@@ -551,6 +551,7 @@ pub fn encode_into(
         out.known_library.len(),
         config.known_library_len(),
     )?;
+    // Legacy card rows cannot carry retained definition-and-position pairs.
     if config.layout == InputLayout::Legacy
         && (!obs.agent.known_library.is_empty() || !obs.opponent.known_library.is_empty())
     {

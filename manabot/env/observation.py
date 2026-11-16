@@ -461,6 +461,8 @@ class ObservationEncoder:
                 self.shapes["known_library"], dtype=np.float32
             )
         elif obs.agent.known_library or obs.opponent.known_library:
+            # Frozen v9/v10 have no definition-and-position rows. Visible card
+            # rows alone cannot express retained facts below the library top.
             raise ValueError("known library positions require the current policy input")
 
         ## NOTE: It is very important that we encode in this exact

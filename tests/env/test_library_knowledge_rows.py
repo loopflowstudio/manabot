@@ -6,7 +6,7 @@ import torch
 
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
-from manabot.infra.config import ModelConfig
+from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.semantic.text_observation import capture_text_decision
 import managym
 from managym.possible_worlds import PossibleWorldSpace
@@ -76,6 +76,19 @@ def test_library_facts_reach_text_and_the_actual_torch_policy() -> None:
     (logits[logits > -1e7].sum() + values.sum()).backward()
     gradient = policy.semantic_cards.token_embedding.weight.grad
     assert gradient is not None and gradient.abs().sum() > 0
+
+
+@pytest.mark.parametrize("version", [9, 10])
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
+def test_legacy_inputs_refuse_unrepresentable_library_positions(version: int) -> None:
+    env = _root(0)
+    observation = env.observation_for_player(0)
+    space = ObservationSpace(ObservationConfig(policy_input_version=version))
+    with pytest.raises(ValueError, match="known library positions"):
+        space.encode(observation)
+    buffers = space.encoder.allocate()
+    with pytest.raises(ValueError, match="known library positions"):
+        env.encode_observation_into(observation, buffers)
 
 
 @pytest.mark.parametrize("owner", [0, 1])
