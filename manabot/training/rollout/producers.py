@@ -13,6 +13,7 @@ from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from functools import partial
+from pathlib import Path
 from typing import Any, Literal
 
 import numpy as np
@@ -41,7 +42,15 @@ class ShardedVectorEnv:
     Call close at the end of the owning training run, including failure paths.
     """
 
-    def __init__(self, num_envs: int, seed: int, workers: int) -> None:
+    def __init__(
+        self,
+        num_envs: int,
+        seed: int,
+        workers: int,
+        *,
+        games_path: Path | None = None,
+        record_fraction: float = 1.0,
+    ) -> None:
         if workers not in (2, 4) or workers > num_envs:
             raise ValueError(
                 "parallel producers require 2 or 4 workers and at least one stream each"
@@ -63,6 +72,16 @@ class ShardedVectorEnv:
                     stream_offset=index * num_envs // workers,
                     skip_trivial=True,
                     player_policies=("agent", "agent"),
+                    **(
+                        {
+                            "games_path": games_path.with_name(
+                                f"{games_path.stem}-{index}.jsonl"
+                            ),
+                            "record_fraction": record_fraction,
+                        }
+                        if games_path is not None
+                        else {}
+                    ),
                 ),
             )
             for index in range(workers)
@@ -193,7 +212,11 @@ class ShardedVectorEnv:
         )
 
     def step_into_buffers(
-        self, actions: list[int], active: list[bool] | None = None
+        self,
+        actions: list[int],
+        active: list[bool] | None = None,
+        *,
+        annotations: list[dict[str, object] | None] | None = None,
     ) -> None:
         self._rows(len(actions))
         if active is not None:
@@ -204,10 +227,20 @@ class ShardedVectorEnv:
                     shard.native.step_into_buffers,
                     actions[shard.start : shard.stop],
                     None if active is None else active[shard.start : shard.stop],
+                    annotations=None
+                    if annotations is None
+                    else annotations[shard.start : shard.stop],
                 )
                 for shard in self._shards
             ]
         )
+
+    def recording_mask(self) -> list[bool]:
+        return [
+            selected
+            for shard in self._shards
+            for selected in shard.native.recording_mask()
+        ]
 
     def current_agent_indices(self) -> list[int]:
         self._check()
@@ -218,7 +251,12 @@ class ShardedVectorEnv:
         ]
 
     def step_isolated_into_buffers(
-        self, actions: list[int], active: list[bool], recover_capacity: bool = False
+        self,
+        actions: list[int],
+        active: list[bool],
+        recover_capacity: bool = False,
+        *,
+        annotations: list[dict[str, object] | None] | None = None,
     ) -> None:
         """Gameplay errors are row outcomes; infrastructure errors still stop."""
         self._rows(len(actions))
@@ -230,6 +268,9 @@ class ShardedVectorEnv:
                     actions[shard.start : shard.stop],
                     active[shard.start : shard.stop],
                     recover_capacity,
+                    annotations=None
+                    if annotations is None
+                    else annotations[shard.start : shard.stop],
                 )
                 for shard in self._shards
             ]

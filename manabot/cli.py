@@ -82,6 +82,15 @@ def train_command(
         "--padded-shapes",
         help="Train local/baseline recipes on CUDA without bucketed shapes or live tokens",
     ),
+    diagnostics: Literal["off", "standard", "detailed"] = typer.Option(
+        "standard", "--diagnostics"
+    ),
+    stall_seconds: float = typer.Option(600, "--stall-seconds", min=0.001),
+    record_games: str = typer.Option(
+        "off",
+        "--record-games",
+        help="Record off, all, or a fraction of games for Academy",
+    ),
     training_game_logs: bool = typer.Option(
         False,
         "--training-game-logs",
@@ -128,6 +137,16 @@ def train_command(
 ) -> None:
     from manabot.backends import resolve
 
+    try:
+        record_fraction = {"off": 0.0, "all": 1.0}.get(record_games)
+        if record_fraction is None:
+            record_fraction = float(record_games)
+        if not 0 <= record_fraction <= 1:
+            raise ValueError
+    except ValueError:
+        raise typer.BadParameter(
+            "--record-games must be off, all, or a fraction in [0, 1]"
+        ) from None
     if preset is not None or set_values:
         raise typer.BadParameter(
             "training --preset/--set are retired; use --recipe local, --recipe baseline, "
@@ -172,6 +191,9 @@ def train_command(
                 device=device,
                 padded_shapes=padded_shapes,
                 training_game_logs=training_game_logs,
+                record_games=record_fraction,
+                diagnostics=diagnostics,
+                stall_seconds=stall_seconds,
             )
             status = result.status
             typer.echo(f"local: {status}; run: {result.id}")
@@ -191,6 +213,9 @@ def train_command(
                 device=device,
                 padded_shapes=padded_shapes,
                 training_game_logs=training_game_logs,
+                record_games=record_fraction,
+                diagnostics=diagnostics,
+                stall_seconds=stall_seconds,
             )
             status = baseline_result.status
             typer.echo(
@@ -230,6 +255,9 @@ def train_command(
             checkpoint_updates=checkpoint_updates,
             initial_admission=Path(initial_admission) if initial_admission else None,
             training_game_logs=training_game_logs,
+            record_games=record_fraction,
+            diagnostics=diagnostics,
+            stall_seconds=stall_seconds,
             backend=resolve("torch"),
         )
 

@@ -12,7 +12,7 @@ import shutil
 import socket
 import sys
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 import uuid
 
 import numpy as np
@@ -253,6 +253,9 @@ def execute_regime(
     experiment: str | None = None,
     training_exposure: bool = False,
     training_game_logs: bool = False,
+    record_games: float = 0.0,
+    diagnostics: Literal["off", "standard", "detailed"] = "standard",
+    stall_seconds: float = 600,
 ) -> TrainingRun:
     """Execute under a local lease, including admission and crash settlement.
 
@@ -396,6 +399,9 @@ def execute_regime(
             experiment=experiment,
             training_exposure=training_exposure,
             training_game_logs=training_game_logs,
+            record_games=record_games,
+            diagnostics=diagnostics,
+            stall_seconds=stall_seconds,
         )
 
 
@@ -419,6 +425,9 @@ def _execute_regime(
     experiment: str | None = None,
     training_exposure: bool = False,
     training_game_logs: bool = False,
+    record_games: float = 0.0,
+    diagnostics: Literal["off", "standard", "detailed"] = "standard",
+    stall_seconds: float = 600,
 ) -> TrainingRun:
     """Execute admitted inputs while the caller holds both recovery writer leases."""
     # A retry can fail during setup before reaching its stage. Walk the retained
@@ -730,9 +739,12 @@ def _execute_regime(
             },
             training_exposure=training_exposure,
             training_game_logs=training_game_logs,
+            record_games=record_games,
+            diagnostics=diagnostics,
+            stall_seconds=stall_seconds,
         )
         resources.enter_context(capture_scope(failures))
-        if training_game_logs:
+        if training_game_logs or diagnostics != "off":
             failures.journal_directory.mkdir(parents=True, exist_ok=True, mode=0o700)
             run.game_journal_directory = str(failures.journal_directory)
             persist()
@@ -1434,12 +1446,17 @@ def _execute_regime(
                     batch = None
                     try:
                         with operation("collection"):
+                            previous_decisions = collector.stats.micro_steps
                             batch = collector.collect(
                                 behavior_agent,
                                 stage.transitions,
                                 deadline_monotonic=deadline,
                                 check=check,
                             )
+                            if failures._diagnostics is not None:
+                                failures._diagnostics.progress(
+                                    collector.stats.micro_steps - previous_decisions
+                                )
                     finally:
                         synchronize()
                         record.collection_seconds += time.perf_counter() - tick
@@ -1792,7 +1809,7 @@ def _execute_regime(
         primary_error = sys.exception()
         resources.close()
         failures = None
-        if training_game_logs and run.stages:
+        if (training_game_logs or diagnostics != "off") and run.stages:
             try:
                 for path in sorted((out / "game-journals").glob("*")):
                     if path.is_file() and not path.name.startswith("."):
@@ -1806,6 +1823,10 @@ def _execute_regime(
                 primary_error.add_note(
                     f"Terminal game journals could not be registered: {capture_error}"
                 )
+        if record_games and run.stages:
+            for path in sorted((out / "games").glob("*.jsonl")):
+                run.stages[-1].artifacts[f"games/{path.name}"] = artifact(path)
+            persist()
         if training_exposure and run.stages:
             for path in sorted((out / "exposure").glob("*.jsonl")):
                 run.stages[-1].artifacts[f"exposure/{path.name}"] = artifact(path)

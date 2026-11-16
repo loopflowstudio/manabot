@@ -98,6 +98,9 @@ def test_cli_smoke_and_named_recipe(
             device=None,
             padded_shapes=False,
             training_game_logs=False,
+            record_games=0.0,
+            diagnostics="standard",
+            stall_seconds=600,
         )
     ]
     result = runner.invoke(
@@ -114,6 +117,9 @@ def test_cli_smoke_and_named_recipe(
         device=None,
         padded_shapes=False,
         training_game_logs=False,
+        record_games=0.0,
+        diagnostics="standard",
+        stall_seconds=600,
     )
     result = runner.invoke(
         cli.app, ["train", "--steps", "1", "--learning-seats", "one"]
@@ -228,6 +234,9 @@ def test_recipe_and_cli_device_selection(
         *args: object,
         backend: Backend,
         training_game_logs: bool = False,
+        record_games: float = 0.0,
+        diagnostics: str = "standard",
+        stall_seconds: float = 600,
     ) -> SimpleNamespace:
         assert backend.name == "torch"
         observed.append(plan.stages[0].execution.device)
@@ -282,6 +291,9 @@ def test_cli_padded_shapes_reaches_the_recipe_stage(
         *args: object,
         backend: Backend,
         training_game_logs: bool = False,
+        record_games: float = 0.0,
+        diagnostics: str = "standard",
+        stall_seconds: float = 600,
     ) -> SimpleNamespace:
         assert backend.name == "torch"
         record(plan)

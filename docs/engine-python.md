@@ -113,17 +113,15 @@ neither changes actions, seeds or legal choices.
 These summaries include private deck facts; do not expose them as Academy viewer
 data. Persist summaries yourself when needed. An interrupted process can lose its
 in-memory counts; label the last saved summary partial and report the gap.
-Compatible private recordings can recover known-prefix counts by replay.
-Add `--statistics` to the standalone replay command below to count its reconstructed
-prefix; these describe the replay, never the original unknown outcome. Counts
-alone cannot reconstruct a game. Live summaries also do not replace
+Counts alone cannot reconstruct a game; [record the games](#record-games) to
+ask questions the counters do not answer. Live summaries also do not replace
 replay verification for audited evaluation: manabot retains its replay-passed
 eligibility rules and participant mapping when exporting Etude statistics.
 
-## Record private replay inputs
+## Record games
 
-Wrap every mutation from the first reset onward. This example retains a private
-rolling journal while playing one decision, using only the `managym` install:
+Wrap every mutation from the first reset onward in a capture, give it a file,
+and each finished game becomes one row:
 
 ```python
 from pathlib import Path
@@ -131,34 +129,138 @@ from pathlib import Path
 import managym
 from managym.recording import ScalarCapture
 
-game = managym.Env(seed=42)
+game = managym.Env(seed=7)
+capture = ScalarCapture(seed=7, games_path=Path("games.jsonl"))
+players = [
+    managym.authored_deck_setup("tla-baseline-v1", key)
+    for key in ("tla_red", "tla_white")
+]
+capture.reset(game, players)
+while not game.is_game_over():
+    capture.step(game, 0, annotation={"value": 0.31})
+capture.close()
+```
+
+```bash
+uv run --no-project managym academy replay games.jsonl
+```
+
+Academy opens in **Replay** at the game's first decision. Each step shows the
+board, the legal actions and the one chosen, with "Value 0.3100" beside it and
+"not retained" for the probabilities this loop did not supply
+([Open a replay directly](academy.md#open-a-replay-directly)).
+
+A record holds what is needed to play the game again: the seed, both players'
+setups, the world and build that played it, each committed action with the
+state digest read before it, and how the game ended. It stores no boards.
+Anything that shows or counts a game re-executes it with managym and checks
+every digest, so a record is small and cannot disagree with the engine. The
+same record serves training, evaluation and your own loop.
+
+Keep the capture's seed and trivial-decision setting equal to the Env's, and
+use the capture for every later mutation; a direct Env call leaves the record
+behind. Call `capture.reset` again to start the next game in the same file.
+Recording changes no action, seed, legal choice or outcome, and does not enable
+statistics; call `game.enable_statistics()` before `capture.reset` for those.
+
+| Option | Meaning |
+|---|---|
+| `games_path` | File that receives one row per finished game. Without it nothing is written at game end. Give each producer its own file. |
+| `record_fraction` | Share of games to record, `1.0` by default. A game is selected at reset from its seed and stream, never from engine or policy randomness, so the same run selects the same games. An unselected game costs no extra native read. |
+| `journal_path` | [Durable journal](#keep-a-durable-journal) of the game in progress. |
+| `context` | Your own labels (run, update, attempt), kept with every row and never shown to an Academy viewer. |
+
+`annotation` is optional per step and says what the chooser knew:
+`probabilities` (one per legal action, in offer order), `value`, `update` and
+`extra` for anything else JSON can hold. Academy shows the first three and
+marks an absent one "not retained"; it never recomputes them.
+
+For native batches, `managym.recording.CapturedVector` owns its `VectorEnv`
+and takes the same options. Construct it with `num_envs` and `seed`, use
+`reset_all(players)` and `step(actions)` or the buffered methods, and pass
+`annotations=` with one entry (or `None`) per stream. Use `stream_offset` for
+global stream identities across producers. A game recorded from a batch opens
+exactly like a scalar one.
+
+`capture.close()` writes each selected game still in progress as
+**interrupted**, with the reason, and syncs the file. Rows written at game end
+are flushed but not synced, so a process that is killed can lose its most
+recent rows and its games in progress; the journal below is for that case.
+
+### Read and re-execute a record
+
+```python
+from pathlib import Path
+
+from managym.recording import read_records
+from managym.replay import walk
+
+record = next(read_records(Path("games.jsonl")))
+replay = walk(record)
+for decision in replay:
+    offered = decision.observation.action_space.actions
+    print(decision.index, offered[decision.chosen].action_type, decision.annotation)
+print(replay.stop)   # complete, winner 0
+```
+
+`read_records` takes a file or a directory of them and yields one `GameRecord`
+per game; `read_record(path)` reads a file that holds exactly one, such as a
+journal or a failure receipt. `walk` plays the game in a scalar `Env` and
+yields each decision only after its digest matched. It ends with a typed
+`stop`:
+
+| Stop | Meaning |
+|---|---|
+| `complete` | Every action replayed and the final digest matched; the winner is the recorded one. |
+| `interrupted` | The recording ended before the game did. The decisions before it are verified; there is no winner. |
+| `diverged` | At this index the digest differed, the recorded action was not offered, or the engine raised. Nothing after it is produced. |
+
+Statistics, the Arena-style export, Academy and the bounded command-line
+replay all read games through `walk`, so they agree on where a game stops:
+
+```bash
+uv run --no-project --python .venv/bin/python python -m managym.replay games.jsonl --seconds 30
+```
+
+Add `--statistics` to count the replayed decisions with the
+[native counters](#collect-in-game-statistics); for a game that stopped early
+these describe the replayed prefix, never the original unknown outcome.
+
+A record opens only in the world that played it. A different world or card
+content is refused, and the message names the recorded and the running
+managym version, world and engine digest, so you know which build to install:
+
+```text
+games.jsonl was recorded by managym 0.3.2 in world w17 (cards 5be01c9a2f31); this is managym 0.3.4 in world w18 (cards e07a44d1c8b2). Open it with managym 0.3.2.
+```
+
+The same world on a different engine build (another platform, or a patch that
+left the world alone) opens, says the build differs, and is checked decision by
+decision like any other; if the builds do not play the game alike it stops as
+`diverged` with the same names. To keep a game readable across worlds, write
+its [Arena-style log](#export-an-arena-style-log).
+
+A record holds the seed and both decks, so it holds both hands. Files use mode
+0600 and directories 0700. Share one as you would share both players' hidden
+cards; Academy still shows each viewer only what that seat could see.
+
+Rows written before this format (`native-failure-v1` receipts and journals)
+read through the same functions. `FailureEvidence` and `read_failure` are the
+former names of `GameRecord` and `read_record`; they warn and are removed in
+0.4.0.
+
+### Keep a durable journal
+
+A journal is the same record written earlier: before and after every native
+call instead of once at game end. It is for a call that may never return.
+
+```python
 capture = ScalarCapture(
     seed=42,
     journal_path=Path("private-games/game.jsonl"),
     context={"attempt": "local-example"},
 )
-players = [
-    managym.authored_deck_setup("tla-baseline-v1", key)
-    for key in ("tla_red", "tla_white")
-]
-observation, info = capture.reset(game, players)
-observation, reward, terminated, truncated, info = capture.step(game, 0)
 ```
-
-Keep the recorder seed and trivial-decision setting equal to the Env's. Use the
-recorder for subsequent mutations too; direct Env mutations leave the retained
-prefix behind. To collect statistics as well, call `game.enable_statistics()`
-before `capture.reset`. Recording does not enable statistics implicitly.
-
-For native batches, `managym.recording.CapturedVector` owns its `VectorEnv`.
-Construct it with `num_envs`, `seed`, an explicit `journal_path`, and optional
-`context`; use `reset_all(players)` and `step(actions)`, or its buffered methods.
-Its `enable_statistics`, `statistics` and `take_statistics` methods keep global
-stream identities too. Assign each producer a distinct
-path and use `stream_offset` for global stream identities. The caller owns the
-destination and lifetime; the engine does not discover a training run or upload
-files. No destination means no durable rolling journal. Detailed recording is
-opt-in; ordinary Env use adds no diagnostic reads or durable writes.
 
 The journal retains actual observed setups, known action prefixes and
 pending/returned native-call boundaries. Cached intent is durable before native
@@ -168,40 +270,23 @@ the acknowledgment could be saved. Batch return does not prove each row
 succeeded. Sampled reset inputs remain unknown until observed; previous decks
 are never substituted as the new setup.
 
-Copy the file to a private location before inspecting a live writer:
+Copy the file to a private location before inspecting a live writer, then read
+it with `read_record` and replay it with the command above. Replay reconstructs
+the known prefix and, for this diagnostic command only, can attempt a pending
+indexed action with its retained fresh binding; Academy and `walk` never
+attempt a pending call and show the game as interrupted there. Unknown setup or
+binding is reported as unavailable, and the original interrupted outcome stays
+unknown even if replay succeeds. Older manabot receipts keep their original
+source-digest meaning; when legacy source verification requires manabot, use
+its [replay command](training.md#inspect-and-replay-a-journal) in the original
+environment. Replay does not restore a process or optimizer.
 
-```python
-from pathlib import Path
-from managym.recording import read_failure
-
-evidence = read_failure(Path("private-games/copied-game.jsonl"))
-print(evidence.boundary)
-```
-
-For bounded replay of the copy:
-
-```bash
-uv run --no-project --python .venv/bin/python python -m managym.replay private-games/copied-game.jsonl --seconds 30
-```
-
-Replay checks the world, native extension and engine-source identities. It
-reconstructs the known prefix and can attempt a pending indexed action only
-with its retained fresh binding. Unknown setup or binding is reported as
-unavailable. The original interrupted outcome stays unknown even if replay
-succeeds. Older manabot receipts keep their original source-digest meaning;
-when legacy source verification requires manabot, use its
-[replay command](training.md#inspect-and-replay-a-journal) in the original
-environment. An explicit changed-runtime diagnostic override does not permit a
-different world. Replay does not restore a process or optimizer.
-
-These are privileged inputs, including hidden decks, not Academy viewer
-recordings or policy observations. Files use mode 0600 and directories 0700.
-Each boundary requires serialization and fsync, which can reduce throughput.
-Automatic atomic compaction replaces superseded journal history when appended
-bytes reach the larger of the last checkpoint size and 64 KiB, allowing one
-record's overshoot and a temporary checkpoint. Storage still grows with active
-prefixes. Successful games supersede earlier inputs; this is not a full game
-archive. Final cursors and immutable failure receipts remain separate.
+Each boundary requires serialization and fsync, which can reduce throughput;
+no training measurement of that cost exists yet. Automatic atomic compaction
+replaces superseded journal history when appended bytes reach the larger of
+the last checkpoint size and 64 KiB, allowing one record's overshoot and a
+temporary checkpoint. Storage still grows with active prefixes. A finished
+game supersedes its journal; set `games_path` as well to keep finished games.
 
 The reader warns on a torn final append and uses complete records; complete
 corruption, sequence gaps or an incomplete first checkpoint fail inspection.
@@ -211,10 +296,172 @@ Retain existing evidence and repair storage before starting a new attempt;
 there is no automatic retry or game skipping. Local durability cannot protect
 against host deletion: collect private files before removing the machine.
 
-A journal can identify engine work, but cannot identify what its caller does
-between calls. The runner must record inference, learning and other phases
-outside native execution. Training provides those markers through
-[`--training-game-logs`](training.md#diagnosing-stalled-training).
+## Ask questions of recorded games
+
+```python
+from pathlib import Path
+
+from managym.recording import read_records
+from managym.statistics import Behaviour, CardPerformance, reduce
+
+cards, behaviour = reduce(
+    read_records(Path("games.jsonl")), [CardPerformance(), Behaviour()]
+)
+for row in cards[:3]:
+    print(row)
+print(behaviour)
+```
+
+```text
+CardRow(card='tla.fire_nation_raider', games=212, opening_hand=61, drawn=74, gih_win_rate=0.563, not_seen_win_rate=0.471)
+…
+[BehaviourRow(seat=0, land_played_when_able=0.94, attacked_when_able=0.71), …]
+```
+
+`reduce` re-executes each record once and feeds every reducer the same
+verified decisions. Two reducers are built in:
+
+- `CardPerformance`: per card, games played, opening-hand and drawn copies, and
+  the win rate of games with the card in hand against games where it was never
+  seen. Game-in-hand, opening-hand and drawn count copies; games played and
+  not-seen count games (`gih-copies-v1`). These are associations, not causal
+  card values.
+- `Behaviour`: per seat, how often a land was played at a decision that offered
+  one, and how often at least one attacker was declared when one could be.
+
+A decision with one legal action is never shown to the chooser and so never
+counts as an opportunity.
+
+Your own question is a class with three methods. This one asks how often a
+seat passed priority while a spell was castable:
+
+```python
+from managym import ActionEnum
+from managym.statistics import Reducer
+
+
+class HeldSpells(Reducer):
+    def start(self, setup):
+        self.able = self.passed = 0
+
+    def decision(self, observation, chosen):
+        actions = observation.action_space.actions
+        if any(a.action_type == ActionEnum.PRIORITY_CAST_SPELL for a in actions):
+            self.able += 1
+            self.passed += actions[chosen].action_type == ActionEnum.PRIORITY_PASS_PRIORITY
+
+    def end(self, result, capture):
+        return [{"able": self.able, "passed": self.passed}]
+```
+
+`start(setup)` receives both players' setups; `decision(observation, chosen)`
+receives the chooser's observation, with its legal actions, and the index
+chosen; `end(result, capture)` receives the winner or the stop and the game's
+card movements and resolutions, and returns that game's rows. `reduce` returns
+one list of rows per reducer, in the order given. A judgement such as "attacked
+when the attack was good" belongs in a reducer of your own, since the engine
+has no opinion on good.
+
+The same reducers run during scalar play: pass `reducers=[...]` to
+`ScalarCapture` and read `capture.rows()` after each game. One definition
+serves both.
+
+A record that stops early contributes its verified decisions and no result;
+`CardPerformance` leaves it out of win rates and reports how many games it left
+out. Reducers describe the games they were given. When only a share of games
+was recorded, the rows describe that sample; the [native counters](#collect-in-game-statistics)
+are the statistics meant for every game. Rows include private deck facts and
+never reach an Academy viewer. manabot's audited card evaluation adds its
+replay-passed eligibility, participant mapping and intervals on top of these
+counts ([card evaluation](evaluation.md)).
+
+## Export an Arena-style log
+
+A record replays only in its own world. To keep a game readable after the
+engine changes, or to hand it to a tool that reads MTG Arena logs, export it:
+
+```python
+from pathlib import Path
+
+from managym.export_arena import export_log
+from managym.recording import read_records
+
+record = next(read_records(Path("games.jsonl")))
+Path("game-seat0.log").write_text(export_log(record, viewer=0))
+```
+
+The export re-executes the game once and writes what seat 0 saw, as Arena's
+client would have logged it: the connection message with both seats, the deck,
+a `GREMessageType_GameStateMessage` for each card movement with its turn,
+phase, step and active player, mulligans, and the match result. Each line
+carries a marker that the log is synthetic. The pinned 17Lands client parses
+it into the opening hand, drawn cards, turns and result.
+
+Cards carry their Arena ids from a table shipped with managym.
+`managym.export_arena.coverage()` reports, for the running world, how many
+cards have an id; tokens and cards with no Arena printing are written with id
+`0` and counted there.
+
+The log is a lossy, one-seat projection. Against the record it does not hold:
+
+- the seed and setups, so it cannot be re-executed or opened in Academy;
+- annotations: probabilities, values, update numbers and `extra`;
+- the other seat's hand, library order and anything else the viewer could not
+  see (export the other seat separately with `viewer=1`);
+- the legal actions that were offered and not taken;
+- cards without an Arena id, beyond their count and zone movements.
+
+Keep the record as well for as long as its world is installable. These logs are
+synthetic; never submit them to 17Lands or any other service.
+
+## Locate a stall
+
+Hold one `Diagnostics` for the run and name each phase of your loop:
+
+```python
+from pathlib import Path
+
+from managym.diagnostics import Diagnostics
+
+diagnostics = Diagnostics(Path("run/diagnostics"), captures=[vector])
+with diagnostics.operation("collection"):
+    vector.step_into_buffers(actions)
+with diagnostics.operation("learning"):
+    update(batch)
+```
+
+If a phase stops returning, `run/diagnostics` already holds `operation.json`
+(the phase, pending or returned, when it began and its sequence number),
+`stall.json` (when the watchdog noticed and why), `stacks.txt` (every Python
+thread's stack) and one `PRODUCER.jsonl` per capture with the games that were
+in progress, readable with `read_record`. Nothing has to be switched on first.
+
+| Level | What runs |
+|---|---|
+| `"standard"` (default) | The operation marker, one small write per phase and never per step. A watchdog thread. A stack dump on `SIGUSR1` and from the watchdog. |
+| `"detailed"` | Also the durable per-call [journal](#keep-a-durable-journal) of every capture and the engine's profiler scopes, reported in `info["profiler"]`. |
+| `"off"` | Nothing: no per-step read, no write, no thread. |
+
+The watchdog raises the level to `"detailed"` and records the reason when no
+operation returns within `stall_seconds`, or when the rate you report with
+`diagnostics.progress(decisions)` falls below `slow_fraction` of its trailing
+rate. You can raise it yourself with `diagnostics.escalate("reason")`, or start
+at `Diagnostics(..., level="detailed")`.
+
+What a stall leaves depends on the call that hung. The buffered `VectorEnv`
+calls, the rollout pool and flat-MC scoring release Python's interpreter lock
+while the engine works, so the watchdog runs during them and writes the game
+cursors and stacks itself. Scalar `Env.step` and `reset`, and the
+object-returning `VectorEnv.step` and `reset_all`, hold the lock: during one of
+those no Python thread runs, the marker still names the phase, and the stack
+comes from `kill -USR1 <pid>`, which is handled without the lock. A journal
+that was not on when a call hung cannot be written for that call afterwards;
+the cursors are the games up to the last call that returned.
+
+A pending marker means no return was recorded. It does not mean the call
+failed, or that it entered the engine. Diagnostics skip no game and retry
+nothing. Engine-side messages for people go to the `managym` logger, which you
+configure like any other.
 
 ## Add training or migrate an existing project
 

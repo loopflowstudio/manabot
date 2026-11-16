@@ -317,7 +317,7 @@ def test_disabled_logging_has_no_writer_or_extra_native_reads(
         raise AssertionError("disabled journal invoked writer")
 
     monkeypatch.setattr("managym.journal.DurableJournal.__init__", forbidden)
-    scope = CaptureScope(tmp_path / "failures", context=forbidden)
+    scope = CaptureScope(tmp_path / "failures", context=forbidden, diagnostics="off")
     with capture_scope(scope):
         vector = CapturedVector(num_envs=1)
         vector.set_buffers(_buffers(1))

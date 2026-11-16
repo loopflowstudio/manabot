@@ -10,13 +10,15 @@ from contextlib import contextmanager
 from copy import deepcopy
 from functools import cache
 import hashlib
+from importlib.metadata import version
+from itertools import chain
 import json
 import os
 from pathlib import Path
 import platform
 import time
 import traceback
-from typing import Any, Literal, TypedDict, Unpack
+from typing import Any, BinaryIO, Literal, TypedDict, Unpack
 from uuid import uuid4
 import warnings
 
@@ -24,16 +26,24 @@ import numpy as np
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 import managym
+from managym.card_capture import CapturedCards
 from managym.journal import DurableJournal, json_line
-from managym.statistics import GameStatistics
+from managym.statistics import GameStatistics, Reducer
 
 
 class RecordingOptions(TypedDict, total=False):
+    games_path: Path | None
+    record_fraction: float
     journal_path: Path | None
     context: dict[str, object] | None
     context_provider: Callable[[], dict[str, object]]
     failure_directory: Path
     on_retained: Callable[[Path], None] | None
+
+
+class CaptureCoordinates(TypedDict):
+    context: dict[str, object]
+    seconds: float
 
 
 class PlayerSetup(BaseModel):
@@ -62,11 +72,33 @@ class PlayerSetup(BaseModel):
         return managym.PlayerConfig(**self.model_dump())
 
 
+class DecisionAnnotation(BaseModel):
+    """Optional runner evidence in the legal offer order, never recomputed."""
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    probabilities: list[float] | None = None
+    value: float | None = None
+    update: int | None = None
+    extra: dict[str, object] = {}
+
+
+class GameEnd(BaseModel):
+    status: Literal["complete", "interrupted", "failed"]
+    winner: int | None = None
+    winner_retained: bool = True
+    reason: str | None = None
+    digest: str | None = None
+
+
 class GameInputs(BaseModel):
     stream: int = 0
     seed: int
     players: list[PlayerSetup]
     actions: list[int | str] = []
+    committed: int | None = Field(default=None, ge=0)
+    digests: list[str] = []
+    annotations: list[DecisionAnnotation | None] = []
+    end: GameEnd | None = None
     actor: int | None = None
     frame: str | None = None
 
@@ -74,6 +106,10 @@ class GameInputs(BaseModel):
         """Keep the stream's setup, discard all inputs from its previous game."""
         self.seed = seed
         self.actions = []
+        self.committed = 0
+        self.digests = []
+        self.annotations = []
+        self.end = None
         self.actor = None
         self.frame = None
 
@@ -109,10 +145,10 @@ class NativeBoundary(BaseModel):
     frame_prefix_lengths: list[int | None] = []
 
 
-class FailureEvidence(BaseModel):
+class GameRecord(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    schema_version: Literal["native-failure-v1"] = Field(
-        default="native-failure-v1", alias="schema"
+    schema_version: Literal["managym-game-v1", "native-failure-v1"] = Field(
+        default="managym-game-v1", alias="schema"
     )
     mode: Literal["scalar", "vector", "search"]
     search: SearchInputs | None = None
@@ -139,6 +175,13 @@ class FailureEvidence(BaseModel):
     )
 
     @property
+    def sha256(self) -> str:
+        """Identity of the canonical private row, including its ending and annotations."""
+        return hashlib.sha256(
+            json_line(self.model_dump(mode="json", by_alias=True))
+        ).hexdigest()
+
+    @property
     def resolved_player_policies(self) -> tuple[str, str]:
         """Read either receipt spelling without deprecating retained evidence."""
         return self.player_policies or _retained_player_policies(self.opponent_policy)
@@ -150,6 +193,12 @@ class GameChange(BaseModel):
     replacement: GameInputs | None = None
     keep: int = Field(default=0, ge=0)
     append: list[int | str] = []
+    committed: int | None = Field(default=None, ge=0)
+    digests: list[str] = Field(default_factory=list, exclude_if=lambda value: not value)
+    annotations: list[DecisionAnnotation | None] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    end: GameEnd | None = None
     actor: int | None = None
     frame: str | None = None
 
@@ -160,7 +209,7 @@ class JournalCheckpoint(BaseModel):
         default="training-game-checkpoint-v1", alias="schema"
     )
     sequence: int = Field(ge=0)
-    evidence: FailureEvidence
+    evidence: GameRecord
 
 
 class JournalChange(BaseModel):
@@ -178,7 +227,7 @@ class JournalChange(BaseModel):
     execution_outcome: Literal["execution_outcome_unknown", "last_command_succeeded"]
     games: list[GameChange] = []
 
-    def apply(self, evidence: FailureEvidence) -> None:
+    def apply(self, evidence: GameRecord) -> None:
         for change in self.games:
             if change.index >= len(evidence.games):
                 raise ValueError("journal game index outside checkpoint")
@@ -190,6 +239,10 @@ class JournalChange(BaseModel):
                     raise ValueError("journal prefix outside retained actions")
                 del game.actions[change.keep :]
                 game.actions.extend(change.append)
+                game.digests = game.digests[: change.keep] + change.digests
+                game.annotations = game.annotations[: change.keep] + change.annotations
+                game.end = change.end
+                game.committed = change.committed
                 game.actor, game.frame = change.actor, change.frame
         evidence.operation = self.operation
         evidence.boundary = self.boundary
@@ -211,7 +264,7 @@ class _GameJournal:
 
     def __init__(self, path: Path) -> None:
         self.writer = DurableJournal(path)
-        self.evidence: FailureEvidence | None = None
+        self.evidence: GameRecord | None = None
         self.sequence = 0
         self.checkpoint_bytes = 0
         self.appended_bytes = 0
@@ -219,7 +272,7 @@ class _GameJournal:
 
     def publish(
         self,
-        evidence: FailureEvidence,
+        evidence: GameRecord,
         boundary: NativeBoundary,
         counts: list[int] | None = None,
     ) -> None:
@@ -232,7 +285,7 @@ class _GameJournal:
         if self.evidence is None:
             # Reconstruct typed fields without recursively deepcopying prefixes;
             # opaque caller metadata must retain its Python representation.
-            retained = FailureEvidence.model_validate(
+            retained = GameRecord.model_validate(
                 {
                     **evidence.model_dump(
                         mode="python", by_alias=True, exclude={"context", "identities"}
@@ -276,12 +329,18 @@ class _GameJournal:
                     or addition
                     or game.actor != old.actor
                     or frame != old.frame
+                    or game.end != old.end
+                    or game.committed != old.committed
                 ):
                     changes.append(
                         GameChange(
                             index=index,
                             keep=keep,
                             append=addition,
+                            committed=game.committed,
+                            digests=game.digests[keep:count],
+                            annotations=game.annotations[keep:count],
+                            end=game.end,
                             actor=game.actor,
                             frame=frame,
                         )
@@ -337,6 +396,8 @@ def runtime_identities() -> dict[str, object]:
     extension = Path(managym._managym.__file__)
     return {
         "world": managym.WORLD_VERSION,
+        "managym_version": version("managym"),
+        "card_digest": managym.world_identity()["card_digest"],
         "python": platform.python_version(),
         "numpy": np.__version__,
         "engine_recording_source_sha256": sources.hexdigest(),
@@ -364,12 +425,19 @@ class _Capture:
     def __init__(
         self,
         *,
+        games_path: Path | None = None,
+        record_fraction: float = 1.0,
         journal_path: Path | None = None,
         context: dict[str, object] | None = None,
         context_provider: Callable[[], dict[str, object]] = dict,
         failure_directory: Path = Path(".runs/game-failures"),
         on_retained: Callable[[Path], None] | None = None,
     ) -> None:
+        if not 0 <= record_fraction <= 1:
+            raise ValueError("record_fraction must be in [0, 1]")
+        self.games_path = games_path
+        self.record_fraction = record_fraction
+        self._output: BinaryIO | None = None
         self.started = time.perf_counter()
         self._failed = False
         self.identities = runtime_identities().copy()
@@ -378,9 +446,66 @@ class _Capture:
         self.failure_directory = failure_directory
         self.on_retained = on_retained
         self._boundary: NativeBoundary | None = None
-        self._call_evidence: FailureEvidence | None = None
+        self._call_evidence: GameRecord | None = None
         self._game_journal = _GameJournal(journal_path) if journal_path else None
         self.frozen_context: dict[str, object] | None = None
+        self._pending_journal_path: Path | None = None
+        self._profiler_requested = False
+
+    def evidence(self) -> GameRecord:
+        raise NotImplementedError
+
+    def snapshot(self) -> GameRecord:
+        """Copy cached cursors only; never enter the native library from a watchdog."""
+        evidence = self.evidence()
+        return evidence.model_copy(update={"boundary": self._boundary}, deep=True)
+
+    def enable_journal(self, path: Path) -> None:
+        # A watchdog can run during a GIL-free native call. Do not change its
+        # in-flight journal protocol: activate at the next owner-thread boundary.
+        self._profiler_requested = True
+        if self._game_journal is None:
+            self._pending_journal_path = path
+
+    def _activate_journal(self, native: Any) -> None:
+        if self._pending_journal_path is not None:
+            self._game_journal = _GameJournal(self._pending_journal_path)
+            self._pending_journal_path = None
+        if self._profiler_requested:
+            native.enable_profiler()
+            self._profiler_requested = False
+
+    def _selected(self, game: GameInputs) -> bool:
+        if self.games_path is None or self.record_fraction == 0:
+            return False
+        value = hashlib.sha256(f"{game.seed}:{game.stream}".encode()).digest()
+        return int.from_bytes(value[:8], "big") < self.record_fraction * 2**64
+
+    def _write_game(self, game: GameInputs, end: GameEnd) -> None:
+        if not self._selected(game) or game.end is not None or not game.players:
+            return
+        game.end = end
+        if self._output is None:
+            assert self.games_path is not None
+            self.games_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            descriptor = os.open(
+                self.games_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600
+            )
+            os.fchmod(descriptor, 0o600)
+            self._output = os.fdopen(descriptor, "ab")
+        record = self.evidence()
+        record = record.model_copy(update={"games": [game], "boundary": None})
+        self._output.write(json_line(record.model_dump(mode="json", by_alias=True)))
+        self._output.flush()
+
+    def _close_output(self) -> None:
+        if self._output is not None:
+            try:
+                self._output.flush()
+                os.fsync(self._output.fileno())
+            finally:
+                self._output.close()
+                self._output = None
 
     def _start_cursor(self, name: str) -> None:
         if self._game_journal is not None:
@@ -400,7 +525,7 @@ class _Capture:
 
     def _publish(
         self,
-        evidence: FailureEvidence,
+        evidence: GameRecord,
         phase: Literal["preparing", "executing", "synchronizing", "ready"],
         counts: list[int] | None = None,
     ) -> None:
@@ -419,7 +544,7 @@ class _Capture:
 
     def _begin_boundary(
         self,
-        evidence: FailureEvidence,
+        evidence: GameRecord,
         operation: str,
         *,
         actions: list[int | str] | None = None,
@@ -478,7 +603,7 @@ class _Capture:
                 )
                 raise
 
-    def _retain(self, evidence: FailureEvidence) -> Path:
+    def _retain(self, evidence: GameRecord) -> Path:
         """Create and register private evidence only after its bytes are durable."""
         directory = self.failure_directory
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -488,7 +613,7 @@ class _Capture:
             self.on_retained(path)
         return path
 
-    def _coordinates(self) -> dict[str, object]:
+    def _coordinates(self) -> CaptureCoordinates:
         """Read live owner coordinates equally for failures and pending Commands."""
         context = self.frozen_context
         if context is None:
@@ -498,8 +623,8 @@ class _Capture:
             "seconds": time.perf_counter() - self.started,
         }
 
-    def _evidence(self, **fields: object) -> FailureEvidence:
-        return FailureEvidence.model_validate(
+    def _evidence(self, **fields: object) -> GameRecord:
+        return GameRecord.model_validate(
             {
                 **fields,
                 "identities": self.identities,
@@ -508,7 +633,7 @@ class _Capture:
         )
 
     @contextmanager
-    def _guard(self, evidence: Callable[[], FailureEvidence]) -> Iterator[None]:
+    def _guard(self, evidence: Callable[[], GameRecord]) -> Iterator[None]:
         """Capture once when nested boundaries observe the same failure."""
         try:
             yield
@@ -521,7 +646,7 @@ class _Capture:
             raise
 
     def _failure(
-        self, error: BaseException, evidence: Callable[[], FailureEvidence]
+        self, error: BaseException, evidence: Callable[[], GameRecord]
     ) -> None:
         self._failed = True
         # Capture failures must never disguise the original native failure.
@@ -543,9 +668,15 @@ class ScalarCapture(_Capture):
         self,
         seed: int,
         skip_trivial: bool = True,
+        *,
+        reducers: list[Reducer[Any]] | None = None,
         **recording: Unpack[RecordingOptions],
     ) -> None:
         super().__init__(**recording)
+        self.reducers = reducers or []
+        self._rows: list[list[Any]] = [[] for _ in self.reducers]
+        self._reducers_finished = True
+        self._env: managym.Env | None = None
         self.seed = seed
         self.skip_trivial = skip_trivial
         self.inputs = GameInputs(seed=seed, players=[])
@@ -554,7 +685,15 @@ class ScalarCapture(_Capture):
 
     def reset(self, env: managym.Env, players: list[managym.PlayerConfig]) -> Any:
         # The heterogeneous native observation/info tuple stays at this boundary.
+        if self.reducers:
+            if self._env is None:
+                env.enable_exposure_capture()
+            else:
+                self._finish_reducers(
+                    env, GameEnd(status="interrupted", reason="reset")
+                )
         self.started = time.perf_counter()
+        self._activate_journal(env)
         if self._game_journal is not None:
             self._begin_boundary(
                 self.evidence(),
@@ -562,20 +701,27 @@ class ScalarCapture(_Capture):
                 seeds=[self.seed],
                 players=[[PlayerSetup.retain(p) for p in players]],
             )
+        self._write_game(self.inputs, GameEnd(status="interrupted", reason="reset"))
         self.inputs = GameInputs(
-            seed=self.seed, players=[PlayerSetup.retain(p) for p in players]
+            seed=self.seed,
+            committed=0,
+            players=[PlayerSetup.retain(p) for p in players],
         )
         self.journal = None
         with self._guard(lambda: self.evidence("reset")):
             self._executing()
             result = env.reset(players)
+            self._env = env
+            self._reducers_finished = False
+            for reducer in self.reducers:
+                reducer.start(self.inputs.players)
             self._returned()
             self.identities["content_manifest"] = env.content_pack_manifest()
             if self._game_journal is not None:
                 self._publish(self.evidence("reset"), "ready")
             return result
 
-    def evidence(self, operation: Literal["reset", "step"] = "step") -> FailureEvidence:
+    def evidence(self, operation: Literal["reset", "step"] = "step") -> GameRecord:
         return self._evidence(
             mode="scalar",
             operation=operation,
@@ -589,10 +735,61 @@ class ScalarCapture(_Capture):
         with self._guard(self.evidence):
             yield
 
-    def step(self, env: managym.Env, action: int) -> Any:
+    def rows(self) -> list[list[Any]]:
+        """Reducer tables for the games completed or closed so far."""
+        return [
+            reducer.finish(rows)
+            for reducer, rows in zip(self.reducers, self._rows, strict=True)
+        ]
+
+    def _finish_reducers(self, env: managym.Env, end: GameEnd) -> None:
+        if self._reducers_finished or not self.reducers:
+            return
+        from managym.replay import ReplayStop
+
+        captured = CapturedCards.model_validate_json(env.card_capture_json())
+        result = ReplayStop(
+            "complete" if end.status == "complete" else "interrupted",
+            len(self.inputs.actions),
+            end.reason,
+            end.winner,
+        )
+        for reducer, rows in zip(self.reducers, self._rows, strict=True):
+            rows.extend(reducer.end(result, captured))
+        self._reducers_finished = True
+
+    def close(self) -> None:
+        if self._env is not None:
+            self._finish_reducers(
+                self._env, GameEnd(status="interrupted", reason="capture closed")
+            )
+        self._write_game(
+            self.inputs,
+            GameEnd(
+                status="failed" if self._failed else "interrupted",
+                reason="capture closed",
+            ),
+        )
+        self._close_output()
+
+    def step(
+        self,
+        env: managym.Env,
+        action: int,
+        *,
+        annotation: DecisionAnnotation | dict[str, object] | None = None,
+    ) -> Any:
+        self._activate_journal(env)
         if self._game_journal is not None:
             self._begin_boundary(
                 self.evidence(), "step", actions=[int(action)], active=[True]
+            )
+        if self._selected(self.inputs):
+            self.inputs.digests.append(env.state_digest())
+            self.inputs.annotations.append(
+                None
+                if annotation is None
+                else DecisionAnnotation.model_validate(annotation)
             )
         self.inputs.actions.append(int(action))
         self.inputs.actor = env.current_agent_index()
@@ -600,7 +797,30 @@ class ScalarCapture(_Capture):
         with self.guard():
             if self._game_journal is not None:
                 self._publish(self.evidence(), "executing")
+            observation = (
+                env.observation_for_player(env.current_agent_index() or 0)
+                if self.reducers
+                else None
+            )
             result = env.step(action)
+            if observation is not None:
+                for reducer in self.reducers:
+                    reducer.decision(observation, action)
+            self.inputs.committed = len(self.inputs.actions)
+            if env.is_game_over():
+                self._finish_reducers(
+                    env, GameEnd(status="complete", winner=env.winner_index())
+                )
+                self._write_game(
+                    self.inputs,
+                    GameEnd(
+                        status="complete",
+                        winner=env.winner_index(),
+                        digest=env.state_digest()
+                        if self._selected(self.inputs)
+                        else None,
+                    ),
+                )
             self._returned()
             if self._game_journal is not None:
                 self._publish(self.evidence(), "ready")
@@ -610,6 +830,7 @@ class ScalarCapture(_Capture):
         self, env: managym.Env, command: str, *, transition_only: bool = True
     ) -> Any:
         """Fsync exact pending Command and full offer frame before native execution."""
+        self._activate_journal(env)
         if self._game_journal is not None:
             self._begin_boundary(
                 self.evidence(), "command", actions=[command], active=[True]
@@ -624,6 +845,7 @@ class ScalarCapture(_Capture):
                     if transition_only
                     else env.step_semantic_command(command)
                 )
+                self.inputs.committed = len(self.inputs.actions)
                 self._returned()
                 self._publish(self.evidence(), "ready")
                 return result
@@ -664,6 +886,7 @@ class ScalarCapture(_Capture):
                 )
             raise
         _append(self.journal, {"success": True})
+        self.inputs.committed = len(self.inputs.actions)
         return result
 
 
@@ -813,6 +1036,15 @@ class CapturedVector(_Capture):
         try:
             self._retain_exposure(current=not self._failed)
         finally:
+            for game in self.games:
+                self._write_game(
+                    game,
+                    GameEnd(
+                        status="failed" if self._failed else "interrupted",
+                        reason="capture closed",
+                    ),
+                )
+            self._close_output()
             self.flush_policy_actions()
 
     def _retain_exposure(self, *, current: bool = False) -> None:
@@ -821,9 +1053,15 @@ class CapturedVector(_Capture):
     def capture_failure(self, error: BaseException) -> None:
         self._failure(error, lambda: self._evidence_for(self.games, "step"))
 
+    def recording_mask(self) -> list[bool]:
+        return [self._selected(game) for game in self.games]
+
+    def evidence(self) -> GameRecord:
+        return self._evidence_for(self.games, "step")
+
     def _evidence_for(
         self, games: list[GameInputs], operation: Literal["reset", "step"]
-    ) -> FailureEvidence:
+    ) -> GameRecord:
         return self._evidence(
             mode="vector",
             operation=operation,
@@ -872,6 +1110,7 @@ class CapturedVector(_Capture):
     def _reset_each(
         self, players: list[list[managym.PlayerConfig]], call: Callable[[], Any]
     ) -> Any:
+        self._activate_journal(self.native)
         if self._game_journal is not None:
             self._begin_boundary(
                 self._evidence_for(self.games, "reset"),
@@ -881,6 +1120,7 @@ class CapturedVector(_Capture):
                 players=[[PlayerSetup.retain(p) for p in setup] for setup in players],
             )
         for game, setup, seed in zip(self.games, players, self.next_seeds, strict=True):
+            self._write_game(game, GameEnd(status="interrupted", reason="reset"))
             game.players = [PlayerSetup.retain(p) for p in setup]
             game.restart(seed)
         with self._guard(lambda: self._evidence_for(self.games, "reset")):
@@ -908,6 +1148,10 @@ class CapturedVector(_Capture):
             proposed, players, self.native.current_game_seeds(), strict=True
         ):
             if setup is not None:
+                self._write_game(
+                    self.games[game.stream - self.games[0].stream],
+                    GameEnd(status="interrupted", reason="root reassigned"),
+                )
                 game.players = [PlayerSetup.retain(p) for p in setup]
                 game.restart(seed)
         with self._guard(lambda: self._evidence_for(proposed, "reset")):
@@ -918,6 +1162,7 @@ class CapturedVector(_Capture):
         self._synchronize()
 
     def reset_seeds_into_buffers(self, seeds: list[int]) -> None:
+        self._activate_journal(self.native)
         if self._game_journal is not None:
             self._begin_boundary(
                 self._evidence_for(self.games, "reset"),
@@ -927,6 +1172,7 @@ class CapturedVector(_Capture):
             )
         self.next_seeds = list(seeds)
         for game, seed in zip(self.games, seeds, strict=True):
+            self._write_game(game, GameEnd(status="interrupted", reason="reset"))
             game.restart(seed)
         with self._guard(lambda: self._evidence_for(self.games, "reset")):
             self._executing()
@@ -934,7 +1180,7 @@ class CapturedVector(_Capture):
         self._returned()
         self._synchronize()
 
-    def _synchronize(self) -> None:
+    def _synchronize(self, *, completed: bool = False) -> None:
         self._retain_exposure()
         seeds = self.native.current_game_seeds()
         # Generations, not seeds, mark a new game: saturated seed succession and
@@ -955,8 +1201,23 @@ class CapturedVector(_Capture):
                 self.games[index].players = [
                     PlayerSetup.retain(player) for player in players[index]
                 ]
+        infos = self.native.get_last_info() if self.games_path is not None else []
         for index in restarted:
-            self.games[index].restart(seeds[index])
+            game = self.games[index]
+            if game.actions and self._selected(game):
+                info = infos[index]
+                self._write_game(
+                    game,
+                    GameEnd(
+                        status="complete" if completed else "interrupted",
+                        reason=None if completed else "root replaced",
+                        winner=info.get("winner_index") if completed else None,
+                        digest=info.get("record_terminal_digest")
+                        if completed
+                        else None,
+                    ),
+                )
+            game.restart(seeds[index])
         self.next_seeds = [
             min(game.seed + self.stride, 2**64 - 1) for game in self.games
         ]
@@ -982,21 +1243,40 @@ class CapturedVector(_Capture):
             for row in self.native.take_statistics()
         ]
 
-    def step(self, actions: list[int]) -> Any:
-        return self._step(actions, None, isolated=False, buffered=False)
+    def step(
+        self,
+        actions: list[int],
+        *,
+        annotations: list[DecisionAnnotation | dict[str, object] | None] | None = None,
+    ) -> Any:
+        return self._step(
+            actions, None, isolated=False, buffered=False, annotations=annotations
+        )
 
     def step_into_buffers(
-        self, actions: list[int], active: list[bool] | None = None
+        self,
+        actions: list[int],
+        active: list[bool] | None = None,
+        *,
+        annotations: list[DecisionAnnotation | dict[str, object] | None] | None = None,
     ) -> None:
-        self._step(actions, active, isolated=False)
+        self._step(actions, active, isolated=False, annotations=annotations)
 
     def step_isolated_into_buffers(
         self,
         actions: list[int],
         active: list[bool] | None = None,
         recover_capacity: bool = False,
+        *,
+        annotations: list[DecisionAnnotation | dict[str, object] | None] | None = None,
     ) -> None:
-        self._step(actions, active, isolated=True, recover_capacity=recover_capacity)
+        self._step(
+            actions,
+            active,
+            isolated=True,
+            recover_capacity=recover_capacity,
+            annotations=annotations,
+        )
 
     def replace_failed_into_buffers(self, active: list[bool]) -> None:
         if self._game_journal is not None:
@@ -1019,7 +1299,9 @@ class CapturedVector(_Capture):
         isolated: bool,
         recover_capacity: bool = False,
         buffered: bool = True,
+        annotations: list[DecisionAnnotation | dict[str, object] | None] | None = None,
     ) -> Any:
+        self._activate_journal(self.native)
         enabled = active if active is not None else [True] * len(self.games)
         if self._game_journal is not None:
             self._begin_boundary(
@@ -1029,6 +1311,19 @@ class CapturedVector(_Capture):
                 active=enabled,
                 setup_known=not self._sampled_roots,
             )
+        if annotations is not None and len(annotations) != len(self.games):
+            raise ValueError("annotations must have one entry per stream")
+        selected_games = [
+            on and self._selected(game)
+            for on, game in zip(enabled, self.games, strict=True)
+        ]
+        if self.games_path is not None and self.record_fraction > 0:
+            self.native.record_games(selected_games)
+        digests = (
+            self.native.state_digests(selected_games)
+            if any(selected_games)
+            else [None] * len(self.games)
+        )
         actors = self.native.current_agent_indices()
         frames = self.native.semantic_decision_frames_json(active)
         summaries = (
@@ -1044,6 +1339,41 @@ class CapturedVector(_Capture):
                 if self._action_cutoff is not None:
                     count, kind = summaries[index]
                     self.record_policy_actions(count, kind, self._action_cutoff, game)
+                if selected_games[index]:
+                    digest = digests[index]
+                    assert digest is not None
+                    game.digests.append(digest)
+                    annotation = annotations[index] if annotations is not None else None
+                    retained = (
+                        None
+                        if annotation is None
+                        else DecisionAnnotation.model_validate(annotation)
+                    )
+                    if retained is not None:
+                        if retained.probabilities is not None and frame is not None:
+                            offers = json.loads(frame)["offers"]
+                            if len(retained.probabilities) != len(offers):
+                                retained = retained.model_copy(
+                                    update={
+                                        "probabilities": None,
+                                        "extra": {
+                                            **retained.extra,
+                                            "probabilities_unavailable": "policy action capacity differs from native offers",
+                                        },
+                                    }
+                                )
+                        coordinates = self._coordinates()["context"].get(
+                            "coordinates", {}
+                        )
+                        if (
+                            retained.update is None
+                            and isinstance(coordinates, dict)
+                            and isinstance(coordinates.get("updates"), int)
+                        ):
+                            retained = retained.model_copy(
+                                update={"update": coordinates["updates"]}
+                            )
+                    game.annotations.append(retained)
                 game.actions.append(int(action))
                 attempted.append(game)
         with self._guard(lambda: self._evidence_for(attempted, "step")):
@@ -1058,8 +1388,12 @@ class CapturedVector(_Capture):
                 )
             else:
                 self.native.step_into_buffers(actions, active)
+        infos = self.native.get_last_info() if isolated and any(selected_games) else []
+        for index, (game, on) in enumerate(zip(self.games, enabled, strict=True)):
+            if on and not (infos and infos[index].get("game_error")):
+                game.committed = len(game.actions)
         self._returned()
-        self._synchronize()
+        self._synchronize(completed=True)
         return result
 
 
@@ -1092,7 +1426,7 @@ class CapturedSearch(_Capture):
         with self._guard(self.evidence):
             self.native = getattr(env, method)(*arguments)
 
-    def evidence(self) -> FailureEvidence:
+    def evidence(self) -> GameRecord:
         return self._evidence(
             mode="search",
             operation="step",
@@ -1124,7 +1458,7 @@ class CapturedSearch(_Capture):
             self.native.finish_random()
 
 
-def read_failure(path: Path) -> FailureEvidence:
+def _read_journal(path: Path) -> GameRecord:
     with path.open("rb") as source:
         first = next(source, b"")
         row = json.loads(first)
@@ -1148,7 +1482,7 @@ def read_failure(path: Path) -> FailureEvidence:
                 change.apply(evidence)
                 sequence = change.sequence
             return evidence
-        evidence = FailureEvidence.model_validate(row)
+        evidence = GameRecord.model_validate(row)
         for line in source:
             row = json.loads(line)
             if "pending" in row:
@@ -1160,9 +1494,115 @@ def read_failure(path: Path) -> FailureEvidence:
                 evidence.seconds = row["seconds"]
             elif "success" in row:
                 evidence.execution_outcome = "last_command_succeeded"
+                evidence.games[0].committed = len(evidence.games[0].actions)
             elif "error_class" in row:
                 evidence.execution_outcome = "failed"
                 evidence.error_class = row["error_class"]
                 evidence.error = row["error"]
                 evidence.traceback = row["traceback"]
     return evidence
+
+
+def record_from_row(row: dict[str, Any]) -> GameRecord:
+    """Project retained exposure receipts by field without loading a bot package."""
+    if not isinstance(row, dict):
+        raise ValueError("expected a game record object")
+    if row.get("schema") != "training-exposure-v1":
+        return GameRecord.model_validate(row)
+    game = row["game"]
+    trace = game["trace"]
+    return GameRecord(
+        mode="scalar",
+        operation="step",
+        skip_trivial=row["skip_trivial"],
+        identities=row["identities"],
+        context=row["context"],
+        seconds=row["seconds"],
+        games=[
+            GameInputs(
+                stream=row["stream"],
+                seed=game["seed"],
+                players=trace["player_configs"],
+                actions=trace["actions"],
+                end=GameEnd(
+                    status="complete" if game["terminal"] else "interrupted",
+                    winner_retained=False,
+                ),
+            )
+        ],
+    )
+
+
+def read_records(path: Path) -> Iterator[GameRecord]:
+    """Read archives or project journals; ignore only a torn final append."""
+    if path.is_dir():
+        for child in sorted(path.glob("*.jsonl")):
+            yield from read_records(child)
+        return
+    with path.open("rb") as source:
+        first = source.readline()
+        if not first:
+            return
+        if not first.endswith(b"\n"):
+            try:
+                incomplete = json.loads(first)
+            except json.JSONDecodeError:
+                incomplete = None
+            if (
+                isinstance(incomplete, dict)
+                and incomplete.get("schema") == "training-game-checkpoint-v1"
+            ):
+                raise ValueError("incomplete initial training checkpoint")
+            warnings.warn(
+                "Incomplete final game record; ignored", RuntimeWarning, stacklevel=2
+            )
+            return
+        row = json.loads(first)
+        if not isinstance(row, dict):
+            raise ValueError("expected a game record object")
+        second = source.readline()
+        if row.get("schema") == "training-game-checkpoint-v1" or (
+            second and second.endswith(b"\n") and "schema" not in json.loads(second)
+        ):
+            yield _read_journal(path)
+            return
+        yield record_from_row(row)
+        for line in chain([second] if second else [], source):
+            if not line.endswith(b"\n"):
+                warnings.warn(
+                    "Incomplete final game record; ignored",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+                break
+            yield record_from_row(json.loads(line))
+
+
+def read_record(path: Path) -> GameRecord:
+    """Read exactly one record or one projected journal, retaining all streams."""
+    records = iter(read_records(path))
+    record = next(records, None)
+    if record is None or next(records, None) is not None:
+        raise ValueError("expected exactly one game record")
+    return record
+
+
+class FailureEvidence(GameRecord):
+    """Deprecated name of GameRecord, removed in 0.4.0."""
+
+    def __init__(self, **data: Any) -> None:
+        warnings.warn(
+            "FailureEvidence is deprecated; use GameRecord; removal in 0.4.0",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(**data)
+
+
+def read_failure(path: Path) -> GameRecord:
+    warnings.warn(
+        "read_failure is deprecated; use read_record; removal in 0.4.0",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return read_record(path)

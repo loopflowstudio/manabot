@@ -15,7 +15,6 @@ import hashlib
 import json
 from pathlib import Path
 import platform
-import time
 from typing import Any, Literal
 from uuid import uuid4
 import warnings
@@ -28,13 +27,13 @@ from manabot.infra.log import getLogger
 import managym
 from managym import recording
 from managym.card_capture import CapturedCards
+from managym.diagnostics import Diagnostics, Level
 from managym.recording import (
-    FailureEvidence as _FailureEvidence,
     GameInputs as _GameInputs,
+    GameRecord as _GameRecord,
     PlayerSetup as _PlayerSetup,
     _append,
     _jsonl,
-    atomic_private_json as _atomic_private_json,
 )
 
 
@@ -132,8 +131,8 @@ class TrainingExposureReceipt(BaseModel):
         body = _jsonl(self.model_dump(mode="json", by_alias=True))
         return hashlib.sha256(body.encode()).hexdigest()
 
-    def replay_inputs(self) -> _FailureEvidence:
-        return _FailureEvidence(
+    def replay_inputs(self) -> _GameRecord:
+        return _GameRecord(
             mode="scalar",
             operation="step",
             skip_trivial=self.skip_trivial,
@@ -157,18 +156,22 @@ class CaptureScope:
     directory: Path
     context: Callable[[], dict[str, object]] = dict
     paths: list[Path] = field(default_factory=list)
+    record_games: float = 0.0
     training_exposure: bool = False
     exposure_directory: Path | None = None
     training_game_logs: bool = False
-    _operation_sequence: int = 0
-    _operations: list[str] = field(default_factory=list)
+    diagnostics: Level = "standard"
+    stall_seconds: float = 600
+    _diagnostics: Diagnostics | None = field(default=None, init=False, repr=False)
     _writers: WeakValueDictionary[str, "_TrainingCapture"] = field(
         default_factory=WeakValueDictionary
     )
 
     def retire_cursors(self) -> None:
         """Retire settled producers when a stage replaces its collector."""
-        if self.training_game_logs:
+        if self.training_game_logs or (
+            self._diagnostics is not None and self._diagnostics.level == "detailed"
+        ):
             for path in self.journal_directory.glob("*.jsonl"):
                 path.unlink()
 
@@ -178,41 +181,17 @@ class CaptureScope:
 
     @contextmanager
     def operation(self, name: str) -> Iterator[None]:
-        """Owner-thread operation stack, restoring collection after inference."""
-        if not self.training_game_logs:
-            yield
+        diagnostics = self._diagnostics
+        if diagnostics is None:
+            with capture_scope(self):
+                with self.operation(name):
+                    yield
             return
-        self._operations.append(name)
-        self._mark_operation(name, "pending")
-        try:
+        if name.endswith("inference") and diagnostics.level == "standard":
             yield
-        except BaseException:
-            # Preserve the interrupted boundary if an exception unwinds it.
-            self._operations.pop()
-            raise
         else:
-            self._operations.pop()
-            self._mark_operation(name, "returned")
-            if self._operations:
-                self._mark_operation(self._operations[-1], "pending")
-
-    def _mark_operation(self, name: str, state: str) -> None:
-        self._operation_sequence += 1
-        _atomic_private_json(
-            self.journal_directory / "operation.json",
-            {
-                "operation": name,
-                "state": state,
-                "sequence": self._operation_sequence,
-                "timestamp": time.time(),
-                "context": {
-                    key: value
-                    for key, value in self.context().items()
-                    if key
-                    in {"run", "stage", "seed", "coordinates", "update", "updates"}
-                },
-            },
-        )
+            with diagnostics.operation(name):
+                yield
 
 
 _scope: ContextVar[CaptureScope | None] = ContextVar("game_failure_scope", default=None)
@@ -222,8 +201,21 @@ _scope: ContextVar[CaptureScope | None] = ContextVar("game_failure_scope", defau
 def capture_scope(scope: CaptureScope) -> Iterator[None]:
     token = _scope.set(scope)
     try:
+        scope._diagnostics = Diagnostics(
+            scope.journal_directory,
+            level="detailed" if scope.training_game_logs else scope.diagnostics,
+            stall_seconds=scope.stall_seconds,
+            context_provider=lambda: {
+                key: value
+                for key, value in scope.context().items()
+                if key in {"run", "stage", "seed", "coordinates", "update", "updates"}
+            },
+        )
         yield
     finally:
+        if scope._diagnostics is not None:
+            scope._diagnostics.close()
+            scope._diagnostics = None
         _scope.reset(token)
 
 
@@ -256,6 +248,13 @@ class _TrainingCapture:
         if self.scope is not None:
             kwargs.setdefault("failure_directory", self.scope.directory)
             kwargs.setdefault("on_retained", self.scope.paths.append)
+        if self.scope is not None and self.scope.record_games:
+            kwargs["context"] = {**kwargs.get("context", {}), "source_kind": "training"}
+            kwargs.setdefault(
+                "games_path",
+                self.scope.directory.parent / "games" / f"{uuid4().hex}.jsonl",
+            )
+            kwargs.setdefault("record_fraction", self.scope.record_games)
         self._policy_counts: dict[str, ActionCutoffCounts] = {}
         self._policy_samples: list[ActionCutoffSample] = []
         self._policy_path: Path | None = None
@@ -265,7 +264,7 @@ class _TrainingCapture:
         scope = _scope.get() or self.scope
         return scope.context() if scope else {}
 
-    def _retain(self, evidence: _FailureEvidence) -> Path:
+    def _retain(self, evidence: _GameRecord) -> Path:
         scope = _scope.get() or self.scope
         if scope is not None:
             self.failure_directory = scope.directory
@@ -284,6 +283,8 @@ class _TrainingCapture:
                 self.scope.journal_directory / f"{name}.jsonl"
             )
         super()._start_cursor(name)
+        if self.scope is not None and self.scope._diagnostics is not None:
+            self.scope._diagnostics.add_capture(self)
 
     def record_policy_actions(
         self, count: int, kind: str, capacity: int, game: _GameInputs

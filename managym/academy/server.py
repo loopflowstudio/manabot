@@ -4024,6 +4024,9 @@ def get_recording_index(
         "can_study": study_available,
         "winner": payload.get("winner") if finished else None,
         "players": players,
+        "record_stop": opponent.get("stop")
+        if opponent.get("kind") == "record"
+        else None,
         "source_kind": "play"
         if recording.completed_mirror
         else opponent.get("source_kind"),
@@ -4086,9 +4089,13 @@ async def get_trace_decision(
     replay = _load_trace_replay(trace_id)
     payload = trace_store.load_trace(trace_id)
     watch_mode = bool(payload["config"].get("watch_players"))
-    if watch_mode and not (
-        payload["end_reason"] == "game_over"
-        and payload["final_observation"]["game_over"]
+    if (
+        watch_mode
+        and payload["end_reason"] not in {"record_interrupted", "record_diverged"}
+        and not (
+            payload["end_reason"] == "game_over"
+            and payload["final_observation"]["game_over"]
+        )
     ):
         _rest_study_owner(_live_record_for_trace(trace_id), x_etude_participant_token)
     try:

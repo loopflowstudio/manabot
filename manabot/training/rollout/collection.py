@@ -26,6 +26,7 @@ from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 from copy import deepcopy
 from dataclasses import dataclass, field
+from pathlib import Path
 import time
 from typing import Any, Literal, TypedDict
 
@@ -375,6 +376,8 @@ class SeatRoutedCollector:
         reward: Reward,
         *,
         num_envs: int,
+        games_path: Path | None = None,
+        record_fraction: float = 1.0,
         numerics: CollectionSession,
         seed: int = 0,
         opponent_mode: str = "random",
@@ -406,6 +409,7 @@ class SeatRoutedCollector:
             raise ValueError(
                 "adaptive collection requires both-seat current-self, one producer, fixed roots and current-game recovery"
             )
+        self._record_annotations: list[dict[str, object] | None] = [None] * num_envs
         self._operation = operation
         self._sampler = AdaptiveSampler(adaptive) if adaptive is not None else None
         self._assignments = (
@@ -520,13 +524,24 @@ class SeatRoutedCollector:
 
         if root is None:
             self._env = (
-                ShardedVectorEnv(num_envs, seed, workers)
+                ShardedVectorEnv(
+                    num_envs,
+                    seed,
+                    workers,
+                    games_path=games_path,
+                    record_fraction=record_fraction,
+                )
                 if workers > 1
                 else CapturedVector(
                     num_envs=num_envs,
                     seed=seed,
                     skip_trivial=True,
                     player_policies=("agent", "agent"),
+                    **(
+                        {"games_path": games_path, "record_fraction": record_fraction}
+                        if games_path is not None
+                        else {}
+                    ),
                 )
             )
         else:
@@ -946,6 +961,7 @@ class SeatRoutedCollector:
             if not active.any():
                 break
             self.stats.idle_stream_steps += num_envs - int(active.sum())
+            self._record_annotations = [None] * num_envs
             actions = np.zeros(num_envs, dtype=np.int64)
             learner_rows = np.flatnonzero(active & (acting == self.learner_seat))
             opp_rows = np.flatnonzero(active & (acting != self.learner_seat))
@@ -993,9 +1009,22 @@ class SeatRoutedCollector:
                         actions.tolist(),
                         active.tolist(),
                         self.game_errors.recover_capacity,
+                        **(
+                            {"annotations": self._record_annotations}
+                            if any(self._record_annotations)
+                            else {}
+                        ),
                     )
                 else:
-                    env.step_into_buffers(actions.tolist(), active.tolist())
+                    env.step_into_buffers(
+                        actions.tolist(),
+                        active.tolist(),
+                        **(
+                            {"annotations": self._record_annotations}
+                            if any(self._record_annotations)
+                            else {}
+                        ),
+                    )
             self.stats.micro_steps += int(active.sum())
 
             with self.profiler.track("Stream bookkeeping"):
@@ -1412,7 +1441,20 @@ class SeatRoutedCollector:
                 sampled.log_probabilities,
                 validator=self.numerics,
             )
+            recording = (
+                self._env.recording_mask()
+                if hasattr(self._env, "recording_mask")
+                else [False] * len(self._record_annotations)
+            )
             for j, row in enumerate(rows):
+                if recording[int(row)]:
+                    valid = np.asarray(self._buffers["actions_valid"][row], dtype=bool)
+                    self._record_annotations[int(row)] = {
+                        "value": float(values[j]),
+                        "probabilities": np.exp(
+                            sampled.log_probabilities[j][valid]
+                        ).tolist(),
+                    }
                 slot = (
                     2 * int(row) + int(acting[row])
                     if self.learning_seats == "both"

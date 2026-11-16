@@ -26,7 +26,7 @@ from manabot.env.observation import ObservationEncoder
 from manabot.env.replay import require_replay_runtime
 from manabot.infra.config import MatchConfig, ObservationConfig
 import managym
-from managym.recording import read_failure
+from managym.recording import read_record
 from managym.replay import (
     ReplayAgreement,
     matches_retained_error,
@@ -314,7 +314,7 @@ def main() -> None:
         parser.error("attempt is beyond the end of the ledger")
     entry = json.loads(line)
     evidence = (
-        read_failure(args.ledger)
+        read_record(args.ledger)
         if entry.get("schema") in {"native-failure-v1", "training-game-checkpoint-v1"}
         else None
     )

@@ -44,6 +44,31 @@ class RecordedGame:
     game_trace_sha256: str
     _record: dict[str, Any] = field(repr=False, compare=False)
 
+    @property
+    def seed(self) -> int:
+        return self.deal_seed
+
+    @property
+    def stream(self) -> int:
+        games = self._record.get("games")
+        return int(games[0]["stream"]) if games else self.leg
+
+    @property
+    def digest(self) -> str:
+        return self.game_trace_sha256
+
+    @property
+    def decisions(self) -> int:
+        games = self._record.get("games")
+        return len(games[0]["actions"]) if games else len(self._record["decisions"])
+
+    @property
+    def ended(self) -> str:
+        games = self._record.get("games")
+        if games:
+            return (games[0].get("end") or {}).get("status", "interrupted")
+        return "complete" if self._record.get("terminated") else "interrupted"
+
 
 class AcademyLaunchError(ValueError):
     def __init__(
@@ -76,17 +101,26 @@ def _file_hint(value: str, suffixes: set[str]) -> str:
     return ""
 
 
-def refuse_training_receipt(record: object) -> None:
-    """Name the export step when a training exposure receipt is offered as a game."""
-    if isinstance(record, dict) and {"schema", "stream", "game"} <= record.keys():
-        raise ValueError(
-            "this is a training game receipt, not a game file; export it first with "
-            "`uv run manabot export-game <receipt or directory> --out <name>.game.jsonl.gz`"
-        )
-
-
 def read_games(path: Path) -> list[RecordedGame]:
     """Read a JSON, JSONL or gzip game file without altering its retained bytes."""
+    if path.is_dir():
+        games: list[RecordedGame] = []
+        for child in sorted(path.glob("*.jsonl")):
+            for game in read_games(child):
+                games.append(
+                    RecordedGame(
+                        len(games),
+                        game.deal_seed,
+                        game.leg,
+                        game.players,
+                        game.decks,
+                        game.game_trace_sha256,
+                        game._record,
+                    )
+                )
+        if not games:
+            raise AcademyLaunchError("replay.unreadable", f"{path}: no game records")
+        return games
     try:
         data = path.expanduser().read_bytes()
     except OSError as exc:
@@ -107,7 +141,40 @@ def read_games(path: Path) -> list[RecordedGame]:
             records = [json.loads(line) for line in source.splitlines() if line.strip()]
         games = []
         for index, record in enumerate(records):
-            refuse_training_receipt(record)
+            if isinstance(record, dict) and record.get("schema") in {
+                "managym-game-v1",
+                "native-failure-v1",
+                "training-exposure-v1",
+                "training-game-checkpoint-v1",
+            }:
+                from managym.recording import read_record, record_from_row
+
+                native = (
+                    read_record(path)
+                    if record["schema"] == "training-game-checkpoint-v1"
+                    else record_from_row(record)
+                )
+                for inputs in native.games:
+                    one = native.model_copy(update={"games": [inputs]})
+                    payload = one.model_dump(mode="json", by_alias=True)
+                    digest = one.sha256
+                    names = tuple(p.name for p in inputs.players)
+                    if len(names) != 2:
+                        raise ValueError("record setup unavailable")
+                    games.append(
+                        RecordedGame(
+                            len(games),
+                            inputs.seed,
+                            inputs.stream,
+                            (names[0], names[1]),
+                            (names[0], names[1]),
+                            digest,
+                            payload,
+                        )
+                    )
+                if record["schema"] == "training-game-checkpoint-v1":
+                    break
+                continue
             if not isinstance(record, dict) or not isinstance(
                 record.get("decisions"), list
             ):
@@ -138,7 +205,7 @@ def read_games(path: Path) -> list[RecordedGame]:
     except (ValueError, KeyError, TypeError, OSError, EOFError) as exc:
         raise AcademyLaunchError(
             "replay.unreadable",
-            f"{path}: {exc}. Supply an evaluation command trace or an exported training game.",
+            f"{path}: {exc}. Supply a managym game record or a retained evaluation command trace.",
         ) from exc
 
 

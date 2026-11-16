@@ -397,10 +397,12 @@ blob per game read with Etude's `read_blobs`; `etude convert-eval` makes older
 per-file runs readable.
 
 **Arena logs.** `cards export-log --experiment EXP --source .runs/cards --run RUN
---game GAME --viewer 0|1 --mapping mapping.json --out game.log` writes `arena-card-log-v1` (`eval.arena_log`).
-`CardMapping` binds content keys to retained Scryfall responses with verified
-`arena_id`; export refuses missing mappings and never joins by name. Logs omit
-opponent private cards and library order, are synthetic, and must never be
+--game GAME --viewer 0|1 --out game.log` writes the game's
+[Arena-style log](engine-python.md#export-an-arena-style-log) through managym's
+exporter, which any recorded game can use without manabot. Arena ids come from
+the table shipped with managym, joined by Scryfall id and never by name; cards
+without one are written with id `0` and counted in the coverage report. Logs
+omit opponent private cards and library order, are synthetic, and must never be
 submitted to 17Lands; `tests/fixtures/seventeenlands` pins the upstream client.
 
 **Scale.** MTG-206 (2026-10-27): 5,000 player-games and 90 cards rendered 363

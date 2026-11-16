@@ -349,6 +349,44 @@ impl VectorEnv {
         self.envs.iter().map(|env| env.capture_generation).collect()
     }
 
+    pub fn enable_profiler(&mut self) {
+        for env in &mut self.envs {
+            if !env.profiler.is_enabled() {
+                env.profiler = crate::infra::profiler::Profiler::new(true, 64);
+            }
+        }
+    }
+
+    /// Select terminal digest retention for the next call, before autoreset.
+    pub fn record_games(&mut self, active: &[bool]) -> Result<(), AgentError> {
+        self.validate_actions_len(active.len())?;
+        for (env, selected) in self.envs.iter_mut().zip(active) {
+            env.record_terminal = *selected;
+        }
+        Ok(())
+    }
+
+    /// Hash only selected games, preserving slot order without advancing RNG.
+    pub fn state_digests(
+        &self,
+        active: Option<&[bool]>,
+    ) -> Result<Vec<Option<String>>, AgentError> {
+        if let Some(mask) = active {
+            self.validate_actions_len(mask.len())?;
+        }
+        self.envs
+            .iter()
+            .enumerate()
+            .map(|(index, env)| {
+                if active.is_none_or(|mask| mask[index]) {
+                    env.state_digest().map(Some)
+                } else {
+                    Ok(None)
+                }
+            })
+            .collect()
+    }
+
     /// Read all requested seats in slot order. After autoreset these describe the
     /// replacement games; no terminal hands are cached and no capacities apply.
     pub fn hand_snapshots(&self, players: &[usize]) -> Result<Vec<HandSnapshot>, AgentError> {
@@ -885,13 +923,19 @@ impl VectorEnv {
     }
 
     fn step_one_on_env(env: &mut Env, action: i64) -> Result<StepResult, AgentError> {
-        let (obs, reward, terminated, truncated, info) = env.step(action).map_err(|error| {
+        let (obs, reward, terminated, truncated, mut info) = env.step(action).map_err(|error| {
             AgentError(format!(
                 "{}; native_failure={}",
                 error.0,
                 env.vector_failure_context(action)
             ))
         })?;
+        if env.record_terminal && (terminated || truncated) {
+            info.insert(
+                "record_terminal_digest".into(),
+                InfoValue::String(env.state_digest()?),
+            );
+        }
         Ok(StepResult {
             obs,
             reward,
@@ -940,6 +984,22 @@ mod tests {
         infra::profiler::InfoValue,
         state::player::PlayerConfig,
     };
+
+    #[test]
+    fn state_digests_match_scalar_and_respect_mask() {
+        let players = sample_player_configs();
+        let mut vector = VectorEnv::new(2, 42, true, [PlayerPolicy::Agent; 2]);
+        vector.reset_all(players.clone()).unwrap();
+        let mut scalar = Env::new(42, true, false, false);
+        scalar.reset(players).unwrap();
+        let before = scalar.state_digest().unwrap();
+        assert_eq!(
+            vector.state_digests(Some(&[true, false])).unwrap(),
+            vec![Some(before.clone()), None]
+        );
+        assert_eq!(vector.state_digests(None).unwrap()[0], Some(before));
+        assert!(vector.state_digests(Some(&[true])).is_err());
+    }
 
     #[test]
     fn fixed_seat_observations_validate_before_writing_and_preserve_control() {

@@ -60,6 +60,9 @@ def local_smoke(
 def run_local(
     *,
     training_game_logs: bool = False,
+    record_games: float = 0.0,
+    diagnostics: Literal["off", "standard", "detailed"] = "standard",
+    stall_seconds: float = 600,
     steps: int = LOCAL_STEPS,
     seed: int = 197,
     out: Path | None = None,
@@ -89,4 +92,7 @@ def run_local(
             store,
             backend=resolve("torch"),
             training_game_logs=training_game_logs,
+            record_games=record_games,
+            diagnostics=diagnostics,
+            stall_seconds=stall_seconds,
         )

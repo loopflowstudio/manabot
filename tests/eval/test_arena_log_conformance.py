@@ -12,13 +12,13 @@ import sys
 from pydantic import JsonValue
 import pytest
 
-from manabot.eval.arena_log import ArenaPrinting, CardMapping, export_arena_log
 from manabot.eval.card_evaluation import verification_spec
 from manabot.eval.card_metrics import reduce_cards
 from manabot.infra.config import MatchConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.sim.card_evidence import GameTrace, capture_verified_game
 from manabot.sim.match import play_game
+from managym.export_arena import ArenaPrinting, CardMapping, export_capture
 from tests.eval.test_card_evaluation import card_fixture
 
 FIXTURES = Path(__file__).parents[1] / "fixtures"
@@ -66,7 +66,14 @@ def test_export_matches_pinned_parser_fields_without_network(
         == "71117bdd8b1ef75cc019bbddfaeab9a69a02c5ef9efd741ec05a2e660918f77d"
     )
     game = card_fixture()
-    log = export_arena_log(game, viewer, mapping())
+    log = export_capture(
+        game.cards,
+        viewer,
+        mapping(),
+        match_id=game.game,
+        winner=game.winner,
+        reason=game.trace.data.get("termination_reason"),
+    )
     path = tmp_path / "game.log"
     path.write_text(log)
     parsed = _parse_log(path)
@@ -101,11 +108,20 @@ def test_export_matches_pinned_parser_fields_without_network(
 
 
 def test_export_refuses_unmapped_or_mislabeled_printings() -> None:
-    with pytest.raises(ValueError, match="printing unavailable"):
-        export_arena_log(card_fixture(), 0, CardMapping(printings=()))
+    game = card_fixture()
+    unmapped = export_capture(
+        game.cards, 0, CardMapping(printings=()), match_id=game.game, winner=game.winner
+    )
+    assert '"overlayGrpId":0' in unmapped
     wrong = mapping().printings[1].model_copy(update={"card": "a" * 64 + ":1"})
-    with pytest.raises(ValueError, match="printing unavailable"):
-        export_arena_log(card_fixture(), 0, CardMapping(printings=(wrong,)))
+    with pytest.raises(ValueError, match="printing differs"):
+        export_capture(
+            card_fixture().cards,
+            0,
+            CardMapping(printings=(wrong,)),
+            match_id="fixture",
+            winner=0,
+        )
 
 
 def test_native_game_replay_exports_both_viewers(tmp_path: Path) -> None:
@@ -159,7 +175,16 @@ def test_native_game_replay_exports_both_viewers(tmp_path: Path) -> None:
     )
     for viewer in (0, 1):
         log = tmp_path / f"native-{viewer}.log"
-        log.write_text(export_arena_log(game, viewer, card_mapping))
+        log.write_text(
+            export_capture(
+                game.cards,
+                viewer,
+                card_mapping,
+                match_id=game.game,
+                winner=game.winner,
+                reason=game.trace.data.get("termination_reason"),
+            )
+        )
         parsed = _parse_log(log)
         printing = 70504 if viewer == 0 else 70505
         assert parsed["opening_hand"] == [printing] * 7

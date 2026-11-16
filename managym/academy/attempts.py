@@ -531,7 +531,7 @@ class AttemptStore:
                 """SELECT p.attempt_id FROM attempt_players AS p
                 JOIN attempts AS a ON a.id=p.attempt_id
                 WHERE json_extract(p.inference_json, '$.source_sha256')=?
-                AND a.status='completed' LIMIT 1""",
+                AND a.status IN ('completed', 'stopped') LIMIT 1""",
                 (source_sha256,),
             ).fetchone()
         return None if row is None else str(row[0])

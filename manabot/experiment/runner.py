@@ -19,6 +19,7 @@ import shutil
 import subprocess
 import sys
 import time
+from typing import Literal
 import uuid
 
 from pydantic import JsonValue
@@ -64,6 +65,9 @@ def run_experiment(
     out: Path,
     *,
     training_game_logs: bool = False,
+    record_games: float = 0.0,
+    diagnostics: Literal["off", "standard", "detailed"] = "standard",
+    stall_seconds: float = 600,
     resume: bool = False,
     recover: tuple[int, ...] = (),
     backend: TrainingBackend,
@@ -325,6 +329,9 @@ def run_experiment(
                         "regime": regimes[attempt.case].model_dump(mode="json"),
                         "seed": attempt.seed,
                         "training_game_logs": training_game_logs,
+                        "record_games": record_games,
+                        "diagnostics": diagnostics,
+                        "stall_seconds": stall_seconds,
                         "out": str(directory),
                         "store": str(store.path.resolve()),
                         "resume_from": attempt.recovery_parent,
@@ -478,6 +485,9 @@ def main() -> None:
             else payload.get("checkpoint_updates"),
             backend=resolve("torch"),
             training_game_logs=payload.get("training_game_logs", False),
+            record_games=payload.get("record_games", 0.0),
+            diagnostics=payload.get("diagnostics", "standard"),
+            stall_seconds=payload.get("stall_seconds", 600),
         )
     if run.status != "completed":
         raise SystemExit(1)
