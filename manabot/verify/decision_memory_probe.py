@@ -19,6 +19,7 @@ from manabot.env.memory_store import MemoryStore, PrefixIdentity, PrefixObservat
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ObservationConfig
 import managym
+from managym.recording import ScalarCapture
 
 Split = Literal["fit", "validation", "test"]
 CAPACITIES = (1024, 8192, 256, 16384)
@@ -167,8 +168,11 @@ def collect_games(
             for i in pair
         ]
         env = managym.Env(seed=seed)
-        obs, _ = env.reset(managym.GameSetup(players, decklists=disclosure))
-        heuristic = managym.Heuristic()
+        capture = ScalarCapture(seed, failure_directory=out / "failures")
+        obs, _ = capture.reset(env, managym.GameSetup(players, decklists=disclosure))
+        # The heuristic retains per-turn plans and private card references.
+        # Each native seat owns its own selector, even when their code is equal.
+        heuristics = (managym.Heuristic(), managym.Heuristic())
         reservoirs: list[list[tuple[ProbeRow, np.ndarray]]] = [[], []]
         seen = [0, 0]
         status = "complete"
@@ -231,7 +235,9 @@ def collect_games(
                         reservoirs[viewer].append((row, label))
                     else:
                         reservoirs[viewer][slot] = (row, label)
-            obs, _, terminated, truncated, _ = env.step(heuristic.select_action(obs))
+            obs, _, terminated, truncated, _ = capture.step(
+                env, heuristics[viewer].select_action(obs)
+            )
             if terminated or truncated:
                 break
         else:
@@ -261,6 +267,7 @@ def collect_games(
                         "failure": failure,
                         "decisions": decision + 1,
                         "eligible": seen,
+                        "actions": capture.inputs.actions,
                     }
                 )
                 + "\n"

@@ -2,6 +2,7 @@
 
 from collections import Counter
 from dataclasses import fields, replace
+import json
 from pathlib import Path
 from typing import Literal
 
@@ -117,9 +118,35 @@ def test_game_splits_and_analytic_baseline() -> None:
 
 def test_labels_stay_outside_recorded_and_prepared_inputs(tmp_path: Path) -> None:
     corpus = new_corpus()
-    collect_games(corpus, 1, tmp_path, start=1)
+    # Seed 48103 reaches trick planning where one shared selector changes a
+    # choice; replay must match independently owned seat plans throughout.
+    collect_games(corpus, 1, tmp_path, start=3)
     assert corpus.rows and corpus.labels
     assert len(corpus.rows) <= 32
+    journal = json.loads((tmp_path / "games.jsonl").read_text())
+    replay = managym.Env(seed=journal["seed"])
+    live, _ = replay.reset(
+        managym.GameSetup(
+            [
+                managym.authored_deck_setup("elemental-world-v2", key)
+                for key in journal["pair"]
+            ],
+            decklists=journal["decklists"],
+        )
+    )
+    selectors = (managym.Heuristic(), managym.Heuristic())
+    selected = {row.decision: i for i, row in enumerate(corpus.rows)}
+    for decision, action in enumerate(journal["actions"]):
+        viewer = replay.current_agent_index()
+        assert action == selectors[viewer].select_action(live)
+        if decision in selected:
+            i = selected[decision]
+            assert corpus.rows[i].viewer == viewer
+            hand = replay.hand_snapshot(1 - viewer).cards
+            np.testing.assert_array_equal(
+                corpus.labels[i], [hand.get(name, 0) > 0 for name in corpus.names]
+            )
+        live, _, _, _, _ = replay.step(action)
     assert not {"label", "labels", "presence", "target"} & {
         f.name for f in fields(Prepared)
     }

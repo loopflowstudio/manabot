@@ -56,7 +56,8 @@ and writes the same content to `summary.json` in the output directory. Use a
 fresh directory.
 
 - **Games.** The native heuristic plays both seats over the Elemental 10-deck
-  roster, uniform ordered pairs, half with open and half with closed decklists,
+  roster, with a separate stateful selector per native seat, uniform ordered
+  pairs, half with open and half with closed decklists,
   forced decisions skipped. No trained policy can read this layout before the
   pilot's own trunks exist, and none may be rebound to it. Games split 70/15/15
   into fit, validation and test by game seed, stratified by disclosure in fixed
