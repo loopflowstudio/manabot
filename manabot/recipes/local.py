@@ -19,6 +19,7 @@ def local_smoke(
     steps: int = LOCAL_STEPS,
     seconds: float = LOCAL_SECONDS,
     learning_seats: Literal["one", "both"] = "both",
+    device: Literal["cpu", "mps", "cuda"] | None = None,
 ) -> TrainingRegime:
     """Terminal-outcome self-play; complete games for both, exact quotas for one.
 
@@ -26,7 +27,9 @@ def local_smoke(
     fixed-seat PPO preset. The baseline model and horizon mapping are shared;
     this recipe omits independent outcome evaluation and makes no strength claim.
     """
-    regime = baseline(steps, seconds=seconds, learning_seats=learning_seats).regime
+    regime = baseline(
+        steps, seconds=seconds, learning_seats=learning_seats, device=device
+    ).regime
     stage = regime.stages[0]
     assert isinstance(stage, TrainSelfPlay)
     regime.id = "local-smoke-v1"
@@ -44,8 +47,11 @@ def run_local(
     out: Path | None = None,
     seconds: float = LOCAL_SECONDS,
     learning_seats: Literal["one", "both"] = "both",
+    device: Literal["cpu", "mps", "cuda"] | None = None,
 ) -> TrainingRun:
-    plan = local_smoke(steps=steps, seconds=seconds, learning_seats=learning_seats)
+    plan = local_smoke(
+        steps=steps, seconds=seconds, learning_seats=learning_seats, device=device
+    )
     destination = out or Path(".runs") / (
         "local-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     )

@@ -10,6 +10,8 @@ from collections.abc import Mapping
 import torch
 from torch import Tensor
 
+from manabot.model.numerics import float64_operand
+
 
 class NumericalError(ValueError):
     """An identified invariant plus tensors for bounded private failure capture."""
@@ -176,8 +178,10 @@ def clipped_surrogate(log_ratio: Tensor, advantages: Tensor, clip: float) -> Ten
     A sampled float32 action has log likelihood >= about -104. Float64 ratios
     cover that range without changing clipping or dropping unbounded bad moves.
     Nonfinite objectives/gradients are still rejected before Adam.
+    MPS returns host float64 terms with gradients connected to the input.
     """
-    ratio = log_ratio.double().exp()
+    ratio = float64_operand(log_ratio).double().exp()
+    advantages = float64_operand(advantages)
     return -torch.minimum(
         ratio * advantages.detach(),
         ratio.clamp(1 - clip, 1 + clip) * advantages.detach(),

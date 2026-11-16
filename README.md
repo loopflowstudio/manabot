@@ -348,7 +348,10 @@ uv run python scripts/inspect_batch.py     # one real batch and how credit reach
 ```
 
 `uv run manabot train` trains a small agent and saves checkpoints under
-`.runs/`. Training recipes are typed *regimes* composed in Python, one module per
+`.runs/`. Apple Silicon supports float32 self-play training with
+`uv run manabot train --recipe local --device mps`; evaluation and search stay
+on CPU for this workflow. This makes no speed or strength claim.
+Training recipes are typed *regimes* composed in Python, one module per
 current experiment in [experiments/](experiments/), from reusable parts in
 [manabot/recipes/builders.py](manabot/recipes/builders.py). The current GPU
 baseline is

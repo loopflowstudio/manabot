@@ -165,6 +165,8 @@ def save_incident(
         "numpy_rng": rng.bit_generator.state,
         "python_rng": random.getstate(),
     }
+    if any(p.device.type == "mps" for p in learner.agent.parameters()):
+        state["mps_rng"] = torch.mps.get_rng_state()
     size = _tensor_bytes(state)
     paths = [evidence_path]
     metadata = {

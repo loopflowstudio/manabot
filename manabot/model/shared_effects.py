@@ -23,6 +23,7 @@ from manabot.env.shared_effects import (
     shared_effect_shapes,
 )
 from manabot.model.facts import RecordVocabulary
+from manabot.model.numerics import embedding_rows
 from manabot.model.records import (
     RecordReducer,
     RecordReduction,
@@ -174,7 +175,7 @@ class SharedEffectEncoder(nn.Module):
         unsigned = ((ids[:, 0] << 16) | ids[:, 1]).to(device)
         kinds = kinds.to(device)
         if catalog is None:
-            detail = self.detail(unsigned % 4096)
+            detail = embedding_rows(self.detail, unsigned % 4096)
         else:
             # Kinds 1-3 name a keyword, subtype or color; 11-19 carry
             # a learning token of kind 1-9.
@@ -182,7 +183,7 @@ class SharedEffectEncoder(nn.Module):
             detail = mod.new_zeros((len(kinds), mod.shape[-1]))
             detail[~program] = catalog.names(RecordNamespace.TOKEN, unsigned[~program])
             detail[program] = catalog.tokens(kinds[program] - 10, unsigned[program])
-        detail_tokens = detail + self.detail_kind(kinds)
+        detail_tokens = detail + embedding_rows(self.detail_kind, kinds)
         if self.version >= 8:
             # Integer/boolean tokens retain signed numeric meaning;
             # the GRU retains the ordered shared program structure.

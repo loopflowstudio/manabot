@@ -85,6 +85,7 @@ def baseline(
     *,
     seconds: float | None = None,
     learning_seats: Literal["one", "both"] = "both",
+    device: Literal["cpu", "mps", "cuda"] | None = None,
 ) -> TrainingRecipe:
     """Resolve horizon-scaled Ataraxos self-play on the current authored world.
 
@@ -130,7 +131,9 @@ def baseline(
                     learning=DampedPolicyLearning(
                         gradient="damped_policy", iteration_schedule=schedule
                     ),
-                    execution=Execution(wall_seconds=allowance * 0.85, threads=1),
+                    execution=Execution(
+                        wall_seconds=allowance * 0.85, threads=1, device=device or "cpu"
+                    ),
                 )
             ],
             wall_seconds=allowance * 0.85,
@@ -146,9 +149,12 @@ def run_baseline(
     out: Path | None = None,
     seconds: float | None = None,
     learning_seats: Literal["one", "both"] = "both",
+    device: Literal["cpu", "mps", "cuda"] | None = None,
 ) -> ExperimentRun:
     """Train, export and evaluate; retain every failure without automatic retry."""
-    plan = baseline(steps, seconds=seconds, learning_seats=learning_seats)
+    plan = baseline(
+        steps, seconds=seconds, learning_seats=learning_seats, device=device
+    )
     destination = out or Path(".runs") / (
         "baseline-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     )

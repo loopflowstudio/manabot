@@ -27,6 +27,11 @@ actual counts through Etude and exports admitted checkpoints. `--steps`,
 `--seconds`, `--seed`, `--out` and `--learning-seats one|both` make local controls
 explicit. This is a software smoke, not playing-strength evidence.
 
+`uv run manabot train --recipe local --device mps` admits Apple Silicon MPS
+for float32 self-play training. CPU remains the default; evaluation and search
+stay on CPU for this workflow. MPS process recovery, belief inputs and frozen
+opponents are unsupported. This makes no speed or strength claim.
+
 Self-play TrainingRegime execution logs cumulative update/transition clocks and
 retains admitted initialization, exact monitoring milestones, and raw stage
 exports in Etude. These are policy artifacts, not portable training recovery. TrainingRun/VerifyStore still hold

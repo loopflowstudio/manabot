@@ -87,6 +87,7 @@ def test_cli_smoke_and_named_recipe(
             out=None,
             seconds=LOCAL_SECONDS,
             learning_seats="both",
+            device=None,
         )
     ]
     result = runner.invoke(
@@ -95,7 +96,12 @@ def test_cli_smoke_and_named_recipe(
     )
     assert result.exit_code == 0, result.output
     assert calls[-1] == dict(
-        steps=123, seed=197, out=tmp_path, seconds=None, learning_seats="both"
+        steps=123,
+        seed=197,
+        out=tmp_path,
+        seconds=None,
+        learning_seats="both",
+        device=None,
     )
     result = runner.invoke(
         cli.app, ["train", "--steps", "1", "--learning-seats", "one"]

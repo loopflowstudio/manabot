@@ -34,8 +34,19 @@ uv run manabot train --regime regime.json --seed 197 --out .runs/example
 smoke with no evaluation. `--recipe baseline` (`manabot.recipes.baseline`,
 version `baseline-v3`) runs the ordinary baseline through the experiment runner
 with initial and endpoint evaluation. `--steps`, `--seconds` and
-`--learning-seats` apply only to these recipes. `--preset` and `--set` are
+`--learning-seats` and `--device cpu|mps|cuda` apply only to these recipes.
+Omitting `--device` retains the recipe's device (CPU for local and baseline).
+`--preset` and `--set` are
 retired and fail.
+
+Apple Silicon MPS is admitted for float32 ordinary self-play through
+`execute_regime` and `uv run manabot train --recipe local --device mps`.
+An unavailable device fails explicitly. Float64 loss and diagnostic arithmetic
+runs on the host with gradients preserved; no automatic operator fallback is
+enabled. Reduced precision remains CUDA-only. MPS process recovery, belief
+inputs and frozen opponents are unsupported. Evaluation and search stay on CPU
+for this workflow, and the baseline experiment coordinator still rejects
+non-CPU training devices. This support makes no speed or strength claim.
 
 Each experiment is one module, `experiments/<experiment>.py`, next to its
 write-up. Its canonical recipe is the zero-argument function named like the

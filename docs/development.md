@@ -418,7 +418,9 @@ For Linux NVIDIA training use `--torch-backend cu128`; always select the backend
 explicitly. CI validates CPU, not GPU, execution.
 
 Supported: CPython 3.12 (no free-threaded ABI) on Linux x86-64 with glibc
-2.28+ (CPU or CUDA 12.8 Torch) and Apple Silicon macOS 14+ (CPU Torch). Windows,
+2.28+ (CPU or CUDA 12.8 Torch) and Apple Silicon macOS 14+ (CPU or MPS Torch).
+MPS is admitted for float32 self-play training with Torch 2.10; evaluation and
+search stay on CPU for this workflow. No speed or strength claim is implied. Windows,
 Intel Mac, Linux ARM and musl are not supplied or tested.
 
 Wheels contain the compiled engine; the sdist needs Rust and a C linker

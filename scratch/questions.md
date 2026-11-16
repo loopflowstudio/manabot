@@ -355,3 +355,12 @@ scratch. No source, test or doc outside those changed, so nothing was edited.
 - `ruff check` / `ruff format --check` on `c2/step-3-c1/`: driver, identity job and test clean. `preflight/discover.py` has 4 style findings; it is a published preflight receipt, so its bytes were left alone.
 - `bash -n run_campaign.sh` passes. PR 456 CI is green at `5485c3f90`; main has not moved.
 - Identifiers that live only in scratch (phantom A4000 records, other-account pods) are also in the published C1/C2 evidence files, so clearing scratch at landing loses nothing.
+
+## MPS optimization planning — 2026-11-11
+
+Reversible context choice: the requested outside-repository `scratchpad/optimize-plan.md`
+is the working design for this planning step; b015d5 experiment notes above remain
+background. `scratch/measure.html` is absent, so the supplied `measure-baseline.md`
+and fixed-w64-MPS update receipts provide the measurement history instead.
+No source change or workload was run. The plan is at
+`/private/tmp/claude-501/-Users-jack-src-manabot-train-big-model-on-manabot/f0b6e76c-aeec-4fcb-a15b-4d0e463a8089/scratchpad/optimize-plan.md`.
