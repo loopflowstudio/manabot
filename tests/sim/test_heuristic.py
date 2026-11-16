@@ -155,10 +155,9 @@ def test_python_vector_wrapper_accepts_native_heuristic() -> None:
 
 def test_closed_decklists_stay_closed_for_native_selector() -> None:
     configs = _players(["red", "green"])
-    configs[0].disclosure = "closed"
-    configs[1].disclosure = "closed"
     env = managym.Env(seed=42)
-    raw, _ = env.reset(configs)
+    raw, _ = env.reset(managym.GameSetup(configs, decklists="closed"))
+    assert raw.decklists_open is False
     assert raw.opponent.main_counts is None
     assert not any(card.zone == managym.ZoneEnum.HAND for card in raw.opponent_cards)
     before = env.state_digest()
