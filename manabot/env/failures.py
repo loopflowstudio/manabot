@@ -59,6 +59,14 @@ class PlayerSetup(BaseModel):
         )
 
 
+def _game_disclosure(players: list[PlayerSetup]) -> Literal["open", "closed"] | None:
+    """The one game value retained in per-seat spelling; None without seats."""
+    values = {player.disclosure for player in players}
+    if len(values) > 1:
+        raise ValueError("retained per-seat disclosure values disagree")
+    return values.pop() if values else None
+
+
 def _retain_players(players: managym.GameSetup, seed: int) -> list[PlayerSetup]:
     disclosure = managym.resolve_decklists(players, seed)
     return [PlayerSetup.retain(player, disclosure) for player in players]
@@ -74,21 +82,20 @@ class GameInputs(BaseModel):
 
     @model_validator(mode="after")
     def uniform_disclosure(self) -> "GameInputs":
-        if len({player.disclosure for player in self.players}) > 1:
-            raise ValueError("retained per-seat disclosure values disagree")
+        _game_disclosure(self.players)
         return self
 
     def setup(self) -> managym.GameSetup:
         """Rebuild retained seats with one game value, rejecting disagreement."""
-        values = {player.disclosure for player in self.players}
-        if len(values) != 1:
-            raise ValueError("retained per-seat disclosure values disagree")
+        decklists = _game_disclosure(self.players)
+        if decklists is None:
+            raise ValueError("retained game has no player setups")
         return managym.GameSetup(
             [
                 managym.PlayerConfig(**player.model_dump(exclude={"disclosure"}))
                 for player in self.players
             ],
-            decklists=values.pop(),
+            decklists=decklists,
         )
 
     def restart(self, seed: int) -> None:
@@ -165,8 +172,7 @@ class NativeTrainingTrace(BaseModel):
 
     @model_validator(mode="after")
     def uniform_disclosure(self) -> "NativeTrainingTrace":
-        if len({player.disclosure for player in self.player_configs}) > 1:
-            raise ValueError("retained per-seat disclosure values disagree")
+        _game_disclosure(self.player_configs)
         return self
 
 
@@ -654,7 +660,6 @@ class CapturedVector(_Capture):
         ]
         self.next_seeds = [game.seed for game in self.games]
         self._generations = self.native.current_game_generations()
-        # Sampled roots pick setups natively at reset; evidence reads them back.
         self._action_cutoff: int | None = None
 
     def __getattr__(self, name: str) -> Any:
@@ -827,15 +832,14 @@ class CapturedVector(_Capture):
         ]
         self._generations = generations
         if restarted:
-            # Sampled roots record the native setup actually created.
-            players = self.native.current_player_configs()
+            # Record the setup natively created: sampled decks, resolved disclosure.
+            setups = self.native.current_player_configs()
             for index in restarted:
                 self.games[index].players = [
-                    PlayerSetup.retain(player, players[index].decklists)
-                    for player in players[index]
+                    PlayerSetup.retain(player, setups[index].decklists)
+                    for player in setups[index]
                 ]
-        for index in restarted:
-            self.games[index].restart(seeds[index])
+                self.games[index].restart(seeds[index])
         self.next_seeds = [
             min(game.seed + self.stride, 2**64 - 1) for game in self.games
         ]

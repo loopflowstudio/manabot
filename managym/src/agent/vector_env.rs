@@ -259,11 +259,12 @@ impl VectorEnv {
         Ok(())
     }
 
-    /// The setups each game was actually reset with, in seat order.
+    /// Each current game's resolved disclosure, never mixed.
     pub fn current_decklists(&self) -> Vec<crate::state::player::DecklistDisclosure> {
         self.envs.iter().map(Env::decklists).collect()
     }
 
+    /// The setups each game was actually reset with, in seat order.
     pub fn current_player_configs(&self) -> Vec<Vec<PlayerConfig>> {
         self.envs
             .iter()

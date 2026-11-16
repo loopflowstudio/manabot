@@ -903,6 +903,11 @@ pub struct ActionSpaceData {
     pub focus: Vec<i32>,
 }
 
+/// Captures that predate the disclosure bit were open games.
+fn open_decklists() -> bool {
+    true
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Observation {
@@ -2503,8 +2508,4 @@ mod characteristics_tests {
             .unwrap_err()
             .contains("ambiguous"));
     }
-}
-
-fn open_decklists() -> bool {
-    true
 }

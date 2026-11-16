@@ -128,6 +128,33 @@ struct NativeActionTrace {
     actions: Vec<usize>,
 }
 
+// Retained evidence predates game-level ownership. Preserve its seat spelling
+// at serialization only; no player carries this value in the live game.
+impl serde::Serialize for NativeActionTrace {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        #[derive(serde::Serialize)]
+        struct RetainedSeat<'a> {
+            #[serde(flatten)]
+            player: &'a PlayerConfig,
+            #[serde(skip_serializing_if = "crate::state::player::DecklistDisclosure::is_open")]
+            disclosure: crate::state::player::DecklistDisclosure,
+        }
+        let players: Vec<_> = self
+            .player_configs
+            .iter()
+            .map(|player| RetainedSeat {
+                player,
+                disclosure: self.disclosure,
+            })
+            .collect();
+        let mut record = serializer.serialize_struct("NativeActionTrace", 2)?;
+        record.serialize_field("player_configs", &players)?;
+        record.serialize_field("actions", &self.actions)?;
+        record.end()
+    }
+}
+
 #[derive(Debug)]
 pub struct Env {
     game: Option<Game>,
@@ -386,13 +413,14 @@ impl Env {
         self.reset_seed
     }
 
-    /// Setups this game was reset with; empty before the first reset.
+    /// The current game's resolved disclosure; open before the first reset.
     pub fn decklists(&self) -> crate::state::player::DecklistDisclosure {
         self.game
             .as_ref()
             .map_or(Default::default(), |game| game.state.disclosure)
     }
 
+    /// Setups this game was reset with; empty before the first reset.
     pub fn player_configs(&self) -> &[PlayerConfig] {
         self.action_trace
             .as_ref()
@@ -1894,32 +1922,5 @@ mod content_pack_contract_tests {
                 .0,
             "player index 2 is out of bounds"
         );
-    }
-}
-
-// Retained evidence predates game-level ownership. Preserve its seat spelling
-// at serialization only; no player carries this value in the live game.
-impl serde::Serialize for NativeActionTrace {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        use serde::ser::SerializeStruct;
-        #[derive(serde::Serialize)]
-        struct RetainedSeat<'a> {
-            #[serde(flatten)]
-            player: &'a PlayerConfig,
-            #[serde(skip_serializing_if = "crate::state::player::DecklistDisclosure::is_open")]
-            disclosure: crate::state::player::DecklistDisclosure,
-        }
-        let players: Vec<_> = self
-            .player_configs
-            .iter()
-            .map(|player| RetainedSeat {
-                player,
-                disclosure: self.disclosure,
-            })
-            .collect();
-        let mut record = serializer.serialize_struct("NativeActionTrace", 2)?;
-        record.serialize_field("player_configs", &players)?;
-        record.serialize_field("actions", &self.actions)?;
-        record.end()
     }
 }

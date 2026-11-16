@@ -5425,16 +5425,14 @@ fn warn_disclosure(py: Python<'_>) -> PyResult<()> {
 pub(crate) fn game_setup(value: &Bound<'_, PyAny>) -> PyResult<crate::state::player::GameSetup> {
     use crate::state::player::{DecklistMode, GameSetup};
     let players: Vec<PyPlayerConfig> = value.extract()?;
-    let hints: Vec<_> = players.iter().filter_map(|p| p.legacy_disclosure).collect();
-    if hints.windows(2).any(|pair| pair[0] != pair[1]) {
-        return Err(PyValueError::new_err(
-            "deprecated per-seat disclosure values disagree",
-        ));
-    }
+    let mut hints = players
+        .iter()
+        .filter_map(|player| player.legacy_disclosure)
+        .map(DecklistMode::from);
     let setup_type = value.py().import_bound("managym")?.getattr("GameSetup")?;
-    let decklists = if value.is_instance(&setup_type)? {
+    let (decklists, conflict) = if value.is_instance(&setup_type)? {
         let name: String = value.getattr("decklists")?.extract()?;
-        match name.as_str() {
+        let decklists = match name.as_str() {
             "open" => DecklistMode::Open,
             "closed" => DecklistMode::Closed,
             "mixed" => DecklistMode::Mixed,
@@ -5443,23 +5441,20 @@ pub(crate) fn game_setup(value: &Bound<'_, PyAny>) -> PyResult<crate::state::pla
                     "decklists must be open, closed or mixed",
                 ))
             }
-        }
-    } else {
-        match hints.first().copied().unwrap_or_default() {
-            DecklistDisclosure::Open => DecklistMode::Open,
-            DecklistDisclosure::Closed => DecklistMode::Closed,
-        }
-    };
-    if hints.iter().any(|hint| {
-        !matches!(
-            (hint, decklists),
-            (DecklistDisclosure::Open, DecklistMode::Open)
-                | (DecklistDisclosure::Closed, DecklistMode::Closed)
-        )
-    }) {
-        return Err(PyValueError::new_err(
+        };
+        (
+            decklists,
             "deprecated per-seat disclosure conflicts with GameSetup.decklists",
-        ));
+        )
+    } else {
+        // A bare seat list takes its game value from the first hint, if any.
+        (
+            hints.clone().next().unwrap_or_default(),
+            "deprecated per-seat disclosure values disagree",
+        )
+    };
+    if hints.any(|hint| hint != decklists) {
+        return Err(PyValueError::new_err(conflict));
     }
     Ok(GameSetup {
         players: players.into_iter().map(PlayerConfig::from).collect(),
@@ -5473,21 +5468,13 @@ pub(crate) fn python_game_setup(
     players: Vec<PlayerConfig>,
     disclosure: DecklistDisclosure,
 ) -> PyResult<PyObject> {
-    let players = players
-        .into_iter()
-        .map(PyPlayerConfig::from)
-        .collect::<Vec<_>>();
+    let players: Vec<PyPlayerConfig> = players.into_iter().map(PyPlayerConfig::from).collect();
+    let kwargs = pyo3::types::PyDict::new_bound(py);
+    kwargs.set_item("decklists", disclosure_name(disclosure))?;
     Ok(py
         .import_bound("managym")?
         .getattr("GameSetup")?
-        .call(
-            (players,),
-            Some(&{
-                let kwargs = pyo3::types::PyDict::new_bound(py);
-                kwargs.set_item("decklists", disclosure_name(disclosure))?;
-                kwargs
-            }),
-        )?
+        .call((players,), Some(&kwargs))?
         .unbind())
 }
 

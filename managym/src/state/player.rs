@@ -126,6 +126,15 @@ pub enum DecklistMode {
     Mixed,
 }
 
+impl From<DecklistDisclosure> for DecklistMode {
+    fn from(disclosure: DecklistDisclosure) -> Self {
+        match disclosure {
+            DecklistDisclosure::Open => Self::Open,
+            DecklistDisclosure::Closed => Self::Closed,
+        }
+    }
+}
+
 impl DecklistMode {
     pub fn resolve(self, seed: u64) -> DecklistDisclosure {
         use rand::{Rng, SeedableRng};

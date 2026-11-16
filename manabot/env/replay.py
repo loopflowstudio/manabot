@@ -16,11 +16,7 @@ from typing import Never
 
 import numpy as np
 
-from manabot.env.failures import (
-    FailureEvidence,
-    GameInputs,
-    runtime_identities,
-)
+from manabot.env.failures import FailureEvidence, GameInputs, runtime_identities
 import managym
 
 
