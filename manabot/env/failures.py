@@ -247,6 +247,7 @@ class _TrainingCapture:
         self.scope = _scope.get()
         kwargs.setdefault("context_provider", self._live_context)
         if self.scope is not None:
+            kwargs.setdefault("record_fraction", self.scope.settings.record_games)
             kwargs.setdefault("failure_directory", self.scope.directory)
             kwargs.setdefault("on_retained", self.scope.paths.append)
         if self.scope is not None and self.scope.settings.record_games:
@@ -255,7 +256,6 @@ class _TrainingCapture:
                 "games_path",
                 self.scope.directory.parent / "games" / f"{uuid4().hex}.jsonl",
             )
-            kwargs.setdefault("record_fraction", self.scope.settings.record_games)
         if self.scope is not None and self.scope.settings.statistics:
             kwargs.setdefault(
                 "statistics_path",

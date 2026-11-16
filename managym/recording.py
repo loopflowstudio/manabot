@@ -392,6 +392,7 @@ class _GameJournal:
             if not executing:
                 for game in retained.games:
                     game.frame = None
+            self.sequence = 0
             row = JournalCheckpoint(sequence=0, evidence=retained)
             self.checkpoint_bytes = self.writer.replace(
                 row.model_dump(mode="json", by_alias=True)
