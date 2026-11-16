@@ -535,14 +535,14 @@ The native observation's `known_library` maps a zero-based library position
 from the top to a card definition. The owner sees the union of public and
 private facts; an opponent sees public facts only. The current policy input
 carries twenty rows per seat (ten public plus ten private, with coinciding
-positions represented once). Deprecated inputs v9/v10 refuse an observation
-that requires these facts. No old checkpoint is relabeled compatible: the new
+positions represented once). Deprecated inputs v9/v10 omit these facts and preserve their frozen layout. No old checkpoint is relabeled compatible: the new
 buffer shape is part of world binding.
 
 Native and Python encoders use the same definition joins and one-based
 position encoding. Prepared resolves definitions once and weights each by the
-reciprocal of its one-based position. Torch adds this pooled vector, divided
-by 60, beside hand and decklist knowledge. MLX currently admits only input v9 and continues to refuse v11;
+reciprocal of its one-based position. Torch projects this separate pooled
+vector, divided by 60, before adding it to hand and decklist knowledge, so a
+known top card and a known hand card have distinct representations. MLX currently admits only input v9 and continues to refuse v11;
 these rows do not extend the deprecated layout. It is a minimal live
 read, with no measured claim about learning or an ability to infer joint
 constraints. The text observation states each exact position in words.

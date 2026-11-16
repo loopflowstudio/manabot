@@ -96,11 +96,11 @@ impl Game {
         let searching_opponent = self.inspects_library(perspective, opponent);
         if !searching_opponent {
             if self.shares_information(perspective, opponent) {
-                self.shuffle_known_library(opponent, perspective, &mut rng);
+                self.shuffle_known_library(opponent, perspective, commitments, &mut rng);
             } else {
                 let (mut known, mut residual) = self.hidden_hand_partition(opponent, commitments);
                 let reserved = self
-                    .reserve_library_facts(opponent, perspective, &mut residual)
+                    .reserve_library_facts(opponent, perspective, &mut residual, commitments)
                     .expect("known hand and library have distinct witnesses");
                 residual.extend(
                     self.foretold_cards(opponent)
@@ -129,7 +129,7 @@ impl Game {
                 self.state.reassign_hidden(opponent, known, library);
             }
         }
-        self.shuffle_known_library(perspective, perspective, &mut rng);
+        self.shuffle_known_library(perspective, perspective, commitments, &mut rng);
     }
 
     fn refresh_sampled_decision(&mut self, perspective: PlayerId) {
@@ -264,23 +264,25 @@ impl Game {
         });
     }
 
-    pub(crate) fn repin_revealed_library_cards(&mut self, viewer: PlayerId) {
+    /// Inspection lists describe an ordered prefix. Revealed search selections
+    /// describe membership only and must never be repositioned as a prefix.
+    pub(crate) fn repin_library_inspections(&mut self, viewer: PlayerId) {
         let Some(suspended) = &self.state.suspended_decision else {
             return;
         };
         let inspections: Vec<_> = suspended
             .decisions()
-            .filter(|decision| !self.shares_information(viewer, decision.player()))
-            .map(|decision| decision.revealed_objects().to_vec())
-            .filter(|objects| !objects.is_empty())
+            .filter_map(Decision::library_inspection)
+            .filter(|(owner, _)| !self.shares_information(viewer, *owner))
+            .map(|(owner, objects)| (owner, objects.to_vec()))
             .collect();
-        for revealed in inspections {
-            let player = self.state[revealed[0]].owner;
-            // Placement appends, so put revealed[0] on top (last).
-            for object in revealed.iter().rev() {
+        for (owner, objects) in inspections {
+            // This is constrained sampling placement, preserving the facts
+            // already checked while binding each inspection slot.
+            for object in objects.iter().rev() {
                 self.state
                     .zones
-                    .reposition(ZoneType::Library, player, *object, usize::MAX);
+                    .reposition(ZoneType::Library, owner, *object, usize::MAX);
             }
         }
     }

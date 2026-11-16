@@ -106,9 +106,7 @@ impl Game {
             self.state.place_object(object, player, ZoneType::Library);
             // move_object pushes to the top (end); rotate to the bottom so the
             // cleared hand is not immediately drawn back.
-            self.state
-                .zones
-                .reposition(ZoneType::Library, player, object, 0);
+            self.reposition_library_object(player, object, 0);
         }
     }
 

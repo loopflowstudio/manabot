@@ -4267,13 +4267,16 @@ fn hidden_knowledge_private_cap_keeps_complete_public_facts() {
 }
 
 #[test]
-fn hidden_knowledge_public_prefix_survives_a_private_pending_inspection() {
+fn hidden_knowledge_public_prefix_survives_a_pending_inspection() {
     use crate::{
         agent::observation::Observation,
         flow::decision::EffectFrame,
         possible_worlds::{MaterializeMode, PossibleWorldSpace},
     };
-    for owner in [PlayerId(0), PlayerId(1)] {
+    for (owner, reveal) in [PlayerId(0), PlayerId(1)]
+        .into_iter()
+        .flat_map(|owner| [false, true].map(|reveal| (owner, reveal)))
+    {
         let viewer = PlayerId(1 - owner.0);
         let (mut game, _, _) = fixture(owner);
         let mut visible = Vec::new();
@@ -4291,7 +4294,22 @@ fn hidden_knowledge_public_prefix_survives_a_private_pending_inspection() {
         for object in visible {
             game.move_object(object, ZoneType::Library);
         }
-        game.run_frame(EffectFrame::new(owner, vec![Effect::Surveil { count: 3 }]));
+        game.run_frame(EffectFrame::new(
+            owner,
+            vec![if reveal {
+                Effect::LookAndSelect {
+                    look: 3.into(),
+                    min_select: 1,
+                    max_select: 2,
+                    predicate: CardPredicate::default(),
+                    reveal: true,
+                    to_battlefield: false,
+                    random_order: false,
+                }
+            } else {
+                Effect::Surveil { count: 3 }
+            }],
+        ));
         game.publish_action_space(game.suspended_decision_action_space().unwrap());
         let known = Observation::for_player(&game, viewer)
             .opponent
@@ -4334,26 +4352,100 @@ fn hidden_knowledge_transient_departures_cannot_leave_false_hidden_zone_facts() 
             let (mut game, _, _) = fixture(owner);
             let inspected = game.library_top_objects(owner, 3);
             game.remember_library_objects(owner, &inspected);
+            game.remember_hand(owner);
+            let expected_hand = game.state.players[owner.0].known_hand.clone();
             let token = game.create_token("token.ally", owner, false).unwrap();
             let object = game.permanent_object(token).unwrap();
             game.move_object(object, zone);
-            if zone == ZoneType::Hand {
-                game.reveal_hand(owner);
-            }
-            let before = game.state.players[owner.0].known_hand.clone();
             game.finish_state_based_batch();
             game.assert_library_knowledge();
             if zone == ZoneType::Library {
-                assert!(game.state.players[owner.0].known_library.is_empty());
-            } else {
-                let expected: BTreeMap<_, _> = before
-                    .into_iter()
-                    .filter_map(|(definition, count)| {
-                        (count > 1).then_some((definition, count - 1))
-                    })
-                    .collect();
-                assert_eq!(game.state.players[owner.0].known_hand, expected);
+                assert_eq!(game.library_facts(owner, owner).len(), 3);
             }
+            assert_eq!(game.state.players[owner.0].known_hand, expected_hand);
         }
+    }
+}
+
+#[test]
+fn hidden_knowledge_forced_single_bottom_is_remembered() {
+    use crate::flow::decision::EffectFrame;
+    for owner in [PlayerId(0), PlayerId(1)] {
+        let (mut game, _, _) = fixture(owner);
+        let top = game.library_top_objects(owner, 1)[0];
+        let definition = game.state[top].definition_id;
+        game.run_frame(EffectFrame::new(
+            owner,
+            vec![Effect::LookAndSelect {
+                look: 1.into(),
+                min_select: 0,
+                max_select: 1,
+                predicate: CardPredicate::default(),
+                reveal: false,
+                to_battlefield: false,
+                random_order: false,
+            }],
+        ));
+        game.publish_action_space(game.suspended_decision_action_space().unwrap());
+        checked_command(&mut game, Action::Decline { player: owner });
+        let bottom = game.state.zones.size(ZoneType::Library, owner) - 1;
+        assert_eq!(
+            game.library_facts(owner, owner).get(&bottom),
+            Some(&definition)
+        );
+        assert!(game.library_facts(owner, PlayerId(1 - owner.0)).is_empty());
+    }
+}
+
+#[test]
+fn hidden_knowledge_search_reveals_do_not_displace_a_known_top() {
+    use crate::flow::decision::EffectFrame;
+    use crate::possible_worlds::{MaterializeMode, PossibleWorldSpace};
+    use crate::state::ability::DistinctSearchEnd;
+    for owner in [PlayerId(0), PlayerId(1)] {
+        let viewer = PlayerId(1 - owner.0);
+        let (mut game, _, _) = fixture(owner);
+        let top = game.library_top_objects(owner, 1)[0];
+        let definition = game.state[top].definition_id;
+        game.state
+            .known_library_mut(owner)
+            .public
+            .insert(0, definition);
+        game.run_frame(EffectFrame::new(
+            owner,
+            vec![Effect::SearchDistinctNames {
+                predicate: CardPredicate::default(),
+                count: 2,
+                end: DistinctSearchEnd::Hand,
+            }],
+        ));
+        game.publish_action_space(game.suspended_decision_action_space().unwrap());
+        let selected = game
+            .state
+            .zones
+            .zone_objects(ZoneType::Library, owner)
+            .iter()
+            .copied()
+            .find(|object| game.state[*object].definition_id != definition)
+            .unwrap();
+        checked_command(
+            &mut game,
+            Action::SelectCard {
+                player: owner,
+                object: selected,
+            },
+        );
+        for seed in 0..8 {
+            let mut branch = game.clone();
+            branch.determinize(viewer, seed).unwrap();
+            assert_eq!(
+                branch.library_facts(owner, viewer).get(&0),
+                Some(&definition)
+            );
+        }
+        let space = PossibleWorldSpace::for_viewer(&game, viewer);
+        space
+            .materialize_index(&game, 0, 7, MaterializeMode::RefreshOpponentCommitment)
+            .unwrap();
     }
 }

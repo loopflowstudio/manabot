@@ -561,7 +561,7 @@ impl HiddenHandConstraints {
             // the lowest ObjectIds of each name go to the hand deterministically.
             let mut pool = commitments.unseen_objects(&branch, opponent);
             let reserved = branch
-                .reserve_library_facts(opponent, self.viewer, &mut pool)
+                .reserve_library_facts(opponent, self.viewer, &mut pool, &commitments)
                 .ok_or(MaterializeError::InconsistentWorld)?;
             let mut by_name: BTreeMap<String, Vec<ObjectId>> = BTreeMap::new();
             for object in pool {
@@ -623,9 +623,9 @@ impl HiddenHandConstraints {
         if source.shares_information(self.viewer, opponent)
             && !source.inspects_library(self.viewer, opponent)
         {
-            branch.shuffle_known_library(opponent, self.viewer, &mut rng);
+            branch.shuffle_known_library(opponent, self.viewer, &commitments, &mut rng);
         }
-        branch.shuffle_known_library(self.viewer, self.viewer, &mut rng);
+        branch.shuffle_known_library(self.viewer, self.viewer, &commitments, &mut rng);
         if !branch.rebind_commitments(&commitments, &mut rng) {
             return Err(MaterializeError::InconsistentWorld);
         }

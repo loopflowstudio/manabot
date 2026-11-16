@@ -551,14 +551,7 @@ pub fn encode_into(
         out.known_library.len(),
         config.known_library_len(),
     )?;
-    // Legacy card rows cannot carry retained definition-and-position pairs.
-    if config.layout == InputLayout::Legacy
-        && (!obs.agent.known_library.is_empty() || !obs.opponent.known_library.is_empty())
-    {
-        return Err(ObservationEncodeError::Unrepresentable(
-            "known library positions require the current policy input".into(),
-        ));
-    }
+    // Frozen legacy layouts omit library facts without changing their buffers.
     validate_buffer_len("decklists", out.decklists.len(), config.decklists_len())?;
     validate_buffer_len(
         "player_turn_state",

@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use rand::{seq::SliceRandom, Rng};
 
 use crate::{
-    flow::game::Game,
+    flow::{game::Game, selection_sampling::HiddenCommitments},
     state::{
         card::CardDefId,
         game_object::{ObjectId, PlayerId},
@@ -76,6 +76,7 @@ impl Game {
         owner: PlayerId,
         viewer: PlayerId,
         pool: &mut Vec<ObjectId>,
+        commitments: &HiddenCommitments,
     ) -> Option<Vec<(usize, ObjectId)>> {
         let mut facts = self.library_facts(owner, viewer);
         if self.shares_information(viewer, owner) {
@@ -109,7 +110,6 @@ impl Game {
         if facts.is_empty() {
             return Some(Vec::new());
         }
-        let commitments = self.hidden_commitments(viewer);
         let mut reserved = Vec::new();
         for (position, definition) in facts {
             let original = self
@@ -176,6 +176,7 @@ impl Game {
         &mut self,
         owner: PlayerId,
         viewer: PlayerId,
+        commitments: &HiddenCommitments,
         rng: &mut impl Rng,
     ) {
         if self.library_facts(owner, viewer).is_empty() && self.state.suspended_decision.is_none() {
@@ -191,7 +192,7 @@ impl Game {
             .to_vec();
         pool.sort_unstable_by_key(|object| object.slot());
         let reserved = self
-            .reserve_library_facts(owner, viewer, &mut pool)
+            .reserve_library_facts(owner, viewer, &mut pool, commitments)
             .expect("library facts are true in the source world");
         pool.shuffle(rng);
         let library = Self::place_library_facts(pool, reserved).expect("valid library positions");

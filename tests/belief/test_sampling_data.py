@@ -3,11 +3,13 @@
 from dataclasses import replace
 import json
 from pathlib import Path
+from typing import cast
 
 import pytest
 import torch
 
 from manabot.backends import resolve
+from manabot.backends.torch.belief import PhysicalDistribution
 from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.sampling_data import (
     SamplerDataset,
@@ -26,8 +28,11 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.model.world import checkpoint_world
 from manabot.semantic.text_observation import capture_text_decision, submit_response
+from manabot.sim.search.sampling import PhysicalHandSampler
+from manabot.sim.search.sampling_receipt import HandSample, validate_hand
 from manabot.verify.text_observation import priority_root
-from managym.decision import Observation
+import managym
+from managym.decision import PUBLIC_COMMITMENT_KINDS, Observation
 
 
 def _dataset() -> SamplerDataset:
@@ -162,3 +167,43 @@ def test_count_sampler_rejects_retained_private_subset_before_inference() -> Non
     schema = SamplerSchema("fixture", tuple(sorted(constraints["pool"])), 0)
     with pytest.raises(ValueError, match="cannot represent retained selections"):
         public_sampler_input(env, history, schema)
+
+
+@pytest.mark.parametrize("viewer", [0, 1])
+def test_count_samplers_reserve_known_library_copies(viewer: int) -> None:
+    env = priority_root(("Lightning Bolt",), ("Island", "Island"))
+    observation = Observation.from_json(env.semantic_observation_json(viewer))
+    history = ViewerHistory.from_observation(observation)
+    original = json.loads(env.hidden_hand_constraints_json(viewer))
+    # Controlled projection fixture isolates physical copy reservation from
+    # rules execution; both production samplers consume this native JSON shape.
+    original["pool"] = {"Island": 3, "Lightning Bolt": 1}
+    original["known_hand"] = {"Island": 1}
+    original["known_library"] = {"Lightning Bolt": 1}
+    original["hand_size"] = 2
+    original["foretold"] = 0
+    original["retained_selection"] = False
+    encoded = json.dumps(original)
+
+    class ProjectedEngine:
+        def hidden_hand_constraints_json(self, seat: int) -> str:
+            assert seat == viewer
+            return encoded
+
+        def semantic_observation_json(self, seat: int) -> str:
+            return env.semantic_observation_json(seat)
+
+    engine = cast(managym.Env, ProjectedEngine())
+    schema = SamplerSchema(
+        "fixture", ("Island", "Lightning Bolt"), 2 * len(PUBLIC_COMMITMENT_KINDS) * 3
+    )
+    inputs, authority = public_sampler_input(engine, history, schema)
+    assert inputs.pool_counts == (3, 0)
+    assert authority == encoded
+    physical = PhysicalHandSampler(PhysicalDistribution())
+    prepared = physical.prepare(engine, history)
+    assert prepared.inputs.pool_counts == inputs.pool_counts
+    batch = physical.sample(prepared, count=4, seed=7, check=lambda: None)
+    assert all(dict(hand.counts) == {"Island": 2} for hand in batch.hands)
+    with pytest.raises(ValueError, match="violates public constraints"):
+        validate_hand(HandSample((("Island", 1), ("Lightning Bolt", 1)), -1.0), encoded)

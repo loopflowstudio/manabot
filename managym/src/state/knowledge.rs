@@ -32,14 +32,21 @@ impl LibraryKnowledge {
     /// A top departure has a publicly identified position. Return the
     /// definition the opponent already knew there, if any.
     pub fn remove_top(&mut self) -> Option<CardDefId> {
-        let known = self.public.remove(&0);
+        self.remove_position(0)
+    }
+
+    /// Public departure at an identified position shifts only the facts below it.
+    pub fn remove_position(&mut self, removed: usize) -> Option<CardDefId> {
+        let known = self.public.get(&removed).copied();
         for view in [&mut self.public, &mut self.own] {
             *view = std::mem::take(view)
                 .into_iter()
                 .filter_map(|(position, definition)| {
-                    position
-                        .checked_sub(1)
-                        .map(|position| (position, definition))
+                    if position == removed {
+                        None
+                    } else {
+                        Some((position - usize::from(position > removed), definition))
+                    }
                 })
                 .collect();
         }

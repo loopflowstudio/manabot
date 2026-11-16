@@ -281,6 +281,9 @@ class ObservationEncoder:
 
     def __init__(self, config: ObservationConfig) -> None:
         self.config = config
+        self.library_shape = tuple(
+            managym.observation_layout()["known_library"]["shape"]
+        )
         self.relation_dim = RELATION_DIM
         self.cards_per_player = config.max_cards_per_player
         self.perms_per_player = config.max_permanents_per_player
@@ -346,7 +349,7 @@ class ObservationEncoder:
             **SHARED_EFFECT_SHAPES,
             "semantic_cards": (2, self.cards_per_player),
             "known_hand": (2, self.cards_per_player, 2),
-            **({"known_library": (2, 20, 2)} if self.one_token else {}),
+            **({"known_library": self.library_shape} if self.one_token else {}),
             "decklists": (2, self.cards_per_player, DECKLIST_DIM),
             **(
                 {
@@ -460,10 +463,6 @@ class ObservationEncoder:
             out["known_library"] = np.zeros(
                 self.shapes["known_library"], dtype=np.float32
             )
-        elif obs.agent.known_library or obs.opponent.known_library:
-            # Frozen v9/v10 have no definition-and-position rows. Visible card
-            # rows alone cannot express retained facts below the library top.
-            raise ValueError("known library positions require the current policy input")
 
         ## NOTE: It is very important that we encode in this exact
         ## order.

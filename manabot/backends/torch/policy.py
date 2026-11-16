@@ -174,6 +174,7 @@ class ActorCritic(nn.Module):
                 embed_dim,
                 decklists=True,
                 records=config.catalog_records(),
+                library=enc.one_token,
             )
         else:
             # Generic worlds still distinguish card definitions. The content

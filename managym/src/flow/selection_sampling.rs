@@ -581,7 +581,8 @@ impl Game {
         let mut pool = BTreeMap::<String, Vec<ObjectId>>::new();
         let mut unseen = commitments.unseen_objects(self, owner);
         let original = unseen.clone();
-        let Some(reserved) = self.reserve_library_facts(owner, commitments.viewer, &mut unseen)
+        let Some(reserved) =
+            self.reserve_library_facts(owner, commitments.viewer, &mut unseen, commitments)
         else {
             return Vec::new();
         };
@@ -690,7 +691,7 @@ impl Game {
     }
 
     /// Give every retained commitment its exact object in this dealt world and
-    /// pin inspected library prefixes back in place. False means the deal cannot
+    /// preserve inspected library domains. False means the deal cannot
     /// honor earlier choices: the caller rejects the world; neither selected
     /// counts nor public commitments are truncated.
     pub(crate) fn rebind_commitments(
@@ -765,7 +766,7 @@ impl Game {
             self.rebind_suspended_selection(&mut suspended, &rebinding);
             *self.state.suspended_decision_mut() = Some(suspended);
         }
-        self.repin_revealed_library_cards(commitments.viewer);
+        self.repin_library_inspections(commitments.viewer);
         self.library_knowledge_holds(commitments.viewer)
     }
 

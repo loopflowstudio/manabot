@@ -415,8 +415,8 @@ class Prepared[A]:
     card_rows: A  # [B,2,C]
     known_rows: A  # [B,2,K]
     known_counts: A  # [B,2,K] raw counts; divide after the embedding product
-    library_rows: A  # [B,2,20], catalog definitions at known positions
-    library_weights: A  # [B,2,20], reciprocal one-based position; zero padding
+    library_rows: A  # [B,2,L], catalog definitions at known positions
+    library_weights: A  # [B,2,L], reciprocal one-based position; zero padding
     deck_rows: A  # [B,2,R]
     deck_counts: A  # [B,2,R,4] already / 60
     permanent_rows: A  # [B,2,P]

@@ -1462,10 +1462,7 @@ impl Game {
                             .zones
                             .size(ZoneType::Library, owner)
                             .saturating_sub(2);
-                        self.state.known_library_mut(owner).forget_order();
-                        self.state
-                            .zones
-                            .reposition(ZoneType::Library, owner, object, below_top);
+                        self.reposition_library_object(owner, object, below_top);
                     } else {
                         self.put_on_bottom_of_library(object);
                     }
@@ -2464,9 +2461,7 @@ impl Game {
                 }
                 if remaining.is_empty() {
                     for object in bottom.iter().rev() {
-                        self.state
-                            .zones
-                            .reposition(ZoneType::Library, *player, *object, 0);
+                        self.reposition_library_object(*player, *object, 0);
                     }
                     self.put_on_top_of_library(*player, top);
                     self.remember_library_objects(*player, bottom);
@@ -3237,8 +3232,11 @@ impl Game {
         }
         match end {
             LibraryEnd::Bottom => {
-                for object in objects {
-                    self.put_on_bottom_of_library(object);
+                for object in &objects {
+                    self.put_on_bottom_of_library(*object);
+                }
+                if !random_order {
+                    self.remember_library_objects(player, &objects);
                 }
             }
             LibraryEnd::Top => self.put_on_top_of_library(player, &objects),
@@ -3298,9 +3296,7 @@ impl Game {
     fn put_on_top_of_library(&mut self, player: PlayerId, objects: &[ObjectId]) {
         self.state.known_library_mut(player).forget_order();
         for object in objects.iter().rev() {
-            self.state
-                .zones
-                .reposition(ZoneType::Library, player, *object, usize::MAX);
+            self.reposition_library_object(player, *object, usize::MAX);
         }
         self.remember_library_objects(player, objects);
         self.assert_library_knowledge();
@@ -3332,6 +3328,16 @@ impl Game {
             LibraryEnd::Bottom => 0,
             LibraryEnd::Top => usize::MAX,
         };
+        self.reposition_library_object(owner, object, index);
+    }
+
+    /// Arbitrary reorders invalidate positional facts at the mutation boundary.
+    pub(crate) fn reposition_library_object(
+        &mut self,
+        owner: PlayerId,
+        object: ObjectId,
+        index: usize,
+    ) {
         self.state.known_library_mut(owner).forget_order();
         self.state
             .zones
