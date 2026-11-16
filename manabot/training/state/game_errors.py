@@ -315,7 +315,8 @@ def main() -> None:
     entry = json.loads(line)
     evidence = (
         read_record(args.ledger)
-        if entry.get("schema") in {"native-failure-v1", "training-game-checkpoint-v1"}
+        if entry.get("schema")
+        in {"managym-game-v1", "native-failure-v1", "training-game-checkpoint-v1"}
         else None
     )
     if evidence is None:

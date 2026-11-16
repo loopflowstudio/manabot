@@ -24,10 +24,10 @@ from manabot.infra.run_settings import RunSettings
 from manabot.training.rollout.producers import ShardedVectorEnv
 import managym
 from managym.recording import (
-    FailureEvidence,
+    GameRecord,
     NativeBoundary,
     atomic_private_json,
-    read_failure,
+    read_record,
 )
 from managym.replay import replay_failure_inputs
 
@@ -153,7 +153,7 @@ def test_abrupt_exit_leaves_replayable_private_cursor(
     cursor = next(_cursors(directory))
     assert cursor.stat().st_mode & 0o777 == 0o600
     assert directory.stat().st_mode & 0o777 == 0o700
-    evidence = read_failure(cursor)
+    evidence = read_record(cursor)
     boundary = evidence.boundary
     assert boundary is not None
     assert evidence.context == {"update": 7}
@@ -278,7 +278,7 @@ def test_interrupted_reset_replays_prior_game_without_binding_claim(
 ) -> None:
     _run_child("_interrupt_reset_child", str(tmp_path), operation, first)
     cursor = next(_cursors(tmp_path / "game-journals"))
-    evidence = read_failure(cursor)
+    evidence = read_record(cursor)
     boundary = evidence.boundary
     assert boundary is not None
     assert boundary.phase == (
@@ -361,7 +361,7 @@ def test_executing_replay_requires_active_fresh_step_binding(
         vector.reset_all_into_buffers(_players())
         frame = vector.semantic_decision_frames_json()[0]
         vector.step_into_buffers([0])
-        evidence = read_failure(next(_cursors(scope.journal_directory)))
+        evidence = read_record(next(_cursors(scope.journal_directory)))
         vector.close()
     boundary = evidence.boundary
     assert boundary is not None
@@ -418,7 +418,7 @@ def test_enabled_logging_preserves_buffers_prefixes_and_reset_identity(
                 )
             )
             if enabled:
-                retained = read_failure(next(_cursors(scope.journal_directory)))
+                retained = read_record(next(_cursors(scope.journal_directory)))
                 assert (
                     retained.boundary is not None and retained.boundary.phase == "ready"
                 )
@@ -456,7 +456,7 @@ def test_shards_keep_independent_paths_and_owner_coordinates(
             vector.close()
     paths = list(_cursors(scope.journal_directory))
     assert len(paths) == workers
-    receipts = [read_failure(path) for path in paths]
+    receipts = [read_record(path) for path in paths]
     assert sorted(game.stream for row in receipts for game in row.games) == [0, 1, 2, 3]
     assert all(row.context["update"] == 2 for row in receipts)
     assert all(row.boundary is not None and row.boundary.returned for row in receipts)
@@ -602,15 +602,15 @@ def test_reassignment_and_failed_replacement_retain_current_inputs(
         vector.reset_all_into_buffers(_players())
         vector.reassign_roots_into_buffers([list(reversed(_players())), None])
         cursor = next(_cursors(scope.journal_directory))
-        reassigned = read_failure(cursor)
+        reassigned = read_record(cursor)
         assert reassigned.games[0].players[0].name == "b"
         vector.step_isolated_into_buffers([-1, 0], [True, True])
-        failed = read_failure(cursor)
+        failed = read_record(cursor)
         assert failed.boundary is not None and failed.boundary.returned
         assert failed.execution_outcome == "execution_outcome_unknown"
         assert replay_failure_inputs(failed)[0]["status"] == "failed"
         vector.replace_failed_into_buffers([True, False])
-        replaced = read_failure(cursor)
+        replaced = read_record(cursor)
         assert replaced.games[0].actions == []
         assert replaced.games[1].actions == [0]
         assert (
@@ -636,7 +636,7 @@ def test_auto_reset_replaces_prefix_and_bounds_retained_files(tmp_path: Path) ->
         else:
             pytest.fail("tiny native game did not settle")
         cursor = next(_cursors(scope.journal_directory))
-        evidence = read_failure(cursor)
+        evidence = read_record(cursor)
         assert evidence.games[0].seed == 25
         assert evidence.games[0].actions == []
         assert evidence.boundary is not None and evidence.boundary.phase == "ready"
@@ -698,18 +698,18 @@ def test_executor_interrupt_marks_active_work_before_call(
     assert marker["context"]["stage"]
     assert marker["context"]["coordinates"]["updates"] == 0
     for cursor in _cursors(directory):
-        evidence = read_failure(cursor)
+        evidence = read_record(cursor)
         assert evidence.boundary is not None and evidence.boundary.phase == "ready"
         assert evidence.boundary.returned
     run = json.loads((tmp_path / "run/run.json").read_text())
     assert Path(run["game_journal_directory"]).resolve() == directory.resolve()
 
 
-def _synthetic_evidence(length: int = 0) -> tuple[FailureEvidence, NativeBoundary]:
-    from managym.recording import FailureEvidence, GameInputs, NativeBoundary
+def _synthetic_evidence(length: int = 0) -> tuple[GameRecord, NativeBoundary]:
+    from managym.recording import GameInputs, GameRecord, NativeBoundary
 
     return (
-        FailureEvidence(
+        GameRecord(
             mode="vector",
             operation="step",
             identities={"world": "fixture"},
@@ -731,17 +731,17 @@ def test_delta_projection_and_root_replacement(tmp_path: Path) -> None:
     evidence.games[0].frame = "fresh-frame"
     boundary.phase = "executing"
     journal.publish(evidence, boundary)
-    assert read_failure(journal.writer.path).games == evidence.games
+    assert read_record(journal.writer.path).games == evidence.games
     boundary.phase = "synchronizing"
     boundary.returned = True
     journal.publish(evidence, boundary, [20])
-    retained = read_failure(journal.writer.path)
+    retained = read_record(journal.writer.path)
     assert retained.games[0].actions == [0] * 20
     assert retained.games[0].frame is None
     assert retained.execution_outcome == "execution_outcome_unknown"
     evidence.games[0].restart(24)  # repeated seed still replaces the root
     journal.publish(evidence, boundary)
-    assert read_failure(journal.writer.path).games[0].actions == []
+    assert read_record(journal.writer.path).games[0].actions == []
 
 
 @dataclass
@@ -797,7 +797,7 @@ def test_initial_checkpoint_isolates_nested_inputs_without_false_deltas(
     if not executing:
         expected["games"][0]["frame"] = None
     assert (
-        read_failure(journal.writer.path).model_dump(mode="json", by_alias=True)
+        read_record(journal.writer.path).model_dump(mode="json", by_alias=True)
         == expected
     )
     for _ in range(2):
@@ -821,7 +821,7 @@ def test_initial_checkpoint_isolates_nested_inputs_without_false_deltas(
     assert journal.writer.path.read_bytes() == saved
     assert journal.evidence.model_dump(mode="json", by_alias=True) == projection
     assert (
-        read_failure(journal.writer.path).model_dump(mode="json", by_alias=True)
+        read_record(journal.writer.path).model_dump(mode="json", by_alias=True)
         == projection
     )
 
@@ -857,7 +857,7 @@ def test_initial_checkpoint_preserves_nested_nonfinite_metadata_behavior(
     assert journal.evidence is not None
     # Existing JSON projection normalizes opaque nonfinite metadata to null;
     # the in-memory projection still owns the original Python value.
-    assert getattr(read_failure(journal.writer.path), field)["nested"] == {
+    assert getattr(read_record(journal.writer.path), field)["nested"] == {
         "values": [None]
     }
     retained = getattr(journal.evidence, field)["nested"]["values"][0]
@@ -878,10 +878,10 @@ def test_training_tail_is_explicit_and_complete_corruption_rejected(
         output.write(suffix)
     if not suffix.endswith(b"\n"):
         with pytest.warns(RuntimeWarning, match="Incomplete final"):
-            assert read_failure(journal.writer.path).games == evidence.games
+            assert read_record(journal.writer.path).games == evidence.games
     else:
         with pytest.raises(ValueError):
-            read_failure(journal.writer.path)
+            read_record(journal.writer.path)
 
 
 def test_training_sequence_gap_and_incomplete_checkpoint(tmp_path: Path) -> None:
@@ -896,10 +896,10 @@ def test_training_sequence_gap_and_incomplete_checkpoint(tmp_path: Path) -> None
     row["sequence"] = 3
     journal.writer.path.write_bytes(lines[0] + json.dumps(row).encode() + b"\n")
     with pytest.raises(ValueError, match="sequence gap"):
-        read_failure(journal.writer.path)
+        read_record(journal.writer.path)
     journal.writer.path.write_bytes(lines[0].rstrip(b"\n"))
     with pytest.raises(ValueError, match="incomplete initial"):
-        read_failure(journal.writer.path)
+        read_record(journal.writer.path)
 
 
 def test_compaction_failure_keeps_fully_appended_projection(
@@ -921,12 +921,12 @@ def test_compaction_failure_keeps_fully_appended_projection(
         patch.setattr(Path, "replace", fail_replace)
         with pytest.raises(OSError, match="compaction interrupted"):
             journal.publish(evidence, boundary)
-    retained = read_failure(journal.writer.path)
+    retained = read_record(journal.writer.path)
     assert retained.context == evidence.context
     assert retained.games == evidence.games
     journal.publish(evidence, boundary)
     assert len(journal.writer.path.read_bytes().splitlines()) == 1
-    assert read_failure(journal.writer.path).games == evidence.games
+    assert read_record(journal.writer.path).games == evidence.games
 
 
 @pytest.mark.parametrize("prefix_length", [10, 10000])
@@ -992,7 +992,7 @@ def test_compaction_byte_allowance_has_one_record_overshoot(tmp_path: Path) -> N
     journal.publish(evidence, boundary)
     assert journal.appended_bytes == 0
     assert len(journal.writer.path.read_bytes().splitlines()) == 1
-    assert read_failure(journal.writer.path).context == evidence.context
+    assert read_record(journal.writer.path).context == evidence.context
 
 
 def _crash_journal_child(directory: str, cut: str) -> None:
@@ -1034,10 +1034,10 @@ def test_process_exit_during_append_and_compaction(tmp_path: Path, cut: str) -> 
     path = tmp_path / "producer.jsonl"
     if cut == "append":
         with pytest.warns(RuntimeWarning, match="Incomplete final"):
-            retained = read_failure(path)
+            retained = read_record(path)
         assert retained.games[0].actions == [0] * 10
     else:
-        retained = read_failure(path)
+        retained = read_record(path)
         assert retained.games[0].actions == [0] * 10 + [7]
         assert retained.context == {"payload": "x" * 65536}
     # The single producer file is sufficient; an abandoned compaction temporary
@@ -1046,9 +1046,9 @@ def test_process_exit_during_append_and_compaction(tmp_path: Path, cut: str) -> 
     copied.write_bytes(path.read_bytes())
     if cut == "append":
         with pytest.warns(RuntimeWarning):
-            assert read_failure(copied) == retained
+            assert read_record(copied) == retained
     else:
-        assert read_failure(copied) == retained
+        assert read_record(copied) == retained
 
 
 def test_suffix_changes_and_one_root_replacement_leave_other_prefixes_out(
@@ -1072,7 +1072,7 @@ def test_suffix_changes_and_one_root_replacement_leave_other_prefixes_out(
     assert len(row["games"]) == 1
     assert row["games"][0]["replacement"]["actions"] == []
     assert len(journal.writer.path.read_bytes().splitlines()) == 3
-    assert read_failure(journal.writer.path).games == evidence.games
+    assert read_record(journal.writer.path).games == evidence.games
 
 
 def test_native_statistics_preserve_recorded_choices(tmp_path: Path) -> None:

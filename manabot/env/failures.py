@@ -136,25 +136,6 @@ class TrainingExposureReceipt(BaseModel):
         body = _jsonl(self.model_dump(mode="json", by_alias=True))
         return hashlib.sha256(body.encode()).hexdigest()
 
-    def replay_inputs(self) -> _GameRecord:
-        return _GameRecord(
-            mode="scalar",
-            operation="step",
-            skip_trivial=self.skip_trivial,
-            games=[
-                _GameInputs(
-                    stream=self.stream,
-                    seed=self.game.seed,
-                    players=self.game.trace.player_configs,
-                    actions=self.game.trace.actions,
-                )
-            ],
-            identities=self.identities,
-            context=self.context,
-            seconds=self.seconds,
-            execution_outcome="last_command_succeeded",
-        )
-
 
 @dataclass
 class CaptureScope:

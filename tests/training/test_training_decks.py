@@ -49,7 +49,7 @@ from manabot.training.state.recovery import admit_recovery_identities
 import managym
 from managym import MAX_DECKLIST_BYTES, Deck, DeckImportError, Decklist
 from managym.disclosure import DecklistSampling
-from managym.recording import FailureEvidence, read_records
+from managym.recording import GameRecord, read_records
 from managym.replay import walk
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
@@ -488,7 +488,7 @@ def test_failure_records_actual_sampled_decks(
         scope = CaptureScope(tmp_path / "failures")
         with capture_scope(scope), pytest.raises(Exception):
             collector._env.step_into_buffers([-1, -1])
-        evidence = FailureEvidence.model_validate_json(scope.paths[-1].read_bytes())
+        evidence = GameRecord.model_validate_json(scope.paths[-1].read_bytes())
         if sampled:
             assert evidence.identities["deck_source"]["digest"] == decks.digest
         for game, players in zip(

@@ -141,10 +141,10 @@ def read_games(path: Path) -> list[RecordedGame]:
             records = value if isinstance(value, list) else [value]
         except json.JSONDecodeError:
             records = [json.loads(line) for line in source.splitlines() if line.strip()]
+        from managym.recording import records_from_source
+
         games = []
         for record in records:
-            from managym.recording import records_from_source
-
             native_records = records_from_source(record, journal_path=path)
             if native_records is not None:
                 for native in native_records:

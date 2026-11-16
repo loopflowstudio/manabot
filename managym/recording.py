@@ -18,7 +18,7 @@ from pathlib import Path
 import platform
 import time
 import traceback
-from typing import TYPE_CHECKING, Any, BinaryIO, Literal, TypedDict, Unpack
+from typing import Any, BinaryIO, Literal, TypedDict, Unpack
 from uuid import uuid4
 import warnings
 
@@ -32,9 +32,6 @@ from managym.decision import Command, DecisionFrame
 from managym.disclosure import DecklistDisclosure
 from managym.journal import DurableJournal, json_line
 from managym.statistics import GameStatistics, Reducer
-
-if TYPE_CHECKING:
-    from managym.replay import RecordedDecision
 
 
 def semantic_frame_sha256(frame: str) -> str:
@@ -584,10 +581,14 @@ class _Capture:
             native.enable_profiler()
             self._profiler_requested = False
 
+    @property
+    def _recording(self) -> bool:
+        return self.record_fraction > 0 and (
+            self.games_path is not None or self._game_journal is not None
+        )
+
     def _selected(self, game: GameInputs) -> bool:
-        if (
-            self.games_path is None and self._game_journal is None
-        ) or self.record_fraction == 0:
+        if not self._recording:
             return False
         # A journal enabled mid-game cannot invent earlier state digests. Keep
         # that root as diagnostic inputs; record from the next complete root.
@@ -961,67 +962,9 @@ class ScalarCapture(_Capture):
         *,
         annotation: DecisionAnnotation | dict[str, object] | None = None,
     ) -> Any:
-        self._activate_journal(env)
-        if self._game_journal is not None:
-            self._begin_boundary(
-                self._snapshot(), "step", actions=[int(action)], active=[True]
-            )
-        if self._selected(self.inputs):
-            self.inputs.digests.append(env.state_digest())
-            self.inputs.annotations.append(
-                None
-                if annotation is None
-                else DecisionAnnotation.model_validate(annotation)
-            )
-        if self.inputs.command_frame_hashes:
-            self.inputs.command_frame_hashes.append(None)
-        self.inputs.actions.append(int(action))
-        self.inputs.actor = env.current_agent_index()
-        self.inputs.frame = env.semantic_decision_frame_json()
-        with self.guard():
-            if self._game_journal is not None:
-                self._publish(self._snapshot(), "executing")
-            observation = (
-                env.observation_for_player(env.current_agent_index() or 0)
-                if self.reducers
-                else None
-            )
-            result = env.step(action)
-            from managym.replay import RecordedDecision
-
-            decision = (
-                RecordedDecision(
-                    len(self.inputs.actions) - 1,
-                    observation,
-                    action,
-                    DecisionAnnotation.model_validate(annotation)
-                    if annotation is not None
-                    else None,
-                )
-                if observation is not None
-                else None
-            )
-            self._commit(env, decision)
-            return result
-
-    def _commit(self, env: managym.Env, decision: "RecordedDecision | None") -> None:
-        """Acknowledge a returned native commitment before invoking consumers."""
-        self.inputs.committed = len(self.inputs.actions)
-        self._returned()
-        if decision is not None:
-            for reducer in self.reducers:
-                reducer.decision(decision)
-        if env.is_game_over():
-            end = GameEnd(
-                status="complete",
-                winner=env.winner_index(),
-                digest=env.state_digest() if self._selected(self.inputs) else None,
-            )
-            self._finish_reducers(env, end)
-            self._write_game(self.inputs, end)
-            self._flush_statistics()
-        if self._game_journal is not None:
-            self._publish(self._snapshot(), "ready")
+        return self._decide(
+            env, "step", int(action), lambda: env.step(action), annotation
+        )
 
     def command(
         self,
@@ -1036,57 +979,88 @@ class ScalarCapture(_Capture):
         The native executor rejects a Command with answers; a rejected or stale
         Command leaves no row, digest or reducer callback.
         """
+        execute = (
+            env.execute_semantic_command_json
+            if transition_only
+            else env.step_semantic_command
+        )
+        return self._decide(
+            env, "command", command, lambda: execute(command), annotation
+        )
+
+    def _decide(
+        self,
+        env: managym.Env,
+        operation: Literal["step", "command"],
+        chosen: int | str,
+        call: Callable[[], Any],
+        annotation: DecisionAnnotation | dict[str, object] | None,
+    ) -> Any:
+        """Retain one commitment, execute it, then acknowledge and notify."""
         from managym.replay import RecordedDecision
 
         self._activate_journal(env)
         if self._game_journal is not None:
             self._begin_boundary(
-                self._snapshot(), "command", actions=[command], active=[True]
+                self._snapshot(), operation, actions=[chosen], active=[True]
             )
-        self.inputs.actor = env.current_agent_index()
-        self.inputs.frame = env.semantic_decision_frame_json()
-        frame = DecisionFrame.from_json(self.inputs.frame)
-        commitment = Command(**json.loads(command))
+        inputs = self.inputs
         retained = (
-            DecisionAnnotation.model_validate(annotation)
-            if annotation is not None
-            else None
+            None
+            if annotation is None
+            else DecisionAnnotation.model_validate(annotation)
         )
-        if self._selected(self.inputs):
-            self.inputs.digests.append(env.state_digest())
-            self.inputs.annotations.append(retained)
-        self.inputs.command_frame_hashes.extend(
-            [None] * (len(self.inputs.actions) - len(self.inputs.command_frame_hashes))
+        commitment = (
+            chosen if isinstance(chosen, int) else Command(**json.loads(chosen))
         )
-        self.inputs.command_frame_hashes.append(
-            semantic_frame_sha256(self.inputs.frame)
-        )
-        self.inputs.actions.append(command)
-        observation = (
-            env.observation_for_player(self.inputs.actor or 0)
+        inputs.actor = env.current_agent_index()
+        inputs.frame = env.semantic_decision_frame_json()
+        if self._selected(inputs):
+            inputs.digests.append(env.state_digest())
+            inputs.annotations.append(retained)
+        # Frame hashes align with actions once any Command has been retained.
+        if isinstance(chosen, str):
+            inputs.command_frame_hashes.extend(
+                [None] * (len(inputs.actions) - len(inputs.command_frame_hashes))
+            )
+            inputs.command_frame_hashes.append(semantic_frame_sha256(inputs.frame))
+        elif inputs.command_frame_hashes:
+            inputs.command_frame_hashes.append(None)
+        inputs.actions.append(chosen)
+        decision = (
+            RecordedDecision(
+                len(inputs.actions) - 1,
+                env.observation_for_player(inputs.actor or 0),
+                commitment,
+                retained,
+                None
+                if isinstance(commitment, int)
+                else DecisionFrame.from_json(inputs.frame),
+            )
             if self.reducers
             else None
         )
         with self.guard():
             if self._game_journal is not None:
                 self._publish(self._snapshot(), "executing")
-            result = (
-                env.execute_semantic_command_json(command)
-                if transition_only
-                else env.step_semantic_command(command)
-            )
-            decision = (
-                RecordedDecision(
-                    len(self.inputs.actions) - 1,
-                    observation,
-                    commitment,
-                    retained,
-                    frame,
+            result = call()
+            # Acknowledge the returned native commitment before invoking consumers.
+            inputs.committed = len(inputs.actions)
+            self._returned()
+            if decision is not None:
+                for reducer in self.reducers:
+                    reducer.decision(decision)
+            if env.is_game_over():
+                end = GameEnd(
+                    status="complete",
+                    winner=env.winner_index(),
+                    digest=env.state_digest() if self._selected(inputs) else None,
                 )
-                if observation is not None
-                else None
-            )
-            self._commit(env, decision)
+                self._finish_reducers(env, end)
+                self._write_game(inputs, end)
+                self._flush_statistics()
+            if self._game_journal is not None:
+                self._publish(self._snapshot(), "ready")
             return result
 
 
@@ -1525,9 +1499,7 @@ class CapturedVector(_Capture):
             on and self._selected(game)
             for on, game in zip(enabled, self.games, strict=True)
         ]
-        if self.record_fraction > 0 and (
-            self.games_path is not None or self._game_journal is not None
-        ):
+        if self._recording:
             self.native.record_games(selected_games)
         digests = (
             self.native.state_digests(selected_games)

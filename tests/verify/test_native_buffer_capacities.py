@@ -17,7 +17,7 @@ from manabot.env.observation import RELATION_ROWS, ObservationEncoder
 from manabot.infra.config import ObservationConfig
 from manabot.training.rollout.producers import ShardedVectorEnv
 import managym
-from managym.recording import GameInputs, read_failure
+from managym.recording import GameInputs, read_record
 from tests.retained_decision import assert_retained_frame
 
 
@@ -77,7 +77,7 @@ def test_native_encoded_arrays_are_writable_and_independent() -> None:
 
 @pytest.mark.parametrize("capacity", [40, 41, 64])
 def test_retained_airship_growth_preserves_every_permanent(capacity: int) -> None:
-    evidence = read_failure(
+    evidence = read_record(
         Path(__file__).parents[1] / "fixtures/tla-pilot-permanent-capacity.jsonl"
     )
     assert evidence.opponent_policy == "none"
@@ -136,7 +136,7 @@ def test_retained_airship_growth_preserves_every_permanent(capacity: int) -> Non
 
 @pytest.mark.parametrize("workers", [1, 2])
 def test_retained_airship_overflow_isolates_only_its_stream(workers: int) -> None:
-    evidence = read_failure(
+    evidence = read_record(
         Path(__file__).parents[1] / "fixtures/tla-pilot-permanent-capacity.jsonl"
     )
     assert evidence.opponent_policy == "none"
@@ -249,7 +249,7 @@ def test_historical_256_offer_capture_respects_supplied_capacity(capacity: int) 
 def test_repaired_retained_prefix_has_scalar_vector_python_parity(
     capacity: int, permanents: int
 ) -> None:
-    evidence = read_failure(
+    evidence = read_record(
         Path(__file__).parents[1] / "fixtures/tla-pilot-action-capacity.jsonl"
     )
     assert evidence.opponent_policy == "none"

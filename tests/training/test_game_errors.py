@@ -42,7 +42,7 @@ from manabot.training.state.game_errors import (
 )
 from manabot.training.updates.ppo import update_iteration
 import managym
-from managym.recording import read_failure
+from managym.recording import read_record
 from tests.eval.arena_fixture import arena_fixture
 from tests.training.game_error_fixtures import (
     _bounded_fixture_replay,
@@ -155,7 +155,7 @@ def attempt(failed: bool, seed: int = 0) -> GameAttempt:
 def test_resource_limit_replay_rejects_old_schema_and_reproduces_current_boundary(
     error_class: str | None,
 ) -> None:
-    evidence = read_failure(
+    evidence = read_record(
         Path(__file__).parents[1] / "fixtures/tla-pilot-permanent-capacity.jsonl"
     )
     (game,) = evidence.games

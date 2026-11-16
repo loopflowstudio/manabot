@@ -104,14 +104,23 @@ def test_vector_record_replays_scalar(tmp_path: Path) -> None:
     assert replay.stop is not None and replay.stop.status == "interrupted"
 
 
-def test_evidence_warns_and_returns_the_cached_snapshot() -> None:
-    import pytest
+def test_deprecated_names_warn_and_read_the_same_record(tmp_path: Path) -> None:
+    from managym.recording import FailureEvidence, read_failure
 
     capture = ScalarCapture(seed=7)
     with pytest.warns(DeprecationWarning, match="snapshot.*0.4.0"):
         assert capture.evidence().model_dump(
             exclude={"seconds"}
         ) == capture.snapshot().model_dump(exclude={"seconds"})
+    row = capture.snapshot().model_dump(mode="json", by_alias=True)
+    with pytest.warns(DeprecationWarning, match="GameRecord.*0.4.0"):
+        FailureEvidence.model_validate(row)
+    path = tmp_path / "record.jsonl"
+    capture.games_path = path
+    capture.reset(managym.Env(seed=7), players())
+    capture.close()
+    with pytest.warns(DeprecationWarning, match="read_record.*0.4.0"):
+        assert read_failure(path) == read_record(path)
 
 
 def test_snapshot_admission_keeps_each_stream_boundary(tmp_path: Path) -> None:

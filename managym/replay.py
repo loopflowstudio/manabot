@@ -31,6 +31,7 @@ from managym.recording import (
     runtime_identities,
     semantic_frame_sha256,
 )
+from managym.statistics import reduce_cards
 
 
 @dataclass(frozen=True)
@@ -581,8 +582,6 @@ def main() -> None:
             assert replay.stop is not None
             result = {**asdict(replay.stop), "build_differs": replay.build_differs}
             if args.statistics:
-                from managym.statistics import reduce_cards
-
                 result["statistics"] = {
                     "terminal": replay.stop.status == "complete",
                     "winner": replay.stop.winner,

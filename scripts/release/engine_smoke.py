@@ -12,7 +12,7 @@ from tempfile import TemporaryDirectory
 
 import managym
 from managym.decision import Command
-from managym.recording import ScalarCapture, read_failure
+from managym.recording import ScalarCapture, read_record
 from managym.replay import replay_failure_inputs, require_replay_runtime
 
 
@@ -46,7 +46,7 @@ capture.step(Interrupted(), 0)
         timeout=30,
     )
     assert child.returncode == 73, child.stderr
-    evidence = read_failure(path)
+    evidence = read_record(path)
     assert evidence.boundary is not None
     assert evidence.boundary.phase == "executing" and not evidence.boundary.returned
     require_replay_runtime(
@@ -115,7 +115,7 @@ def main() -> None:
         )
         capture.step(recorded, 0)
         assert recorded.statistics() is not None
-        evidence = read_failure(Path(directory) / "private" / "game.jsonl")
+        evidence = read_record(Path(directory) / "private" / "game.jsonl")
         require_replay_runtime(
             evidence.identities, allow_changed_runtime=False, require_source=True
         )
