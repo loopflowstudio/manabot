@@ -16,15 +16,14 @@ import managym
 
 def _players(
     disclosure: Literal["open", "closed"] = "closed",
-) -> list[managym.PlayerConfig]:
-    return [
-        managym.PlayerConfig(
-            "a", {"Mountain": 8, "Gray Ogre": 4}, disclosure=disclosure
-        ),
-        managym.PlayerConfig(
-            "b", {"Island": 8, "Wind Drake": 4}, disclosure=disclosure
-        ),
-    ]
+) -> managym.GameSetup:
+    return managym.GameSetup(
+        [
+            managym.PlayerConfig("a", {"Mountain": 8, "Gray Ogre": 4}),
+            managym.PlayerConfig("b", {"Island": 8, "Wind Drake": 4}),
+        ],
+        decklists=disclosure,
+    )
 
 
 def _step_buffers(space: ObservationSpace, size: int) -> dict[str, np.ndarray]:
@@ -83,7 +82,8 @@ def test_fixed_seat_scalar_parity_and_unchanged_execution(
     vector.reset_all_into_buffers(players)
     scalars = [managym.Env(seed=42 + slot) for slot in range(2)]
     for scalar in scalars:
-        scalar.reset(players)
+        observation, _ = scalar.reset(players)
+        assert observation.decklists_open is (disclosure == "open")
     buffers = space.encoder.allocate(2)
     try:
         for _ in range(6):

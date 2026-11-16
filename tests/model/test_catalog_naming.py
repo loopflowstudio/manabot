@@ -33,21 +33,21 @@ class NamingTrace:
     actions: tuple[int, ...]
 
 
-def _players() -> list[managym.PlayerConfig]:
-    return [
-        managym.PlayerConfig(
-            "Hero", {"Swamp": 24, "The Rise of Sozin": 12}, disclosure="closed"
-        ),
-        managym.PlayerConfig(
-            "Villain", {"Plains": 20, "Gray Ogre": 20}, disclosure="closed"
-        ),
-    ]
+def _players() -> managym.GameSetup:
+    return managym.GameSetup(
+        [
+            managym.PlayerConfig("Hero", {"Swamp": 24, "The Rise of Sozin": 12}),
+            managym.PlayerConfig("Villain", {"Plains": 20, "Gray Ogre": 20}),
+        ],
+        decklists="closed",
+    )
 
 
 @pytest.fixture(scope="module")
 def naming_trace() -> NamingTrace:
     env = managym.Env(seed=165)
-    env.reset(_players())
+    observation, _ = env.reset(_players())
+    assert observation.decklists_open is False
     actions: list[int] = []
     cast = False
     for ordinal in range(200):

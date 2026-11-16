@@ -96,19 +96,15 @@ class IndependentSession:
 def _game(*, closed: bool = False) -> tuple[managym.Env, managym.Observation]:
     engine = managym.Env(seed=42)
     observation, _ = engine.reset(
-        [
-            managym.PlayerConfig(
-                "a",
-                {"Mountain": 12, "Gray Ogre": 12},
-                disclosure="closed" if closed else "open",
-            ),
-            managym.PlayerConfig(
-                "b",
-                {"Forest": 12, "Llanowar Elves": 12},
-                disclosure="closed" if closed else "open",
-            ),
-        ]
+        managym.GameSetup(
+            [
+                managym.PlayerConfig("a", {"Mountain": 12, "Gray Ogre": 12}),
+                managym.PlayerConfig("b", {"Forest": 12, "Llanowar Elves": 12}),
+            ],
+            decklists="closed" if closed else "open",
+        )
     )
+    assert observation.decklists_open is (not closed)
     return engine, observation
 
 

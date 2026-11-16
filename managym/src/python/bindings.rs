@@ -5425,10 +5425,7 @@ fn warn_disclosure(py: Python<'_>) -> PyResult<()> {
 pub(crate) fn game_setup(value: &Bound<'_, PyAny>) -> PyResult<crate::state::player::GameSetup> {
     use crate::state::player::{DecklistMode, GameSetup};
     let players: Vec<PyPlayerConfig> = value.extract()?;
-    let hints: Vec<_> = players
-        .iter()
-        .map(|p| p.legacy_disclosure.unwrap_or_default())
-        .collect();
+    let hints: Vec<_> = players.iter().filter_map(|p| p.legacy_disclosure).collect();
     if hints.windows(2).any(|pair| pair[0] != pair[1]) {
         return Err(PyValueError::new_err(
             "deprecated per-seat disclosure values disagree",
@@ -5453,6 +5450,17 @@ pub(crate) fn game_setup(value: &Bound<'_, PyAny>) -> PyResult<crate::state::pla
             DecklistDisclosure::Closed => DecklistMode::Closed,
         }
     };
+    if hints.iter().any(|hint| {
+        !matches!(
+            (hint, decklists),
+            (DecklistDisclosure::Open, DecklistMode::Open)
+                | (DecklistDisclosure::Closed, DecklistMode::Closed)
+        )
+    }) {
+        return Err(PyValueError::new_err(
+            "deprecated per-seat disclosure conflicts with GameSetup.decklists",
+        ));
+    }
     Ok(GameSetup {
         players: players.into_iter().map(PlayerConfig::from).collect(),
         decklists,

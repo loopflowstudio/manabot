@@ -275,9 +275,79 @@ def test_public_reveal_then_departure_updates_closed_known_hand() -> None:
 def test_deprecated_seat_disclosure_rejects_disagreement() -> None:
     with pytest.warns(DeprecationWarning, match="0.4.0"):
         first = managym.PlayerConfig("first", {"Island": 12}, disclosure="closed")
-    second = managym.PlayerConfig("second", {"Mountain": 12})
+    with pytest.warns(DeprecationWarning, match="0.4.0"):
+        second = managym.PlayerConfig("second", {"Mountain": 12}, disclosure="open")
     with pytest.raises(ValueError, match="per-seat disclosure values disagree"):
         managym.Env(seed=7).reset([first, second])
+
+
+@pytest.mark.parametrize(
+    ("hint", "decklists"),
+    [("closed", "open"), ("open", "closed"), ("closed", "mixed"), ("open", "mixed")],
+)
+def test_deprecated_seat_disclosure_rejects_game_conflict(
+    hint: Decklists,
+    decklists: Literal["open", "closed", "mixed"],
+) -> None:
+    with pytest.warns(DeprecationWarning, match="0.4.0"):
+        first = managym.PlayerConfig("first", {"Island": 12}, disclosure=hint)
+    with pytest.warns(DeprecationWarning, match="0.4.0"):
+        second = managym.PlayerConfig("second", {"Mountain": 12}, disclosure=hint)
+    # Omission exercises the constructor's ordinary open default.
+    setup = (
+        managym.GameSetup([first, second])
+        if decklists == "open"
+        else managym.GameSetup([first, second], decklists=decklists)
+    )
+    with pytest.raises(ValueError, match="conflicts with GameSetup.decklists"):
+        managym.Env(seed=7).reset(setup)
+    with pytest.raises(ValueError, match="conflicts with GameSetup.decklists"):
+        managym.VectorEnv(num_envs=1, seed=7).reset_all(setup)
+
+
+@pytest.mark.parametrize("hint", ["open", "closed"])
+@pytest.mark.parametrize("hinted_seat", [0, 1])
+def test_deprecated_seat_disclosure_ignores_unset_hints(
+    hint: Decklists,
+    hinted_seat: int,
+) -> None:
+    players = [
+        managym.PlayerConfig("first", {"Island": 12}),
+        managym.PlayerConfig("second", {"Mountain": 12}),
+    ]
+    with pytest.warns(DeprecationWarning, match="0.4.0"):
+        players[hinted_seat].disclosure = hint
+    for setup in (players, managym.GameSetup(players, decklists=hint)):
+        observation, _ = managym.Env(seed=7).reset(setup)
+        assert observation.decklists_open is (hint == "open")
+        ((observation, _),) = managym.VectorEnv(num_envs=1, seed=7).reset_all(setup)
+        assert observation.decklists_open is (hint == "open")
+
+
+@pytest.mark.parametrize("decklists", ["closed", "mixed"])
+def test_game_setup_rewrap_preserves_disclosure(
+    decklists: Literal["closed", "mixed"],
+) -> None:
+    original = managym.GameSetup(
+        [managym.PlayerConfig(name, {"Island": 40}) for name in ("a", "b")],
+        decklists=decklists,
+    )
+    wrapped = managym.GameSetup(original)
+    assert wrapped.decklists == decklists
+    assert wrapped.players == original.players
+    assert managym.GameSetup(original, decklists="open").decklists == "open"
+    assert managym.GameSetup(list(original)).decklists == "open"
+    modes: set[bool] = set()
+    for seed in range(8):
+        expected = managym.resolve_decklists(original, seed) == "open"
+        observation, _ = managym.Env(seed=seed).reset(wrapped)
+        assert observation.decklists_open is expected
+        ((observation, _),) = managym.VectorEnv(num_envs=1, seed=seed).reset_all(
+            wrapped
+        )
+        assert observation.decklists_open is expected
+        modes.add(expected)
+    assert modes == ({False} if decklists == "closed" else {False, True})
 
 
 @pytest.mark.parametrize("viewer", [0, 1])

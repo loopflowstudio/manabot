@@ -384,9 +384,9 @@ class VectorEnv:
     def hand_snapshots(self, players: list[int]) -> list[HandSnapshot]:
         """One native seat per slot; after done, snapshots describe the reset game."""
     def current_action_summaries(self) -> list[tuple[int, str]]: ...
-    def set_uniform_roster(self, roster: GameSetup | list[PlayerConfig]) -> None: ...
+    def set_uniform_roster(self, roster: Sequence[PlayerConfig]) -> None: ...
     def set_training_decks(
-        self, decks: GameSetup | list[PlayerConfig], distinct: bool = True
+        self, decks: Sequence[PlayerConfig], distinct: bool = True
     ) -> None: ...
     def current_player_configs(self) -> list[GameSetup]:
         """Current games with resolved open/closed disclosure, never mixed."""
@@ -1121,7 +1121,7 @@ class GameSetup(Sequence[PlayerConfig]):
         self,
         players: Sequence[PlayerConfig],
         *,
-        decklists: Literal["open", "closed", "mixed"] = "open",
+        decklists: Literal["open", "closed", "mixed"] | None = None,
     ) -> None: ...
     def __len__(self) -> int: ...
     @overload

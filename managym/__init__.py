@@ -57,7 +57,7 @@ learning_record_names = _deprecated_alias(
 
 @dataclass(frozen=True, init=False)
 class GameSetup(Sequence[_managym.PlayerConfig]):
-    """Read-only seats and one game disclosure; slices preserve disclosure.
+    """Read-only seats and one game disclosure; slices and re-wraps preserve it.
 
     Native reset resolves mixed 50/50 from the reset seed, independently of
     deck and shuffle draws. Iterating exposes seats, not a complete game setup.
@@ -70,8 +70,10 @@ class GameSetup(Sequence[_managym.PlayerConfig]):
         self,
         players: Sequence[_managym.PlayerConfig],
         *,
-        decklists: Literal["open", "closed", "mixed"] = "open",
+        decklists: Literal["open", "closed", "mixed"] | None = None,
     ) -> None:
+        if decklists is None:
+            decklists = players.decklists if isinstance(players, GameSetup) else "open"
         if decklists not in ("open", "closed", "mixed"):
             raise ValueError("decklists must be open, closed or mixed")
         object.__setattr__(self, "players", tuple(players))
