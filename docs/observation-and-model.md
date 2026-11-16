@@ -574,8 +574,25 @@ model = ModelConfig(
 )
 ```
 
-Use this model configuration in your training regime, with its matching
-observation configuration. The policy receives the whole game's viewer-safe
+Use this model configuration in your training regime. The regime must also
+declare the log's capacities and bounded execution rows, or validation names
+the missing fields:
+
+```python
+from manabot.infra.config import ObservationConfig
+
+observation = ObservationConfig(
+    max_opponent_records=1024,
+    max_opponent_details=1_048_576,
+)
+# On each self-play stage:
+stage.execution.collection_rows = 2
+stage.execution.bootstrap_rows = 2
+stage.execution.learner_rows = 2
+```
+
+These are the census-sized capacities; a game that exceeds them stops with a
+typed capacity error rather than dropping records. The policy receives the whole game's viewer-safe
 opponent decision records at each decision. For example, a pass with mana open
 and a card in hand remains available after later turns; a recent-event window
 can lose that context. The encoder produces summary tokens that join the board

@@ -27,7 +27,11 @@ from managym.decision_capture import (
     PlayerReference,
     UnavailableReference,
 )
-from managym.opponent_memory import read_records
+from managym.opponent_memory import (
+    DecisionReference,
+    OpponentDecisionRecord,
+    read_records,
+)
 
 REPRESENTATION_VERSION = "manabot-text-7"
 _ZONES = ("library", "hand", "battlefield", "graveyard", "stack", "exile", "command")
@@ -1225,38 +1229,7 @@ class _Renderer:
             )
         if not capture.history.rows:
             lines.append("Empty." if capture.history.capacity else "History disabled.")
-        memory = read_records(state.opponent_memory_json())
-        if memory:
-            lines += [
-                "",
-                "Opponent decisions, chronological whole-game viewer history:",
-            ]
-            for record in memory:
-                context = record.context
-                choice = record.choice
-                names = ", ".join(
-                    reference.name or "unavailable" for reference in choice.references
-                )
-                lines.append(
-                    f"{record.ordinal + 1}. Turn {context.turn}, step {context.step}: {record.kind}; "
-                    f"life {context.life}, hand sizes {context.hand}, board counts (total/tapped/land/creature/artifact/enchantment/planeswalker/battle) {context.board_counts}; "
-                    f"choice {choice.kind or 'unavailable'}, mode {choice.mode}, ability {choice.ability}, "
-                    f"named {choice.named}, declared {choice.declared}; "
-                    f"subjects [{names}]; count {record.count}, span {record.first_position}..{record.last_position}."
-                )
-                for label, references in (
-                    ("Untapped mana source at choice", context.mana_sources),
-                    ("Response", record.response),
-                    ("Chosen subjects", choice.references),
-                ):
-                    for reference in references:
-                        lines.append(
-                            f"  {label}: {reference.name or 'unavailable'}; role {reference.role}; "
-                            f"P/T {reference.power}/{reference.toughness}; tapped {reference.tapped}, "
-                            f"ready {reference.ready}, attacking {reference.attacking}, blocking {reference.blocking}; "
-                            f"untapped mana alternatives W/U/B/R/G/C {reference.mana}; "
-                            f"effective rules snapshot {reference.description or 'unavailable'}."
-                        )
+        lines.extend(_memory_lines(read_records(state.opponent_memory_json())))
         if capture.frames:
             lines += ["", "Current stack and continuation relations:"]
             lines.extend(
@@ -1284,6 +1257,111 @@ class _Renderer:
             actions.append(TextAction(reference, description, command))
             lines.append(f"{reference} — {description}.")
         return "\n".join(lines) + "\n", tuple(actions)
+
+
+_MEMORY_ROLES = ("none", "You", "Opponent")
+
+
+def _production(alternative: tuple[int, int, int, int, int, int]) -> str:
+    symbols = "".join(
+        f"{{{symbol}}}" * count for symbol, count in zip("WUBRGC", alternative)
+    )
+    return symbols or "nothing"
+
+
+def _memory_reference(reference: DecisionReference, snapshot: str) -> str:
+    status = ", ".join(
+        label
+        for label, value in (
+            ("tapped", reference.tapped),
+            ("ready", reference.ready),
+            ("attacking", reference.attacking),
+            ("blocking", reference.blocking),
+        )
+        if value
+    )
+    mana = " or ".join(_production(m) for m in reference.mana) or "none"
+    return (
+        f"{reference.name or 'unavailable'} ({snapshot}; role "
+        f"{_MEMORY_ROLES[reference.role]}; P/T {reference.power}/"
+        f"{reference.toughness}; status {status or 'none'}; untapped mana {mana})"
+    )
+
+
+def _memory_lines(memory: list[OpponentDecisionRecord]) -> list[str]:
+    """Whole-game opponent records with each historical snapshot printed once.
+
+    A log repeats the same untapped sources at many choices; printing each
+    snapshot beside every reference grew a prompt by kilobytes per record.
+    Aliases keep every snapshot exactly while bounding repetition.
+    """
+    if not memory:
+        return []
+    snapshots: dict[str, str] = {}
+
+    def alias(reference: DecisionReference) -> str:
+        if not reference.description:
+            return "rules snapshot unavailable"
+        return snapshots.setdefault(reference.description, f"H{len(snapshots) + 1}")
+
+    records: list[str] = []
+    for record in memory:
+        context, choice = record.context, record.choice
+        selectors = "".join(
+            f", {label} {value}"
+            for label, value in (
+                ("mode", choice.mode),
+                ("ability", choice.ability),
+                ("named", choice.named),
+                ("declared", choice.declared),
+            )
+            if value is not None
+        )
+        board = "; ".join(
+            f"{role} {'/'.join(map(str, counts))}"
+            for role, counts in zip(("You", "Opponent"), context.board_counts)
+        )
+        records.append(
+            f"{record.ordinal + 1}. Turn {context.turn}, step {context.step}: "
+            f"{record.kind}, choice {choice.kind or 'unavailable'}{selectors}; "
+            f"count {record.count}, span {record.first_position}..{record.last_position}; "
+            f"life You {context.life[0]}, Opponent {context.life[1]}; "
+            f"hand You {context.hand[0]}, Opponent {context.hand[1]}; board {board}."
+        )
+        for label, references in (
+            ("Untapped mana sources at choice", context.mana_sources),
+            ("Response", record.response),
+            ("Chosen subjects", choice.references),
+        ):
+            # Consecutive equal snapshots (three untapped Forests) print once.
+            groups: list[tuple[str, int]] = []
+            for reference in references:
+                text = _memory_reference(reference, alias(reference))
+                if groups and groups[-1][0] == text:
+                    groups[-1] = (text, groups[-1][1] + 1)
+                else:
+                    groups.append((text, 1))
+            if groups:
+                records.append(
+                    f"  {label}: "
+                    + "; ".join(
+                        text if count == 1 else f"{count}× {text}"
+                        for text, count in groups
+                    )
+                    + "."
+                )
+    return [
+        "",
+        "Opponent decisions, chronological whole-game viewer history "
+        "(board counts are total/tapped/land/creature/artifact/enchantment/"
+        "planeswalker/battle; role is the viewer-relative controller, or owner "
+        "off the battlefield; P/T is effective on the battlefield and 0/0 "
+        "elsewhere; H aliases name effective rules snapshots at that choice):",
+        *records,
+        "",
+        "Historical rules snapshots:",
+        *(f"{key} — {description}" for description, key in snapshots.items()),
+    ]
 
 
 def render_decision(capture_json: str, *, max_bytes: int = 262_144) -> TextDecision:

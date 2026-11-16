@@ -48,9 +48,9 @@ from manabot.sim.rollout import BatchedSampler, RandomBatchController, allocate_
 from manabot.training.regime import Learning
 from manabot.training.rollout.actions import ACTION_FIELDS, PackedActions
 from manabot.training.rollout.collection import (
+    ObservationRows,
     RecordedObservations,
     RolloutBatch,
-    _ObservationRows,
 )
 from manabot.training.rollout.matchups import elemental_roster
 from manabot.training.rollout.producers import ShardedVectorEnv
@@ -593,7 +593,7 @@ def independent_measure(
     # Use the production recorder, including legal action fields for later
     # resampling. It excludes the dense history axes exactly as collection does.
     floor_rows = streams * floor
-    recorded = _ObservationRows(
+    recorded = ObservationRows(
         buffers, list(space.keys()), floor_rows + floor_rows // 4
     )
     native = ShardedVectorEnv(streams, 39101, 4)

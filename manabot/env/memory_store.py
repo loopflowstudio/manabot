@@ -120,10 +120,11 @@ def select_rows(
     rows: Mapping[str, np.ndarray], indexes: np.ndarray
 ) -> dict[str, np.ndarray]:
     """Select ordinary fields and prefix references before any dense gather."""
-    selected = {k: v[indexes] for k, v in rows.items() if k not in MEMORY_FIELDS}
     if isinstance(rows, PrefixObservation):
         return PrefixObservation(
-            selected, [rows.prefixes[int(i)] for i in indexes], rows.memory_capacities
+            {k: v[indexes] for k, v in rows.items() if k not in MEMORY_FIELDS},
+            [rows.prefixes[int(i)] for i in indexes],
+            rows.memory_capacities,
         )
     return {k: v[indexes] for k, v in rows.items()}
 
@@ -301,18 +302,28 @@ def archive_memory(
     prefixes: Sequence[Prefix], capacities: tuple[int, int]
 ) -> MemoryArchive:
     """Build reference tables; chunk arrays are immutable views, never expanded."""
-    chunks = {c.key: c for p in prefixes for c in (*p.records, *p.details)}
-    keys = tuple(chunks)
-    indexes = {key: index for index, key in enumerate(keys)}
-    offsets = np.array([0, *np.cumsum([p.record_count for p in prefixes])], np.int64)
+    chunks: dict[str, Chunk] = {}
+    indexes: dict[str, int] = {}
+    offsets = [0]
+    records: list[int] = []
+    details: list[int] = []
+    # Visit each prefix once; both reference tables use the same chunk index.
+    for prefix in prefixes:
+        for record, detail in prefix.chunks():
+            for chunk, references in ((record, records), (detail, details)):
+                if chunk.key not in indexes:
+                    indexes[chunk.key] = len(chunks)
+                    chunks[chunk.key] = chunk
+                references.append(indexes[chunk.key])
+        offsets.append(len(records))
     return MemoryArchive(
         capacities,
         tuple(p.identity for p in prefixes),
-        keys,
-        tuple(chunks[key].rows for key in keys),
-        offsets,
-        np.array([indexes[c.key] for p in prefixes for c in p.records], np.int64),
-        np.array([indexes[c.key] for p in prefixes for c in p.details], np.int64),
+        tuple(chunks),
+        tuple(chunk.rows for chunk in chunks.values()),
+        np.array(offsets, np.int64),
+        np.array(records, np.int64),
+        np.array(details, np.int64),
     )
 
 
@@ -354,12 +365,10 @@ def restore_memory(archive: MemoryArchive) -> tuple[Prefix, ...]:
             archive.records[start:stop], archive.details[start:stop], strict=True
         ):
             record, detail = chunks[int(record_index)], chunks[int(detail_index)]
+            if record.rows.shape != (1, 18) or detail.rows.shape[1] != 8:
+                raise ValueError("invalid opponent-memory chunk role")
             tail = store._append(tail, record, detail)
         prefix = Prefix(identity, tail)
-        if any(c.rows.shape != (1, 18) for c in prefix.records) or any(
-            c.rows.shape[1] != 8 for c in prefix.details
-        ):
-            raise ValueError("invalid opponent-memory chunk role")
         if (
             prefix.record_count > archive.capacities[0]
             or prefix.detail_count > archive.capacities[1]

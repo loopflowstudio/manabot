@@ -25,7 +25,7 @@ from manabot.training.updates.backend import (
     PPOPolicy,
     ppo_rl,
 )
-from manabot.training.updates.damped_policy import bootstrap_predictions
+from manabot.training.updates.bootstrap import bootstrap_predictions
 from manabot.training.updates.health import (
     OptimizerHealth,
     batch_health,

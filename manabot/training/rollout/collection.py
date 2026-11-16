@@ -97,7 +97,7 @@ OPPONENT_MODES = ("random", "frozen", "self", "learning")
 # -----------------------------------------------------------------------------
 
 
-class _ObservationRows:
+class ObservationRows:
     """One update's recorded non-action observation rows, each copied once.
 
     Recording copies a step's sampled rows from the native buffers straight into
@@ -186,7 +186,7 @@ class _ObservationRows:
 class _Pending:
     """A decision awaiting its reward at the same seat's next turn or game end."""
 
-    obs_row: int  # Row in this update's _ObservationRows.
+    obs_row: int  # Row in this update's ObservationRows.
     action: int
     logprob: float
     value: float
@@ -634,7 +634,7 @@ class SeatRoutedCollector:
             self._observation_keys = [
                 key for key in self.observation_space.shapes if key not in ACTION_FIELDS
             ]
-            self._observations = _ObservationRows(
+            self._observations = ObservationRows(
                 self._buffers, self._observation_keys, 0
             )
             self._memory_store = (
@@ -785,8 +785,9 @@ class SeatRoutedCollector:
             actual_prefixes = self._capture_memory(np.arange(self.num_envs))
             if len(expected_prefixes) != len(actual_prefixes) or any(
                 expected.identity != actual.identity
-                or [c.key for c in expected.records] != [c.key for c in actual.records]
-                or [c.key for c in expected.details] != [c.key for c in actual.details]
+                # Each tail hashes its predecessor and both exact chunk keys.
+                or (expected.tail.key if expected.tail else None)
+                != (actual.tail.key if actual.tail else None)
                 for expected, actual in zip(
                     expected_prefixes, actual_prefixes, strict=True
                 )
@@ -999,7 +1000,7 @@ class SeatRoutedCollector:
                 else num_steps * (num_envs if complete_games else len(self._streams))
             )
             rows = max(self._observations.rows, floor)
-            self._observations = _ObservationRows(
+            self._observations = ObservationRows(
                 self._buffers, self._observation_keys, rows + rows // 4
             )
         while True:

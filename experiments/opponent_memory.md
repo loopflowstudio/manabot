@@ -272,11 +272,12 @@ collection, selected gathers, bootstrap and recovery. Bootstrap retains prefixes
 without keeping padded memory through the update. The original controlled proof
 combined host and device bytes; the new proof separates them and establishes
 finite one-row CPU execution, not pilot fit.
-Collection, frozen-opponent and bootstrap inference still materialize every
-selected prefix at once; explicit execution row limits must bound them, with
-output and gradient parity, before sizing. Then calibrate those row sizes with
-separate host RSS and CUDA peaks before concrete job wiring; record any
-workload choice here. Preserve every record and typed overflow.
+Collection, frozen-opponent, bootstrap and learner execution now use explicit
+2/2/2 row limits with output and gradient parity. The independent CPU cohort's
+27.33 GiB host peak covers its recorded histories and one logical minibatch;
+it does not admit an on-policy CUDA worker. Measure separate host RSS and CUDA
+peaks, worker/update and checkpoint reload before job wiring and horizon
+calibration. Preserve every record and typed overflow.
 Do not adopt memory or remove recent events. This report launches no new run.
 
 Evidence that would change this recommendation is a measured comparison at
@@ -521,7 +522,8 @@ submitting another chunk. No history capacity or logical workload changed.
 
 Command: `uv run --no-sync python scripts/verify_opponent_memory_storage.py --source experiments/data/opponent-memory/20261116-census/summary.json --out experiments/data/opponent-memory/20261116-execution-final/receipt.json --collection-rows 2 --bootstrap-rows 2 --learner-rows 2`.
 The [execution receipt](data/opponent-memory/20261116-execution-final/receipt.json) is
-manifest-backed; all 16 recorded source hashes match the measured source.
+manifest-backed; all 16 recorded source hashes matched the measured source at
+that checkpoint.
 The earlier census, storage and bootstrap receipts remain unchanged. The
 preliminary `20261116-execution/receipt.json` is retained too; the final receipt
 repeats execution after correcting source docstrings for the chunked boundary.
@@ -648,7 +650,8 @@ throughput result, and the observed host fit does not guarantee learned-game fit
 Both attempts are manifest-backed. Each source patch reconstructs its measured
 checkout from `b859eb68dd41f09f16f790a887b6e1a70c05f56e`; companion source metadata
 records patch, lock and native-extension hashes. All seven source hashes in the
-successful receipt match the checkout. Earlier receipts remain unchanged. No
+successful receipt matched the checkout at that measurement checkpoint. Earlier
+receipts remain unchanged. No
 rental, paid calibration, learning pilot or evaluation ran. Etude job construction
 stays stopped pending CUDA peaks, the ordinary worker/update, checkpoint reload
 and matched-decision horizon calibration.

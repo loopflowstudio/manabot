@@ -282,12 +282,12 @@ class PPOPolicy(Policy, Protocol):
 
 
 class Learner(BackendLearner, Protocol):
+    """The policy, its optimizer and profiler, as an update steps them."""
+
     execution_rows: int | None
     bootstrap_rows: int | None
 
     def accumulate(self, loss: Array, *, first: bool) -> None: ...
-
-    """The policy, its optimizer and profiler, as an update steps them."""
 
     @property
     def agent(self) -> Policy: ...

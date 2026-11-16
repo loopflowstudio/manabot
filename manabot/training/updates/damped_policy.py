@@ -37,6 +37,7 @@ from manabot.training.updates.backend import (
     UpdateBackend,
     categorical_rl,
 )
+from manabot.training.updates.bootstrap import bootstrap_predictions
 from manabot.training.updates.health import (
     OptimizerHealth,
     batch_health,
@@ -111,20 +112,6 @@ def minibatch_objective(
     policy_loss = policy_loss * policy_weight
     value_loss = value_loss * value_weight
     return policy_loss + rl.float64_operand(value_loss), policy_loss, value_loss
-
-
-def bootstrap_predictions(
-    backend: UpdateBackend, learner: Learner, admitted: AdmittedRollout, policy: Policy
-) -> Array:
-    """Preserve trajectory order; only raw critic predictions survive each chunk."""
-    outputs: list[np.ndarray] = []
-    size = learner.bootstrap_rows or len(admitted.batch.next_done)
-    for obs in admitted.next_observations(learner.device, size):
-        with learner.forward_precision():
-            _, values = policy.forward_distribution(obs)
-        outputs.append(backend.arrays.to_numpy(backend.arrays.float32(values)))
-        del obs, values
-    return backend.arrays.from_numpy(np.concatenate(outputs), learner.device)
 
 
 def compute_targets(

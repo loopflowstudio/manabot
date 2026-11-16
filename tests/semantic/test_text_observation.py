@@ -3,10 +3,12 @@
 from hashlib import sha256
 import json
 from pathlib import Path
+import random
 
 import numpy as np
 import pytest
 
+from manabot.env.match import Match
 from manabot.env.observation import (
     CARD_PERMISSION_INDEX,
     PERMANENT_ONCE_EACH_TURN_INDEX,
@@ -28,6 +30,7 @@ from manabot.verify.text_observation import collision_branches, priority_root, r
 import managym
 from managym.decision import SemanticContractError
 from managym.decision_capture import DecisionInput
+from managym.opponent_memory import read_records
 
 
 def test_every_native_decision_code_has_a_label() -> None:
@@ -1347,3 +1350,35 @@ def test_shared_mill_selection_reaches_text_commands_and_both_encoders() -> None
             submit_response(branch, captured, action.reference)
     assert len(outcomes) >= 2
     assert env.state_digest() == before
+
+
+def test_opponent_memory_text_lists_every_record_and_snapshot_once() -> None:
+    # A whole-game log repeats the same untapped sources at many choices; the
+    # prompt must keep every record without repeating their rules snapshots,
+    # or ordinary games pass the default budget after about 120 decisions.
+    env = managym.Env(seed=0)
+    env.reset(Match().to_rust())
+    rng = random.Random(0)
+    for _ in range(160):
+        env.step(rng.randrange(env.action_count()))
+    viewer = env.current_agent_index()
+    memory = read_records(env.observation_for_player(viewer).opponent_memory_json())
+    text = capture_text_decision(env).text
+    history, snapshots = text.split("Opponent decisions, chronological")[1].split(
+        "Historical rules snapshots:\n"
+    )
+    numbered = [line for line in history.splitlines() if line[:1].isdigit()]
+    assert len(numbered) == len(memory) > 50
+    described = {
+        reference.description
+        for record in memory
+        for reference in (
+            *record.context.mana_sources,
+            *record.response,
+            *record.choice.references,
+        )
+        if reference.description
+    }
+    table = snapshots.split("\n\n")[0].splitlines()
+    assert sorted(line.split(" — ", 1)[1] for line in table) == sorted(described)
+    assert all(text.count(description) == 1 for description in described)

@@ -11,13 +11,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
+from etude.jobs import ExperimentState
 from etude.report import Curve, Matches, Matrix, Ranking, Report, Score
-
-if TYPE_CHECKING:
-    from etude.jobs import ExperimentState
-    from etude.launch.records import Job, Run
+from etude.spec import Job, RunRequest
 
 
 @dataclass(frozen=True)
@@ -165,18 +163,17 @@ def census(path: Path) -> Census:
     )
 
 
-def runs(revision: str) -> list[Run]:
-    """Stop before job construction until the shared memory software ships."""
+def training_jobs(revision: str) -> list[RunRequest]:
+    """Stop before allocation until CUDA admission and calibration are complete."""
     raise RuntimeError(
-        "Opponent-memory resource sizing is not ready at the measured pilot size. "
-        "Immutable prefix storage is implemented, but the controlled census-max "
-        "256-row gather/prefetch/device envelope exceeds the declared 40 GiB. "
-        "Calibrate an explicit batch size and wire jobs before allocating training. "
+        "Opponent-memory CUDA peaks, worker/update and checkpoint-reload admission "
+        "remain unmeasured at 2/2/2 execution limits. Calibrate a common learner-"
+        "decision horizon and wire jobs before allocating training. "
         "See experiments/opponent_memory.md."
     )
 
 
-def eval(state: ExperimentState) -> list[Job]:
+def eval_jobs(state: ExperimentState) -> list[Job]:
     """Stop rather than score unmatched updates as matched learner decisions."""
     raise RuntimeError(
         "Wire paired Elemental 10x10 evaluation to retained learner-decision "

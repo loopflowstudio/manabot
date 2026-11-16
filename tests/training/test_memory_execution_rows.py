@@ -43,10 +43,8 @@ from manabot.training.rollout.collection import (
     RolloutBatch,
     SeatRoutedCollector,
 )
-from manabot.training.updates.damped_policy import (
-    bootstrap_predictions,
-    update_damped_iteration,
-)
+from manabot.training.updates.bootstrap import bootstrap_predictions
+from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
 import managym
 from tests.model.test_opponent_memory import memory_input, policy
