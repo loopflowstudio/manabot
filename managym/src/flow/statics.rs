@@ -128,8 +128,6 @@ pub(crate) struct DerivedCache {
     /// Indexed by PermanentId, as are the authoritative permanent slots.
     characteristics: Vec<Option<Arc<Characteristics>>>,
     pub(super) trigger_index: Option<Arc<TriggerIndex>>,
-    /// Layered permission, shared by knowledge updates and viewer projections.
-    pub(super) library_top_visibility: [Option<bool>; 2],
     /// Live `BoardScan`s of this game; a fork starts with none.
     #[cfg(debug_assertions)]
     scans: ScanCount,
@@ -167,6 +165,8 @@ impl Drop for BoardScan<'_> {
 #[derive(Debug, PartialEq)]
 struct LayerBoard {
     objects: Vec<Option<Arc<Characteristics>>>,
+    /// Layered permissions for both seats, computed during the board's scan.
+    library_top_visibility: [bool; 2],
     reads_mana: bool,
     reads_tapped: bool,
     /// Finalization can inspect state beyond the raw layer view. Ordinary
@@ -213,7 +213,6 @@ impl DerivedCache {
             self.trigger_index = None;
         }
         if board_changed {
-            self.library_top_visibility = [None; 2];
             self.board = None;
         }
         self.revisions = revisions;
@@ -222,21 +221,40 @@ impl DerivedCache {
 impl Game {
     fn compute_board(&self, sources: Option<&mut Vec<Option<Arc<SourceSeed>>>>) -> LayerBoard {
         let context = Context::evaluate(self, sources);
+        let mut objects = vec![None; self.state.permanents.len()];
+        let mut library_top_visibility = [false; 2];
+        for (id, object) in context.objects {
+            if !self.is_phased_out(id)
+                && object
+                    .view
+                    .static_abilities
+                    .contains(&StaticAbility::LookAtLibraryTop)
+            {
+                let controller = self.state.permanents[id].as_ref().unwrap().controller;
+                library_top_visibility[controller.0] = true;
+            }
+            objects[id.0] = Some(object.view.clone());
+        }
         LayerBoard {
             reads_mana: context.reads_mana,
             reads_tapped: context.reads_tapped,
-            dynamic_activations: context
-                .objects
-                .values()
-                .any(|object| object.view.has_dynamic_activations()),
-            objects: {
-                let mut objects = vec![None; self.state.permanents.len()];
-                for (id, object) in context.objects {
-                    objects[id.0] = Some(object.view.clone());
-                }
-                objects
-            },
+            dynamic_activations: objects
+                .iter()
+                .flatten()
+                .any(|view| view.has_dynamic_activations()),
+            objects,
+            library_top_visibility,
         }
+    }
+
+    /// Both seats share the same layered board and its invalidation rules.
+    pub(crate) fn visible_library_tops(&self) -> [bool; 2] {
+        self.layer_board().library_top_visibility
+    }
+
+    /// Whether `player` may look at the top card of their library (CR 401.2).
+    pub(crate) fn looks_at_library_top(&self, player: PlayerId) -> bool {
+        self.visible_library_tops()[player.0]
     }
     /// Begin an immutable scan; see `BoardScan`. Release builds do nothing.
     pub(crate) fn board_scan(&self) -> BoardScan<'_> {
@@ -944,6 +962,7 @@ mod cache_tests {
     fn with_stale_board(game: &Game) {
         let board = game.layer_board();
         game.derived.borrow_mut().board = Some(Arc::new(LayerBoard {
+            library_top_visibility: board.library_top_visibility,
             objects: board.objects.clone(),
             reads_mana: !board.reads_mana,
             reads_tapped: board.reads_tapped,

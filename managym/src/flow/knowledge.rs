@@ -56,8 +56,9 @@ impl Game {
     }
 
     pub(crate) fn refresh_visible_library_tops(&mut self) {
+        let visible = self.visible_library_tops();
         for owner in [PlayerId(0), PlayerId(1)] {
-            if self.looks_at_library_top(owner) {
+            if visible[owner.0] {
                 if let Some(object) = self.state.zones.top(ZoneType::Library, owner) {
                     let definition = self.state[object].definition_id;
                     let knowledge = self.state.known_library_mut(owner);

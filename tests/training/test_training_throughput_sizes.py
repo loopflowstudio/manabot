@@ -11,7 +11,7 @@ from experiments.elemental_variants import elemental_recipe
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.experiment.job import TrainingJob
-from manabot.infra.config import ObservationConfig
+from manabot.infra.config import POLICY_INPUT_VERSION
 from manabot.infra.identity import canonical_sha256
 from manabot.training.records import TrainingRun
 from manabot.training.regime import TrainingRegime
@@ -165,7 +165,9 @@ def test_a_size_cell_trains_through_the_real_worker_on_cpu(
     chosen = sizes.LEGS[leg]
     regime = sizes.recipe(chosen.size, chosen.precision, 1)
     # Exercise the current worker without changing the frozen experiment recipe.
-    regime.observation = ObservationConfig()
+    regime.observation = regime.observation.model_copy(
+        update={"policy_input_version": POLICY_INPUT_VERSION}
+    )
     regime.wall_seconds = 600
     stage = regime.stages[0]
     stage.streams = 2
