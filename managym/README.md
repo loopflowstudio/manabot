@@ -444,9 +444,8 @@ automatic tapping order cannot differ between the two. Adding a kind of mana
 source needs no change here unless it should join the direct class, which
 requires a test comparing both paths on that source.
 
-Payment search tracks an object's untapped resource, presence and limited
-ability uses separately, storing only the limited abilities already used.
-Counted tap costs select distinct untapped matching
+Payment search tracks an object's untapped resource, presence and used limited
+abilities separately. Counted tap costs select distinct untapped matching
 permanents through ordinary SelectCard decisions; The Cabbage Merchant can
 activate twice by tapping four distinct Foods without tapping itself. Each
 selected tap commits before the next selection and is unavailable to nested
@@ -487,21 +486,19 @@ large-board work limit or truncation of legal payments. The
 other engine layer on large duplicative and large diverse boards; run them when
 changing this search.
 
-Each Game retains at most 64 exact searched payment queries in FIFO order, including
-negative answers and complete first witnesses. Keys compare ordered source
-identities and capabilities, current tap resources, pool classes, payable life,
-ordered caller obligations, source policy and any selected counted tap. A fork
-copies the FIFO by value and shares immutable query entries; insertions and
-evictions stay independent. Queries and keys share immutable ordered source
-lists; reservations detach on writes. The cache is derived data outside hashes
-and observations.
-Source abilities and saved obligations share immutable output alternatives and
-counted-tap candidate lists. Search branches copy only their changing resource,
-pool and obligation state; sharing never changes value equality or source order.
-Debug builds recompute every hit. Automatic-prefix searches also skip budgets
-that cannot cover the pool shortfall with the largest fixed outputs, ignoring
-color and tap competition conservatively. Neither optimization truncates
-choices or substitutes a fallback when a payment has no witness.
+Each Game caches at most 64 searched queries in FIFO order, retaining negative
+answers and complete first witnesses. Exact keys include ordered source
+identities and capabilities, tap resources, pool classes, payable life, ordered
+caller obligations, source policy and the selected counted tap. Forks own
+independent FIFOs but share immutable entries, source lists, output alternatives
+and tap-candidate lists. Reservations detach source lists on writes. The cache
+stays outside hashes and observations; debug builds recompute every hit.
+
+Automatic-prefix searches start at the fewest taps whose largest fixed outputs
+or waterbend contributions could cover the pool shortfall, conservatively
+ignoring colors and tap competition. The cache and lower bound preserve complete
+choices and first witnesses; neither substitutes a fallback for an infeasible
+payment.
 
 Spending restrictions (CR 106.6) are typed: `ManaRestriction::Only` holds
 `SpendPredicate`s naming any subtype a spell must have or an activation's

@@ -177,6 +177,11 @@ publish, land or choose the next Graph step from here.
   there; it builds cold, runs the browser proof and writes
   `.cache/clean-machine/proof.json` (`launch.elapsed_to_playable_ms`). Shared
   uv/Cargo/npm download caches stay warm locally, unlike the CI reference.
+- Native Command QA: use an ordinary seeded game and its current semantic frame;
+  submit one legal Command, then another command id with the old revision and
+  an absent offer id with the current revision. Native rejection raises
+  `managym.AgentError` (not only `ValueError`). Compare both `state_digest()`
+  and `semantic_decision_frame_json()` before/after each rejection.
 - Engine cost on large boards (`docs/development.md#stress-states`): build
   once with `cargo build --release --features benchmark --example bench_states
   --manifest-path managym/Cargo.toml`, then call

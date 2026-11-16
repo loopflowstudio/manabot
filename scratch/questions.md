@@ -19,8 +19,11 @@ and removed; their contrary measurements remain in the active plan.
 
 2026-11-15 realign: no new choice. The step feedback's 1.98x mixed figure
 predates the recorded production pass (2.03x, all four targets pass locally in
-both orders). PRs #523/#524/#538/#540 remain OPEN at the recorded heads; main
-has no new mana-flow change beyond the recorded `ObjectId` rename. Intermediate
+both orders). The latest main-integrated pair gives 2.01x mixed; its margin remains a
+measurement limitation, not an unresolved implementation decision. On the
+latest realign check, #523 is CLOSED and #524/#538/#540 remain OPEN. Local
+main `84143728be` and fetched remote main `2176882620` have identical trees;
+HEAD `287be612dc` contains the integration. Intermediate
 measurements moved to `02ccb36f7f:scratch/mtg-350-speed-up-the.md`.
 
 2026-11-15 compress: keep the reusable `bench_states --allocations` diagnostic

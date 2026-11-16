@@ -2,8 +2,10 @@
 
 ## Current outcome (2026-11-15)
 
-The reservation/life repair is preserved and integrated onto main
-`2176882620`. A fresh sequential release comparison gives 12.80x counted-tap,
+The reservation/life repair is preserved on HEAD `287be612dc`, after syncing
+local main `84143728be`. That main tree is identical to measured baseline
+`2176882620` (also fetched remote main); the sync changed no implementation
+bytes. The recorded sequential release comparison gives 12.80x counted-tap,
 2.60x diverse-mana, 2.01x mixed and 3.24x restricted-filter, with matching
 witnesses, outputs and closing digests. Mixed remains marginal; this is local
 measurement, not Engine Budget CI. Earlier pre-integration comparisons passed
@@ -27,16 +29,19 @@ remaining cost and committed tap count. `Decision` / `SpendCompletion` own
 nested callers. Reservations and ordered obligations are derived planning
 inputs, never a parallel serialized payment lifecycle.
 
-`payment_model` now reads the announced payment once for ManaPayment,
-SacrificePayment and Waterbend. A shared internal helper reserves its source
+`Game::payment_model` in `managym/src/flow/mana.rs` reads the announced payment once for ManaPayment,
+SacrificePayment and Waterbend. `reserve_announced_payment` reserves its source
 and unpaid life fee; the same helper follows an announced payment held in
 `SpendCompletion::Announced`, including nested Upfront/ManaChoice callers.
 ManaUpfront life fees remain Output obligations, so they are not debited a
 second time. Actual cost commits and caller restoration use the existing path.
 No browser operation, automatic source preference, cancellation, fallback
 action, policy layout, world identity or replay-schema change is introduced.
-The README describes the search bounds, exact cache and fork ownership;
-development docs describe the separate allocation diagnostic.
+`managym/README.md` describes the search bounds, exact cache and fork ownership;
+`docs/development.md` describes the separate allocation diagnostic. Directed
+regressions live in `managym/cards/tests/cards/tla.rs` (`yue_reserves_her_tap`
+and `yue_rejects_rumble_arena_filter`) and `flow/mana.rs`
+(`announced_payment_reserves_life_across_nested_callers`).
 
 Directed proof: Yue owes her own tap and waterbend {5}. With one floating mana
 and Prism plus three Ogres, tap two Ogres, leaving {3}. Activating Prism spends
@@ -154,7 +159,7 @@ up to ~2x between runs with no established host cause, so decisions use
 sequential matched pairs in both orders, deterministic witnesses and separate
 `bench_states --allocations` traffic counts (requests, not live heap).
 
-## Latest measurement (mixed production pass)
+## Earlier measurement (before main integration)
 
 Release `benchmark` feature, `bench_states counted-tap diverse-mana mixed
 --sizes 16 --layers search` then `restricted-filter --sizes 4 --layers search`,
@@ -178,7 +183,7 @@ baseline; closing stress digests remain size-16
 restricted-4 `adecfb769e039154e870dc7d36956035cb8c772ff25058ea5718ef70f6d43ecb`.
 Raw rows are ignored `.lf/tmp/mtg350/production-*.jsonl`.
 
-Checks on final code: debug `flow::mana` lib tests — 36 passed; cards
+Checks before main integration: debug `flow::mana` lib tests — 36 passed; cards
 `yue_reserves_her_tap` — 1 passed; cards `heartbeat` — 7 passed;
 `tests/model/test_record_coverage.py` — 4 passed. Root cp313 release wheel
 rebuilt, extension replaced atomically, native import passed (SHA256
@@ -186,8 +191,9 @@ rebuilt, extension replaced atomically, native import passed (SHA256
 fmt check and `git diff --check` passed. Before repair both new directed tests
 failed on old production code. `tests/training/test_game_errors.py`'s three
 `test_resource_limit_receipt_replays_its_retained_encoding_boundary` variants
-fail on unchanged base too (`binding_mismatch`); main's `452d7b5357` resolves
-it on rebase. No binding check was changed.
+failed on unchanged base too (`binding_mismatch`). Main's `452d7b5357` and
+the renamed regression resolve this in the completed integration checks below.
+No binding check was changed.
 
 ## Current-main integration measurement
 
@@ -211,43 +217,20 @@ The latter differs from the older baseline above across main's intervening
 changes; it is equal in this same-revision comparison. Engine Budget's reference
 has not moved. Raw rows/comparison are ignored `.lf/tmp/mtg350/main-*`.
 
+## Concept review — 2026-11-15
+
+No conceptual mismatch or open product choice was identified. Payment and saved
+callers still own the lifecycle; reservation prevents the infeasible offer before
+resources commit. This does not recover an already stranded historical frame:
+the retained proof resumes at the first changed offer with a candidate-owned
+Command. No API, persistence, browser or policy migration is needed. The
+one-screen review remains `scratch/concept-review.html`; the original prose is
+at `287be612dc:scratch/mtg-350-speed-up-the.md`.
+
 ## Remaining work
 
-### Concept review — 2026-11-15
-
-Outcome: nothing to change and no open product choice. Advance to the next
-Graph step; no additional implement direction. Reviewed the current patch
-against the retained-game proof and the existing README/QA instructions;
-this review ran no new games or timing measurements.
-
-The experience remains one announcement with nested payment choices. The
-largest mismatch was an offered filter that spent a resource already owed
-to that announcement, leaving no completion. Reservation at the shared native
-authority fixes that mismatch without teaching people a reservation operation.
-Payment and saved callers own the lifecycle; reservations, search obligations
-and cached witnesses remain derived. The existing usage docs already express
-this model, so no further documentation or skill redesign is needed.
-
-Normal path: Yue's nearby funded Prism choice remains available and completes.
-Failure path: the underfunded filter is absent before resources are committed
-to it. Recovery retains committed taps and the actual pending decision;
-stale Commands are rejected and exact forks preserve that decision while
-cache mutations stay independent. This is prevention, not recovery of an
-already stranded historical frame: the retained changed-runtime proof starts
-at the first changed offer and uses a fresh candidate-owned Command. Original
-evidence is never rebound or rewritten.
-
-Counterexamples remain decisive: one more floating mana makes Prism legal;
-restricted mana can seed a filter even when the parent cannot spend it;
-selected tap identity can change feasibility; an upfront life fee must not
-be charged again as an announced fee. None permits merging resource classes,
-dropping caller obligations or turning the cache into persisted authority.
-No API, persistence, browser or policy-input migration follows from this
-review. Next show gate/Engine Budget results and the focused delivery copy,
-including changed-runtime provenance and the marginal local mixed speedup.
-The one-screen review is `scratch/concept-review.html`.
-
-Implementation and focused checks are complete on main `2176882620`. The
+Implementation and focused checks are complete against baseline `2176882620`;
+the later tree-identical sync adds no new validation question. The
 retained-game proof and four-cell witness parity pass. Current-main timing is
 one sequential matched pair; earlier pre-integration timing passed in both
 orders. Mixed is close to the local 2x target, so retain that limitation in
@@ -255,17 +238,18 @@ review. Exact keys, the 64-entry FIFO, independent branch mutations and complete
 first witnesses remain required; no rejected optimization should be revived.
 
 Gate owns CI, broad debug nextest/clippy and Engine Budget, then delivery can
-publish and land this independent repair. PR #523 is no prerequisite. Never
+publish and land this independent repair, then verify the merged outcome.
+Task status currently has no PR. On the 2026-11-15 realign check, PR #523 is
+CLOSED; #524/#538/#540 are OPEN. None is a prerequisite. Never
 move the Engine Budget reference to disguise a changed digest. Retain the
 repair-only snapshot provenance and candidate-owned continuation in PR copy
 before scratch is cleared; no experimental source-preference feature ships.
 
-## Delete — do not maintain
+## Completed simplifications and validation
 
 Main removed the parent report's opt-in `mana/outcomes.rs`,
-`PaymentShapeCapture`, capture hooks and `is_surplus`. Keep those deletions
-while integrating the performance work; remove the exclusive `into_uncached`
-helper as well. This Task ships no reporting API or source-preference feature.
+`PaymentShapeCapture`, capture hooks and `is_surplus`. Integration preserves
+those deletions and removes the exclusive `into_uncached` helper as well. This Task ships no reporting API or source-preference feature.
 Synthetic source ids use main's `payment_object` allocator; live fixture writes
 use `state[object]` so appearance identity is validated.
 
@@ -299,14 +283,25 @@ SHA256 `c9e3d2ae2d942ab257b7e2deefbb6e6d9018c835275b3d7fce062b386acae0ba`.
 Workspace fmt and `git diff --check` passed. After curation, `lf context`
 reports scratch below both configured limits; no limit was raised.
 
-No dormant deep-copy cache, reachability closure, inline resource vectors,
-dense per-source use rows, duplicated announced-payment readers, late forced
-branches, independent memo copies, doomed partial-spending copies, or owned
-mode copies for absent/deterministic bonuses. Preserve one payer/model, shared
-announced caller ownership, exact resource/fee semantics, forced-decision
-skipping, receipts and replay binding authority. No parallel serialized
-lifecycle, global cache, cutoff, fallback action, source-tap prerequisite
-import, schema/data migration or unrelated source preference belongs here.
+## Delete — do not maintain
+
+Completed: main's `mana/outcomes.rs`, `PaymentShapeCapture`, capture hooks,
+`is_surplus` and their six exclusive tests; this branch's `into_uncached`,
+`payment_cache_profile` and exclusive `CachedPayment::clone`. No deletion target
+remains. The rejected deep-copy cache, reachability closure and inline resource
+vectors stay removed; their measurements remain above.
+
+Preserve one payer/model, announced caller ownership, exact resource/fee
+semantics, forced-decision skipping and replay bindings. No parallel serialized
+lifecycle, global cache, cutoff, fallback, experimental source-tap import or
+unrelated source preference belongs here.
+
+Compress review (2026-11-15): no further code reduction justified changing the
+validated search. Shortened the README's cache/ownership explanation and removed
+duplicate concept-review prose. Uncommitted notes were preserved first at
+`.lf/tmp/mtg350/{plan,questions}-before-compress-review.md`. Documentation-only;
+no build or test rerun. `git diff --check` passed; `lf context` remains below
+both scratch limits.
 
 QA (2026-11-15, `scratch/qa.html`): 1,188 seeded random games (authored,
 TLA pool, Yue pools) have identical per-decision digests on base `ddc337f764`
@@ -335,3 +330,12 @@ receipt regression; the old filter selected no tests and is superseded by this
 result. Workspace fmt and diff whitespace checks pass. Original receipt and
 context hashes still match the retained values. Scratch remains below both
 configured limits.
+
+Current-main QA (2026-11-15): fresh non-editable cp313 wheel installed in an
+isolated consumer venv. 257 complete public-Env games / 53,389 decisions match
+main 2176882620 exactly; 766 forks per engine preserve source and continuation.
+Stale/absent semantic Commands preserve state and frame; reset stays playable.
+Retained repair-only changed-runtime replay again diverges first at 193 and
+advances via a candidate-owned Command in 0.844 ms. `scratch/qa.html` replaces
+its obsolete retained-proof limitation. No new product defect; CI remains outside
+this QA step. Driver/evidence are ignored under `.lf/tmp/mtg350/qa/`.
