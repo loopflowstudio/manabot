@@ -538,3 +538,36 @@ def test_player_crash_is_an_interrupted_record(monkeypatch: pytest.MonkeyPatch) 
     replay = walk(record)
     assert list(replay) == []
     assert replay.stop is not None and replay.stop.status == "interrupted"
+
+
+def test_runner_failure_after_terminal_step_voids_the_view_result() -> None:
+    from manabot.sim.evaluation_records import audit_view
+    from manabot.sim.matchup import selected_match
+    from manabot.sim.native_game import execute_game
+    from managym.recording import GameRecord
+
+    _, players = selected_players()
+    game = dict(
+        match_id="late-runner-failure",
+        deal_seed=83,
+        leg=0,
+        seat_players=[p.player_id for p in players],
+        player_seeds={p.player_id: 7 for p in players},
+        match_hypers=selected_match().model_dump(),
+        decisions=[],
+        integrity=dict(
+            private_exposures=0, root_mutations=0, illegal_actions=0, truncations=0
+        ),
+    )
+    messages: list[tuple[str, Any]] = []
+    execute_game(game, players, {}, 10_000, messages.append)
+    data = messages[-1][1]["record"]
+    end = GameRecord.model_validate(data).games[0].end
+    assert end is not None and end.status == "complete"
+    assert audit_view(data)["terminated"] is True
+
+    data["context"]["evaluation"]["failure"] = "send failed"
+    data["context"]["evaluation"]["termination_reason"] = "crash"
+    view = audit_view(data)
+    assert view["terminated"] is False and view["winner"] is None
+    assert view["record"]["games"][0]["end"]["status"] == "complete"

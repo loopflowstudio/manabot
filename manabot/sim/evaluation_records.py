@@ -85,7 +85,11 @@ def audit_view(data: dict[str, Any], *, digest: str | None = None) -> dict[str, 
     ) != len(inputs["actions"]):
         raise ValueError("evaluation inputs lack aligned digests or annotations")
     end = inputs.get("end")
-    game["terminated"] = end is not None and end["status"] == "complete"
+    # The record keeps the engine's ending; a runner failure (context) voids the
+    # result even after a terminal step, as retained failure rows do.
+    game["terminated"] = (
+        game.get("failure") is None and end is not None and end["status"] == "complete"
+    )
     game["winner"] = end.get("winner") if game["terminated"] else None
     game["initial_state_digest"] = (
         inputs["digests"][0]
