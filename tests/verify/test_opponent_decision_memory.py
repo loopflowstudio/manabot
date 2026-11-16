@@ -18,9 +18,7 @@ from managym.decision_memory import read_records
 def _root(disclosure: Literal["open", "closed"] = "open") -> managym.Env:
     env = managym.Env(seed=111)
     configs = Match().to_rust()
-    for config in configs:
-        config.disclosure = disclosure
-    env.reset(configs)
+    env.reset(managym.GameSetup(configs, decklists=disclosure))
     return env
 
 
@@ -28,6 +26,24 @@ def _observations(env: managym.Env) -> list[str]:
     return [
         env.observation_for_player(seat).decision_memory_json() for seat in range(2)
     ]
+
+
+@pytest.mark.parametrize("disclosure", ["open", "closed"])
+@pytest.mark.parametrize("include_own", [False, True])
+def test_memory_exposure_retains_game_disclosure_and_own_flag(
+    disclosure: Literal["open", "closed"], include_own: bool
+) -> None:
+    env = managym.VectorEnv(
+        num_envs=1, seed=111, decision_memory_include_own=include_own
+    )
+    env.enable_exposure_capture()
+    env.reset_all(managym.GameSetup(Match().to_rust(), decklists=disclosure))
+    trace = json.loads(env.current_exposure()[0])["trace"]
+    assert trace.get("decision_memory_include_own", False) is include_own
+    assert all(
+        player.get("disclosure", "open") == disclosure
+        for player in trace["player_configs"]
+    )
 
 
 def test_decision_memory_metadata_and_legacy_admission() -> None:
@@ -202,17 +218,15 @@ def test_headless_decision_memory_demo(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "disclosures",
-    [("open", "open"), ("closed", "closed"), ("open", "closed"), ("closed", "open")],
+    "disclosure",
+    ["open", "closed"],
 )
 def test_own_seat_option_is_default_off_and_rebases_opposing_view_only(
-    disclosures: tuple[Literal["open", "closed"], Literal["open", "closed"]],
+    disclosure: Literal["open", "closed"],
 ) -> None:
     default = managym.Env(seed=111)
     own = managym.Env(seed=111, decision_memory_include_own=True)
-    configs = Match().to_rust()
-    for config, disclosure in zip(configs, disclosures, strict=True):
-        config.disclosure = disclosure
+    configs = managym.GameSetup(Match().to_rust(), decklists=disclosure)
     default.reset(configs)
     own.reset(configs)
     for _ in range(12):

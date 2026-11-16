@@ -22,11 +22,19 @@ import managym
 
 Split = Literal["fit", "validation", "test"]
 CAPACITIES = (1024, 8192, 256, 16384)
+_SPLIT_BUCKETS = tuple(
+    sorted(range(20), key=lambda value: sha256(str(value).encode()).digest())
+)
 
 
 def split_game(seed: int) -> Split:
-    bucket = int.from_bytes(sha256(str(seed).encode()).digest()[:8], "little") % 100
-    return "fit" if bucket < 70 else "validation" if bucket < 85 else "test"
+    """Fixed 70/15/15 blocks, stratified over alternating disclosure modes.
+
+    Each aligned block of 40 seeds assigns 14/3/3 games of each disclosure.
+    Adding games never moves an existing game between splits.
+    """
+    rank = _SPLIT_BUCKETS.index((seed // 2) % 20)
+    return "fit" if rank < 14 else "validation" if rank < 17 else "test"
 
 
 def probe_space() -> ObservationSpace:
@@ -121,7 +129,13 @@ def public_state(
 
 
 def collect_games(
-    corpus: Corpus, count: int, out: Path, *, start: int = 0, max_decisions: int = 2000
+    corpus: Corpus,
+    count: int,
+    out: Path,
+    *,
+    start: int = 0,
+    max_decisions: int = 2000,
+    deadline: float = float("inf"),
 ) -> float:
     """Collect seeded complete heuristic games; discard capped/overflow games.
 
@@ -152,10 +166,8 @@ def collect_games(
             managym.authored_deck_setup("elemental-world-v2", keys[int(i)])
             for i in pair
         ]
-        for player in players:
-            player.disclosure = disclosure
         env = managym.Env(seed=seed)
-        obs, _ = env.reset(players)
+        obs, _ = env.reset(managym.GameSetup(players, decklists=disclosure))
         heuristic = managym.Heuristic()
         reservoirs: list[list[tuple[ProbeRow, np.ndarray]]] = [[], []]
         seen = [0, 0]
@@ -163,6 +175,10 @@ def collect_games(
         failure: str | None = None
         buffers = space.encoder.allocate()
         for decision in range(max_decisions):
+            if time.monotonic() >= deadline:
+                raise TimeoutError(
+                    "probe wall cap exhausted during collection; partial evidence retained"
+                )
             if obs.game_over:
                 break
             viewer = env.current_agent_index()
@@ -249,7 +265,10 @@ def collect_games(
                 )
                 + "\n"
             )
-        print(f"game {seed} {disclosure}: {status}; retained rows {len(corpus.rows)}", flush=True)
+        print(
+            f"game {seed} {disclosure}: {status}; retained rows {len(corpus.rows)}",
+            flush=True,
+        )
     return time.monotonic() - started
 
 
@@ -291,4 +310,34 @@ def choose_k(differences: np.ndarray, seconds: dict[int, float]) -> tuple[int, s
     return (
         k,
         f"validation improvement inconclusive ({mean:.6f} [{lo:.6f}, {hi:.6f}]); CPU fit time breaks tie",
+    )
+
+
+def save_corpus(corpus: Corpus, out: Path) -> None:
+    """Persist row joins and separate privileged labels, including smoke evidence."""
+    np.savez_compressed(
+        out / "labels.npz",
+        presence=np.stack(corpus.labels),
+        names=np.array(corpus.names),
+    )
+    np.savez_compressed(
+        out / "public.npz",
+        state=np.stack([r.public for r in corpus.rows]),
+        analytic=np.stack([r.analytic for r in corpus.rows]),
+    )
+    (out / "rows.json").write_text(
+        json.dumps(
+            [
+                {
+                    "game": r.game,
+                    "viewer": r.viewer,
+                    "decision": r.decision,
+                    "disclosure": r.disclosure,
+                    "split": split_game(r.game),
+                }
+                for r in corpus.rows
+            ],
+            indent=2,
+        )
+        + "\n"
     )

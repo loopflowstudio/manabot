@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import random
 import re
+from typing import Literal
 
 import numpy as np
 import pytest
@@ -1532,7 +1533,7 @@ def _assert_memory_contexts(text: str, memory: list[DecisionRecord]) -> None:
 
 @pytest.mark.parametrize("disclosure", ["open", "closed"])
 def test_distinct_long_game_decision_memory_fits_default_text_budget(
-    disclosure: str,
+    disclosure: Literal["open", "closed"],
 ) -> None:
     # Fixed native setup with a long library and peaceful play. Every record is
     # emitted by this game, with changing turn/step/hand/board/source snapshots;
@@ -1540,9 +1541,7 @@ def test_distinct_long_game_decision_memory_fits_default_text_budget(
     env = managym.Env(seed=7)
     deck = {"Mountain": 60, "Island": 20, "Gray Ogre": 120}
     configs = [managym.PlayerConfig(name, deck) for name in ("a", "b")]
-    for config in configs:
-        config.disclosure = disclosure
-    env.reset(configs)
+    env.reset(managym.GameSetup(configs, decklists=disclosure))
     remaining = [595, 1024]
     for step in range(2500):
         assert env.action_count(), "long-game setup ended before the size proof"

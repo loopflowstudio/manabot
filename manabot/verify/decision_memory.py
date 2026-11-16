@@ -28,7 +28,7 @@ class DemoBackend(Protocol):
         space: ObservationSpace,
         obs: dict[str, np.ndarray],
         out: Path,
-        player_configs: list[managym.PlayerConfig],
+        player_configs: managym.GameSetup,
     ) -> list[dict[str, object]]: ...
 
     def ordinary_update(self, out: Path) -> dict[str, object]: ...
@@ -96,7 +96,7 @@ class Proof:
         return counts
 
 
-def _configs(disclosure: Literal["open", "closed"]) -> list[managym.PlayerConfig]:
+def _configs(disclosure: Literal["open", "closed"]) -> managym.GameSetup:
     deck = {
         name: 20
         for name in (
@@ -108,9 +108,7 @@ def _configs(disclosure: Literal["open", "closed"]) -> list[managym.PlayerConfig
         )
     }
     configs = [managym.PlayerConfig(name, deck) for name in ("a", "b")]
-    for config in configs:
-        config.disclosure = disclosure
-    return configs
+    return managym.GameSetup(configs, decklists=disclosure)
 
 
 def _root(disclosure: Literal["open", "closed"]) -> managym.Env:

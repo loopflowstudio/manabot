@@ -1,7 +1,9 @@
 """Offline hand labels never enter the production summary path."""
 
+from collections import Counter
 from dataclasses import fields, replace
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 import pytest
@@ -12,6 +14,7 @@ from manabot.backends.torch.decision_memory_probe import HandProbe, _predict, fi
 from manabot.env.decision_memory import encode_records
 from manabot.env.memory_store import MemoryStore, PrefixIdentity, PrefixObservation
 from manabot.policy.prepare import Prepared
+import manabot.verify.decision_memory_probe as probe_module
 from manabot.verify.decision_memory_probe import (
     CAPACITIES,
     Corpus,
@@ -98,6 +101,13 @@ def test_game_splits_and_analytic_baseline() -> None:
     assert all(groups)
     assert not (groups[0] & groups[1] or groups[0] & groups[2] or groups[1] & groups[2])
     assert split_game(31) == split_game(31)
+    counts = Counter((split_game(seed), seed % 2) for seed in range(48120, 48160))
+    for mode in (0, 1):
+        assert [counts[split, mode] for split in ("fit", "validation", "test")] == [
+            14,
+            3,
+            3,
+        ]
     np.testing.assert_allclose(
         analytic_presence(2, np.array([3.0, 1.0])), [1 - 1e-6, 0.5]
     )
@@ -133,7 +143,10 @@ def test_labels_stay_outside_recorded_and_prepared_inputs(tmp_path: Path) -> Non
         model.policy.encode_decision_memory(dense)  # type: ignore[arg-type]
 
 
-def test_native_capacity_failure_discards_the_whole_game(tmp_path: Path) -> None:
+def test_native_capacity_failure_discards_the_whole_game(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(probe_module, "CAPACITIES", (1, 8192, 256, 16384))
     corpus = new_corpus()
     collect_games(corpus, 1, tmp_path)
     assert corpus.overflows == 1
@@ -143,11 +156,11 @@ def test_native_capacity_failure_discards_the_whole_game(tmp_path: Path) -> None
 
 @pytest.mark.parametrize("encoder", ["gru", "transformer"])
 def test_production_summary_learns_planted_signal_but_not_shuffled_labels(
-    tmp_path: Path, encoder: str
+    tmp_path: Path, encoder: Literal["gru", "transformer"]
 ) -> None:
     torch.set_num_threads(1)
     corpus = _planted()
-    candidate = fit(corpus, encoder, 1, 123, tmp_path, epochs=12)  # type: ignore[arg-type]
+    candidate = fit(corpus, encoder, 1, 123, tmp_path, epochs=12)
     valid = corpus.indexes("validation")
     loss = game_losses(np.stack(corpus.labels)[valid], candidate.validation).mean()
     assert loss < 0.25
@@ -160,7 +173,7 @@ def test_production_summary_learns_planted_signal_but_not_shuffled_labels(
         ),
     )
     baseline = fit(shuffled, "none", 1, 123, tmp_path, epochs=12)
-    candidate = fit(shuffled, encoder, 1, 123, tmp_path, epochs=12)  # type: ignore[arg-type]
+    candidate = fit(shuffled, encoder, 1, 123, tmp_path, epochs=12)
     truth = np.stack(shuffled.labels)[valid]
     assert (
         game_losses(truth, candidate.validation).mean()

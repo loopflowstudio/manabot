@@ -28,7 +28,7 @@ def prove_policies(
     space: ObservationSpace,
     obs: dict[str, np.ndarray],
     out: Path,
-    player_configs: list[managym.PlayerConfig],
+    player_configs: managym.GameSetup,
 ) -> list[dict[str, object]]:
     torch.set_num_threads(1)
     blank = blank_memory(obs)

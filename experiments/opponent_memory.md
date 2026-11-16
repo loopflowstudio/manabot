@@ -59,7 +59,9 @@ fresh directory.
   roster, uniform ordered pairs, half with open and half with closed decklists,
   forced decisions skipped. No trained policy can read this layout before the
   pilot's own trunks exist, and none may be rebound to it. Games split 70/15/15
-  into fit, validation and test by game seed; no game appears in two splits.
+  into fit, validation and test by game seed, stratified by disclosure in fixed
+  40-game seed blocks (14/3/3 per mode); no game appears in two splits and
+  appending games never moves one to another split.
 - **Rows.** Each acting decision of each viewer with a non-empty log, at most
   16 per viewer per game. Capacities are the census bounds; a game exceeding
   them is a typed capacity error and is counted, never truncated.
@@ -72,6 +74,12 @@ fresh directory.
   library size, turn, per-definition public-zone counts, decklist counts when
   open). Baselines on the same rows: that state vector alone through the same
   head, and the analytic hand size × unseen-deck frequency. Three fitting seeds.
+- **Fitting.** Adam at 0.003, batches of 16 decisions, eight epochs, retaining
+  the epoch with the lowest game-weighted validation loss. Training averages
+  per-card Bernoulli log loss over decisions; readouts give each game equal
+  weight and average the three fitting seeds. The test split is scored after
+  K selection. `--epochs` and `--max-games` allow predeclared smaller runs;
+  defaults are eight and 120, with the 20-game smoke sizing the actual count.
 - **Choosing K.** K=4 only if its validation loss beats K=1, averaged over both
   encoders, with an interval excluding zero; otherwise the cheaper on CPU, then
   K=1. The test split is read once, for the table.
@@ -261,6 +269,26 @@ Mark this check deferred if collection and fitting do not fit the cap.
 
 USD 8 remains for failures/retries and unresolved startup cost, inside the same
 USD 50 total, not an additional budget. The task already authorizes this amount.
+
+### Disclosure and input comparisons to consider
+
+Jack Heart's 2026-11-16 direction was to consider the remaining #547/#550
+experiments in this series after both landed. The history layout must settle
+first, and these share the same USD50 total. The core probe, K selection and
+three-arm pilot retain priority.
+
+- **B1:** compare the mixed-training control with open-only and closed-only
+  training, evaluating each in both disclosure modes. This would inform whether
+  one player should serve both modes and the default training disclosure mix.
+- **B2:** mask one admitted viewer-safe input at a time at Prepared on the full
+  layout: initial main/sideboard counts, decklist rows, `known_library` facts,
+  and `decklists_open`. Preserve native observations, legality and layout
+  identity. A null result can reflect redundant information retained in history.
+
+Both allocations are deferred until CUDA calibration prices the primary pilot;
+no extra arms or ablation implementation are added speculatively. Report which
+fit the remaining allowance and which remain deferred. Native knowledge stays
+sound single-card facts; inference beyond those facts belongs to the model.
 Etude owns launch/admission/recovery; inspect existing runs before allocating,
 quote full startup plus `Job.max_hours`, launch with `--max-usd` bounded by the
 remaining total, record each launcher's cost once, and verify rentals ended.

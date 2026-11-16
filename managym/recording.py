@@ -906,9 +906,7 @@ class CapturedVector(_Capture):
     def reset_all_into_buffers(self, players: managym.GameSetup) -> None:
         self.reset_each_into_buffers([players for _ in self.games])
 
-    def reset_each_into_buffers(
-        self, players: list[managym.GameSetup]
-    ) -> None:
+    def reset_each_into_buffers(self, players: list[managym.GameSetup]) -> None:
         self._reset_each(players, lambda: self.native.reset_each_into_buffers(players))
 
     def reset_all(self, players: managym.GameSetup) -> Any:

@@ -999,7 +999,7 @@ mod tests {
     };
 
     fn game() -> Game {
-        let players = (0..2)
+        let players: Vec<PlayerConfig> = (0..2)
             .map(|seat| {
                 PlayerConfig::new(
                     format!("seat{seat}"),

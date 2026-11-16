@@ -8,6 +8,9 @@ then decisions; uncertainty resamples games, averaging the three fitting seeds.
 from dataclasses import asdict, dataclass
 import json
 from pathlib import Path
+import platform
+import sys
+import sysconfig
 import time
 from typing import Literal
 
@@ -20,6 +23,8 @@ from manabot.backends.torch.arrays import on_device
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.memory_store import PrefixObservation
 from manabot.infra.config import ModelConfig
+from manabot.infra.identity import file_sha256
+from manabot.infra.source import source_commit
 from manabot.policy.prepare import Prepared
 from manabot.verify.decision_memory_probe import (
     Corpus,
@@ -29,7 +34,7 @@ from manabot.verify.decision_memory_probe import (
     game_losses,
     new_corpus,
     probe_space,
-    split_game,
+    save_corpus,
 )
 import managym
 
@@ -112,12 +117,21 @@ def _prepared(
 
 
 def _predict(
-    model: HandProbe, corpus: Corpus, indexes: np.ndarray, *, batch_size: int = 16
+    model: HandProbe,
+    corpus: Corpus,
+    indexes: np.ndarray,
+    *,
+    batch_size: int = 16,
+    deadline: float = float("inf"),
 ) -> np.ndarray:
     model.eval()
     predictions: list[np.ndarray] = []
     with torch.no_grad():
         for start in range(0, len(indexes), batch_size):
+            if time.monotonic() >= deadline:
+                raise TimeoutError(
+                    "probe wall cap exhausted during readout; partial evidence retained"
+                )
             selected = indexes[start : start + batch_size]
             public = torch.from_numpy(
                 np.stack([corpus.rows[int(i)].public for i in selected])
@@ -136,6 +150,7 @@ def fit(
     out: Path,
     *,
     epochs: int = 8,
+    deadline: float = float("inf"),
 ) -> FitResult:
     """Select the epoch on validation only; never inspect the test labels."""
     started = time.monotonic()
@@ -147,30 +162,38 @@ def fit(
     )
     train, validation = corpus.indexes("fit"), corpus.indexes("validation")
     public = torch.from_numpy(np.stack([row.public for row in corpus.rows]))
-    labels = torch.from_numpy(np.stack(corpus.labels))
+    validation_labels = np.stack([corpus.labels[int(i)] for i in validation])
     name = "state-only" if encoder == "none" else f"{encoder}-k{summaries}"
     weights = out / f"{name}-{seed}.pt"
     best = float("inf")
     best_predictions: np.ndarray | None = None
-    for _ in range(epochs):
+    for epoch in range(epochs):
         model.train()
         order = rng.permutation(train)
         for start in range(0, len(order), 16):
+            if time.monotonic() >= deadline:
+                raise TimeoutError(
+                    "probe wall cap exhausted during fitting; partial evidence retained"
+                )
             selected = order[start : start + 16]
             optimizer.zero_grad(set_to_none=True)
             loss = F.binary_cross_entropy_with_logits(
                 model(public[selected], _prepared(model, corpus, selected)),
-                labels[selected],
+                torch.from_numpy(np.stack([corpus.labels[int(i)] for i in selected])),
             )
             loss.backward()
             optimizer.step()
-        predictions = _predict(model, corpus, validation)
+        predictions = _predict(model, corpus, validation, deadline=deadline)
         # Match the game-weighted readout used for choosing K.
-        losses = game_losses(np.stack(corpus.labels)[validation], predictions)
+        losses = game_losses(validation_labels, predictions)
         score = float(_by_game(corpus, validation, losses).mean())
         if score < best:
             best, best_predictions = score, predictions
             torch.save(model.state_dict(), weights)
+        print(
+            f"{name} seed={seed} epoch={epoch + 1}/{epochs} validation={score:.6f}",
+            flush=True,
+        )
     assert best_predictions is not None
     return FitResult(
         name,
@@ -202,22 +225,73 @@ def run_probe(
             "probe needs epochs >=1, max_games >=60, and 0<wall_seconds<=7200"
         )
     out.mkdir(parents=True, exist_ok=False)
+    root = Path(__file__).resolve().parents[3]
+    sources = (
+        "experiments/opponent_memory.py",
+        "manabot/backends/torch/decision_memory_probe.py",
+        "manabot/verify/decision_memory_probe.py",
+        "manabot/backends/torch/policy.py",
+        "manabot/backends/torch/_decision_memory.py",
+    )
+    for name in sources:
+        target = out / "source" / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes((root / name).read_bytes())
+    (out / "runtime.json").write_text(
+        json.dumps(
+            {
+                "revision": source_commit(),
+                "python": sys.version,
+                "platform": platform.platform(),
+                "torch": torch.__version__,
+                "native_sha256": file_sha256(
+                    root
+                    / "managym"
+                    / ("_managym" + sysconfig.get_config_var("EXT_SUFFIX"))
+                ),
+                "sources": {name: file_sha256(root / name) for name in sources},
+                "threads": 1,
+                "precision": "float32",
+            },
+            indent=2,
+        )
+        + "\n"
+    )
     torch.set_num_threads(1)
     started = time.monotonic()
+    deadline = started + wall_seconds
     corpus = new_corpus()
-    collection_seconds = collect_games(corpus, 20, out)
+    collection_seconds = collect_games(corpus, 20, out, deadline=deadline)
+    save_corpus(corpus, out)
     # Calibration must contain fit/validation games independently of the final
     # test readout. The deterministic seed schedule is fixed across candidates.
     if not len(corpus.indexes("fit")) or not len(corpus.indexes("validation")):
         raise ValueError("20-game smoke lacks fit/validation rows")
-    smoke = fit(corpus, "transformer", 4, FIT_SEEDS[0], out, epochs=1)
+    smoke = fit(
+        corpus, "transformer", 4, FIT_SEEDS[0], out, epochs=1, deadline=deadline
+    )
     per_game = collection_seconds / 20 + smoke.seconds / 20 * epochs * 15
     games = min(max_games, int(wall_seconds * 0.65 / max(per_game, 0.001)))
     if games < 60:
         raise RuntimeError(
             f"20-game smoke admits only {games} games inside the wall cap; need at least 60"
         )
-    collect_games(corpus, games - 20, out, start=20)
+    (out / "calibration.json").write_text(
+        json.dumps(
+            {
+                "smoke_games": 20,
+                "collection_seconds": collection_seconds,
+                "fit_epoch_seconds": smoke.seconds,
+                "epochs": epochs,
+                "games": games,
+                "max_games": max_games,
+                "wall_cap_seconds": wall_seconds,
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    collect_games(corpus, games - 20, out, start=20, deadline=deadline)
     for split in ("fit", "validation", "test"):
         selected = corpus.indexes(split)
         for disclosure in ("open", "closed"):
@@ -232,32 +306,7 @@ def run_probe(
                 < 2
             ):
                 raise ValueError(f"need at least two {disclosure} games in {split}")
-    np.savez_compressed(
-        out / "labels.npz",
-        presence=np.stack(corpus.labels),
-        names=np.array(corpus.names),
-    )
-    np.savez_compressed(
-        out / "public.npz",
-        state=np.stack([r.public for r in corpus.rows]),
-        analytic=np.stack([r.analytic for r in corpus.rows]),
-    )
-    (out / "rows.json").write_text(
-        json.dumps(
-            [
-                {
-                    "game": r.game,
-                    "viewer": r.viewer,
-                    "decision": r.decision,
-                    "disclosure": r.disclosure,
-                    "split": split_game(r.game),
-                }
-                for r in corpus.rows
-            ],
-            indent=2,
-        )
-        + "\n"
-    )
+    save_corpus(corpus, out)
     candidates: tuple[tuple[Encoder, int], ...] = (
         ("none", 1),
         ("transformer", 1),
@@ -272,12 +321,14 @@ def run_probe(
                 raise RuntimeError(
                     "probe exhausted wall cap; partial evidence retained, no K selected"
                 )
-            fits.append(fit(corpus, encoder, k, seed, out, epochs=epochs))
+            fits.append(
+                fit(corpus, encoder, k, seed, out, epochs=epochs, deadline=deadline)
+            )
             print(
                 f"fit {encoder} K={k} seed={seed} {fits[-1].seconds:.1f}s", flush=True
             )
     validation = corpus.indexes("validation")
-    target = np.stack(corpus.labels)[validation]
+    target = np.stack([corpus.labels[int(i)] for i in validation])
     differences = []
     for encoder in ("transformer", "gru"):
         by_k = {
@@ -302,7 +353,7 @@ def run_probe(
         json.dumps({"k": selected_k, "reason": reason}, indent=2) + "\n"
     )
     test = corpus.indexes("test")
-    targets = np.stack(corpus.labels)[test]
+    targets = np.stack([corpus.labels[int(i)] for i in test])
     losses: dict[str, list[np.ndarray]] = {
         "analytic": [
             game_losses(targets, np.stack([corpus.rows[int(i)].analytic for i in test]))
@@ -311,7 +362,7 @@ def run_probe(
     for result in fits:
         model = HandProbe(corpus, result.encoder, result.summaries)
         model.load_state_dict(torch.load(result.weights, weights_only=True))
-        predictions = _predict(model, corpus, test)
+        predictions = _predict(model, corpus, test, deadline=deadline)
         np.savez_compressed(
             out / f"predictions-{result.name}-{result.seed}.npz",
             indexes=test,

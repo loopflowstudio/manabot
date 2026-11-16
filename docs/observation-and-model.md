@@ -589,11 +589,14 @@ residency separately from device inputs and activations.
 The earlier repeated-reference layout measured a 27.33 GiB host peak in an
 independent 256-stream CPU cohort with 2/2/2 execution limits; see the [resource report](../experiments/opponent_memory.md#independent-game-host-measurement-2026-11-16)
 for its scope. Host residency of the new snapshot layout has not been measured;
-on CPU, log-control collection costs 1.73× the history-disabled median
+on the recorded CPU world before #547/#550 integration, log-control collection
+costs 1.73× the history-disabled median
 ([report](../experiments/opponent_memory.md#final-post-sync-admission-measurement--2026-11-16)).
 The gated join, [branching from a trunk](#starting-from-a-no-history-trunk),
 the supervised probe, CUDA worker admission and the three-arm pilot remain
 outstanding; the intended interface follows.
+The combined disclosure/library layout needs fresh cost and CUDA admission;
+those earlier timings do not measure it.
 
 To let a Torch policy use the opponent's earlier choices, select an encoder and
 one or four summary tokens in its model configuration:
@@ -788,11 +791,10 @@ remain explicit and different actors never coalesce. Native scalar/vector
 constructors take the same default-false keyword; library training wrappers pass
 it from `ObservationConfig`. Configure it before reset, since missing history
 cannot be filled in later. Primary census and CPU comparisons keep it false.
-Disclosure is currently per player (`PlayerConfig.disclosure`), and no
-observation states whether the opponent knows your list, so own-seat records
-cannot tell the policy that. Memory adds no disclosure flag: PR #547 makes
-disclosure one game-level setting with a public bit and rejects asymmetric
-settings, which makes the bit reciprocal.
+Disclosure is one symmetric game-level setting on `GameSetup`; both player
+rows carry `decklists_open`. That bit also tells the policy whether the
+opponent knows its list, so own-seat memory adds no disclosure flag.
+
 
 ### Starting from a no-history trunk
 
