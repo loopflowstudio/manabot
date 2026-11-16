@@ -209,6 +209,14 @@ authority across serving changes. `shared-eval-v1` (through PR #389) also
 hashed allocation settings; its records stay readable as `EvalComputeV1` /
 `EvalExecutionV1` but are not reused or continued under v2.
 
+The resident service admits CPU, CUDA and Apple MPS with float32. MPS
+availability is checked in the serving child at policy admission; unavailable
+MPS and `PYTORCH_ENABLE_MPS_FALLBACK=1` fail explicitly. Use `evaluate` with an
+explicit MPS `InferenceRuntime`; the local CLI and `evaluate_local` still use
+CPU. Search and guidance remain CPU-only. MPS receipts count transfers and
+output waits and report allocated/driver memory snapshots and sampled maxima,
+not allocator peaks. Diagnostic batches synchronize MPS without CUDA events.
+
 With an execution, flat stateless checkpoints are served; without one,
 `play_cell`, `evaluate` and the monitor play them scalar in the game child
 under their original registrations. Served and scalar players of one checkpoint
@@ -246,7 +254,7 @@ share its batches across matchups (setups are still validated at admission).
 Batches flush on row cap or delay. Each game child talks to the service over
 its own socket (`InferenceClient`); the supervisor keeps lifecycle, deadlines,
 failure classification and the Command journal, retaining each Command before
-native execution. CPU and CUDA share one serial service with one Torch thread;
+native execution. CPU, CUDA and MPS share one serial service with one Torch thread;
 CPU-specific engine work waits for a calibration showing it saturated.
 
 Children start through `manabot.sim.child`, never `multiprocessing` spawn.

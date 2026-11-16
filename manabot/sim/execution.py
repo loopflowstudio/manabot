@@ -28,7 +28,7 @@ class EvalCompute(StrictModel):
     """Stable serving contract used in player and benchmark identities."""
 
     version: Literal["shared-eval-v2"] = "shared-eval-v2"
-    device: Literal["cpu", "cuda"] = "cpu"
+    device: Literal["cpu", "cuda", "mps"] = "cpu"
     dtype: Literal["float32"] = "float32"
 
     @property

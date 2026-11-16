@@ -91,6 +91,14 @@ def selection_diagnostics(
     Cross-stratification permits comparisons within distance and action type;
     selection-correlated residuals alone cannot establish critic error causality.
     """
+    if advantages.device.type == "mps":
+        # One host copy per report input, once per update. The device's chosen
+        # membership is authoritative; never recompute its learning threshold.
+        advantages = advantages.detach().cpu()
+        residuals = residuals.detach().cpu()
+        selected = selected.detach().cpu()
+        ends = ends.detach().cpu()
+        action_types = action_types.detach().cpu()
     distances = terminal_distances(ends)
     result: list[SelectionGroup] = []
     bins = {

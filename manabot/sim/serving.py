@@ -17,6 +17,7 @@ from collections import OrderedDict, deque
 from collections.abc import Callable
 from dataclasses import dataclass
 from multiprocessing.connection import Connection
+import os
 from pathlib import Path
 import selectors
 import socket
@@ -127,6 +128,15 @@ class PolicyStore:
             self.policies.move_to_end(key)
             return self.policies[key]
         self.perf.count("resident_misses")
+        # Admission runs in the serving child, before any weights move. Never
+        # turn an unavailable accelerator or unsupported operator into CPU work.
+        if self.execution.device == "mps":
+            if not torch.backends.mps.is_available():
+                raise ValueError(
+                    "MPS requested but unavailable; CPU fallback is forbidden"
+                )
+            if os.environ.get("PYTORCH_ENABLE_MPS_FALLBACK") == "1":
+                raise ValueError("MPS serving forbids PYTORCH_ENABLE_MPS_FALLBACK=1")
         admission = self.admissions[key]
         player, path = admission.registration, Path(admission.path)
         with self.perf.span("checkpoint_verification"):
@@ -246,7 +256,7 @@ def _infer(
                 prepared, transfers = transfer(
                     tensors, torch.device(store.execution.device)
                 )
-        if store.execution.device == "cuda":
+        if store.execution.device in ("cuda", "mps"):
             perf.count("host_to_device_bytes", size)
             perf.count("host_to_device_calls", transfers)
         with perf.span("forward_host", batch=batch):
@@ -254,7 +264,7 @@ def _infer(
         with perf.span("output_transfer_host", batch=batch):
             logits = logits.cpu()
         perf.count("output_bytes", logits.numel() * logits.element_size())
-        if store.execution.device == "cuda":
+        if store.execution.device in ("cuda", "mps"):
             perf.count("device_to_host_calls")
             perf.count("required_output_waits")
         with perf.span("sampling", batch=batch):
@@ -306,7 +316,7 @@ def _record_dispatch(
 
 
 def _sample_memory(perf: EvalPerformance, execution: EvalExecution) -> None:
-    """Sample RSS at admission/batch boundaries; CUDA peaks are process allocator peaks."""
+    """Sample RSS/MPS at batch boundaries; only CUDA has allocator peak counters."""
     perf.counters["rss_bytes"] = psutil.Process().memory_info().rss
     perf.counters["peak_sampled_rss_bytes"] = max(
         perf.counters["peak_sampled_rss_bytes"], perf.counters["rss_bytes"]
@@ -315,6 +325,14 @@ def _sample_memory(perf: EvalPerformance, execution: EvalExecution) -> None:
     if execution.device == "cuda":
         perf.counters["peak_allocated_cuda_bytes"] = torch.cuda.max_memory_allocated()
         perf.counters["peak_reserved_cuda_bytes"] = torch.cuda.max_memory_reserved()
+    elif execution.device == "mps":
+        for name, value in (
+            ("allocated_mps_bytes", torch.mps.current_allocated_memory()),
+            ("driver_mps_bytes", torch.mps.driver_allocated_memory()),
+        ):
+            perf.counters[name] = value
+            peak = f"peak_sampled_{name}"
+            perf.counters[peak] = max(perf.counters[peak], value)
 
 
 def _profiled_infer(
@@ -349,6 +367,11 @@ def _profiled_infer(
                     "scope": "diagnostic batch, includes stream gaps; not pure kernel compute",
                 }
             )
+        elif execution.device == "mps":
+            # MPS exposes a device wait, not CUDA events. The host profiler
+            # includes this wait; do not present it as a kernel duration.
+            torch.mps.synchronize()
+            perf.count("diagnostic_synchronizations")
     profile.export_chrome_trace(str(trace))
     perf.traces.append(str(trace))
     perf.count("diagnostic_batches")
