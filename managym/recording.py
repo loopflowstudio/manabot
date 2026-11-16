@@ -1258,14 +1258,7 @@ class CapturedVector(_Capture):
             if old != new
         ]
         self._generations = generations
-        if restarted:
-            # Record native roots, including the resolved disclosure for every reset.
-            players = self.native.current_player_configs()
-            for index in restarted:
-                self.games[index].players = [
-                    PlayerSetup.retain(player, players[index].decklists)
-                    for player in players[index]
-                ]
+        players = self.native.current_player_configs() if restarted else []
         infos = self.native.get_last_info() if self.games_path is not None else []
         for index in restarted:
             game = self.games[index]
@@ -1283,6 +1276,12 @@ class CapturedVector(_Capture):
                     ),
                 )
             game.restart(seeds[index])
+            # The ending row owns the old setup; retain the new native root only
+            # after writing it, including disclosure resolved for the new seed.
+            game.players = [
+                PlayerSetup.retain(player, players[index].decklists)
+                for player in players[index]
+            ]
         self.next_seeds = [
             min(game.seed + self.stride, 2**64 - 1) for game in self.games
         ]

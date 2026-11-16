@@ -12,6 +12,50 @@ from managym.academy.watch import import_arena, inspect_watch
 from managym.recording import ScalarCapture, runtime_identities
 
 
+@pytest.mark.parametrize("vector", [False, True])
+def test_mixed_disclosure_record_replays_and_imports(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, vector: bool
+) -> None:
+    from managym.recording import CapturedVector, read_records
+    from managym.replay import walk
+
+    monkeypatch.setattr(trace, "TRACES_DIR", tmp_path / "traces")
+    setup = managym.GameSetup(
+        [managym.PlayerConfig(name=str(i), decklist={"Mountain": 12}) for i in (0, 1)],
+        decklists="mixed",
+    )
+    path = tmp_path / "games.jsonl"
+    if vector:
+        capture = CapturedVector(num_envs=1, seed=7, games_path=path)
+        capture.reset_all(setup)
+        for _ in range(1000):
+            if capture.step([0])[0][2]:
+                break
+        else:
+            raise AssertionError("bounded fixture did not complete")
+        capture.step([0])
+        capture.close()
+    else:
+        scalar = ScalarCapture(seed=7, games_path=path)
+        env = managym.Env(seed=7)
+        scalar.reset(env, setup)
+        scalar.step(env, 0)
+        scalar.close()
+    records = list(read_records(path))
+    assert len(records) == (2 if vector else 1)
+    for record in records:
+        game = record.games[0]
+        expected = managym.resolve_decklists(setup, game.seed)
+        assert {player.disclosure for player in game.players} == {expected}
+        replay = walk(record)
+        assert len(list(replay)) == len(game.actions)
+        assert replay.stop is not None
+        assert game.end is not None
+        assert replay.stop.status == game.end.status
+        imported = import_arena(record.model_dump(mode="json", by_alias=True))
+        assert imported["id"] not in server.SESSION_REGISTRY
+
+
 def test_interrupted_record_import_is_closed_and_readable(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

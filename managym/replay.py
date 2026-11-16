@@ -106,7 +106,7 @@ class RecordWalker:
         )
         if capture_cards:
             self.env.enable_exposure_capture()
-        self.observation = self.env.reset([p.native() for p in self.game.players])[0]
+        self.observation = self.env.reset(self.game.setup())[0]
         self.stop: ReplayStop | None = None
         self._used = False
 
