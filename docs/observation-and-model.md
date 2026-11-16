@@ -617,12 +617,19 @@ incumbent. Checkpoints retain the declared observation capacities in every arm.
 The LLM text observation lists every opponent record chronologically. Repeated
 historical references and rules descriptions appear once in alias tables; the
 aliases resolve snapshots at the choice, never today's objects. Paired life and
-hand values, and the two board rows, are ordered You/Opponent. A prompt costs
-roughly 40 KB plus 380 bytes per record in uniform-play curated games, so
-ordinary games fit the default 256 KiB budget and games near 600 records, or
-the 1,024-record capacity, can exceed it: `RepresentationOverflow` reports the complete
-size rather than trimming history. A byte fit does not establish a model's token
-fit; the LLM harness must check its tokenizer and chat-template budget.
+hand values, and the two board rows, are ordered You/Opponent. Text representation
+`manabot-text-9` prints the first record's context in full, then only changed
+turn, phase, step, life, hand, board and untapped-source values. Omitted context
+fields keep the previous record's value; `none` explicitly clears a reference
+group. Choices and responses apply only to their own record, including empty
+groups. Every record retains its kind, count, chronological span and selectors.
+
+Native long-game fixtures with hundreds of distinct contexts fit the default
+256 KiB budget through 1,029 records under both disclosures. This is a bounded
+size check, not a guarantee for every game: sufficiently large distinct
+snapshots still raise `RepresentationOverflow` with the complete size, without
+trimming history. A byte fit does not establish a model's token fit; the LLM
+harness must check its tokenizer and chat-template budget.
 
 Run the headless software proof with:
 

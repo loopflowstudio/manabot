@@ -33,7 +33,7 @@ from managym.opponent_memory import (
     read_records,
 )
 
-REPRESENTATION_VERSION = "manabot-text-8"
+REPRESENTATION_VERSION = "manabot-text-9"
 _ZONES = ("library", "hand", "battlefield", "graveyard", "stack", "exile", "command")
 _PHASES = ("beginning", "first main", "combat", "second main", "ending")
 _STEPS = (
@@ -1293,7 +1293,8 @@ def _memory_lines(memory: list[OpponentDecisionRecord]) -> list[str]:
 
     A log repeats the same untapped sources at many choices; printing each
     snapshot beside every reference grew a prompt by kilobytes per record.
-    Aliases keep every snapshot exactly while bounding repetition.
+    Aliases keep every snapshot exactly while context changes avoid repeating
+    unchanged turn, board and mana-source values between adjacent records.
     """
     if not memory:
         return []
@@ -1306,34 +1307,28 @@ def _memory_lines(memory: list[OpponentDecisionRecord]) -> list[str]:
         return snapshots.setdefault(reference.description, f"H{len(snapshots) + 1}")
 
     records: list[str] = []
+    previous: dict[str, str] = {}
     for record in memory:
         context, choice = record.context, record.choice
-        selectors = "".join(
-            f", {label} {value}"
-            for label, value in (
-                ("mode", choice.mode),
-                ("ability", choice.ability),
-                ("named", choice.named),
-                ("declared", choice.declared),
-            )
-            if value is not None
-        )
-        board = " | ".join(
-            "/".join(map(str, counts)) for counts in context.board_counts
-        )
-        records.append(
-            f"{record.ordinal + 1}. Turn {context.turn}, phase {context.phase}, step {context.step}: "
-            f"{record.kind}/{choice.kind or 'unavailable'}{selectors}; "
-            f"count {record.count}, span {record.first_position}..{record.last_position}; "
-            f"life {context.life[0]}/{context.life[1]}; "
-            f"hand {context.hand[0]}/{context.hand[1]}; board {board}."
-        )
+        # Only context is inherited. Empty response/choice groups are explicit,
+        # so a disappearing source or target cannot survive by omission.
+        fields = {
+            "turn": str(context.turn),
+            "phase": str(context.phase),
+            "step": str(context.step),
+            "life": "/".join(map(str, context.life)),
+            "hand": "/".join(map(str, context.hand)),
+            "board": " | ".join(
+                "/".join(map(str, counts)) for counts in context.board_counts
+            ),
+        }
+        groups_text: list[str] = []
         for label, references in (
-            ("Untapped mana sources", context.mana_sources),
+            ("mana", context.mana_sources),
             ("Response", record.response),
             ("Chosen subjects", choice.references),
         ):
-            # Consecutive equal snapshots (three untapped Forests) print once.
+            # Consecutive equal snapshots retain multiplicity and ordering.
             groups: list[tuple[str, int]] = []
             for reference in references:
                 snapshot = _memory_reference(reference, alias(reference))
@@ -1344,15 +1339,37 @@ def _memory_lines(memory: list[OpponentDecisionRecord]) -> list[str]:
                     groups[-1] = (text, groups[-1][1] + 1)
                 else:
                     groups.append((text, 1))
-            if groups:
-                records.append(
-                    f"  {label}: "
-                    + "; ".join(
-                        text if count == 1 else f"{count}× {text}"
-                        for text, count in groups
-                    )
-                    + "."
+            value = (
+                ", ".join(
+                    text if count == 1 else f"{count}× {text}" for text, count in groups
                 )
+                or "none"
+            )
+            if label == "mana":
+                fields[label] = value
+            else:
+                groups_text.append(f"{label}: {value}")
+        changes = [
+            f"{label}: {value}"
+            for label, value in fields.items()
+            if previous.get(label) != value
+        ]
+        previous = fields
+        selectors = [
+            f"{label}: {value}"
+            for label, value in (
+                ("mode", choice.mode),
+                ("ability", choice.ability),
+                ("named", choice.named),
+                ("declared", choice.declared),
+            )
+            if value is not None
+        ]
+        records.append(
+            f"{record.ordinal + 1}. {record.kind}/{choice.kind or 'unavailable'}; "
+            f"count: {record.count}; span: {record.first_position}..{record.last_position}; "
+            + "; ".join([*changes, *selectors, *groups_text])
+        )
     return [
         "",
         "Opponent decisions, chronological whole-game viewer history "
@@ -1361,7 +1378,12 @@ def _memory_lines(memory: list[OpponentDecisionRecord]) -> list[str]:
         "planeswalker/battle; role is the viewer-relative controller, or owner "
         "off the battlefield; P/T is effective on the battlefield and 0/0 "
         "elsewhere; M aliases name complete historical reference snapshots, "
-        "H aliases name effective rules snapshots at that choice):",
+        "H aliases name effective rules snapshots at that choice; "
+        "context fields turn, phase, step, life, hand, board and mana are printed "
+        "in full on the first record, then only when changed from the previous "
+        "record; omitted context fields keep their previous values; none clears "
+        "a reference group; mana lists untapped mana sources; choice selectors, "
+        "Response and Chosen subjects apply only to their own record):",
         *records,
         "",
         "Historical reference snapshots:",

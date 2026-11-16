@@ -739,3 +739,37 @@ tests passed; Ruff and `git diff --check` passed. No Rust changed. The artifacts
 are manifest-backed. CUDA resource/worker/reload admission, matched-decision
 calibration, Etude wiring, gate and the capped five-arm pilot remain outstanding.
 No paid allocation was made.
+
+### Lossless long-game context rendering, 2026-11-16
+
+Text representation `manabot-text-9` prints each first context fully, then only
+changed turn/phase/step/life/hand/board/untapped-source fields. Its prompt explains
+inheritance; choices/responses never inherit and empty groups are explicit.
+Every chronological record, selector, count/span and ordered reference remains.
+Historical aliases continue to resolve exact rendered snapshots. The v8 size
+projection above remains historical evidence, not a current cost estimate.
+
+The cycling-prefix tests are replaced with native games: seed 7, fixed 200-card
+decks (60 Mountain, 20 Island, 120 Gray Ogre), trivial skipping enabled, build
+until eight permanents then pass priority and decline attacks; other choices use
+the first legal action. At 602 and 1,029 records, the full prompts measured
+137,123/224,948 bytes open and 137,001/224,827 closed before a final 69-byte
+legend clarification. These logs have hundreds of distinct contexts; they are
+controlled long-game fixtures, not census replay or typical-game measurements.
+Uniform legal curated play, seed 166 at step 600, reproduces the earlier
+484-record maximum with over 250 distinct contexts and 50 distinct historical
+references. Its complete new prompt fits below 180,000 bytes, versus the earlier
+v8 observation of 209,614 bytes. No prefix is repeated to create either proof.
+
+An independent test reader reconstructs all rendered context values, reference
+groups (including order and multiplicity), historical descriptions, choice
+selectors and count/spans against native records. Directed fixtures also check
+zero/negative values, false selectors, disappearing sources and empty choices.
+All 70 tests in `tests/semantic/test_text_observation.py` pass (13.60 s), including
+ordinary Command binding and explicit byte/token overflow. Ruff and patch
+whitespace checks pass. The 262,144-byte default is unchanged; arbitrarily
+larger distinct snapshots and model token budgets can still reject a complete
+prompt. This is text fidelity/size evidence, not a CUDA, throughput or strength
+result. No paid run or new retained artifact was created; the fixtures above
+and checked-in test source reproduce the checks. CUDA admission, calibration,
+wiring, gate and the capped pilot remain outstanding.
