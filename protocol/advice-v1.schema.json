@@ -2984,6 +2984,15 @@
           "title": "Known Hand",
           "type": "object"
         },
+        "known_library": {
+          "additionalProperties": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Known Library",
+          "type": "object"
+        },
         "lesson_mana": {
           "anyOf": [
             {
@@ -4352,8 +4361,11 @@
       "additionalProperties": false,
       "properties": {
         "rules_viewer": {
-          "const": 0,
           "default": 0,
+          "enum": [
+            0,
+            1
+          ],
           "title": "Rules Viewer",
           "type": "integer"
         },
