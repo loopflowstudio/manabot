@@ -24,6 +24,7 @@ from manabot.infra.config import (
     RewardConfig,
 )
 from manabot.infra.identity import canonical_sha256, file_sha256
+from manabot.sim.evaluation_records import audit_view, finalize_game, stored_game
 from manabot.sim.native_game import execute_game
 from manabot.sim.registration import PlayerRegistration, SearchSemantics
 from manabot.sim.replay import replay_games
@@ -288,7 +289,8 @@ def test_arena_uses_exact_range_lifecycle_and_replays(
         )
         assert game.get("terminated"), game.get("failure")
         assert any("local_update_receipt" in decision for decision in game["decisions"])
-        game["game_trace_sha256"] = canonical_sha256(game)
+        finalize_game(game)
+        assert audit_view(stored_game(game))["decisions"] == game["decisions"]
         games.append(game)
     assert replay_games(games).passed
 

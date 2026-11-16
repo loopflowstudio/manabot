@@ -526,3 +526,19 @@ nor callback transport. `manabot.eval.models` holds only the identities
 leg); wire field names keep their recorded meanings because frozen evidence
 carries them. Tests load the INT-6 fixture's key and anchors through
 `tests/eval/arena_fixture.py`.
+
+Ordinary evaluation games are retained as canonical managym records in
+`games/<cell-id>.jsonl`, with finalized per-deal shards beside them. Evaluation
+setup, participant and runtime identities stay in private record context;
+viewer-frame hashes, player ordinals, policy seeds, latencies, inference ids and
+local-update receipts stay in decision annotations. Card eligibility and Etude
+admission still require the separate successful replay audit. Its `trace_sha256`
+identifies the canonical record, including that metadata. Existing rollup names
+and `gih-copies-v1` counting rules are unchanged.
+
+A failed game's `failures/*.jsonl` file is a settled capture snapshot. A pending
+call is retained as unknown and is never attempted while viewing it. Diagnose
+it with `uv run --no-project python -m managym.replay <file>` on the recorded
+runtime (or explicitly allow a changed runtime for diagnostic replay). Old
+Command traces and event journals remain readable; constructed scenario roots
+continue to use Command traces.

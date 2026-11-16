@@ -553,3 +553,9 @@ not change frozen observation layouts or make old checkpoints compatible
 with a new world. Retain the package versions, world identity, configuration
 and seeds with collected data, and reproduce old runs in their original
 environments.
+
+Recorded search annotations can also supply `search_scores` in legal-action
+order and a `belief` summary (`model`, `digest`, `condition_mass`,
+`sampled_worlds`). Academy presents those public outputs. The annotation's
+arbitrary `extra` payload and record context remain private; evaluation keeps
+its full search receipts there for offline audit.

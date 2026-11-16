@@ -215,6 +215,15 @@ def test_arena_import_keeps_source_and_rejects_tampering(
     assert receipt["passed"]
     source = read_trace(Path(trace["path"]))[0]
     assert source.get("failure") is None
+    canonical = import_game(source["record"])
+    assert canonical["finished"] and canonical["count"] == len(source["decisions"])
+    assert inspect_watch(canonical["id"], 0, None)["source_kind"] == "evaluation"
+    # The historical Command envelope remains a reader contract of its own.
+    from manabot.infra.identity import canonical_sha256
+
+    source.pop("record")
+    source.pop("game_trace_sha256")
+    source["game_trace_sha256"] = canonical_sha256(source)
     original = copy.deepcopy(source)
     result = import_game(source)
     assert source == original

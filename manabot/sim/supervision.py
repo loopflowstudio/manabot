@@ -1,6 +1,7 @@
 """Killable game supervision shared by served and in-child players.
 
-The pending Command is fsynced before acknowledgement. Each call owns one
+Ordinary games fsync the capture journal before native execution; scenario
+Commands are fsynced here before acknowledgement. Each call owns one
 native `ChildProcess` (game or replay); allocation slots bound concurrent
 callbacks, including wait time. A served game's child holds its own connection
 to the inference service, so decisions never pass through this process; the
@@ -15,6 +16,7 @@ from multiprocessing.connection import Connection
 from pathlib import Path
 import time
 from typing import Any
+from uuid import uuid4
 
 from manabot.sim.card_evidence import (
     EvidenceRef,
@@ -23,12 +25,19 @@ from manabot.sim.card_evidence import (
     retain_evidence,
 )
 from manabot.sim.child import ChildProcess
+from manabot.sim.evaluation_records import (
+    audit_view,
+    bind_record,
+    finalize_game,
+    stored_game,
+)
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import apply_game_event, replay_games
 from manabot.sim.serving_protocol import InferenceFailure, InferenceRuntime
 from manabot.sim.threads import REPLAY_BUDGET
 from managym.journal import DurableJournal
+from managym.recording import atomic_private_json, read_record
 
 
 def failure_record(
@@ -72,7 +81,9 @@ def supervise_game(
     descriptor of its inference connection (or None) and the game's wall-clock
     deadline in Unix seconds.
     Successful games discard their journal unless `keep_completed`; their
-    returned trace holds every decision. Failed games always keep the journal.
+    canonical record holds every decision. Failed ordinary games retain a
+    settled canonical snapshot of the journal, including an unknown pending call.
+    Scenario roots keep the acknowledged event journal.
     """
     slot = (
         nullcontext()
@@ -101,7 +112,12 @@ def supervise_game(
             seconds = min(seconds, inference.execution.remaining())
         deadline = started + seconds
         deadline_unix = time.time() + seconds
-        if evidence_path is not None:
+        canonical = "scenario_root" not in game
+        if canonical and evidence_path is None:
+            evidence_path = Path(".runs/game-failures") / f"{uuid4().hex}.jsonl"
+        if canonical and evidence_path is not None:
+            game["capture_path"] = str(evidence_path)
+        if evidence_path is not None and not canonical:
             journal = DurableJournal(evidence_path)
             journal.append(["game", game], create=True)
         process: ChildProcess | None = None
@@ -175,7 +191,7 @@ def supervise_game(
                 game = apply_game_event(game, kind, value)
                 if kind == "phase":
                     responsible = value
-                elif kind == "pending":
+                elif kind == "pending" and not canonical:
                     try:
                         receiver.send("retained")
                     except (BrokenPipeError, ConnectionResetError):
@@ -191,6 +207,21 @@ def supervise_game(
             game["execution_seconds"] = time.monotonic() - started
             perf.record("worker_wall", started, request=game.get("match_id"))
             game["supervision_performance"] = perf.snapshot()
+            if canonical:
+                if (
+                    "record" not in game
+                    and evidence_path is not None
+                    and evidence_path.exists()
+                ):
+                    bind_record(game, read_record(evidence_path))
+                finalize_game(game)
+                if "record" in game:
+                    game.pop("pending_decision", None)
+                    game.update(audit_view(game["record"]))
+                    if evidence_path is not None and (
+                        game.get("failure") or keep_completed
+                    ):
+                        atomic_private_json(evidence_path, game["record"])
             retain("settled", game)
             if (
                 evidence_path is not None
@@ -220,7 +251,7 @@ def replay_worker(
             receipts = []
             references = []
             for game in games:
-                evidence = capture_verified_game(GameTrace(data=game))
+                evidence = capture_verified_game(GameTrace(data=stored_game(game)))
                 references.append(retain_evidence(card_evidence_dir, evidence))
                 receipts.append(dict(evidence.replay))
             outcome = ReplayOutcome(receipts, tuple(references))

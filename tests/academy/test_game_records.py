@@ -252,3 +252,49 @@ def test_journal_listing_projects_the_complete_file(tmp_path: Path) -> None:
 def test_malformed_native_row_never_falls_back_to_bot_import() -> None:
     with pytest.raises(ValueError):
         import_game({"schema": "managym-game-v1", "decisions": []})
+
+
+def test_search_outputs_open_without_private_runner_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from managym.recording import read_record
+
+    monkeypatch.setattr(trace, "TRACES_DIR", tmp_path / "traces")
+    path = tmp_path / "evaluation.jsonl"
+    env = managym.Env(seed=7)
+    capture = ScalarCapture(
+        seed=7,
+        games_path=path,
+        context={
+            "source_kind": "evaluation",
+            "evaluation": {"token": "private-runner-context"},
+        },
+    )
+    observation, _ = capture.reset(
+        env, [managym.PlayerConfig(str(i), {"Mountain": 12}) for i in (0, 1)]
+    )
+    count = len(observation.action_space.actions)
+    capture.step(
+        env,
+        0,
+        annotation={
+            "probabilities": [1 / count] * count,
+            "search_scores": [0.25] * count,
+            "belief": {
+                "model": "physical",
+                "digest": "public-summary",
+                "condition_mass": 1.0,
+                "sampled_worlds": 2,
+            },
+            "extra": {"evaluation": {"local_update_receipt": "private-search-receipt"}},
+        },
+    )
+    capture.close()
+    imported = import_game(read_record(path).model_dump(mode="json", by_alias=True))
+    shown = inspect_watch(imported["id"], 0, imported["token"])
+    assert shown["outputs"]["search_scores"] == [0.25] * count
+    assert shown["outputs"]["belief"]["sampled_worlds"] == 2
+    assert shown["source_kind"] == "evaluation"
+    public = json.dumps(shown)
+    assert "private-search-receipt" not in public
+    assert "private-runner-context" not in public

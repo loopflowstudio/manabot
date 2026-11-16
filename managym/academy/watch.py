@@ -558,6 +558,8 @@ def import_record(record: "GameRecord") -> dict[str, Any]:
             session._bot_decision = BotDecision(
                 decision.chosen,
                 probabilities=probabilities or [],
+                search_scores=annotation.search_scores if annotation else [],
+                belief=annotation.belief if annotation else None,
                 value=annotation.value if annotation else None,
                 update=annotation.update if annotation else None,
                 unavailable="not retained" if annotation is None else None,

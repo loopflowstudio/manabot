@@ -26,6 +26,7 @@ import numpy as np
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 import managym
+from managym.bots import BeliefSummary
 from managym.card_capture import captured_cards
 from managym.decision import Command, DecisionFrame
 from managym.disclosure import DecklistDisclosure
@@ -103,6 +104,12 @@ class DecisionAnnotation(BaseModel):
     probabilities: list[float] | None = None
     value: float | None = None
     update: int | None = None
+    search_scores: list[float | None] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    belief: BeliefSummary | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     extra: dict[str, object] = {}
 
 
@@ -899,6 +906,13 @@ class ScalarCapture(_Capture):
             GameEnd(
                 status="failed" if self._failed else "interrupted",
                 reason="capture closed",
+                digest=(
+                    self._env.state_digest()
+                    if self._env is not None
+                    and not self._failed
+                    and self._selected(self.inputs)
+                    else None
+                ),
             ),
         )
         self._flush_statistics(partial=True)

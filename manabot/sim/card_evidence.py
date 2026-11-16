@@ -12,8 +12,10 @@ from pydantic import JsonValue, model_validator
 
 from manabot.infra.config import MatchConfig
 from manabot.infra.identity import StrictModel, canonical_json, canonical_sha256
+from manabot.sim.evaluation_records import audit_view, is_record
 from manabot.sim.replay import replay_game
 from managym.card_capture import CapturedCards, Seat
+from managym.recording import GameRecord
 
 CAPTURE_VERSION = 1
 
@@ -22,6 +24,19 @@ class GameTrace(StrictModel):
     """Typed view at the existing, extensible arena receipt boundary."""
 
     data: dict[str, JsonValue]
+
+    @property
+    def audit(self) -> dict[str, JsonValue]:
+        return audit_view(self.data, digest=self.sha256)
+
+    @property
+    def sha256(self) -> str | None:
+        if is_record(self.data):
+            return GameRecord.model_validate(self.data).sha256
+        value = self.data.get("game_trace_sha256")
+        if value is not None and not isinstance(value, str):
+            raise ValueError("invalid trace digest")
+        return value
 
 
 class GameEvidence(StrictModel):
@@ -46,9 +61,13 @@ class GameEvidence(StrictModel):
 
     @model_validator(mode="after")
     def bound(self) -> GameEvidence:
-        trace = dict(self.trace.data)
-        digest = trace.pop("game_trace_sha256", None)
-        if digest != self.trace_sha256 or canonical_sha256(trace) != digest:
+        trace = dict(self.trace.audit)
+        digest = self.trace.sha256
+        unsigned = dict(self.trace.data)
+        unsigned.pop("game_trace_sha256", None)
+        if digest != self.trace_sha256 or (
+            not is_record(self.trace.data) and canonical_sha256(unsigned) != digest
+        ):
             raise ValueError("trace digest mismatch")
         if canonical_sha256(self.replay) != self.replay_sha256:
             raise ValueError("replay receipt digest mismatch")
@@ -88,7 +107,7 @@ class EvidenceRef(StrictModel):
 
 
 def capture_verified_game(trace: GameTrace) -> GameEvidence:
-    data = trace.data
+    data = trace.audit
     identities = data.get("runtime_identities")
     if not isinstance(identities, dict) or not isinstance(
         identities.get("content_digest"), str

@@ -19,6 +19,7 @@ from manabot.eval.models import EvaluationKey
 from manabot.infra.config import MatchConfig
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
+from manabot.sim.evaluation_records import finalize_game
 from manabot.sim.execution import EvalExecution
 from manabot.sim.match import play_game
 from manabot.sim.matchup import (
@@ -92,8 +93,9 @@ def play_cell(
     Card capture uses verified replay within the same deadline and retains the
     upstream evidence references for trace_card_tables.
 
-    Each game's Command journal under `out_dir/failures/` is kept only when the
-    game fails, unless `keep_game_logs`; the cell trace keeps every game.
+    Each game's capture journal under `out_dir/failures/` is kept only when the
+    game fails, unless `keep_game_logs`; `games/<cell-id>.jsonl` keeps every
+    settled canonical record. Block shards preserve finalized progress.
 
     `legs` selects a subset of the mode's legs for every deal, for designs that
     assign one seat and deck pair per game instead of playing whole deals.
@@ -175,7 +177,7 @@ def play_cell(
     perf = EvalPerformance("cell", execution.instrumentation if execution else True)
     pair = (player_a.player_id, player_b.player_id)
     cell_id = "__".join(sorted(pair))
-    trace_relative_path = str(Path("traces") / f"{cell_id}.commands.jsonl.gz")
+    trace_relative_path = str(Path("games") / f"{cell_id}.jsonl")
     trace_path = out_dir / trace_relative_path
     deal_seed_set_sha256 = canonical_sha256(list(deal_seeds))
     for block, deal_seed in enumerate(deal_seeds):
@@ -310,10 +312,7 @@ def play_cell(
             block_rows = sorted(
                 (r for r in rows if r["deal_block"] == block), key=lambda r: r["leg"]
             )
-            relative = (
-                Path("traces")
-                / f"{cell_id}.{block_games[0]['deal_seed']}.commands.jsonl.gz"
-            )
+            relative = Path("games") / f"{cell_id}.{block_games[0]['deal_seed']}.jsonl"
             shard = write_trace(out_dir / relative, block_games)
             started = time.perf_counter()
             outcome = replay_retained(
@@ -364,7 +363,7 @@ def play_cell(
             seeds = game["player_seeds"]
             seat_decks = game.get("seat_decks")
             seconds = game["execution_seconds"]
-            game["game_trace_sha256"] = canonical_sha256(game)
+            finalize_game(game)
             games.append(game)
             if game["failure"] is not None:
                 score_a = (
@@ -466,7 +465,7 @@ def play_cell(
                         except InferenceFailure:
                             pass
         finally:
-            # Block shards and Command journals retain progress. Build the
+            # Block shards and capture journals retain progress. Build the
             # diagnostic aggregate once, including on coordinator failure,
             # rather than recompressing the growing panel after every game.
             if games:

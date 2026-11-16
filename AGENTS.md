@@ -89,6 +89,9 @@ checkpoints or experiment evidence.
 
 ## Style
 
+- Etude evaluation source identity reads `git ls-files`. Mark a new source file
+  with `git add -N <path>` before running an evaluation fixture that fingerprints
+  it; untracked files fail admission with `identity_path_without_files`.
 - Package style guides live in each package README (`manabot/README.md`,
   `managym/README.md`). Avoid transient comments that denote changes; pay
   attention to file headers and README content; propose small, iterative
