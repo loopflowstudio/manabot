@@ -228,9 +228,7 @@ def collect_games(
                         analytic,
                     )
                     hand = env.hand_snapshot(1 - viewer).cards
-                    label = np.array(
-                        [hand.get(name, 0) > 0 for name in corpus.names], np.float32
-                    )
+                    label = hand_presence(hand, corpus.names)
                     if slot == len(reservoirs[viewer]):
                         reservoirs[viewer].append((row, label))
                     else:
@@ -285,8 +283,29 @@ def new_corpus() -> Corpus:
         for key in managym.authored_deck_keys("elemental-world-v2")
     ]
     return Corpus(
-        [], [], tuple(sorted({name for player in roster for name in player.decklist}))
+        [],
+        [],
+        tuple(
+            sorted(
+                {
+                    name
+                    for player in roster
+                    for cards in (player.decklist, player.sideboard)
+                    for name in cards
+                }
+            )
+        ),
     )
+
+
+def hand_presence(hand: dict[str, int], names: tuple[str, ...]) -> np.ndarray:
+    """Keep every physical hand definition in the declared diagnostic target."""
+    missing = hand.keys() - set(names)
+    if missing:
+        raise ValueError(
+            f"probe target vocabulary omits hand definitions: {sorted(missing)}"
+        )
+    return np.array([hand.get(name, 0) > 0 for name in names], np.float32)
 
 
 def game_losses(labels: np.ndarray, probabilities: np.ndarray) -> np.ndarray:

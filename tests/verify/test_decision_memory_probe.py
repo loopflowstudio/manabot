@@ -24,6 +24,7 @@ from manabot.verify.decision_memory_probe import (
     choose_k,
     collect_games,
     game_losses,
+    hand_presence,
     new_corpus,
     probe_space,
     split_game,
@@ -114,6 +115,18 @@ def test_game_splits_and_analytic_baseline() -> None:
     )
     assert choose_k(np.array([-0.02, -0.03, -0.01]), {1: 1.0, 4: 2.0})[0] == 4
     assert choose_k(np.array([-0.1, 0.1]), {1: 1.0, 4: 2.0})[0] == 1
+
+
+def test_hand_targets_cover_main_and_sideboard_without_silent_omission() -> None:
+    corpus = new_corpus()
+    for key in managym.authored_deck_keys("elemental-world-v2"):
+        player = managym.authored_deck_setup("elemental-world-v2", key)
+        for cards in (player.decklist, player.sideboard):
+            assert cards.keys() <= set(corpus.names)
+            presence = hand_presence(cards, corpus.names)
+            assert presence.sum() == len(cards)
+    with pytest.raises(ValueError, match="vocabulary omits hand"):
+        hand_presence({"not a roster card": 1}, corpus.names)
 
 
 def test_labels_stay_outside_recorded_and_prepared_inputs(tmp_path: Path) -> None:

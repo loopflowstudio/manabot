@@ -67,7 +67,8 @@ fresh directory.
   16 per viewer per game. Capacities are the census bounds; a game exceeding
   them is a typed capacity error and is counted, never truncated.
 - **Label.** Which card definitions the opponent holds, from the privileged
-  native hand snapshot. The recorder stores labels beside the observation,
+  native hand snapshot, over the union of roster main decks and sideboards.
+  An unrepresented hand definition stops collection. The recorder stores labels beside the observation,
   never in an observation key, a prepared policy input, a cache or a replay.
 - **Candidates.** The production memory encoder and the embeddings it reads,
   fitted from scratch for transformer and GRU at K=1 and K=4, each with a linear
