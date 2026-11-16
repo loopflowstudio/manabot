@@ -6258,7 +6258,7 @@ fn hakoda_reveals_the_top_card_to_you_and_casts_allies_from_it() {
     assert!(!sees_library_card(&s, 0, ally), "no permission yet");
     assert!(!castable(&mut s, ally));
 
-    s.force_permanent_on_battlefield(0, "Hakoda, Selfless Commander");
+    let hakoda = s.force_permanent_on_battlefield(0, "Hakoda, Selfless Commander");
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(sees_library_card(&s, 0, ally));
     assert!(!sees_library_card(&s, 1, ally), "private to its controller");
@@ -6274,6 +6274,10 @@ fn hakoda_reveals_the_top_card_to_you_and_casts_allies_from_it() {
     s.set_player_mana_pool(0, "2W");
     assert!(sees_library_card(&s, 0, ogre));
     assert!(!castable(&mut s, ogre), "not an Ally");
+
+    let source = card_of(&s, hakoda);
+    move_card(&mut s, source, ZoneType::Graveyard);
+    assert!(!sees_library_card(&s, 0, ogre), "permission ended");
 }
 
 #[test]
@@ -15843,4 +15847,24 @@ fn sozins_comet_foretell_spending_choices_preserve_color_and_private_identity() 
         .opponent_cards
         .iter()
         .any(|card| card.name == "Sozin's Comet"));
+}
+
+#[test]
+fn aang_returning_to_library_cannot_remember_its_departed_back_face() {
+    let mut s = five_color_setup(&["Aang, at the Crossroads"]);
+    let permanent = s.force_permanent_on_battlefield(0, "Aang, at the Crossroads");
+    s.game_mut().transform_permanent(permanent);
+    let object = s.game().permanent_object(permanent).unwrap();
+    assert_eq!(s.game().state[object].name, "Aang, Destined Savior");
+    let moved = s.game_mut().move_object(object, ZoneType::Library);
+    assert_eq!(s.game().state[moved].name, "Aang, at the Crossroads");
+    for viewer in [PlayerId(0), PlayerId(1)] {
+        let observation = Observation::for_player(s.game(), viewer);
+        let player = if viewer == PlayerId(0) {
+            observation.agent
+        } else {
+            observation.opponent
+        };
+        assert!(player.known_library.is_empty());
+    }
 }

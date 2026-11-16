@@ -23,11 +23,12 @@ use crate::{
         turn::TurnState,
     },
     state::{
-        card::ActivatedAbilityDefinition,
+        card::{ActivatedAbilityDefinition, CardDefId},
         game_object::{
             CardId, CardVec, IdGenerator, ObjectId, ObjectLkiLog, ObjectLookupError, ObjectVec,
             PermanentId, PermanentVec, PlayerId, Target,
         },
+        knowledge::LibraryKnowledge,
         mana::Mana,
         permanent::{CounterKind, Permanent},
         stack_object::StackObject,
@@ -450,6 +451,16 @@ impl TrackedState {
     }
 
     // Fields no cached derivation reads: writing them keeps every revision.
+
+    // Viewer knowledge changes neither legality nor layered characteristics or
+    // mana production. Keep rule caches when only these projections change.
+    pub(crate) fn known_hand_mut(&mut self, player: PlayerId) -> &mut BTreeMap<CardDefId, u32> {
+        &mut self.state.players[player.0].known_hand
+    }
+
+    pub(crate) fn known_library_mut(&mut self, player: PlayerId) -> &mut LibraryKnowledge {
+        &mut self.state.players[player.0].known_library
+    }
 
     pub(crate) fn priority_mut(&mut self) -> &mut PriorityState {
         &mut self.state.priority

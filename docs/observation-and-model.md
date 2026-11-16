@@ -28,7 +28,7 @@ filters hidden information.
 | Local facts and links | Open-ended details such as counters, plus attachment and blocking links. |
 | Current continuation | The pending decision: stack entries, targets, modes and suspended payments. |
 | Shared effects | Each active effect once, with the objects it affects. |
-| Known hand and disclosed decklists | What this seat is allowed to know. |
+| Known hand, library positions and disclosed decklists | What this seat is allowed to know. |
 | Legal actions and focus objects | Every offered action and up to two objects it refers to. |
 | Card definitions | Typed rules tokens derived from each card's native definition. |
 
@@ -405,6 +405,7 @@ Capacities are configuration; widths are the layout.
 | `relations` | 64 × 49 | Stack entries, targets, clauses, modes, costs, suspended payments, waiting triggers |
 | `facts` | 512 × 12 (`max_facts`) | One row per object and detail of an open vocabulary |
 | `effects`, `effect_details`, `effect_members` | 128 × 18, 4096 × 3, 2048 × 2 | Each active effect once, with its payload tokens and affected objects |
+| `known_library` | 2 × 20 × 2 | Exact library facts: definition + 1, position from top + 1; zero padding |
 | `decklists`, `known_hand`, `semantic_cards` | 2 × 60 × 5, 2 × 60 × 2, 2 × 60 | Disclosed lists, known-hand minima, definition joins |
 | `actions`, `action_focus`, `name_candidates` | 512 × 22, 512 × 2, 512 × 4 | Legal actions, the objects each names, name choices |
 | `events` | 32 × 7, or 32 × 12 with recent events | Public events |
@@ -537,6 +538,29 @@ definitions; this is exercised only by the offline large-vocabulary fixture.
 This does not claim that the supported catalog exhausts every name legal under
 Magic's rules, and does not broaden deck admission.
 
+### Exact library knowledge
+
+The native observation's `known_library` maps a zero-based library position
+from the top to a card definition. The owner sees the union of public and
+private facts; an opponent sees public facts only. The current policy input
+carries twenty rows per seat (ten public plus ten private, with coinciding
+positions represented once). Deprecated inputs v9/v10 omit these facts and preserve their frozen layout. No old checkpoint is relabeled compatible: the new
+buffer shape is part of world binding.
+
+Native and Python encoders use the same definition joins and one-based
+position encoding. Prepared resolves definitions once and weights each by the
+reciprocal of its one-based position. Torch projects this separate pooled
+vector, divided by 60, before adding it to hand and decklist knowledge, so a
+known top card and a known hand card have distinct representations. MLX currently admits only input v9 and continues to refuse v11;
+these rows do not extend the deprecated layout. It is a minimal live
+read, with no measured claim about learning or an ability to infer joint
+constraints. The text observation states each exact position in words.
+
+A private return can erase independent facts; it never creates a claim that a
+card occupies several possible places. Models may infer such relationships
+from their available observations and history. Native sampling honors every
+retained single-place fact ([engine knowledge](engine.md#remembered-library-positions)).
+
 ### Optional recent public events
 
 `ModelConfig(recent_events=True)` (or `with_recent_events` / `ModelOverride`)
@@ -571,7 +595,7 @@ does not make hidden cards observable or the game fully observed.
 
 | Layer | Holds | Shipped | Must not carry |
 | --- | --- | --- | --- |
-| Effective state | Current characteristics from `Game::characteristics`, zones, stack, suspended decisions, waiting triggers, known-hand minima, deck disclosure | Object rows and the 64 × 49 relation table | Raw effect bookkeeping a consumer must replay to learn the current value |
+| Effective state | Current characteristics from `Game::characteristics`, zones, stack, suspended decisions, waiting triggers, hand minima, exact library positions, deck disclosure | Object rows and the 64 × 49 relation table | Raw effect bookkeeping a consumer must replay to learn the current value |
 | Shared records | Each active effect once: payload, duration, timestamp rank, controller, source definition, exact visible source, exact memberships | `effects`, `effect_details`, `effect_members`; local facts for copy exceptions and other per-object kinds | A recomputed layer result, or a merged record that loses a future difference |
 | History | Chronological public events, explicitly bounded | At most 32 rows of arrival, damage, life, cast, resolved and countered; optional and off by default | Anything needed to know the current rules state. Effect creation is not an event kind, and an activation adds no row |
 | Memory | Inference from everything the seat has been shown | Nothing | A fact the current observation should carry, or anything the viewer may not see |
@@ -649,7 +673,7 @@ is not evidence for any of them:
 - **Hidden information.** Updates read only that seat's authorized observations
   and the public events since its committed cursor. Opponent private frames,
   sampled possible worlds and future trajectory facts never enter.
-- **Eviction.** Current effects, known-hand minima, disclosure and pending
+- **Eviction.** Current effects, hand minima, retained library positions, disclosure and pending
   obligations stay in native state regardless of memory or window. Old history
   rows disappear explicitly and never change a legal decision.
 - **Fork.** A fork clones state and cursor, then evolves independently. Replay

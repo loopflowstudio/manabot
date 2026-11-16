@@ -530,6 +530,8 @@ pub struct LegacyPlayerView {
     pub library_count: u32,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub known_hand: BTreeMap<String, u32>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub known_library: BTreeMap<String, u32>,
     /// Decklist counts by definition, present only when this frame's viewer
     /// knows the player's decklist (its own, or an open opponent's). Absent
     /// means hidden; an empty map means known and empty.

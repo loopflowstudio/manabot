@@ -195,13 +195,14 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 19] {
     ]
 }
 
-fn player_fields(player: &Player) -> [(&'static str, Seen); 11] {
+fn player_fields(player: &Player) -> [(&'static str, Seen); 12] {
     let Player {
         id: _,
         index: _,
         deck: _,
         sideboard: _,
         known_hand: _,
+        known_library: _,
         name: _,
         life: _,
         drew_when_empty: _,
@@ -221,6 +222,7 @@ fn player_fields(player: &Player) -> [(&'static str, Seen); 11] {
             Seen::Via("decklists tensor (sideboard counts)"),
         ),
         ("known_hand", Seen::Via("known_hand tensor")),
+        ("known_library", Seen::Via("known_library tensor")),
         ("name", Seen::Identity),
         ("life", Seen::Player(player::LIFE, player::IS_ACTIVE)),
         (
@@ -2525,6 +2527,7 @@ fn opponent_hidden_cards_do_not_reach_the_viewer_tensor() {
     assert_eq!(left.opponent_cards, right.opponent_cards);
     assert_eq!(left.opponent_permanents, right.opponent_permanents);
     assert_eq!(left.known_hand, right.known_hand);
+    assert_eq!(left.known_library, right.known_library);
     assert_eq!(left.semantic_cards, right.semantic_cards);
 }
 
@@ -3006,6 +3009,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         pooled_mana_classes => [Rows("pooled mana classes below")],
         hand_only_until => [column(Player, player::HAND_ONLY)],
         known_hand => [Rows("known_hand")],
+        known_library => [Rows("known_library")],
         main_counts => [Rows("decklists")],
         unseen_counts => [Rows("decklists")],
         sideboard_counts => [Rows("decklists")],
@@ -3632,6 +3636,7 @@ fn flat(encoded: &EncodedObservation) -> Vec<f32> {
         &encoded.relations,
         &encoded.semantic_cards,
         &encoded.known_hand,
+        &encoded.known_library,
         &encoded.agent_player,
         &encoded.opponent_player,
         &encoded.agent_cards,
@@ -5214,4 +5219,18 @@ fn pooled_mana_expiry_preserves_totals_beyond_one_class_capacity() {
         );
         encoded_default(&observation);
     }
+}
+
+#[test]
+fn library_knowledge_positions_reach_their_named_rows() {
+    let mut s = five_color_setup(&["Hakoda, Selfless Commander"]);
+    s.force_permanent_on_battlefield(0, "Hakoda, Selfless Commander");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let observation = Observation::for_player(s.game(), PlayerId(0));
+    let definition = observation.agent.known_library[&0];
+    let encoded = encode(&observation, &ObservationEncoderConfig::default()).unwrap();
+    assert_eq!(&encoded.known_library[..2], &[(definition + 1) as f32, 1.0]);
+    assert!(encoded.known_library[2..].iter().all(|value| *value == 0.0));
+    let other = Observation::for_player(s.game(), PlayerId(1));
+    assert!(other.opponent.known_library.is_empty());
 }

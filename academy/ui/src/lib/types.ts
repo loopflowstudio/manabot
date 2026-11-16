@@ -166,6 +166,8 @@ export interface PlayerState {
   inspected?: CardState[];
   sideboard?: SideboardCard[];
   known_hand?: Record<string, number>;
+  /** Zero-based position from the top to definition, as this viewer knows it. */
+  known_library?: Record<string, number>;
   /** Decklist counts, present only when the viewer knows this player's
    *  decklist (its own, or an open opponent's). Absent means closed. */
   main_counts?: Record<string, number>;

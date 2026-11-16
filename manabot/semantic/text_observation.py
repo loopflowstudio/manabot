@@ -827,6 +827,10 @@ class _Renderer:
             if state.shared_effects is None:
                 for effect in player.effects:
                     lines.append(f"Effect: {self._effect(effect)}.")
+            for position, definition in sorted(player.known_library.items()):
+                lines.append(
+                    f"Known library position {int(position) + 1} from top: {self.definition(int(definition))}."
+                )
             counts: list[tuple[str, dict[int, int]]] = [
                 ("Publicly known hand minima", player.known_hand)
             ]

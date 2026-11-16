@@ -380,6 +380,15 @@ authored-match receipt, both parity receipts and the Academy fixtures were
 re-recorded with their Commands, state digests and outcomes unchanged. A
 checkpoint keeps the manifest of the revision that wrote it.
 
+The current open world carries exact viewer-known library positions in the
+`known_library` `(2, 20, 2)` policy buffer. No bags or sets of locations are
+asserted. Native observations, determinization and exact materialization share
+these single-place facts. Possible-world space version 4 reserves known-position
+copies before counting residual hand deals, and the physical-deal sampler is
+`managym.determinize/physical-deal/v2`. Earlier checkpoints fail the changed
+buffer-shape binding; retained space-v3 receipts and experiment evidence keep
+their original identities. Empty positional state adds no serialized field.
+
 ## w16: one card authority (superseded by w17)
 
 Cards are typed Rust functions in the file of the set that first printed them

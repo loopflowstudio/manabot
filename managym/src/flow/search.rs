@@ -41,8 +41,8 @@ impl Game {
     /// - public known-hand definition counts are reserved; unknown slots are
     ///   sampled uniformly from the residual hand ∪ library pool, with the
     ///   remainder becoming their shuffled library;
-    /// - `perspective`'s own library is reshuffled (its order is unknown to
-    ///   them, but its contents are determined by the public zones + hand).
+    /// - viewer-known library positions reserve distinct definition witnesses;
+    ///   only the remaining order is shuffled, for both players.
     ///
     /// - the opponent's face-down foretold slots are filled from the same
     ///   unseen pool's first foretell-bearing cards, as possible-world
@@ -66,6 +66,8 @@ impl Game {
             self.determinize_zones(perspective, &commitments, sample_seed);
             let mut rng = ChaCha8Rng::seed_from_u64(mix_seed(sample_seed, 241));
             if self.rebind_commitments(&commitments, &mut rng) {
+                self.refresh_sampled_library_knowledge(perspective);
+                self.assert_library_knowledge();
                 self.refresh_sampled_decision(perspective);
                 return Ok(());
             }
@@ -94,9 +96,12 @@ impl Game {
         let searching_opponent = self.inspects_library(perspective, opponent);
         if !searching_opponent {
             if self.shares_information(perspective, opponent) {
-                self.shuffle_private_library(opponent, &mut rng);
+                self.shuffle_known_library(opponent, perspective, commitments, &mut rng);
             } else {
                 let (mut known, mut residual) = self.hidden_hand_partition(opponent, commitments);
+                let reserved = self
+                    .reserve_library_facts(opponent, perspective, &mut residual, commitments)
+                    .expect("known hand and library have distinct witnesses");
                 residual.extend(
                     self.foretold_cards(opponent)
                         .map(|card| self.state.object_of(card)),
@@ -109,16 +114,22 @@ impl Game {
                 );
                 let unknown_slots = self.state.zones.size(ZoneType::Hand, opponent) - known.len();
                 let mut library = residual.split_off(unknown_slots);
-                let pending = commitments.pinned_library_objects(self, opponent);
+                let pending: Vec<_> = commitments
+                    .pinned_library_objects(self, opponent)
+                    .into_iter()
+                    .filter(|object| !reserved.iter().any(|(_, fixed)| fixed == object))
+                    .collect();
                 if !pending.is_empty() {
                     library.extend(pending);
                     library.shuffle(&mut rng);
                 }
                 known.extend(residual);
+                let library = Self::place_library_facts(library, reserved)
+                    .expect("valid known library positions");
                 self.state.reassign_hidden(opponent, known, library);
             }
         }
-        self.shuffle_private_library(perspective, &mut rng);
+        self.shuffle_known_library(perspective, perspective, commitments, &mut rng);
     }
 
     fn refresh_sampled_decision(&mut self, perspective: PlayerId) {
@@ -164,23 +175,6 @@ impl Game {
         }
     }
 
-    /// Shuffle an unknown library order while preserving its permitted top.
-    pub(crate) fn shuffle_private_library(&mut self, player: PlayerId, rng: &mut ChaCha8Rng) {
-        let known_top = self
-            .state
-            .zones
-            .top(ZoneType::Library, player)
-            .filter(|_| self.looks_at_library_top(player));
-        self.state
-            .zones
-            .shuffle_canonical(ZoneType::Library, player, rng);
-        if let Some(object) = known_top {
-            self.state
-                .zones
-                .reposition(ZoneType::Library, player, object, usize::MAX);
-        }
-    }
-
     /// Whether `viewer` knows `owner`'s main deck and sideboard: always its
     /// own, and the opponent's when that decklist is open.
     pub fn decklist_known(&self, owner: PlayerId, viewer: PlayerId) -> bool {
@@ -208,7 +202,7 @@ impl Game {
         player: PlayerId,
         commitments: &HiddenCommitments,
     ) -> (Vec<ObjectId>, Vec<ObjectId>) {
-        let is_fixed = |object: ObjectId| commitments.pins_object(object);
+        let is_fixed = |object: ObjectId| commitments.pins(object);
         let mut pool: Vec<_> = [ZoneType::Hand, ZoneType::Library]
             .into_iter()
             .flat_map(|zone| self.state.zones.zone_objects(zone, player).iter().copied())
@@ -270,20 +264,25 @@ impl Game {
         });
     }
 
-    pub(crate) fn repin_revealed_library_cards(&mut self) {
+    /// Inspection lists describe an ordered prefix. Revealed search selections
+    /// describe membership only and must never be repositioned as a prefix.
+    pub(crate) fn repin_library_inspections(&mut self, viewer: PlayerId) {
         let Some(suspended) = &self.state.suspended_decision else {
             return;
         };
         let inspections: Vec<_> = suspended
             .decisions()
-            .map(|decision| decision.revealed_objects().to_vec())
-            .filter(|objects| !objects.is_empty())
+            .filter_map(Decision::library_inspection)
+            .filter(|(owner, _)| !self.shares_information(viewer, *owner))
+            .map(|(owner, objects)| (owner, objects.to_vec()))
             .collect();
-        for revealed in inspections {
-            let player = self.state[revealed[0]].owner;
-            // Placement appends, so put revealed[0] on top (last).
-            for object in revealed.iter().rev() {
-                self.state.place_object(*object, player, ZoneType::Library);
+        for (owner, objects) in inspections {
+            // This is constrained sampling placement, preserving the facts
+            // already checked while binding each inspection slot.
+            for object in objects.iter().rev() {
+                self.state
+                    .zones
+                    .reposition(ZoneType::Library, owner, *object, usize::MAX);
             }
         }
     }
