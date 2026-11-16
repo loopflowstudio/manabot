@@ -782,6 +782,17 @@ impl Decision {
         }
     }
 
+    /// Every library card this decision's chooser has looked at, including
+    /// cards an `OrderLibrary` has already placed on the bottom.
+    pub(crate) fn inspected_library_objects(&self) -> Option<(PlayerId, &[ObjectId])> {
+        match self {
+            Self::OrderLibrary {
+                player, object_ids, ..
+            } => Some((*player, object_ids)),
+            _ => self.library_inspection(),
+        }
+    }
+
     /// Private inspection domains that survive library resampling. Search
     /// offers over an entire zone have a different membership authority.
     pub(crate) fn library_inspection(&self) -> Option<(PlayerId, &[ObjectId])> {
@@ -801,6 +812,11 @@ impl Decision {
                     LibraryEnd::Bottom => &objects[*next..],
                 },
             )),
+            Self::CastDuringResolution {
+                player,
+                offer: ResolutionCastOffer::LibraryTop { object },
+                ..
+            } => Some((*player, std::slice::from_ref(object))),
             _ => None,
         }
     }
@@ -1457,9 +1473,7 @@ impl Game {
                             .zones
                             .size(ZoneType::Library, owner)
                             .saturating_sub(2);
-                        self.state
-                            .zones
-                            .reposition(ZoneType::Library, owner, object, below_top);
+                        self.reposition_library_object(owner, object, below_top);
                     } else {
                         self.put_on_bottom_of_library(object);
                     }
@@ -2458,11 +2472,10 @@ impl Game {
                 }
                 if remaining.is_empty() {
                     for object in bottom.iter().rev() {
-                        self.state
-                            .zones
-                            .reposition(ZoneType::Library, *player, *object, 0);
+                        self.reposition_library_object(*player, *object, 0);
                     }
                     self.put_on_top_of_library(*player, top);
+                    self.remember_library_objects(*player, bottom);
                     self.run_frame(suspended.frame);
                 } else {
                     *self.state.suspended_decision_mut() = Some(suspended);
@@ -2581,6 +2594,7 @@ impl Game {
                     LibraryEnd::Bottom => self.put_on_bottom_of_library(*object_id),
                     LibraryEnd::Top => self.put_on_top_of_library(*player, object_ids),
                 }
+                self.remember_library_objects(*player, &object_ids[..*next]);
                 if *next == object_ids.len() {
                     self.run_frame(suspended.frame);
                 } else {
@@ -3229,11 +3243,17 @@ impl Game {
         }
         match end {
             LibraryEnd::Bottom => {
-                for object in objects {
-                    self.put_on_bottom_of_library(object);
+                for object in &objects {
+                    self.put_on_bottom_of_library(*object);
+                }
+                if !random_order {
+                    self.remember_library_objects(player, &objects);
                 }
             }
             LibraryEnd::Top => self.put_on_top_of_library(player, &objects),
+        }
+        if random_order {
+            self.state.known_library_mut(player).forget_order();
         }
         None
     }
@@ -3285,11 +3305,12 @@ impl Game {
     /// Reorder inspected library cards, first to draw first. Their exact
     /// objects survive: placement within a zone emits no zone-change events.
     fn put_on_top_of_library(&mut self, player: PlayerId, objects: &[ObjectId]) {
+        self.state.known_library_mut(player).forget_order();
         for object in objects.iter().rev() {
-            self.state
-                .zones
-                .reposition(ZoneType::Library, player, *object, usize::MAX);
+            self.reposition_library_object(player, *object, usize::MAX);
         }
+        self.remember_library_objects(player, objects);
+        self.assert_library_knowledge();
     }
 
     /// Put each of `cards` still in exile on the bottom of its owner's
@@ -3318,6 +3339,17 @@ impl Game {
             LibraryEnd::Bottom => 0,
             LibraryEnd::Top => usize::MAX,
         };
+        self.reposition_library_object(owner, object, index);
+    }
+
+    /// Arbitrary reorders invalidate positional facts at the mutation boundary.
+    pub(crate) fn reposition_library_object(
+        &mut self,
+        owner: PlayerId,
+        object: ObjectId,
+        index: usize,
+    ) {
+        self.state.known_library_mut(owner).forget_order();
         self.state
             .zones
             .reposition(ZoneType::Library, owner, object, index);

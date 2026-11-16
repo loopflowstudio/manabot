@@ -1834,6 +1834,7 @@ impl Game {
                 if remaining.is_empty() {
                     return None;
                 }
+                self.remember_library_objects(frame.controller, &remaining);
                 Some(Decision::Scry {
                     player: frame.controller,
                     looked: remaining.clone(),
@@ -1849,6 +1850,7 @@ impl Game {
                     });
                 }
                 let looked = self.library_top_objects(frame.controller, *count);
+                self.remember_library_objects(frame.controller, &looked);
                 (!looked.is_empty()).then_some(Decision::Surveil {
                     player: frame.controller,
                     looked,
@@ -1869,6 +1871,7 @@ impl Game {
                 if looked.is_empty() {
                     return None;
                 }
+                self.remember_library_objects(frame.controller, &looked);
                 Some(Decision::LookAndSelect {
                     random_order: *random_order,
                     reveal: *reveal,

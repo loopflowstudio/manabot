@@ -184,6 +184,7 @@ class ActorCritic(nn.Module):
                 decklists=True,
                 records=config.catalog_records(),
                 decision_memory=config.decision_memory != "none",
+                library=enc.one_token,
             )
         else:
             # Generic worlds still distinguish card definitions. The content

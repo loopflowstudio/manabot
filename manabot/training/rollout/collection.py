@@ -59,7 +59,7 @@ from manabot.sim.rollout import (
     RandomBatchController,
     allocate_buffers,
 )
-from manabot.training.decks import UniformDecks, pair_match
+from manabot.training.decks import UniformDecks
 from manabot.training.regime import BatchClosure
 from manabot.training.rollout.actions import ACTION_FIELDS, ActionRows, PackedActions
 from manabot.training.rollout.adaptive import (
@@ -88,7 +88,7 @@ from manabot.training.state.game_errors import (
     GameErrorState,
     GameOutcome,
 )
-from managym import WORLD_SETUP, Deck
+from managym import WORLD_SETUP, Deck, GameSetup
 
 OPPONENT_MODES = ("random", "frozen", "self", "learning")
 
@@ -494,6 +494,15 @@ class SeatRoutedCollector:
                 raise ValueError("a deck source cannot be combined with a curriculum")
             if match.config.world != WORLD_SETUP:
                 raise ValueError("deck-source games play in the world")
+            if (
+                deck_source.decklists != "mixed"
+                and match.config.decklists != deck_source.decklists
+            ):
+                raise ValueError(
+                    "the deck source's disclosure decides every game: match has "
+                    f"decklists={match.config.decklists!r}, deck source has "
+                    f"decklists={deck_source.decklists!r}"
+                )
             self._uniform_roster = deck_source.players()
         elif matchup_curriculum == "elemental-uniform":
             self._uniform_roster = elemental_roster(match)
@@ -622,7 +631,10 @@ class SeatRoutedCollector:
                     [m.to_rust() for m in self.stream_matches]
                 )
             elif matchup_curriculum in ("fixed", "elemental-uniform"):
-                self._env.reset_all_into_buffers(match.to_rust())
+                setup = match.to_rust()
+                if deck_source is not None:
+                    setup = GameSetup(setup, decklists=deck_source.decklists)
+                self._env.reset_all_into_buffers(setup)
             else:
                 self._env.reset_each_into_buffers(
                     [m.to_rust() for m in self.stream_matches]
@@ -830,7 +842,11 @@ class SeatRoutedCollector:
             # the run submitted, even one outside the supply it began with.
             setups = self._env.current_player_configs()
             for row in rows:
-                self.stream_matches[row] = Match(pair_match(*setups[row]))
+                self.stream_matches[row] = Match(
+                    MatchConfig.from_players(
+                        *setups[row], decklists=setups[row].decklists
+                    )
+                )
         for row in rows:
             match = self.stream_matches[row]
             self._self_play_decks[row] = (

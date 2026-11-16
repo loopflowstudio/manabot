@@ -47,14 +47,19 @@ def test_retained_drill_prefix_admits_shared_effects(
         ).read_bytes()
     )
     game = receipt.game
-    players = [
-        player.model_copy(update={"disclosure": "closed"}).native()
-        if closed
-        else player.native()
-        for player in game.players
-    ]
+    if closed:
+        game = game.model_copy(
+            update={
+                "players": [
+                    player.model_copy(update={"disclosure": "closed"})
+                    for player in game.players
+                ]
+            }
+        )
+    players = game.setup()
     scalar = managym.Env(seed=game.seed, skip_trivial=receipt.skip_trivial)
-    scalar.reset(players)
+    scalar_obs, _ = scalar.reset(players)
+    assert scalar_obs.decklists_closed is closed
     encoder = ObservationEncoder(ObservationConfig())
     buffers = encoder.allocate(1)
     buffers.update(
@@ -69,8 +74,13 @@ def test_retained_drill_prefix_admits_shared_effects(
         skip_trivial=receipt.skip_trivial,
     )
     vector.set_buffers(buffers)
-    vector.reset_all(players)
+    ((vector_obs, _),) = vector.reset_all(players)
+    assert vector_obs.decklists_closed is closed
     vector.reset_seeds_into_buffers([game.seed])
+    assert scalar.observation_for_player(0).decklists_closed is closed
+    assert vector.current_player_configs()[0].decklists == (
+        "closed" if closed else "open"
+    )
     for index, action in enumerate(game.actions):
         assert isinstance(action, int)
         if index == len(game.actions) - 1 and not closed:
@@ -87,6 +97,7 @@ def test_retained_drill_prefix_admits_shared_effects(
             if viewer == actor
             else scalar.observation_for_player(viewer)
         )
+        assert obs.decklists_closed is closed
         assert obs.shared_effects is not None
         assert len(obs.shared_effects) == receipt.payloads
         assert (

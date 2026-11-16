@@ -25,6 +25,7 @@ from manabot.infra.identity import StrictModel, canonical_sha256
 from manabot.model.world import admit_world_decks
 import managym
 from managym import Deck
+from managym.disclosure import DecklistSampling
 
 
 class UniformDecks(StrictModel):
@@ -32,9 +33,14 @@ class UniformDecks(StrictModel):
 
     Independent sampling keeps duplicate lists from different source events as
     separate entries. Optional stable entry IDs distinguish those events in game
-    receipts; deck content identity remains owned by `Deck`.
+    receipts; deck content identity remains owned by `Deck`. `decklists` selects
+    a fixed disclosure or a balanced, seeded per-game draw ("mixed"). Open is
+    omitted from serialized sources so their recovery identities remain unchanged.
     """
 
+    decklists: DecklistSampling = Field(
+        default="open", exclude_if=lambda value: value == "open"
+    )
     decks: tuple[Deck, ...] = Field(min_length=1)
     sampling: Literal["uniform-distinct-v1", "uniform-independent-v1"] = Field(
         default="uniform-distinct-v1",
@@ -81,19 +87,8 @@ class UniformDecks(StrictModel):
     def match_config(self) -> MatchConfig:
         """A representative root; sampled roots come from the native draw."""
         players = self.players()
-        return pair_match(players[0], players[1] if len(players) > 1 else players[0])
-
-
-def pair_match(
-    first: managym.PlayerConfig, second: managym.PlayerConfig
-) -> MatchConfig:
-    """Record an actual native root's decks in seat order."""
-    return MatchConfig(
-        hero=first.name,
-        villain=second.name,
-        hero_deck=first.decklist,
-        villain_deck=second.decklist,
-        hero_sideboard=first.sideboard,
-        villain_sideboard=second.sideboard,
-        world=first.world,
-    )
+        return MatchConfig.from_players(
+            players[0],
+            players[1] if len(players) > 1 else players[0],
+            decklists="closed" if self.decklists == "closed" else "open",
+        )

@@ -99,6 +99,7 @@ impl Scenario {
     /// the hand. Calling it twice finds the same copy.
     pub fn force_card_in_hand(&mut self, player: usize, card_name: &str) {
         let object = owned_card(self, player, card_name);
+        forget_injected_knowledge(self, object, ZoneType::Hand);
         self.game
             .state
             .place_object(object, PlayerId(player), ZoneType::Hand);
@@ -149,6 +150,7 @@ impl Scenario {
                 return permanent_id;
             }
         } else {
+            forget_injected_knowledge(self, object_id, ZoneType::Battlefield);
             self.game
                 .state
                 .place_object(object_id, PlayerId(player), ZoneType::Battlefield);
@@ -211,6 +213,17 @@ pub fn five_color_unfunded_setup(names: &[&str]) -> Scenario {
 // Hand, library and graveyard
 // ---------------------------------------------------------------------------
 
+fn forget_injected_knowledge(s: &mut Scenario, object: ObjectId, to: ZoneType) {
+    let owner = s.game.state[object].owner;
+    let from = s.game.state.zones.zone_of(object);
+    if from == Some(ZoneType::Library) || to == ZoneType::Library {
+        s.game.state.players[owner.0].known_library.forget_order();
+    }
+    if from == Some(ZoneType::Hand) && to != ZoneType::Hand {
+        s.game.state.players[owner.0].known_hand.clear();
+    }
+}
+
 /// Move every card in a player's hand back to their library (test setup —
 /// removes castable noise so `PriorityCastSpell` is unambiguous).
 pub fn clear_hand(s: &mut Scenario, player: usize) {
@@ -221,6 +234,7 @@ pub fn clear_hand(s: &mut Scenario, player: usize) {
         .zone_objects(ZoneType::Hand, PlayerId(player))
         .to_vec();
     for object in hand {
+        forget_injected_knowledge(s, object, ZoneType::Library);
         s.game_mut()
             .state
             .place_object(object, PlayerId(player), ZoneType::Library);
@@ -250,6 +264,7 @@ pub fn force_new_card_in_hand(s: &mut Scenario, player: usize, card_name: &str) 
             .then_some(index)
         })
         .unwrap_or_else(|| panic!("no library copy of {card_name} for player {player}"));
+    forget_injected_knowledge(s, object, ZoneType::Hand);
     s.game_mut()
         .state
         .place_object(object, PlayerId(player), ZoneType::Hand);
@@ -268,6 +283,7 @@ pub fn force_from_library(s: &mut Scenario, player: usize, name: &str) -> Object
         .copied()
         .find(|object_id| game.state[object_id].name == name)
         .unwrap_or_else(|| panic!("no {name} in player {player}'s library"));
+    forget_injected_knowledge(s, object_id, ZoneType::Hand);
     s.game_mut()
         .state
         .place_object(object_id, PlayerId(player), ZoneType::Hand);
@@ -290,6 +306,7 @@ pub fn pin_top(s: &mut Scenario, names: &[&str]) -> Vec<ObjectId> {
             .unwrap();
         objects.push(next);
     }
+    s.game_mut().state.players[0].known_library.forget_order();
     for object in objects.iter().rev() {
         s.game_mut()
             .state
@@ -317,6 +334,7 @@ pub fn move_from_library(s: &mut Scenario, player: usize, name: &str, zone: Zone
 /// planting a Lesson).
 pub fn plant_in_graveyard(s: &mut Scenario, player: usize, card_name: &str) -> ObjectId {
     let object = find_owned_card(s, player, card_name);
+    forget_injected_knowledge(s, object, ZoneType::Graveyard);
     s.game_mut()
         .state
         .place_object(object, PlayerId(player), ZoneType::Graveyard);

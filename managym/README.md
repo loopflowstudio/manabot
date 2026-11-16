@@ -283,7 +283,11 @@ frequency (column 28: 1 once, 2 each match); column 48 keeps its expiry meaning.
 Missing historical frequency is unknown.
 
 Public hand knowledge is a minimum multiset of `CardDefId` counts on `Player`,
-not a set of revealed physical cards. Search forks by full clone: clone the
+not a set of revealed physical cards. Exact library positions are retained
+per viewer in `Player.known_library`, and projected as `PlayerData.known_library`
+([library knowledge](../docs/engine.md#remembered-library-positions)).
+Private moves discard uncertain locations; both world samplers preserve the
+remaining facts. Search forks by full clone: clone the
 `Game` before a normal Command `apply` and compare `search_state::witness` to
 check that the source is unchanged. Exercise nested choices through Commands,
 not by direct calls to resolution helpers.

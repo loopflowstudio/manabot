@@ -80,6 +80,52 @@ both players know each other's main deck and sideboard) or `"closed"`; search
 players cannot play closed matches. `Match.swapped()` moves both lists together;
 `Env.reset(options={"match": match})` also replaces the setup used by later resets.
 
+### Closed decklists
+
+Training keeps the `decklists` setting for every game of the run, whichever
+way the run gets its decks:
+
+```python
+from manabot.training.decks import UniformDecks
+from managym import Deck
+
+decks = (Deck({"Island": 40}), Deck({"Mountain": 40}))
+source = UniformDecks(decks=decks, decklists="closed")
+source.match_config().decklists                     # 'closed'
+```
+
+A fixed match and an `elemental-uniform` match take it from
+`MatchConfig.decklists`; a deck source takes it from `UniformDecks.decklists`
+(`"open"` by default). In a closed run the policy's `decklists` rows for the
+opponent are zero in every game, including games started by auto-reset and
+games regathered after a [game failure](../docs/training.md#game-failures), and
+the retained record of each game says closed. What the opponent shows during
+play still arrives: a revealed card appears in `known_hand` while it stays in
+that hand.
+
+The native `GameSetup(players, decklists="closed")` carries one value for the
+whole game. It is a read-only seat sequence; slicing and re-wrapping with
+`GameSetup(setup)` preserve disclosure unless explicitly overridden.
+A plain list of seats uses the open default.
+`MatchConfig.from_players(first, second, decklists="closed")`
+records native seats and rejects differing worlds. The old
+`PlayerConfig.disclosure` alias warns and will be removed in 0.4.0; disagreeing
+legacy seat values or hints conflicting with the game setting raise when
+creating a game. Evaluation matchups take
+`MatchConfig.decklists`, open or closed, never mixed.
+
+A sampled source can also use `decklists="mixed"`: each game draws open or
+closed with equal probability from its reset seed, separately from deck and
+shuffle RNG. Auto-reset and recovery reproduce that draw; retained matchups,
+attempts and replays record the resolved setting. Both seats see the public
+`decklists_closed` observation flag, stated in the text observation. Its inverse
+(1 open, 0 closed) accompanies the other game facts on the player tokens.
+Older checkpoints with a different player-buffer shape fail normal world binding.
+
+An open source serializes without a `decklists` key, so saved regimes and their
+source digests are unchanged; closed and mixed sources have their own digests, so a run
+resumes only under the setting it started with.
+
 
 Train on rented machines through Etude: see [remote training](../docs/training.md#remote-training).
 New self-play jobs use exact absolute update checkpoints (`checkpoint_updates`,
@@ -333,7 +379,9 @@ For the semantic card model, use `ModelConfig(world="world")`. The ordinary
 model joins
 viewer-safe `semantic_cards` transport IDs to complete checked catalog programs,
 including characteristics and referenced definitions; `known_hand` contains
-public definition minima, not hidden hand slots, and `decklists` rows hold
+public definition minima, not hidden hand slots. `known_library` carries exact
+viewer-known definitions and library positions; Torch reads its
+position-weighted pool. MLX continues to refuse input v11. The `decklists` rows hold
 each known decklist's main, unseen, sideboard and remaining-sideboard counts. Selected compiled checkpoints
 without that semantic input fail admission. Generic uncompiled training keeps
 its existing bounded feature model. These models do not certify strength or

@@ -11,6 +11,7 @@ from experiments.elemental_variants import elemental_recipe
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.experiment.job import TrainingJob
+from manabot.infra.config import POLICY_INPUT_VERSION
 from manabot.infra.identity import canonical_sha256
 from manabot.training.records import TrainingRun
 from manabot.training.regime import TrainingRegime
@@ -54,8 +55,10 @@ def test_sizes_change_only_the_network_and_count_as_the_protocol(
     control = elemental_recipe("control", sizes.SPEED_UPDATES)
 
     assert _without_size(variant) == _without_size(control)
-    assert _compute_parameters(variant) == parameters
     shape = sizes.SIZES[size]
+    # The frozen protocol counts predate the public disclosure feature: its
+    # extra player input adds one weight per hidden unit to the current model.
+    assert _compute_parameters(variant) == parameters + shape.width
     agent = variant.agent
     assert (agent.hidden_dim, agent.attention_layers, agent.num_attention_heads) == (
         shape.width,
@@ -163,6 +166,10 @@ def test_a_size_cell_trains_through_the_real_worker_on_cpu(
     """
     chosen = sizes.LEGS[leg]
     regime = sizes.recipe(chosen.size, chosen.precision, 1)
+    # Exercise the current worker without changing the frozen experiment recipe.
+    regime.observation = regime.observation.model_copy(
+        update={"policy_input_version": POLICY_INPUT_VERSION}
+    )
     regime.wall_seconds = 600
     stage = regime.stages[0]
     stage.streams = 2

@@ -39,7 +39,10 @@ def validate_hand(hand: HandSample, constraints_json: str) -> None:
         len(counts) != len(hand.counts)
         or sum(counts.values()) != source["hand_size"]
         or any(
-            type(n) is not int or n <= 0 or n > source["pool"].get(name, 0)
+            type(n) is not int
+            or n <= 0
+            or n
+            > source["pool"].get(name, 0) - source.get("known_library", {}).get(name, 0)
             for name, n in hand.counts
         )
         or any(counts.get(name, 0) < n for name, n in source["known_hand"].items())

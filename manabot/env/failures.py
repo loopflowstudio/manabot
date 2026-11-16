@@ -33,6 +33,7 @@ from managym.recording import (
     GameInputs as _GameInputs,
     PlayerSetup as _PlayerSetup,
     _append,
+    _game_disclosure,
     _jsonl,
     atomic_private_json as _atomic_private_json,
 )
@@ -59,6 +60,11 @@ class NativeTrainingTrace(BaseModel):
         default=False, exclude_if=lambda value: not value
     )
     actions: list[int]
+
+    @model_validator(mode="after")
+    def uniform_disclosure(self) -> "NativeTrainingTrace":
+        _game_disclosure(self.player_configs)
+        return self
 
 
 class NativeTrainingGame(BaseModel):

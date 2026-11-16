@@ -29,7 +29,7 @@ filters hidden information.
 | Local facts and links | Open-ended details such as counters, plus attachment and blocking links. |
 | Current continuation | The pending decision: stack entries, targets, modes and suspended payments. |
 | Shared effects | Each active effect once, with the objects it affects. |
-| Known hand and disclosed decklists | What this seat is allowed to know. |
+| Known hand, library positions and disclosed decklists | What this seat is allowed to know. |
 | Legal actions and focus objects | Every offered action and up to two objects it refers to. |
 | Card definitions | Typed rules tokens derived from each card's native definition. |
 
@@ -399,7 +399,7 @@ Capacities are configuration; widths are the layout.
 
 | Key | Shape | Holds |
 | --- | --- | --- |
-| `agent_player`, `opponent_player` | 1 × 73 | Player state |
+| `agent_player`, `opponent_player` | 1 × 74 | Player state and public game disclosure |
 | `agent_cards`, `opponent_cards` | 60 × 56 | Cards outside the battlefield and stack |
 | `agent_permanents`, `opponent_permanents` | 40 × 51 | Permanents with their characteristics |
 | `stack`, `stack_valid` | 32 × 37 (`max_stack_objects`), 32 | Spells and abilities, top first |
@@ -407,9 +407,19 @@ Capacities are configuration; widths are the layout.
 | `relations` | 64 × 49 | Stack entries, targets, clauses, modes, costs, suspended payments, waiting triggers |
 | `facts` | 512 × 12 (`max_facts`) | One row per object and detail of an open vocabulary |
 | `effects`, `effect_details`, `effect_members` | 128 × 18, 4096 × 3, 2048 × 2 | Each active effect once, with its payload tokens and affected objects |
+| `known_library` | 2 × 20 × 2 | Exact library facts: definition + 1, position from top + 1; zero padding |
 | `decklists`, `known_hand`, `semantic_cards` | 2 × 60 × 5, 2 × 60 × 2, 2 × 60 | Disclosed lists, known-hand minima, definition joins |
 | `actions`, `action_focus`, `name_candidates` | 512 × 22, 512 × 2, 512 × 4 | Legal actions, the objects each names, name choices |
 | `events` | 32 × 7, or 32 × 12 with recent events | Public events |
+
+The game-level `decklists_closed` flag is inverted in the `decklists_open`
+column (73) of each player row: 1
+means both players know both lists, 0 means neither knows the opponent's list.
+The native game supplies it for both viewers; it accompanies the other game
+facts on both player learning tokens and is explicit in the text observation.
+Closed opponent list rows remain zero, while public reveals still update
+`known_hand`. This width change uses ordinary checkpoint world binding to
+refuse older layouts; it adds no policy-input version.
 
 Allocate and collect every key from the supplied `ObservationSpace`, on both
 the scalar and vector paths. Fact, relation, effect and action overflow is a
@@ -529,6 +539,29 @@ A separate immutable vocabulary can hold validated names without playable card
 definitions; this is exercised only by the offline large-vocabulary fixture.
 This does not claim that the supported catalog exhausts every name legal under
 Magic's rules, and does not broaden deck admission.
+
+### Exact library knowledge
+
+The native observation's `known_library` maps a zero-based library position
+from the top to a card definition. The owner sees the union of public and
+private facts; an opponent sees public facts only. The current policy input
+carries twenty rows per seat (ten public plus ten private, with coinciding
+positions represented once). Deprecated inputs v9/v10 omit these facts and preserve their frozen layout. No old checkpoint is relabeled compatible: the new
+buffer shape is part of world binding.
+
+Native and Python encoders use the same definition joins and one-based
+position encoding. Prepared resolves definitions once and weights each by the
+reciprocal of its one-based position. Torch projects this separate pooled
+vector, divided by 60, before adding it to hand and decklist knowledge, so a
+known top card and a known hand card have distinct representations. MLX currently admits only input v9 and continues to refuse v11;
+these rows do not extend the deprecated layout. It is a minimal live
+read, with no measured claim about learning or an ability to infer joint
+constraints. The text observation states each exact position in words.
+
+A private return can erase independent facts; it never creates a claim that a
+card occupies several possible places. Models may infer such relationships
+from their available observations and history. Native sampling honors every
+retained single-place fact ([engine knowledge](engine.md#remembered-library-positions)).
 
 ### Optional recent public events
 
@@ -849,7 +882,7 @@ it does not make hidden cards observable.
 
 | Layer | Holds |
 | --- | --- |
-| Effective state | Current characteristics, zones, stack, pending decisions, known-hand minima and disclosure. |
+| Effective state | Current characteristics, zones, stack, pending decisions, known-hand minima, exact viewer-known library positions and game-level disclosure. |
 | Shared records | Each active effect's payload, duration, timestamp, controller, source and memberships. |
 | Recent events | An optional bounded suffix of public events. |
 | Opponent memory | Whole-game viewer-safe opponent decision records, summarized for board attention. |

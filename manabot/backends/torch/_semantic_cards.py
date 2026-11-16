@@ -103,10 +103,12 @@ class SemanticCardEncoder(nn.Module):
         *,
         records: bool = False,
         decision_memory: bool = False,
+        library: bool = False,
     ) -> None:
         """`decklists` adds a projection of the pooled
         decklist rows into each player's knowledge vector; `records` adds the
-        fact and shared-effect id vocabulary (see the module docstring)."""
+        fact and shared-effect id vocabulary (see the module docstring).
+        `library` projects positional knowledge separately from hand minima."""
         super().__init__()
         pack = bind_policy_catalog(pack_key)
         catalog = pack.catalog
@@ -183,6 +185,12 @@ class SemanticCardEncoder(nn.Module):
         # unseen, sideboard, remaining sideboard), projected to one vector.
         self.decklist_projection = (
             nn.Linear(4 * hidden_dim, hidden_dim) if decklists else None
+        )
+        # A library top and a known hand card have different strategic roles.
+        # Keep their pools distinct until this learned projection; no bias means
+        # an empty positional pool contributes exactly zero.
+        self.library_projection = (
+            nn.Linear(hidden_dim, hidden_dim, bias=False) if library else None
         )
         self.records = records
         if tables is not None:
@@ -281,6 +289,13 @@ class SemanticCardEncoder(nn.Module):
             * batch.known_counts[..., None]
             / 60.0
         ).sum(dim=2)
+        if self.library_projection is not None:
+            library = (
+                self.lookup(definitions, batch.library_rows)
+                * batch.library_weights[..., None]
+                / 60.0
+            ).sum(dim=2)
+            known = known + self.library_projection(library)
         if self.decklist_projection is not None:
             pooled = torch.einsum(
                 "bsrh,bsrc->bsch",

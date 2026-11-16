@@ -3,10 +3,22 @@ from __future__ import annotations
 from collections.abc import Sequence
 from enum import IntEnum
 import os
-from typing import Any, Dict, List, Literal, NotRequired, Optional, Tuple, TypedDict
+from typing import (
+    Any,
+    Dict,
+    List,
+    Literal,
+    NotRequired,
+    Optional,
+    Tuple,
+    TypedDict,
+    overload,
+)
 
 import numpy as np
 from typing_extensions import deprecated
+
+from managym.disclosure import DecklistDisclosure, DecklistSampling
 
 from . import format as format
 from .statistics import GameStatistics
@@ -150,7 +162,7 @@ class Env:
         | None = None,
     ) -> None: ...
     def reset(
-        self, player_configs: List[PlayerConfig]
+        self, player_configs: GameSetup | list[PlayerConfig]
     ) -> Tuple[Observation, Dict[str, Any]]: ...
     def enable_statistics(self) -> None: ...
     def statistics(self) -> GameStatistics | None: ...
@@ -344,7 +356,7 @@ class VectorEnv:
         | None = None,
     ) -> None: ...
     def reset_all(
-        self, player_configs: List[PlayerConfig]
+        self, player_configs: GameSetup | list[PlayerConfig]
     ) -> List[Tuple[Observation, Dict[str, Any]]]: ...
     def step(
         self, actions: List[int]
@@ -353,12 +365,14 @@ class VectorEnv:
         self, buffers: Dict[str, np.ndarray], action_overflow: str = "error"
     ) -> None: ...
     def scenario_naming_vocabulary_into_buffers(self) -> None: ...
-    def reset_all_into_buffers(self, player_configs: List[PlayerConfig]) -> None: ...
+    def reset_all_into_buffers(
+        self, player_configs: GameSetup | list[PlayerConfig]
+    ) -> None: ...
     def reset_each_into_buffers(
-        self, player_configs: list[list[PlayerConfig]]
+        self, player_configs: list[GameSetup | list[PlayerConfig]]
     ) -> None: ...
     def reassign_roots_into_buffers(
-        self, player_configs: list[list[PlayerConfig] | None]
+        self, player_configs: list[GameSetup | list[PlayerConfig] | None]
     ) -> None: ...
     def step_into_buffers(
         self, actions: list[int], active: list[bool] | None = None
@@ -385,11 +399,12 @@ class VectorEnv:
     def hand_snapshots(self, players: list[int]) -> list[HandSnapshot]:
         """One native seat per slot; after done, snapshots describe the reset game."""
     def current_action_summaries(self) -> list[tuple[int, str]]: ...
-    def set_uniform_roster(self, roster: list[PlayerConfig]) -> None: ...
+    def set_uniform_roster(self, roster: Sequence[PlayerConfig]) -> None: ...
     def set_training_decks(
-        self, decks: List[PlayerConfig], distinct: bool = True
+        self, decks: Sequence[PlayerConfig], distinct: bool = True
     ) -> None: ...
-    def current_player_configs(self) -> list[list[PlayerConfig]]: ...
+    def current_player_configs(self) -> list[GameSetup]:
+        """Current games with resolved open/closed disclosure, never mixed."""
     def current_matchup_indices(self) -> list[tuple[int, int]]: ...
     def current_agent_indices(self) -> list[int]: ...
     def reset_seeds_into_buffers(self, seeds: list[int]) -> None: ...
@@ -408,14 +423,14 @@ class PlayerConfig:
         decklist: Dict[str, int],
         sideboard: Optional[Dict[str, int]] = None,
         world: str | None = None,
-        disclosure: Literal["open", "closed"] = "open",
+        disclosure: DecklistDisclosure | None = None,
     ) -> None: ...
     name: str
     world: str | None
     """``WORLD_SETUP`` submits the deck to the world (reset admits it); ``None``
     runs it as given. Any other value raises: content packs are retired."""
-    # Whether the opponent knows this player's main deck and sideboard.
-    disclosure: Literal["open", "closed"]
+    # Deprecated per-seat hint, removed in 0.4.0; use GameSetup.decklists.
+    disclosure: DecklistDisclosure
     @property
     def deck(self) -> Deck: ...
     @property
@@ -675,6 +690,7 @@ class Player:
     zone_counts: List[int]
     graveyard_lessons: int
     known_hand: Dict[int, int]
+    known_library: Dict[int, int]
     # Decklist counts by definition id; None when the viewer's opponent has a
     # closed decklist. Unseen counts the library, plus an opponent's hand and
     # face-down foretold cards; remaining counts sideboard copies outside the game.
@@ -967,6 +983,7 @@ class EventData:
     controller_id: int
 
 class Observation:
+    decklists_closed: bool
     shared_effects: list[SharedEffect] | None
     continuation: list[ContinuationFrame]
 
@@ -1111,3 +1128,24 @@ class Heuristic:
     def __init__(self, max_actions: int | None = None) -> None: ...
     def select_action(self, observation: Observation) -> int: ...
     def reset(self) -> None: ...
+
+class GameSetup(Sequence[PlayerConfig]):
+    @property
+    def players(self) -> tuple[PlayerConfig, ...]: ...
+    @property
+    def decklists(self) -> DecklistSampling: ...
+    def __init__(
+        self,
+        players: Sequence[PlayerConfig],
+        *,
+        decklists: DecklistSampling | None = None,
+    ) -> None: ...
+    def __len__(self) -> int: ...
+    @overload
+    def __getitem__(self, index: int) -> PlayerConfig: ...
+    @overload
+    def __getitem__(self, index: slice) -> GameSetup: ...
+
+def resolve_decklists(
+    player_configs: GameSetup | list[PlayerConfig], seed: int
+) -> DecklistDisclosure: ...

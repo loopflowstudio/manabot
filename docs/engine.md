@@ -120,7 +120,7 @@ pub fn for_player(game: &Game, viewer: PlayerId) -> Self {
 - The engine filters hidden information. No encoder, search player or browser
   re-derives what a viewer may know.
 - Legal actions appear only in the chooser's observation.
-- Decklists are open by default, set on `PlayerConfig.disclosure`. A closed
+- Decklists are open by default, set on `GameSetup.decklists`. A closed
   opponent's list is absent from observations, search and possible worlds alike.
 - Two states that look the same to a viewer produce byte-identical
   observations, which is what makes replay and the learnability checks
@@ -229,11 +229,34 @@ pub fn determinize(&mut self, perspective: PlayerId, seed: u64) {
 ```
 
 The unseen pool is the opponent's unknown hand cards, library and face-down
-foretold cards; publicly known hand cards stay put. Both library orders are
-reshuffled, since the viewer knows neither, and everything the viewer can see is
-preserved. [`possible_worlds.rs`](../managym/src/possible_worlds.rs) defines the
-same domain exactly, with compatible-deal counts as weights, for beliefs that
+foretold cards. Public hand minima and exact viewer-known library positions
+reserve distinct definition witnesses; the remaining cards are shuffled.
+Everything the viewer can see is preserved.
+[`possible_worlds.rs`](../managym/src/possible_worlds.rs) defines the same domain exactly, with compatible-deal counts as weights, for beliefs that
 want more than a uniform redraw ([beside the loop](../README.md#beside-the-loop)).
+
+### Remembered library positions
+
+Native knowledge retains public hand minima and exact card definitions at
+library positions counted from the top. Each player has an opponent-visible
+and an owner-visible position map. Inspection and chosen ordering record only
+what that viewer sees. A draw shifts known positions; a known top card drawn
+into hand becomes a hand minimum. A shuffle or an unspecified private reorder
+forgets the affected order. Public and private maps independently retain ten
+positions: eight nearest the top and two nearest the bottom among known facts.
+The owner reads their union, so private retention cannot erase a public fact.
+
+Facts never claim several possible locations. After a secret hand departure,
+each independent hand minimum decreases by one (to a minimum of zero). Seeing
+A, B and C, then returning two cards privately, therefore preserves no
+individual hand fact. Joint deductions belong to the model. This information
+loss is deliberate; an observation must never assert something false.
+
+Observations, determinization and exact-world materialization read the same
+native facts. Samplers reserve distinct definition witnesses for known library
+positions before dealing the remaining hand and library. An unshared sampled
+opponent's private position map resets to their public map. Clones preserve
+both maps. Closed opposing decklists still refuse hidden-world sampling.
 
 ## Batched games
 
@@ -1219,8 +1242,10 @@ Training does not take deck files; it takes a **deck source** in the regime
 ordered pairs from its RNG domain, so exact resume reproduces decks, seats and
 seed; the TLA pilot's source is the frozen trophy corpus
 ([training](training.md#regimes-and-stages)). Every deck a source lists is
-admitted when the regime validates, and again natively at each game root. A
-checkpoint from such a run binds the world and nothing about the decks, so it
+admitted when the regime validates, and again natively at each game root.
+`UniformDecks(decklists="closed")` closes every game the source deals; each
+game has one setting shared by both seats. Use `decklists="mixed"` for a
+seeded, balanced per-game open/closed draw. A checkpoint from such a run binds the world and nothing about the decks, so it
 plays any deck the world admits, including ones it never saw. Checkpoints bound
 to an authored setup refuse imported decks even when shapes agree
 (`manabot.model.world.validate_agent_setup`). Academy imports a pair through

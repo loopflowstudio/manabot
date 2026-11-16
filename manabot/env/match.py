@@ -49,7 +49,6 @@ class Match:
             self.hero_deck,
             self.hero_sideboard,
             self._submission,
-            self.config.decklists,
         )
 
     def to_rust_villain(self) -> "managym.PlayerConfig":
@@ -58,11 +57,13 @@ class Match:
             self.villain_deck,
             self.villain_sideboard,
             self._submission,
-            self.config.decklists,
         )
 
-    def to_rust(self) -> "list[managym.PlayerConfig]":
-        return [self.to_rust_hero(), self.to_rust_villain()]
+    def to_rust(self) -> "managym.GameSetup":
+        return managym.GameSetup(
+            [self.to_rust_hero(), self.to_rust_villain()],
+            decklists=self.config.decklists,
+        )
 
     def swapped(self) -> "Match":
         """Return a copy with hero and villain seats exchanged.

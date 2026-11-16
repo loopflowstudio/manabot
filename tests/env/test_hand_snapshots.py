@@ -16,19 +16,19 @@ from manabot.env.observation import ObservationSpace
 from manabot.env.vector_env import VectorEnv as TorchVectorEnv
 from manabot.infra.config import MatchConfig, RewardConfig
 from manabot.managym.decision import Command, DecisionFrame
+from managym.disclosure import DecklistDisclosure
 
 
 def _players(
-    disclosure: Literal["open", "closed"] = "closed",
-) -> list[managym.PlayerConfig]:
-    return [
-        managym.PlayerConfig(
-            "a", {"Mountain": 8, "Gray Ogre": 4}, disclosure=disclosure
-        ),
-        managym.PlayerConfig(
-            "b", {"Island": 8, "Wind Drake": 4}, disclosure=disclosure
-        ),
-    ]
+    disclosure: DecklistDisclosure = "closed",
+) -> managym.GameSetup:
+    return managym.GameSetup(
+        [
+            managym.PlayerConfig("a", {"Mountain": 8, "Gray Ogre": 4}),
+            managym.PlayerConfig("b", {"Island": 8, "Wind Drake": 4}),
+        ],
+        decklists=disclosure,
+    )
 
 
 def _buffers(space: ObservationSpace, size: int) -> dict[str, np.ndarray]:
@@ -62,11 +62,12 @@ def _identity(snapshot: managym.HandSnapshot) -> tuple[int, int, int, int]:
 
 @pytest.mark.parametrize("disclosure", ["open", "closed"])
 def test_hand_snapshots_match_scalar_without_changing_observations(
-    disclosure: Literal["open", "closed"],
+    disclosure: DecklistDisclosure,
 ) -> None:
     vector = managym.VectorEnv(2, seed=42)
     players = _players(disclosure)
     results = vector.reset_all(players)
+    assert all(obs.decklists_closed is (disclosure == "closed") for obs, _ in results)
     scalars = [managym.Env(seed=42 + slot) for slot in range(2)]
     for scalar in scalars:
         scalar.reset(players)
@@ -139,7 +140,7 @@ def test_hand_snapshots_mask_reset_and_failure_replacement(captured: bool) -> No
     buffers = _buffers(ObservationSpace(), 2)
     vector.set_buffers(buffers)
     try:
-        vector.reset_each_into_buffers([_players(), list(reversed(_players()))])
+        vector.reset_each_into_buffers([_players(), _players()[::-1]])
         before = vector.hand_snapshots([1, 0])
         frozen = {key: value[1].copy() for key, value in buffers.items()}
         for key in ("rewards", "terminated", "truncated"):
@@ -157,7 +158,7 @@ def test_hand_snapshots_mask_reset_and_failure_replacement(captured: bool) -> No
         reset = vector.hand_snapshots([1, 0])
         assert [t.cards for t in reset] == [t.cards for t in before]
         assert all(a.game_id != b.game_id for a, b in zip(before, reset, strict=True))
-        vector.reassign_roots_into_buffers([list(reversed(_players())), None])
+        vector.reassign_roots_into_buffers([_players()[::-1], None])
         reassigned = vector.hand_snapshots([1, 0])
         assert reassigned[0].game_id != reset[0].game_id
         assert reassigned[0].seed == reset[0].seed

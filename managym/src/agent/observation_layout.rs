@@ -181,6 +181,7 @@ columns! { player {
     70: BENT_AIR => ("bent_air", ValueLayout::FLAG),
     71: EXTRA_TURNS => ("extra_turns", ValueLayout::COUNT),
     72: ADDITIONAL_COMBATS => ("additional_combats", ValueLayout::COUNT),
+    73: DECKLISTS_OPEN => ("decklists_open", ValueLayout::FLAG),
 } }
 
 // Input v10 player turn state, one row per seat (agent first).
@@ -381,6 +382,11 @@ columns! { name {
     1: DEFINITION => ("definition", ValueLayout::DEFINITION),
     2: GROUP_FIRST => ("group_first", ValueLayout::new("reference", "Inclusive naming_catalog row + 1; 0 absent", "nonnegative integers; 0 absent")),
     3: GROUP_LAST => ("group_last", ValueLayout::new("reference", "Inclusive naming_catalog row + 1; 0 absent", "nonnegative integers; 0 absent")),
+} }
+
+columns! { known_library {
+    0: DEFINITION => ("definition", ValueLayout::DEFINITION),
+    1: POSITION => ("position", ValueLayout::new("position", "Library position from top + 1; 0 absent", "nonnegative integers")),
 } }
 
 columns! { known_hand {
@@ -790,6 +796,16 @@ pub fn observation_layout(
             ValueLayout::DEFINITION,
         ),
     );
+    if layout_kind == InputLayout::OneToken {
+        layout.insert(
+            "known_library".into(),
+            ArrayLayout::features(
+                &["viewer_relative_seat", "known_position"],
+                &[Some(2), Some(crate::state::knowledge::KNOWN_LIBRARY_ROWS)],
+                known_library::COLUMNS,
+            ),
+        );
+    }
     layout.insert(
         "known_hand".into(),
         ArrayLayout::features(
@@ -922,7 +938,7 @@ mod tests {
             }
             // Numeric ABI: changing a width is a layout change that checkpoints see.
             for (key, width, abi) in [
-                ("agent_player", player::WIDTH, 73),
+                ("agent_player", player::WIDTH, 74),
                 ("agent_cards", card::WIDTH, 56),
                 (
                     "agent_permanents",

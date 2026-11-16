@@ -416,6 +416,8 @@ class Prepared[A]:
     card_rows: A  # [B,2,C]
     known_rows: A  # [B,2,K]
     known_counts: A  # [B,2,K] raw counts; divide after the embedding product
+    library_rows: A  # [B,2,L], catalog definitions at known positions
+    library_weights: A  # [B,2,L], reciprocal one-based position; zero padding
     deck_rows: A  # [B,2,R]
     deck_counts: A  # [B,2,R,4] already / 60
     permanent_rows: A  # [B,2,P]
@@ -515,6 +517,13 @@ def prepare(
     numeric = permanents[..., list(layout.numeric_permanent_columns)].astype(f32)
     knowledge = obs["known_hand"]
     decklists = obs["decklists"]
+    # Deprecated v9/v10 carry no positional rows. Current input must supply
+    # the admitted buffer; missing rows never become an empty-knowledge claim.
+    library = (
+        obs["known_library"]
+        if stack is not None
+        else np.zeros((batch, 2, 0, 2), dtype=f32)
+    )
     link_targets: list[Array] = []
     link_masks: list[Array] = []
     base = np.arange(batch)[:, None] * objects
@@ -605,6 +614,13 @@ def prepare(
         card_rows=tables.rows(obs["semantic_cards"]),
         known_rows=tables.rows(knowledge[..., 0]),
         known_counts=knowledge[..., 1].astype(f32),
+        library_rows=tables.rows(library[..., 0]),
+        library_weights=np.divide(
+            np.float32(1),
+            library[..., 1],
+            out=np.zeros_like(library[..., 1]),
+            where=library[..., 1] > 0,
+        ).astype(f32),
         deck_rows=tables.rows(decklists[..., 0]),
         deck_counts=(decklists[..., 1:] / f32(60)).astype(f32),
         permanent_rows=tables.rows(permanents[..., PERMANENT_DEFINITION_INDEX]),
@@ -690,6 +706,8 @@ def _referenced_definitions(
         obs["relations"][..., [5, 23]],
         candidates[:, 1],
     ]
+    if "known_library" in obs:
+        references.append(obs["known_library"][..., 0])
     if has_history_events(obs):
         references.extend(
             obs["events"][..., col][obs["events_valid"] == 1] for col in (2, 7)

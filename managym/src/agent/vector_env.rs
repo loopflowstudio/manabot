@@ -12,7 +12,7 @@ use crate::{
         player_policy::PlayerPolicy,
     },
     infra::profiler::{InfoDict, InfoValue},
-    state::player::PlayerConfig,
+    state::player::{GameSetup, PlayerConfig},
 };
 
 /// Preserve encoder capacity errors across the buffer boundary. Pointer/shape
@@ -93,7 +93,7 @@ impl RootRoster {
 #[derive(Debug)]
 pub struct VectorEnv {
     envs: Vec<Env>,
-    player_configs: Vec<Vec<PlayerConfig>>,
+    player_configs: Vec<GameSetup>,
     player_policies: [PlayerPolicy; 2],
     next_seeds: Vec<u64>,
     seed_stride: u64,
@@ -307,6 +307,11 @@ impl VectorEnv {
         Ok(())
     }
 
+    /// Each current game's resolved disclosure, never mixed.
+    pub fn current_decklists(&self) -> Vec<crate::state::player::DecklistDisclosure> {
+        self.envs.iter().map(Env::decklists).collect()
+    }
+
     /// The setups each game was actually reset with, in seat order.
     pub fn current_player_configs(&self) -> Vec<Vec<PlayerConfig>> {
         self.envs
@@ -484,8 +489,9 @@ impl VectorEnv {
 
     pub fn reset_all(
         &mut self,
-        player_configs: Vec<PlayerConfig>,
+        player_configs: impl Into<GameSetup>,
     ) -> Result<Vec<(Observation, InfoDict)>, AgentError> {
+        let player_configs = player_configs.into();
         Self::validate_player_configs(player_configs.len())?;
         self.fresh_roots.fill(true);
         self.player_configs = vec![player_configs; self.envs.len()];
@@ -546,24 +552,25 @@ impl VectorEnv {
 
     pub fn reset_all_into<F>(
         &mut self,
-        player_configs: Vec<PlayerConfig>,
+        player_configs: impl Into<GameSetup>,
         write: F,
     ) -> Result<Vec<InfoDict>, AgentError>
     where
         F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError>,
     {
-        self.reset_each_into(vec![player_configs; self.envs.len()], write)
+        self.reset_each_into(vec![player_configs.into(); self.envs.len()], write)
     }
 
     /// Retain one exact setup per stream, including through terminal auto-reset.
-    pub fn reset_each_into<F>(
+    pub fn reset_each_into<F, S: Into<GameSetup>>(
         &mut self,
-        player_configs: Vec<Vec<PlayerConfig>>,
+        player_configs: Vec<S>,
         write: F,
     ) -> Result<Vec<InfoDict>, AgentError>
     where
         F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError>,
     {
+        let player_configs: Vec<GameSetup> = player_configs.into_iter().map(Into::into).collect();
         self.validate_actions_len(player_configs.len())?;
         for configs in &player_configs {
             Self::validate_player_configs(configs.len())?;
@@ -584,9 +591,9 @@ impl VectorEnv {
     /// Every setup is built (game creation admits its decks against the world's
     /// one catalog) and encoded before any new root is published. A live
     /// game cannot be reassigned, even when its stream was masked in the last step.
-    pub fn reassign_roots_into<V, F>(
+    pub fn reassign_roots_into<V, F, S: Into<GameSetup>>(
         &mut self,
-        configs: Vec<Option<Vec<PlayerConfig>>>,
+        configs: Vec<Option<S>>,
         validate: V,
         write: F,
     ) -> Result<Vec<InfoDict>, AgentError>
@@ -604,6 +611,7 @@ impl VectorEnv {
         let mut prepared = Vec::new();
         for (index, setup) in configs.into_iter().enumerate() {
             if let Some(setup) = setup {
+                let setup: GameSetup = setup.into();
                 if !self.fresh_roots[index] {
                     return Err(AgentError("cannot reassign a live game".into()));
                 }
@@ -612,7 +620,7 @@ impl VectorEnv {
                 crate::cards::deck_admission::admit_submitted(&setup)
                     .map_err(|error| AgentError(error.to_string()))?;
                 let content = crate::cards::content_pack::default_content_pack();
-                for player in &setup {
+                for player in setup.iter() {
                     for name in player.deck.main.keys() {
                         if content.definition_id(name).is_none() {
                             return Err(AgentError(format!("unknown card in decklist: {name}")));
@@ -813,7 +821,7 @@ impl VectorEnv {
             usize,
             &mut Env,
             &mut u64,
-            &[PlayerConfig],
+            &GameSetup,
             &RootRoster,
             &mut bool,
         ) -> Result<R, AgentError>,
@@ -874,7 +882,7 @@ impl VectorEnv {
         env: &mut Env,
         next_seed: &mut u64,
         action: i64,
-        player_configs: &[PlayerConfig],
+        player_configs: &GameSetup,
         seed_stride: u64,
     ) -> Result<StepResult, AgentError> {
         let mut out = Self::step_one_on_env(env, action)?;
@@ -922,16 +930,19 @@ impl VectorEnv {
         env: &mut Env,
         next_seed: &mut u64,
         seed_stride: u64,
-        player_configs: &[PlayerConfig],
+        player_configs: &GameSetup,
     ) -> Result<(Observation, InfoDict), AgentError> {
         let seed = *next_seed;
         *next_seed = seed.saturating_add(seed_stride);
         env.set_seed(seed);
         let configs = if roster.is_empty() {
-            player_configs.to_vec()
+            player_configs.clone()
         } else {
             let (a, b) = roster.pair(seed);
-            vec![roster.players[a].clone(), roster.players[b].clone()]
+            GameSetup {
+                players: vec![roster.players[a].clone(), roster.players[b].clone()],
+                decklists: player_configs.decklists,
+            }
         };
         env.reset(configs)
     }
@@ -954,7 +965,7 @@ mod tests {
             player_policy::PlayerPolicy, vector_env::VectorEnv,
         },
         infra::profiler::InfoValue,
-        state::player::PlayerConfig,
+        state::player::{GameSetup, PlayerConfig},
     };
 
     #[test]
@@ -1791,7 +1802,10 @@ mod tests {
             assert_eq!(vector.current_game_seeds(), seeds);
         }
         assert!(terminals.iter().all(|count| *count > 0));
-        assert_eq!(vector.player_configs, configs);
+        assert_eq!(
+            vector.player_configs,
+            configs.into_iter().map(GameSetup::from).collect::<Vec<_>>()
+        );
     }
 
     #[test]

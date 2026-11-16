@@ -47,6 +47,7 @@ struct ObservationBuffers {
     facts: Option<Py<PyAny>>,
     semantic_cards: Py<PyAny>,
     known_hand: Py<PyAny>,
+    known_library: Option<Py<PyAny>>,
     decklists: Option<Py<PyAny>>,
     player_turn_state: Option<Py<PyAny>>,
     card_turn_state: Option<Py<PyAny>>,
@@ -164,9 +165,9 @@ impl PyVectorEnv {
     fn reset_all(
         &mut self,
         py: Python<'_>,
-        player_configs: Vec<PyPlayerConfig>,
+        player_configs: Bound<'_, PyAny>,
     ) -> PyResult<Vec<PyResetResult>> {
-        let configs = player_configs.into_iter().map(PlayerConfig::from).collect();
+        let configs = super::bindings::game_setup(&player_configs)?;
         let results = self.inner.reset_all(configs).map_err(map_agent_err)?;
         self.last_info = results.iter().map(|(_, info)| info.clone()).collect();
 
@@ -223,10 +224,9 @@ impl PyVectorEnv {
     fn reset_all_into_buffers(
         &mut self,
         py: Python<'_>,
-        player_configs: Vec<PyPlayerConfig>,
+        player_configs: Bound<'_, PyAny>,
     ) -> PyResult<()> {
-        let configs: Vec<PlayerConfig> =
-            player_configs.into_iter().map(PlayerConfig::from).collect();
+        let configs = super::bindings::game_setup(&player_configs)?;
         self.run_into_buffers(py, move |inner, write_buffers, config| {
             inner.reset_all_into(configs, |env_index, obs, reward, terminated, truncated| {
                 write_buffers
@@ -239,12 +239,12 @@ impl PyVectorEnv {
     fn reset_each_into_buffers(
         &mut self,
         py: Python<'_>,
-        player_configs: Vec<Vec<PyPlayerConfig>>,
+        player_configs: Vec<Bound<'_, PyAny>>,
     ) -> PyResult<()> {
         let configs = player_configs
             .into_iter()
-            .map(|row| row.into_iter().map(PlayerConfig::from).collect())
-            .collect();
+            .map(|row| super::bindings::game_setup(&row))
+            .collect::<PyResult<Vec<_>>>()?;
         self.run_into_buffers(py, move |inner, write_buffers, config| {
             inner.reset_each_into(configs, |env_index, obs, reward, terminated, truncated| {
                 write_buffers
@@ -257,12 +257,15 @@ impl PyVectorEnv {
     fn reassign_roots_into_buffers(
         &mut self,
         py: Python<'_>,
-        player_configs: Vec<Option<Vec<PyPlayerConfig>>>,
+        player_configs: Vec<Option<Bound<'_, PyAny>>>,
     ) -> PyResult<()> {
         let configs = player_configs
             .into_iter()
-            .map(|row| row.map(|players| players.into_iter().map(PlayerConfig::from).collect()))
-            .collect();
+            .map(|row| {
+                row.map(|players| super::bindings::game_setup(&players))
+                    .transpose()
+            })
+            .collect::<PyResult<Vec<_>>>()?;
         self.run_into_buffers(py, move |inner, buffers, config| {
             inner.reassign_roots_into(
                 configs,
@@ -340,11 +343,14 @@ impl PyVectorEnv {
             .map_err(map_agent_err)
     }
 
-    fn current_player_configs(&self) -> Vec<Vec<PyPlayerConfig>> {
+    fn current_player_configs(&self, py: Python<'_>) -> PyResult<Vec<PyObject>> {
         self.inner
             .current_player_configs()
             .into_iter()
-            .map(|players| players.into_iter().map(PyPlayerConfig::from).collect())
+            .zip(self.inner.current_decklists())
+            .map(|(players, disclosure)| {
+                super::bindings::python_game_setup(py, players, disclosure)
+            })
             .collect()
     }
 
@@ -728,6 +734,14 @@ fn read_observation_buffers(
             "facts",
             &[n, c.max_facts, crate::agent::observation_encoder::FACT_DIM],
         )?,
+        known_library: if c.known_library_len() > 0 {
+            required(
+                "known_library",
+                &[n, 2, crate::state::knowledge::KNOWN_LIBRARY_ROWS, 2],
+            )?
+        } else {
+            None
+        },
         known_hand: require_numpy_array(
             buffers,
             "known_hand",
@@ -1330,6 +1344,7 @@ struct SendObservationFieldSlices {
     facts: Option<SendSlice<f32>>,
     semantic_cards: SendSlice<f32>,
     known_hand: SendSlice<f32>,
+    known_library: Option<SendSlice<f32>>,
     decklists: Option<SendSlice<f32>>,
     player_turn_state: Option<SendSlice<f32>>,
     card_turn_state: Option<SendSlice<f32>>,
@@ -1532,6 +1547,17 @@ impl SendObservationFieldSlices {
                 &mut []
             },
             // SAFETY: each call uses disjoint per-env rows.
+            known_library: if let Some(buffer) = self.known_library {
+                // SAFETY: registered buffers partition each environment into disjoint rows.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(env_index, config.known_library_len())?,
+                        config.known_library_len(),
+                    )
+                }
+            } else {
+                &mut []
+            },
             known_hand: unsafe { slice::from_raw_parts_mut(known_hand_ptr, known_hand_len) },
             decklists: if let Some(buffer) = self.decklists {
                 // SAFETY: the registered buffer is partitioned into disjoint rows.
@@ -1782,6 +1808,11 @@ fn with_observation_field_slices<R>(
         .transpose()?;
     let semantic_cards_buffer =
         typed_numpy_buffer::<f32>(py, &buffers.semantic_cards, "semantic_cards")?;
+    let known_library_buffer = buffers
+        .known_library
+        .as_ref()
+        .map(|array| typed_numpy_buffer::<f32>(py, array, "known_library"))
+        .transpose()?;
     let known_hand_buffer = typed_numpy_buffer::<f32>(py, &buffers.known_hand, "known_hand")?;
     let decklists_buffer = buffers
         .decklists
@@ -1888,6 +1919,10 @@ fn with_observation_field_slices<R>(
             .map(|buffer| send_slice_from_buffer(py, buffer, "facts"))
             .transpose()?,
         known_hand: send_slice_from_buffer(py, &known_hand_buffer, "known_hand")?,
+        known_library: known_library_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "known_library"))
+            .transpose()?,
         decklists: decklists_buffer
             .as_ref()
             .map(|buffer| send_slice_from_buffer(py, buffer, "decklists"))

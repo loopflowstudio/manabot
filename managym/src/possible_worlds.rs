@@ -29,7 +29,7 @@ use crate::{
 
 /// Canonical serialization contract for a viewer-relative possible-world
 /// space. Increment when identity or projection field inclusion changes.
-pub const POSSIBLE_WORLD_SPACE_VERSION: u16 = 3;
+pub const POSSIBLE_WORLD_SPACE_VERSION: u16 = 4;
 
 /// Stable, viewer-meaningful identity for a canonical query. Equivalent query
 /// constructions share one canonical form and therefore one digest.
@@ -374,6 +374,8 @@ pub struct HiddenHandConstraints {
     pub hand_size: u32,
     pub pool: BTreeMap<String, u32>,
     pub known_hand: BTreeMap<String, u32>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub known_library: BTreeMap<String, u32>,
     /// Public count of the opponent's face-down foretold cards.
     pub foretold: u32,
     /// Pool names that carry foretell and so may fill a foretold slot.
@@ -437,6 +439,21 @@ impl HiddenHandConstraints {
             let (known, _) = game.hidden_hand_partition(opponent, &commitments);
             name_counts(game, known)
         };
+        let mut known_library = BTreeMap::new();
+        for (position, definition) in &game.library_facts(opponent, viewer) {
+            let object = game
+                .library_from_top(opponent)
+                .nth(*position)
+                .expect("known position");
+            if commitments.pins(object) {
+                continue;
+            }
+            let name = &crate::cards::content_pack::default_content_pack()
+                .definition(*definition)
+                .expect("known definition")
+                .name;
+            *known_library.entry(name.clone()).or_insert(0) += 1;
+        }
         Self {
             viewer,
             opponent,
@@ -444,6 +461,7 @@ impl HiddenHandConstraints {
             hand_size,
             pool,
             known_hand,
+            known_library,
             foretold,
             foretell,
             retained_selection: commitments.constrains(),
@@ -537,17 +555,19 @@ impl HiddenHandConstraints {
         {
             // Group the opponent's unseen ObjectIds by name, sorted ascending so
             // the lowest ObjectIds of each name go to the hand deterministically.
+            let mut pool = commitments.unseen_objects(&branch, opponent);
+            let reserved = branch
+                .reserve_library_facts(opponent, self.viewer, &mut pool, &commitments)
+                .ok_or(MaterializeError::InconsistentWorld)?;
             let mut by_name: BTreeMap<String, Vec<ObjectId>> = BTreeMap::new();
-            for object in commitments.unseen_objects(&branch, opponent) {
+            for object in pool {
                 by_name
                     .entry(branch.state[object].name.clone())
                     .or_default()
                     .push(object);
             }
             for objects in by_name.values_mut() {
-                objects.sort_unstable_by_key(|object| {
-                    (!commitments.pins_object(*object), object.slot())
-                });
+                objects.sort_unstable_by_key(|object| (!commitments.pins(*object), object.slot()));
             }
 
             let mut new_hand: Vec<ObjectId> = Vec::with_capacity(self.hand_size as usize);
@@ -580,12 +600,18 @@ impl HiddenHandConstraints {
             if !branch.fill_foretold_slots(opponent, &mut new_library) {
                 return Err(MaterializeError::InconsistentWorld);
             }
-            let pending = commitments.pinned_library_objects(source, opponent);
+            let pending: Vec<_> = commitments
+                .pinned_library_objects(source, opponent)
+                .into_iter()
+                .filter(|object| !reserved.iter().any(|(_, fixed)| fixed == object))
+                .collect();
             if !pending.is_empty() {
                 new_library.extend(pending);
                 new_library.shuffle(&mut rng);
             }
 
+            let new_library = Game::place_library_facts(new_library, reserved)
+                .ok_or(MaterializeError::InconsistentWorld)?;
             branch
                 .state
                 .reassign_hidden(opponent, new_hand, new_library);
@@ -593,12 +619,15 @@ impl HiddenHandConstraints {
         if source.shares_information(self.viewer, opponent)
             && !source.inspects_library(self.viewer, opponent)
         {
-            branch.shuffle_private_library(opponent, &mut rng);
+            branch.shuffle_known_library(opponent, self.viewer, &commitments, &mut rng);
         }
-        branch.shuffle_private_library(self.viewer, &mut rng);
+        branch.shuffle_known_library(self.viewer, self.viewer, &commitments, &mut rng);
         if !branch.rebind_commitments(&commitments, &mut rng) {
             return Err(MaterializeError::InconsistentWorld);
         }
+
+        branch.refresh_sampled_library_knowledge(self.viewer);
+        branch.assert_library_knowledge();
 
         // Fail closed: the realized hand name-multiset must equal the world.
         let hand = branch.state.zones.zone_objects(ZoneType::Hand, opponent);
@@ -672,6 +701,8 @@ pub struct PossibleWorldSpaceProjection {
     pub hand_size: u32,
     pub pool: BTreeMap<String, u32>,
     pub known_hand: BTreeMap<String, u32>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub known_library: BTreeMap<String, u32>,
     pub foretold: u32,
     pub total_weight: String,
     pub worlds: Vec<PossibleWorldProjection>,
@@ -707,6 +738,7 @@ struct PossibleWorldSpaceIdentity<'a> {
     hand_size: u32,
     pool: &'a BTreeMap<String, u32>,
     known_hand: &'a BTreeMap<String, u32>,
+    known_library: &'a BTreeMap<String, u32>,
     foretold: u32,
     worlds: &'a [PossibleWorld],
     total_weight: String,
@@ -724,6 +756,7 @@ pub struct PossibleWorldSpace {
     hand_size: u32,
     pool: BTreeMap<String, u32>,
     known_hand: BTreeMap<String, u32>,
+    known_library: BTreeMap<String, u32>,
     foretold: u32,
     foretell: BTreeSet<String>,
     worlds: Vec<PossibleWorld>,
@@ -774,6 +807,7 @@ impl PossibleWorldSpace {
             hand_size: self.hand_size,
             pool: &self.pool,
             known_hand: &self.known_hand,
+            known_library: &self.known_library,
             foretold: self.foretold,
             worlds: &self.worlds,
             total_weight: self.total_weight.to_string(),
@@ -794,6 +828,7 @@ impl PossibleWorldSpace {
             hand_size: self.hand_size,
             pool: self.pool.clone(),
             known_hand: self.known_hand.clone(),
+            known_library: self.known_library.clone(),
             foretold: self.foretold,
             total_weight: self.total_weight.to_string(),
             worlds: self
@@ -864,7 +899,11 @@ impl PossibleWorldSpace {
                 let bearers = space
                     .foretell
                     .iter()
-                    .map(|name| space.pool[name] - world.hand.get(name).copied().unwrap_or(0))
+                    .map(|name| {
+                        space.pool[name]
+                            - world.hand.get(name).copied().unwrap_or(0)
+                            - space.known_library.get(name).copied().unwrap_or(0)
+                    })
                     .sum();
                 // The prior measure includes every foretold fill; replace only
                 // that factor, preserving the exact hand-subset multiplicity.
@@ -900,6 +939,7 @@ impl PossibleWorldSpace {
             hand_size,
             pool,
             known_hand: BTreeMap::new(),
+            known_library: BTreeMap::new(),
             foretold: 0,
             foretell: BTreeSet::new(),
             retained_selection: false,
@@ -914,6 +954,7 @@ impl PossibleWorldSpace {
             hand_size,
             pool,
             known_hand,
+            known_library,
             foretold,
             foretell,
             retained_selection: _,
@@ -923,6 +964,11 @@ impl PossibleWorldSpace {
             *residual
                 .get_mut(name)
                 .expect("known definition belongs to pool") -= count;
+        }
+        for (name, count) in &known_library {
+            *residual
+                .get_mut(name)
+                .expect("known library belongs to pool") -= count;
         }
         let unknown_slots = hand_size - known_hand.values().sum::<u32>();
         let names: Vec<_> = residual.into_iter().collect();
@@ -935,7 +981,11 @@ impl PossibleWorldSpace {
             }
             let bearers = foretell
                 .iter()
-                .map(|name| pool[name] - world.hand.get(name).copied().unwrap_or(0))
+                .map(|name| {
+                    pool[name]
+                        - world.hand.get(name).copied().unwrap_or(0)
+                        - known_library.get(name).copied().unwrap_or(0)
+                })
                 .sum();
             world.weight *= falling(bearers, foretold);
         }
@@ -948,6 +998,7 @@ impl PossibleWorldSpace {
             hand_size,
             pool,
             known_hand,
+            known_library,
             foretold,
             foretell,
             worlds,
@@ -1110,6 +1161,7 @@ impl PossibleWorldSpace {
             hand_size: self.hand_size,
             pool: self.pool.clone(),
             known_hand: self.known_hand.clone(),
+            known_library: self.known_library.clone(),
             foretold: self.foretold,
             foretell: self.foretell.clone(),
             retained_selection: source.hidden_commitments(self.viewer).constrains(),

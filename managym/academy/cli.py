@@ -15,7 +15,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 import json
 from pathlib import Path
-from typing import Literal
 
 from pydantic import TypeAdapter
 import typer
@@ -28,6 +27,7 @@ from managym.academy.launch import (
     _path_or_name,
     serve,
 )
+from managym.disclosure import DecklistDisclosure
 from managym.policy import PolicySpec
 from managym.search import SearchConfig
 
@@ -127,7 +127,7 @@ def play(
         None,
         help="Deal seed; the same seed and decks give the same deal (default random)",
     ),
-    decklists: Literal["open", "closed"] = typer.Option(
+    decklists: DecklistDisclosure = typer.Option(
         "open", help="Whether each player knows the other's list"
     ),
     search_json: str | None = typer.Option(
