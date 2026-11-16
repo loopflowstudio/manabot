@@ -35,8 +35,8 @@ training arm in this pilot; stratify the existing Elemental matchups instead.
 Jack Heart selected transformer and GRU, extra board tokens (J1), and summary
 counts 1 and 4; see `scratch/questions.md` for the exact direction. This replaces
 the earlier six-arm proposal. The experiment module declares these five arms
-but deliberately stops before job construction until bootstrap storage,
-resource sizing and calibrated job wiring are ready. The implementation plan is
+but deliberately stops before job construction until resource sizing, CUDA admission
+and calibrated job wiring are ready. The implementation plan is
 `scratch/opponent-memory-design.md`.
 
 Torch only; MLX support is outside this task. Assumption: memory width 64,
@@ -250,7 +250,7 @@ compact/bucketed paths and bounded ordinary updates. Those fixtures establish
 implementation health, not learnability or readiness at the intended load.
 
 Training/evaluation declarations still stop before constructing jobs. Dependent
-wiring is stopped at the measured storage counterexample; there was no paid run
+wiring is stopped pending full resource admission; there was no paid run
 or rental, and there is no launcher run ID or cost to record.
 
 ## What the results support
@@ -268,9 +268,10 @@ neither equivalence nor a regression.
 ## Recommendation
 
 Keep the no-history incumbent. Shared immutable game/viewer prefixes now back
-collection, selected gathers, bootstrap and recovery. Revise bootstrap to retain
-prefixes without keeping padded memory through the update. The controlled proof
-below combines host and device bytes; it does not establish a host-cap failure.
+collection, selected gathers, bootstrap and recovery. Bootstrap retains prefixes
+without keeping padded memory through the update. The original controlled proof
+combined host and device bytes; the new proof separates them and establishes
+finite one-row CPU execution, not pilot fit.
 Calibrate explicit collection, bootstrap and learner row sizes with separate
 host RSS and CUDA peaks before concrete job wiring; record any workload choice
 here. Preserve every record and typed overflow.
@@ -434,3 +435,72 @@ the other forwards. The controlled fixture's shared tails do not estimate
 independent-game deduplication. Record explicit execution row sizes before
 calibration; preserve full histories, learner clocks, five arms and USD 50 cap.
 No runtime change, new test run or paid experiment occurred in this review.
+
+### Bootstrap lifetime and separate execution proof, 2026-11-16
+
+Bootstrap now retains ordinary next-state fields and immutable prefixes, with
+no padded memory arrays in the returned batch. Admission and preparation gather
+temporary arrays; weak-reference checks confirm those arrays die while Prepared
+bootstrap input remains live. Learner prefetch releases its raw memory arrays too,
+keeping ordinary action/reference fields and immutable prefixes alongside Prepared.
+Both encoders and K values pass exact Prepared
+parity for mixed empty/duplicate rows, value parity, native-buffer reuse,
+collector journal restore and bounded incident capture. Collection/frozen/
+bootstrap fixtures use one stream; the ordinary update uses 16 learner decisions
+and four-row learner minibatches. These are explicit proof sizes, not pilot sizes.
+No optimizer schedule, learner clock, history capacity or arm changed.
+
+Command: `uv run --no-sync python scripts/verify_opponent_memory_storage.py --source experiments/data/opponent-memory/20261116-census/summary.json --out experiments/data/opponent-memory/20261116-bootstrap/receipt.json`.
+The [new receipt](data/opponent-memory/20261116-bootstrap/receipt.json) is published
+through the artifact manifest. It preserves the original storage receipt and
+its source identities unchanged. One controlled prefix contains all 595 records
+and 665,431 details, under the same 1,024/1,048,576 bounds. It shares tails across
+16,384 references; unique chunks are not an independent-game estimate.
+
+All four memory arms completed a full policy/board forward, backward and Adam
+step with finite outputs/gradients/weights and nonzero encoder gradients at
+**one execution row** with **two host Prepared batches**. Width is 64, float32,
+CPU with one Torch thread. This is an operational numerical proof; it does not
+measure playing strength or throughput. Per-phase receipt samples cover model,
+preparation, prefetch, device input, forward, backward and optimizer.
+
+| Encoder | Summaries | Cumulative process peak RSS (bytes) |
+| --- | ---: | ---: |
+| transformer | 1 | 1,821,507,584 |
+| transformer | 4 | 1,832,337,408 |
+| gru | 1 | 1,844,281,344 |
+| gru | 4 | 1,844,576,256 |
+
+These are cumulative process high-water marks, not independent arm peaks or
+phase deltas. Allocator retention carries across arms. Phase-end process-tree
+RSS is also recorded; without sampling, it cannot establish transient tree
+peaks. On this CPU run input tensors share host arrays. CUDA allocated/reserved
+current and peak bytes, and device capacity, are null: no CUDA hardware was
+available and no GPU fit follows. The same proof command supports `--device cuda`
+for a later admitted device; it does not replace real-worker admission.
+
+For the **unexecuted** 256-stream/256-selected-row worst case, host memory
+components total **33,197,816,959 bytes**: 8,608,808,960 native memory-buffer
+bytes, 24,563,357,696 for a temporary raw gather plus two retained host Prepared
+memory batches, and controlled prefix ownership/indexes. Bootstrap raw arrays
+exist only during admission/preparation and precede learner prefetch; they are
+not an additional update-long owner. Prepared bootstrap tensors still live
+through their value forward, and every bootstrap call still uses all trajectory
+rows. Native complete-game logs, ordinary fields, preparation temporaries and
+model/optimizer/activation memory are additional. This partial ownership total
+is **not** a host-limit admission, even though it is below the 40 GiB RSS guard.
+
+Device input memory separately totals **9,550,589,952 bytes** at 256 selected
+maxima. Just one width-64 float32 detail activation would add **43,609,686,016
+bytes**, before other detail intermediates, encoder/board activations, gradients,
+optimizer and allocator reserve. Do not sum these device numbers with the host
+limit. The census terminal payload context remains 1,807,045,512 bytes without
+interning; the small shared fixture cannot predict 256 independent games.
+
+Focused checks: `uv run --no-sync pytest tests/training/test_memory_prefix_storage.py tests/model/test_opponent_memory.py::test_opponent_memory_collects_bootstraps_and_learns_from_real_prefixes tests/training/test_update_backend_protocols.py::test_prefetched_minibatches_preserve_order_and_policy_input -q` — 14 passed; the final bootstrap/learner lifetime, mixed-row recovery and real-update checks passed 6 cases.
+
+Keep experiment wiring stopped. Explicit device limits and concurrent lifetimes
+for actual collection, frozen inference, bootstrap, admission and learner sizes
+still need CUDA/worker calibration before choosing job sizes. No execution
+chunking or smaller pilot workload was silently substituted. The five arms,
+matched learner decisions, full histories and inclusive USD 50 cap remain.

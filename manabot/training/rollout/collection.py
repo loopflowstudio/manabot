@@ -40,6 +40,7 @@ from manabot.env.memory_store import (
     MemoryStore,
     Prefix,
     PrefixIdentity,
+    PrefixObservation,
     archive_memory,
     restore_memory,
 )
@@ -869,14 +870,19 @@ class SeatRoutedCollector:
         )
 
     def _slice_obs_rows(self, rows: np.ndarray) -> ObservationBuffers:
-        """Host observation rows with the training action-focus dtype."""
+        """Temporary raw rows for immediate inference/preparation."""
+        obs = self._retain_obs_rows(rows)
+        return obs.materialize() if isinstance(obs, PrefixObservation) else obs
+
+    def _retain_obs_rows(self, rows: np.ndarray) -> ObservationBuffers:
+        """Freeze bootstrap fields and prefix versions without padded memory."""
         obs = {
             key: self._buffers[key][rows]
             for key in self.observation_space.shapes
             if key not in MEMORY_FIELDS
         }
         if self._memory_store is not None:
-            obs = CompactObservation(
+            obs = PrefixObservation(
                 obs, self._capture_memory(rows), self._memory_store.capacities
             )
         # Training convention (VectorEnv): action_focus as float32.
@@ -1574,7 +1580,7 @@ class SeatRoutedCollector:
         values = np.zeros((num_steps, num_envs), dtype=np.float32)
         if num_envs > self.num_envs:
             raise ValueError("bootstrap rows exceed native streams")
-        next_obs = self._slice_obs_rows(np.arange(num_envs))
+        next_obs = self._retain_obs_rows(np.arange(num_envs))
         next_done = np.zeros((num_envs,), dtype=bool)
         # Flatten in time-major order, matching scalar credit/selected actions.
         action_data = PackedActions.concatenate(

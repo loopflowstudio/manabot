@@ -22,6 +22,7 @@ from manabot.backends.torch.rl import (
     legal_mask,
     require,
 )
+from manabot.env.memory_store import PrefixObservation
 from manabot.policy.buckets import row_needs
 from manabot.policy.prepare import Prepared
 from manabot.training.rollout.actions import ActionRows, PackedActions
@@ -49,7 +50,10 @@ class AdmittedRollout:
         # measuring again.
         self._needs: np.ndarray | None = None
         self._measured = np.zeros(batch.actions.size, dtype=bool)
-        self.agent.check_observation(batch.next_obs)
+        raw = batch.next_obs
+        self.agent.check_observation(
+            raw.materialize() if isinstance(raw, PrefixObservation) else raw
+        )
 
     def admit_rows(self, indexes: NDArray[np.int64], chunk_rows: int) -> None:
         """Admit flat rollout `indexes` not yet admitted."""
@@ -74,8 +78,12 @@ class AdmittedRollout:
 
     def next_observation(self, device: torch.device) -> Prepared[torch.Tensor]:
         """Inference-prepared bootstrap observations [trajectory, ...] on `device`."""
+        raw = self.batch.next_obs
         return on_device(
-            self.agent.prepare_admitted(self.batch.next_obs, inference=True),
+            self.agent.prepare_admitted(
+                raw.materialize() if isinstance(raw, PrefixObservation) else raw,
+                inference=True,
+            ),
             device,
         )
 
@@ -101,6 +109,13 @@ class AdmittedRollout:
         prepared = self.agent.prepare_admitted(
             rows.observation, needs=needs, inference=False
         )
+        # Behavior/reference calculations need ordinary action fields, not a
+        # second raw memory owner beside Prepared (including in the prefetch).
+        if isinstance(rows.observation, PrefixObservation):
+            raw = rows.observation
+            rows.observation = PrefixObservation(
+                raw, raw.prefixes, raw.memory_capacities
+            )
         return prepared, rows
 
     @contextmanager

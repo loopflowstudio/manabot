@@ -77,8 +77,12 @@ class Prefix:
         return self.tail.detail_count if self.tail is not None else 0
 
 
-class CompactObservation(dict[str, np.ndarray]):
-    """Raw selected rows padded only to their maxima, under configured bounds."""
+class PrefixObservation(dict[str, np.ndarray]):
+    """Retained ordinary rows and immutable prefixes, with no padded memory owner.
+
+    Materialize selected rows only for admission/preparation. The returned raw
+    arrays must not be retained by the rollout or its admission owner.
+    """
 
     def __init__(
         self,
@@ -91,9 +95,24 @@ class CompactObservation(dict[str, np.ndarray]):
             for p in prefixes
         ):
             raise ValueError("opponent-memory prefix exceeds configured capacity")
-        super().__init__(rows)
+        super().__init__((k, v) for k, v in rows.items() if k not in MEMORY_FIELDS)
         self.prefixes = tuple(prefixes)
         self.memory_capacities = capacities
+
+    def materialize(self) -> "CompactObservation":
+        return CompactObservation(self, self.prefixes, self.memory_capacities)
+
+
+class CompactObservation(PrefixObservation):
+    """Temporary selected raw rows padded to their maxima under declared bounds."""
+
+    def __init__(
+        self,
+        rows: Mapping[str, np.ndarray],
+        prefixes: Sequence[Prefix],
+        capacities: tuple[int, int],
+    ) -> None:
+        super().__init__(rows, prefixes, capacities)
         self.update(gather_memory(self.prefixes))
 
 

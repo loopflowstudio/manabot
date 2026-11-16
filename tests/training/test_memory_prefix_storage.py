@@ -3,22 +3,27 @@
 from dataclasses import replace
 from io import BytesIO
 from typing import Literal
+import weakref
 
 import numpy as np
 import pytest
 import torch
 
-from manabot.backends.torch.arrays import array_fields
+from manabot.backends.torch.arrays import array_fields, on_device
 from manabot.backends.torch.collection import CollectionSession
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.rl import NumericalError
+from manabot.backends.torch.rollout import AdmittedRollout
 from manabot.backends.torch.state import capture_incident, load, save
 from manabot.env.match import Match, Reward
+import manabot.env.memory_store as memory_store
 from manabot.env.memory_store import (
     MEMORY_FIELDS,
     CompactObservation,
     MemoryStore,
+    Prefix,
     PrefixIdentity,
+    PrefixObservation,
     archive_memory,
     gather_memory,
     restore_memory,
@@ -120,11 +125,17 @@ def test_compact_memory_prepares_exactly_as_dense(
         )
 
 
-def test_memory_collector_recovery_retains_old_batches_and_incident_budget() -> None:
+@pytest.mark.parametrize("encoder", ["transformer", "gru"])
+@pytest.mark.parametrize("summaries", [1, 4])
+def test_memory_collector_recovery_retains_old_batches_and_incident_budget(
+    encoder: Literal["transformer", "gru"],
+    summaries: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     space = ObservationSpace(
         ObservationConfig(max_opponent_records=64, max_opponent_details=65536)
     )
-    model = policy(space, "gru", 1)
+    model = policy(space, encoder, summaries)
 
     def collector() -> SeatRoutedCollector:
         return SeatRoutedCollector(
@@ -143,6 +154,63 @@ def test_memory_collector_recovery_retains_old_batches_and_incident_budget() -> 
     try:
         first = original.collect(model, 16)
         before = first.observations(np.array([15, 0, 15])).observation
+        assert isinstance(first.next_obs, PrefixObservation)
+        assert not MEMORY_FIELDS.intersection(first.next_obs)
+        bootstrap_before = first.next_obs.materialize()
+        with torch.no_grad():
+            expected_value = model.get_value(
+                on_device(model.prepare(bootstrap_before), "cpu")
+            )
+            gathered: list[weakref.ReferenceType[np.ndarray]] = []
+
+            def observe_gather(prefixes: tuple[Prefix, ...]) -> dict[str, np.ndarray]:
+                arrays = gather_memory(prefixes)
+                gathered.extend(weakref.ref(a) for a in arrays.values())
+                return arrays
+
+            with monkeypatch.context() as patch:
+                patch.setattr(memory_store, "gather_memory", observe_gather)
+                admitted = AdmittedRollout(model, first)
+                prepared_bootstrap = admitted.next_observation(torch.device("cpu"))
+                actual_value = model.get_value(prepared_bootstrap)
+                admitted.admit_rows(np.array([15, 0, 15]), 2)
+                learner_input, behavior = admitted.rows(
+                    np.array([15, 0, 15]), torch.device("cpu")
+                )
+                assert not MEMORY_FIELDS.intersection(behavior.observation)
+                assert torch.isfinite(model.get_value(learner_input)).all()
+            # Prepared input cannot keep temporary raw padded arrays alive.
+            assert gathered and all(ref() is None for ref in gathered)
+            prefix = first.next_obs.prefixes[0]
+            selected = PrefixObservation(
+                {
+                    key: np.repeat(value, 3, axis=0)
+                    for key, value in first.next_obs.items()
+                },
+                [prefix, Prefix(PrefixIdentity("empty", 1, "root"), None), prefix],
+                first.next_obs.memory_capacities,
+            )
+            selected_batch = replace(
+                first, next_obs=selected, next_done=np.zeros(3, bool)
+            )
+            selected_input = AdmittedRollout(model, selected_batch).next_observation(
+                torch.device("cpu")
+            )
+            expected_input = on_device(
+                model.prepare(selected.materialize(), inference=True), "cpu"
+            )
+            for key, value in array_fields(expected_input, torch.Tensor).items():
+                torch.testing.assert_close(
+                    array_fields(selected_input, torch.Tensor)[key],
+                    value,
+                    rtol=0,
+                    atol=0,
+                )
+            torch.testing.assert_close(
+                model.get_value(selected_input), model.get_value(expected_input)
+            )
+        torch.testing.assert_close(actual_value, expected_value)
+        assert not MEMORY_FIELDS.intersection(first.next_obs)
         snapshot = original.snapshot()
         assert not MEMORY_FIELDS.intersection(snapshot.buffers)
         encoded = BytesIO()
@@ -153,6 +221,21 @@ def test_memory_collector_recovery_retains_old_batches_and_incident_budget() -> 
         resumed.restore(decoded, lambda: None)
         second = original.collect(model, 8)
         replayed = resumed.collect(model, 8)
+        assert isinstance(second.next_obs, PrefixObservation)
+        assert isinstance(replayed.next_obs, PrefixObservation)
+        # Both retained bootstrap and collector replay survive native buffer reuse.
+        for key in MEMORY_FIELDS:
+            np.testing.assert_array_equal(
+                first.next_obs.materialize()[key], bootstrap_before[key]
+            )
+            np.testing.assert_array_equal(
+                second.next_obs.materialize()[key], replayed.next_obs.materialize()[key]
+            )
+        with torch.no_grad():
+            torch.testing.assert_close(
+                model.get_value(admitted.next_observation(torch.device("cpu"))),
+                expected_value,
+            )
         for key in MEMORY_FIELDS:
             np.testing.assert_array_equal(
                 first.observations(np.array([15, 0, 15])).observation[key], before[key]
@@ -234,7 +317,8 @@ def test_memory_frozen_opponent_uses_the_compact_raw_contract() -> None:
     try:
         batch = collector.collect(model, 4)
         assert batch.actions.size == 4
-        assert isinstance(batch.next_obs, CompactObservation)
+        assert isinstance(batch.next_obs, PrefixObservation)
+        assert not MEMORY_FIELDS.intersection(batch.next_obs)
         assert len(batch.recorded.memory) == 4
         assert not MEMORY_FIELDS.intersection(batch.recorded.rows)
     finally:

@@ -623,7 +623,10 @@ the stack, as the source's frame before the output choice (CR 605.3b).
 Collector snapshots require a completed update boundary and current-self
 opponents. Retain opponent memory as a compact chunk archive, then validate it
 against native action-journal replay; never copy the configured padded memory
-buffers into a recovery snapshot. Numerical incidents are bounded diagnostics,
+buffers into a recovery snapshot. Bootstrap rows retain immutable prefixes;
+materialize raw memory only for admission/preparation. Prepared learner rows keep
+ordinary action fields for reference distributions, never a second padded memory
+owner beside Prepared (including prefetch). Numerical incidents are bounded diagnostics,
 not collector snapshots, and must report omitted complete prefixes explicitly.
 
 ### Etude training records

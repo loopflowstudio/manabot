@@ -18,7 +18,7 @@ from torch import Tensor
 
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
-from manabot.env.memory_store import MEMORY_FIELDS, CompactObservation, archive_memory
+from manabot.env.memory_store import MEMORY_FIELDS, PrefixObservation, archive_memory
 from manabot.policy.protocol import BackendPolicy
 from manabot.training.state.backend import IncidentCapture, NumericalIncident
 
@@ -242,7 +242,7 @@ def capture_incident(
         if batch.recorded.memory_capacities is not None:
             prefixes = [batch.recorded.memory[int(row)] for row in recorded]
             next_count = 0
-            if isinstance(batch.next_obs, CompactObservation):
+            if isinstance(batch.next_obs, PrefixObservation):
                 next_prefixes = batch.next_obs.prefixes[:max_rows]
                 next_count = len(next_prefixes)
                 prefixes.extend(next_prefixes)

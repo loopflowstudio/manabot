@@ -551,7 +551,8 @@ complete decision history, and no training benefit has been measured.
 storage are implemented as a bounded draft. The original dense rollout would need over
 500 GiB at the planned pilot size. Prefix storage removes that repeated ownership,
 but the controlled size proof does not establish host or GPU fit at the census
-maxima. Bootstrap lifetime and separate host/device accounting need revision.
+maxima. Bootstrap retains prefixes; a controlled one-row CPU proof now reports
+host residency separately from device inputs and activations.
 Resource sizing, CUDA admission and the five-arm pilot remain outstanding; the intended interface follows.
 
 To let a Torch policy use the opponent's earlier choices, select an encoder and
@@ -636,12 +637,17 @@ journal and checks a compact chunk archive. Numerical incidents select rows and
 budget whole prefixes before copying them; evidence that cannot fit is explicitly
 marked incomplete. These diagnostics do not resume games.
 
-**Proposed before calibration:** retain bootstrap memory as prefix references
-and gather it only for admission or value evaluation. The draft currently keeps
-padded bootstrap arrays through the update. Size collection, bootstrap and
-learner forwards explicitly; the host RSS limit and GPU memory are separate
-limits. These execution choices must preserve every record and the learning
-schedule.
+Bootstrap retains the same immutable prefixes with its ordinary next-state
+fields. Admission and value preparation materialize temporary raw arrays, which
+are released after preparation. Returned batches keep no padded bootstrap memory
+through the update. Learner prefetch also releases raw memory after preparation,
+keeping ordinary action fields for behavior/reference calculations. Bootstrap
+values and collector replay agree for both encoders
+and summary counts. Each bootstrap call still prepares all trajectory rows;
+collection and frozen inference also use their selected rows together. Size all
+these forwards explicitly before calibration; changing learner minibatches alone
+does not bound them. Host RSS and GPU memory are separate limits. These execution
+choices must preserve every record and the learning schedule.
 
 Record and companion-row capacities belong to the supplied observation space:
 `ObservationConfig.max_opponent_records` and `max_opponent_details`. Both default

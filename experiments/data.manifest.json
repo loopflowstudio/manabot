@@ -40914,6 +40914,10 @@
    "sha256": "f645e2b876253be1357794bef82fd827f0089cdeb7170c7c376ffb43eeb64a5c",
    "bytes": 562310
   },
+  "experiments/data/opponent-memory/20261116-bootstrap/receipt.json": {
+   "sha256": "9cc20a4d2316dc316a352419a26cadc14d8d9141c79735b35403125b3be3a243",
+   "bytes": 14217
+  },
   "experiments/data/opponent-memory/20261116-census/engine-source.patch": {
    "sha256": "d8c991f0fb2946db10e612a246cfdceb2d78001c9cf96b5a32513f43d22db1ae",
    "bytes": 79945
