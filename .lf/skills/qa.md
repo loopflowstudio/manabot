@@ -250,6 +250,13 @@ publish, land or choose the next Graph step from here.
   (wheel paths plus `--find-links`
   and the CPU Torch index), since uv's one-step upgrade hides file-ownership
   problems that pip's install order exposes.
+- Release installed-Academy proof (`scripts/release/academy_smoke.py`, the
+  Release packages job): `./scripts/verify-installed-academy` builds the staged
+  sdist, its wheel, a no-build-tools venv, the smoke and the wheel Playwright
+  spec (about 10 minutes under load). It deletes its directory on exit; to rerun
+  an older smoke against the same wheel, copy the script into `.runs/` with the
+  `trap` line replaced by `echo $proof_dir`. Socket readers must skip
+  `work_status` and early accepted `command_outcome` receipts.
 - Installed Academy (`managym[academy]` wheel): build as above, then in a fresh
   `/tmp` directory `uv venv --python 3.13 --seed` (without `--seed` there is
   no `pip`) and
