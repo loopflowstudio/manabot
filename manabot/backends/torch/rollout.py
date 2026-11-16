@@ -22,7 +22,7 @@ from manabot.backends.torch.rl import (
     legal_mask,
     require,
 )
-from manabot.env.memory_store import PrefixObservation
+from manabot.env.memory_store import PrefixObservation, materialize, select_rows
 from manabot.policy.buckets import row_needs
 from manabot.policy.prepare import Prepared
 from manabot.training.rollout.actions import ActionRows, PackedActions
@@ -32,7 +32,7 @@ from manabot.training.rollout.collection import RolloutBatch
 class AdmittedRollout:
     """A rollout batch whose observations are admitted once for one policy.
 
-    Construction admits the bootstrap rows. `admit_rows` admits the learner
+    Bootstrap reads admit one execution chunk at a time. `admit_rows` admits the learner
     rows an update will train, in chunks of at most one minibatch so host
     memory stays bounded; rows filtered out never enter a model and are not
     admitted. Minibatches then re-read admitted rows from the unchanged batch
@@ -50,10 +50,6 @@ class AdmittedRollout:
         # measuring again.
         self._needs: np.ndarray | None = None
         self._measured = np.zeros(batch.actions.size, dtype=bool)
-        raw = batch.next_obs
-        self.agent.check_observation(
-            raw.materialize() if isinstance(raw, PrefixObservation) else raw
-        )
 
     def admit_rows(self, indexes: NDArray[np.int64], chunk_rows: int) -> None:
         """Admit flat rollout `indexes` not yet admitted."""
@@ -78,14 +74,25 @@ class AdmittedRollout:
 
     def next_observation(self, device: torch.device) -> Prepared[torch.Tensor]:
         """Inference-prepared bootstrap observations [trajectory, ...] on `device`."""
-        raw = self.batch.next_obs
-        return on_device(
-            self.agent.prepare_admitted(
-                raw.materialize() if isinstance(raw, PrefixObservation) else raw,
-                inference=True,
-            ),
-            device,
-        )
+        return next(self.next_observations(device, len(self.batch.next_done)))
+
+    def next_observations(
+        self, device: torch.device, size: int
+    ) -> Iterator[Prepared[torch.Tensor]]:
+        """Admit, prepare and transfer one bootstrap chunk at a time."""
+        if size < 1:
+            raise ValueError("bootstrap rows must be positive")
+        for start in range(0, len(self.batch.next_done), size):
+            raw = materialize(
+                select_rows(
+                    self.batch.next_obs,
+                    np.arange(start, min(start + size, len(self.batch.next_done))),
+                )
+            )
+            prepared = self.agent.prepare(raw, inference=True)
+            del raw
+            yield on_device(prepared, device)
+            del prepared
 
     def rows(
         self, indexes: NDArray[np.int64], device: torch.device
@@ -151,6 +158,7 @@ class AdmittedRollout:
                     assert ready is not None
                     prepared, rows = ready.result()
                     yield chunk, on_device(prepared, device), rows
+                    del prepared, rows, ready
 
             yield batches()
 

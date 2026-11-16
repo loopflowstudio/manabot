@@ -506,3 +506,70 @@ for actual collection, frozen inference, bootstrap, admission and learner sizes
 still need CUDA/worker calibration before choosing job sizes. No execution
 chunking or smaller pilot workload was silently substituted. The five arms,
 matched learner decisions, full histories and inclusive USD 50 cap remain.
+
+### Explicit execution limits, 2026-11-16
+
+Implemented separate `Execution.collection_rows`, `bootstrap_rows` and
+`learner_rows` limits, required for training with opponent-memory buffers,
+including the no-history control. Limits select prefix references before raw
+materialization, admission, preparation and forward. Frozen opponents use the
+collection limit. Bootstrap concatenates only small predictions. Sampling keeps
+one backend RNG call per original group; learner chunks retain selection/order,
+separate logical actor/critic denominators and one clip/Adam step per logical
+minibatch. PPO's actual prefetch releases its previous completed Future before
+submitting another chunk. No history capacity or logical workload changed.
+
+Command: `uv run --no-sync python scripts/verify_opponent_memory_storage.py --source experiments/data/opponent-memory/20261116-census/summary.json --out experiments/data/opponent-memory/20261116-execution-final/receipt.json --collection-rows 2 --bootstrap-rows 2 --learner-rows 2`.
+The [execution receipt](data/opponent-memory/20261116-execution-final/receipt.json) is
+manifest-backed; all 16 recorded source hashes match the measured source.
+The earlier census, storage and bootstrap receipts remain unchanged. The
+preliminary `20261116-execution/receipt.json` is retained too; the final receipt
+repeats execution after correcting source docstrings for the chunked boundary.
+
+This controlled CPU proof runs the actual collection, frozen-inference,
+bootstrap, admission, PPO preparation and update paths at **2/2/2 execution
+rows**, with **five logical optimizer rows**, a final one-row chunk, **three
+simultaneous policies** (learner, bootstrap/EMA and frozen opponent), Adam and
+one-ahead host preparation. Every selected prefix contains all 595 records and
+665,431 details. All four arms finish with finite outputs, gradients and weights,
+nonzero encoder gradients, five optimizer exposures and exactly one Adam step.
+Width is 64, float32, one Torch thread. This is a numerical/resource proof, not
+a throughput, learning or playing-strength measurement.
+
+| Encoder | Summaries | Sampled concurrent process-tree RSS peak (bytes) | Cumulative self high-water RSS (bytes) |
+| --- | ---: | ---: | ---: |
+| transformer | 1 | 3,205,169,152 | 3,208,380,416 |
+| transformer | 4 | 3,221,864,448 | 3,221,864,448 |
+| GRU | 1 | 3,235,430,400 | 3,235,463,168 |
+| GRU | 4 | 3,204,202,496 | 3,235,463,168 |
+
+Tree samples occur every 20 ms across the complete model/update lifetime;
+phase samples and the self high-water mark complement them. Sampling can miss
+short transients, and allocator retention carries across arms. On CPU tensors
+share host arrays. CUDA allocated/reserved current and peak bytes and device
+capacity are null because CUDA is unavailable here. No host/device sum or GPU
+fit claim follows.
+
+For the unexecuted 256-stream native-buffer envelope, the bounded execution
+memory components total **8,826,360,495 host bytes**, including native buffers,
+the controlled shared-prefix payload/indexes and the largest raw/Prepared
+execution overlap. This partial arithmetic excludes native game logs, ordinary
+fields, preparation temporaries and model/activation/optimizer memory. It is
+not a host-limit admission. Shared tails still cannot estimate independent-game
+storage; the full 256-stream workload was not executed. The old 256-selected-row
+33,197,816,959-byte host envelope remains explicitly unexecuted in the receipt.
+
+Focused parity covers both encoders/K values, duplicate/empty/shuffled prefixes,
+unequal chunks, scalar/categorical bootstrap, both filter scopes, clipped PPO
+and damped updates, frozen RNG partition and three-stream supported collector
+restore. Post-Adam parameters and logical diagnostics agree within numerical
+tolerances; model batching is not promised bitwise identical. Near-constant PPO
+advantage normalization can amplify ordinary floating-point forward differences;
+this is not evidence of learning equivalence.
+
+CUDA worker/update/checkpoint reload admission and independent-game resource
+accounting remain prerequisites for calibrated Etude wiring. The five arms,
+matched learner decisions, full histories and inclusive USD 50 cap are unchanged.
+No training/evaluation rental or pilot ran in this iteration.
+
+Validation: `uv run --extra dev pytest tests/training/test_memory_execution_rows.py -q` — 18 passed. Simulation/collection, precision and CI-selection checks — 76 passed. The required backend checks passed after moving malformed-bootstrap rejection coverage from construction to the bootstrap read; MLX cases were skipped because MLX is unavailable. Retained prefix/recovery and ordinary memory-update checks passed. Training CI includes both memory test files; its exact training invocation collected 423 tests. Artifact tracking, Ruff and `git diff --check` passed. Full gate and CUDA admission remain outstanding.

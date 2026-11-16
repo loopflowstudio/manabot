@@ -551,8 +551,8 @@ complete decision history, and no training benefit has been measured.
 storage are implemented as a bounded draft. The original dense rollout would need over
 500 GiB at the planned pilot size. Prefix storage removes that repeated ownership,
 but the controlled size proof does not establish host or GPU fit at the census
-maxima. Bootstrap retains prefixes; a controlled one-row CPU proof now reports
-host residency separately from device inputs and activations.
+maxima. Bootstrap retains prefixes; controlled CPU execution reports host
+residency separately from device inputs and activations.
 Resource sizing, CUDA admission and the five-arm pilot remain outstanding; the intended interface follows.
 
 To let a Torch policy use the opponent's earlier choices, select an encoder and
@@ -637,17 +637,28 @@ journal and checks a compact chunk archive. Numerical incidents select rows and
 budget whole prefixes before copying them; evidence that cannot fit is explicitly
 marked incomplete. These diagnostics do not resume games.
 
-Bootstrap retains the same immutable prefixes with its ordinary next-state
-fields. Admission and value preparation materialize temporary raw arrays, which
-are released after preparation. Returned batches keep no padded bootstrap memory
-through the update. Learner prefetch also releases raw memory after preparation,
-keeping ordinary action fields for behavior/reference calculations. Bootstrap
-values and collector replay agree for both encoders
-and summary counts. Each bootstrap call still prepares all trajectory rows;
-collection and frozen inference also use their selected rows together. Size all
-these forwards explicitly before calibration; changing learner minibatches alone
-does not bound them. Host RSS and GPU memory are separate limits. These execution
-choices must preserve every record and the learning schedule.
+Bootstrap retains immutable prefixes with ordinary next-state fields. Collection,
+frozen opponents and bootstrap select prefix references before materializing,
+admitting and preparing one execution chunk. Temporary raw arrays expire after
+preparation; only small predictions survive each chunk. Sampling still uses one
+RNG call in the original group order.
+
+A memory-enabled training stage (including a no-history control retaining the
+same logs) requires explicit positive `Execution.collection_rows`,
+`Execution.bootstrap_rows` and `Execution.learner_rows` limits. For example,
+`Execution(collection_rows=2, bootstrap_rows=2, learner_rows=2)` exercises the
+controlled CPU proof size; calibrate these resource limits for the target
+device. These Torch execution settings do not change native stream count,
+history capacities, learner selection, shuffled order or logical optimizer
+minibatches. Learner chunks accumulate gradients with the logical minibatch's
+separate actor and critic denominators, then clip and step once. PPO prepares
+at most one chunk ahead. Full histories remain intact even for an execution
+chunk of one row; inability to fit that row is a calibration failure.
+
+Host RSS and device memory remain separate limits. CPU chunk parity and
+residency measurements do not admit a CUDA worker or establish independent-game
+storage, throughput or playing strength. Recipes without memory retain their
+historical execution when row limits are omitted.
 
 Record and companion-row capacities belong to the supplied observation space:
 `ObservationConfig.max_opponent_records` and `max_opponent_details`. Both default

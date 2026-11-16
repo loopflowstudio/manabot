@@ -40934,6 +40934,14 @@
    "sha256": "da4bb8e09b684b28a5d6ee87453f211de72b3e9dd361e7a5265ac979d5500c6d",
    "bytes": 1244
   },
+  "experiments/data/opponent-memory/20261116-execution-final/receipt.json": {
+   "sha256": "449ca7150e12e0ceabc7c547923cb940620e987096bd7c5f0d45cadbd91eac3f",
+   "bytes": 15172
+  },
+  "experiments/data/opponent-memory/20261116-execution/receipt.json": {
+   "sha256": "d9116119cd34c36a5e44f00620d591db8f8f895810ee2527ecca5517094e8cc4",
+   "bytes": 15171
+  },
   "experiments/data/opponent-memory/20261116-storage/receipt.json": {
    "sha256": "95fdf09cd706d6e81e3659dcdf2b2bd51ade330f49b2ee727f6caf7721fd569e",
    "bytes": 3121

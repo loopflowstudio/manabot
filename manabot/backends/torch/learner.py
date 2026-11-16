@@ -97,20 +97,25 @@ def gradient_step(
     max_grad_norm: float,
     *,
     recorder: StepRecorder | None = None,
+    accumulated: bool = False,
 ) -> Tensor:
     """Zero, backward, clip the global norm to `max_grad_norm`, step; return the pre-clip norm.
 
     Raises before stepping on a detached or nonfinite loss, a loss that reaches
     no parameter, or nonfinite gradients; the model and optimizer are then
     unchanged. Raises after stepping if a parameter became nonfinite.
+    `accumulated` preserves gradients already backpropagated by execution chunks;
+    clipping and Adam still occur exactly once at the logical boundary.
     """
     recorder = recorder or _Unrecorded()
     with recorder.rejecting():
         check_objective(loss)
         parameters = list(model.parameters())
-        optimizer.zero_grad(set_to_none=True)
+        if not accumulated:
+            optimizer.zero_grad(set_to_none=True)
         with recorder.track("Backward and gradient clipping"):
-            loss.backward()
+            if not accumulated:
+                loss.backward()
             sampled = recorder.sampling()
             if not any(p.grad is not None for p in parameters):
                 raise NumericalError("missing_all_gradients", {"loss": loss})
@@ -228,9 +233,14 @@ class Learner:
         *,
         minibatch_rows: int,
         precision: "Precision" = "float32",
+        execution_rows: int | None = None,
+        bootstrap_rows: int | None = None,
     ) -> None:
         if minibatch_rows < 1:
             raise ValueError("minibatch_rows must be positive")
+        if any(v is not None and v < 1 for v in (execution_rows, bootstrap_rows)):
+            raise ValueError("execution row limits must be positive")
+        self.execution_rows, self.bootstrap_rows = execution_rows, bootstrap_rows
         self.device = torch.device(device)
         # Checkpoint admission returns eval mode. Recurrent CUDA kernels need
         # a training-mode forward before backward, including on warm starts.
@@ -267,12 +277,25 @@ class Learner:
         max_grad_norm: float,
         *,
         recorder: StepRecorder | None = None,
+        accumulated: bool = False,
     ) -> Tensor:
         """`gradient_step` on this learner's policy and optimizer: the
         pre-clip gradient norm."""
         return gradient_step(
-            loss, self.agent, self.optimizer, max_grad_norm, recorder=recorder
+            loss,
+            self.agent,
+            self.optimizer,
+            max_grad_norm,
+            recorder=recorder,
+            accumulated=accumulated,
         )
+
+    def accumulate(self, loss: Tensor, *, first: bool) -> None:
+        """Backward a correctly weighted contribution, freeing its graph now."""
+        check_objective(loss)
+        if first:
+            self.optimizer.zero_grad(set_to_none=True)
+        loss.backward()
 
     def gradients(self, loss: Tensor) -> "ParameterArrays":
         """Unclipped gradients of `loss` by parameter name, without stepping

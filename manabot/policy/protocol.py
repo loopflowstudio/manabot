@@ -143,6 +143,15 @@ class BackendPolicy(Protocol):
         """Action rows using the backend's RNG and established sampling arithmetic."""
         ...
 
+    def sample_logits(
+        self,
+        logits: np.ndarray,
+        *,
+        deterministic: bool = False,
+        temperature: float = 1.0,
+        sampling: Literal["categorical", "multinomial"] = "categorical",
+    ) -> np.ndarray: ...
+
     def win_probabilities(self, batch: Prepared[np.ndarray]) -> np.ndarray:
         """Sigmoid of scalar win-logit values, evaluated in the backend."""
         ...

@@ -2,17 +2,20 @@
 
 This is a size proof, not a throughput or CUDA admission benchmark. It builds
 one valid synthetic prefix at the measured maxima and measures actual ownership,
-selected raw gather, and host preparation. Larger envelopes are arithmetic;
+selected raw gather, preparation and chunked execution. Larger storage envelopes are arithmetic;
 no full padded rollout or resource-pressure fixture is allocated.
 """
 
 import argparse
+from collections.abc import Callable
+from copy import deepcopy
 import gc
 from hashlib import sha256
 import json
 from pathlib import Path
 import resource
 import sys
+from threading import Event, Thread
 import time
 import tracemalloc
 from typing import Literal
@@ -21,7 +24,10 @@ import numpy as np
 import psutil
 import torch
 
-from manabot.backends.torch.arrays import array_fields, on_device
+import manabot.backends.torch as backend
+from manabot.backends.torch.arrays import array_fields
+from manabot.backends.torch.collection import CollectionSession
+from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.memory_store import (
@@ -37,6 +43,12 @@ from manabot.env.memory_store import (
 )
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.infra.profiler import Profiler
+from manabot.sim.rollout import BatchedSampler
+from manabot.training.regime import Learning
+from manabot.training.rollout.actions import ACTION_FIELDS, PackedActions
+from manabot.training.rollout.collection import RecordedObservations, RolloutBatch
+from manabot.training.updates.ppo import update_iteration
 import managym
 
 
@@ -68,18 +80,69 @@ def residency(device: torch.device) -> dict[str, int | None]:
     }
 
 
+def measured[**P, T](
+    operation: Callable[P, T],
+    phases: dict[str, dict[str, int | None]],
+    name: str,
+    device: torch.device,
+) -> Callable[P, T]:
+    def run(*args: P.args, **kwargs: P.kwargs) -> T:
+        result = operation(*args, **kwargs)
+        phases[name] = residency(device)
+        return result
+
+    return run
+
+
+class HostPeak:
+    """Sample simultaneous process-tree RSS through every model/update lifetime."""
+
+    def __init__(self) -> None:
+        self.stop = Event()
+        self.peak = 0
+        self.thread = Thread(target=self._sample, name="memory-rss", daemon=True)
+
+    def _sample(self) -> None:
+        process = psutil.Process()
+        while True:
+            processes = [process, *process.children(recursive=True)]
+            self.peak = max(
+                self.peak, sum(p.memory_info().rss for p in processes if p.is_running())
+            )
+            if self.stop.wait(0.02):
+                return
+
+    def __enter__(self) -> "HostPeak":
+        self.thread.start()
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        self.stop.set()
+        self.thread.join()
+
+
 def execution_proof(
     space: ObservationSpace,
     retained: PrefixObservation,
     device: torch.device,
+    *,
+    collection_rows: int,
+    bootstrap_rows: int,
+    learner_rows: int,
 ) -> list[dict[str, object]]:
-    """One complete maximum prefix per forward, four arms, sequentially.
+    """Exercise real chunk paths with full maximum prefixes and a final short chunk.
 
-    This bounds execution without changing the experiment's streams or optimizer
-    batches. Full job sizing remains separate. CPU high-water is cumulative;
-    CUDA peaks reset per arm and include model, input, activations and Adam.
+    Three policies coexist (learner, bootstrap/EMA, frozen opponent), along with
+    Adam and PPO's actual one-ahead host preparation. Native independent-game
+    buffers remain an arithmetic envelope, not allocated resource pressure.
     """
     results: list[dict[str, object]] = []
+    logical_rows = max(collection_rows, bootstrap_rows, learner_rows) * 2 + 1
+    rows = PrefixObservation(
+        {k: np.repeat(v, logical_rows, axis=0) for k, v in retained.items()},
+        retained.prefixes * logical_rows,
+        retained.memory_capacities,
+    )
     encoders: tuple[Literal["transformer", "gru"], ...] = ("transformer", "gru")
     for encoder in encoders:
         for summaries in (1, 4):
@@ -87,68 +150,119 @@ def execution_proof(
             if device.type == "cuda":
                 torch.cuda.empty_cache()
                 torch.cuda.reset_peak_memory_stats(device)
-            phases = {"before_model": residency(device)}
-            model = ActorCritic(
-                space,
-                ModelConfig(
-                    world=managym.WORLD_SETUP,
-                    hidden_dim=64,
-                    opponent_memory=encoder,
-                    opponent_memory_summaries=summaries,
-                    attention_on=True,
-                    attention_layers=2,
-                    policy_film=True,
-                    value_aggregation="masked_mean",
-                ),
-            ).to(device)
-            optimizer = torch.optim.Adam(model.parameters())
-            phases["model"] = residency(device)
-            # Admission and preparation see only temporary dense input; the next
-            # observation owner continues to contain ordinary fields + prefixes.
-            host = model.prepare(retained.materialize())
-            phases["prepared"] = residency(device)
-            prefetched = model.prepare(retained.materialize())
-            phases["two_host_prepared"] = residency(device)
-            prepared = on_device(host, device)
-            phases["device_input"] = residency(device)
-            logits, value = model.forward_distribution(prepared)
-            legal_logits = logits[prepared.legal > 0]
-            assert torch.isfinite(legal_logits).all() and torch.isfinite(value).all()
-            loss = legal_logits.square().mean() + value.square().mean()
-            phases["forward"] = residency(device)
-            loss.backward()
-            assert model.opponent_memory is not None
-            gradients = [
-                p.grad for p in model.opponent_memory.parameters() if p.grad is not None
-            ]
-            assert gradients and all(torch.isfinite(g).all() for g in gradients)
-            assert any(g.abs().sum() > 0 for g in gradients)
-            phases["backward"] = residency(device)
-            optimizer.step()
-            assert all(torch.isfinite(p).all() for p in model.parameters())
-            phases["optimizer"] = residency(device)
-            assert not MEMORY_FIELDS.intersection(retained)
+            with HostPeak() as peak:
+                phases = {"before_models": residency(device)}
+                model = ActorCritic(
+                    space,
+                    ModelConfig(
+                        world=managym.WORLD_SETUP,
+                        hidden_dim=64,
+                        opponent_memory=encoder,
+                        opponent_memory_summaries=summaries,
+                        attention_on=True,
+                        attention_layers=2,
+                        policy_film=True,
+                        value_aggregation="masked_mean",
+                    ),
+                ).to(device)
+                ema, frozen = deepcopy(model), deepcopy(model)
+                learner = Learner(
+                    model,
+                    device,
+                    minibatch_rows=logical_rows,
+                    execution_rows=learner_rows,
+                    bootstrap_rows=bootstrap_rows,
+                )
+                phases["three_models"] = residency(device)
+                session = CollectionSession(device=str(device), seed=111)
+                with session.scope(model) as scope:
+                    sampled = scope.sample(
+                        rows, Profiler(), execution_rows=collection_rows
+                    )
+                phases["collection"] = residency(device)
+                BatchedSampler(
+                    frozen, device=str(device), execution_rows=collection_rows
+                ).select(rows, np.arange(logical_rows))
+                phases["frozen_opponent"] = residency(device)
+                batch = RolloutBatch(
+                    RecordedObservations(
+                        {k: v for k, v in rows.items() if k not in ACTION_FIELDS},
+                        np.arange(logical_rows),
+                        memory=rows.prefixes,
+                        memory_capacities=rows.memory_capacities,
+                    ),
+                    sampled.actions[None],
+                    sampled.logprobs[None],
+                    np.linspace(-1, 1, logical_rows)[None],
+                    np.zeros((1, logical_rows), bool),
+                    sampled.values[None],
+                    rows,
+                    np.zeros(logical_rows, bool),
+                    PackedActions.pack(
+                        {k: v for k, v in rows.items() if k in ACTION_FIELDS},
+                        sampled.log_probabilities,
+                        validator=backend.rollout,
+                    ),
+                )
+                # Sample residency at actual preparation/forward/backward/Adam boundaries.
+                model.prepare_admitted = measured(
+                    model.prepare_admitted, phases, "prepared_or_prefetched", device
+                )
+                model.forward_distribution = measured(
+                    model.forward_distribution, phases, "forward", device
+                )
+                diagnostics = update_iteration(
+                    backend,
+                    learner,
+                    batch,
+                    Learning(filter_scope="actor", epochs=1, minibatches=1),
+                    0.0,
+                    np.random.default_rng(1),
+                    bootstrap_agent=ema,
+                )
+                del model.prepare_admitted, model.forward_distribution
+                phases["after_adam"] = residency(device)
+                assert model.opponent_memory is not None
+                gradients = [
+                    p.grad
+                    for p in model.opponent_memory.parameters()
+                    if p.grad is not None
+                ]
+                assert gradients and all(torch.isfinite(g).all() for g in gradients)
+                assert any(g.abs().sum() > 0 for g in gradients)
+                assert all(torch.isfinite(p).all() for p in model.parameters())
+                assert all(
+                    state["step"].item() == 1
+                    for state in learner.optimizer.state.values()
+                )
             results.append(
-                {
-                    "encoder": encoder,
-                    "summaries": summaries,
-                    "execution_rows": len(retained.prefixes),
-                    "host_prepared_batches": 2,
-                    "finite_forward_backward_adam": True,
-                    "phases": phases,
-                }
+                dict(
+                    encoder=encoder,
+                    summaries=summaries,
+                    logical_rows=logical_rows,
+                    execution_limits=dict(
+                        collection_rows=collection_rows,
+                        bootstrap_rows=bootstrap_rows,
+                        learner_rows=learner_rows,
+                    ),
+                    host_prepared_batches=2,
+                    simultaneous_policy_copies=3,
+                    finite_forward_backward_adam=True,
+                    optimizer_exposures=diagnostics["optimizer_exposures"],
+                    host_tree_peak_sampled_bytes=peak.peak,
+                    host_tree_sample_interval_seconds=0.02,
+                    phases=phases,
+                )
             )
             del (
-                loss,
-                legal_logits,
-                logits,
-                value,
-                gradients,
-                prepared,
-                host,
-                prefetched,
-                optimizer,
                 model,
+                learner,
+                ema,
+                frozen,
+                session,
+                batch,
+                sampled,
+                gradients,
             )
     return results
 
@@ -159,6 +273,9 @@ def measure(
     streams: int = 256,
     selected_rows: int = 256,
     device_name: Literal["cpu", "cuda"] = "cpu",
+    collection_rows: int = 2,
+    bootstrap_rows: int = 2,
+    learner_rows: int = 2,
 ) -> dict[str, object]:
     """Use retained counts and a valid controlled fixture; never claim replay bytes."""
     device = torch.device(device_name)
@@ -293,7 +410,14 @@ def measure(
     all_field_bytes = sum(a.nbytes for a in prepared_arrays.values())
     retained = PrefixObservation(ordinary, [prefix], capacities)
     del compact, prepared, prepared_arrays, memory_arrays, model
-    execution = execution_proof(space, retained, device)
+    execution = execution_proof(
+        space,
+        retained,
+        device,
+        collection_rows=collection_rows,
+        bootstrap_rows=bootstrap_rows,
+        learner_rows=learner_rows,
+    )
     return {
         "source_sha256": {
             name: sha256(Path(name).read_bytes()).hexdigest()
@@ -307,6 +431,13 @@ def measure(
                 "manabot/backends/torch/state.py",
                 "manabot/backends/torch/rollout.py",
                 "manabot/sim/rollout.py",
+                "manabot/backends/torch/collection.py",
+                "manabot/backends/torch/learner.py",
+                "manabot/backends/torch/policy.py",
+                "manabot/training/execution.py",
+                "manabot/training/updates/ppo.py",
+                "manabot/training/updates/damped_policy.py",
+                "manabot/training/regime.py",
             )
         },
         "fixture": "controlled valid distinct facts at census terminal maxima; no replay corpus",
@@ -350,8 +481,27 @@ def measure(
         if device.type == "cuda"
         else None,
         "execution_proof": execution,
+        "bounded_execution_host_memory_components_bytes": native_bytes
+        + max(
+            collection_rows * (gather_bytes([prefix]) + prepared_bytes),
+            bootstrap_rows * (gather_bytes([prefix]) + prepared_bytes),
+            learner_rows * (gather_bytes([prefix]) + 2 * prepared_bytes),
+        )
+        + sum(
+            ownership[key]
+            for key in (
+                "unique_chunk_bytes",
+                "python_metadata_bytes",
+                "intern_index_bytes",
+            )
+        ),
         "execution_row_counts": {
-            "controlled_forward_backward": 1,
+            "collection_limit": collection_rows,
+            "bootstrap_limit": bootstrap_rows,
+            "learner_limit": learner_rows,
+            "logical_optimizer_rows": max(collection_rows, bootstrap_rows, learner_rows)
+            * 2
+            + 1,
             "controlled_host_prefetch_batches": 2,
             "collector_recovery_test_streams": 1,
             "collector_recovery_test_quota": 16,
@@ -378,14 +528,29 @@ def main() -> None:
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
     parser.add_argument("--streams", type=int, default=256)
     parser.add_argument("--selected-rows", type=int, default=256)
+    parser.add_argument("--collection-rows", type=int, default=2)
+    parser.add_argument("--bootstrap-rows", type=int, default=2)
+    parser.add_argument("--learner-rows", type=int, default=2)
     args = parser.parse_args()
-    if min(args.streams, args.selected_rows) < 1:
+    if (
+        min(
+            args.streams,
+            args.selected_rows,
+            args.collection_rows,
+            args.bootstrap_rows,
+            args.learner_rows,
+        )
+        < 1
+    ):
         parser.error("stream and selected row counts must be positive")
     result = measure(
         args.source,
         streams=args.streams,
         selected_rows=args.selected_rows,
         device_name=args.device,
+        collection_rows=args.collection_rows,
+        bootstrap_rows=args.bootstrap_rows,
+        learner_rows=args.learner_rows,
     )
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(result, indent=2) + "\n")

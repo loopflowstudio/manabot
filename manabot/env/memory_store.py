@@ -116,6 +116,23 @@ class CompactObservation(PrefixObservation):
         self.update(gather_memory(self.prefixes))
 
 
+def select_rows(
+    rows: Mapping[str, np.ndarray], indexes: np.ndarray
+) -> dict[str, np.ndarray]:
+    """Select ordinary fields and prefix references before any dense gather."""
+    selected = {k: v[indexes] for k, v in rows.items() if k not in MEMORY_FIELDS}
+    if isinstance(rows, PrefixObservation):
+        return PrefixObservation(
+            selected, [rows.prefixes[int(i)] for i in indexes], rows.memory_capacities
+        )
+    return {k: v[indexes] for k, v in rows.items()}
+
+
+def materialize(rows: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    """Temporary dense input; callers retain references, never this owner."""
+    return rows.materialize() if isinstance(rows, PrefixObservation) else rows
+
+
 def gather_bytes(prefixes: Sequence[Prefix]) -> int:
     """Preflight selected padding without allocating it (including duplicates)."""
     return (

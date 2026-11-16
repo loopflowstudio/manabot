@@ -32,6 +32,7 @@ from manabot.training.updates.backend import (
     AdmittedRollout,
     Array,
     Learner,
+    Observations,
     Policy,
     UpdateBackend,
     categorical_rl,
@@ -72,6 +73,8 @@ def minibatch_objective(
     clip: float,
     collection_kl: float,
     tau: float,
+    policy_weight: float = 1.0,
+    value_weight: float = 1.0,
 ) -> tuple[Array, Array, Array]:
     """The damped rule's loss on one minibatch: (loss, policy loss, value loss).
 
@@ -105,7 +108,23 @@ def minibatch_objective(
     else:
         # Representation ablation, not the paper's outcome objective.
         value_loss = rl.squared_value_loss(value_logits, value_targets).mean()
+    policy_loss = policy_loss * policy_weight
+    value_loss = value_loss * value_weight
     return policy_loss + rl.float64_operand(value_loss), policy_loss, value_loss
+
+
+def bootstrap_predictions(
+    backend: UpdateBackend, learner: Learner, admitted: AdmittedRollout, policy: Policy
+) -> Array:
+    """Preserve trajectory order; only raw critic predictions survive each chunk."""
+    outputs: list[np.ndarray] = []
+    size = learner.bootstrap_rows or len(admitted.batch.next_done)
+    for obs in admitted.next_observations(learner.device, size):
+        with learner.forward_precision():
+            _, values = policy.forward_distribution(obs)
+        outputs.append(backend.arrays.to_numpy(backend.arrays.float32(values)))
+        del obs, values
+    return backend.arrays.from_numpy(np.concatenate(outputs), learner.device)
 
 
 def compute_targets(
@@ -124,11 +143,9 @@ def compute_targets(
         values = backend.arrays.from_numpy(batch.values, device)
         rl.require_finite("nonfinite_collection_values", values=values)
         rl.require_finite("nonfinite_rewards", rewards=rewards)
-        next_obs = admitted.next_observation(device)
-        with learner.forward_precision():
-            policy = bootstrap_agent or learner.agent
-            _, next_raw = policy.forward_distribution(next_obs)
-        next_raw = backend.arrays.float32(next_raw)
+        next_raw = bootstrap_predictions(
+            backend, learner, admitted, bootstrap_agent or learner.agent
+        )
         rl.require_finite("nonfinite_bootstrap", values=next_raw)
         if learner.agent.config.value_kind == "categorical_wdl":
             if batch.outcome_probabilities is None:
@@ -278,97 +295,153 @@ def update_damped_iteration(
     # Rows each minibatch trains: the actor's under actor_critic scope, else all.
     trained = actor_rows if actor_critic else np.ones_like(actor_rows)
     with track("Minibatches"):
-        admitted.admit_rows(np.flatnonzero(trained), width)
+        admitted.admit_rows(
+            np.flatnonzero(trained), min(width, learner.execution_rows or width)
+        )
         for start in range(0, len(actor_rows), width):
             window = trained[start : start + width]
             if not window.any():
                 health["skipped_steps"] += 1
                 continue
-            with track("Forward and loss"):
-                rows_host = np.arange(start, start + len(window))[window]
-                indexes = to_device(rows_host, device)
-                minibatch_actions = actions[indexes]
-                obs, rows = admitted.rows(rows_host, device)
-                valid = rl.legal_mask(admitted.legal(obs))
-                behavior_logs = to_device(rows.log_probabilities, device)
-                reference = to_device(
-                    reference_distribution(rows.observation, learning.reference),
-                    device,
-                )
-                actor_selected = actor_rows[rows_host]
-                actor_mask = to_device(actor_selected, device)
+            logical_rows = np.arange(start, start + len(window))[window]
+            execution_rows = learner.execution_rows or len(logical_rows)
+            split = len(logical_rows) > execution_rows
+            actor_count = int(actor_rows[logical_rows].sum())
+            totals = dict(
+                loss=0.0,
+                policy_loss=0.0,
+                value_loss=0.0,
+                entropy=0.0,
+                collection_kl=0.0,
+                reference_kl=0.0,
+                clip_fraction=0.0,
+            )
+            for offset in range(0, len(logical_rows), execution_rows):
+                rows_host = logical_rows[offset : offset + execution_rows]
+                with track("Forward and loss"):
+                    indexes = to_device(rows_host, device)
+                    minibatch_actions = actions[indexes]
+                    obs, rows = admitted.rows(rows_host, device)
+                    valid = rl.legal_mask(admitted.legal(obs))
+                    behavior_logs = to_device(rows.log_probabilities, device)
+                    reference = to_device(
+                        reference_distribution(rows.observation, learning.reference),
+                        device,
+                    )
+                    actor_selected = actor_rows[rows_host]
+                    actor_mask = to_device(actor_selected, device)
+                    # Actor and critic have different denominators under actor-only filtering.
+                    policy_weight = int(actor_selected.sum()) / max(1, actor_count)
+                    value_weight = len(rows_host) / len(logical_rows)
 
-                def _objective() -> tuple[Array, ...]:
-                    with learner.forward_precision():
-                        logits, value_logits = learner.agent.forward_distribution(obs)
-                    logits, value_logits = float32(logits), float32(value_logits)
-                    return (
-                        *minibatch_objective(
-                            rl,
+                    def _objective(obs: Observations = obs) -> tuple[Array, ...]:
+                        with learner.forward_precision():
+                            logits, value_logits = learner.agent.forward_distribution(
+                                obs
+                            )
+                        logits, value_logits = float32(logits), float32(value_logits)
+                        return (
+                            *minibatch_objective(
+                                rl,
+                                logits,
+                                value_logits,
+                                valid,
+                                actions=minibatch_actions,
+                                advantages=advantages[indexes],
+                                value_targets=value_targets[indexes],
+                                behavior_logs=behavior_logs,
+                                reference=reference,
+                                actor_mask=actor_mask,
+                                categorical=categorical,
+                                clip=learning.clip,
+                                collection_kl=learning.collection_kl,
+                                tau=tau,
+                                policy_weight=policy_weight,
+                                value_weight=value_weight,
+                            ),
                             logits,
                             value_logits,
-                            valid,
+                        )
+
+                    loss, policy_loss, value_loss, logits, value_logits = learner.loss(
+                        _objective
+                    )
+
+                    def _failure(
+                        logits: Array = logits,
+                        value_logits: Array = value_logits,
+                        obs: Observations = obs,
+                    ) -> dict[str, Any]:
+                        return minibatch_tensors(
+                            logits=rl.constant(logits),
+                            value_logits=rl.constant(value_logits),
+                            valid=valid,
                             actions=minibatch_actions,
-                            advantages=advantages[indexes],
-                            value_targets=value_targets[indexes],
                             behavior_logs=behavior_logs,
                             reference=reference,
-                            actor_mask=actor_mask,
-                            categorical=categorical,
-                            clip=learning.clip,
-                            collection_kl=learning.collection_kl,
-                            tau=tau,
-                        ),
-                        logits,
-                        value_logits,
-                    )
+                            advantages=advantages[indexes],
+                            value_targets=value_targets[indexes],
+                            actor_selected=actor_mask,
+                            indexes=indexes,
+                            obs=admitted.evidence(obs),
+                        )
 
-                loss, policy_loss, value_loss, logits, value_logits = learner.loss(
-                    _objective
-                )
-
-                def _failure() -> dict[str, Any]:
-                    return minibatch_tensors(
-                        logits=rl.constant(logits),
-                        value_logits=rl.constant(value_logits),
-                        valid=valid,
-                        actions=minibatch_actions,
-                        behavior_logs=behavior_logs,
-                        reference=reference,
-                        advantages=advantages[indexes],
-                        value_targets=value_targets[indexes],
-                        actor_selected=actor_mask,
-                        indexes=indexes,
-                        obs=admitted.evidence(obs),
-                    )
-
-                with failure_tensors(_failure, rl.NumericalError):
-                    observer.check(loss)
-            with failure_tensors(_failure, rl.NumericalError):
-                norm = learner.step(loss, learning.max_grad_norm, recorder=observer)
-            with track("Minibatch diagnostics"):
-                diagnostics["optimizer_exposures"] += len(rows_host)
-                diagnostics["actor_exposures"] += int(actor_selected.sum())
-                diagnostics["critic_exposures"] += len(rows_host)
-                with backend.learner.no_grad():
+                    with failure_tensors(_failure, rl.NumericalError):
+                        observer.check(loss)
+                        if split:
+                            learner.accumulate(loss, first=offset == 0)
+                        # Clip and Adam stay at the logical boundary, after all contributions.
+                        if offset + execution_rows >= len(logical_rows):
+                            norm = learner.step(
+                                loss,
+                                learning.max_grad_norm,
+                                recorder=observer,
+                                accumulated=split,
+                            )
+                with track("Minibatch diagnostics"), backend.learner.no_grad():
                     logs = rl.policy_logs(logits, valid)
-                    diagnostics["entropy"] = float(rl.entropy(logs, valid).mean())
-                    diagnostics["collection_kl"] = float(
-                        rl.reverse_kl(logs, behavior_logs, valid).mean()
+                    totals["entropy"] += (
+                        float(rl.entropy(logs, valid).mean()) * value_weight
                     )
-                    diagnostics["reference_kl"] = float(
-                        rl.reverse_kl(
-                            logs, rl.reference_logs(reference, valid), valid
-                        ).mean()
+                    totals["collection_kl"] += (
+                        float(rl.reverse_kl(logs, behavior_logs, valid).mean())
+                        * value_weight
                     )
-                    ratio_logs = rl.action_logs(logs - behavior_logs, minibatch_actions)
-                    health["clip_fraction"] = rl.clip_fraction(
-                        ratio_logs, learning.clip
+                    totals["reference_kl"] += (
+                        float(
+                            rl.reverse_kl(
+                                logs, rl.reference_logs(reference, valid), valid
+                            ).mean()
+                        )
+                        * value_weight
                     )
-                diagnostics.update(
-                    loss=float(rl.constant(loss)),
-                    value_loss=float(rl.constant(value_loss)),
-                    policy_loss=float(rl.constant(policy_loss)),
-                    gradient_norm=float(norm),
+                    totals["clip_fraction"] += (
+                        float(
+                            rl.clip_fraction(
+                                rl.action_logs(logs - behavior_logs, minibatch_actions),
+                                learning.clip,
+                            )
+                        )
+                        * value_weight
+                    )
+                    totals["loss"] += float(rl.constant(loss))
+                    totals["value_loss"] += float(rl.constant(value_loss))
+                    totals["policy_loss"] += float(rl.constant(policy_loss))
+                del (
+                    obs,
+                    rows,
+                    logits,
+                    value_logits,
+                    loss,
+                    policy_loss,
+                    value_loss,
+                    logs,
+                    _objective,
+                    _failure,
                 )
+            health["clip_fraction"] = totals.pop("clip_fraction")
+            diagnostics.update(totals, gradient_norm=float(norm))
+            diagnostics["optimizer_exposures"] += len(logical_rows)
+            diagnostics["actor_exposures"] += actor_count
+            diagnostics["critic_exposures"] += len(logical_rows)
     return diagnostics

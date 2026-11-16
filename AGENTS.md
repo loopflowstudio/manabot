@@ -161,6 +161,13 @@ checkpoints or experiment evidence.
   not add a forward that reads an observation dictionary or a second
   preparation for one framework.
 
+Execution row limits bound prefix materialization before preparation, independently
+of stream counts and logical optimizer minibatches. Accumulate actor and critic
+terms with their own logical denominators and clip/step once. Collection keeps
+one sampling call per original row group. A prefetch generator must release its
+previous Prepared input and completed Future before submitting another chunk;
+the completed Future also owns the host result.
+
 ### Python typing
 
 - Write fully typed Python: annotate parameters and return values on all

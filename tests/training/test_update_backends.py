@@ -325,7 +325,7 @@ def test_backends_refuse_malformed_rows_before_preparing_them(
             with pytest.raises(ValueError, match=message):
                 module.rollout.AdmittedRollout(
                     agent, replace(batch, next_obs=corrupt(batch.next_obs))
-                )
+                ).next_observation("cpu")
         else:
             admitted = module.rollout.AdmittedRollout(agent, batch)
             with monkeypatch.context() as patch:

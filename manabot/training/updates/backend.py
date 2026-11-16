@@ -216,6 +216,9 @@ class AdmittedRollout(Protocol):
     def admit_rows(self, indexes: NDArray[np.int64], chunk_rows: int) -> None: ...
 
     def next_observation(self, device: Device) -> Observations: ...
+    def next_observations(
+        self, device: Device, size: int
+    ) -> Iterator[Observations]: ...
 
     def rows(
         self, indexes: NDArray[np.int64], device: Device
@@ -279,6 +282,11 @@ class PPOPolicy(Policy, Protocol):
 
 
 class Learner(BackendLearner, Protocol):
+    execution_rows: int | None
+    bootstrap_rows: int | None
+
+    def accumulate(self, loss: Array, *, first: bool) -> None: ...
+
     """The policy, its optimizer and profiler, as an update steps them."""
 
     @property
@@ -297,7 +305,14 @@ class Learner(BackendLearner, Protocol):
         """Wrap each policy forward; callers cast its outputs to float32."""
         ...
 
-    def step(self, loss: Array, max_grad_norm: float, *, recorder: Any = None) -> Array:
+    def step(
+        self,
+        loss: Array,
+        max_grad_norm: float,
+        *,
+        recorder: Any = None,
+        accumulated: bool = False,
+    ) -> Array:
         """One clipped optimizer step on `loss`: the pre-clip gradient norm.
         `recorder` is the update's `OptimizerHealth`, which each backend
         reads through its own `StepRecorder`."""

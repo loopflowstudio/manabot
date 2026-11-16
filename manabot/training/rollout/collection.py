@@ -421,6 +421,7 @@ class SeatRoutedCollector:
         reward: Reward,
         *,
         num_envs: int,
+        execution_rows: int | None = None,
         numerics: CollectionSession,
         seed: int = 0,
         opponent_mode: str = "random",
@@ -438,6 +439,9 @@ class SeatRoutedCollector:
         record_attempt: Callable[[GameAttempt], GameErrorState] | None = None,
         adaptive: AdaptiveConfig | None = None,
     ) -> None:
+        if execution_rows is not None and execution_rows < 1:
+            raise ValueError("execution_rows must be positive")
+        self.execution_rows = execution_rows
         if adaptive is not None and (
             opponent_mode != "self"
             or learning_seats == "one"
@@ -647,6 +651,7 @@ class SeatRoutedCollector:
                     deterministic=False,
                     seed=seed + 1,
                     device=self.numerics.device_name,
+                    execution_rows=execution_rows,
                 )
             else:  # self-play: live learner weights, bound at collect() time
                 self._opponent = None
@@ -850,10 +855,12 @@ class SeatRoutedCollector:
         self, rows: np.ndarray, inference: CollectionScope
     ) -> np.ndarray:
         if self.opponent_mode == "self":
-            return inference.opponent_actions(self._slice_obs_rows(rows))
+            return inference.opponent_actions(
+                self._retain_obs_rows(rows), execution_rows=self.execution_rows
+            )
         if self.opponent_mode == "random":
             return self._opponent.select(self._buffers, rows)
-        return self._opponent.select(self._slice_obs_rows(rows), np.arange(len(rows)))
+        return self._opponent.select(self._retain_obs_rows(rows), np.arange(len(rows)))
 
     def _capture_memory(self, rows: np.ndarray) -> tuple[Prefix, ...]:
         if self._memory_store is None:
@@ -868,11 +875,6 @@ class SeatRoutedCollector:
             )
             for row in rows
         )
-
-    def _slice_obs_rows(self, rows: np.ndarray) -> ObservationBuffers:
-        """Temporary raw rows for immediate inference/preparation."""
-        obs = self._retain_obs_rows(rows)
-        return obs.materialize() if isinstance(obs, PrefixObservation) else obs
 
     def _retain_obs_rows(self, rows: np.ndarray) -> ObservationBuffers:
         """Freeze bootstrap fields and prefix versions without padded memory."""
@@ -1500,8 +1502,10 @@ class SeatRoutedCollector:
         acting: np.ndarray,
         inference: CollectionScope,
     ) -> np.ndarray:
-        observation = self._slice_obs_rows(rows)
-        sampled = inference.sample(observation, self.profiler)
+        observation = self._retain_obs_rows(rows)
+        sampled = inference.sample(
+            observation, self.profiler, execution_rows=self.execution_rows
+        )
         acts, logprobs, values = sampled.actions, sampled.logprobs, sampled.values
         outcomes, needs = sampled.outcomes, sampled.needs
         with self.profiler.track("Rollout recording"):
@@ -1509,7 +1513,7 @@ class SeatRoutedCollector:
                 rows,
                 needs,
                 prefixes=observation.prefixes
-                if isinstance(observation, CompactObservation)
+                if isinstance(observation, PrefixObservation)
                 else (),
             )
             packed = PackedActions.pack(

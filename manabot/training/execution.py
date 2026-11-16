@@ -1220,6 +1220,7 @@ def _execute_regime(
                         Match(regime.root_match),
                         Reward(RewardConfig()),
                         num_envs=stage.streams,
+                        execution_rows=stage.execution.collection_rows,
                         seed=seeds["collection"],
                         opponent_mode="frozen"
                         if stage.opponent is not None
@@ -1299,6 +1300,8 @@ def _execute_regime(
                         agent,
                         experiment.device,
                         minibatch_rows=stage.streams,
+                        execution_rows=stage.execution.learner_rows,
+                        bootstrap_rows=stage.execution.bootstrap_rows,
                         precision=stage.execution.resolved_precision,
                     )
                     ema = (

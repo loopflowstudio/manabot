@@ -614,21 +614,33 @@ class ActorCritic(nn.Module):
         sampling: Literal["categorical", "multinomial"] = "categorical",
     ) -> np.ndarray:
         """Retain Torch RNG and categorical/multinomial rounding at the boundary."""
-        prepared = on_device(batch, device_of(self))
-        if sampling == "categorical" and temperature == 1.0:
-            actions, _, _, _ = self.get_action_and_value(
-                prepared, deterministic=deterministic
-            )
+        logits, _ = self(on_device(batch, device_of(self)))
+        return self.sample_logits(
+            logits,
+            deterministic=deterministic,
+            temperature=temperature,
+            sampling=sampling,
+        )
+
+    @torch.no_grad()
+    def sample_logits(
+        self,
+        logits: np.ndarray | torch.Tensor,
+        *,
+        deterministic: bool = False,
+        temperature: float = 1.0,
+        sampling: Literal["categorical", "multinomial"] = "categorical",
+    ) -> np.ndarray:
+        """Sample once after bounded forwards, preserving backend RNG partition."""
+        values = torch.as_tensor(logits, device=device_of(self))
+        if deterministic:
+            actions = values.argmax(-1)
+        elif sampling == "categorical" and temperature == 1.0:
+            actions = torch.distributions.Categorical(logits=values).sample()
         else:
-            logits, _ = self(prepared)
-            if deterministic:
-                actions = logits.argmax(-1)
-            else:
-                if temperature != 1.0:
-                    logits = logits / temperature
-                actions = torch.multinomial(torch.softmax(logits, dim=-1), 1).squeeze(
-                    -1
-                )
+            actions = torch.multinomial(
+                torch.softmax(values / temperature, dim=-1), 1
+            ).squeeze(-1)
         return to_numpy(actions).astype(np.int64)
 
     @torch.no_grad()

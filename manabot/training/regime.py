@@ -239,6 +239,17 @@ AUTO_EXECUTION_FIELDS = ("precision", *LAYOUT_FIELDS)
 
 
 class Execution(Strict):
+    # Resource rows are independent of native streams and optimizer minibatches.
+    # Omitted values preserve historical execution/serialized recipe identities.
+    collection_rows: int | None = Field(
+        default=None, ge=1, strict=True, exclude_if=lambda v: v is None
+    )
+    bootstrap_rows: int | None = Field(
+        default=None, ge=1, strict=True, exclude_if=lambda v: v is None
+    )
+    learner_rows: int | None = Field(
+        default=None, ge=1, strict=True, exclude_if=lambda v: v is None
+    )
     device: Device = "cpu"
     precision: Precision | Literal["auto"] = "auto"
     # Coarse native observation producers; policy/learning remain on one device.
@@ -936,6 +947,17 @@ class TrainingRegime(Strict):
             raise ValueError(
                 "opponent memory requires v11 and explicit record/detail capacities"
             )
+        if self.observation.max_opponent_records and any(
+            isinstance(stage, TrainSelfPlay)
+            and any(
+                getattr(stage.execution, name) is None
+                for name in ("collection_rows", "bootstrap_rows", "learner_rows")
+            )
+            for stage in self.stages
+        ):
+            raise ValueError(
+                "opponent-memory collection requires explicit collection_rows, bootstrap_rows and learner_rows"
+            )
         if self.agent.recent_events and self.agent.world is None:
             raise ValueError("recent events require a world for public identities")
         if self.agent.recent_events and not 1 <= self.observation.max_events <= 32:
@@ -1031,6 +1053,10 @@ class TrainingRegime(Strict):
                 if (
                     parent.execution.device != stage.execution.device
                     or parent.execution.workers != stage.execution.workers
+                    or parent.execution.collection_rows
+                    != stage.execution.collection_rows
+                    or parent.execution.bootstrap_rows != stage.execution.bootstrap_rows
+                    or parent.execution.learner_rows != stage.execution.learner_rows
                     or parent.execution.bucketed_shapes
                     != stage.execution.bucketed_shapes
                     or parent.execution.live_tokens != stage.execution.live_tokens
@@ -1047,7 +1073,7 @@ class TrainingRegime(Strict):
                     or parent.learning.gradient != stage.learning.gradient
                 ):
                     raise ValueError(
-                        "live self-play continuation must preserve streams, batch closure, curriculum, gradient, EMA clock, workers, bucketed shapes, live tokens and opponent"
+                        "live self-play continuation must preserve streams, batch closure, curriculum, gradient, EMA clock, workers, bucketed shapes, live tokens, execution row limits and opponent"
                     )
             if (
                 self.agent.value_kind == "categorical_wdl"
