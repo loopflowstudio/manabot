@@ -47,6 +47,7 @@ struct ObservationBuffers {
     facts: Option<Py<PyAny>>,
     semantic_cards: Py<PyAny>,
     known_hand: Py<PyAny>,
+    known_library: Option<Py<PyAny>>,
     decklists: Option<Py<PyAny>>,
     player_turn_state: Option<Py<PyAny>>,
     card_turn_state: Option<Py<PyAny>>,
@@ -685,6 +686,14 @@ fn read_observation_buffers(
             "facts",
             &[n, c.max_facts, crate::agent::observation_encoder::FACT_DIM],
         )?,
+        known_library: if c.known_library_len() > 0 {
+            required(
+                "known_library",
+                &[n, 2, crate::state::knowledge::KNOWN_LIBRARY_ROWS, 2],
+            )?
+        } else {
+            None
+        },
         known_hand: require_numpy_array(
             buffers,
             "known_hand",
@@ -1239,6 +1248,7 @@ struct SendObservationFieldSlices {
     facts: Option<SendSlice<f32>>,
     semantic_cards: SendSlice<f32>,
     known_hand: SendSlice<f32>,
+    known_library: Option<SendSlice<f32>>,
     decklists: Option<SendSlice<f32>>,
     player_turn_state: Option<SendSlice<f32>>,
     card_turn_state: Option<SendSlice<f32>>,
@@ -1379,6 +1389,17 @@ impl SendObservationFieldSlices {
                 &mut []
             },
             // SAFETY: each call uses disjoint per-env rows.
+            known_library: if let Some(buffer) = self.known_library {
+                // SAFETY: registered buffers partition each environment into disjoint rows.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(env_index, config.known_library_len())?,
+                        config.known_library_len(),
+                    )
+                }
+            } else {
+                &mut []
+            },
             known_hand: unsafe { slice::from_raw_parts_mut(known_hand_ptr, known_hand_len) },
             decklists: if let Some(buffer) = self.decklists {
                 // SAFETY: the registered buffer is partitioned into disjoint rows.
@@ -1629,6 +1650,11 @@ fn with_observation_field_slices<R>(
         .transpose()?;
     let semantic_cards_buffer =
         typed_numpy_buffer::<f32>(py, &buffers.semantic_cards, "semantic_cards")?;
+    let known_library_buffer = buffers
+        .known_library
+        .as_ref()
+        .map(|array| typed_numpy_buffer::<f32>(py, array, "known_library"))
+        .transpose()?;
     let known_hand_buffer = typed_numpy_buffer::<f32>(py, &buffers.known_hand, "known_hand")?;
     let decklists_buffer = buffers
         .decklists
@@ -1715,6 +1741,10 @@ fn with_observation_field_slices<R>(
             .map(|buffer| send_slice_from_buffer(py, buffer, "facts"))
             .transpose()?,
         known_hand: send_slice_from_buffer(py, &known_hand_buffer, "known_hand")?,
+        known_library: known_library_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "known_library"))
+            .transpose()?,
         decklists: decklists_buffer
             .as_ref()
             .map(|buffer| send_slice_from_buffer(py, buffer, "decklists"))

@@ -6,7 +6,7 @@
 //! exact-object mapping across active decisions, saved callers and captured
 //! bindings, so the same selection cannot acquire two meanings on resume.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, ops::Range};
 
 use rand::{seq::SliceRandom, Rng};
 use rand_chacha::ChaCha8Rng;
@@ -22,6 +22,7 @@ use crate::{
     state::{
         ability::ObjectSelector,
         binding::{ObjectBinding, ZoneSelection},
+        card::CardDefId,
         game_object::{ObjectId, PlayerId},
         stack_object::StackObject,
         zone::ZoneType,
@@ -48,6 +49,14 @@ struct SelectionMinimum {
     min: usize,
     selected: usize,
     hidden: bool,
+}
+
+/// Placement owned by a still-pending instruction. A prefix can be rebound
+/// within its current top N; an already ordered choice keeps its exact rank.
+struct InspectionSlot {
+    owner: PlayerId,
+    positions: Range<usize>,
+    definition: Option<CardDefId>,
 }
 
 /// One name allocation to face-down slots and its ordered physical-copy count.
@@ -88,10 +97,6 @@ impl HiddenCommitments {
 
     pub(crate) fn pins(&self, object: ObjectId) -> bool {
         self.pinned.binary_search(&object).is_ok()
-    }
-
-    pub(crate) fn pins_object(&self, object_id: ObjectId) -> bool {
-        self.pinned.contains(&object_id)
     }
 
     /// Pinned cards currently in `owner`'s library: they rejoin the sampled
@@ -247,6 +252,69 @@ impl Game {
             .collect()
     }
 
+    fn inspection_slots(&self, viewer: PlayerId) -> BTreeMap<ObjectId, Vec<InspectionSlot>> {
+        let mut slots: BTreeMap<ObjectId, Vec<InspectionSlot>> = BTreeMap::new();
+        let Some(suspended) = &self.state.suspended_decision else {
+            return slots;
+        };
+        for decision in suspended.decisions() {
+            if let Some((owner, objects)) = decision.library_inspection() {
+                if !self.shares_information(viewer, owner) {
+                    let facts = self.library_facts(owner, viewer);
+                    for (position, object) in objects.iter().enumerate() {
+                        slots.entry(*object).or_default().push(InspectionSlot {
+                            owner,
+                            positions: 0..objects.len(),
+                            definition: facts.get(&position).copied(),
+                        });
+                    }
+                }
+            }
+            if let Decision::OrderLibrary {
+                player,
+                object_ids,
+                next,
+                end,
+            } = decision
+            {
+                if !self.shares_information(viewer, *player) {
+                    let size = self.state.zones.size(ZoneType::Library, *player);
+                    let facts = self.library_facts(*player, viewer);
+                    for (rank, object) in object_ids[..*next].iter().enumerate() {
+                        let position = match end {
+                            crate::state::ability::LibraryEnd::Top => rank,
+                            crate::state::ability::LibraryEnd::Bottom => size - next + rank,
+                        };
+                        slots.entry(*object).or_default().push(InspectionSlot {
+                            owner: *player,
+                            positions: position..position + 1,
+                            definition: facts.get(&position).copied(),
+                        });
+                    }
+                }
+            }
+        }
+        slots
+    }
+
+    fn inspection_slot_matches(
+        &self,
+        inspection: &InspectionSlot,
+        zone: ZoneType,
+        object: ObjectId,
+        known_position: Option<usize>,
+    ) -> bool {
+        if zone != ZoneType::Library {
+            return false;
+        }
+        if known_position.is_some_and(|position| !inspection.positions.contains(&position)) {
+            return false;
+        }
+        inspection
+            .definition
+            .is_none_or(|definition| self.state[object].definition_id == definition)
+    }
+
     /// Every retained capture: trigger occurrences first, then the frames of
     /// the suspended continuation, outermost first.
     pub(crate) fn captured_bindings(&self) -> impl Iterator<Item = &ObjectBinding> {
@@ -277,7 +345,7 @@ impl Game {
         if let Some(suspended) = &self.state.suspended_decision {
             for (owner, object_ids) in suspended
                 .decisions()
-                .filter_map(Decision::library_inspection)
+                .filter_map(Decision::inspected_library_objects)
             {
                 if self.shares_information(viewer, owner) {
                     pinned.extend(
@@ -390,6 +458,12 @@ impl Game {
                     .filter_map(|object_id| self.state.live(*object_id))
                     .collect();
                 retain(&source, &objects);
+                if let Decision::OrderLibrary {
+                    object_ids, next, ..
+                } = decision
+                {
+                    retain(&source, &object_ids[..*next]);
+                }
                 if let Decision::LookAndSelect {
                     predicate,
                     min_select,
@@ -503,7 +577,15 @@ impl Game {
     ) -> Vec<ForetoldAllocation> {
         let owner = PlayerId(1 - commitments.viewer.0);
         let mut pool = BTreeMap::<String, Vec<ObjectId>>::new();
-        for object in commitments.unseen_objects(self, owner) {
+        let mut unseen = commitments.unseen_objects(self, owner);
+        let original = unseen.clone();
+        let Some(reserved) =
+            self.reserve_library_facts(owner, commitments.viewer, &mut unseen, commitments)
+        else {
+            return Vec::new();
+        };
+        let inspections = self.inspection_slots(commitments.viewer);
+        for object in unseen {
             pool.entry(self.state[object].name.clone())
                 .or_default()
                 .push(object);
@@ -537,7 +619,7 @@ impl Game {
                     .iter()
                     .filter(|object| {
                         self.state.zones.contains(**object, ZoneType::Hand, owner)
-                            && commitments.pins_object(**object)
+                            && commitments.pins(**object)
                     })
                     .count();
                 for index in pinned_hand..objects.len() - foretold {
@@ -548,18 +630,31 @@ impl Game {
                             ZoneType::Library
                         },
                         objects[0],
+                        None,
                     ));
                 }
             }
+            slots.extend(
+                reserved
+                    .iter()
+                    .filter(|(_, object)| original.contains(object))
+                    .map(|(position, object)| (ZoneType::Library, *object, Some(*position))),
+            );
             let mut candidates: Vec<Vec<usize>> = commitments
                 .slots
-                .values()
-                .map(|constraints| {
+                .iter()
+                .map(|(old, constraints)| {
                     slots
                         .iter()
                         .enumerate()
-                        .filter(|(_, (zone, object))| {
-                            constraints
+                        .filter(|(_, (zone, object, position))| {
+                            inspections.get(old).is_none_or(|conditions| {
+                                conditions.iter().all(|condition| {
+                                    self.inspection_slot_matches(
+                                        condition, *zone, *object, *position,
+                                    )
+                                })
+                            }) && constraints
                                 .iter()
                                 .all(|source| matches_slot(self, source, owner, *zone, *object))
                         })
@@ -577,7 +672,7 @@ impl Game {
                 let eligible: Vec<_> = slots
                     .iter()
                     .enumerate()
-                    .filter(|(_, (zone, object))| {
+                    .filter(|(_, (zone, object, _))| {
                         source.zone == *zone
                             && self.object_matches_predicate(*object, &source.predicate)
                     })
@@ -594,7 +689,7 @@ impl Game {
     }
 
     /// Give every retained commitment its exact object in this dealt world and
-    /// pin inspected library prefixes back in place. False means the deal cannot
+    /// preserve inspected library domains. False means the deal cannot
     /// honor earlier choices: the caller rejects the world; neither selected
     /// counts nor public commitments are truncated.
     pub(crate) fn rebind_commitments(
@@ -614,9 +709,10 @@ impl Game {
         }) {
             return false;
         }
+        let inspections = self.inspection_slots(commitments.viewer);
         let old: Vec<_> = commitments.slots.keys().copied().collect();
         let mut candidates = Vec::with_capacity(old.len());
-        for constraints in commitments.slots.values() {
+        for (old, constraints) in &commitments.slots {
             let source = &constraints[0];
             let mut eligible: Vec<_> = self
                 .state
@@ -627,6 +723,16 @@ impl Game {
                 .filter(|object_id| {
                     constraints.iter().all(|constraint| {
                         matches_slot(self, constraint, source.owner, source.zone, *object_id)
+                    })
+                })
+                .filter(|object| {
+                    inspections.get(old).is_none_or(|conditions| {
+                        conditions.iter().all(|condition| {
+                            let position = self
+                                .library_from_top(condition.owner)
+                                .position(|candidate| candidate == *object);
+                            self.inspection_slot_matches(condition, source.zone, *object, position)
+                        })
                     })
                 })
                 .filter_map(|object_id| self.state.live(object_id))
@@ -654,8 +760,8 @@ impl Game {
             self.rebind_suspended_selection(&mut suspended, &rebinding);
             *self.state.suspended_decision_mut() = Some(suspended);
         }
-        self.repin_revealed_library_cards();
-        true
+        self.repin_library_inspections(commitments.viewer);
+        self.library_knowledge_holds(commitments.viewer)
     }
 
     fn rebind_suspended_selection(

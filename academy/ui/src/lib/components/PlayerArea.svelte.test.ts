@@ -109,3 +109,14 @@ it('labels runtime identity as Policy ID and retains artifact roles', () => {
   expect(body).toContain('actor: ' + 'b'.repeat(64));
   expect(body).not.toContain('SHA-256:');
 });
+
+it('lists known library positions from the top in numeric order', () => {
+  const { body } = render(PlayerArea, {
+    props: {
+      identity: playerIdentity({ name: 'You' }), tablePermanents: [], definitionNames: names,
+      player: player({ known_library: { '10': 4, '0': 9 } }),
+    },
+  });
+  expect(body).toContain('Known in library:');
+  expect(body.indexOf('Accumulate Wisdom (1 from top)')).toBeLessThan(body.indexOf('Island (11 from top)'));
+});

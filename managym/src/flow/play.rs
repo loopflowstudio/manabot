@@ -138,13 +138,6 @@ impl Game {
             })
     }
 
-    /// Whether `player` may look at the top card of their library (CR 401.2).
-    pub(crate) fn looks_at_library_top(&self, player: PlayerId) -> bool {
-        self.active_permanent_has(player, |ability| {
-            *ability == StaticAbility::LookAtLibraryTop
-        })
-    }
-
     /// The top card of `player`'s library, when a permanent they control
     /// lets them cast it as a spell (Hakoda's Ally spells). Lands are never
     /// cast, so they are never offered.

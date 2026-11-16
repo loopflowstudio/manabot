@@ -357,6 +357,7 @@ for (const [seed, viewport] of [
     const observed = new Map<number, PresentationEvent>();
     let matchId = '';
     let liveFrame: ExperienceFrame | null = null;
+    let pendingFrame: { match: string; revision: number; resolve: () => void } | null = null;
     let working = false;
     const submitted: Command[] = [];
     let reloadedTarget = false;
@@ -368,6 +369,10 @@ for (const [seed, viewport] of [
         if ('work' in message) working = message.work?.state === 'running';
         const frame = message.recovery?.frame ?? message.update?.frame;
         if (frame) { matchId = frame.match_id; liveFrame = frame; }
+        if (frame && pendingFrame && frame.match_id === pendingFrame.match && frame.revision > pendingFrame.revision) {
+          pendingFrame.resolve();
+          pendingFrame = null;
+        }
         for (const event of message.recovery?.presentation_tail ?? message.update?.presentation ?? []) observed.set(event.seq, event);
         socket.send(raw);
       });
@@ -444,9 +449,11 @@ for (const [seed, viewport] of [
           continue;
         }
         expect(await page.evaluate(() => scrollY)).toBe(0);
-        const before = await page.locator('main').getAttribute('data-frame-revision');
         const labels = await options.allTextContents();
         let pick = labels.findIndex(label => /Play (Island|Mountain)|Cast /.test(label));
+        // This is a workflow proof: commit attacks and decline blocks so an
+        // arbitrary input-index cycle cannot prolong a stalled battlefield.
+        if (pick < 0) pick = labels.findIndex(label => /Attack with |do not block/.test(label));
         if (pick < 0) pick = input % labels.length;
         const chosen = options.nth(pick);
         receipts.push({ kind: await page.getByTestId('action-panel').getAttribute('data-action-space-kind'),
@@ -472,6 +479,11 @@ for (const [seed, viewport] of [
         await expect(page.getByTestId('legal-choice-count')).toContainText(`of ${authority!.offers.length} legal choices`);
         await modes.getByRole('button', { name: 'Play', exact: true }).click();
         expect(submitted).toHaveLength(count);
+        // Synchronize with the authoritative receipt, under the existing test
+        // deadline, rather than racing server work against a five-second poll.
+        const advanced = new Promise<void>(resolve => {
+          pendingFrame = { match: authority!.match_id, revision: authority!.revision, resolve };
+        });
         const source = offer!.subjects?.find(subject => subject.role === 'source')?.object.subject ?? offer!.source;
         const playerTarget = offer!.subjects?.find(subject => subject.role === 'target' && subject.object.subject.kind === 'player')?.object.subject;
         if (source?.kind === 'object' && authority!.projection.agent.hand.some(card => card.id === source.id.entity)) {
@@ -484,10 +496,14 @@ for (const [seed, viewport] of [
           expect(submitted).toHaveLength(count);
           await page.locator(`[data-testid="action-option"][data-offer-id="${offer!.id}"]`).click();
         } else {
-          await chosen.focus();
-          await chosen.press('Enter');
+          // Reload and mode changes can rebuild the list. Keep the recovered
+          // authority's identity rather than its earlier position in the list.
+          const commit = page.locator(`[data-testid="action-option"][data-offer-id="${offer!.id}"]`);
+          await commit.focus();
+          await expect(commit).toBeFocused();
+          await commit.press('Enter');
         }
-        await expect.poll(() => page.locator('main').getAttribute('data-frame-revision')).not.toBe(before);
+        await advanced;
         expect(submitted).toHaveLength(count + 1);
         expect(submitted.at(-1)).toMatchObject({ match_id: authority!.match_id, expected_revision: authority!.revision,
           prompt_id: authority!.prompt!.id, offer_id: offer!.id });
