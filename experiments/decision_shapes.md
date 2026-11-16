@@ -339,3 +339,11 @@ USD9 including startup; no automatic replacement rentals. Launcher study
 rental total at planning USD32.24696207357906484849877806, within the existing
 USD55 total authorization. This is a crash-fix/placement continuation of the
 same exploratory question, not a new protocol or a clean completed study.
+
+2026-11-16 capacity adjustment: L4 admission was refused before any run
+queued; available A5000/A4000 offers also lacked capacity. Select one available
+RTX4090/16CPU/60GB offer at USD0.89/hour instead. Shorten the job to8hours
+(26,400seconds training watchdog plus reserves), within a10-hour/USD9lease;
+retain the same absolute500-update target and500-step damping horizon, seed,
+population and raw/EMA/Adam continuation. No additional scientific arm or
+replacement rental loop. The CUDA numerics gate remains required.
