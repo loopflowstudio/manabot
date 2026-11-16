@@ -48,10 +48,6 @@ def admit_memory(obs: "ObservationBuffers") -> None:
         or records.shape[-1] != 18
         or details.shape[-1] != 8
         or records.shape[0] != details.shape[0]
-        or not np.isfinite(records).all()
-        or not np.isfinite(details).all()
-        or not (records == np.floor(records)).all()
-        or not (details == np.floor(details)).all()
     ):
         raise ValueError("invalid opponent-memory shapes or integer values")
     if not np.isin(records[..., 17], (0, 1)).all():
@@ -60,6 +56,12 @@ def admit_memory(obs: "ObservationBuffers") -> None:
         length = int(headers[:, 17].sum())
         if not (headers[:length, 17] == 1).all() or headers[length:].any():
             raise ValueError("opponent records must be a chronological prefix")
+        # Zero padding also rejects NaN/Inf/fractional garbage. Validate numeric
+        # values only on the owned prefix, avoiding repeated capacity-sized
+        # scans and floor allocations for million-row detail buffers.
+        live = headers[:length]
+        if not np.isfinite(live).all() or not (live == np.floor(live)).all():
+            raise ValueError("invalid opponent-memory integer values")
         cursor = 0
         for ordinal, header in enumerate(headers[:length]):
             if int(header[0]) * 65536 + int(header[1]) != ordinal:
@@ -85,6 +87,9 @@ def admit_memory(obs: "ObservationBuffers") -> None:
             ):
                 raise ValueError("invalid opponent-memory phase or step")
         if cursor:
+            live = rows[:cursor]
+            if not np.isfinite(live).all() or not (live == np.floor(live)).all():
+                raise ValueError("invalid opponent-memory detail integer values")
             words = rows[:cursor, [2, 3, 5, 6]]
             if not ((words >= 0) & (words <= 65535)).all():
                 raise ValueError("invalid opponent-memory detail words")

@@ -40934,6 +40934,30 @@
    "sha256": "da4bb8e09b684b28a5d6ee87453f211de72b3e9dd361e7a5265ac979d5500c6d",
    "bytes": 1244
   },
+  "experiments/data/opponent-memory/20261116-control-cost/attribute_cost.py": {
+   "sha256": "0e67fbf6a1783a841913a3651ae656a44c02db68e5f693b199482fe3d4f3ae0f",
+   "bytes": 2239
+  },
+  "experiments/data/opponent-memory/20261116-control-cost/before-log-control.txt": {
+   "sha256": "e8cb5f71ed8d0d598ce326b580d904ca94a613db72000ccee4987a16af8cb529",
+   "bytes": 2054
+  },
+  "experiments/data/opponent-memory/20261116-control-cost/before.json": {
+   "sha256": "f91a4abcfd6ce50c7ab0df9eb881c346ffd4dc6e99c0e2d24b649e872316987b",
+   "bytes": 666
+  },
+  "experiments/data/opponent-memory/20261116-control-cost/incumbent.txt": {
+   "sha256": "e22512677a835e9493c3d2ca715c8654cd485ffcfc6a2029797bcf026f81cf4a",
+   "bytes": 1797
+  },
+  "experiments/data/opponent-memory/20261116-control-cost/log-control.txt": {
+   "sha256": "6ea33ddc3951cd6d0bfd25b53aa198930db72c07246abd5782dd411d67f1a7b4",
+   "bytes": 2098
+  },
+  "experiments/data/opponent-memory/20261116-control-cost/receipt.json": {
+   "sha256": "c54ae47466062250860c0fbbe2e4c408fb8e2daf642f94bc7cb1a2f4b2d9f3cf",
+   "bytes": 668
+  },
   "experiments/data/opponent-memory/20261116-execution-final/receipt.json": {
    "sha256": "449ca7150e12e0ceabc7c547923cb940620e987096bd7c5f0d45cadbd91eac3f",
    "bytes": 15172
@@ -40941,6 +40965,282 @@
   "experiments/data/opponent-memory/20261116-execution/receipt.json": {
    "sha256": "d9116119cd34c36a5e44f00620d591db8f8f895810ee2527ecca5517094e8cc4",
    "bytes": 15171
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/closed/branch/cast/capture.json": {
+   "sha256": "79264814e93ad23f273b80946a3b07cec4c1462f08eab82e8bf64bae508d586f",
+   "bytes": 18840
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/closed/branch/cast/prompt.txt": {
+   "sha256": "f5031a9206229cad22e14e03bf5984f2c8a268bfe15e15d2b614ced9b740fa2c",
+   "bytes": 7315
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/closed/branch/cast/viewer-0.json": {
+   "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+   "bytes": 3
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/closed/branch/cast/viewer-1.json": {
+   "sha256": "0bf88616149892d738b7e708e88dba0b418d1dbc78b4da64aab4053a1990d671",
+   "bytes": 10335
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/closed/commands.jsonl": {
+   "sha256": "97eee77f59bb68a8779a0d67d0e0e3a0dfa188dc24f673a01fedc4bdd604823b",
+   "bytes": 1454
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/closed/declined-block/capture.json": {
+   "sha256": "1e243e5b92832d63ae98d2a589f067b15e5c442fbd015bc396604eaa971a3403",
+   "bytes": 52723
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/closed/declined-block/prompt.txt": {
+   "sha256": "f8e6d1b543430854b0af72eebc5567d4e3a6d84f4b3a492aa51da1b7e18f0b73",
+   "bytes": 10783
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/closed/declined-block/viewer-0.json": {
+   "sha256": "7f3cdff95f4835367f83aedd6a9be37c117a7d88cc6d248de0e524e08e9aa2fb",
+   "bytes": 32935
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/closed/declined-block/viewer-1.json": {
+   "sha256": "f851df170f1d61a119c58023c80c148d0f313068597e575ab551c7d7842e03e8",
+   "bytes": 59066
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/closed/gru-k1.safetensors": {
+   "sha256": "62277bd0b9a0a7ae48038261dc524d0f41b2450ddf1a8b2985393935f981460a",
+   "bytes": 3443066
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/closed/gru-k4.safetensors": {
+   "sha256": "bb44823d41e5ee03a04386765bbd2e3d645318111f0ca87b74b2898f41245c65",
+   "bytes": 3455706
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/closed/native.json": {
+   "sha256": "ea289736f03176ed45446d1f7633e1eaccfa5d18110af475cdda3266181d245a",
+   "bytes": 247
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/closed/private-selection/capture.json": {
+   "sha256": "fda05774819143f504cbe3229bd6171dd1c5de192f2cb72468c64b81acbbac49",
+   "bytes": 28758
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/closed/private-selection/prompt.txt": {
+   "sha256": "5c978952c7da0752317abddae25df4f0391a2350b707bb155198d516b32722b4",
+   "bytes": 11133
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/closed/private-selection/viewer-0.json": {
+   "sha256": "bf46a936e59a2bf8a1dee75b9d92cc51c22e59d1fea0ae12e3aff12cb0ff1711",
+   "bytes": 5322
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/closed/private-selection/viewer-1.json": {
+   "sha256": "179e2489c9815d66139cf8c57b84ddd017af219f3b55f9f32344c033cd9d02c8",
+   "bytes": 20970
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/closed/public-play/capture.json": {
+   "sha256": "6a2786716c26634efb65d48a9d2741facd9d53c05a9f407d471c16f5fa72b29e",
+   "bytes": 25076
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/closed/public-play/prompt.txt": {
+   "sha256": "6fa36a6a10460ce0bca9731fa9ffc314605bd61ccf9ab5a4737da767543bb754",
+   "bytes": 9529
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/closed/public-play/viewer-0.json": {
+   "sha256": "bf46a936e59a2bf8a1dee75b9d92cc51c22e59d1fea0ae12e3aff12cb0ff1711",
+   "bytes": 5322
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/closed/public-play/viewer-1.json": {
+   "sha256": "377520ea3e33818429dcde433ab4e0a2f423211afbc454cd4a33ac56474b1156",
+   "bytes": 32592
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/closed/transformer-k1.safetensors": {
+   "sha256": "193e73951eed2b243aca0ea83da49c37ec97eed47271557e9370659af8ed3970",
+   "bytes": 3615098
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/closed/transformer-k4.safetensors": {
+   "sha256": "8857499ba4b6f993c1cfa4d677d6c24eb82898dabab7134efe38f2c6ff4a7918",
+   "bytes": 3616026
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/open/branch/cast/capture.json": {
+   "sha256": "30f06a869d5a56b960fa86886b3b08aae238ca7eaa077394e1766b16ac378fae",
+   "bytes": 19016
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/open/branch/cast/prompt.txt": {
+   "sha256": "4a107d4823906c8545a20e230d24b902bc40c9652a486ad668006bf27deaae23",
+   "bytes": 7476
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/open/branch/cast/viewer-0.json": {
+   "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+   "bytes": 3
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/open/branch/cast/viewer-1.json": {
+   "sha256": "0bf88616149892d738b7e708e88dba0b418d1dbc78b4da64aab4053a1990d671",
+   "bytes": 10335
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/open/commands.jsonl": {
+   "sha256": "97eee77f59bb68a8779a0d67d0e0e3a0dfa188dc24f673a01fedc4bdd604823b",
+   "bytes": 1454
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/open/declined-block/capture.json": {
+   "sha256": "4e49d55c5f59941d91a6ef56e70102bad2733253cf497c8a31cd3f75af9b024f",
+   "bytes": 52899
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/open/declined-block/prompt.txt": {
+   "sha256": "3b425fa647c4729cf001c3fd03bde3369803ebe55fdd2d9264576cdd9831d043",
+   "bytes": 10944
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/open/declined-block/viewer-0.json": {
+   "sha256": "7f3cdff95f4835367f83aedd6a9be37c117a7d88cc6d248de0e524e08e9aa2fb",
+   "bytes": 32935
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/open/declined-block/viewer-1.json": {
+   "sha256": "f851df170f1d61a119c58023c80c148d0f313068597e575ab551c7d7842e03e8",
+   "bytes": 59066
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/open/gru-k1.safetensors": {
+   "sha256": "62277bd0b9a0a7ae48038261dc524d0f41b2450ddf1a8b2985393935f981460a",
+   "bytes": 3443066
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/open/gru-k4.safetensors": {
+   "sha256": "bb44823d41e5ee03a04386765bbd2e3d645318111f0ca87b74b2898f41245c65",
+   "bytes": 3455706
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/open/native.json": {
+   "sha256": "ea289736f03176ed45446d1f7633e1eaccfa5d18110af475cdda3266181d245a",
+   "bytes": 247
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/open/private-selection/capture.json": {
+   "sha256": "e57210159e5ea4dc05d6966557669c8468a05b6d664e0da37d1f5e6d572b3f4d",
+   "bytes": 28934
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/open/private-selection/prompt.txt": {
+   "sha256": "5b92915adcee6e8c72a4d905f97ad55f91082fd65b0ee6c5b16a167c49b2415f",
+   "bytes": 11294
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/open/private-selection/viewer-0.json": {
+   "sha256": "bf46a936e59a2bf8a1dee75b9d92cc51c22e59d1fea0ae12e3aff12cb0ff1711",
+   "bytes": 5322
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/open/private-selection/viewer-1.json": {
+   "sha256": "179e2489c9815d66139cf8c57b84ddd017af219f3b55f9f32344c033cd9d02c8",
+   "bytes": 20970
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/open/public-play/capture.json": {
+   "sha256": "88614dc9e69e4ff96861dbb04969b0cbe6f5a2afb16e73e18d0776d14cdfb438",
+   "bytes": 25252
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/open/public-play/prompt.txt": {
+   "sha256": "952add78b7891955fcf1d631f6ea53974d4fdb3614d09d6a3ee9eb62d4a4e9de",
+   "bytes": 9690
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/open/public-play/viewer-0.json": {
+   "sha256": "bf46a936e59a2bf8a1dee75b9d92cc51c22e59d1fea0ae12e3aff12cb0ff1711",
+   "bytes": 5322
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/open/public-play/viewer-1.json": {
+   "sha256": "377520ea3e33818429dcde433ab4e0a2f423211afbc454cd4a33ac56474b1156",
+   "bytes": 32592
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/open/transformer-k1.safetensors": {
+   "sha256": "193e73951eed2b243aca0ea83da49c37ec97eed47271557e9370659af8ed3970",
+   "bytes": 3615098
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/open/transformer-k4.safetensors": {
+   "sha256": "8857499ba4b6f993c1cfa4d677d6c24eb82898dabab7134efe38f2c6ff4a7918",
+   "bytes": 3616026
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/source.json": {
+   "sha256": "9602997b41c43c5b34caf92281629803d8398e19a783d42909311abfa8f97a72",
+   "bytes": 854
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/source/manabot/backends/torch/verify_opponent_memory.py": {
+   "sha256": "74c539756488abd250dbba25c4aad63588cfbfc2c5815aa3d30b1c1e61eb7340",
+   "bytes": 5611
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/source/manabot/policy/opponent_memory.py": {
+   "sha256": "d97925f7552de7e91527039b32fdd332b02245f753fb2bb6e3c7ffd9812112bd",
+   "bytes": 7613
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/source/manabot/semantic/text_observation.py": {
+   "sha256": "c98ad6bb241061e50af789a21ba2c6be1006ed35cd5734e0807865e1e0522da9",
+   "bytes": 61316
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/source/manabot/verify/opponent_memory.py": {
+   "sha256": "17b2dadc05b00b1d4dda6710fb5649beb4fc8852e86715cbd111e6c23c9cac78",
+   "bytes": 10006
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/summary.json": {
+   "sha256": "0378d96dfe51921f73136ad98b326cc0e021edf6ceb6ad521d1e7cac5f1f08cc",
+   "bytes": 2662
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/training.sqlite": {
+   "sha256": "6ddc4ac3809d4bdee31986193a885d27546a3e80d9f0475f808a2a9e9980d8d0",
+   "bytes": 73728
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/training.writer.lock": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "bytes": 0
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/training/run.json": {
+   "sha256": "a0f03436f4e4ec8ff7ea4a7a4d5d1d15bf067fefff54553ba7a42da6f50925ee",
+   "bytes": 12576
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/training/self-play-ema.safetensors": {
+   "sha256": "318f4e3122152dcff0a5051730a44b8b14ee0dcd193802cc933417a38040336b",
+   "bytes": 5185194
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/training/self-play-initial-raw.safetensors": {
+   "sha256": "0030f61df650b28a7a53da6e1a1886cc7770f70ca8c247dd0ecb6e09e73dd6ff",
+   "bytes": 5185114
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/training/self-play-optimizer.pt": {
+   "sha256": "8b91af247f722cca1bddd477207502ff665f37b8828dd42518bc48cbb14dbe57",
+   "bytes": 4379957
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/training/self-play-raw.safetensors": {
+   "sha256": "59ecb246ffb57aad89bd44dca652171b97bacd3afbb7f9eec4cdac793839ccec",
+   "bytes": 5185122
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/training/self-play/etude/self-play/5aeea517dd88454dbd679c3495706090/.out": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "bytes": 0
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/training/self-play/etude/self-play/5aeea517dd88454dbd679c3495706090/artifacts/f424cf3654b4a800528166724cd6e30f6086e68a4beec090b6bd0d91ccd3160d.json": {
+   "sha256": "f424cf3654b4a800528166724cd6e30f6086e68a4beec090b6bd0d91ccd3160d",
+   "bytes": 424
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/training/self-play/etude/self-play/5aeea517dd88454dbd679c3495706090/checkpoints/learner_transitions-0.json": {
+   "sha256": "60b2d9e3c3e2d0aa86fc3d56959aeda5ae1fb7238c13edf72b3482c8e97c7167",
+   "bytes": 841
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/training/self-play/etude/self-play/5aeea517dd88454dbd679c3495706090/checkpoints/learner_transitions-0.safetensors": {
+   "sha256": "0030f61df650b28a7a53da6e1a1886cc7770f70ca8c247dd0ecb6e09e73dd6ff",
+   "bytes": 5185114
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/training/self-play/etude/self-play/5aeea517dd88454dbd679c3495706090/checkpoints/learner_transitions-193.json": {
+   "sha256": "95b3f195732f56a1529c26a7929c8eeed153abfa431a9e68708fd015db52d6b4",
+   "bytes": 848
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/training/self-play/etude/self-play/5aeea517dd88454dbd679c3495706090/checkpoints/learner_transitions-193.safetensors": {
+   "sha256": "59ecb246ffb57aad89bd44dca652171b97bacd3afbb7f9eec4cdac793839ccec",
+   "bytes": 5185122
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/training/self-play/etude/self-play/5aeea517dd88454dbd679c3495706090/metrics/2-00000000-00000001-b95d716f5e22.blk": {
+   "sha256": "3bca7a6efef0c513ea3e68149ac3aac73caa8ce1dd50dd5762337023ea2a454a",
+   "bytes": 139464
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/training/self-play/etude/self-play/5aeea517dd88454dbd679c3495706090/metrics/b95d716f5e22.index.json": {
+   "sha256": "dd31f0f983e4c8c1b66d3de8f93292d28a473ad6895c42c7529f195b32362570",
+   "bytes": 23530
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/training/self-play/etude/self-play/5aeea517dd88454dbd679c3495706090/metrics/b95d716f5e22.json": {
+   "sha256": "322e776970f486075ab7708fa327593c1d336098d97641490f423171cd217ad2",
+   "bytes": 361
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/training/self-play/etude/self-play/5aeea517dd88454dbd679c3495706090/metrics/b95d716f5e22.permanent.json": {
+   "sha256": "6b151487e217919b7416118b59271a84172f61f1774f4d0f3a1677ee2e428ea1",
+   "bytes": 166542
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/training/self-play/etude/self-play/5aeea517dd88454dbd679c3495706090/outcome.json": {
+   "sha256": "1259a028b5eb98fab5618803c6c5c289c1cf9757090176369f68525ff6b56a69",
+   "bytes": 84
+  },
+  "experiments/data/opponent-memory/20261116-headless-demo/training/self-play/etude/self-play/5aeea517dd88454dbd679c3495706090/run.json": {
+   "sha256": "dd4ac296c35d2926f6c7f834bc2c897c68879f728802a244f18ed50b2c97dd1d",
+   "bytes": 6289
   },
   "experiments/data/opponent-memory/20261116-independent-host-attempt1/failure.json": {
    "sha256": "819e77bf4df79d13e16d76f47c46c6051ef4296c80b0592bee88891faedeff11",

@@ -501,9 +501,11 @@ identities. Main defaults to v11 and loads deprecated v9/v10 checkpoints
 until 0.4.0; see
 [policy inputs](../docs/observation-and-model.md#policy-inputs) for the layout
 and the saved-checkpoint and world admission requirements. Text representation
-`manabot-text-7` renders each native payload once with exact public source and
+`manabot-text-8` renders each native payload once with exact public source and
 member labels and timestamp ranks. Its within-observation token reducer is not
-persistent game memory.
+persistent game memory. Whole-game opponent records share exact historical
+reference and rules snapshots through a prompt-local alias table; every record,
+order, multiplicity and public context remains listed.
 
 ## Policy action capacity
 

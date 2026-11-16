@@ -1,6 +1,7 @@
 """Live viewer memory agrees across independent encoders, replay and forks."""
 
 import json
+from pathlib import Path
 from typing import Literal
 
 import numpy as np
@@ -139,3 +140,23 @@ def test_opponent_memory_buffered_vector_and_builtin_choices_match_scalar() -> N
             for key in ("opponent_records", "opponent_details"):
                 np.testing.assert_array_equal(buffers[key][index], expected[key])
     assert retained, "built-in opponent choices must reach the external viewer"
+
+
+def test_headless_opponent_memory_demo(tmp_path: Path) -> None:
+    from manabot.backends.torch import verify_opponent_memory
+    from manabot.verify.opponent_memory import run_demo
+
+    run_demo(tmp_path, verify_opponent_memory)
+    summary = json.loads((tmp_path / "summary.json").read_text())
+    assert summary["ordinary_cpu_update"]["updates"] == 1
+    for disclosure in ("open", "closed"):
+        assert len(summary["policies"][disclosure]) == 4
+        for policy in summary["policies"][disclosure]:
+            assert policy["checkpoint_reload_matches"]
+            assert policy["legal_probability_max_delta"] > 0
+            assert all(value > 0 for value in policy["temporal_gradient_l1"].values())
+        native = json.loads((tmp_path / disclosure / "native.json").read_text())
+        assert native["private_history_unchanged_after_public_play"]
+        assert all(count > 0 for count in native["records_by_viewer"].values())
+        commands = (tmp_path / disclosure / "commands.jsonl").read_text().splitlines()
+        assert len(commands) == native["commands_replayed"]

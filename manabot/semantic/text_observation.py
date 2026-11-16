@@ -33,7 +33,7 @@ from managym.opponent_memory import (
     read_records,
 )
 
-REPRESENTATION_VERSION = "manabot-text-7"
+REPRESENTATION_VERSION = "manabot-text-8"
 _ZONES = ("library", "hand", "battlefield", "graveyard", "stack", "exile", "command")
 _PHASES = ("beginning", "first main", "combat", "second main", "ending")
 _STEPS = (
@@ -1298,6 +1298,7 @@ def _memory_lines(memory: list[OpponentDecisionRecord]) -> list[str]:
     if not memory:
         return []
     snapshots: dict[str, str] = {}
+    references_seen: dict[str, str] = {}
 
     def alias(reference: DecisionReference) -> str:
         if not reference.description:
@@ -1317,26 +1318,28 @@ def _memory_lines(memory: list[OpponentDecisionRecord]) -> list[str]:
             )
             if value is not None
         )
-        board = "; ".join(
-            f"{role} {'/'.join(map(str, counts))}"
-            for role, counts in zip(("You", "Opponent"), context.board_counts)
+        board = " | ".join(
+            "/".join(map(str, counts)) for counts in context.board_counts
         )
         records.append(
-            f"{record.ordinal + 1}. Turn {context.turn}, step {context.step}: "
-            f"{record.kind}, choice {choice.kind or 'unavailable'}{selectors}; "
+            f"{record.ordinal + 1}. Turn {context.turn}, phase {context.phase}, step {context.step}: "
+            f"{record.kind}/{choice.kind or 'unavailable'}{selectors}; "
             f"count {record.count}, span {record.first_position}..{record.last_position}; "
-            f"life You {context.life[0]}, Opponent {context.life[1]}; "
-            f"hand You {context.hand[0]}, Opponent {context.hand[1]}; board {board}."
+            f"life {context.life[0]}/{context.life[1]}; "
+            f"hand {context.hand[0]}/{context.hand[1]}; board {board}."
         )
         for label, references in (
-            ("Untapped mana sources at choice", context.mana_sources),
+            ("Untapped mana sources", context.mana_sources),
             ("Response", record.response),
             ("Chosen subjects", choice.references),
         ):
             # Consecutive equal snapshots (three untapped Forests) print once.
             groups: list[tuple[str, int]] = []
             for reference in references:
-                text = _memory_reference(reference, alias(reference))
+                snapshot = _memory_reference(reference, alias(reference))
+                text = references_seen.setdefault(
+                    snapshot, f"M{len(references_seen) + 1}"
+                )
                 if groups and groups[-1][0] == text:
                     groups[-1] = (text, groups[-1][1] + 1)
                 else:
@@ -1353,11 +1356,16 @@ def _memory_lines(memory: list[OpponentDecisionRecord]) -> list[str]:
     return [
         "",
         "Opponent decisions, chronological whole-game viewer history "
-        "(board counts are total/tapped/land/creature/artifact/enchantment/"
+        "(decision/choice; paired life/hand values and board rows are You/Opponent; "
+        "board counts are total/tapped/land/creature/artifact/enchantment/"
         "planeswalker/battle; role is the viewer-relative controller, or owner "
         "off the battlefield; P/T is effective on the battlefield and 0/0 "
-        "elsewhere; H aliases name effective rules snapshots at that choice):",
+        "elsewhere; M aliases name complete historical reference snapshots, "
+        "H aliases name effective rules snapshots at that choice):",
         *records,
+        "",
+        "Historical reference snapshots:",
+        *(f"{key} — {description}" for description, key in references_seen.items()),
         "",
         "Historical rules snapshots:",
         *(f"{key} — {description}" for description, key in snapshots.items()),

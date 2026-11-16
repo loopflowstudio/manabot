@@ -1360,6 +1360,8 @@ def test_opponent_memory_text_lists_every_record_and_snapshot_once() -> None:
     env.reset(Match().to_rust())
     rng = random.Random(0)
     for _ in range(160):
+        if not env.action_count():
+            break
         env.step(rng.randrange(env.action_count()))
     viewer = env.current_agent_index()
     memory = read_records(env.observation_for_player(viewer).opponent_memory_json())
@@ -1382,3 +1384,80 @@ def test_opponent_memory_text_lists_every_record_and_snapshot_once() -> None:
     table = snapshots.split("\n\n")[0].splitlines()
     assert sorted(line.split(" — ", 1)[1] for line in table) == sorted(described)
     assert all(text.count(description) == 1 for description in described)
+
+
+def test_opponent_memory_text_reference_alias_preserves_historical_status() -> None:
+    from manabot.semantic.text_observation import _memory_lines
+    from managym.opponent_memory import DecisionReference
+
+    env = managym.Env(seed=0)
+    env.reset(Match().to_rust())
+    for _ in range(12):
+        env.step(0)
+    records = read_records(env.observation_for_player(1).opponent_memory_json())
+    reference = DecisionReference(
+        role=2,
+        definition=None,
+        appearance=None,
+        name="historical source",
+        description="historical rules",
+        power=2,
+        toughness=3,
+        tapped=False,
+        ready=True,
+        attacking=False,
+        blocking=False,
+        program=[],
+        mana=[],
+    )
+    first = records[0].model_copy(
+        update={
+            "response": [reference, reference],
+        }
+    )
+    second = first.model_copy(
+        update={
+            "ordinal": 1,
+            "response": [reference.model_copy(update={"tapped": True})],
+        }
+    )
+    text = "\n".join(_memory_lines([first, second]))
+    assert "Response: 2× M" in text
+    assert text.count("historical source") == 2
+    assert "status ready" in text and "status tapped, ready" in text
+    assert text.count("historical rules") == 1
+
+
+@pytest.mark.parametrize("record_count", [595, 1024])
+def test_census_length_opponent_memory_fits_default_text_budget(
+    record_count: int,
+) -> None:
+    env = managym.Env(seed=0)
+    env.reset(Match().to_rust())
+    rng = random.Random(0)
+    for _ in range(160):
+        env.step(rng.randrange(env.action_count()))
+    decision = capture_text_decision(env)
+    payload = json.loads(decision.capture_json)
+    memory = payload["observation"]["viewer_state"]["opponent_memory"]
+    # The census retained counts rather than original record bytes. Repeat real
+    # snapshots to exercise its maximum length without inventing game evidence.
+    payload["observation"]["viewer_state"]["opponent_memory"] = [
+        {
+            **memory[index % len(memory)],
+            "ordinal": index,
+            "first_position": index,
+            "last_position": index,
+        }
+        for index in range(record_count)
+    ]
+    source = _redigest(payload)
+    rendered = render_decision(source)
+    history = rendered.text.split("Opponent decisions, chronological")[1]
+    assert sum(line[:1].isdigit() for line in history.splitlines()) == record_count
+    assert len(rendered.text.encode()) <= 262_144
+    assert [
+        (a.reference, a.description, a.command.offer_id) for a in rendered.actions
+    ] == [(a.reference, a.description, a.command.offer_id) for a in decision.actions]
+    with pytest.raises(RepresentationOverflow):
+        render_decision(source, max_bytes=1000)

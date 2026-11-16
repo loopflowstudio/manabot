@@ -565,6 +565,7 @@ _BACKEND_ENTRYPOINTS = {
     "manabot/verify/learning_regression.py": {"main"},
     "manabot/verify/llm_game.py": {"main"},
     "manabot/verify/record_coverage.py": {"main"},
+    "manabot/verify/opponent_memory.py": {"main"},
 }
 
 

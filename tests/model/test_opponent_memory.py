@@ -325,3 +325,17 @@ def test_no_history_control_retains_logs_without_using_them(tmp_path: Path) -> N
     malformed = {**obs, "opponent_details": obs["opponent_details"][:, :1]}
     with pytest.raises(ValueError):
         model.prepare(malformed)
+
+
+@pytest.mark.parametrize("field", ["opponent_records", "opponent_details"])
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), 0.5])
+@pytest.mark.parametrize("padding", [False, True])
+def test_memory_admission_rejects_invalid_live_and_padding_values(
+    field: str, value: float, padding: bool
+) -> None:
+    from manabot.policy.opponent_memory import admit_memory
+
+    _, obs = memory_input()
+    obs[field][0, -1 if padding else 0, 0] = value
+    with pytest.raises(ValueError):
+        admit_memory(obs)

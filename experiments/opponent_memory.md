@@ -658,3 +658,74 @@ and matched-decision horizon calibration.
 
 
 Validation: `uv run --no-sync pytest tests/model/test_opponent_memory.py tests/model/test_prepare_rows.py -q` — 54 passed; artifact tracking guard — one passed. Ruff, patch reconstruction check and `git diff --check` passed. Full gate remains outstanding.
+
+### Prompt, headless proof and collection attribution, 2026-11-16
+
+The headless demo now runs with
+`uv run --extra dev python -m manabot.verify.opponent_memory --out .runs/opponent-memory-demo`
+(use a fresh directory). Its [retained summary](data/opponent-memory/20261116-headless-demo/summary.json)
+records both disclosures and all four memory arms. Constructed priority roots
+use trivial skipping; subsequent choices are ordinary replayed Commands. Both
+viewers' native tensors, independent Python tensors and JSON round trips agree.
+The proof includes eligible passes, private selection of a Mountain followed by
+its public play without changing earlier records, a declined block, and an
+isolated cast branch. Prompts, captures, viewer logs, Commands and checkpoints
+are retained beside the summary; source snapshots and native-extension hashes
+are in `source.json` and `source/`.
+
+Every arm has distinct legal probabilities under intact versus blank memory,
+finite nonzero temporal-encoder gradients from actor and value losses tested
+separately, and matching checkpoint reload. Probability maximum deltas range
+from 1.06e-5 to 1.09e-4. These use a declared nonzero FiLM weight intervention to
+exercise connectivity; they are not evidence of learned memory use. A separate
+ordinary GRU local-smoke update starts from the recipe's normal initialization,
+collects 193 learner decisions with complete-game closure and census capacities
+at 2/2/2 execution rows, completes one update, and reloads finite weights. It
+establishes neither CUDA admission nor playing strength.
+
+`manabot-text-8` shares identical historical reference renderings and rules
+snapshots within the prompt. Every chronological record, reference group,
+multiplicity, span, life/hand value and board count remains listed; phase is now
+explicit beside turn and step. Repeated-snapshot fixtures at the census maximum
+595 records and configured 1,024 records fit the existing 262,144-byte budget.
+The census has counts rather than original record bytes, so these are controlled
+size fixtures, not retained long-game evidence. Arbitrarily distinct snapshots
+can still exceed a byte/token budget and fail with `RepresentationOverflow`;
+no history is hidden, truncated or silently retried. Tokenizer and chat-template
+admission remain the harness's responsibility.
+
+The earlier QA result (control collection 13.9 s versus incumbent 2.3 s) remains
+an uncontrolled CPU observation, not a CUDA throughput estimate. A bounded
+[attribution probe](data/opponent-memory/20261116-control-cost/attribute_cost.py)
+replays 160 uniform choices in the same seeded game, encoding the acting view
+into native dense buffers and retaining every control prefix. Both configurations
+finish at state digest
+`dddebeb9072740e1b61eb46509b3f3b1b5744c5324a31f12d285e8993195ec7c`,
+with viewer record counts 67/87. It profiles no policy inference, vector worker,
+bootstrap or optimizer. Census capacities are 1,024/1,048,576.
+
+The [before receipt](data/opponent-memory/20261116-control-cost/before.json)
+measures control native observation/encoding at 0.415 s and prefix capture at
+0.904 s, versus incumbent encoding at 0.026 s. Python profiling attributes
+0.839 s cumulatively to `admit_memory`: it repeatedly checks finiteness and
+integrality over the full padded detail capacity, allocating full-size floor
+results. Admission now checks unused rows once for zero padding (also rejecting
+NaN, infinity and fractional garbage), then checks numeric values on the owned
+prefix. The rejection contract is unchanged; directed tests cover live and
+padding corruption in both companion buffers.
+
+The [after receipt](data/opponent-memory/20261116-control-cost/receipt.json)
+measures control encoding at 0.395 s and prefix capture at 0.436 s; incumbent
+encoding is 0.027 s. Profiled admission falls to 0.378 s, with 0.319 s still in
+array `any` reductions, chiefly the mandatory zero-padding check. Native encoding
+still rebuilds every historical detail row and clears the configured buffers.
+The capture reduction is local attribution with profiling overhead and host
+variation; it does not erase the earlier sixfold collection result or establish
+a whole-update speedup. Measure the actual worker against the incumbent during
+calibration, including these remaining costs.
+
+Focused validation: 82 model/native/demo/boundary tests and 78 text/prefix-storage
+tests passed; Ruff and `git diff --check` passed. No Rust changed. The artifacts
+are manifest-backed. CUDA resource/worker/reload admission, matched-decision
+calibration, Etude wiring, gate and the capped five-arm pilot remain outstanding.
+No paid allocation was made.

@@ -614,6 +614,31 @@ validation still carry the full log. The control creates no memory parameters
 or prepared memory features, and its current-state predictions match the
 incumbent. Checkpoints retain the declared observation capacities in every arm.
 
+The LLM text observation lists every opponent record chronologically. Repeated
+historical references and rules descriptions appear once in alias tables; the
+aliases resolve snapshots at the choice, never today's objects. Paired life and
+hand values, and the two board rows, are ordered You/Opponent. This keeps the
+595-record census-length and 1,024-record repeated-snapshot fixtures within the
+default 256 KiB prompt budget. Distinct snapshots and larger states can still
+exceed a byte or tokenizer budget: `RepresentationOverflow` reports the complete
+size rather than trimming history. A byte fit does not establish a model's token
+fit; the LLM harness must check its tokenizer and chat-template budget.
+
+Run the headless software proof with:
+
+```bash
+uv run --extra dev python -m manabot.verify.opponent_memory --out .runs/opponent-memory-demo
+```
+
+Use a fresh output directory. It retains both viewers' logs, captures, text,
+replayed Commands, four policy checkpoints under each disclosure and a JSON
+summary. It checks a private selection followed by public revelation, a pass
+with mana open, a declined block, branch isolation, encoder parity, separate
+actor/value gradients and one ordinary CPU update with checkpoint reload.
+Controlled FiLM weights exercise memory sensitivity before training; the update
+uses ordinary initialization. This proves software connectivity and preserves
+legality and focus; CUDA admission, throughput and learning remain to be measured.
+
 Both encoders use record width 64 and zero dropout. The transformer has two
 layers, four heads and feedforward width 128. The GRU has one layer with hidden
 width 64 and projects its final valid state to the selected summaries. Both
