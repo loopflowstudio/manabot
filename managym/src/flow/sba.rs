@@ -270,12 +270,8 @@ impl Game {
                     // A token's departure is public. Shift known positions at
                     // that position without forgetting unrelated identities.
                     let position = self
-                        .state
-                        .zones
-                        .zone_objects(ZoneType::Library, owner)
-                        .iter()
-                        .rev()
-                        .position(|object| *object == object_id)
+                        .library_from_top(owner)
+                        .position(|object| object == object_id)
                         .unwrap();
                     self.state
                         .known_library_mut(owner)

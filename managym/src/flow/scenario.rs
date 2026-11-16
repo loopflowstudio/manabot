@@ -92,10 +92,16 @@ impl Game {
         self.state.players[player.0].life = life;
     }
 
-    /// Move every card in `player`'s hand to the bottom of their library.
-    pub fn scenario_clear_hand(&mut self, player: PlayerId) {
+    /// Direct placement bypasses the knowledge hooks of ordinary zone moves;
+    /// drop every fact about `player`'s hidden zones it could falsify.
+    fn scenario_forget_knowledge(&mut self, player: PlayerId) {
         self.state.known_library_mut(player).forget_order();
         self.state.known_hand_mut(player).clear();
+    }
+
+    /// Move every card in `player`'s hand to the bottom of their library.
+    pub fn scenario_clear_hand(&mut self, player: PlayerId) {
+        self.scenario_forget_knowledge(player);
         self.policy_history = Default::default();
         let hand: Vec<ObjectId> = self
             .state
@@ -126,8 +132,7 @@ impl Game {
                 .copied()
                 .find(|object| self.state[*object].name == name);
             if let Some(object) = found {
-                self.state.known_library_mut(player).forget_order();
-                self.state.known_hand_mut(player).clear();
+                self.scenario_forget_knowledge(player);
                 self.policy_history = Default::default();
                 self.state.place_object(object, player, ZoneType::Hand);
                 return Ok(());
@@ -166,8 +171,7 @@ impl Game {
             )));
         };
 
-        self.state.known_library_mut(player).forget_order();
-        self.state.known_hand_mut(player).clear();
+        self.scenario_forget_knowledge(player);
         self.policy_history = Default::default();
         self.state
             .place_object(object_id, player, ZoneType::Battlefield);

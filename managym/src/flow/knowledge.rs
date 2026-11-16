@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use rand::{seq::SliceRandom, Rng};
 
 use crate::{
-    flow::{game::Game, selection_sampling::HiddenCommitments},
+    flow::{decision::Decision, game::Game, selection_sampling::HiddenCommitments},
     state::{
         card::CardDefId,
         game_object::{ObjectId, PlayerId},
@@ -17,6 +17,35 @@ use crate::{
 };
 
 impl Game {
+    /// `owner`'s library from the top: position 0 is the next card drawn.
+    pub(crate) fn library_from_top(&self, owner: PlayerId) -> impl Iterator<Item = ObjectId> + '_ {
+        self.state
+            .zones
+            .zone_objects(ZoneType::Library, owner)
+            .iter()
+            .rev()
+            .copied()
+    }
+
+    fn library_definition_at(&self, owner: PlayerId, position: usize) -> Option<CardDefId> {
+        self.library_from_top(owner)
+            .nth(position)
+            .map(|object| self.state[object].definition_id)
+    }
+
+    /// Current positions and definitions of those `objects` in `owner`'s library.
+    fn library_positions_of(
+        &self,
+        owner: PlayerId,
+        objects: &[ObjectId],
+    ) -> Vec<(usize, CardDefId)> {
+        self.library_from_top(owner)
+            .enumerate()
+            .filter(|(_, object)| objects.contains(object))
+            .map(|(position, object)| (position, self.state[object].definition_id))
+            .collect()
+    }
+
     pub(crate) fn library_facts(
         &self,
         owner: PlayerId,
@@ -40,16 +69,7 @@ impl Game {
     /// Called only for cards the owner has inspected, in their resulting
     /// order. True positions are private; this never changes the public view.
     pub(crate) fn remember_library_objects(&mut self, owner: PlayerId, objects: &[ObjectId]) {
-        let facts: Vec<_> = self
-            .state
-            .zones
-            .zone_objects(ZoneType::Library, owner)
-            .iter()
-            .rev()
-            .enumerate()
-            .filter(|(_, object)| objects.contains(object))
-            .map(|(position, object)| (position, self.state[*object].definition_id))
-            .collect();
+        let facts = self.library_positions_of(owner, objects);
         let knowledge = self.state.known_library_mut(owner);
         knowledge.own.extend(facts);
         LibraryKnowledge::bound(&mut knowledge.own);
@@ -81,29 +101,12 @@ impl Game {
         let mut facts = self.library_facts(owner, viewer);
         if self.shares_information(viewer, owner) {
             if let Some(suspended) = &self.state.suspended_decision {
-                for decision in suspended.decisions() {
-                    let domain = match decision {
-                        crate::flow::decision::Decision::OrderLibrary {
-                            player,
-                            object_ids,
-                            ..
-                        } => Some((*player, object_ids.as_slice())),
-                        _ => decision.library_inspection(),
-                    };
-                    if let Some((player, objects)) = domain.filter(|(player, _)| *player == owner) {
-                        for (position, object) in self
-                            .state
-                            .zones
-                            .zone_objects(ZoneType::Library, player)
-                            .iter()
-                            .rev()
-                            .enumerate()
-                        {
-                            if objects.contains(object) {
-                                facts.insert(position, self.state[*object].definition_id);
-                            }
-                        }
-                    }
+                for (_, objects) in suspended
+                    .decisions()
+                    .filter_map(Decision::inspected_library_objects)
+                    .filter(|(player, _)| *player == owner)
+                {
+                    facts.extend(self.library_positions_of(owner, objects));
                 }
             }
         }
@@ -112,14 +115,7 @@ impl Game {
         }
         let mut reserved = Vec::new();
         for (position, definition) in facts {
-            let original = self
-                .state
-                .zones
-                .zone_objects(ZoneType::Library, owner)
-                .iter()
-                .rev()
-                .nth(position)
-                .copied()?;
+            let original = self.library_from_top(owner).nth(position)?;
             // Shared inspections already pin their exact objects through
             // HiddenCommitments; ordinary facts reserve definition witnesses.
             if commitments.pins(original)
@@ -216,15 +212,10 @@ impl Game {
 
     pub(crate) fn library_knowledge_holds(&self, viewer: PlayerId) -> bool {
         [PlayerId(0), PlayerId(1)].into_iter().all(|owner| {
-            let library = self.state.zones.zone_objects(ZoneType::Library, owner);
             self.library_facts(owner, viewer)
-                .iter()
+                .into_iter()
                 .all(|(position, definition)| {
-                    library
-                        .iter()
-                        .rev()
-                        .nth(*position)
-                        .is_some_and(|object| self.state[*object].definition_id == *definition)
+                    self.library_definition_at(owner, position) == Some(definition)
                 })
         })
     }
@@ -232,7 +223,6 @@ impl Game {
     pub(crate) fn assert_library_knowledge(&self) {
         #[cfg(debug_assertions)]
         for owner in [PlayerId(0), PlayerId(1)] {
-            let library = self.state.zones.zone_objects(ZoneType::Library, owner);
             let player = &self.state.players[owner.0];
             for (definition, minimum) in &player.known_hand {
                 let count = self
@@ -251,11 +241,7 @@ impl Game {
             for facts in [&knowledge.public, &knowledge.own] {
                 for (position, definition) in facts {
                     assert_eq!(
-                        library
-                            .iter()
-                            .rev()
-                            .nth(*position)
-                            .map(|object| self.state[*object].definition_id),
+                        self.library_definition_at(owner, *position),
                         Some(*definition),
                         "false library fact for {owner:?} at {position}"
                     );

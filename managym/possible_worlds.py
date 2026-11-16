@@ -326,14 +326,11 @@ class PossibleWorldSpace:
             count <= 0 or count > pool.get(name, 0) for name, count in self.known_hand
         ):
             raise PossibleWorldError("known hand is outside the pool or hand size")
-        for name, count in self.known_library:
-            if (
-                not isinstance(name, str)
-                or type(count) is not int
-                or count <= 0
-                or count > pool.get(name, 0)
-            ):
-                raise PossibleWorldError("known library is outside the unseen pool")
+        if any(
+            count <= 0 or count > pool.get(name, 0)
+            for name, count in self.known_library
+        ):
+            raise PossibleWorldError("known library is outside the unseen pool")
         for world in self.worlds:
             hand = dict(world.hand)
             if any(

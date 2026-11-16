@@ -343,12 +343,10 @@ impl Game {
                 .map(|binding| binding.object),
         );
         if let Some(suspended) = &self.state.suspended_decision {
-            for (owner, object_ids) in suspended.decisions().filter_map(|decision| match decision {
-                Decision::OrderLibrary {
-                    player, object_ids, ..
-                } => Some((*player, object_ids.as_slice())),
-                _ => decision.library_inspection(),
-            }) {
+            for (owner, object_ids) in suspended
+                .decisions()
+                .filter_map(Decision::inspected_library_objects)
+            {
                 if self.shares_information(viewer, owner) {
                     pinned.extend(
                         object_ids
@@ -731,12 +729,8 @@ impl Game {
                     inspections.get(old).is_none_or(|conditions| {
                         conditions.iter().all(|condition| {
                             let position = self
-                                .state
-                                .zones
-                                .zone_objects(ZoneType::Library, condition.owner)
-                                .iter()
-                                .rev()
-                                .position(|candidate| candidate == object);
+                                .library_from_top(condition.owner)
+                                .position(|candidate| candidate == *object);
                             self.inspection_slot_matches(condition, source.zone, *object, position)
                         })
                     })

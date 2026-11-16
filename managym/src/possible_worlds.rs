@@ -442,14 +442,10 @@ impl HiddenHandConstraints {
         let mut known_library = BTreeMap::new();
         for (position, definition) in &game.library_facts(opponent, viewer) {
             let object = game
-                .state
-                .zones
-                .zone_objects(ZoneType::Library, opponent)
-                .iter()
-                .rev()
+                .library_from_top(opponent)
                 .nth(*position)
                 .expect("known position");
-            if commitments.pins(*object) {
+            if commitments.pins(object) {
                 continue;
             }
             let name = &crate::cards::content_pack::default_content_pack()

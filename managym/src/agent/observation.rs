@@ -1125,16 +1125,12 @@ impl Observation {
         }
         for (position, definition) in game.library_facts(player, viewer) {
             let object = game
-                .state
-                .zones
-                .zone_objects(ZoneType::Library, player)
-                .iter()
-                .rev()
+                .library_from_top(player)
                 .nth(position)
                 .expect("known library position");
             // Active inspections already remove their exact objects from the
             // unseen pool; do not subtract a second same-definition copy.
-            if !unseen.contains(object) {
+            if !unseen.contains(&object) {
                 continue;
             }
             if let Some(count) = counts.get_mut(&definition.0) {

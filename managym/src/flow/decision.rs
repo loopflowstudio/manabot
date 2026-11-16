@@ -782,6 +782,17 @@ impl Decision {
         }
     }
 
+    /// Every library card this decision's chooser has looked at, including
+    /// cards an `OrderLibrary` has already placed on the bottom.
+    pub(crate) fn inspected_library_objects(&self) -> Option<(PlayerId, &[ObjectId])> {
+        match self {
+            Self::OrderLibrary {
+                player, object_ids, ..
+            } => Some((*player, object_ids)),
+            _ => self.library_inspection(),
+        }
+    }
+
     /// Private inspection domains that survive library resampling. Search
     /// offers over an entire zone have a different membership authority.
     pub(crate) fn library_inspection(&self) -> Option<(PlayerId, &[ObjectId])> {
