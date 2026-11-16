@@ -23,11 +23,12 @@ from uuid import uuid4
 import warnings
 
 import numpy as np
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 import managym
 from managym.card_capture import CapturedCards
 from managym.decision import Command, DecisionFrame
+from managym.disclosure import DecklistDisclosure
 from managym.journal import DurableJournal, json_line
 from managym.statistics import GameStatistics, Reducer
 
@@ -58,22 +59,34 @@ class PlayerSetup(BaseModel):
     world: str | None = Field(
         default=None, validation_alias=AliasChoices("world", "content_pack")
     )
-    disclosure: Literal["open", "closed"] = Field(
+    disclosure: DecklistDisclosure = Field(
         default="open", exclude_if=lambda value: value == "open"
     )
 
     @classmethod
-    def retain(cls, player: managym.PlayerConfig) -> "PlayerSetup":
+    def retain(
+        cls, player: managym.PlayerConfig, decklists: DecklistDisclosure
+    ) -> "PlayerSetup":
         return cls(
             name=player.name,
             decklist=player.decklist,
             sideboard=player.sideboard,
             world=player.world,
-            disclosure=player.disclosure,
+            disclosure=decklists,
         )
 
-    def native(self) -> managym.PlayerConfig:
-        return managym.PlayerConfig(**self.model_dump())
+
+def _game_disclosure(players: list[PlayerSetup]) -> DecklistDisclosure | None:
+    """The one game value retained in per-seat spelling; None without seats."""
+    values = {player.disclosure for player in players}
+    if len(values) > 1:
+        raise ValueError("retained per-seat disclosure values disagree")
+    return values.pop() if values else None
+
+
+def _retain_players(players: managym.GameSetup, seed: int) -> list[PlayerSetup]:
+    disclosure = managym.resolve_decklists(players, seed)
+    return [PlayerSetup.retain(player, disclosure) for player in players]
 
 
 class DecisionAnnotation(BaseModel):
@@ -108,6 +121,24 @@ class GameInputs(BaseModel):
     end: GameEnd | None = None
     actor: int | None = None
     frame: str | None = None
+
+    @model_validator(mode="after")
+    def uniform_disclosure(self) -> "GameInputs":
+        _game_disclosure(self.players)
+        return self
+
+    def setup(self) -> managym.GameSetup:
+        """Rebuild retained seats with one game value, rejecting disagreement."""
+        decklists = _game_disclosure(self.players)
+        if decklists is None:
+            raise ValueError("retained game has no player setups")
+        return managym.GameSetup(
+            [
+                managym.PlayerConfig(**player.model_dump(exclude={"disclosure"}))
+                for player in self.players
+            ],
+            decklists=decklists,
+        )
 
     def restart(self, seed: int) -> None:
         """Keep the stream's setup, discard all inputs from its previous game."""
@@ -701,7 +732,7 @@ class ScalarCapture(_Capture):
         self.inputs = GameInputs(seed=seed, players=[])
         self._start_cursor("scalar")
 
-    def reset(self, env: managym.Env, players: list[managym.PlayerConfig]) -> Any:
+    def reset(self, env: managym.Env, players: managym.GameSetup) -> Any:
         # The heterogeneous native observation/info tuple stays at this boundary.
         if self.reducers:
             if self._env is None:
@@ -717,13 +748,13 @@ class ScalarCapture(_Capture):
                 self.evidence(),
                 "reset",
                 seeds=[self.seed],
-                players=[[PlayerSetup.retain(p) for p in players]],
+                players=[_retain_players(players, self.seed)],
             )
         self._write_game(self.inputs, GameEnd(status="interrupted", reason="reset"))
         self.inputs = GameInputs(
             seed=self.seed,
             committed=0,
-            players=[PlayerSetup.retain(p) for p in players],
+            players=_retain_players(players, self.seed),
         )
         with self._guard(lambda: self.evidence("reset")):
             self._executing()
@@ -1122,21 +1153,21 @@ class CapturedVector(_Capture):
             "deck_ids": [player.name for player in decks],
         }
 
-    def reset_all_into_buffers(self, players: list[managym.PlayerConfig]) -> None:
+    def reset_all_into_buffers(self, players: managym.GameSetup) -> None:
         self.reset_each_into_buffers([players for _ in self.games])
 
     def reset_each_into_buffers(
-        self, players: list[list[managym.PlayerConfig]]
+        self, players: list[managym.GameSetup]
     ) -> None:
         self._reset_each(players, lambda: self.native.reset_each_into_buffers(players))
 
-    def reset_all(self, players: list[managym.PlayerConfig]) -> Any:
+    def reset_all(self, players: managym.GameSetup) -> Any:
         return self._reset_each(
             [players for _ in self.games], lambda: self.native.reset_all(players)
         )
 
     def _reset_each(
-        self, players: list[list[managym.PlayerConfig]], call: Callable[[], Any]
+        self, players: list[managym.GameSetup], call: Callable[[], Any]
     ) -> Any:
         self._activate_journal(self.native)
         if self._game_journal is not None:
@@ -1145,11 +1176,14 @@ class CapturedVector(_Capture):
                 "reset_each",
                 setup_known=not self._sampled_roots,
                 seeds=self.next_seeds,
-                players=[[PlayerSetup.retain(p) for p in setup] for setup in players],
+                players=[
+                    _retain_players(setup, seed)
+                    for setup, seed in zip(players, self.next_seeds, strict=True)
+                ],
             )
         for game, setup, seed in zip(self.games, players, self.next_seeds, strict=True):
             self._write_game(game, GameEnd(status="interrupted", reason="reset"))
-            game.players = [PlayerSetup.retain(p) for p in setup]
+            game.players = _retain_players(setup, seed)
             game.restart(seed)
         with self._guard(lambda: self._evidence_for(self.games, "reset")):
             self._executing()
@@ -1159,7 +1193,7 @@ class CapturedVector(_Capture):
         return result
 
     def reassign_roots_into_buffers(
-        self, players: list[list[managym.PlayerConfig] | None]
+        self, players: list[managym.GameSetup | None]
     ) -> None:
         """Retain new setups only after native atomic fresh-root validation."""
         if self._game_journal is not None:
@@ -1167,8 +1201,10 @@ class CapturedVector(_Capture):
                 self._evidence_for(self.games, "reset"),
                 "reassign_roots",
                 players=[
-                    None if setup is None else [PlayerSetup.retain(p) for p in setup]
-                    for setup in players
+                    None if setup is None else _retain_players(setup, seed)
+                    for setup, seed in zip(
+                        players, self.native.current_game_seeds(), strict=True
+                    )
                 ],
             )
         proposed = [game.model_copy(deep=True) for game in self.games]
@@ -1180,7 +1216,7 @@ class CapturedVector(_Capture):
                     self.games[game.stream - self.games[0].stream],
                     GameEnd(status="interrupted", reason="root reassigned"),
                 )
-                game.players = [PlayerSetup.retain(p) for p in setup]
+                game.players = _retain_players(setup, seed)
                 game.restart(seed)
         with self._guard(lambda: self._evidence_for(proposed, "reset")):
             self._executing()
@@ -1222,12 +1258,13 @@ class CapturedVector(_Capture):
             if old != new
         ]
         self._generations = generations
-        if self._sampled_roots and restarted:
-            # Sampled roots record the native setup actually created.
+        if restarted:
+            # Record native roots, including the resolved disclosure for every reset.
             players = self.native.current_player_configs()
             for index in restarted:
                 self.games[index].players = [
-                    PlayerSetup.retain(player) for player in players[index]
+                    PlayerSetup.retain(player, players[index].decklists)
+                    for player in players[index]
                 ]
         infos = self.native.get_last_info() if self.games_path is not None else []
         for index in restarted:

@@ -425,9 +425,9 @@ def _replay_game_inputs(
     try:
         agreement.at_retained_failure = retained_phase == "reset"
         if evidence.mode == "vector":
-            reached = env.reset_all([p.native() for p in game.players])[0][0]
+            reached = env.reset_all(game.setup())[0][0]
         else:
-            reached = env.reset([p.native() for p in game.players])[0]
+            reached = env.reset(game.setup())[0]
         phase = "prefix"
         for index, action in enumerate(game.actions):
             if (

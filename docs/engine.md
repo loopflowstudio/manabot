@@ -120,7 +120,7 @@ pub fn for_player(game: &Game, viewer: PlayerId) -> Self {
 - The engine filters hidden information. No encoder, search player or browser
   re-derives what a viewer may know.
 - Legal actions appear only in the chooser's observation.
-- Decklists are open by default, set on `PlayerConfig.disclosure`. A closed
+- Decklists are open by default, set on `GameSetup.decklists`. A closed
   opponent's list is absent from observations, search and possible worlds alike.
 - Two states that look the same to a viewer produce byte-identical
   observations, which is what makes replay and the learnability checks
@@ -1242,8 +1242,10 @@ Training does not take deck files; it takes a **deck source** in the regime
 ordered pairs from its RNG domain, so exact resume reproduces decks, seats and
 seed; the TLA pilot's source is the frozen trophy corpus
 ([training](training.md#regimes-and-stages)). Every deck a source lists is
-admitted when the regime validates, and again natively at each game root. A
-checkpoint from such a run binds the world and nothing about the decks, so it
+admitted when the regime validates, and again natively at each game root.
+`UniformDecks(decklists="closed")` closes every game the source deals; each
+game has one setting shared by both seats. Use `decklists="mixed"` for a
+seeded, balanced per-game open/closed draw. A checkpoint from such a run binds the world and nothing about the decks, so it
 plays any deck the world admits, including ones it never saw. Checkpoints bound
 to an authored setup refuse imported decks even when shapes agree
 (`manabot.model.world.validate_agent_setup`). Academy imports a pair through

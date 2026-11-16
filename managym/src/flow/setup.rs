@@ -13,7 +13,7 @@ use crate::{
     },
     state::{
         game_object::{Card, CardVec, IdGenerator, ObjectVec, PermanentVec, PlayerId},
-        player::{Player, PlayerConfig},
+        player::{GameSetup, Player},
         zone::{ZoneManager, ZoneType},
     },
 };
@@ -21,26 +21,27 @@ use crate::{
 impl Game {
     /// A match on the catalog. Panics when a deck submitted to the world fails
     /// admission; [`crate::agent::env::Env::reset`] checks that first.
-    pub fn new(player_configs: Vec<PlayerConfig>, seed: u64, skip_trivial: bool) -> Self {
-        Self::construct(player_configs, seed, skip_trivial, false, false)
+    pub fn new(player_configs: impl Into<GameSetup>, seed: u64, skip_trivial: bool) -> Self {
+        Self::construct(player_configs.into(), seed, skip_trivial, false, false)
     }
 
     #[cfg(test)]
     pub(crate) fn new_capturing(
-        player_configs: Vec<PlayerConfig>,
+        player_configs: impl Into<GameSetup>,
         seed: u64,
         skip_trivial: bool,
     ) -> Self {
-        Self::construct(player_configs, seed, skip_trivial, true, false)
+        Self::construct(player_configs.into(), seed, skip_trivial, true, false)
     }
 
     pub(crate) fn construct(
-        player_configs: Vec<PlayerConfig>,
+        player_configs: GameSetup,
         seed: u64,
         skip_trivial: bool,
         capture: bool,
         statistics: bool,
     ) -> Self {
+        let disclosure = player_configs.decklists.resolve(seed);
         admit_submitted(&player_configs)
             .unwrap_or_else(|error| panic!("submitted deck is not admitted: {error}"));
         let content = default_content_pack();
@@ -59,7 +60,6 @@ impl Game {
         let mut zones = ZoneManager::default();
 
         for (player_index, config) in player_configs.iter().enumerate() {
-            players[player_index].disclosure = config.disclosure;
             for (name, qty) in &config.deck.main {
                 for _ in 0..*qty {
                     let object = content
@@ -135,6 +135,7 @@ impl Game {
                 object_to_permanent,
                 object_lki: Default::default(),
                 players,
+                disclosure,
                 zones,
                 turn: TurnState::new(PlayerId(0)),
                 priority: PriorityState::default(),

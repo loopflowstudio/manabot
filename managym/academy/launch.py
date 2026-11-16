@@ -19,10 +19,11 @@ import secrets
 import socket
 import threading
 import time
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlencode
 import webbrowser
 
+from managym.disclosure import DecklistDisclosure
 from managym.policy import PolicyFactory, PolicySource, PolicySpec
 from managym.search import SearchConfig, SearchError, search_descriptor
 
@@ -340,7 +341,7 @@ class Academy:
         opponent: str | Path = "search",
         sims: int = 64,
         seed: int | None = None,
-        decklists: Literal["open", "closed"] = "open",
+        decklists: DecklistDisclosure = "open",
         search: SearchConfig | None = None,
     ) -> Launched:
         self._require_open()

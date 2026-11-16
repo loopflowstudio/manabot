@@ -24,7 +24,11 @@ use crate::{
     infra::profiler::{empty_info_dict, insert_info, InfoDict, InfoValue, Profiler},
     possible_worlds::{MaterializeMode, PossibleWorldSpace, PossibleWorldSpaceProjection},
     search_state::{witness, SearchStateWitness},
-    state::{game_object::PlayerId, player::PlayerConfig, zone::ZoneType},
+    state::{
+        game_object::PlayerId,
+        player::{DecklistDisclosure, GameSetup, PlayerConfig},
+        zone::ZoneType,
+    },
 };
 use rand::Rng;
 use std::{
@@ -118,13 +122,40 @@ pub struct FlatMcResult {
 }
 
 /// Private scalar replay input for failure diagnostics and training exposure.
-#[derive(Clone, Debug, serde::Serialize)]
+#[derive(Clone, Debug)]
 struct NativeActionTrace {
-    #[serde(skip)]
     seed: u64,
     /// Fixed at reset; forks share it rather than copying the decklists.
     player_configs: Arc<[PlayerConfig]>,
+    disclosure: DecklistDisclosure,
     actions: Vec<usize>,
+}
+
+// Retained evidence predates game-level ownership. Preserve its seat spelling
+// at serialization only; no player carries this value in the live game.
+impl serde::Serialize for NativeActionTrace {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        #[derive(serde::Serialize)]
+        struct RetainedSeat<'a> {
+            #[serde(flatten)]
+            player: &'a PlayerConfig,
+            #[serde(skip_serializing_if = "DecklistDisclosure::is_open")]
+            disclosure: DecklistDisclosure,
+        }
+        let players: Vec<_> = self
+            .player_configs
+            .iter()
+            .map(|player| RetainedSeat {
+                player,
+                disclosure: self.disclosure,
+            })
+            .collect();
+        let mut record = serializer.serialize_struct("NativeActionTrace", 2)?;
+        record.serialize_field("player_configs", &players)?;
+        record.serialize_field("actions", &self.actions)?;
+        record.end()
+    }
 }
 
 #[derive(Debug)]
@@ -278,8 +309,9 @@ impl Env {
 
     pub fn reset(
         &mut self,
-        player_configs: Vec<PlayerConfig>,
+        player_configs: impl Into<GameSetup>,
     ) -> Result<(Observation, InfoDict), AgentError> {
+        let player_configs = player_configs.into();
         // Admit submitted decks at the fallible environment boundary, before
         // Game construction can panic on them.
         crate::cards::deck_admission::admit_submitted(&player_configs)
@@ -295,7 +327,8 @@ impl Env {
         }
         self.action_trace = Some(NativeActionTrace {
             seed: self.seed,
-            player_configs: Arc::from(player_configs.clone()),
+            disclosure: player_configs.decklists.resolve(self.seed),
+            player_configs: Arc::from(player_configs.players.clone()),
             actions: Vec::new(),
         });
         let mut game = Game::construct(
@@ -423,6 +456,13 @@ impl Env {
     /// Seed the live game was reset with; a pending `set_seed` does not change it.
     pub(crate) fn reset_seed(&self) -> u64 {
         self.reset_seed
+    }
+
+    /// The current game's resolved disclosure; open before the first reset.
+    pub fn decklists(&self) -> DecklistDisclosure {
+        self.game
+            .as_ref()
+            .map_or(Default::default(), |game| game.state.disclosure)
     }
 
     /// Setups this game was reset with; empty before the first reset.

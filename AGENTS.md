@@ -231,8 +231,8 @@ checkpoints or experiment evidence.
   `managym/cards/tests/cards/observability.rs` names each `Observation` field's
   tensor columns or fact kind and fails to compile when a field is unlisted.
 - Decklist disclosure (open by default, or closed) lives on native
-  `PlayerConfig.disclosure`, written by `MatchConfig.decklists` and Academy
-  `GameConfig.decklists`. Observations, search and possible worlds read it
+  `GameSetup.decklists` and the resolved `GameState.disclosure`, written by
+  `MatchConfig.decklists` and Academy `GameConfig.decklists`. Observations, search and possible worlds read it
   through `Game::decklist_known`/`require_open_decklist`; never filter decklist
   information in an encoder or the browser. The policy input encodes the lists in
   the `decklists` block (2 seats × max cards × 5); a closed opponent's rows are zero.
