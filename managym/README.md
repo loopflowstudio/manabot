@@ -620,24 +620,21 @@ ancestry and inspection permissions.
 ### Automatic source preference
 
 Pay `{1}{G}` with an empty mana pool and two untapped Mountains and a Forest:
-automatic payment taps one Mountain and the Forest, leaving the other Mountain
-untapped. With equal follow-up scores, it uses a basic Forest before a green
-mana creature to pay `{G}`. Any remaining native spending decision still
-determines which mana units are spent; source preference adds no new option
-to configure.
+automatic payment taps one Mountain and the Forest. With equal follow-up
+scores, it uses a basic Forest before a green mana creature to pay `{G}`.
 
 Automatic payment removes unnecessary fixed-source taps and uses a bounded
 mana-cost heuristic to prefer the remaining sources (`flow/mana/autotapper.rs`).
-It scores up to 64 distinct hand-cost and ability records, with hand costs then
-instant-timing hand costs breaking ties. Targets and other costs can still
-prevent a follow-up; alternatives can be affordable under different possible
-pool remainders. This is not a count of playable cards or a global optimum.
-Single-use abilities matching the paid cost are excluded by cost equality,
-which can also omit another source's equal-cost ability.
+It prefers, in order: more affordable follow-up costs, more hand costs, then
+more instant-timing hand costs. It considers at most 64 distinct hand-cost and
+ability records. Targets and other costs are only partially checked, and
+different follow-ups may need incompatible spending remainders: the score is
+not a count of playable cards or a global optimum. Single-use abilities with
+the paid cost are excluded, including another source's equal-cost ability.
 
 Further ties prefer basic lands, other lands, lands with activated abilities,
 other permanents, then creatures; within those tiers, colorless output is
 preferred. The class search stops after 1024 arithmetic checks and keeps a
 payable candidate. Payments with saved obligations only receive surplus
-pruning. Activated mana abilities remain deliberate actions, and native
-spending choices still determine the exact mana receipt.
+pruning. Activated mana abilities remain deliberate actions; native spending
+choices determine the exact mana receipt. Source preference has no setting.
