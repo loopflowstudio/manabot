@@ -153,6 +153,8 @@ impl From<&CombatState> for CanonicalCombat {
 
 #[derive(Serialize)]
 struct CanonicalMatchState<'a> {
+    #[serde(skip_serializing_if = "crate::state::player::DecklistDisclosure::is_open")]
+    disclosure: crate::state::player::DecklistDisclosure,
     hash_contract_version: u32,
     content_schema_version: u32,
     content_digest: String,
@@ -197,6 +199,7 @@ impl<'a> CanonicalMatchState<'a> {
         // Keep this exhaustive: adding a mutable GameState field must break the
         // build until its canonical representation is deliberately chosen.
         let GameState {
+            disclosure,
             // Immutable roster facts already occur in the v16 object rows.
             cards: _,
             objects,
@@ -246,6 +249,7 @@ impl<'a> CanonicalMatchState<'a> {
         }
 
         Self {
+            disclosure: *disclosure,
             hash_contract_version: MATCH_STATE_HASH_VERSION,
             content_schema_version: content.schema_version,
             content_digest: content.content_digest(),

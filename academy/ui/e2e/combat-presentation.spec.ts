@@ -600,7 +600,12 @@ test('partial history recovery preserves event pixels, focus and recovered unrea
   const region = panel.getByRole('list', { name: 'Recorded game events' });
   await expect(panel).toContainText('Events 950–950 unavailable');
   await expect(region.getByRole('heading').first()).toHaveText('Turn unknown');
-  await region.evaluate(element => { element.scrollTop = 200; });
+  await region.evaluate(element => {
+    element.scrollTop = 200;
+    // The clock is paused, so deliver the reader's scroll before recovery can
+    // arrive and mark the recovered events as read while still following.
+    element.dispatchEvent(new Event('scroll'));
+  });
   const anchor = await region.evaluate(element => {
     const row = Array.from(element.querySelectorAll<HTMLElement>('[data-presentation-seq]'))
       .find(row => row.getBoundingClientRect().bottom > element.getBoundingClientRect().top)!;

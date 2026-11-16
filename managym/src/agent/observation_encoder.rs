@@ -840,6 +840,9 @@ pub fn encode_into(
         &mut current_object_index,
     );
     out.opponent_player_valid[0] = 1.0;
+    // Like turn number, this game-level public fact accompanies both player tokens.
+    out.agent_player[player::DECKLISTS_OPEN] = bool_to_f32(!obs.decklists_closed);
+    out.opponent_player[player::DECKLISTS_OPEN] = bool_to_f32(!obs.decklists_closed);
 
     let card_context = CardContext {
         max_cards: config.max_cards_per_player,
@@ -2043,6 +2046,7 @@ mod tests {
 
     fn sample_observation() -> Observation {
         Observation {
+            decklists_closed: false,
             shared_effects: Some(Vec::new()),
             continuation: Vec::new(),
             game_over: false,

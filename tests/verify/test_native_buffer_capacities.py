@@ -33,11 +33,13 @@ def _vector_buffers(
     return buffers
 
 
-def _players() -> list[managym.PlayerConfig]:
-    return [
-        managym.PlayerConfig(name, {"Mountain": 10, "Gray Ogre": 20})
-        for name in ("a", "b")
-    ]
+def _players() -> managym.GameSetup:
+    return managym.GameSetup(
+        [
+            managym.PlayerConfig(name, {"Mountain": 10, "Gray Ogre": 20})
+            for name in ("a", "b")
+        ]
+    )
 
 
 def _assert_encoding_parity(
@@ -81,7 +83,7 @@ def test_retained_airship_growth_preserves_every_permanent(capacity: int) -> Non
     assert evidence.opponent_policy == "none"
     (game,) = evidence.games
     assert game.stream == 43 and game.seed == 32624 and len(game.actions) == 371
-    players = [player.native() for player in game.players]
+    players = game.setup()
     scalar = managym.Env(seed=game.seed, skip_trivial=evidence.skip_trivial)
     vector = managym.VectorEnv(
         num_envs=1,
@@ -155,7 +157,7 @@ def test_retained_airship_overflow_isolates_only_its_stream(workers: int) -> Non
     try:
         buffers = _vector_buffers(encoder, num_envs=2)
         vector.set_buffers(buffers, "first-legal")
-        vector.reset_each_into_buffers([[p.native() for p in game.players], _players()])
+        vector.reset_each_into_buffers([game.setup(), _players()])
         for action in game.actions[:-1]:
             vector.step_into_buffers([action, 0], [True, False])
         if isinstance(vector, CapturedVector):
@@ -253,7 +255,7 @@ def test_repaired_retained_prefix_has_scalar_vector_python_parity(
     assert evidence.opponent_policy == "none"
     (game,) = evidence.games
     assert game.stream == 103 and len(game.actions) == 76
-    players = [player.native() for player in game.players]
+    players = game.setup()
     scalar = managym.Env(seed=game.seed, skip_trivial=evidence.skip_trivial)
     vector = managym.VectorEnv(
         num_envs=1,

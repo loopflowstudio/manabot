@@ -55,8 +55,10 @@ def test_sizes_change_only_the_network_and_count_as_the_protocol(
     control = elemental_recipe("control", sizes.SPEED_UPDATES)
 
     assert _without_size(variant) == _without_size(control)
-    assert _compute_parameters(variant) == parameters
     shape = sizes.SIZES[size]
+    # The frozen protocol counts predate the public disclosure feature: its
+    # extra player input adds one weight per hidden unit to the current model.
+    assert _compute_parameters(variant) == parameters + shape.width
     agent = variant.agent
     assert (agent.hidden_dim, agent.attention_layers, agent.num_attention_heads) == (
         shape.width,

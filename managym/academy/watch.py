@@ -8,12 +8,13 @@ from contextlib import ExitStack
 from dataclasses import asdict, dataclass, field, replace
 from threading import Lock
 from time import monotonic
-from typing import Any, Literal, TypedDict
+from typing import Any, TypedDict
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
 from managym.bots import BotPolicy
+from managym.disclosure import DecklistDisclosure
 from managym.policy import PolicyRunner
 from managym.search import SearchConfig, SearchError
 
@@ -51,7 +52,7 @@ class WatchRequest(BaseModel):
     mirror: list[SearchConfig | None] | None = Field(
         default=None, min_length=2, max_length=2
     )
-    decklists: Literal["open", "closed"] = "open"
+    decklists: DecklistDisclosure = "open"
 
 
 def resolve_player(

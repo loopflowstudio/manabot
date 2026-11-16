@@ -15473,9 +15473,7 @@ fn secret_of_bloodbending_cannot_inspect_private_sideboards_or_take_outside_card
         deck(&[("Accumulate Wisdom", 1)]),
         161,
     );
-    for player in &mut s.game_mut().state.players {
-        player.disclosure = managym::state::player::DecklistDisclosure::Closed;
-    }
+    s.game_mut().state.disclosure = managym::state::player::DecklistDisclosure::Closed;
     s.advance_to_active_step(0, StepKind::Main);
     clear_hand(&mut s, 0);
     clear_hand(&mut s, 1);
