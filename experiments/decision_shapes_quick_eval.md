@@ -1,5 +1,31 @@
 # Equal-update payment-model head-to-head
 
+2026-11-16 continuation: the original mana candidate stopped at66; its first
+GPU continuation delivered no updates because its declared input keys omitted
+the parent's attempt directory. All four corrected inputs have now been
+downloaded through the worker's signed-URL path with fresh caches and verified
+against the recorded SHA256/lengths. The frozen source archive also downloaded.
+An owned Mac mini rehearsal, `decision_shapes/b5dd9dda131c`, completed one
+CPU update from66to67 and Etude delivered raw/EMA/Adam plus its run record.
+That device-change rehearsal is delivery evidence, not a study candidate.
+
+The evaluator now accepts an explicit `QUICK_EVAL_MANIFEST` with common update,
+training seed, player names, file basenames, hashes and lengths, and an explicit
+`QUICK_EVAL_PAIRS` (default8). The original u50 defaults and frozen outputs
+remain reproducible from their original commit. Use one mirror pair of the
+delivered rehearsal checkpoint to verify evaluation consumption before a
+longer continuation; keep those games out of the learning comparison.
+
+The retained u50 manual-mode Commands add a behavioral observation: among
+PAY_OR_NOT decisions the baseline chose196 automatic payments and117
+individual source taps, whereas the mana-trained policy chose217 automatic
+payments and9 individual source taps. There were also14versus10 activated
+abilities and one declined choice per policy. These are chosen-action counts
+over32games, deduplicated by Command ID; repeated source taps count separately.
+They are not per-opportunity rates or proof that either policy pays better,
+because the policies encountered different states. Source:
+`.runs/quick-head-to-head/manual-use-audit.json` and the original retained traces.
+
 Exploratory check requested 2026-11-16 UTC: compare available policies at the
 same number of updates, not a scored finding about learnability. Compare raw
 update-50 checkpoints of seed26502: baseline4218e16c4678 and original

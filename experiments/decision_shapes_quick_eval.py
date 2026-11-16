@@ -8,6 +8,7 @@ Each pair retains ordinary evaluation requests, Commands and replay results.
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 from itertools import combinations
 import json
 import os
@@ -16,6 +17,72 @@ import random
 import subprocess
 import sys
 import time
+
+
+@dataclass(frozen=True)
+class CheckpointInput:
+    name: str
+    path: Path
+    sha256: str
+    size_bytes: int
+
+
+@dataclass(frozen=True)
+class PanelInputs:
+    updates: int
+    training_seed: int
+    baseline: CheckpointInput
+    candidate: CheckpointInput
+
+
+def checkpoint_inputs(directory: Path) -> PanelInputs:
+    """Read explicit hash-bound inputs, preserving the original u50 defaults."""
+    manifest = os.environ.get("QUICK_EVAL_MANIFEST")
+    if manifest is None:
+        return PanelInputs(
+            50,
+            26502,
+            CheckpointInput(
+                "baseline-u50",
+                directory / "baseline-u50.pt",
+                "7250ccd5fec785bd2b305e9a180c93af2e70ade1ca0b0f5a40a54d010e584853",
+                4927595,
+            ),
+            CheckpointInput(
+                "mana-taps-u50",
+                directory / "mana-taps-u50.pt",
+                "6a9b27d0c2b334ad0fe00256474dfcb358918c141774f0aead7e4d1fdd70f4e2",
+                4927595,
+            ),
+        )
+    raw = json.loads(Path(manifest).read_text())
+    if (
+        not isinstance(raw, dict)
+        or type(raw.get("updates")) is not int
+        or type(raw.get("training_seed")) is not int
+    ):
+        raise ValueError("checkpoint manifest needs integer updates and training_seed")
+
+    def read(role: str) -> CheckpointInput:
+        row = raw.get(role)
+        if (
+            not isinstance(row, dict)
+            or not all(isinstance(row.get(k), str) for k in ("name", "file", "sha256"))
+            or type(row.get("bytes")) is not int
+        ):
+            raise ValueError(f"invalid checkpoint manifest role: {role}")
+        if Path(row["file"]).name != row["file"] or row["bytes"] <= 0:
+            raise ValueError("checkpoint file must be a basename with positive bytes")
+        return CheckpointInput(
+            row["name"], directory / row["file"], row["sha256"], row["bytes"]
+        )
+
+    result = PanelInputs(
+        raw["updates"], raw["training_seed"], read("baseline"), read("candidate")
+    )
+    if result.updates <= 0 or result.baseline.name == result.candidate.name:
+        raise ValueError("checkpoint coordinates and distinct player names required")
+    return result
 
 
 def panel(mode: str, output: Path, deadline: float) -> None:
@@ -41,20 +108,22 @@ def panel(mode: str, output: Path, deadline: float) -> None:
         for index, deck in enumerate(held["decks"])
         if excluded not in deck["decklist"] and excluded not in deck["sideboard"]
     ]
-    pairs = random.Random(26593001).sample(list(combinations(kept, 2)), 8)
+    pair_count = int(os.environ.get("QUICK_EVAL_PAIRS", "8"))
+    if not 1 <= pair_count <= 64:
+        raise ValueError("pair count must be between one and64")
+    pairs = random.Random(26593001).sample(list(combinations(kept, 2)), pair_count)
     inputs = Path(os.environ["ETUDE_INPUTS_DIR"])
+    declared = checkpoint_inputs(inputs)
+    baseline, candidate = declared.baseline.name, declared.candidate.name
     paths = {
-        "baseline-u50": str(inputs / "baseline-u50.pt"),
-        "mana-taps-u50": str(inputs / "mana-taps-u50.pt"),
-    }
-    expected = {
-        "baseline-u50": "7250ccd5fec785bd2b305e9a180c93af2e70ade1ca0b0f5a40a54d010e584853",
-        "mana-taps-u50": "6a9b27d0c2b334ad0fe00256474dfcb358918c141774f0aead7e4d1fdd70f4e2",
+        checkpoint.name: str(checkpoint.path)
+        for checkpoint in (declared.baseline, declared.candidate)
     }
     summary: dict[str, object] = {
         "mode": mode,
-        "updates": 50,
-        "training_seed": 26502,
+        "updates": declared.updates,
+        "training_seed": declared.training_seed,
+        "players": [baseline, candidate],
         "held_out_total": len(held["decks"]),
         "held_out_retained": len(kept),
         "excluded_card": excluded,
@@ -70,8 +139,13 @@ def panel(mode: str, output: Path, deadline: float) -> None:
             population_sha256=held["corpus_sha256"],
             entries=(held["entry_ids"][first], held["entry_ids"][second]),
             lists=(
-                Deck(held["decks"][first]["decklist"], held["decks"][first]["sideboard"]),
-                Deck(held["decks"][second]["decklist"], held["decks"][second]["sideboard"]),
+                Deck(
+                    held["decks"][first]["decklist"], held["decks"][first]["sideboard"]
+                ),
+                Deck(
+                    held["decks"][second]["decklist"],
+                    held["decks"][second]["sideboard"],
+                ),
             ),
         )
         registrations = {
@@ -81,28 +155,29 @@ def panel(mode: str, output: Path, deadline: float) -> None:
                 content_suite=matchup.content_suite,
                 player_id=name,
                 display_name=name,
-                training_seed=26502,
+                training_seed=declared.training_seed,
                 artifact_prefix=f"quick-eval/{name}",
-                expected_sha256=expected[name],
-                expected_bytes=4927595,
+                expected_sha256=checkpoint.sha256,
+                expected_bytes=checkpoint.size_bytes,
             ).registration
-            for name, path in paths.items()
+            for checkpoint in (declared.baseline, declared.candidate)
+            for name, path in [(checkpoint.name, str(checkpoint.path))]
         }
         key = EvaluationKey(
             world=WORLD_VERSION,
             content_suite=matchup.content_suite,
             viewer_boundary="acting-viewer",
-            arena_version=f"decision-shapes-quick-u50-{mode}",
+            arena_version=f"decision-shapes-quick-u{declared.updates}-{mode}",
             rating_model_version="unrated",
             rating_prior_sha256=canonical_sha256({}),
-            anchor_cohort_sha256=registrations["baseline-u50"].identity_sha256,
+            anchor_cohort_sha256=registrations[baseline].identity_sha256,
             evaluation_compute_envelope_id="policy-cpu-one-thread-one-pass",
         )
         result = evaluate(
             EvaluationRequest(
                 key=key,
-                candidate=registrations["mana-taps-u50"],
-                opponent=registrations["baseline-u50"],
+                candidate=registrations[candidate],
+                opponent=registrations[baseline],
                 checkpoint_paths=paths,
                 deal_seeds=(26594000 + number,),
                 purpose="exploratory-equal-update-head-to-head",
@@ -113,7 +188,9 @@ def panel(mode: str, output: Path, deadline: float) -> None:
             ),
             out_dir=output / f"pair-{number:02d}",
             execution=EvalExecution(
-                device="cuda" if os.environ.get("QUICK_EVAL_DEVICE") == "cuda" else "cpu",
+                device="cuda"
+                if os.environ.get("QUICK_EVAL_DEVICE") == "cuda"
+                else "cpu",
                 deadline_unix=deadline,
                 max_active_games=2,
                 max_batch_rows=16,
@@ -155,8 +232,15 @@ def main() -> None:
             MANAGYM_EXPERIMENT_SOURCE_TAPS=str(int(mode == "mana-taps")),
         )
         subprocess.run(
-            [sys.executable, "-m", "experiments.decision_shapes_quick_eval",
-             "--mode", mode, "--deadline", str(time.time() + 2100)],
+            [
+                sys.executable,
+                "-m",
+                "experiments.decision_shapes_quick_eval",
+                "--mode",
+                mode,
+                "--deadline",
+                str(time.time() + 2100),
+            ],
             env=environment,
             check=True,
             timeout=2160,
