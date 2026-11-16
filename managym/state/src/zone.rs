@@ -6,7 +6,7 @@ use rand::seq::SliceRandom;
 
 use super::game_object::{CardId, Object, ObjectId, ObjectVec, PlayerId};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 #[repr(i32)]
 pub enum ZoneType {
     Library = 0,

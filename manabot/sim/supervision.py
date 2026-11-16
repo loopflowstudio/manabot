@@ -16,7 +16,6 @@ from pathlib import Path
 import time
 from typing import Any
 
-from manabot.infra.journal import DurableJournal
 from manabot.sim.card_evidence import (
     EvidenceRef,
     GameTrace,
@@ -29,6 +28,7 @@ from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import apply_game_event, replay_games
 from manabot.sim.serving_protocol import InferenceFailure, InferenceRuntime
 from manabot.sim.threads import REPLAY_BUDGET
+from managym.journal import DurableJournal
 
 
 def failure_record(

@@ -1,0 +1,116 @@
+"""Standalone recording survives abrupt native boundaries without training."""
+
+from pathlib import Path
+import subprocess
+import sys
+
+import pytest
+
+import managym
+from managym.recording import ScalarCapture, read_failure
+from managym.replay import replay_failure_inputs, require_replay_runtime
+
+
+@pytest.mark.parametrize(
+    "method,phase",
+    [("semantic_decision_frame_json", "preparing"), ("step", "executing")],
+)
+def test_standalone_interrupted_prefix(tmp_path: Path, method: str, phase: str) -> None:
+    path = tmp_path / "game.jsonl"
+    code = """
+import os, sys
+from pathlib import Path
+import managym
+from managym.recording import ScalarCapture
+class ExitNative:
+    def __init__(self, native): self.native = native
+    def __getattr__(self, name):
+        if name == sys.argv[2]: return lambda *a, **k: os._exit(73)
+        return getattr(self.native, name)
+game = managym.Env(seed=24)
+capture = ScalarCapture(24, journal_path=Path(sys.argv[1]), context={"attempt": "standalone"})
+capture.reset(game, [managym.PlayerConfig(n, {"Mountain": 20}) for n in ("a", "b")])
+capture.step(game, 0)
+assert not any(n.split('.')[0] in {"manabot", "torch", "etude"} for n in sys.modules)
+capture.step(ExitNative(game), 0)
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", code, str(path), method],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 73, result.stderr
+    evidence = read_failure(path)
+    assert evidence.boundary is not None
+    assert evidence.boundary.phase == phase
+    assert not evidence.boundary.returned
+    assert evidence.context["attempt"] == "standalone"
+    assert path.stat().st_mode & 0o777 == 0o600
+    require_replay_runtime(
+        evidence.identities, allow_changed_runtime=False, require_source=True
+    )
+    replay = replay_failure_inputs(evidence, statistics=True)[0]
+    assert replay["statistics"]["seed"] == 24
+    assert replay["status"] == "advanced"
+    assert replay["original_outcome"] == "execution_outcome_unknown"
+
+
+def test_legacy_source_is_not_reinterpreted(tmp_path: Path) -> None:
+    capture = ScalarCapture(7, journal_path=tmp_path / "game.jsonl")
+    game = managym.Env(seed=7)
+    capture.reset(game, [managym.PlayerConfig(n, {"Mountain": 20}) for n in ("a", "b")])
+    identities = dict(capture.identities)
+    identities["source_sha256"] = identities.pop("engine_recording_source_sha256")
+    with pytest.raises(ValueError, match="legacy source"):
+        require_replay_runtime(
+            identities, allow_changed_runtime=False, require_source=True
+        )
+    require_replay_runtime(identities, allow_changed_runtime=True, require_source=True)
+    identities["world"] = "wrong-world"
+    with pytest.raises(ValueError, match="world differs"):
+        require_replay_runtime(
+            identities, allow_changed_runtime=True, require_source=True
+        )
+
+
+def test_standalone_vector_records_global_streams(tmp_path: Path) -> None:
+    from managym.recording import CapturedVector
+
+    capture = CapturedVector(
+        num_envs=2, seed=17, stream_offset=8, journal_path=tmp_path / "vector.jsonl"
+    )
+    capture.enable_statistics()
+    capture.reset_all([managym.PlayerConfig(n, {"Mountain": 20}) for n in ("a", "b")])
+    capture.step([0, 0])
+    evidence = read_failure(tmp_path / "vector.jsonl")
+    assert [game.stream for game in evidence.games] == [8, 9]
+    assert [game.actions for game in evidence.games] == [[0], [0]]
+    assert [row.stream for row in capture.statistics()] == [8, 9]
+    assert all(
+        result["status"] == "advanced" for result in replay_failure_inputs(evidence)
+    )
+
+
+def test_standalone_command_journal_and_statistics(tmp_path: Path) -> None:
+    import json
+
+    from managym.decision import Command
+
+    game = managym.Env(seed=17)
+    indexed = managym.Env(seed=17)
+    game.enable_statistics()
+    indexed.enable_statistics()
+    players = [managym.PlayerConfig(n, {"Mountain": 20}) for n in ("a", "b")]
+    capture = ScalarCapture(17, journal_path=tmp_path / "command.jsonl")
+    capture.reset(game, players)
+    indexed.reset(players)
+    frame = json.loads(game.semantic_decision_frame_json())
+    command = Command("one", frame["revision"], frame["offers"][0]["id"]).to_json()
+    capture.command(game, command)
+    indexed.step(0)
+    assert game.statistics().cards == indexed.statistics().cards
+    evidence = read_failure(tmp_path / "command.jsonl")
+    assert evidence.boundary.returned and evidence.boundary.phase == "ready"
+    assert evidence.games[0].actions == [command]
+    assert replay_failure_inputs(evidence)[0]["status"] == "advanced"

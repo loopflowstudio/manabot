@@ -356,8 +356,8 @@ def test_checkpoint_observation_bounds_survive_selected_replay(tmp_path):
 def test_shared_writer_keeps_eval_pending_unknown_and_torn_records_fail_closed(
     tmp_path: Path,
 ) -> None:
-    from manabot.infra.journal import DurableJournal
     from manabot.sim.replay import read_game_journal
+    from managym.journal import DurableJournal
 
     path = tmp_path / "private/game.jsonl"
     journal = DurableJournal(path)

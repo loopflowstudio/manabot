@@ -8,10 +8,11 @@ from typing import Any, Dict, Literal, Optional, Tuple
 import numpy as np
 import torch
 
-from manabot.env.failures import CapturedVector, resolve_player_policies
+from manabot.env.failures import CapturedVector
 from manabot.env.match import Match, Reward
 from manabot.env.observation import PERMANENT_TYPES_INDEX, ObservationSpace
 import managym
+from managym.recording import resolve_player_policies
 
 
 class VectorEnv:

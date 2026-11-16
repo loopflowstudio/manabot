@@ -17,12 +17,7 @@ from manabot.backends.torch.collection import (
 )
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
-from manabot.env.failures import (
-    CaptureScope,
-    capture_scope,
-    read_failure,
-    runtime_identities,
-)
+from manabot.env.failures import CaptureScope, capture_scope, runtime_identities
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.env.replay import require_replay_runtime
@@ -41,6 +36,7 @@ from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.verify.store import VerifyStore
 import managym
 from managym.decision import Command
+from managym.recording import read_failure
 
 
 def _model() -> ActorCritic:
@@ -405,7 +401,7 @@ def test_search_slot_failures_replay(tmp_path: Path) -> None:
 def test_capture_write_failure_does_not_mask_native_error(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from manabot.env import failures
+    from managym import recording as failures
 
     env = _env()
     env.reset()
@@ -565,3 +561,28 @@ def test_strict_uniform_capture_replays_actual_sampled_root(tmp_path: Path) -> N
     assert evidence.games[0].actions == [0, -1]
     result = _bounded(scope.paths[0])["results"][0]
     assert result["matches_error"]
+
+
+def test_search_construction_failure_retains_original_error(tmp_path: Path) -> None:
+    from manabot.env.failures import CapturedSearch
+
+    scope = CaptureScope(tmp_path)
+    with capture_scope(scope):
+        env = _env()
+        env.reset()
+        original = managym.AgentError("search construction failed")
+
+        class BrokenSearch:
+            def semantic_decision_frame_json(self) -> str:
+                return env._engine.semantic_decision_frame_json()
+
+            def rollout_pool(self, *args: int) -> None:
+                raise original
+
+        with pytest.raises(managym.AgentError) as failed:
+            CapturedSearch(
+                env._capture, BrokenSearch(), "rollout_pool", [1, 1, 197, 100]
+            )
+    assert failed.value is original
+    evidence = read_failure(scope.paths[0])
+    assert evidence.mode == "search" and evidence.error == str(original)

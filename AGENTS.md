@@ -301,6 +301,11 @@ the last live projection's events so combat history survives scalar calls and
 exact forks. Player policies belong to Env/VectorEnv chooser seats, separate
 from rules/deck PlayerConfig and world identity.
 
+Optional statistics and private recording share native setup, movement and
+committed-choice facts. Search clones omit those sinks and their copy provenance;
+transactional rollback snapshots must restore them. Training supplies recorder
+paths and phase markers; engine recording never discovers training scope.
+
 ## Forced decisions
 
 Every game runner, benchmark and Academy session uses native trivial-decision

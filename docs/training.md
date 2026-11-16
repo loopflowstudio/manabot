@@ -877,6 +877,15 @@ recover an unfinished game's inputs from an earlier run that omitted logging.
 With logging off, there are no additional diagnostic native reads or durable
 per-step writes.
 
+Game facts, optional statistics and private recording belong to managym and
+can be used [without the training package](engine-python.md#collect-in-game-statistics).
+Training selects that recorder and supplies producer paths, run coordinates,
+retention and the outer phase markers. `--training-game-logs` does not enable
+aggregate statistics or audited evaluation eligibility. Statistics can count
+play without detailed logs, but cannot explain a native call that never returns.
+The training exposure option retains detailed facts for analysis; it is distinct
+from both in-memory statistics and durable pending-call recording.
+
 ### Locate the interrupted operation
 
 Read `operation.json` alongside the producer journals. It identifies the

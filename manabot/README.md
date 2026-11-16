@@ -109,7 +109,9 @@ To diagnose a future training stall, opt into durable pending-call journals
 with `uv run manabot train --recipe local --training-game-logs --out .runs/journal-demo`.
 The private `game-journals/` directory retains compacting producer replay journals
 and an active operation marker that distinguishes native work from inference
-and learning. Logging defaults off and can substantially reduce throughput;
+and learning. Game recording and independent in-game statistics are owned by
+[managym](../docs/engine-python.md#collect-in-game-statistics); training adds
+producer coordination and phase markers. Logging defaults off and can reduce throughput;
 see [diagnosing stalled training](../docs/training.md#diagnosing-stalled-training)
 for remote job configuration, inspection, replay and retention limits.
 
