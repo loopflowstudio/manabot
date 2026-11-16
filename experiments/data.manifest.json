@@ -40942,6 +40942,30 @@
    "sha256": "d9116119cd34c36a5e44f00620d591db8f8f895810ee2527ecca5517094e8cc4",
    "bytes": 15171
   },
+  "experiments/data/opponent-memory/20261116-independent-host-attempt1/failure.json": {
+   "sha256": "819e77bf4df79d13e16d76f47c46c6051ef4296c80b0592bee88891faedeff11",
+   "bytes": 432
+  },
+  "experiments/data/opponent-memory/20261116-independent-host-attempt1/source.json": {
+   "sha256": "4c2a8a18066e3fa696c39f2196dd3343782f2a97abb78cece763c581b9c5e7ba",
+   "bytes": 371
+  },
+  "experiments/data/opponent-memory/20261116-independent-host-attempt1/source.patch": {
+   "sha256": "600eb52e6af3c4f105371f5d230d770588a2bab390596688ae7fa170e46937b3",
+   "bytes": 13948
+  },
+  "experiments/data/opponent-memory/20261116-independent-host/receipt.json": {
+   "sha256": "98cc7aca5bc9534c1cb2b44af0dd4d940cd36625068e17692e28f8ddcd31a874",
+   "bytes": 23143
+  },
+  "experiments/data/opponent-memory/20261116-independent-host/source.json": {
+   "sha256": "68600855ec94533422096ec91addc84395d7df6492c544ec4a0308577cfbd450",
+   "bytes": 598
+  },
+  "experiments/data/opponent-memory/20261116-independent-host/source.patch": {
+   "sha256": "122d1981cbf0fa77d84575f413542f12b16f9c56598ec51484c2325be0530e4a",
+   "bytes": 21786
+  },
   "experiments/data/opponent-memory/20261116-storage/receipt.json": {
    "sha256": "95fdf09cd706d6e81e3659dcdf2b2bd51ade330f49b2ee727f6caf7721fd569e",
    "bytes": 3121

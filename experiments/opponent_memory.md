@@ -5,7 +5,7 @@
 **Exploratory.** Can a learned memory of the opponent's past decisions become
 an affordable training basis without materially hurting throughput or early
 learning? Census and controlled storage measurements are retained below;
-calibration, training and paired evaluation have not run. The USD 50 allocation is a
+GPU calibration, training and paired evaluation have not run. The USD 50 allocation is a
 budget, not a measured cost. No playing-strength finding follows from this report.
 
 The incumbent is the current no-history policy. The best guess is a small
@@ -573,3 +573,85 @@ matched learner decisions, full histories and inclusive USD 50 cap are unchanged
 No training/evaluation rental or pilot ran in this iteration.
 
 Validation: `uv run --extra dev pytest tests/training/test_memory_execution_rows.py -q` — 18 passed. Simulation/collection, precision and CI-selection checks — 76 passed. The required backend checks passed after moving malformed-bootstrap rejection coverage from construction to the bootstrap read; MLX cases were skipped because MLX is unavailable. Retained prefix/recovery and ordinary memory-update checks passed. Training CI includes both memory test files; its exact training invocation collected 423 tests. Artifact tracking, Ruff and `git diff --check` passed. Full gate and CUDA admission remain outstanding.
+
+### Independent-game host measurement, 2026-11-16
+
+Select **2/2/2 collection/bootstrap/learner execution rows** for the pilot's
+initial CUDA admission. Keep 256 streams, the 64-decision floor, complete-game
+closure, full 1,024/1,048,576 record/detail capacities and all five arms. These
+are concrete resource limits awaiting device admission, not a changed learner
+clock or optimizer schedule.
+
+The first host attempt reached complete-game closure, then failed before model
+execution: Torch incorrectly required memory heads whenever observations
+retained logs. Its [failure](data/opponent-memory/20261116-independent-host-attempt1/failure.json)
+and measured source are retained, without a host-peak claim. The existing
+admission path now derives retained input from observation capacities and
+learned memory from summary count. The no-history control retains and validates
+logs but creates no memory parameters or prepared memory features. Its outputs
+match the incumbent exactly, and ordinary checkpoint reload preserves its input
+space. Focused model/preparation checks: 54 passed.
+
+Command: `uv run --no-sync python scripts/verify_opponent_memory_storage.py --independent-games --source experiments/data/opponent-memory/20261116-census/summary.json --out experiments/data/opponent-memory/20261116-independent-host/receipt.json --collection-rows 2 --bootstrap-rows 2 --learner-rows 2`.
+This mode uses independently seeded native games over the uniform Elemental
+roster, four production native producers and uniform legal actions. It retains
+every sampled viewer prefix through the floor and complete-game closure. The
+production ordinary-row recorder starts with its 25% spare capacity; this
+measurement also retains dense legal-action fields for resampling, rather than
+claiming an exact production packed-action footprint.
+
+All native buffers and recorded rows stay live while each arm samples, runs
+frozen inference, bootstraps and executes PPO with three concurrent policy
+copies, Adam and actual one-ahead preparation. One 256-row logical minibatch
+selects each stream's largest observed prefix. Update targets are a fixed
+numerical fixture, not game outcomes. This measures concurrent host
+ownership with independent games; it does not execute the whole cohort's
+on-policy worker update, change the pilot's logical minibatches, or measure
+learning or throughput. Learned-game tails can differ. CUDA peak measurement,
+ordinary worker/update and checkpoint reload remain prerequisites before Etude
+wiring, within the existing USD 3 calibration allowance and inclusive USD 50 cap.
+
+The [successful receipt](data/opponent-memory/20261116-independent-host/receipt.json)
+retains **52,304 decision prefixes** from **259 completed games**, with 64–597
+decisions per stream. Selected complete prefixes contain 9,214–579,591 detail
+rows. Native memory buffers occupy **8,608,808,960 bytes** (all native fields:
+8,666,700,288 bytes). Retained unique chunks occupy **867,925,248 bytes**, plus
+79,950,282 bytes of Python metadata and interning indexes. Ordinary recorder
+allocation is 18,524,405,760 bytes, including unused spare pages and the dense
+action fields; allocation is not the same as resident memory. The store
+receipt's `selected_padding_bytes` is arithmetic for gathering every retained
+prefix together; that padding was never allocated.
+
+The measured **concurrent process-tree peak is 29,347,774,464 bytes (27.33 GiB)**,
+below the declared 40 GiB host limit for this cohort. The process high-water RSS
+agrees; its peak occurs during cohort recording/growth. After complete-game
+closure, phase-end RSS is 22,421,291,008 bytes. Each arm below retains that cohort
+and the full native buffers through its three-policy execution.
+
+| Arm | Sampled concurrent host RSS peak (bytes) |
+| --- | ---: |
+| No history | 23,021,436,928 |
+| Transformer, one summary | 26,183,073,792 |
+| Transformer, four summaries | 26,068,205,568 |
+| GRU, one summary | 25,943,195,648 |
+| GRU, four summaries | 26,023,559,168 |
+
+All five arms complete with finite outputs, gradients and weights, 256 optimizer
+exposures and one Adam step; all four memory arms have nonzero encoder gradients.
+The control's serialized summary setting is ignored: it produces zero memory
+tokens. RSS is sampled every 20 ms; short transients can be missed and allocator
+retention carries across arms. High-water RSS is cumulative, not an independent
+arm peak. This is float32 CPU execution with one Torch thread. All CUDA allocated,
+reserved and peak fields are null. The 670.59-second measurement is not a training
+throughput result, and the observed host fit does not guarantee learned-game fit.
+
+Both attempts are manifest-backed. Each source patch reconstructs its measured
+checkout from `b859eb68dd41f09f16f790a887b6e1a70c05f56e`; companion source metadata
+records patch, lock and native-extension hashes. All seven source hashes in the
+successful receipt match the checkout. Earlier receipts remain unchanged. No
+rental, paid calibration, learning pilot or evaluation ran. Etude job construction
+stays stopped pending CUDA peaks, the ordinary worker/update, checkpoint reload
+and matched-decision horizon calibration.
+
+
+Validation: `uv run --no-sync pytest tests/model/test_opponent_memory.py tests/model/test_prepare_rows.py -q` — 54 passed; artifact tracking guard — one passed. Ruff, patch reconstruction check and `git diff --check` passed. Full gate remains outstanding.

@@ -553,7 +553,10 @@ storage are implemented as a bounded draft. The original dense rollout would nee
 but the controlled size proof does not establish host or GPU fit at the census
 maxima. Bootstrap retains prefixes; controlled CPU execution reports host
 residency separately from device inputs and activations.
-Resource sizing, CUDA admission and the five-arm pilot remain outstanding; the intended interface follows.
+An independent 256-stream CPU cohort now has a measured 27.33 GiB host peak
+with 2/2/2 execution limits; see the [resource report](../experiments/opponent_memory.md#independent-game-host-measurement-2026-11-16)
+for its scope. CUDA worker admission and the five-arm pilot remain outstanding;
+the intended interface follows.
 
 To let a Torch policy use the opponent's earlier choices, select an encoder and
 one or four summary tokens in its model configuration:
@@ -587,6 +590,12 @@ both summary counts with a no-history control.
 | `opponent_memory_summaries` | 1 or 4 for either encoder; default 4. Ignored when memory is `"none"`. |
 | `attention_on`, `policy_film` | Both must be `True` for memory. FiLM carries board context to actions without focus objects. |
 | `recent_events` | Must be `False` when opponent memory is enabled. The bounded event encoder remains a separate option. |
+
+A no-history control can use `opponent_memory="none"` with the same positive
+observation capacities. Native encoding, immutable prefix retention and input
+validation still carry the full log. The control creates no memory parameters
+or prepared memory features, and its current-state predictions match the
+incumbent. Checkpoints retain the declared observation capacities in every arm.
 
 Both encoders use record width 64 and zero dropout. The transformer has two
 layers, four heads and feedforward width 128. The GRU has one layer with hidden
@@ -656,9 +665,11 @@ at most one chunk ahead. Full histories remain intact even for an execution
 chunk of one row; inability to fit that row is a calibration failure.
 
 Host RSS and device memory remain separate limits. CPU chunk parity and
-residency measurements do not admit a CUDA worker or establish independent-game
-storage, throughput or playing strength. Recipes without memory retain their
-historical execution when row limits are omitted.
+residency measurements do not admit a CUDA worker, guarantee learned-game
+storage, or establish throughput or playing strength. The independent-game host
+measurement covers its recorded cohort and one logical execution minibatch.
+Recipes without memory retain their historical execution when row limits are
+omitted.
 
 Record and companion-row capacities belong to the supplied observation space:
 `ObservationConfig.max_opponent_records` and `max_opponent_details`. Both default

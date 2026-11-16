@@ -83,11 +83,11 @@ def legal_mask(mask: np.ndarray) -> np.ndarray:
 
 def check(obs: ObservationBuffers, spec: Spec, legal: np.ndarray) -> None:
     """Admit raw rows before masking or trimming; legal-mask errors belong to the backend."""
-    enabled = spec.model.opponent_memory != "none"
-    if enabled != ("opponent_records" in obs):
+    retained = bool(spec.space.encoder.config.max_opponent_records)
+    if retained != ("opponent_records" in obs):
         raise ValueError("opponent-memory model and input contract disagree")
     admit_memory(obs)
-    if enabled:
+    if retained:
         for key in ("opponent_records", "opponent_details"):
             expected = spec.space.encoder.shapes[key]
             if isinstance(obs, CompactObservation):
@@ -119,7 +119,7 @@ def check(obs: ObservationBuffers, spec: Spec, legal: np.ndarray) -> None:
         ids.extend((obs["known_hand"][..., 0], obs["decklists"][..., 0]))
     if spec.space.encoder.one_token:
         ids.append(obs["stack"][..., STACK_DEFINITION_INDEX])
-    if enabled:
+    if retained:
         details = obs["opponent_details"]
         ids.append(record_word(details, 5)[details[..., 4] == -3])
     for values in ids:

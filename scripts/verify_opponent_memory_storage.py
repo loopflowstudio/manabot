@@ -1,9 +1,9 @@
-"""Controlled storage accounting at retained census counts, without game load.
+"""Opponent-memory ownership and bounded execution measurements.
 
-This is a size proof, not a throughput or CUDA admission benchmark. It builds
-one valid synthetic prefix at the measured maxima and measures actual ownership,
-selected raw gather, preparation and chunked execution. Larger storage envelopes are arithmetic;
-no full padded rollout or resource-pressure fixture is allocated.
+Default mode uses one controlled census-maximum prefix. --independent-games
+instead retains real Elemental games beside 256 native buffers, then executes
+one logical minibatch for all five arms. Neither mode establishes throughput,
+learning or CUDA worker admission. No artificial resource pressure is induced.
 """
 
 import argparse
@@ -42,12 +42,18 @@ from manabot.env.memory_store import (
     restore_memory,
 )
 from manabot.env.observation import ObservationSpace
-from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.infra.profiler import Profiler
-from manabot.sim.rollout import BatchedSampler
+from manabot.sim.rollout import BatchedSampler, RandomBatchController, allocate_buffers
 from manabot.training.regime import Learning
 from manabot.training.rollout.actions import ACTION_FIELDS, PackedActions
-from manabot.training.rollout.collection import RecordedObservations, RolloutBatch
+from manabot.training.rollout.collection import (
+    RecordedObservations,
+    RolloutBatch,
+    _ObservationRows,
+)
+from manabot.training.rollout.matchups import elemental_roster
+from manabot.training.rollout.producers import ShardedVectorEnv
 from manabot.training.updates.ppo import update_iteration
 import managym
 
@@ -129,23 +135,35 @@ def execution_proof(
     collection_rows: int,
     bootstrap_rows: int,
     learner_rows: int,
+    independent: bool = False,
 ) -> list[dict[str, object]]:
-    """Exercise real chunk paths with full maximum prefixes and a final short chunk.
+    """Exercise collection, frozen inference, bootstrap and PPO chunk paths.
 
-    Three policies coexist (learner, bootstrap/EMA, frozen opponent), along with
-    Adam and PPO's actual one-ahead host preparation. Native independent-game
-    buffers remain an arithmetic envelope, not allocated resource pressure.
+    Three policies coexist with Adam and actual one-ahead host preparation.
+    Default mode repeats a controlled maximum prefix and a final short chunk;
+    independent mode uses the supplied cohort without repeating any prefix.
+    Its caller retains the native buffers and all recorded rows throughout.
     """
     results: list[dict[str, object]] = []
-    logical_rows = max(collection_rows, bootstrap_rows, learner_rows) * 2 + 1
-    rows = PrefixObservation(
-        {k: np.repeat(v, logical_rows, axis=0) for k, v in retained.items()},
-        retained.prefixes * logical_rows,
-        retained.memory_capacities,
+    logical_rows = (
+        len(retained.prefixes)
+        if independent
+        else max(collection_rows, bootstrap_rows, learner_rows) * 2 + 1
     )
-    encoders: tuple[Literal["transformer", "gru"], ...] = ("transformer", "gru")
+    rows = (
+        retained
+        if independent
+        else PrefixObservation(
+            {k: np.repeat(v, logical_rows, axis=0) for k, v in retained.items()},
+            retained.prefixes * logical_rows,
+            retained.memory_capacities,
+        )
+    )
+    encoders: tuple[Literal["none", "transformer", "gru"], ...] = (
+        ("none", "transformer", "gru") if independent else ("transformer", "gru")
+    )
     for encoder in encoders:
-        for summaries in (1, 4):
+        for summaries in (4,) if encoder == "none" else (1, 4):
             gc.collect()
             if device.type == "cuda":
                 torch.cuda.empty_cache()
@@ -222,14 +240,15 @@ def execution_proof(
                 )
                 del model.prepare_admitted, model.forward_distribution
                 phases["after_adam"] = residency(device)
-                assert model.opponent_memory is not None
-                gradients = [
-                    p.grad
-                    for p in model.opponent_memory.parameters()
-                    if p.grad is not None
-                ]
-                assert gradients and all(torch.isfinite(g).all() for g in gradients)
-                assert any(g.abs().sum() > 0 for g in gradients)
+                gradients = []
+                if model.opponent_memory is not None:
+                    gradients = [
+                        p.grad
+                        for p in model.opponent_memory.parameters()
+                        if p.grad is not None
+                    ]
+                    assert gradients and all(torch.isfinite(g).all() for g in gradients)
+                    assert any(g.abs().sum() > 0 for g in gradients)
                 assert all(torch.isfinite(p).all() for p in model.parameters())
                 assert all(
                     state["step"].item() == 1
@@ -254,6 +273,17 @@ def execution_proof(
                     phases=phases,
                 )
             )
+            if independent:
+                print(
+                    json.dumps(
+                        dict(
+                            encoder=encoder,
+                            summaries=summaries,
+                            execution_complete=True,
+                        )
+                    ),
+                    flush=True,
+                )
             del (
                 model,
                 learner,
@@ -521,8 +551,205 @@ def measure(
     }
 
 
+def independent_measure(
+    source: Path,
+    *,
+    device_name: str,
+    collection_rows: int,
+    bootstrap_rows: int,
+    learner_rows: int,
+) -> dict[str, object]:
+    """Measure real independent Elemental histories beside full native buffers.
+
+    Uniform legal play generates resource inputs, not learning evidence. Keep
+    every prefix through a 64-decision floor and complete-game closure in each
+    stream. Execute one 256-row logical minibatch, selecting each stream's largest
+    prefix. The full retained cohort and four native producers stay live through
+    all five arms. This does not admit an on-policy CUDA worker or its throughput.
+    """
+    streams, floor = 256, 64
+    host_limit = 40 * 1024**3
+    device = torch.device(device_name)
+    if device.type == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("CUDA requested but unavailable; no fallback")
+    census = json.loads(source.read_text())
+    capacities = (int(census["record_capacity"]), int(census["detail_capacity"]))
+    space = ObservationSpace(
+        ObservationConfig(
+            max_opponent_records=capacities[0],
+            max_opponent_details=capacities[1],
+        )
+    )
+    torch.set_num_threads(1)
+    match = Match(
+        MatchConfig.authored(
+            "elemental-world-v2",
+            "elemental_ug",
+            "elemental_bg",
+        )
+    )
+    buffers = allocate_buffers(space, streams)
+    store = MemoryStore(capacities)
+    # Use the production recorder, including legal action fields for later
+    # resampling. It excludes the dense history axes exactly as collection does.
+    floor_rows = streams * floor
+    recorded = _ObservationRows(
+        buffers, list(space.keys()), floor_rows + floor_rows // 4
+    )
+    native = ShardedVectorEnv(streams, 39101, 4)
+    random = RandomBatchController(39101)
+    counts = np.zeros(streams, np.int64)
+    generations = np.zeros(streams, np.int64)
+    completed = np.zeros(streams, np.int64)
+    active = np.ones(streams, bool)
+    largest = np.zeros(streams, np.int64)
+    sizes = np.full(streams, -1, np.int64)
+    phases: dict[str, dict[str, int | None]] = {}
+    started = time.perf_counter()
+    try:
+        with HostPeak() as peak:
+            native.set_buffers(buffers)
+            native.set_uniform_roster(elemental_roster(match))
+            native.reset_all_into_buffers(match.to_rust())
+            phases["native_reset"] = residency(device)
+            # Refuse a broken control contract before generating the cohort.
+            control = ActorCritic(space, ModelConfig(world=managym.WORLD_SETUP))
+            control.prepare(
+                {
+                    key: value[:1]
+                    for key, value in buffers.items()
+                    if key in space.keys()
+                }
+            )
+            del control
+            rounds = 0
+            while active.any():
+                if rounds >= 2000:
+                    raise RuntimeError(
+                        "independent cohort exceeded 2000 decisions; no truncation admitted"
+                    )
+                if residency(device)["host_tree_rss_bytes"] > host_limit:
+                    raise RuntimeError("independent cohort exceeded 40 GiB host limit")
+                indexes = np.flatnonzero(active)
+                viewers = native.current_agent_indices()
+                prefixes = tuple(
+                    store.capture(
+                        buffers,
+                        int(row),
+                        PrefixIdentity(
+                            f"stream-{row}-game-{generations[row]}",
+                            viewers[row],
+                            "root",
+                        ),
+                    )
+                    for row in indexes
+                )
+                start = recorded.append(indexes, prefixes=prefixes)
+                for offset, (row, prefix) in enumerate(
+                    zip(indexes, prefixes, strict=True)
+                ):
+                    if prefix.detail_count > sizes[row]:
+                        largest[row], sizes[row] = start + offset, prefix.detail_count
+                actions = np.zeros(streams, np.int64)
+                actions[indexes] = random.select(buffers, indexes)
+                native.step_into_buffers(actions.tolist(), active.tolist())
+                counts[indexes] += 1
+                done = active & (
+                    (buffers["terminated"] > 0) | (buffers["truncated"] > 0)
+                )
+                if (active & (buffers["truncated"] > 0)).any():
+                    raise RuntimeError(
+                        "independent game truncated; cohort not admitted"
+                    )
+                completed[done] += 1
+                generations[done] += 1
+                active[done & (counts >= floor)] = False
+                rounds += 1
+                if rounds % 32 == 0:
+                    print(
+                        json.dumps(
+                            dict(
+                                round=rounds,
+                                rows=recorded.rows,
+                                active=int(active.sum()),
+                            )
+                        ),
+                        flush=True,
+                    )
+            phases["retained_complete_games"] = residency(device)
+            arrays = recorded.arrays()
+            selected = PrefixObservation(
+                {key: value[largest] for key, value in arrays.items()},
+                [recorded.memory[int(i)] for i in largest],
+                capacities,
+            )
+            ownership = store.measure(recorded.memory)
+            execution = execution_proof(
+                space,
+                selected,
+                device,
+                collection_rows=collection_rows,
+                bootstrap_rows=bootstrap_rows,
+                learner_rows=learner_rows,
+                independent=True,
+            )
+            phases["after_execution"] = residency(device)
+        return dict(
+            fixture="independent Elemental uniform legal games; no synthetic prefixes",
+            source_sha256={
+                str(path): sha256(path.read_bytes()).hexdigest()
+                for path in (
+                    Path(__file__).relative_to(Path.cwd()),
+                    Path("manabot/env/memory_store.py"),
+                    Path("manabot/training/rollout/collection.py"),
+                    Path("manabot/training/rollout/producers.py"),
+                    Path("manabot/backends/torch/policy.py"),
+                    Path("manabot/policy/admission.py"),
+                    Path("manabot/policy/prepare.py"),
+                )
+            },
+            world=managym.WORLD_VERSION,
+            seed=39101,
+            device=device_name,
+            cuda_available=torch.cuda.is_available(),
+            torch_version=str(torch.__version__),
+            capacities=list(capacities),
+            streams=streams,
+            native_producers=4,
+            minimum_decisions_per_stream=floor,
+            stream_decisions=counts.tolist(),
+            stream_completed_games=completed.tolist(),
+            retained_rows=recorded.rows,
+            selected_logical_rows=streams,
+            selected_detail_counts=sizes.tolist(),
+            retained_prefixes=ownership,
+            native_buffer_bytes=sum(v.nbytes for v in buffers.values()),
+            native_memory_buffer_bytes=sum(buffers[k].nbytes for k in MEMORY_FIELDS),
+            ordinary_retained_allocated_bytes=sum(
+                v.nbytes for v in recorded._arrays.values()
+            ),
+            host_tree_peak_sampled_bytes=peak.peak,
+            host_limit_bytes=host_limit,
+            host_tree_sample_interval_seconds=0.02,
+            sampled_host_peak_within_limit=peak.peak <= host_limit,
+            elapsed_seconds=time.perf_counter() - started,
+            phases=phases,
+            execution_proof=execution,
+            limitations=[
+                "Random legal actions size host ownership; no on-policy learning or throughput claim.",
+                "One 256-row logical minibatch executes while the whole cohort stays live; not a whole worker update.",
+                "Sampled RSS may miss transients; allocator retention carries across arms.",
+                "CUDA peaks, actual worker update and checkpoint reload remain required before Etude wiring.",
+                "Learned-game tails may exceed these independent random games; full census capacity is unchanged.",
+            ],
+        )
+    finally:
+        native.close()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--independent-games", action="store_true")
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
@@ -543,14 +770,26 @@ def main() -> None:
         < 1
     ):
         parser.error("stream and selected row counts must be positive")
-    result = measure(
-        args.source,
-        streams=args.streams,
-        selected_rows=args.selected_rows,
-        device_name=args.device,
-        collection_rows=args.collection_rows,
-        bootstrap_rows=args.bootstrap_rows,
-        learner_rows=args.learner_rows,
+    if args.independent_games and (args.streams != 256 or args.selected_rows != 256):
+        parser.error("independent pilot proof requires 256 streams and selected rows")
+    result = (
+        independent_measure(
+            args.source,
+            device_name=args.device,
+            collection_rows=args.collection_rows,
+            bootstrap_rows=args.bootstrap_rows,
+            learner_rows=args.learner_rows,
+        )
+        if args.independent_games
+        else measure(
+            args.source,
+            streams=args.streams,
+            selected_rows=args.selected_rows,
+            device_name=args.device,
+            collection_rows=args.collection_rows,
+            bootstrap_rows=args.bootstrap_rows,
+            learner_rows=args.learner_rows,
+        )
     )
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(result, indent=2) + "\n")
@@ -565,6 +804,7 @@ def main() -> None:
                     "device_limit_bytes",
                     "archive_identity_round_trip",
                 )
+                if key in result
             }
         )
     )

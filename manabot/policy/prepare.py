@@ -668,7 +668,7 @@ def prepare(
         else None,
         belief=belief,
         events=_events(obs, tables, objects),
-        memory=prepare_memory(obs, tables),
+        memory=prepare_memory(obs, tables) if memory_summaries else None,
         live_index=np.flatnonzero(present) if live_tokens else None,
         live_offsets=np.concatenate(([0], present.sum(1).cumsum()))
         if live_tokens

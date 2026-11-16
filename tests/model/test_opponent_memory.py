@@ -283,3 +283,45 @@ def test_opponent_memory_collects_bootstraps_and_learns_from_real_prefixes(
         assert all(torch.isfinite(parameter).all() for parameter in model.parameters())
     finally:
         collector.close()
+
+
+def test_no_history_control_retains_logs_without_using_them(tmp_path: Path) -> None:
+    space, obs = memory_input()
+    config = ModelConfig(world=managym.WORLD_SETUP, hidden_dim=16)
+    torch.set_num_threads(1)
+    torch.manual_seed(23)
+    model = ActorCritic(space, config).eval()
+    assert model.opponent_memory is None
+    assert model.prepare(obs).memory is None
+    blank = blank_memory(obs)
+    for actual, expected in zip(
+        forward(model, obs), forward(model, blank), strict=True
+    ):
+        torch.testing.assert_close(actual, expected, atol=0, rtol=0)
+    # Retaining the shared native input must not grow the incumbent's vocabulary
+    # or parameters, or change its current-state predictions.
+    ordinary = {
+        k: v
+        for k, v in obs.items()
+        if k not in ("opponent_records", "opponent_details")
+    }
+    torch.manual_seed(23)
+    incumbent = ActorCritic(ObservationSpace(), config).eval()
+    assert list(model.state_dict()) == list(incumbent.state_dict())
+    for actual, expected in zip(
+        forward(model, obs), forward(incumbent, ordinary), strict=True
+    ):
+        torch.testing.assert_close(actual, expected, atol=0, rtol=0)
+    path = tmp_path / "control.safetensors"
+    save_checkpoint(model, space, path, player_configs=Match().to_rust())
+    restored, restored_space = load_checkpoint(str(path))
+    assert restored_space == space
+    for actual, expected in zip(
+        forward(restored.eval(), obs), forward(model, obs), strict=True
+    ):
+        torch.testing.assert_close(actual, expected, atol=0, rtol=0)
+    with pytest.raises(ValueError, match="contract"):
+        model.prepare(ordinary)
+    malformed = {**obs, "opponent_details": obs["opponent_details"][:, :1]}
+    with pytest.raises(ValueError):
+        model.prepare(malformed)

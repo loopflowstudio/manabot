@@ -142,9 +142,9 @@ class ActorCritic(nn.Module):
 
         # Extract dimensions from the observation encoder.
         enc = observation_space.encoder
-        if (config.opponent_memory != "none") != bool(enc.config.max_opponent_records):
+        if config.opponent_memory != "none" and not enc.config.max_opponent_records:
             raise ValueError(
-                "opponent-memory model and explicit observation capacities must agree"
+                "opponent-memory model requires explicit observation capacities"
             )
         if config.opponent_memory != "none" and not config.catalog_records():
             raise ValueError("opponent memory requires a catalog world")
