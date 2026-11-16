@@ -542,3 +542,10 @@ it with `uv run --no-project python -m managym.replay <file>` on the recorded
 runtime (or explicitly allow a changed runtime for diagnostic replay). Old
 Command traces and event journals remain readable; constructed scenario roots
 continue to use Command traces.
+
+An audit-view dictionary has the retained Command-trace shape and carries its
+canonical `record`; it is a derived view for reports, not another stored
+trajectory. Completion and winner come from the record ending. Runner failures
+stay in private evaluation context; only a captured native exception marks the
+record as failed. Interrupted endings carry a reason token such as `command_cap`,
+`truncated` or `crash`, without exposing exception text in Academy.

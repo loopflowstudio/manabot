@@ -493,3 +493,48 @@ def test_canonical_journal_retains_worker_loss_at_native_boundary(
     replay = walk(record)
     assert list(replay) == []
     assert replay.stop is not None and replay.stop.status == "interrupted"
+
+
+def test_player_crash_is_an_interrupted_record(monkeypatch: pytest.MonkeyPatch) -> None:
+    from manabot.sim.matchup import selected_match
+    from manabot.sim.native_game import execute_game
+    from managym.recording import GameRecord
+    from managym.replay import walk
+
+    _, players = selected_players()
+
+    class BrokenPlayer:
+        def act(self, env: object, obs: object) -> int:
+            raise RuntimeError("private policy detail")
+
+    monkeypatch.setattr(
+        "manabot.sim.native_game.build_code_player", lambda *a, **kw: BrokenPlayer()
+    )
+    game = dict(
+        match_id="player-crash",
+        deal_seed=83,
+        leg=0,
+        seat_players=[p.player_id for p in players],
+        player_seeds={p.player_id: 7 for p in players},
+        match_hypers=selected_match().model_dump(),
+        decisions=[],
+        integrity=dict(
+            private_exposures=0, root_mutations=0, illegal_actions=0, truncations=0
+        ),
+    )
+    messages: list[tuple[str, Any]] = []
+    execute_game(game, players, {}, 1, messages.append)
+    result = messages[-1][1]
+    record = GameRecord.model_validate(result["record"])
+    assert record.error_class is None and record.error is None
+    assert record.execution_outcome == "last_command_succeeded"
+    assert not record.needs_reproduction
+    assert record.context["evaluation"]["termination_reason"] == "crash"
+    assert "private policy detail" in record.context["evaluation"]["failure"]
+    end = record.games[0].end
+    assert end is not None and end.status == "interrupted" and end.reason == "crash"
+    assert "terminated" not in record.context["evaluation"]
+    assert "winner" not in record.context["evaluation"]
+    replay = walk(record)
+    assert list(replay) == []
+    assert replay.stop is not None and replay.stop.status == "interrupted"

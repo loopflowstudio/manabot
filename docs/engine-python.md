@@ -201,7 +201,7 @@ statistics; add `statistics_path` to collect those independently.
 | `games_path` | File that receives one row per finished game. Without it nothing is written at game end. Give each producer its own file. |
 | `record_fraction` | Share of games to record, `1.0` by default. A game is selected at reset from its seed and stream, never from engine or policy randomness, so the same run selects the same games. An unselected game costs no extra native read. |
 | `statistics_path` | Private native summaries for every game, independent of record selection. |
-| `journal_path` | [Durable journal](#keep-a-durable-journal) of the game in progress. |
+| `journal_path` | [Durable journal](#keep-a-durable-journal) of the game in progress. On its own, it records digests and annotations at the default fraction, without requiring a games file. Set `record_fraction=0` for diagnostic cursors without digest reads. |
 | `context` | Your own labels (run, update, attempt), kept with every row and never shown to an Academy viewer. |
 
 `annotation` is optional per step and says what the chooser knew:

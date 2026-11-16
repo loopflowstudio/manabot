@@ -396,3 +396,46 @@ assert performance.excluded_games == 6
     subprocess.run(
         [sys.executable, "-c", script, str(tmp_path)], check=True, timeout=30
     )
+
+
+@pytest.mark.parametrize("complete", [False, True])
+def test_journal_only_retains_verifiable_game(tmp_path: Path, complete: bool) -> None:
+    path = tmp_path / "journal.jsonl"
+    capture = ScalarCapture(seed=7, journal_path=path)
+    env = managym.Env(seed=7)
+    capture.reset(env, players())
+    for _ in range(1000 if complete else 1):
+        capture.step(env, 0, annotation={"value": 0.31})
+        if env.is_game_over():
+            break
+    capture.close(reason="command_cap")
+    record = read_record(path)
+    replay = walk(record)
+    decisions = list(replay)
+    assert len(decisions) == len(record.games[0].actions)
+    assert all(
+        d.annotation is not None and d.annotation.value == 0.31 for d in decisions
+    )
+    assert replay.stop is not None
+    assert replay.stop.status == ("complete" if complete else "interrupted")
+    assert record.games[0].end is not None
+    if not complete:
+        assert record.games[0].end.reason == "command_cap"
+    assert list(tmp_path.iterdir()) == [path]
+
+
+def test_native_error_remains_native_in_journal(tmp_path: Path) -> None:
+    path = tmp_path / "journal.jsonl"
+    capture = ScalarCapture(
+        seed=7, journal_path=path, failure_directory=tmp_path / "failures"
+    )
+    env = managym.Env(seed=7)
+    capture.reset(env, players())
+    with pytest.raises(managym.AgentError):
+        capture.step(env, 99999)
+    capture.close(reason="crash")
+    record = read_record(path)
+    assert record.error_class == "PyAgentError"
+    assert record.execution_outcome == "failed"
+    assert record.needs_reproduction
+    assert record.games[0].committed == 0

@@ -282,8 +282,8 @@ class Env(gym.Env):
                 self._capture.inputs,
             )
 
-    def close(self) -> None:
-        self._capture.close()
+    def close(self, *, reason: str = "capture closed") -> None:
+        self._capture.close(reason=reason)
         self._capture.flush_policy_actions()
 
     @property

@@ -369,7 +369,11 @@ class _GameJournal:
             if boundary.returned and evidence.mode == "scalar"
             else "execution_outcome_unknown"
         )
-        if self.evidence is None:
+        if (
+            self.evidence is None
+            or evidence.error_class is not None
+            or self.evidence.error_class is not None
+        ):
             # Reconstruct typed fields without recursively deepcopying prefixes;
             # opaque caller metadata must retain its Python representation.
             retained = GameRecord.model_validate(
@@ -382,7 +386,9 @@ class _GameJournal:
                 }
             )
             retained.boundary = boundary.model_copy(deep=True)
-            retained.execution_outcome = outcome
+            retained.execution_outcome = (
+                "failed" if evidence.error_class is not None else outcome
+            )
             if not executing:
                 for game in retained.games:
                     game.frame = None
@@ -532,6 +538,7 @@ class _Capture:
         self._statistics_generations: dict[int, int] = {}
         self.started = time.perf_counter()
         self._failed = False
+        self._raised: GameRecord | None = None
         self.identities = runtime_identities().copy()
         self.context = dict(context or {})
         self.context_provider = context_provider
@@ -577,7 +584,9 @@ class _Capture:
             self._profiler_requested = False
 
     def _selected(self, game: GameInputs) -> bool:
-        if self.games_path is None or self.record_fraction == 0:
+        if (
+            self.games_path is None and self._game_journal is None
+        ) or self.record_fraction == 0:
             return False
         value = hashlib.sha256(f"{game.seed}:{game.stream}".encode()).digest()
         return int.from_bytes(value[:8], "big") < self.record_fraction * 2**64
@@ -588,8 +597,10 @@ class _Capture:
         game.end = end
         record = self._snapshot()
         record = record.model_copy(update={"games": [game], "boundary": None})
-        assert self.games_path is not None
-        self._append_row(self.games_path, record.model_dump(mode="json", by_alias=True))
+        if self.games_path is not None:
+            self._append_row(
+                self.games_path, record.model_dump(mode="json", by_alias=True)
+            )
 
     def _append_row(self, path: Path, row: object) -> None:
         output = self._outputs.get(path)
@@ -715,6 +726,8 @@ class _Capture:
             )
 
     def _returned(self) -> None:
+        self._raised = None
+        self._failed = False
         if self._game_journal is not None:
             assert self._boundary is not None and self._call_evidence is not None
             self._boundary.returned = True
@@ -754,6 +767,18 @@ class _Capture:
         return GameRecord.model_validate(
             {
                 **fields,
+                **(
+                    {
+                        "error_class": self._raised.error_class,
+                        "error": self._raised.error,
+                        "traceback": self._raised.traceback,
+                        "execution_outcome": "failed",
+                    }
+                    if self._raised is not None
+                    else {"execution_outcome": "last_command_succeeded"}
+                    if self._boundary is not None and self._boundary.returned
+                    else {}
+                ),
                 "identities": self.identities,
                 **self._coordinates(),
             }
@@ -786,6 +811,9 @@ class _Capture:
             retained.error_class = type(error).__name__
             retained.error = str(error)
             retained.traceback = "".join(traceback.format_exception(error))
+            self._raised = retained
+            if self._game_journal is not None and self._boundary is not None:
+                self._publish(retained, self._boundary.phase)
             path = self._retain(retained)
             error.add_note(f"Private native failure evidence: {path}")
         except Exception as capture_error:
@@ -896,16 +924,16 @@ class ScalarCapture(_Capture):
                 rows.append(current)
             self._write_statistics(rows)
 
-    def close(self) -> None:
+    def close(self, *, reason: str = "capture closed") -> None:
         if self._env is not None:
             self._finish_reducers(
-                self._env, GameEnd(status="interrupted", reason="capture closed")
+                self._env, GameEnd(status="interrupted", reason=reason)
             )
         self._write_game(
             self.inputs,
             GameEnd(
                 status="failed" if self._failed else "interrupted",
-                reason="capture closed",
+                reason=reason,
                 digest=(
                     self._env.state_digest()
                     if self._env is not None
@@ -915,6 +943,8 @@ class ScalarCapture(_Capture):
                 ),
             ),
         )
+        if self._game_journal is not None and self._boundary is not None:
+            self._publish(self._snapshot(), self._boundary.phase)
         self._flush_statistics(partial=True)
         self._close_output()
 
@@ -1367,7 +1397,7 @@ class CapturedVector(_Capture):
         if restarted:
             self._flush_statistics()
         players = self.native.current_player_configs() if restarted else []
-        infos = self.native.get_last_info() if self.games_path is not None else []
+        infos = self.native.get_last_info() if any(self.recording_mask()) else []
         for index in restarted:
             game = self.games[index]
             if game.actions and self._selected(game):
@@ -1489,7 +1519,9 @@ class CapturedVector(_Capture):
             on and self._selected(game)
             for on, game in zip(enabled, self.games, strict=True)
         ]
-        if self.games_path is not None and self.record_fraction > 0:
+        if self.record_fraction > 0 and (
+            self.games_path is not None or self._game_journal is not None
+        ):
             self.native.record_games(selected_games)
         digests = (
             self.native.state_digests(selected_games)

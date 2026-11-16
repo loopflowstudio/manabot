@@ -29,11 +29,6 @@ def stored_game(game: dict[str, Any]) -> dict[str, Any]:
 def bind_record(game: dict[str, Any], record: GameRecord) -> None:
     """Freeze settled runner metadata alongside the capture's native inputs."""
     metadata = evaluation_metadata(game)
-    if (error_class := game.get("error_class")) is not None:
-        record.error_class = error_class
-        record.error = str(game.get("failure", "")).removeprefix(f"{error_class}: ")
-        record.traceback = game.get("failure_trace")
-        record.execution_outcome = "failed"
     record.context["evaluation"] = metadata
     game["record"] = record.model_dump(mode="json", by_alias=True)
     game["game_trace_sha256"] = record.sha256
@@ -50,6 +45,9 @@ def evaluation_metadata(game: dict[str, Any]) -> dict[str, Any]:
             "pending_decision",
             "game_trace_sha256",
             "capture_path",
+            "winner",
+            "terminated",
+            "initial_state_digest",
         }
     }
 
@@ -83,6 +81,16 @@ def audit_view(data: dict[str, Any], *, digest: str | None = None) -> dict[str, 
         inputs["digests"]
     ) != len(inputs["actions"]):
         raise ValueError("evaluation inputs lack aligned digests or annotations")
+    end = inputs.get("end")
+    game["terminated"] = end is not None and end["status"] == "complete"
+    game["winner"] = end.get("winner") if game["terminated"] else None
+    game["initial_state_digest"] = (
+        inputs["digests"][0]
+        if inputs["digests"]
+        else end.get("digest")
+        if end
+        else None
+    )
     decisions = []
     for index, annotation in enumerate(inputs["annotations"]):
         if annotation is None or "evaluation" not in annotation["extra"]:

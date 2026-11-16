@@ -217,15 +217,15 @@ def execute_game(
                 )
                 capture = ScalarCapture(
                     game["deal_seed"],
-                    games_path=Path(temporary.name) / "games.jsonl",
                     journal_path=capture_path,
                     context={"source_kind": "evaluation"},
                     context_provider=lambda: {"evaluation": evaluation_metadata(game)},
                     failure_directory=capture_path.parent,
                 )
             env, obs = replay_environment(game, space, capture=capture)
-        game["initial_state_digest"] = env._engine.state_digest()
-        send(("initial", game["initial_state_digest"]))
+        if capture is None:
+            game["initial_state_digest"] = env._engine.state_digest()
+            send(("initial", game["initial_state_digest"]))
         for seat, player_id in enumerate(game["seat_players"]):
             player = built[player_id][0]
             if in_child.starts_game(player):
@@ -303,7 +303,7 @@ def execute_game(
             responsible = None
             send(("phase", None))
             decision = {
-                **decision_row(env, frame, action),
+                **decision_row(env, frame, action, retain_digest=capture is None),
                 "revision": revision,
                 "player_id": player_id,
                 "player_seed": game["player_seeds"][player_id],
@@ -368,7 +368,8 @@ def execute_game(
                 )
             perf.record("native_step_and_encoding", native_started)
             perf.count("native_step_calls")
-            decision["post_state_digest"] = env._engine.state_digest()
+            if capture is None:
+                decision["post_state_digest"] = env._engine.state_digest()
             game.pop("pending_decision", None)
             game["decisions"].append(decision)
             decision_counts[player_id] += 1
@@ -412,7 +413,7 @@ def execute_game(
     if env is not None:
         if env.obs_space.encoder.config.action_overflow == "first-legal":
             game["policy_action_cutoff"] = env._capture.policy_action_report()
-        env.close()
+        env.close(reason=game["termination_reason"])
         if capture is not None:
             # The journal includes a rejected/pending call; viewing never executes it.
             record = (
