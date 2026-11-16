@@ -104,7 +104,7 @@ class SearchDecision(BotDecision):
     mirror: SearchSummary | None = None
 
 
-NATIVE_PHYSICAL_BELIEF = "managym.determinize/physical-deal/v1"
+NATIVE_PHYSICAL_BELIEF = "managym.determinize/physical-deal/v2"
 MIRROR_METHOD = "regularized-local-update"
 
 

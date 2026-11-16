@@ -9,7 +9,7 @@ possible worlds. The physical baseline ignores behavioral history deliberately.
 import json
 from typing import Callable, Literal, Protocol
 
-from manabot.belief.sampling_data import public_sampler_input
+from manabot.belief.sampling_data import hand_sampling_pool, public_sampler_input
 from manabot.belief.sampling_types import SamplerInput, SamplerSchema, sampling_digest
 from manabot.belief.state import ViewerHistory
 from manabot.sim.search.sampling_receipt import (
@@ -71,7 +71,7 @@ def _batch(
 
 
 class PhysicalHandSampler:
-    """Exact physical-deal measure after removing publicly known hand minima."""
+    """Exact physical-deal measure after reserving known hand and library copies."""
 
     kind: Literal["compatible_prior"] = "compatible_prior"
     identity = PHYSICAL_SAMPLER_IDENTITY
@@ -91,10 +91,13 @@ class PhysicalHandSampler:
             raise ValueError("sampling history does not match current observation")
         encoded = engine.hidden_hand_constraints_json(history.viewer)
         constraints = json.loads(encoded)
-        names = tuple(sorted(constraints["pool"]))
+        pool = hand_sampling_pool(
+            constraints["pool"], constraints.get("known_library", {})
+        )
+        names = tuple(sorted(pool))
         inputs = SamplerInput(
             sampling_digest({"method": self.identity, "names": names}),
-            tuple(constraints["pool"][name] for name in names),
+            tuple(pool[name] for name in names),
             tuple(constraints["known_hand"].get(name, 0) for name in names),
             constraints["hand_size"],
             (),

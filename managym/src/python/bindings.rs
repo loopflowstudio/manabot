@@ -354,6 +354,17 @@ fn encoded_to_dict<'py>(
             &[2, config.max_cards_per_player],
         )?,
     )?;
+    if config.known_library_len() > 0 {
+        dict.set_item(
+            "known_library",
+            to_numpy_array_f32(
+                py,
+                &np,
+                &encoded.known_library,
+                &[2, crate::state::knowledge::KNOWN_LIBRARY_ROWS, 2],
+            )?,
+        )?;
+    }
     dict.set_item(
         "known_hand",
         to_numpy_array_f32(
@@ -1213,6 +1224,8 @@ pub struct PyPlayer {
     pub graveyard_lessons: i32,
     #[pyo3(get)]
     pub known_hand: BTreeMap<u32, u32>,
+    #[pyo3(get)]
+    pub known_library: BTreeMap<u32, u32>,
     /// Decklist counts by definition; `None` when the opponent's decklist is
     /// closed to this observation's viewer.
     #[pyo3(get)]
@@ -1539,6 +1552,7 @@ impl From<PlayerData> for PyPlayer {
             zone_counts: value.zone_counts.to_vec(),
             graveyard_lessons: value.graveyard_lessons,
             known_hand: value.known_hand,
+            known_library: value.known_library,
             main_counts: value.main_counts,
             unseen_counts: value.unseen_counts,
             sideboard_counts: value.sideboard_counts,
@@ -1581,6 +1595,7 @@ impl From<PyPlayer> for PlayerData {
             zone_counts,
             graveyard_lessons: value.graveyard_lessons,
             known_hand: value.known_hand,
+            known_library: value.known_library,
             main_counts: value.main_counts,
             unseen_counts: value.unseen_counts,
             sideboard_counts: value.sideboard_counts,

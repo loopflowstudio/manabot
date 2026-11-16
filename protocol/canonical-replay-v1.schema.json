@@ -1554,6 +1554,14 @@
             "minimum": 0
           }
         },
+        "known_library": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
         "lesson_mana": {
           "type": [
             "array",

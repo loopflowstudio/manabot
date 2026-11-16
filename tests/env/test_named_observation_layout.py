@@ -102,7 +102,7 @@ def test_named_layout_describes_tagged_rows_and_history() -> None:
     assert raw["stack"]["columns"]["source"]["kind"] == "reference"
     legacy = managym.observation_layout(legacy=True)
     assert legacy["agent_permanents"]["columns"]["valid"]["index"] == 37
-    assert raw.keys() - legacy.keys() == {"stack", "stack_valid"}
+    assert raw.keys() - legacy.keys() == {"stack", "stack_valid", "known_library"}
     assert not raw["action_focus"]["columns"]
     assert raw["action_focus"]["element"]["kind"] == "reference"
 
