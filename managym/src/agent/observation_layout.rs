@@ -785,7 +785,7 @@ mod tests {
             }
             // Numeric ABI: changing a width is a layout change that checkpoints see.
             for (key, width, abi) in [
-                ("agent_player", player::WIDTH, 73),
+                ("agent_player", player::WIDTH, 74),
                 ("agent_cards", card::WIDTH, 56),
                 (
                     "agent_permanents",
