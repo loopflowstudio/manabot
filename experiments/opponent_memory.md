@@ -19,8 +19,9 @@ judgment, not a precomputed verdict.
 
 ## Method (planned, not executed)
 
-A supervised probe comes first, then three paid arms with three independent
-training seeds each, sharing seed labels across arms for blocking. The seed, not
+A supervised probe comes first, then three paid arms across three independent
+seed labels, shared across arms for blocking: nine runs, not nine independent
+seeds. The seed, not
 an evaluation game, is the unit of learning evidence. No factorial cross and no
 dedicated control-deck training arm in this pilot; stratify the existing
 Elemental matchups instead.
@@ -53,12 +54,29 @@ rule fixed across arms. Use the baseline's 64-wide two-layer board attention,
 masked-mean value and FiLM in every arm, so J1 also reaches objectless actions.
 Override sampled_self_play's per-wall fitted schedule with one calibrated
 learner-decision schedule across arms and disable capacity recovery; long-game
-overflow must remain a visible failure. Initialize fresh models; checkpoints from before the
-layout change cannot be rebound. Keep parameter counts visible: these are design
-alternatives with different costs, not parameter-matched architecture claims.
-Run all arms on one new input layout and retain all log records even for the
-control; measure the common log/encoding overhead against pre-change replay
-receipts separately, so a shared input cost is not hidden by the control.
+overflow must remain a visible failure. Keep parameter counts visible: these are
+design alternatives with different costs, not parameter-matched architecture claims.
+Use the true history-disabled incumbent as the throughput reference. A control
+that retains the log isolates encoder/join cost, but cannot establish the total
+cost of adding memory. Report native capture, encoding and host transport
+separately; the shared engine still captures decisions with history input disabled.
+
+### Common-trunk initialization (planned, unimplemented)
+
+Branch each seed's three arms from one compatible current-layout trunk checkpoint,
+with an explicit copy of matching shared parameters and recorded source identities.
+The arms do not start as unrelated randomly initialized agents. Older-world
+checkpoints cannot be rebound or admitted by bypassing world/shape checks.
+The three seed labels 39101–39103 provide independent learning units; the three
+branches within each label form a blocked comparison.
+
+Before the pilot, implement and prove a control-equivalent J1 initialization:
+matching ordinary inputs must produce the incumbent's action distribution and
+value at initialization, and a staged gradient check must show how learning
+reaches the new join and memory encoder. Zero-valued summaries alone are not
+inert attention tokens. The explicit shared-parameter copy, gated join and these
+proofs are deferred; current CPU timing does not establish them. Probe-first K
+selection precedes this three-arm pilot.
 
 ### Shared software before a paid run
 
@@ -124,7 +142,8 @@ this one experiment.
    the training allowance; date that choice here before training. If three arms
    cannot fit meaningful learning, report that rather than covertly narrowing the
    comparison or making a learning claim from smoke updates.
-3. **Learning pilot, at most USD 27.** Nine fresh runs, seeds 39101–39103,
+3. **Learning pilot, at most USD 27.** Nine runs from compatible common trunks,
+   three arms × three independent seed labels 39101–39103,
    three arms, at most USD 3.00 each including startup and finalization. Inspect
    PR #547 / Task 4b0591 before freezing: if mixed per-game disclosure training
    has landed, use a balanced open/closed mix identically across arms; otherwise
@@ -872,3 +891,119 @@ learnability or strength results. Two later behavior-preserving simplifications
 (`Prefix.tables`, a hoisted `definition_programs()` lookup) passed the same
 corpus; the final measurement re-freezes their source hashes. Receipts remain
 local in `.runs/decision-memory-admission/` until evidence packaging.
+
+## Final post-sync admission measurement — 2026-11-16
+
+**Better for CPU log-control collection.** On the same post-sync release engine, five
+alternating processes per source give **1.709 [1.672, 1.924] → 0.771 [0.690, 0.898] s
+per 250 decisions / two completed games**. The only substituted production behavior is
+the old versus final admission implementation. Ranges separate; the narrow admission
+software remains justified. This measurement adds no production optimization and makes
+no policy-adoption claim.
+
+The final true history-disabled incumbent is **0.446 [0.420, 0.835] s**, so log control
+is **1.730×** its median. The approximately 10% throughput guide is not established by
+these CPU timings. Both arms still share native decision capture; the history-disabled
+input does not measure a pre-feature engine. No CUDA, learner-update/backward, peak
+RSS/host-fit, probe, learnability or strength result exists. Own-seat inclusion stays
+default false and is uncosted.
+
+Collection shares (median per-run fractions): native step/capture 1.9%, encoding 1.6%,
+host transport 16.1%, preparation 37.2%, nested validation 23.0%, Torch forward 35.6%,
+residual 7.9%. Validation is nested inside preparation and capture admission is inside
+transport; do not add nested validation to disjoint totals. Removing encoding entirely
+saves at most 1.6% of this path. Baseline transport+prepare occupies 79.2%; removing all
+of it bounds total speedup at 4.80×. Separate profiles map the admission hot spot to
+policy/decision_memory.py, MemoryStore.capture and Admission.check; production
+preparation and forward remain costs. Profile wall times are excluded from all tables.
+
+The engine was rebuilt from synced revision `7adcb0943a6d443f75c8131bafd742b34afb51b4`
+in release for CPython 3.13 and atomically installed, SHA256
+`8d4e83e9e0850e0c07d2837acab8203cd29847fc47de0b5aabddce9523c0722d`. Baseline uses only
+admit_memory/validate_memory_vocabulary from exact commit f5688cf686 before consumer
+imports; all other final Python code, current collector/journal/statistics paths and the
+native binary are shared. Source/harness hashes match before/after. Frozen pre-sync
+receipts are historical and untouched. No world/layout change was made in this
+measurement, so no new world-shape sweep was added.
+
+Five alternating source processes per scalar/collector arm; prefixes use five process
+medians of five warmed operations each (25 samples per arm/prefix). Scalar: 160 choices.
+Collection: two streams, execution_rows=2, complete-game closure,250 learner/environment
+decisions, two games,146 inference calls and 42 idle slots. Prefixes: 0/34/52/484 real
+records at seed 166 steps 0/80/160/600. Empty and long prefixes distinguish easier and
+harder work. Float32 CPU, seeded 1 weights, cached production PolicyInference,
+Torch/inter-op threads=1. All ordinary work, current recording-wrapper bookkeeping,
+native capture/encoding, host capture/admission, preparation, forward and assembly
+execute within collection timing; scalar wall includes ordinary digest work. Ordinary
+collector digests are checked outside timing. Durable journals, native statistics and
+recovery remain at their actual disabled defaults in this harness. Enabled
+journal/statistics correctness is covered separately; no enabled workload was silently
+timed or omitted.
+
+Zero measurement errors, rejected games or truncations. Scalar state/ordinary digests
+and collector ordinary/action/logprob/value/reward/done digests agree across both sides
+and repeats. All four learned prefix outputs match exactly across validators and
+repetitions; incumbent/control no-head outputs match. Untimed contracts verify 320
+scalar viewer histories and 251 collector/bootstrap views per side, independent
+native/Python encoding, canonical frozen histories and ordinary buffers. Every prefix
+process rejects NaN padding in all four companions. The rebuilt-extension differential
+proof has 4,298 cases and zero mismatches; this finite corpus does not prove exhaustive
+equivalence or first-error precedence. Focused checks and exact commands are in
+checks.json and check-*.log.
+
+Shared host: Apple M4 Max / 128 GiB, macOS, CPython 3.13.15, Torch 2.15.0. One-minute
+load endpoints 11.87–23.96; no induced load, discarded outliers or tuning changes. Cold-
+worker/warm-prefix procedures match, but OS cache identity and scheduler contention are
+uncontrolled. Overlapping metric ranges are no measurable difference, regardless of
+median movement. A quieter matched-host repeat would settle those costs. Common-trunk
+parameter copy/control-equivalent initialization and CUDA/update/resource admission
+remain planned, unimplemented prerequisites to the learning pilot.
+
+Commands: uv run --no-sync python .runs/decision-memory-final/checks.py; then
+measure.py, which freezes identities, runs separate history/prefix contracts and
+profiles, performs five alternating pairs and checks digests/source identities. All
+workers are sequential and reaped. Exact source bytes, old/final profiles, raw receipts,
+commands, replay/census proofs and the verified lossless 1,024-file census archive are
+packaged under experiments/data/opponent-memory/20261116-final. Publication is recorded
+separately in the experiment report and artifact manifest; raw local files are retained.
+
+ ### Additional final readouts
+
+Scalar log-path wall time is better: **0.490 [0.482, 0.594] → 0.130 [0.129, 0.151] s per
+160 choices**, n=5 per side. At 484 records dense admission is **13.545 [13.269, 14.124]
+→ 0.710 [0.670, 0.765] ms** (five process medians, five inner samples each). All four
+484-record learned prepare+forward ranges separate: GRU-K1 **25.795 [25.602, 26.366] →
+13.100 [12.454, 13.268] ms**; GRU-K4 **25.940 [25.759, 26.124] → 13.005 [12.827, 13.509]
+ms**; transformer-K1 **32.919 [31.914, 33.150] → 19.616 [19.228, 20.483] ms**;
+transformer-K4 **32.875 [32.095, 33.106] → 20.084 [19.392, 21.009] ms**. These are
+admission-cost comparisons within unchanged learned models, with exactly matching
+outputs; they do not rank encoder quality or establish learning equivalence. Prefix-only
+unchanged native encoding and forward measurements cannot be attributed to validator
+changes; scheduler variation remains a limitation.
+
+Separate profiles retain 397 structural admissions on each side (251 captures +146
+prepared batches), while `np.isin` calls fall 83,856→7,575 and `array_equal`
+calls84,724→4,287. The final path still performs 587 parameter-version enumerations
+(`policy.py:651`), as does baseline. Source mapping is `decision_memory.py:80/81`,
+`memory_store.py:233`, `admission.py:84`; counts and full profiles are retained in
+profile-counts.json and *-attribution.prof. Unchanged forward/cache work and shared-host
+contention mean the whole observed 2.215× collection multiplier cannot be assigned to
+admission alone, although its reduction is both explained and arithmetically within the
+4.80× host-work bound.
+
+Focused post-sync validation: 23 native debug tests passed; 81 journal/recording/replay
+tests and 188 storage/execution/model/admission/package tests passed (one demo case
+deliberately deselected); 4,298 differential comparisons, zero mismatches. No test
+exceeded its watchdog. No new production code, model/layout change, probe, rental, paid
+call, child agent or Graph movement occurred.
+
+Evidence publication completed through Doppler-injected artifact CLI: 19 manifest
+entries under `experiments/data/opponent-memory/20261116-final` (seven verified bundles,
+per-file manifests, census proof and publication receipt). The original 18 files total
+83,368,982 bytes; all match the published content-addressed manifest. Every archived
+member was verified locally, including all 1,024 census logs; no fresh remote-fetch
+round trip was performed. Raw logs and historical receipts remain local and untracked.
+The artifact guard passed; no servers, watchers or background workers remain. This is
+software/cost evidence only: the 10% guide, common-trunk/control-equivalent
+initialization, CUDA/update/resource admission, probe, learnability and strength remain
+unresolved.
