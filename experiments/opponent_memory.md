@@ -108,8 +108,10 @@ keep the current small Elemental board model, optimizer, precision and learning
 rule fixed across arms. Use the baseline's 64-wide two-layer board attention,
 masked-mean value and FiLM in every arm, so J1 also reaches objectless actions.
 Override sampled_self_play's per-wall fitted schedule with one calibrated
-learner-decision schedule across arms and disable capacity recovery; long-game
-overflow must remain a visible failure. Keep parameter counts visible: these are
+learner-decision schedule across arms. Pilot capacities come from a USD0
+heuristic Elemental census (3 of 60 probe games exceeded 8,192 reference rows);
+overflow is never truncated, and whether an overflowing paid game is aborted and
+counted per arm or ends the run is decided before launch. Keep parameter counts visible: these are
 design alternatives with different costs, not parameter-matched architecture claims.
 Use the true history-disabled incumbent as the throughput reference. A control
 that retains the log isolates encoder/join cost, but cannot establish the total
