@@ -874,9 +874,8 @@ ends are written as interrupted.
 Records hold both decks and the seed; keep them as private as the run.
 Statistics computed from them
 ([reducers](engine-python.md#ask-questions-of-recorded-games)) describe the
-recorded fraction, not every training game. The planned CUDA comparison and its
-current admission blocker are tracked in
-[recording cost](../experiments/recording_cost.md).
+recorded fraction, not every training game. Their CUDA cost is not yet
+measured; [recording cost](../experiments/recording_cost.md) is the comparison.
 
 `TrainingJob.training_exposure` is the former name of `record_games="all"`; it
 warns and is removed in 0.4.0. Runs no longer write `training/exposure`
@@ -1029,8 +1028,7 @@ and a temporary checkpoint during compaction. Directory entries are synced on
 creation/replacement. Phase-only changes do not serialize action prefixes, but
 fresh decision frames still need serialization and each boundary needs durable
 I/O. This is the cost of the `detailed` level; the `standard` level writes
-only the operation marker. CUDA rates remain unmeasured; the planned comparison
-and admission evidence are in
+only the operation marker. CUDA rates are not yet measured; the comparison is
 [recording cost](../experiments/recording_cost.md).
 
 A deterministic fixture with a 10,000-action prefix and five publications wrote
