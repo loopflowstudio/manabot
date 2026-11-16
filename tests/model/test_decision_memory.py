@@ -658,3 +658,142 @@ def test_no_head_selected_programs_ignore_admitted_historical_definitions() -> N
     )
     for a, b in zip(actual, expected, strict=True):
         torch.testing.assert_close(a, b, atol=0, rtol=0)
+
+
+@pytest.mark.parametrize(
+    ("field", "row", "column", "value"),
+    [
+        ("decision_records", 0, 1, 1),  # ordinal must start at zero
+        ("decision_records", 0, 3, 0),  # positive multiplicity
+        ("decision_records", 0, 7, 1),  # chronological span
+        ("decision_records", 0, 9, 1),
+        ("decision_records", 0, 10, 5),
+        ("decision_records", 0, 11, 12),
+        ("decision_records", 0, 18, 0),
+        ("decision_records", 0, 15, -1),
+        ("decision_records", 0, 15, 1e30),  # reject before allocation/conversion
+        ("decision_records", 0, 63, 2),
+        ("decision_records", 0, 64, 1),  # unavailable selector
+        ("decision_records", 0, 73, 1),  # unavailable declaration
+        ("decision_records", 0, 21, 65536),
+        ("decision_members", 1, 0, 0),
+        ("decision_members", 1, 0, 3),
+        ("decision_members", 2, 1, 1),  # new group starts at zero
+        ("decision_members", 3, 1, 1),
+        ("decision_references", 0, 0, 3),
+        ("decision_references", 0, 1, -1),
+        ("decision_references", 0, 3, 65536),
+        ("decision_references", 0, 6, 2),
+        ("decision_references", 0, 11, -1),
+        ("decision_references", 0, 11, 1e30),
+        ("decision_references", 0, 13, 1),  # shortcut cannot have a program
+        ("decision_reference_details", 0, 1, 0),
+        ("decision_reference_details", 0, 1, 10),
+        ("decision_reference_details", 0, 2, 65536),
+        ("decision_reference_details", 1, 0, 1),  # mana before remaining program
+        ("decision_reference_details", 1, 4, 0),
+        ("decision_reference_details", 2, 1, 4),
+        ("decision_reference_details", 2, 4, 2),
+    ],
+)
+def test_memory_admission_rejects_malformed_owned_tables(
+    field: str, row: int, column: int, value: float
+) -> None:
+    from manabot.policy.decision_memory import admit_memory
+
+    _, obs = _two_reference_input()
+    obs[field][0, row, column] = value
+    with pytest.raises(ValueError):
+        admit_memory(obs)
+
+
+@pytest.mark.parametrize("change", ["first_occurrence", "unreachable", "interleaved"])
+def test_memory_admission_requires_reachable_snapshots_in_first_occurrence_order(
+    change: str,
+) -> None:
+    from manabot.policy.decision_memory import admit_memory
+
+    _, obs = _two_reference_input()
+    if change == "first_occurrence":
+        obs["decision_members"][0, :4, 0] = [2, 1, 2, 1]
+    elif change == "unreachable":
+        obs["decision_members"][0, :4, 0] = 1
+    else:
+        obs["decision_reference_details"][0, [1, 2]] = obs[
+            "decision_reference_details"
+        ][0, [2, 1]]
+    with pytest.raises(ValueError):
+        admit_memory(obs)
+
+
+def test_memory_admission_preserves_own_records_coalescing_and_empty_groups() -> None:
+    from manabot.policy.decision_memory import admit_memory
+
+    _, obs = _two_reference_input()
+    headers = obs["decision_records"]
+    headers[0, 0, [3, 9]] = [3, 2]  # three coalesced opponent decisions
+    headers[0, 1] = headers[0, 0]
+    headers[0, 1, [1, 3, 7, 9, 14, 18]] = [1, 1, 3, 3, 4, 1]
+    headers[0, 1, 15:18] = 0  # own record with no members
+    # Available zero/false selectors differ from unavailable selectors.
+    headers[0, 1, [63, 66, 69, 72]] = 1
+    blank = blank_memory(obs)
+    mixed = {
+        key: np.concatenate((blank[key], value, value), 0) for key, value in obs.items()
+    }
+    admit_memory(mixed)
+    # Compact capacities and noncontiguous views have the same contract.
+    compact = dict(mixed)
+    for key, count in zip(
+        (
+            "decision_records",
+            "decision_reference_details",
+            "decision_references",
+            "decision_members",
+        ),
+        (2, 16, 2, 4),
+        strict=True,
+    ):
+        compact[key] = mixed[key][:, :count]
+    admit_memory(compact)
+    admit_memory({key: value[::-1] for key, value in compact.items()})
+    # Spans must remain contiguous across the actor boundary too.
+    mixed["decision_records"][1, 1, 7] = 4
+    with pytest.raises(ValueError, match="span"):
+        admit_memory(mixed)
+
+
+@pytest.mark.parametrize("include_own", [False, True])
+def test_no_head_admission_respects_own_seat_configuration(include_own: bool) -> None:
+    from manabot.env.observation import ObservationSpace
+
+    space, obs = _shared_reference_input()
+    space = ObservationSpace(
+        space.encoder.config.model_copy(
+            update={"decision_memory_include_own": include_own}
+        )
+    )
+    obs["decision_records"][0, 0, 18] = 1
+    control = ActorCritic(space, ModelConfig(world=managym.WORLD_SETUP, hidden_dim=16))
+    if include_own:
+        assert control.prepare(obs).memory is None
+    else:
+        with pytest.raises(ValueError, match="own-seat"):
+            control.prepare(obs)
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "decision_records",
+        "decision_reference_details",
+        "decision_references",
+        "decision_members",
+    ],
+)
+def test_no_head_admission_rejects_changed_companion_capacity(field: str) -> None:
+    space, obs = _shared_reference_input()
+    obs[field] = np.pad(obs[field], ((0, 0), (0, 1), (0, 0)))
+    control = ActorCritic(space, ModelConfig(world=managym.WORLD_SETUP, hidden_dim=16))
+    with pytest.raises(ValueError, match="capacity mismatch"):
+        control.prepare(obs)

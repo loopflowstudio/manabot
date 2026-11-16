@@ -115,89 +115,106 @@ def admit_memory(obs: "ObservationBuffers") -> None:
                 raise ValueError("unavailable decision-memory selector has a value")
         if records[records[:, 72] == 0, 73].any():
             raise ValueError("unavailable decision-memory declaration has a value")
-        cursor = 0
-        last = -1
-        seen: set[int] = set()
-        for ordinal, header in enumerate(records):
+        # Word arithmetic must be exact even above float32's integer range.
+        temporal = records[:, :10].astype(np.int64).reshape(-1, 5, 2)
+        temporal = temporal[:, :, 0] * 65536 + temporal[:, :, 1]
+        if (
+            not np.array_equal(temporal[:, 0], np.arange(len(records)))
+            or (temporal[:, 1] < 1).any()
+            or not np.array_equal(
+                temporal[:, 3], np.r_[0, temporal[:-1, 4] + 1][: len(records)]
+            )
+            or (temporal[:, 4] - temporal[:, 3] + 1 != temporal[:, 1]).any()
+        ):
+            raise ValueError("invalid decision-memory ordinal, span or multiplicity")
 
-            def word(offset: int) -> int:
-                return int(header[offset]) * 65536 + int(header[offset + 1])
-
-            if (
-                word(0) != ordinal
-                or word(2) < 1
-                or word(6) != last + 1
-                or word(8) - word(6) + 1 != word(2)
-            ):
-                raise ValueError(
-                    "invalid decision-memory ordinal, span or multiplicity"
-                )
-            last = word(8)
-            if header[14] != cursor or (header[15:18] < 0).any():
-                raise ValueError("invalid decision-memory member partition")
-            for count in header[15:18].astype(np.int64):
-                group = joins[cursor : cursor + count]
-                if len(group) != count:
-                    raise ValueError("invalid decision-memory member partition")
-                _integers(group)
-                if (
-                    not np.array_equal(group[:, 1], np.arange(count))
-                    or ((group[:, 0] < 1) | (group[:, 0] > len(references))).any()
-                ):
-                    raise ValueError("invalid decision-memory member join or ordinal")
-                for index in group[:, 0].astype(np.int64):
-                    if int(index) not in seen:
-                        if int(index) != len(seen) + 1:
-                            raise ValueError(
-                                "decision-memory snapshots must be ordered by first occurrence"
-                            )
-                        seen.add(int(index))
-                cursor += int(count)
-        if joins[cursor:].any() or len(seen) != len(references):
+        # Bound before integer conversion/repeat: imported counts can be finite
+        # integers far beyond int64, and may never drive an allocation.
+        raw_counts = records[:, 15:18]
+        member_count = raw_counts.sum(dtype=np.float64)
+        if (raw_counts < 0).any() or member_count > len(joins):
+            raise ValueError("invalid decision-memory member partition")
+        counts = raw_counts.astype(np.int64)
+        record_ends = counts.sum(1).cumsum()
+        if not np.array_equal(records[:, 14], record_ends - counts.sum(1)):
+            raise ValueError("invalid decision-memory member partition")
+        members = joins[: int(member_count)]
+        _integers(members)
+        group_counts = counts.ravel()
+        group_starts = group_counts.cumsum() - group_counts
+        if (
+            not np.array_equal(
+                members[:, 1],
+                np.arange(len(members)) - np.repeat(group_starts, group_counts),
+            )
+            or ((members[:, 0] < 1) | (members[:, 0] > len(references))).any()
+        ):
+            raise ValueError("invalid decision-memory member join or ordinal")
+        identities, first = np.unique(members[:, 0], return_index=True)
+        if len(identities) and (
+            not np.array_equal(identities, np.arange(1, len(identities) + 1))
+            or (np.diff(first) <= 0).any()
+        ):
+            raise ValueError(
+                "decision-memory snapshots must be ordered by first occurrence"
+            )
+        if joins[len(members) :].any() or len(identities) != len(references):
             raise ValueError("unowned decision-memory member or snapshot rows")
         if (
             not np.isin(references[:, 13], (0, 1)).all()
             or ((references[:, 13] == 1) & (references[:, 1] == 0)).any()
         ):
             raise ValueError("invalid decision-memory definition shortcut")
-        cursor = 0
-        for reference in references:
-            start, count = map(int, reference[10:12])
-            if start != cursor or count < 0 or start + count > len(details):
-                raise ValueError("invalid decision-memory reference detail partition")
-            if (
-                reference[1] < 0
-                or not np.isin(reference[0], (0, 1, 2))
-                or not np.isin(reference[6:10], (0, 1)).all()
-            ):
-                raise ValueError("invalid decision-memory reference features")
-            if reference[0] == 0 and (
-                reference[:10].any() or reference[11] != 0 or reference[13] != 0
-            ):
-                raise ValueError("unavailable decision-memory reference has features")
-            part = details[start : start + count]
-            programs = int((part[:, 0] == 0).sum())
-            if (
-                not (part[:programs, 0] == 0).all()
-                or not (part[programs:, 0] == 1).all()
-                or not np.isin(part[:programs, 1], range(1, 10)).all()
-                or not (part[programs:, 1] == -1).all()
-            ):
-                raise ValueError("invalid decision-memory program or mana kind")
-            if (
-                not np.array_equal(part[:programs, 4], np.arange(programs))
-                or not np.array_equal(part[programs:, 4], np.arange(count - programs))
-                or (count - programs) % 6
-            ):
-                raise ValueError("invalid decision-memory program or mana coordinates")
-            if reference[13] and programs:
-                raise ValueError("definition-only snapshot also owns a program")
-            boolean = part[:, 1] == 5
-            if ((part[boolean, 2] != 0) | ~np.isin(part[boolean, 3], (0, 1))).any():
-                raise ValueError("invalid decision-memory boolean token")
-            cursor += count
-        if cursor != len(details):
+
+        raw_counts = references[:, 11]
+        detail_count = raw_counts.sum(dtype=np.float64)
+        if (raw_counts < 0).any() or detail_count > len(details):
+            raise ValueError("invalid decision-memory reference detail partition")
+        counts = raw_counts.astype(np.int64)
+        starts = counts.cumsum() - counts
+        if not np.array_equal(references[:, 10], starts):
+            raise ValueError("invalid decision-memory reference detail partition")
+        if detail_count != len(details):
             raise ValueError("unowned decision-memory reference details")
+        if (
+            (references[:, 1] < 0).any()
+            or not np.isin(references[:, 0], (0, 1, 2)).all()
+            or not np.isin(references[:, 6:10], (0, 1)).all()
+        ):
+            raise ValueError("invalid decision-memory reference features")
+        unknown = references[:, 0] == 0
+        if (
+            references[unknown, :10].any()
+            or references[unknown, 11].any()
+            or references[unknown, 13].any()
+        ):
+            raise ValueError("unavailable decision-memory reference has features")
+
+        # Route every owned detail once. Empty reference slices retain their
+        # place in counts but own no rows; each program must precede its mana.
+        owners = np.repeat(np.arange(len(references)), counts)
+        program = details[:, 0] == 0
+        programs = np.bincount(owners[program], minlength=len(references))
+        positions = np.arange(len(details)) - np.repeat(starts, counts)
+        expected_program = positions < programs[owners]
+        if (
+            not np.array_equal(program, expected_program)
+            or not (details[~program, 0] == 1).all()
+            or not ((details[program, 1] >= 1) & (details[program, 1] <= 9)).all()
+            or not (details[~program, 1] == -1).all()
+        ):
+            raise ValueError("invalid decision-memory program or mana kind")
+        coordinates = np.where(program, positions, positions - programs[owners])
+        if (
+            not np.array_equal(details[:, 4], coordinates)
+            or ((counts - programs) % 6).any()
+        ):
+            raise ValueError("invalid decision-memory program or mana coordinates")
+        if ((references[:, 13] == 1) & (programs > 0)).any():
+            raise ValueError("definition-only snapshot also owns a program")
+        boolean = details[:, 1] == 5
+        if ((details[boolean, 2] != 0) | ~np.isin(details[boolean, 3], (0, 1))).any():
+            raise ValueError("invalid decision-memory boolean token")
 
 
 def validate_memory_vocabulary(obs: "ObservationBuffers", tables: "Tables") -> None:
