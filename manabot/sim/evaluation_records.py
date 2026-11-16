@@ -63,7 +63,10 @@ def finalize_game(game: dict[str, Any]) -> None:
 
 
 def audit_view(data: dict[str, Any], *, digest: str | None = None) -> dict[str, Any]:
-    """Project report fields without invoking an engine or rewriting evidence."""
+    """Derive a retained-trace-shaped view carrying its canonical ``record``.
+
+    Projection invokes no engine and never rewrites persisted evidence.
+    """
     if not is_record(data):
         return data
     # Offline reports project retained JSON without probing the native runtime.

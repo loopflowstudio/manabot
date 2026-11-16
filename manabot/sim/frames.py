@@ -113,6 +113,7 @@ def decision_row(
 
     The caller owns execution and adds post_state_digest only after success.
     Keeping these separate preserves durable evidence of rejected Commands.
+    Captured callers leave state digests to the capture with retain_digest=False.
     """
     offer = next((o for o in frame["offers"] if int(o["id"]) == offer_id), None)
     if offer is None:
