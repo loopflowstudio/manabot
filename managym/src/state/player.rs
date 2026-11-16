@@ -7,7 +7,7 @@ use super::{
     mana::Mana,
 };
 
-/// Whether a player's opponent knows that player's main deck and sideboard.
+/// Whether both players know each other's main deck and sideboard.
 /// An open decklist discloses both lists and a closed one neither; there is
 /// no partial disclosure. Open is the default, and records that predate the
 /// option read as open.
@@ -43,9 +43,6 @@ pub struct PlayerConfig {
         serialize_with = "serialize_submission"
     )]
     pub submitted: bool,
-    /// Serialized only when closed, so default-mode digests are unchanged.
-    #[serde(skip_serializing_if = "DecklistDisclosure::is_open")]
-    pub disclosure: DecklistDisclosure,
 }
 
 fn serialize_submission<S: serde::Serializer>(_: &bool, serializer: S) -> Result<S::Ok, S::Error> {
@@ -58,7 +55,6 @@ impl PlayerConfig {
             name: name.into(),
             deck: Deck::new(decklist, BTreeMap::new()),
             submitted: false,
-            disclosure: DecklistDisclosure::Open,
         }
     }
 
@@ -70,11 +66,6 @@ impl PlayerConfig {
 
     pub fn with_sideboard(mut self, sideboard: BTreeMap<String, usize>) -> Self {
         self.deck.sideboard = sideboard;
-        self
-    }
-
-    pub fn with_disclosure(mut self, disclosure: DecklistDisclosure) -> Self {
-        self.disclosure = disclosure;
         self
     }
 
@@ -95,9 +86,6 @@ pub struct Player {
     pub deck: Vec<CardId>,
     /// Immutable owned outside-game roster; availability is derived from zones.
     pub sideboard: Vec<CardId>,
-    /// What the opponent knows of `deck` and `sideboard`; fixed for the game.
-    #[serde(skip_serializing_if = "DecklistDisclosure::is_open")]
-    pub disclosure: DecklistDisclosure,
     /// Public minimum counts in hand, without physical-copy or slot identity.
     pub known_hand: BTreeMap<CardDefId, u32>,
     #[serde(skip_serializing_if = "super::knowledge::LibraryKnowledge::is_empty")]
@@ -119,7 +107,6 @@ impl Player {
             index,
             deck: Vec::new(),
             sideboard: Vec::new(),
-            disclosure: DecklistDisclosure::Open,
             known_hand: BTreeMap::new(),
             known_library: Default::default(),
             name: name.into(),
@@ -129,5 +116,66 @@ impl Player {
             mana_pool: Mana::default(),
             combat_mana_pool: Mana::default(),
         }
+    }
+}
+
+/// Game-level disclosure selection. Mixed draws one fair, independent coin per
+/// reset seed, without consuming shuffle or roster RNG.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DecklistMode {
+    #[default]
+    Open,
+    Closed,
+    Mixed,
+}
+
+impl From<DecklistDisclosure> for DecklistMode {
+    fn from(disclosure: DecklistDisclosure) -> Self {
+        match disclosure {
+            DecklistDisclosure::Open => Self::Open,
+            DecklistDisclosure::Closed => Self::Closed,
+        }
+    }
+}
+
+impl DecklistMode {
+    pub fn resolve(self, seed: u64) -> DecklistDisclosure {
+        use rand::{Rng, SeedableRng};
+        use rand_chacha::ChaCha8Rng;
+        match self {
+            Self::Open => DecklistDisclosure::Open,
+            Self::Closed => DecklistDisclosure::Closed,
+            Self::Mixed => {
+                let mut rng = ChaCha8Rng::seed_from_u64(seed ^ 0x646973636c6f7365);
+                if rng.gen_bool(0.5) {
+                    DecklistDisclosure::Open
+                } else {
+                    DecklistDisclosure::Closed
+                }
+            }
+        }
+    }
+}
+
+/// Complete root setup; disclosure belongs to the game, never a seat.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GameSetup {
+    pub players: Vec<PlayerConfig>,
+    pub decklists: DecklistMode,
+}
+
+impl From<Vec<PlayerConfig>> for GameSetup {
+    fn from(players: Vec<PlayerConfig>) -> Self {
+        Self {
+            players,
+            decklists: DecklistMode::Open,
+        }
+    }
+}
+
+impl std::ops::Deref for GameSetup {
+    type Target = [PlayerConfig];
+    fn deref(&self) -> &Self::Target {
+        &self.players
     }
 }

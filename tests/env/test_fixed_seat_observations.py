@@ -1,7 +1,5 @@
 """Fixed-seat batch reads match scalar viewer encodings without advancing games."""
 
-from typing import Literal
-
 import numpy as np
 import pytest
 import torch
@@ -12,19 +10,19 @@ from manabot.env.observation import ObservationSpace
 from manabot.env.vector_env import VectorEnv as TorchVectorEnv
 from manabot.infra.config import MatchConfig, ObservationConfig, RewardConfig
 import managym
+from managym.disclosure import DecklistDisclosure
 
 
 def _players(
-    disclosure: Literal["open", "closed"] = "closed",
-) -> list[managym.PlayerConfig]:
-    return [
-        managym.PlayerConfig(
-            "a", {"Mountain": 8, "Gray Ogre": 4}, disclosure=disclosure
-        ),
-        managym.PlayerConfig(
-            "b", {"Island": 8, "Wind Drake": 4}, disclosure=disclosure
-        ),
-    ]
+    disclosure: DecklistDisclosure = "closed",
+) -> managym.GameSetup:
+    return managym.GameSetup(
+        [
+            managym.PlayerConfig("a", {"Mountain": 8, "Gray Ogre": 4}),
+            managym.PlayerConfig("b", {"Island": 8, "Wind Drake": 4}),
+        ],
+        decklists=disclosure,
+    )
 
 
 def _step_buffers(space: ObservationSpace, size: int) -> dict[str, np.ndarray]:
@@ -69,7 +67,7 @@ def _identity(read: managym.ObservationRead) -> tuple[int, int, int]:
 @pytest.mark.parametrize("disclosure", ["open", "closed"])
 @pytest.mark.parametrize("captured", [False, True])
 def test_fixed_seat_scalar_parity_and_unchanged_execution(
-    version: int, disclosure: Literal["open", "closed"], captured: bool
+    version: int, disclosure: DecklistDisclosure, captured: bool
 ) -> None:
     space = ObservationSpace(ObservationConfig(policy_input_version=version))
     vector = (
@@ -83,7 +81,8 @@ def test_fixed_seat_scalar_parity_and_unchanged_execution(
     vector.reset_all_into_buffers(players)
     scalars = [managym.Env(seed=42 + slot) for slot in range(2)]
     for scalar in scalars:
-        scalar.reset(players)
+        observation, _ = scalar.reset(players)
+        assert observation.decklists_closed is (disclosure == "closed")
     buffers = space.encoder.allocate(2)
     try:
         for _ in range(6):

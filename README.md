@@ -153,7 +153,8 @@ decision count in this repository excludes forced choices.
 
 **Observations are viewer-safe at the source.** `Observation::for_player`
 holds everything one seat may see and nothing else; legal actions appear only
-in the chooser's view; decklist disclosure lives on `PlayerConfig.disclosure`.
+in the chooser's view; decklist disclosure lives on the game
+(`GameSetup.decklists`, resolved to `GameState.disclosure`).
 Viewer-equivalent states produce byte-identical observations. The policy
 tensor, the LLM text and the learning tokens all derive from the same
 observation, and a mechanic reaches all three in the change that adds it

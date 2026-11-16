@@ -382,6 +382,22 @@ publish, land or choose the next Graph step from here.
   a committed snapshot. Continue by ID through the CLI, then compare the
   final `load_update(..., backend=resolve("torch").state)` payload against
   uninterrupted execution, including Adam, EMA and collector sampling RNG.
+- Deck-source or `elemental-uniform` regimes from `local_smoke`: drop `match`
+  and set `deck_source` plus `agent.world = managym.WORLD_SETUP`, or keep an
+  authored Elemental `match` and set `agent.world = "elemental-world-v2"`;
+  either way validation refuses the local recipe's agent world. Give parallel
+  runs separate `--out` parents, since `training.sqlite` lives beside `--out`
+  and concurrent runs lock it. To see what training games actually were, wrap
+  `SeatRoutedCollector.collect` in a driver calling `execute_regime` and read
+  `self._env.current_player_configs()`, `self.stream_matches` and
+  `self._buffers` (e.g. `decklists`, `[streams, 2, cards, 5]`) after each
+  batch. The native `VectorEnv.set_training_decks(decks, distinct)` differs
+  from the collector wrapper's `(decks, digest, sampling)`. Without a driver,
+  `--training-game-logs` writes `game-journals/vector-0.jsonl`: full rows
+  carry `evidence` (`FailureEvidence`), delta rows carry `games[].replacement`
+  (`GameInputs`). Reset a `VectorEnv(num_envs=1, seed=game.seed,
+  seed_stride=…, skip_trivial=…, player_policies=evidence.resolved_player_policies)`
+  with `game.setup()` and step `game.actions` to replay each retained game.
 - TLA Limited decks (the MTG-282 pool corpus) overflow default observation
   capacities within a few dozen games; copy the `observation` block and the
   `game_errors` policy (`recover_capacity: true`) of

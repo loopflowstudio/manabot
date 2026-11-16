@@ -7,9 +7,22 @@ from manabot.verify.trigger_order import DECK, SEED, configure_root
 import managym
 from managym.academy import server
 from managym.academy.opponent import policy_registry
+from managym.academy.trace import GameConfig
 from managym.policy import PolicyDecision, PolicyDescriptor, PolicyView
 
 _new_game = server.GameSession.new_game
+_parse_game_config = server._parse_game_config
+
+
+def parse_game_config(config: Any) -> GameConfig:
+    # Fixed eight-card decks finish through native failed-draw rules. Only the
+    # dedicated timeline proof requests this name; submitted decks stay unchanged.
+    if isinstance(config, dict) and config.get("hero_deck") == "watch-timeline-fixture":
+        config = {**config, "hero_deck": {"Island": 8}, "villain_deck": {"Mountain": 8}}
+    return _parse_game_config(config)
+
+
+server._parse_game_config = parse_game_config
 
 
 def new_game(

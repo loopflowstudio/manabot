@@ -156,7 +156,7 @@ def test_closed_decklists_are_recorded_replayed_and_hidden_from_the_viewer(
     assert "main_counts" not in frame["projection"]["opponent"]
     assert "sideboard_counts" not in frame["projection"]["opponent"]
     configs = GameConfig(**asdict(session.trace.config)).to_rust()
-    assert [config.disclosure for config in configs] == ["closed", "closed"]
+    assert configs.decklists == "closed"
     legacy = asdict(session.trace.config)
     del legacy["decklists"]
     assert GameConfig(**legacy).decklists == "open"

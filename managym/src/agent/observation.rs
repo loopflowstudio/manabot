@@ -909,6 +909,9 @@ pub struct ActionSpaceData {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Observation {
+    /// One public game setting, shared by both seats.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub decklists_closed: bool,
     /// Absent only in historical captures; v7 must not invent missing provenance.
     #[serde(default)]
     pub shared_effects: Option<Vec<super::shared_effects::SharedEffectData>>,
@@ -1069,6 +1072,7 @@ impl Observation {
         let mut obs = Self {
             shared_effects: Some(super::shared_effects::project(game)),
             continuation: game.continuation_frames(agent_player),
+            decklists_closed: !game.state.disclosure.is_open(),
             game_over,
             won,
             turn,

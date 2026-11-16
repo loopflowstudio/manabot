@@ -195,13 +195,12 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 19] {
     ]
 }
 
-fn player_fields(player: &Player) -> [(&'static str, Seen); 13] {
+fn player_fields(player: &Player) -> [(&'static str, Seen); 12] {
     let Player {
         id: _,
         index: _,
         deck: _,
         sideboard: _,
-        disclosure: _,
         known_hand: _,
         known_library: _,
         name: _,
@@ -221,10 +220,6 @@ fn player_fields(player: &Player) -> [(&'static str, Seen); 13] {
         (
             "sideboard",
             Seen::Via("decklists tensor (sideboard counts)"),
-        ),
-        (
-            "disclosure",
-            Seen::Via("decklists tensor rows, all zero for a closed opponent"),
         ),
         ("known_hand", Seen::Via("known_hand tensor")),
         ("known_library", Seen::Via("known_library tensor")),
@@ -2962,6 +2957,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
     let mut fields = encoding!(Observation {
         shared_effects => [Rows("v7 effects, effect_details, effect_members")],
         continuation => [Rows("relations")],
+        decklists_closed => [column(Player, player::DECKLISTS_OPEN)],
         game_over => [Excluded("no decision follows the end of the game")],
         won => [Excluded("no decision follows the end of the game")],
         turn => [Rows("player")],
