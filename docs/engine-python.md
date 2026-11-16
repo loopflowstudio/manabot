@@ -89,9 +89,11 @@ print(performance.excluded_games)
 ```
 
 The same `statistics_path` option works on `CapturedVector`. Use one file per
-producer. Rows carry the card digest, use mode 0600, flush at each game boundary
+producer. Rows carry the card digest and the capture's `context` labels at the
+game's end, so a table can be split by run, update or cell; they use mode 0600, flush at each game boundary
 and fsync at close. The reader accepts a file or directory and ignores a torn
-last line. Partial summaries from replaced or closed games are counted in
+last line. A game that keeps playing after a raised failure still writes its
+terminal row. Partial summaries from replaced or closed games are counted in
 `excluded_games` and excluded from the table. These private every-game rows
 never join audited evaluation populations automatically.
 
@@ -256,9 +258,12 @@ this walker for game history:
 uv run --no-project --python .venv/bin/python python -m managym.replay games.jsonl --seconds 30
 ```
 
-Add `--statistics` to count the replayed decisions with the
-[native counters](#collect-in-game-statistics); for a game that stopped early
-these describe the replayed prefix, never the original unknown outcome.
+Add `--statistics` to print the replayed game's `terminal`, `winner` and
+per-card counts, reduced from the walker's verified card facts (the same
+counts as the [native counters](#collect-in-game-statistics)); for a game that
+stopped early these describe the replayed prefix, never the original unknown
+outcome. Reproducing a failed or pending call prints the full native summary
+instead, with seed, stream and generation.
 
 A record opens only in the world that played it. A different world or card
 content is refused, and the message names the recorded and the running

@@ -40,6 +40,10 @@ class GameStatistics(BaseModel):
     card_digest: str | None = Field(
         default=None, pattern=r"^[0-9a-f]{64}$", exclude_if=lambda value: value is None
     )
+    # The capture's private labels (run, update, cell) when the row was written.
+    context: dict[str, Any] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
 
 def read_statistics(path: Path) -> Iterator[GameStatistics]:

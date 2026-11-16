@@ -303,6 +303,34 @@ def test_statistics_failure_retains_partial_once(tmp_path: Path) -> None:
     assert table.excluded_games == 1
 
 
+def test_statistics_game_finishing_after_failure_stays_terminal(
+    tmp_path: Path,
+) -> None:
+    from managym.statistics import read_statistics
+
+    path = tmp_path / "statistics.jsonl"
+    env = managym.Env(seed=7)
+    capture = ScalarCapture(
+        seed=7,
+        statistics_path=path,
+        failure_directory=tmp_path,
+        context={"update": 3},
+    )
+    capture.reset(env, players())
+    with pytest.raises(managym.AgentError):
+        capture.step(env, 99999)
+    for _ in range(500):
+        capture.step(env, 0)
+        if env.is_game_over():
+            break
+    assert env.is_game_over()
+    capture.close()
+    rows = list(read_statistics(path))
+    assert len(rows) == 1
+    assert rows[0].terminal and rows[0].winner is not None
+    assert rows[0].context == {"update": 3}
+
+
 def test_walker_card_counts_equal_native_statistics(tmp_path: Path) -> None:
     from managym.statistics import reduce_cards
 

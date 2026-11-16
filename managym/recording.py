@@ -598,8 +598,9 @@ class _Capture:
         if self.statistics_path is None:
             return
         for row in rows:
-            # Native drains omit the running generation. Close/failure also reads
-            # it; remember only the latest generation per stream to avoid repeats.
+            # Native drains omit the running generation. Close and root
+            # replacement also read it; remember the latest generation per
+            # stream so a repeated close writes no second row.
             if self._statistics_generations.get(row.stream) == row.generation:
                 continue
             self._append_row(
@@ -607,6 +608,7 @@ class _Capture:
                 {
                     **row.model_dump(mode="json"),
                     "card_digest": self.identities["card_digest"],
+                    "context": self._coordinates()["context"],
                 },
             )
             self._statistics_generations[row.stream] = row.generation
@@ -770,7 +772,8 @@ class _Capture:
         # Capture failures must never disguise the original native failure.
         try:
             self.flush_policy_actions()
-            self._flush_statistics(partial=True)
+            # No statistics row here: the game may still finish after a raised
+            # failure. Only close or root replacement writes a partial row.
             retained = evidence()
             retained.execution_outcome = "failed"
             retained.error_class = type(error).__name__
