@@ -640,6 +640,11 @@ the stack, as the source's frame before the output choice (CR 605.3b).
 
 ### Etude training records
 
+A launched training job's experiment label must match the label supplied to
+Etude tracking by its recipe/stage, including training in a subprocess. Etude
+rejects a mismatch with `experiment_differs_from_launch` before the first update;
+changing the launch label does not rename the recipe's tracking label.
+
 Etude preserves a checkpoint's source suffix. Worker tests wait for a registered
 checkpoint through the SDK, rather than assuming the file ends in `.pt`.
 
