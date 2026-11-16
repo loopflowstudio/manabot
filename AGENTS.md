@@ -97,6 +97,9 @@ checkpoints or experiment evidence.
   Compose builtin graphs; use narrowly named forks for domain review placement.
   Validate changes with `uv run python scripts/check_loopflow_workflows.py`.
   See [work boundaries](docs/workflows.md).
+  `lf pr publish` stages tracked edits, including edits left after a path-scoped
+  commit. Temporarily preserve unrelated edits outside the checkout and restore
+  them after publication.
 
 ### Experiments
 
