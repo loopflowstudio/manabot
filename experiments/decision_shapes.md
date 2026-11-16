@@ -347,3 +347,9 @@ RTX4090/16CPU/60GB offer at USD0.89/hour instead. Shorten the job to8hours
 retain the same absolute500-update target and500-step damping horizon, seed,
 population and raw/EMA/Adam continuation. No additional scientific arm or
 replacement rental loop. The CUDA numerics gate remains required.
+
+2026-11-16 capacity adjustment: the4090offer vanished before admission, so
+its unsubmitted request was retained as refused. A compatible A40offer is
+available at USD0.59/hour (8CPU,48GBhost RAM,48GBGPU RAM). Use that hardware
+with the already validated8-hour job and a10-hour/USD9capped lease. Model,
+learning state, population, source fix and update target are unchanged.
