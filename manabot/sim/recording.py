@@ -13,12 +13,7 @@ from pathlib import Path
 import random
 from typing import Any
 
-from manabot.env.failures import (
-    CaptureScope,
-    GameInputs,
-    TrainingExposureReceipt,
-    capture_scope,
-)
+from manabot.env.failures import CaptureScope, TrainingExposureReceipt, capture_scope
 from manabot.infra.config import MatchConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.infra.provenance import RECORDED_ASSET_MANIFEST_HASH
@@ -26,6 +21,7 @@ from manabot.sim.frames import build_viewer_frame, decision_row
 from manabot.sim.replay import replay_environment, write_trace
 import managym
 from managym.experience import UNVERSIONED_CONTENT_HASH
+from managym.recording import GameInputs
 
 
 def record_actions(

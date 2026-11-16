@@ -63,6 +63,7 @@ def run_experiment(
     hardware: HardwareInventory,
     out: Path,
     *,
+    training_game_logs: bool = False,
     resume: bool = False,
     recover: tuple[int, ...] = (),
     backend: TrainingBackend,
@@ -323,6 +324,7 @@ def run_experiment(
                     {
                         "regime": regimes[attempt.case].model_dump(mode="json"),
                         "seed": attempt.seed,
+                        "training_game_logs": training_game_logs,
                         "out": str(directory),
                         "store": str(store.path.resolve()),
                         "resume_from": attempt.recovery_parent,
@@ -475,6 +477,7 @@ def main() -> None:
             if isinstance(payload.get("checkpoint_updates"), list)
             else payload.get("checkpoint_updates"),
             backend=resolve("torch"),
+            training_game_logs=payload.get("training_game_logs", False),
         )
     if run.status != "completed":
         raise SystemExit(1)

@@ -23,7 +23,7 @@ Collection never updates model weights; the regime executor owns learning.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from copy import deepcopy
 from dataclasses import dataclass, field
 import time
@@ -438,6 +438,9 @@ class SeatRoutedCollector:
         game_errors: GameErrorPolicy | None = None,
         record_attempt: Callable[[GameAttempt], GameErrorState] | None = None,
         adaptive: AdaptiveConfig | None = None,
+        operation: Callable[[str], AbstractContextManager[None]] = lambda name: (
+            nullcontext()
+        ),
     ) -> None:
         if execution_rows is not None and execution_rows < 1:
             raise ValueError("execution_rows must be positive")
@@ -453,6 +456,7 @@ class SeatRoutedCollector:
             raise ValueError(
                 "adaptive collection requires both-seat current-self, one producer, fixed roots and current-game recovery"
             )
+        self._operation = operation
         self._sampler = AdaptiveSampler(adaptive) if adaptive is not None else None
         self._assignments = (
             [self._sampler.draw() for _ in range(num_envs)] if self._sampler else []
@@ -861,13 +865,14 @@ class SeatRoutedCollector:
     def _opponent_actions(
         self, rows: np.ndarray, inference: CollectionScope
     ) -> np.ndarray:
-        if self.opponent_mode == "self":
-            return inference.opponent_actions(
-                self._retain_obs_rows(rows), execution_rows=self.execution_rows
-            )
-        if self.opponent_mode == "random":
-            return self._opponent.select(self._buffers, rows)
-        return self._opponent.select(self._retain_obs_rows(rows), np.arange(len(rows)))
+        with self._operation("opponent_inference"):
+            if self.opponent_mode == "self":
+                return inference.opponent_actions(
+                    self._retain_obs_rows(rows), execution_rows=self.execution_rows
+                )
+            if self.opponent_mode == "random":
+                return self._opponent.select(self._buffers, rows)
+            return self._opponent.select(self._retain_obs_rows(rows), np.arange(len(rows)))
 
     def _capture_memory(self, rows: np.ndarray) -> tuple[Prefix, ...]:
         if self._memory_store is None:
@@ -1079,7 +1084,7 @@ class SeatRoutedCollector:
                     if self.opponent_mode == "learning":
                         assert opponent_inference is not None
                         opp_acts = self._sample_learning_rows(
-                            opp_rows, acting, opponent_inference
+                            opp_rows, acting, opponent_inference, "opponent_inference"
                         )
                     else:
                         opp_acts = self._opponent_actions(opp_rows, inference)
@@ -1509,11 +1514,13 @@ class SeatRoutedCollector:
         rows: np.ndarray,
         acting: np.ndarray,
         inference: CollectionScope,
+        operation: str = "learner_inference",
     ) -> np.ndarray:
-        observation = self._retain_obs_rows(rows)
-        sampled = inference.sample(
-            observation, self.profiler, execution_rows=self.execution_rows
-        )
+        with self._operation(operation):
+            observation = self._retain_obs_rows(rows)
+            sampled = inference.sample(
+                observation, self.profiler, execution_rows=self.execution_rows
+            )
         acts, logprobs, values = sampled.actions, sampled.logprobs, sampled.values
         outcomes, needs = sampled.outcomes, sampled.needs
         with self.profiler.track("Rollout recording"):

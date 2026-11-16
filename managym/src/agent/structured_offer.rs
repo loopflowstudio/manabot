@@ -1277,7 +1277,7 @@ impl Game {
         submission: &OfferSubmission,
     ) -> Result<(bool, usize), StructuredOfferError> {
         let command = offers.decode(submission)?;
-        let checkpoint = self.clone();
+        let checkpoint = self.rollback_snapshot();
         match self.apply_legacy_command_inner(&command, &mut None) {
             Ok(result) => Ok(result),
             Err(error) => {
@@ -1523,7 +1523,7 @@ impl Game {
         if matches!(command, AtomicCommand::SearchAction { .. }) {
             return self.apply_search_action(command);
         }
-        let checkpoint = self.clone();
+        let checkpoint = self.rollback_snapshot();
         if matches!(command, AtomicCommand::DeclarationSequence { .. }) {
             return match self.apply_legacy_command_inner(command, &mut None) {
                 Ok((done, _)) => Ok(done),
@@ -1589,11 +1589,15 @@ impl Game {
             action,
         );
         let action = action.clone();
+        let exposure = self.exposure_for_action(&action);
         self.current_action_space.take();
         self.execute_action(&action).unwrap_or_else(|error| {
             panic!("structured search offer admitted an unexecutable action: {error}")
         });
         crate::agent::decision_memory::commit(self, pending_memory);
+        if let Some(choice) = exposure {
+            self.commit_capture_choice(choice);
+        }
         Ok(self.finish_action_step())
     }
 

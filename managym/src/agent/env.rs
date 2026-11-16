@@ -139,6 +139,9 @@ pub struct Env {
     // must reuse the live projection's events, especially combat declarations.
     heuristic_events: Vec<EventData>,
     action_trace: Option<NativeActionTrace>,
+    collect_statistics: bool,
+    retained_statistics: Vec<crate::flow::statistics::GameStatistics>,
+    drained_generation: Option<u64>,
     capture_cards: bool,
     capture_exposure: bool,
     retained_exposure: Vec<String>,
@@ -233,6 +236,9 @@ impl Env {
             heuristic_events: Vec::new(),
             player_policies: [PlayerPolicy::Agent; 2],
             action_trace: None,
+            collect_statistics: false,
+            retained_statistics: Vec::new(),
+            drained_generation: None,
             capture_cards: false,
             capture_exposure: false,
             retained_exposure: Vec::new(),
@@ -290,17 +296,24 @@ impl Env {
         if self.capture_exposure && self.game.is_some() {
             self.retained_exposure.push(self.exposure_json()?);
         }
+        if self.drained_generation != Some(self.capture_generation) {
+            if let Some(summary) = self.statistics() {
+                self.retained_statistics.push(summary);
+            }
+        }
         self.action_trace = Some(NativeActionTrace {
             seed: self.seed,
             player_configs: Arc::from(player_configs.clone()),
             decision_memory_include_own: self.decision_memory_include_own,
             actions: Vec::new(),
         });
-        let mut game = if self.capture_cards {
-            Game::new_capturing(player_configs, self.seed, self.skip_trivial)
-        } else {
-            Game::new(player_configs, self.seed, self.skip_trivial)
-        };
+        let mut game = Game::construct(
+            player_configs,
+            self.seed,
+            self.skip_trivial,
+            self.capture_cards,
+            self.collect_statistics,
+        );
         game.decision_memory_include_own = self.decision_memory_include_own;
         if self.capture_exposure {
             game.card_capture
@@ -319,6 +332,37 @@ impl Env {
         let (observation, _, _, _, info) =
             self.settle_players(observation, 0.0, false, false, empty_info_dict())?;
         Ok((observation, info))
+    }
+
+    pub fn enable_statistics(&mut self) -> Result<(), AgentError> {
+        if self.game.is_some() {
+            return Err(AgentError("statistics must be enabled before reset".into()));
+        }
+        self.collect_statistics = true;
+        Ok(())
+    }
+
+    pub fn statistics(&self) -> Option<crate::flow::statistics::GameStatistics> {
+        let game = self.game.as_ref()?;
+        let stats = game.statistics.as_ref()?;
+        Some(crate::flow::statistics::GameStatistics {
+            seed: self.reset_seed,
+            generation: self.capture_generation,
+            stream: 0,
+            terminal: game.is_game_over(),
+            winner: game.winner_index(),
+            cards: stats.rows(),
+        })
+    }
+
+    pub fn take_statistics(&mut self) -> Vec<crate::flow::statistics::GameStatistics> {
+        if self.is_game_over() && self.drained_generation != Some(self.capture_generation) {
+            if let Some(summary) = self.statistics() {
+                self.retained_statistics.push(summary);
+                self.drained_generation = Some(self.capture_generation);
+            }
+        }
+        std::mem::take(&mut self.retained_statistics)
     }
 
     /// Must be enabled before reset so setup facts cannot be missed.

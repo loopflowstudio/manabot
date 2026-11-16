@@ -22,7 +22,7 @@ from manabot.backends.torch.collection import (
     CollectionSession as TorchCollectionSession,
 )
 from manabot.backends.torch.policy import ActorCritic
-from manabot.env.failures import CaptureScope, FailureEvidence, capture_scope
+from manabot.env.failures import CaptureScope, capture_scope
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
@@ -45,6 +45,7 @@ from manabot.training.state.game_errors import (
 from manabot.training.state.recovery import admit_recovery_identities
 import managym
 from managym import MAX_DECKLIST_BYTES, Deck, DeckImportError, Decklist
+from managym.recording import FailureEvidence
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
 WORLD = managym.WORLD_SETUP

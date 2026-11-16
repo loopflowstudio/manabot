@@ -1,7 +1,7 @@
 """Bounded regime execution; VerifyStore owns state, manifests are exports."""
 
-from collections.abc import Mapping
-from contextlib import ExitStack
+from collections.abc import Iterator, Mapping
+from contextlib import ExitStack, contextmanager
 from copy import deepcopy
 from dataclasses import asdict
 import math
@@ -10,6 +10,7 @@ from pathlib import Path
 import platform
 import shutil
 import socket
+import sys
 import time
 from typing import TYPE_CHECKING
 import uuid
@@ -251,6 +252,7 @@ def execute_regime(
     stop_reserve_seconds: float | None = None,
     experiment: str | None = None,
     training_exposure: bool = False,
+    training_game_logs: bool = False,
 ) -> TrainingRun:
     """Execute under a local lease, including admission and crash settlement.
 
@@ -393,6 +395,7 @@ def execute_regime(
             initial_admission=initial_admission,
             experiment=experiment,
             training_exposure=training_exposure,
+            training_game_logs=training_game_logs,
         )
 
 
@@ -415,6 +418,7 @@ def _execute_regime(
     initial_admission: Path | None = None,
     experiment: str | None = None,
     training_exposure: bool = False,
+    training_game_logs: bool = False,
 ) -> TrainingRun:
     """Execute admitted inputs while the caller holds both recovery writer leases."""
     # A retry can fail during setup before reaching its stage. Walk the retained
@@ -518,6 +522,17 @@ def _execute_regime(
     game_index = 0
     last_monitor_seconds = 0.0
 
+    stage_started = False
+    failures: CaptureScope | None = None
+
+    @contextmanager
+    def operation(name: str) -> Iterator[None]:
+        if failures is None:
+            yield
+        else:
+            with failures.operation(name):
+                yield
+
     last_export = float("-inf")
     export_wait = PROGRESS_EXPORT_SECONDS
 
@@ -546,7 +561,8 @@ def _execute_regime(
         began = time.monotonic()
         if progress and began - last_export < export_wait:
             return
-        export_training_run(run.id, store, out)
+        with operation("export"):
+            export_training_run(run.id, store, out)
         last_export = time.monotonic()
         export_wait = max(
             PROGRESS_EXPORT_SECONDS, (last_export - began) / PROGRESS_EXPORT_SHARE
@@ -569,7 +585,7 @@ def _execute_regime(
             "updates": run.updates_through(),
             **(
                 {"segment_updates": record.updates}
-                if isinstance(stage, TrainSelfPlay)
+                if run.stages and isinstance(stage, TrainSelfPlay)
                 else {}
             ),
             **(
@@ -655,19 +671,20 @@ def _execute_regime(
         tick = time.perf_counter()
         target = out / f"monitor-{receipt.ordinal:08d}.safetensors"
         try:
-            backend.save_policy(
-                model,
-                space,
-                target.with_suffix(".tmp"),
-                player_configs=_checkpoint_setups(regime),
-                extra={
-                    "run_id": run.id,
-                    "stage_id": record.id,
-                    "regime_digest": run.regime_digest,
-                    "weights": "raw",
-                    "value_semantic": "signed_outcome",
-                },
-            )
+            with operation("export"):
+                backend.save_policy(
+                    model,
+                    space,
+                    target.with_suffix(".tmp"),
+                    player_configs=_checkpoint_setups(regime),
+                    extra={
+                        "run_id": run.id,
+                        "stage_id": record.id,
+                        "regime_digest": run.regime_digest,
+                        "weights": "raw",
+                        "value_semantic": "signed_outcome",
+                    },
+                )
             os.replace(target.with_suffix(".tmp"), target)
             # Admission constructs a fresh model. Its initialization must not
             # consume the learner's action-sampling RNG stream.
@@ -704,14 +721,21 @@ def _execute_regime(
                 "regime_digest": run.regime_digest,
                 "stage": run.stages[-1].id if run.stages else None,
                 "identities": run.identities,
-                "coordinates": coordinates(),
+                "coordinates": coordinates()
+                if stage_started
+                else {"updates": run.updates_through()},
                 "recovery_artifact": run.recovery_artifact,
                 "allocation_deadline": run.allocation_deadline,
                 "parent_run_id": run.parent_run_id,
             },
             training_exposure=training_exposure,
+            training_game_logs=training_game_logs,
         )
         resources.enter_context(capture_scope(failures))
+        if training_game_logs:
+            failures.journal_directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+            run.game_journal_directory = str(failures.journal_directory)
+            persist()
         # Set when stop_reserve_seconds ends the (single) stage before its target.
         wall_bounded = False
         for stage_index, stage in enumerate(regime.stages):
@@ -765,6 +789,7 @@ def _execute_regime(
                 else 0.0
             )
             cpu_start = time.process_time()
+            stage_started = True
             deadline = min(
                 start + regime.wall_seconds - run.prior_watchdog_seconds,
                 float("inf")
@@ -780,7 +805,8 @@ def _execute_regime(
             )
 
             def synchronize() -> None:
-                backend.runtime.synchronize(stage.execution.device)
+                with operation("device_synchronization"):
+                    backend.runtime.synchronize(stage.execution.device)
 
             synchronize()
             if not restoring_completed:
@@ -1166,19 +1192,20 @@ def _execute_regime(
                         tick = time.perf_counter()
                         target = out / f"{stage.id}-initial-raw.safetensors"
                         temporary = target.with_suffix(".tmp")
-                        backend.save_policy(
-                            agent,
-                            space,
-                            temporary,
-                            player_configs=_checkpoint_setups(regime),
-                            extra={
-                                "run_id": run.id,
-                                "stage_id": stage.id,
-                                "weights": "initial_raw",
-                                "value_semantic": "signed_outcome",
-                                "regime_digest": run.regime_digest,
-                            },
-                        )
+                        with operation("export"):
+                            backend.save_policy(
+                                agent,
+                                space,
+                                temporary,
+                                player_configs=_checkpoint_setups(regime),
+                                extra={
+                                    "run_id": run.id,
+                                    "stage_id": stage.id,
+                                    "weights": "initial_raw",
+                                    "value_semantic": "signed_outcome",
+                                    "regime_digest": run.regime_digest,
+                                },
+                            )
                         os.replace(temporary, target)
                         # New self-play monitoring must preserve initialization and
                         # action-sampling streams compared with monitoring disabled.
@@ -1210,46 +1237,50 @@ def _execute_regime(
                             ):
                                 raise ValueError("initial evaluation admission differs")
                     producers.close()
+                    failures.retire_cursors()
 
                     def record_game_attempt(attempt: GameAttempt) -> GameErrorState:
                         assert game_ledger is not None
                         return game_ledger.record(attempt, failures.context())
 
-                    collector = SeatRoutedCollector(
-                        space,
-                        Match(regime.root_match),
-                        Reward(RewardConfig()),
-                        num_envs=stage.streams,
-                        execution_rows=stage.execution.collection_rows,
-                        seed=seeds["collection"],
-                        opponent_mode="frozen"
-                        if stage.opponent is not None
-                        else "random"
-                        if stage.behavior == "random"
-                        else "self",
-                        opponent_agent=opponent_agent,
-                        learning_seats=stage.learning_seats,
-                        batch_closure=stage.batch_closure,
-                        games_per_stream=stage.games_per_stream,
-                        recovery_max_microsteps=regime.recovery_max_microsteps,
-                        game_errors=stage.game_errors,
-                        record_attempt=record_game_attempt
-                        if stage.game_errors
-                        else None,
-                        recovery_max_game_microsteps=regime.recovery.max_game_microsteps
-                        if regime.recovery
-                        else None,
-                        root=stage.root,
-                        matchup_curriculum=stage.matchup_curriculum,
-                        deck_source=regime.deck_source,
-                        workers=stage.execution.workers,
-                        adaptive=stage.adaptive,
-                        numerics=backend.collection.CollectionSession(
-                            device=stage.execution.device,
+                    # Construction resets every producer's first games natively.
+                    with operation("collection"):
+                        collector = SeatRoutedCollector(
+                            space,
+                            Match(regime.root_match),
+                            Reward(RewardConfig()),
+                            num_envs=stage.streams,
+                            execution_rows=stage.execution.collection_rows,
                             seed=seeds["collection"],
-                            precision=stage.execution.resolved_precision,
-                        ),
-                    )
+                            opponent_mode="frozen"
+                            if stage.opponent is not None
+                            else "random"
+                            if stage.behavior == "random"
+                            else "self",
+                            opponent_agent=opponent_agent,
+                            learning_seats=stage.learning_seats,
+                            batch_closure=stage.batch_closure,
+                            games_per_stream=stage.games_per_stream,
+                            recovery_max_microsteps=regime.recovery_max_microsteps,
+                            game_errors=stage.game_errors,
+                            record_attempt=record_game_attempt
+                            if stage.game_errors
+                            else None,
+                            recovery_max_game_microsteps=regime.recovery.max_game_microsteps
+                            if regime.recovery
+                            else None,
+                            root=stage.root,
+                            matchup_curriculum=stage.matchup_curriculum,
+                            deck_source=regime.deck_source,
+                            workers=stage.execution.workers,
+                            adaptive=stage.adaptive,
+                            operation=operation,
+                            numerics=backend.collection.CollectionSession(
+                                device=stage.execution.device,
+                                seed=seeds["collection"],
+                                precision=stage.execution.resolved_precision,
+                            ),
+                        )
                     producers.callback(collector.close)
                     experiment = RunContext(
                         RuntimeConfig(
@@ -1367,18 +1398,19 @@ def _execute_regime(
                     )
                     suffix = ".pt.gz" if regime.recovery else ".pt"
                     target = out / f"{stage.id}-{label}{suffix}"
-                    save_update(
-                        target,
-                        learner,
-                        collector,
-                        ema,
-                        rng,
-                        iteration,
-                        record,
-                        run,
-                        before,
-                        backend=backend.state,
-                    )
+                    with operation("export"):
+                        save_update(
+                            target,
+                            learner,
+                            collector,
+                            ema,
+                            rng,
+                            iteration,
+                            record,
+                            run,
+                            before,
+                            backend=backend.state,
+                        )
                     run.recovery_artifact = artifact(target)
                     record.export_seconds += time.perf_counter() - tick
 
@@ -1404,12 +1436,13 @@ def _execute_regime(
                     assert behavior_agent is not None
                     batch = None
                     try:
-                        batch = collector.collect(
-                            behavior_agent,
-                            stage.transitions,
-                            deadline_monotonic=deadline,
-                            check=check,
-                        )
+                        with operation("collection"):
+                            batch = collector.collect(
+                                behavior_agent,
+                                stage.transitions,
+                                deadline_monotonic=deadline,
+                                check=check,
+                            )
                     finally:
                         synchronize()
                         record.collection_seconds += time.perf_counter() - tick
@@ -1423,7 +1456,7 @@ def _execute_regime(
                     try:
                         # The final device sync stays inside the Learning phase so
                         # queued work (EMA, last step) counts toward learning.
-                        with learner.profiler.track("Learning"):
+                        with operation("learning"), learner.profiler.track("Learning"):
                             try:
                                 if stage.trainable != "policy_value":
                                     diagnostic = {
@@ -1589,26 +1622,27 @@ def _execute_regime(
                 for name, model in variants.items():
                     target = out / f"{stage.id}-{name}.safetensors"
                     temporary = target.with_suffix(".tmp")
-                    backend.save_policy(
-                        model,
-                        space,
-                        temporary,
-                        player_configs=_checkpoint_setups(regime),
-                        extra={
-                            "run_id": run.id,
-                            "stage_id": stage.id,
-                            "weights": name,
-                            "averaging": {
-                                "clock": "collect-update-iteration",
-                                "iteration": iteration,
-                                "rate": stage.learning.ema,
-                            }
-                            if name == "ema"
-                            else None,
-                            "regime_digest": run.regime_digest,
-                            "value_semantic": "signed_outcome",
-                        },
-                    )
+                    with operation("export"):
+                        backend.save_policy(
+                            model,
+                            space,
+                            temporary,
+                            player_configs=_checkpoint_setups(regime),
+                            extra={
+                                "run_id": run.id,
+                                "stage_id": stage.id,
+                                "weights": name,
+                                "averaging": {
+                                    "clock": "collect-update-iteration",
+                                    "iteration": iteration,
+                                    "rate": stage.learning.ema,
+                                }
+                                if name == "ema"
+                                else None,
+                                "regime_digest": run.regime_digest,
+                                "value_semantic": "signed_outcome",
+                            },
+                        )
                     os.replace(temporary, target)
                     candidate = artifact(target)
                     try:
@@ -1626,7 +1660,8 @@ def _execute_regime(
                         )
                 optimizer_path = out / f"{stage.id}-optimizer.pt"
                 with optimizer_path.with_suffix(".tmp").open("wb") as output:
-                    backend.state.save(optimizer_state, output)
+                    with operation("export"):
+                        backend.state.save(optimizer_state, output)
                 os.replace(optimizer_path.with_suffix(".tmp"), optimizer_path)
                 record.artifacts["optimizer"] = artifact(optimizer_path)
                 record.export_seconds += time.perf_counter() - tick
@@ -1757,7 +1792,23 @@ def _execute_regime(
                 pass
         raise
     finally:
+        primary_error = sys.exception()
         resources.close()
+        failures = None
+        if training_game_logs and run.stages:
+            try:
+                for path in sorted((out / "game-journals").glob("*")):
+                    if path.is_file() and not path.name.startswith("."):
+                        run.stages[-1].artifacts[f"game-journals/{path.name}"] = (
+                            artifact(path)
+                        )
+                persist()
+            except Exception as capture_error:
+                if primary_error is None:
+                    raise
+                primary_error.add_note(
+                    f"Terminal game journals could not be registered: {capture_error}"
+                )
         if training_exposure and run.stages:
             for path in sorted((out / "exposure").glob("*.jsonl")):
                 run.stages[-1].artifacts[f"exposure/{path.name}"] = artifact(path)
