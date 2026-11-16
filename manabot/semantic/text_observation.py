@@ -1123,7 +1123,7 @@ class _Renderer:
             f"Active player: {self.name(state.turn.active_player_id)}. Acting player: {self.name(state.turn.agent_player_id)}.",
             f"Decision: {_enum(_SPACES, int(state.action_space.action_space_type))}. Game over: {_yes(state.game_over)}. Won: {_yes(state.won)}.",
             "",
-            f"Decklists: {'open (both players know both lists)' if state.decklists_open else 'closed (neither player knows the opponent list)'}.",
+            f"Decklists: {'closed (neither player knows the opponent list)' if state.decklists_closed else 'open (both players know both lists)'}.",
             "Players:",
         ]
         lines.extend(self._players_lines())

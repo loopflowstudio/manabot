@@ -208,7 +208,7 @@ fn mixed_game_disclosure_is_seeded_and_independent_of_the_deal() {
         let control = Game::new(configs(disclosure), seed, true);
         for seat in [PlayerId(0), PlayerId(1)] {
             let view = Observation::for_player(&game, seat);
-            assert_eq!(view.decklists_open, disclosure.is_open());
+            assert_eq!(view.decklists_closed, !disclosure.is_open());
             assert_eq!(
                 view.to_json(),
                 Observation::for_player(&control, seat).to_json()

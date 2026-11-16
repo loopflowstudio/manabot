@@ -2954,7 +2954,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
     let mut fields = encoding!(Observation {
         shared_effects => [Rows("v7 effects, effect_details, effect_members")],
         continuation => [Rows("relations")],
-        decklists_open => [column(Player, player::DECKLISTS_OPEN)],
+        decklists_closed => [column(Player, player::DECKLISTS_OPEN)],
         game_over => [Excluded("no decision follows the end of the game")],
         won => [Excluded("no decision follows the end of the game")],
         turn => [Rows("player")],

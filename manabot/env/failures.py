@@ -32,6 +32,7 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 from manabot.env.card_capture import CapturedCards
 from manabot.infra.log import getLogger
 import managym
+from managym.disclosure import DecklistDisclosure
 
 
 class PlayerSetup(BaseModel):
@@ -42,13 +43,13 @@ class PlayerSetup(BaseModel):
     world: str | None = Field(
         default=None, validation_alias=AliasChoices("world", "content_pack")
     )
-    disclosure: Literal["open", "closed"] = Field(
+    disclosure: DecklistDisclosure = Field(
         default="open", exclude_if=lambda value: value == "open"
     )
 
     @classmethod
     def retain(
-        cls, player: managym.PlayerConfig, decklists: Literal["open", "closed"]
+        cls, player: managym.PlayerConfig, decklists: DecklistDisclosure
     ) -> "PlayerSetup":
         return cls(
             name=player.name,
@@ -59,7 +60,7 @@ class PlayerSetup(BaseModel):
         )
 
 
-def _game_disclosure(players: list[PlayerSetup]) -> Literal["open", "closed"] | None:
+def _game_disclosure(players: list[PlayerSetup]) -> DecklistDisclosure | None:
     """The one game value retained in per-seat spelling; None without seats."""
     values = {player.disclosure for player in players}
     if len(values) > 1:

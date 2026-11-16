@@ -2,7 +2,6 @@
 
 from dataclasses import asdict
 import random
-from typing import Literal
 
 import numpy as np
 import pytest
@@ -21,24 +20,23 @@ from manabot.sim.registration import (
     require_open_decklists,
 )
 import managym
+from managym.disclosure import DecklistDisclosure, DecklistSampling
 
-Decklists = Literal["open", "closed"]
 
-
-def _match(decklists: Decklists) -> MatchConfig:
+def _match(decklists: DecklistDisclosure) -> MatchConfig:
     return MatchConfig.authored(
         "ur-lessons-vs-gw-allies", "ur_lessons", "gw_allies"
     ).model_copy(update={"decklists": decklists})
 
 
-def _env(decklists: Decklists) -> tuple[managym.Env, managym.Observation]:
+def _env(decklists: DecklistDisclosure) -> tuple[managym.Env, managym.Observation]:
     env = managym.Env(seed=3)
     obs, _ = env.reset(Match(_match(decklists)).to_rust())
     return env, obs
 
 
 @pytest.mark.parametrize("decklists", ["open", "closed"])
-def test_opponent_lists_appear_exactly_when_open(decklists: Decklists) -> None:
+def test_opponent_lists_appear_exactly_when_open(decklists: DecklistDisclosure) -> None:
     env, obs = _env(decklists)
     agent, opponent = obs.agent, obs.opponent
     assert sum(agent.main_counts.values()) == 41
@@ -64,7 +62,7 @@ def test_opponent_lists_appear_exactly_when_open(decklists: Decklists) -> None:
 
     # Python reference and native encoders agree.
     space = ObservationSpace(ObservationConfig())
-    assert obs.decklists_open == (decklists == "open")
+    assert obs.decklists_closed == (decklists == "closed")
     for viewer in (0, 1):
         view = env.observation_for_player(viewer)
         encoded = space.encode(view)
@@ -153,7 +151,7 @@ def test_unseen_opponent_list_does_not_change_observation_or_prepared(
     space = ObservationSpace()
     policy = ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
 
-    def game(land: str, disclosure: Decklists) -> managym.Env:
+    def game(land: str, disclosure: DecklistDisclosure) -> managym.Env:
         decks = [{"Forest": 40}, {land: 40}]
         if viewer == 1:
             decks.reverse()
@@ -286,8 +284,8 @@ def test_deprecated_seat_disclosure_rejects_disagreement() -> None:
     [("closed", "open"), ("open", "closed"), ("closed", "mixed"), ("open", "mixed")],
 )
 def test_deprecated_seat_disclosure_rejects_game_conflict(
-    hint: Decklists,
-    decklists: Literal["open", "closed", "mixed"],
+    hint: DecklistDisclosure,
+    decklists: DecklistSampling,
 ) -> None:
     with pytest.warns(DeprecationWarning, match="0.4.0"):
         first = managym.PlayerConfig("first", {"Island": 12}, disclosure=hint)
@@ -308,7 +306,7 @@ def test_deprecated_seat_disclosure_rejects_game_conflict(
 @pytest.mark.parametrize("hint", ["open", "closed"])
 @pytest.mark.parametrize("hinted_seat", [0, 1])
 def test_deprecated_seat_disclosure_ignores_unset_hints(
-    hint: Decklists,
+    hint: DecklistDisclosure,
     hinted_seat: int,
 ) -> None:
     players = [
@@ -319,14 +317,14 @@ def test_deprecated_seat_disclosure_ignores_unset_hints(
         players[hinted_seat].disclosure = hint
     for setup in (players, managym.GameSetup(players, decklists=hint)):
         observation, _ = managym.Env(seed=7).reset(setup)
-        assert observation.decklists_open is (hint == "open")
+        assert observation.decklists_closed is (hint == "closed")
         ((observation, _),) = managym.VectorEnv(num_envs=1, seed=7).reset_all(setup)
-        assert observation.decklists_open is (hint == "open")
+        assert observation.decklists_closed is (hint == "closed")
 
 
 @pytest.mark.parametrize("decklists", ["closed", "mixed"])
 def test_game_setup_rewrap_preserves_disclosure(
-    decklists: Literal["closed", "mixed"],
+    decklists: DecklistSampling,
 ) -> None:
     original = managym.GameSetup(
         [managym.PlayerConfig(name, {"Island": 40}) for name in ("a", "b")],
@@ -341,11 +339,11 @@ def test_game_setup_rewrap_preserves_disclosure(
     for seed in range(8):
         expected = managym.resolve_decklists(original, seed) == "open"
         observation, _ = managym.Env(seed=seed).reset(wrapped)
-        assert observation.decklists_open is expected
+        assert observation.decklists_closed is (not expected)
         ((observation, _),) = managym.VectorEnv(num_envs=1, seed=seed).reset_all(
             wrapped
         )
-        assert observation.decklists_open is expected
+        assert observation.decklists_closed is (not expected)
         modes.add(expected)
     assert modes == ({False} if decklists == "closed" else {False, True})
 
@@ -362,10 +360,10 @@ def test_closed_draw_in_mixed_run_matches_closed_game(viewer: int) -> None:
         setup = match.to_rust()
         setup = managym.GameSetup(setup, decklists="mixed")
         mixed.reset(setup)
-        modes.add(mixed.observation_for_player(viewer).decklists_open)
+        modes.add(mixed.observation_for_player(viewer).decklists_closed)
         closed.reset(match.to_rust())
         view = mixed.observation_for_player(viewer)
-        if view.decklists_open:
+        if not view.decklists_closed:
             continue
         control = closed.observation_for_player(viewer)
         assert view.toJSON() == control.toJSON()
@@ -379,7 +377,7 @@ def test_closed_draw_in_mixed_run_matches_closed_game(viewer: int) -> None:
 
 @pytest.mark.parametrize("decklists", ["closed", "mixed"])
 def test_game_setup_slices_preserve_disclosure(
-    decklists: Literal["closed", "mixed"],
+    decklists: DecklistSampling,
 ) -> None:
     setup = managym.GameSetup(
         [managym.PlayerConfig(name, {"Island": 40}) for name in ("a", "b")],
@@ -394,12 +392,12 @@ def test_game_setup_slices_preserve_disclosure(
         assert sliced.decklists == decklists
         scalar = managym.Env(seed=3)
         obs, _ = scalar.reset(sliced)
-        assert obs.decklists_open is (managym.resolve_decklists(setup, 3) == "open")
+        assert obs.decklists_closed is (managym.resolve_decklists(setup, 3) == "closed")
         vector = managym.VectorEnv(num_envs=1, seed=3)
         ((vector_obs, _),) = vector.reset_all(sliced)
-        assert vector_obs.decklists_open is obs.decklists_open
+        assert vector_obs.decklists_closed is obs.decklists_closed
         assert vector.current_player_configs()[0].decklists == (
-            "open" if obs.decklists_open else "closed"
+            "closed" if obs.decklists_closed else "open"
         )
     with pytest.raises(TypeError):
         setup[0] = setup[1]  # type: ignore[index] — the public sequence is read-only.
@@ -416,4 +414,4 @@ def test_bare_player_list_defaults_open_without_reading_unrelated_attributes() -
     )
     env = managym.Env(seed=3)
     obs, _ = env.reset(players)
-    assert obs.decklists_open is True
+    assert obs.decklists_closed is False

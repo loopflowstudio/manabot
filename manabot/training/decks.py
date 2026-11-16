@@ -25,6 +25,7 @@ from manabot.infra.identity import StrictModel, canonical_sha256
 from manabot.model.world import admit_world_decks
 import managym
 from managym import Deck
+from managym.disclosure import DecklistSampling
 
 
 class UniformDecks(StrictModel):
@@ -37,7 +38,7 @@ class UniformDecks(StrictModel):
     omitted from serialized sources so their recovery identities remain unchanged.
     """
 
-    decklists: Literal["open", "closed", "mixed"] = Field(
+    decklists: DecklistSampling = Field(
         default="open", exclude_if=lambda value: value == "open"
     )
     decks: tuple[Deck, ...] = Field(min_length=1)

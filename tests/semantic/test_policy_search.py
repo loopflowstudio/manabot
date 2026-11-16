@@ -104,7 +104,7 @@ def _game(*, closed: bool = False) -> tuple[managym.Env, managym.Observation]:
             decklists="closed" if closed else "open",
         )
     )
-    assert observation.decklists_open is (not closed)
+    assert observation.decklists_closed is closed
     return engine, observation
 
 

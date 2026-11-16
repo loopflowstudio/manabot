@@ -33,12 +33,13 @@ from manabot.training.state.game_errors import (
 )
 from manabot.verify.store import VerifyStore
 import managym
+from managym.disclosure import DecklistDisclosure
 from tests.training.test_recovery import tracked_updates
 
 PACK = "elemental-world-v2"
 
 
-def _match(decklists: Literal["open", "closed"] = "open") -> Match:
+def _match(decklists: DecklistDisclosure = "open") -> Match:
     return Match(
         MatchConfig.authored(PACK, "elemental_ug", "elemental_bg").model_copy(
             update={"decklists": decklists}

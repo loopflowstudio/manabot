@@ -157,7 +157,7 @@ def test_closed_decklists_stay_closed_for_native_selector() -> None:
     configs = _players(["red", "green"])
     env = managym.Env(seed=42)
     raw, _ = env.reset(managym.GameSetup(configs, decklists="closed"))
-    assert raw.decklists_open is False
+    assert raw.decklists_closed is True
     assert raw.opponent.main_counts is None
     assert not any(card.zone == managym.ZoneEnum.HAND for card in raw.opponent_cards)
     before = env.state_digest()

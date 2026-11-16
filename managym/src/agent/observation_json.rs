@@ -48,8 +48,8 @@ impl Serialize for ObservationJson<'_> {
         map.serialize_entry("agent_cards", &CardsJson(&value.agent_cards))?;
         map.serialize_entry("agent_permanents", &sorted_record(&value.agent_permanents))?;
         map.serialize_entry("agent_sideboard", &sorted_record(&value.agent_sideboard))?;
-        if !value.decklists_open {
-            map.serialize_entry("decklists_open", &false)?;
+        if value.decklists_closed {
+            map.serialize_entry("decklists_closed", &true)?;
         }
         map.serialize_entry("game_over", &value.game_over)?;
         map.serialize_entry("opponent", &sorted_record(&value.opponent))?;

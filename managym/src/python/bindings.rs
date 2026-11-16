@@ -3089,7 +3089,7 @@ impl PySharedEffect {
 #[derive(Clone)]
 pub struct PyObservation {
     #[pyo3(get, set)]
-    pub decklists_open: bool,
+    pub decklists_closed: bool,
     #[pyo3(get)]
     pub shared_effects: Option<Vec<PySharedEffect>>,
     #[pyo3(get)]
@@ -3133,7 +3133,7 @@ impl From<Observation> for PyObservation {
                     .map(|inner| PySharedEffect { inner })
                     .collect()
             }),
-            decklists_open: value.decklists_open,
+            decklists_closed: value.decklists_closed,
             game_over: value.game_over,
             won: value.won,
             turn: value.turn.into(),
@@ -3180,7 +3180,7 @@ impl From<PyObservation> for Observation {
             shared_effects: value
                 .shared_effects
                 .map(|records| records.into_iter().map(|record| record.inner).collect()),
-            decklists_open: value.decklists_open,
+            decklists_closed: value.decklists_closed,
             game_over: value.game_over,
             won: value.won,
             turn: value.turn.into(),

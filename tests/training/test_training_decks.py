@@ -49,6 +49,7 @@ from manabot.training.state.game_errors import (
 from manabot.training.state.recovery import admit_recovery_identities
 import managym
 from managym import MAX_DECKLIST_BYTES, Deck, DeckImportError, Decklist
+from managym.disclosure import DecklistSampling
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
 WORLD = managym.WORLD_SETUP
@@ -199,7 +200,7 @@ def test_collector_resets_recovers_seats_seeds_and_exposure(
     decks: UniformDecks,
     recovery: Literal["exact", "current"],
     sampling: Literal["uniform-distinct-v1", "uniform-independent-v1"],
-    disclosure: Literal["closed", "mixed"],
+    disclosure: DecklistSampling,
 ) -> None:
     decks = decks.model_copy(update={"sampling": sampling, "decklists": disclosure})
     agent = _agent()
@@ -427,7 +428,7 @@ def test_failure_records_actual_sampled_decks(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     sampled: bool,
-    disclosure: Literal["closed", "mixed"],
+    disclosure: DecklistSampling,
 ) -> None:
     decks = decks.model_copy(update={"decklists": disclosure})
     policy = GameErrorPolicy()
@@ -565,7 +566,7 @@ def test_independent_population_retains_event_ids_and_mirrors() -> None:
 
 @pytest.mark.parametrize("mode", ["closed", "mixed"])
 def test_source_disclosure_preserves_open_identity_and_binds_recovery(
-    mode: Literal["closed", "mixed"],
+    mode: DecklistSampling,
 ) -> None:
     source = UniformDecks(
         decks=tuple(Deck({name: 10}) for name in ("Plains", "Mountain", "Island"))

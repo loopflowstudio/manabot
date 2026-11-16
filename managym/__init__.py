@@ -9,8 +9,10 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 import sys
-from typing import Literal, ParamSpec, TypeVar, overload
+from typing import ParamSpec, TypeVar, overload
 import warnings
+
+from managym.disclosure import DecklistSampling
 
 from . import _managym
 from ._managym import *  # noqa: F403 — expose the native API described by the stub.
@@ -64,13 +66,13 @@ class GameSetup(Sequence[_managym.PlayerConfig]):
     """
 
     players: tuple[_managym.PlayerConfig, ...]
-    decklists: Literal["open", "closed", "mixed"]
+    decklists: DecklistSampling
 
     def __init__(
         self,
         players: Sequence[_managym.PlayerConfig],
         *,
-        decklists: Literal["open", "closed", "mixed"] | None = None,
+        decklists: DecklistSampling | None = None,
     ) -> None:
         if decklists is None:
             decklists = players.decklists if isinstance(players, GameSetup) else "open"

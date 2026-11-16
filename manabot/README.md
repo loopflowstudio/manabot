@@ -116,8 +116,8 @@ A sampled source can also use `decklists="mixed"`: each game draws open or
 closed with equal probability from its reset seed, separately from deck and
 shuffle RNG. Auto-reset and recovery reproduce that draw; retained matchups,
 attempts and replays record the resolved setting. Both seats see the public
-`decklists_open` observation bit (1 open, 0 closed), encoded alongside the
-other game facts on the player tokens and stated in the text observation.
+`decklists_closed` observation flag, stated in the text observation. Its inverse
+(1 open, 0 closed) accompanies the other game facts on the player tokens.
 Older checkpoints with a different player-buffer shape fail normal world binding.
 
 An open source serializes without a `decklists` key, so saved regimes and their

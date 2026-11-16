@@ -16,10 +16,11 @@ from manabot.env.observation import ObservationSpace
 from manabot.env.vector_env import VectorEnv as TorchVectorEnv
 from manabot.infra.config import MatchConfig, RewardConfig
 from manabot.managym.decision import Command, DecisionFrame
+from managym.disclosure import DecklistDisclosure
 
 
 def _players(
-    disclosure: Literal["open", "closed"] = "closed",
+    disclosure: DecklistDisclosure = "closed",
 ) -> managym.GameSetup:
     return managym.GameSetup(
         [
@@ -61,12 +62,12 @@ def _identity(snapshot: managym.HandSnapshot) -> tuple[int, int, int, int]:
 
 @pytest.mark.parametrize("disclosure", ["open", "closed"])
 def test_hand_snapshots_match_scalar_without_changing_observations(
-    disclosure: Literal["open", "closed"],
+    disclosure: DecklistDisclosure,
 ) -> None:
     vector = managym.VectorEnv(2, seed=42)
     players = _players(disclosure)
     results = vector.reset_all(players)
-    assert all(obs.decklists_open is (disclosure == "open") for obs, _ in results)
+    assert all(obs.decklists_closed is (disclosure == "closed") for obs, _ in results)
     scalars = [managym.Env(seed=42 + slot) for slot in range(2)]
     for scalar in scalars:
         scalar.reset(players)

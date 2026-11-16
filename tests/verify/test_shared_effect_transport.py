@@ -59,7 +59,7 @@ def test_retained_drill_prefix_admits_shared_effects(
     players = game.setup()
     scalar = managym.Env(seed=game.seed, skip_trivial=receipt.skip_trivial)
     scalar_obs, _ = scalar.reset(players)
-    assert scalar_obs.decklists_open is (not closed)
+    assert scalar_obs.decklists_closed is closed
     encoder = ObservationEncoder(ObservationConfig())
     buffers = encoder.allocate(1)
     buffers.update(
@@ -75,9 +75,9 @@ def test_retained_drill_prefix_admits_shared_effects(
     )
     vector.set_buffers(buffers)
     ((vector_obs, _),) = vector.reset_all(players)
-    assert vector_obs.decklists_open is (not closed)
+    assert vector_obs.decklists_closed is closed
     vector.reset_seeds_into_buffers([game.seed])
-    assert scalar.observation_for_player(0).decklists_open is (not closed)
+    assert scalar.observation_for_player(0).decklists_closed is closed
     assert vector.current_player_configs()[0].decklists == (
         "closed" if closed else "open"
     )
@@ -97,7 +97,7 @@ def test_retained_drill_prefix_admits_shared_effects(
             if viewer == actor
             else scalar.observation_for_player(viewer)
         )
-        assert obs.decklists_open is (not closed)
+        assert obs.decklists_closed is closed
         assert obs.shared_effects is not None
         assert len(obs.shared_effects) == receipt.payloads
         assert (

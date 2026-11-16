@@ -17,6 +17,7 @@ from pydantic import (
 
 from manabot.env.legacy_input import warn_deprecated_input
 from managym import WORLD_SETUP, Deck, DeckImport, Decklist, PlayerConfig
+from managym.disclosure import DecklistDisclosure
 
 # The policy input a fresh configuration selects. Input v11 gives each game
 # thing one object row (cards outside the battlefield and stack, permanents
@@ -164,7 +165,7 @@ class MatchConfig(BaseConfig):
     # Open decklists disclose each player's main deck and sideboard to the
     # opponent; closed disclose neither. One setting covers both players.
     # Omitted when open, so earlier configurations keep their identity.
-    decklists: Literal["open", "closed"] = Field(
+    decklists: DecklistDisclosure = Field(
         default="open", exclude_if=lambda value: value == "open"
     )
 
@@ -197,7 +198,7 @@ class MatchConfig(BaseConfig):
         first: PlayerConfig,
         second: PlayerConfig,
         *,
-        decklists: Literal["open", "closed"],
+        decklists: DecklistDisclosure,
     ) -> "MatchConfig":
         """Record a native root in seat order, rejecting asymmetric match settings."""
         if first.world != second.world:

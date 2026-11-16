@@ -409,7 +409,8 @@ Capacities are configuration; widths are the layout.
 | `actions`, `action_focus`, `name_candidates` | 512 × 22, 512 × 2, 512 × 4 | Legal actions, the objects each names, name choices |
 | `events` | 32 × 7, or 32 × 12 with recent events | Public events |
 
-The game-level `decklists_open` flag is column 73 of each player row: 1
+The game-level `decklists_closed` flag is inverted in the `decklists_open`
+column (73) of each player row: 1
 means both players know both lists, 0 means neither knows the opponent's list.
 The native game supplies it for both viewers; it accompanies the other game
 facts on both player learning tokens and is explicit in the text observation.

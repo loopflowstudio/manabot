@@ -1,14 +1,22 @@
 import { expect, test } from '@playwright/test';
 
-// One bounded real native game. This is workflow evidence, not a strength test.
+// One fixed, short native game. This is workflow evidence, not a strength test.
 test('live Watch, archived playback and the final action share one resumable timeline', async ({ page }, testInfo) => {
   test.setTimeout(180_000);
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.setViewportSize({width: 1280, height: 800});
   await page.emulateMedia({reducedMotion: 'reduce', colorScheme: 'light'});
+  await page.route('**/api/watch/setups/*', route => {
+    if (route.request().method() !== 'POST') return route.continue();
+    return route.continue({postData: JSON.stringify({
+      ...route.request().postDataJSON(), hero_deck: 'watch-timeline-fixture',
+    })});
+  });
   await page.goto('/replay?watch=1');
   await page.getByRole('combobox', {name: 'Seat 2 bot', exact: true}).selectOption('random');
+  await page.getByRole('combobox', {name: 'Deal mode', exact: true}).selectOption('repeat');
+  await page.getByLabel('Seed', {exact: true}).fill(String(0x5e25483b));
   await page.getByRole('button', {name: 'Start watching', exact: true}).click();
   await page.getByRole('button', {name: 'Continue', exact: true}).click();
   await expect(page.getByTestId('position-counter')).toHaveText('Position 1 / 3');
@@ -28,14 +36,14 @@ test('live Watch, archived playback and the final action share one resumable tim
   expect(new URL(page.url()).searchParams.get('position')).toBe(recordedKey);
   expect(produced).toHaveLength(0);
 
-  // Complete the same ordinary seeded game through its existing producer.
+  // Complete the short seeded game through its existing producer.
   const terminal = await page.evaluate(async id => {
     const token = sessionStorage.getItem(`etude.watch.${id}`)!;
     const headers = {'content-type': 'application/json', 'x-etude-participant-token': token};
     const indexResponse = await fetch(`/api/traces/${id}/recording`, {headers});
     const index = await indexResponse.json();
     let revision = index.revision as number;
-    for (let decision = 0; decision < 350; decision++) {
+    for (let decision = 0; decision < 64; decision++) {
       const response = await fetch(`/api/watch/${id}/step`, {method: 'POST', headers, body: JSON.stringify({revision})});
       if (!response.ok) throw new Error(`Native producer failed: ${await response.text()}`);
       const result = await response.json();
@@ -57,7 +65,20 @@ test('live Watch, archived playback and the final action share one resumable tim
   await expect(page.getByTestId('replay-perspective')).toContainText('Recorded seat-0 view');
   const history = page.getByTestId('presentation-history');
   await history.locator('summary').click();
-  await expect(history.getByRole('listitem').last()).toContainText('damage');
+  // A game may end without damage. The final consequence must include the
+  // recording's last retained event, whatever ended this deal.
+  const finalEvent = await page.evaluate(async id => {
+    const token = sessionStorage.getItem(`etude.watch.${id}`)!;
+    const position = new URL(location.href).searchParams.get('position')!;
+    const response = await fetch(`/api/traces/${id}/positions/${encodeURIComponent(position)}`, {
+      headers: {'x-etude-participant-token': token},
+    });
+    if (!response.ok) throw new Error(`Final recording read failed: ${await response.text()}`);
+    const result = await response.json();
+    return (result.history as {seq: number}[]).at(-1)?.seq;
+  }, id);
+  expect(finalEvent).toBeDefined();
+  await expect(history.locator('[data-presentation-seq]').last()).toHaveAttribute('data-presentation-seq', String(finalEvent));
   const historyScope = await history.getAttribute('data-scope');
   await page.getByRole('button', {name: 'Swap seats'}).click();
   await expect(history).toHaveAttribute('data-scope', historyScope!);

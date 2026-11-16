@@ -18,6 +18,7 @@ from pydantic import TypeAdapter
 
 import managym
 from managym.bots import BotDecision
+from managym.disclosure import DecklistDisclosure
 from managym.experience_projection import redact_observation
 from managym.search import SearchConfig
 
@@ -64,7 +65,7 @@ class GameConfig:
     mirror: SearchConfig | None = None
     # "open": each player knows the other's main deck and sideboard;
     # "closed": neither. Traces that predate the option were open.
-    decklists: Literal["open", "closed"] = "open"
+    decklists: DecklistDisclosure = "open"
     # Private import provenance: each seat's decklist (``managym.Decklist``
     # JSON form), admitted by the world. Viewer exports strip them.
     hero_source: dict[str, Any] | None = None

@@ -478,7 +478,7 @@ class ObservationEncoder:
             ("opponent_player", obs.opponent),
         ):
             out[key] = self._encode_player_features(player, obs.turn)[np.newaxis, ...]
-            out[key][0, PLAYER_DECKLISTS_OPEN_INDEX] = float(obs.decklists_open)
+            out[key][0, PLAYER_DECKLISTS_OPEN_INDEX] = float(not obs.decklists_closed)
         for key, cards, is_mine in (
             ("agent_cards", agent_cards, 1.0),
             ("opponent_cards", opponent_cards, 0.0),

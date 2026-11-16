@@ -47,7 +47,7 @@ def _players() -> managym.GameSetup:
 def naming_trace() -> NamingTrace:
     env = managym.Env(seed=165)
     observation, _ = env.reset(_players())
-    assert observation.decklists_open is False
+    assert observation.decklists_closed is True
     actions: list[int] = []
     cast = False
     for ordinal in range(200):

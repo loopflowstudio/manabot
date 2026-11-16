@@ -18,6 +18,8 @@ from typing import (
 import numpy as np
 from typing_extensions import deprecated
 
+from managym.disclosure import DecklistDisclosure, DecklistSampling
+
 from . import format as format
 
 class ObservationValueLayout(TypedDict):
@@ -408,14 +410,14 @@ class PlayerConfig:
         decklist: Dict[str, int],
         sideboard: Optional[Dict[str, int]] = None,
         world: str | None = None,
-        disclosure: Literal["open", "closed"] | None = None,
+        disclosure: DecklistDisclosure | None = None,
     ) -> None: ...
     name: str
     world: str | None
     """``WORLD_SETUP`` submits the deck to the world (reset admits it); ``None``
     runs it as given. Any other value raises: content packs are retired."""
     # Deprecated per-seat hint, removed in 0.4.0; use GameSetup.decklists.
-    disclosure: Literal["open", "closed"]
+    disclosure: DecklistDisclosure
     @property
     def deck(self) -> Deck: ...
     @property
@@ -967,7 +969,7 @@ class EventData:
     controller_id: int
 
 class Observation:
-    decklists_open: bool
+    decklists_closed: bool
     shared_effects: list[SharedEffect] | None
     continuation: list[ContinuationFrame]
 
@@ -1116,12 +1118,12 @@ class GameSetup(Sequence[PlayerConfig]):
     @property
     def players(self) -> tuple[PlayerConfig, ...]: ...
     @property
-    def decklists(self) -> Literal["open", "closed", "mixed"]: ...
+    def decklists(self) -> DecklistSampling: ...
     def __init__(
         self,
         players: Sequence[PlayerConfig],
         *,
-        decklists: Literal["open", "closed", "mixed"] | None = None,
+        decklists: DecklistSampling | None = None,
     ) -> None: ...
     def __len__(self) -> int: ...
     @overload
@@ -1131,4 +1133,4 @@ class GameSetup(Sequence[PlayerConfig]):
 
 def resolve_decklists(
     player_configs: GameSetup | list[PlayerConfig], seed: int
-) -> Literal["open", "closed"]: ...
+) -> DecklistDisclosure: ...
