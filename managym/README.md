@@ -413,6 +413,11 @@ and frame. Only after that obligation finishes do its tap/life/sacrifice costs
 commit and its output become a visible color decision. Mana abilities do not
 create stack objects. Fixed production keeps source order; a nested automatic
 prefix considers concrete pool remainders and the parent's completion.
+The announced activation's own tap, sacrifice and unpaid life fee remain
+reserved throughout waterbend and nested mana decisions, including a saved
+spending caller. A nested mana ability cannot consume those resources and
+leave the announcement without a complete payment. Its own upfront life fee
+is counted once, on that ability's output obligation.
 
 Most payment questions never reach the search. With four untapped Islands and
 an empty pool, "can this player pay `{2}{U}`?" is answered by adding: the pool
@@ -443,8 +448,8 @@ automatic tapping order cannot differ between the two. Adding a kind of mana
 source needs no change here unless it should join the direct class, which
 requires a test comparing both paths on that source.
 
-Payment search tracks an object's untapped resource, presence and limited
-ability uses separately. Counted tap costs select distinct untapped matching
+Payment search tracks an object's untapped resource, presence and used limited
+abilities separately. Counted tap costs select distinct untapped matching
 permanents through ordinary SelectCard decisions; The Cabbage Merchant can
 activate twice by tapping four distinct Foods without tapping itself. Each
 selected tap commits before the next selection and is unavailable to nested
@@ -457,11 +462,23 @@ an identity-preserving witness with explicit tap choices. Every saved counted-ta
 cost must retain enough present, untapped candidates throughout the search;
 production and spending cannot restore a consumed resource. The whole-payment
 bound counts only outputs a pending cost could spend and takes the maximum of
-competing uses of one tap; the color-set bound applies the same supply to every
-set of owed colors, so one "U or R" source cannot cover `{U}{R}`. Search
+competing uses of one tap. A separate conservation bound counts every mana
+class and the net gain after future activation fees; saved outputs stay gross
+supply beside their explicit unpaid costs. Restricted mana can therefore seed
+a filter without being mistaken for mana the parent can spend. The color-set
+bound applies the same supply to every set of owed colors, so one "U or R"
+source cannot cover `{U}{R}`. Search
 memoization shares feasibility across interchangeable sources (including
 membership in every counted-tap set), while retaining source order and exact
-identities in the first witness. Repeated lands therefore contribute resource
+identities in the first witness. An immutable branch state also serves as its
+memo key; canonical permutations copy only when resource order changes.
+The per-cost optimistic pool projects allowed classes onto color counts after
+taking each class's output-mode maxima, without copying restriction metadata.
+Concrete pools retain their exact classes throughout execution and search.
+Spending alternatives are explored only after the pool covers the whole current
+cost; a partial spend cannot interleave production, and its remaining pool must
+cover the unpaid pips before saved callers are checked.
+Repeated lands therefore contribute resource
 counts instead of all identity subsets. A search checks the color-set bound at
 its root and keeps identity keys until it has expanded 16 states; only then
 does it classify the sources and apply both to every state, so ordinary small
@@ -472,6 +489,20 @@ large-board work limit or truncation of legal payments. The
 [stress states](../docs/development.md#stress-states) measure payment and every
 other engine layer on large duplicative and large diverse boards; run them when
 changing this search.
+
+Each Game caches at most 64 searched queries in FIFO order, retaining negative
+answers and complete first witnesses. Exact keys include ordered source
+identities and capabilities, tap resources, pool classes, payable life, ordered
+caller obligations, source policy and the selected counted tap. Forks own
+independent FIFOs but share immutable entries, source lists, output alternatives
+and tap-candidate lists. Reservations detach source lists on writes. The cache
+stays outside hashes and observations; debug builds recompute every hit.
+
+Automatic-prefix searches start at the fewest taps whose largest fixed outputs
+or waterbend contributions could cover the pool shortfall, conservatively
+ignoring colors and tap competition. The cache and lower bound preserve complete
+choices and first witnesses; neither substitutes a fallback for an infeasible
+payment.
 
 Spending restrictions (CR 106.6) are typed: `ManaRestriction::Only` holds
 `SpendPredicate`s naming any subtype a spell must have or an activation's
