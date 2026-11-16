@@ -35,3 +35,30 @@ games delivered. Move the same checkpoint pair and schedule to an isolated
 source/runtime directory on mini-heart, using CPU inference and two active
 games. Do not replace another checkout's environment. Source changes only
 placement/device and concurrency; report it as the same exploratory check.
+
+## Results — Mac mini CPU
+
+All64scheduled games completed, with no draws, invalid games, timeouts or
+replay failures. Candidate was the mana-taps-trained50update checkpoint;
+opponent was the baseline-trained50update checkpoint, both seed26502.
+Checkpoint digests were verified against the frozen input receipts in every
+evaluation request. Both panels used the same8held-out deck pairs drawn from
+96Yue-free entries, crossing decks/seats over4legs.
+
+| Shared decision mode | Baseline wins | Mana-trained wins | Mana-trained win rate | Evaluation seconds |
+| --- | ---: | ---: | ---: | ---: |
+| Ordinary decisions | 20/32 | 12/32 | 37.5% | 69.94 |
+| Manual source taps | 17/32 | 15/32 | 46.875% | 82.16 |
+
+These are separate mode panels, not64independent games in one arena. With
+one training seed and8paired-deal blocks per mode, this small exploratory
+check establishes that the checkpoints can play/replay under both modes;
+it does not establish either training method's superiority or equivalence.
+The baseline won more games in this sample.
+
+Evaluation itself took152.10seconds summed over pair receipts, excluding
+environment setup/native compilation. Mini results and full traces remain at
+`/Users/jack/.cache/manabot-evals/decision-shapes-u50/outputs/`; a local copy is
+being retained under `.runs/quick-head-to-head/mini-results/`. Placement source
+is74d21dec68. The cancelled GPU attempt played no games; its specific pod was
+provider-confirmed deleted before this result. No baseline training restarted.
