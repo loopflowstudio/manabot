@@ -20,7 +20,12 @@ from manabot.infra.config import MatchConfig, ObservationConfig, RewardConfig
 from manabot.infra.identity import canonical_json, canonical_sha256, file_sha256
 from manabot.infra.provenance import RECORDED_ASSET_MANIFEST_HASH
 from manabot.model.world import expected_world
-from manabot.sim.evaluation_records import audit_view, evaluation_metadata, stored_game
+from manabot.sim.evaluation_records import (
+    audit_view,
+    evaluation_metadata,
+    is_record,
+    stored_game,
+)
 from manabot.sim.frames import build_command, build_viewer_frame, decision_row
 from manabot.verify.games import INTERACTIVE_DECK
 from manabot.verify.scenario_validation import scenario_identity
@@ -100,7 +105,7 @@ def read_trace(path: Path) -> list[dict[str, Any]]:
     rows = [json.loads(line) for line in body.splitlines()]
     return [
         audit_view(row, digest=GameRecord.model_validate(row).sha256)
-        if row.get("schema") == "managym-game-v1"
+        if is_record(row)
         else row
         for row in rows
     ]
@@ -238,7 +243,7 @@ def replay_game(
     capture_cards: bool = False,
 ) -> tuple[ReplayReceipt, dict[str, Any] | None]:
     """Verify one game, optionally retaining native facts from the same replay."""
-    if game.get("schema") == "managym-game-v1":
+    if is_record(game):
         game = audit_view(game, digest=GameRecord.model_validate(game).sha256)
     if "record" in game:
         return _replay_record(
