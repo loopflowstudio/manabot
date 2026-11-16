@@ -24,6 +24,7 @@ mod selection_sampling;
 pub mod setup;
 pub mod stabilization;
 pub mod statics;
+pub mod statistics;
 pub mod tick;
 pub mod trigger;
 pub mod triggers;

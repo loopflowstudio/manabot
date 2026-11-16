@@ -20,6 +20,7 @@ to copy.
 - [Numerical health](#numerical-health)
 - [Recovery](#recovery)
 - [Game failures](#game-failures)
+- [Diagnosing stalled training](#diagnosing-stalled-training)
 - [Ataraxos](#ataraxos)
 - [Policy inputs](#policy-inputs)
 - [Distributed training](#distributed-training)
@@ -839,6 +840,156 @@ world mismatch is always refused. It reports:
 Only agreement on binding, boundary and error reproduces a known failure.
 Replay never rewrites evidence, restores allowance or runs an optimizer.
 Engine failures in evaluation get no loss, draw or strength credit.
+
+## Diagnosing stalled training
+
+Enable durable game journals before starting an attempt you need to diagnose:
+
+```sh
+uv run manabot train --recipe local --training-game-logs --out .runs/journal-demo
+```
+
+The training run directory holds `game-journals/operation.json` and one rolling
+`game-journals/PRODUCER.jsonl` journal per active producer. Scalar and vector
+producers use the same private replay evidence; sharded producers write separate
+files with global stream identities. The baseline recipe nests these under each
+training attempt directory; `run.json` records `game_journal_directory`.
+The files remain readable if a producer
+never returns or the process exits abruptly, without waiting for exception
+handling or cleanup.
+
+`--training-game-logs` defaults off and applies to local and baseline recipes
+and explicit regime runs. Python callers pass `training_game_logs=True` to
+`execute_regime`; remote declarations set it on the job:
+
+```python
+job = TrainingJob(
+    regime=batched_baseline(),
+    experiment=Path(__file__).stem,
+    training_game_logs=True,
+)
+```
+
+Use the imports and launch setup in [remote training](#remote-training).
+This is a runtime diagnostic option: it does not edit the `TrainingRegime`,
+its digest or checkpoint bindings. Enable it in a new attempt; it cannot
+recover an unfinished game's inputs from an earlier run that omitted logging.
+With logging off, there are no additional diagnostic native reads or durable
+per-step writes.
+
+Game facts, optional statistics and private recording belong to managym and
+can be used [without the training package](engine-python.md#collect-in-game-statistics).
+Training selects that recorder and supplies producer paths, run coordinates,
+retention and the outer phase markers. `--training-game-logs` does not enable
+aggregate statistics or audited evaluation eligibility. Statistics can count
+play without detailed logs, but cannot explain a native call that never returns.
+The training exposure option retains detailed facts for analysis; it is distinct
+from both in-memory statistics and durable pending-call recording.
+
+### Locate the interrupted operation
+
+Read `operation.json` alongside the producer journals. It identifies the
+active collection, learner or opponent inference, learning, device
+synchronization or export operation, with pending/returned state, timestamp,
+sequence and run/stage/update coordinates. Nested inference returns restore
+the enclosing operation. A pending learning marker with returned/ready game
+journals points to learning work; the last game action alone does not identify
+where progress stopped.
+
+Each producer journal retains the known seed and actual decks, committed
+action prefix, selected pending actions, active streams and last-known
+decision frames (actor and offers); replay below names their turn and phase.
+Collector construction, which resets each producer's first games, is part of the
+`collection` operation. Its native boundary distinguishes:
+
+| Phase | Interpretation |
+| --- | --- |
+| `preparing` | Inputs are durable before native decision-frame reads; cached decision context is explicitly last-known. Execution has not started. |
+| `executing` | Intent to call the named native mutation (step, reset, reassignment or failed-row replacement) is durable, with no durable return acknowledgment. For an indexed step, the selected action and its fresh pre-action binding are durable. |
+| `synchronizing` | The native call returned; current seeds, decks or game generations are still being read. |
+| `ready` | Synchronization completed and the retained evidence describes the current known game prefixes. |
+
+A returned batch does not establish success for every row. Unobserved row
+outcomes stay unknown. During sampled reset or auto-reset, the new seed/setup
+may be unknown until synchronization; the previous prefix and decks remain
+last-known evidence, never the claimed new game. The operation marker and
+producer files are written independently, so compare their coordinates and
+sequences rather than treating them as one atomic snapshot. A process can stop
+after publishing intent but before entering the native call, or after the call
+returns but before its acknowledgment is durable. Both leave a pending, unknown
+outcome; the journal cannot distinguish them from a call that never returned.
+Neither that state nor a lack of progress proves an illegal
+action, a failed game or the cause of a stall.
+
+### Inspect and replay a journal
+
+Copy the producer journal to a private location before replaying if the run
+is still writing it. Substitute its filename for `PRODUCER`:
+
+```sh
+uv run python -m manabot.training.state.game_errors .runs/journal-demo/game-journals/PRODUCER.jsonl --attempt 1 --seconds 30
+```
+
+Replay uses the [existing source/native and world checks](#automatic-capture-and-replay).
+An indexed-step execution journal can attempt its pending action under the
+retained fresh binding. A reset, reassignment or replacement journal
+reconstructs the last-known prefix and reports its new setup unavailable; it
+never replays proposed seeds or decks as observed native state. Preparation and
+synchronization journals reconstruct the last-known prefix where possible and
+report unavailable binding or setup; replay cannot
+reconstruct an unobserved sampled root or settle the original unknown outcome.
+Each reconstructed stream reports `reached`: the turn, phase, step and active
+player of the last decision replay reached. Before attempting a bound pending
+action, replay prints a `replay_attempt` line to stderr with that decision's
+position, so a replay that also stops before its time limit still names the turn.
+These journals are diagnostic inputs, not optimizer or process-recovery
+checkpoints. Choose a [recovery contract](#recovery) separately to resume work.
+
+### Storage, overhead and retention
+
+Journals contain privileged replay inputs, including hidden decks and state.
+Files use mode 0600 and directories 0700; keep them private and out of Academy
+viewer exports. Each required boundary is appended and fsynced before the next
+operation. Producer files contain a checkpoint plus sequenced changes; automatic
+atomic compaction discards superseded history once appended bytes reach the
+larger of the last checkpoint size and 64 KiB. Allow for one oversized record
+and a temporary checkpoint during compaction. Directory entries are synced on
+creation/replacement. Phase-only changes do not serialize action prefixes, but
+fresh decision frames still need serialization and each boundary needs durable
+I/O. Logging remains opt-in and can reduce throughput.
+
+A deterministic fixture with a 10,000-action prefix and five publications wrote
+32,743 bytes instead of the previous full-snapshot path's 153,601 bytes. Both
+paths made five writes and five file syncs; directory syncs fell from ten to
+one. With ten actions the same fixture wrote 2,773 versus 3,751 bytes. These
+counts measure serialization and I/O work on synthetic inputs, not training
+throughput; no controlled on/off throughput measurement is available.
+
+Retained file count is bounded by the run's maximum simultaneous producers;
+bytes depend on active prefixes and the compaction allowance. Successful games
+supersede earlier inputs; this is not a complete game archive. Final cursors
+remain after close, and immutable failure receipts stay separate. A torn final
+append reports an incomplete tail and projects only complete records; malformed
+complete records
+or sequence gaps fail inspection. An incomplete first checkpoint is rejected.
+A missing return acknowledgment remains pending with unknown outcome.
+
+The run registers the journal directory before training starts and registers
+terminal journals on success or failure. On Etude workers the directory is
+`$ETUDE_OUTPUT_DIR/training/game-journals`, inside the ordinary output collection
+boundary. A hung process leaves local bytes; remote retention still requires
+the launcher or host to collect them before deleting the machine. Journaling
+does not provide live cloud upload from a hung worker or guarantee survival of
+host deletion. Completed-game arena exports, `game-attempts.jsonl` and optional
+training exposure do not replace these pending-call journals.
+
+If a requested pending boundary cannot be persisted, training stops with a
+storage error before entering that native operation. A write failure after
+execution reports the persistence error without claiming the call did not run;
+capture errors do not replace an original native exception. Restore writable
+storage and retain the existing evidence before starting a new attempt or using
+an admitted recovery path. Journaling introduces no automatic retry, game
+skipping or failure tolerance.
 
 ## Ataraxos
 

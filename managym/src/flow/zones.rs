@@ -283,8 +283,8 @@ impl Game {
             }
 
             if let Some(object) = self.state.zones.top(ZoneType::Library, player) {
-                if let Some(capture) = &mut self.card_capture {
-                    capture.drawing = Some(object);
+                if self.card_capture.is_some() || self.statistics.is_some() {
+                    self.capture_drawing = Some(object);
                 }
                 self.move_object_with_entry(
                     object,
@@ -294,9 +294,7 @@ impl Game {
                         ..Default::default()
                     },
                 );
-                if let Some(capture) = &mut self.card_capture {
-                    capture.drawing = None;
-                }
+                self.capture_drawing = None;
                 self.state.turn.history[player.0].cards_drawn += 1;
                 self.emit(GameEvent::CardDrawn {
                     player,

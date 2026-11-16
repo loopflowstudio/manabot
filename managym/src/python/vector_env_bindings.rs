@@ -441,6 +441,18 @@ impl PyVectorEnv {
         })
     }
 
+    fn enable_statistics(&mut self) -> PyResult<()> {
+        self.inner.enable_statistics().map_err(map_agent_err)
+    }
+
+    fn statistics(&self, py: Python<'_>) -> PyResult<PyObject> {
+        super::bindings::statistics_object(py, &self.inner.statistics(), "summaries")
+    }
+
+    fn take_statistics(&mut self, py: Python<'_>) -> PyResult<PyObject> {
+        super::bindings::statistics_object(py, &self.inner.take_statistics(), "summaries")
+    }
+
     fn enable_exposure_capture(&mut self) -> PyResult<()> {
         self.inner.enable_exposure_capture().map_err(map_agent_err)
     }

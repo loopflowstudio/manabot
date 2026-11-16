@@ -82,6 +82,11 @@ def train_command(
         "--padded-shapes",
         help="Train local/baseline recipes on CUDA without bucketed shapes or live tokens",
     ),
+    training_game_logs: bool = typer.Option(
+        False,
+        "--training-game-logs",
+        help="Retain private durable game and operation journals",
+    ),
     bucketed_shapes: bool = typer.Option(
         False,
         "--bucketed-shapes",
@@ -166,6 +171,7 @@ def train_command(
                 learning_seats=learning_seats or "both",
                 device=device,
                 padded_shapes=padded_shapes,
+                training_game_logs=training_game_logs,
             )
             status = result.status
             typer.echo(f"local: {status}; run: {result.id}")
@@ -184,6 +190,7 @@ def train_command(
                 learning_seats=learning_seats or "both",
                 device=device,
                 padded_shapes=padded_shapes,
+                training_game_logs=training_game_logs,
             )
             status = baseline_result.status
             typer.echo(
@@ -222,6 +229,7 @@ def train_command(
             checkpoint_seconds=checkpoint_seconds,
             checkpoint_updates=checkpoint_updates,
             initial_admission=Path(initial_admission) if initial_admission else None,
+            training_game_logs=training_game_logs,
             backend=resolve("torch"),
         )
 

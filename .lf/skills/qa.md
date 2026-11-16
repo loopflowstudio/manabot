@@ -404,6 +404,18 @@ publish, land or choose the next Graph step from here.
   `gh run view <id> --job <job-id> --log`. Compare install time with peers in
   the same run and inspect dependency logs for unexpected downloads.
   See `docs/development.md` (Job time) for the budget.
+- Training game journals (`--training-game-logs`): run `manabot train --recipe local --steps 200 --training-game-logs` from a supervised `Popen(start_new_session=True)`, poll `game-journals/operation.json` and `os.killpg(..., SIGKILL)` while `collection` is pending after update 1; copy `vector-N.jsonl` and replay it with `manabot.training.state.game_errors --attempt 1`. Kills land at `ready` boundaries; a pending native step is reachable only through the `os._exit` child fixtures. Compare on/off runs by safetensors tensor bytes (metadata differs by `run_id`); `execution.workers=2` in a `local_smoke` regime gives sharded files.
+- Standalone statistics/recording: stage and install an engine-only wheel into a
+  fresh venv, then run the two Python examples in `docs/engine-python.md` outside
+  the checkout. Play the same seeded authored game with neither option, statistics
+  only, recording only and both; compare observation digests and summary counts.
+  Exclude `generation` from cross-Env summary comparison: it intentionally names
+  each distinct game. Check terminal drain-once and replaced partial summaries.
+  Copy a journal and run `uv run --no-project --python <venv>/bin/python python -m
+  managym.replay <copy> --seconds 30 --statistics`; confirm source bytes remain
+  unchanged. Empty/missing/corrupt inputs must fail, and a torn final append must
+  warn while recovering the last complete boundary. `scripts/release/engine_smoke.py`
+  additionally checks that manabot, Torch and Etude are absent.
 - Ctrl-C a run: start it with `subprocess.Popen(..., start_new_session=True,
   preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))` and
   `os.killpg(pid, SIGINT)`. A job started with `&` from a non-interactive shell

@@ -18,7 +18,6 @@ from manabot.backends.torch.collection import (
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import transition_gae
-from manabot.env.failures import read_failure
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
@@ -43,6 +42,7 @@ from manabot.training.state.game_errors import (
 )
 from manabot.training.updates.ppo import update_iteration
 import managym
+from managym.recording import read_failure
 from tests.eval.arena_fixture import arena_fixture
 from tests.training.game_error_fixtures import (
     _bounded_fixture_replay,

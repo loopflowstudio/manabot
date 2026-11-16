@@ -23,7 +23,7 @@ Collection never updates model weights; the regime executor owns learning.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from copy import deepcopy
 from dataclasses import dataclass, field
 import time
@@ -391,6 +391,9 @@ class SeatRoutedCollector:
         game_errors: GameErrorPolicy | None = None,
         record_attempt: Callable[[GameAttempt], GameErrorState] | None = None,
         adaptive: AdaptiveConfig | None = None,
+        operation: Callable[[str], AbstractContextManager[None]] = lambda name: (
+            nullcontext()
+        ),
     ) -> None:
         if adaptive is not None and (
             opponent_mode != "self"
@@ -403,6 +406,7 @@ class SeatRoutedCollector:
             raise ValueError(
                 "adaptive collection requires both-seat current-self, one producer, fixed roots and current-game recovery"
             )
+        self._operation = operation
         self._sampler = AdaptiveSampler(adaptive) if adaptive is not None else None
         self._assignments = (
             [self._sampler.draw() for _ in range(num_envs)] if self._sampler else []
@@ -769,9 +773,10 @@ class SeatRoutedCollector:
     def _opponent_actions(
         self, rows: np.ndarray, inference: CollectionScope
     ) -> np.ndarray:
-        if self.opponent_mode == "self":
-            return inference.opponent_actions(self._slice_obs_rows(rows))
-        return self._opponent.select(self._buffers, rows)
+        with self._operation("opponent_inference"):
+            if self.opponent_mode == "self":
+                return inference.opponent_actions(self._slice_obs_rows(rows))
+            return self._opponent.select(self._buffers, rows)
 
     def _slice_obs_rows(self, rows: np.ndarray) -> ObservationBuffers:
         """Host observation rows with the training action-focus dtype."""
@@ -961,7 +966,7 @@ class SeatRoutedCollector:
                     if self.opponent_mode == "learning":
                         assert opponent_inference is not None
                         opp_acts = self._sample_learning_rows(
-                            opp_rows, acting, opponent_inference
+                            opp_rows, acting, opponent_inference, "opponent_inference"
                         )
                     else:
                         opp_acts = self._opponent_actions(opp_rows, inference)
@@ -1390,8 +1395,10 @@ class SeatRoutedCollector:
         rows: np.ndarray,
         acting: np.ndarray,
         inference: CollectionScope,
+        operation: str = "learner_inference",
     ) -> np.ndarray:
-        sampled = inference.sample(self._slice_obs_rows(rows), self.profiler)
+        with self._operation(operation):
+            sampled = inference.sample(self._slice_obs_rows(rows), self.profiler)
         acts, logprobs, values = sampled.actions, sampled.logprobs, sampled.values
         outcomes, needs = sampled.outcomes, sampled.needs
         with self.profiler.track("Rollout recording"):
