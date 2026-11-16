@@ -29,12 +29,12 @@ import managym
 from managym import recording
 from managym.card_capture import CapturedCards
 from managym.recording import (
-    FailureEvidence,
-    GameInputs,
-    PlayerSetup,
+    FailureEvidence as _FailureEvidence,
+    GameInputs as _GameInputs,
+    PlayerSetup as _PlayerSetup,
     _append,
     _jsonl,
-    atomic_private_json,
+    atomic_private_json as _atomic_private_json,
 )
 
 
@@ -49,12 +49,12 @@ class ActionCutoffSample(BaseModel):
     retained_count: int
     dropped_count: int
     decision_kind: str
-    game: GameInputs
+    game: _GameInputs
 
 
 class NativeTrainingTrace(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    player_configs: list[PlayerSetup]
+    player_configs: list[_PlayerSetup]
     actions: list[int]
 
 
@@ -132,13 +132,13 @@ class TrainingExposureReceipt(BaseModel):
         body = _jsonl(self.model_dump(mode="json", by_alias=True))
         return hashlib.sha256(body.encode()).hexdigest()
 
-    def replay_inputs(self) -> FailureEvidence:
-        return FailureEvidence(
+    def replay_inputs(self) -> _FailureEvidence:
+        return _FailureEvidence(
             mode="scalar",
             operation="step",
             skip_trivial=self.skip_trivial,
             games=[
-                GameInputs(
+                _GameInputs(
                     stream=self.stream,
                     seed=self.game.seed,
                     players=self.game.trace.player_configs,
@@ -198,7 +198,7 @@ class CaptureScope:
 
     def _mark_operation(self, name: str, state: str) -> None:
         self._operation_sequence += 1
-        atomic_private_json(
+        _atomic_private_json(
             self.journal_directory / "operation.json",
             {
                 "operation": name,
@@ -265,7 +265,7 @@ class _TrainingCapture:
         scope = _scope.get() or self.scope
         return scope.context() if scope else {}
 
-    def _retain(self, evidence: FailureEvidence) -> Path:
+    def _retain(self, evidence: _FailureEvidence) -> Path:
         scope = _scope.get() or self.scope
         if scope is not None:
             self.failure_directory = scope.directory
@@ -286,7 +286,7 @@ class _TrainingCapture:
         super()._start_cursor(name)
 
     def record_policy_actions(
-        self, count: int, kind: str, capacity: int, game: GameInputs
+        self, count: int, kind: str, capacity: int, game: _GameInputs
     ) -> None:
         """Count decisions consumed under the explicit first-legal policy.
 

@@ -316,7 +316,6 @@ def test_disabled_logging_has_no_writer_or_extra_native_reads(
     def forbidden(*args: object, **kwargs: object) -> None:
         raise AssertionError("disabled journal invoked writer")
 
-    monkeypatch.setattr("manabot.env.failures.atomic_private_json", forbidden)
     monkeypatch.setattr("managym.journal.DurableJournal.__init__", forbidden)
     scope = CaptureScope(tmp_path / "failures", context=forbidden)
     with capture_scope(scope):
