@@ -31,7 +31,7 @@ from manabot.verify.text_observation import collision_branches, priority_root, r
 import managym
 from managym.decision import SemanticContractError
 from managym.decision_capture import DecisionInput
-from managym.opponent_memory import OpponentDecisionRecord, read_records
+from managym.decision_memory import DecisionRecord, read_records
 
 
 def test_every_native_decision_code_has_a_label() -> None:
@@ -1353,7 +1353,7 @@ def test_shared_mill_selection_reaches_text_commands_and_both_encoders() -> None
     assert env.state_digest() == before
 
 
-def test_opponent_memory_text_lists_every_record_and_snapshot_once() -> None:
+def test_decision_memory_text_lists_every_record_and_snapshot_once() -> None:
     # A whole-game log repeats the same untapped sources at many choices; the
     # prompt must keep every record without repeating their rules snapshots,
     # or ordinary games pass the default budget after about 120 decisions.
@@ -1365,9 +1365,9 @@ def test_opponent_memory_text_lists_every_record_and_snapshot_once() -> None:
             break
         env.step(rng.randrange(env.action_count()))
     viewer = env.current_agent_index()
-    memory = read_records(env.observation_for_player(viewer).opponent_memory_json())
+    memory = read_records(env.observation_for_player(viewer).decision_memory_json())
     text = capture_text_decision(env).text
-    history, snapshots = text.split("Opponent decisions, chronological")[1].split(
+    history, snapshots = text.split("Decision history, chronological")[1].split(
         "Historical rules snapshots:\n"
     )
     numbered = [line for line in history.splitlines() if line[:1].isdigit()]
@@ -1387,15 +1387,15 @@ def test_opponent_memory_text_lists_every_record_and_snapshot_once() -> None:
     assert all(text.count(description) == 1 for description in described)
 
 
-def test_opponent_memory_text_reference_alias_preserves_historical_status() -> None:
+def test_decision_memory_text_reference_alias_preserves_historical_status() -> None:
     from manabot.semantic.text_observation import _memory_lines
-    from managym.opponent_memory import DecisionReference
+    from managym.decision_memory import DecisionReference
 
     env = managym.Env(seed=0)
     env.reset(Match().to_rust())
     for _ in range(12):
         env.step(0)
-    records = read_records(env.observation_for_player(1).opponent_memory_json())
+    records = read_records(env.observation_for_player(1).decision_memory_json())
     reference = DecisionReference(
         role=2,
         definition=None,
@@ -1429,9 +1429,9 @@ def test_opponent_memory_text_reference_alias_preserves_historical_status() -> N
     assert text.count("historical rules") == 1
 
 
-def _assert_memory_contexts(text: str, memory: list[OpponentDecisionRecord]) -> None:
+def _assert_memory_contexts(text: str, memory: list[DecisionRecord]) -> None:
     """Read the documented changes independently and recover every native value."""
-    history = text.split("Opponent decisions, chronological")[1].split(
+    history = text.split("Decision history, chronological")[1].split(
         "Historical reference snapshots:"
     )[0]
     lines = [line for line in history.splitlines() if line[:1].isdigit()]
@@ -1452,6 +1452,7 @@ def _assert_memory_contexts(text: str, memory: list[OpponentDecisionRecord]) -> 
             == f"{record.ordinal + 1}. {record.kind}/{record.choice.kind or 'unavailable'}"
         )
         values = dict(part.split(": ", 1) for part in parts)
+        assert values.pop("actor") == ("You" if record.actor == 1 else "Opponent")
         assert values.pop("count") == str(record.count)
         assert values.pop("span") == f"{record.first_position}..{record.last_position}"
         for name in ("turn", "phase", "step", "life", "hand", "board", "mana"):
@@ -1529,7 +1530,7 @@ def _assert_memory_contexts(text: str, memory: list[OpponentDecisionRecord]) -> 
 
 
 @pytest.mark.parametrize("disclosure", ["open", "closed"])
-def test_distinct_long_game_opponent_memory_fits_default_text_budget(
+def test_distinct_long_game_decision_memory_fits_default_text_budget(
     disclosure: str,
 ) -> None:
     # Fixed native setup with a long library and peaceful play. Every record is
@@ -1547,7 +1548,7 @@ def test_distinct_long_game_opponent_memory_fits_default_text_budget(
         actor = env.current_agent_index()
         obs = env.observation_for_player(actor)
         if step % 50 == 0:
-            memory = read_records(obs.opponent_memory_json())
+            memory = read_records(obs.decision_memory_json())
             if len(memory) >= remaining[0]:
                 decision = capture_text_decision(env)
                 _assert_memory_contexts(decision.text, memory)
@@ -1587,15 +1588,15 @@ def test_distinct_long_game_opponent_memory_fits_default_text_budget(
     assert not remaining
 
 
-def test_opponent_memory_context_changes_and_empty_choices() -> None:
+def test_decision_memory_context_changes_and_empty_choices() -> None:
     from manabot.semantic.text_observation import _memory_lines
-    from managym.opponent_memory import DecisionReference
+    from managym.decision_memory import DecisionReference
 
     env = managym.Env(seed=0)
     env.reset(Match().to_rust())
     for _ in range(12):
         env.step(0)
-    record = read_records(env.observation_for_player(1).opponent_memory_json())[0]
+    record = read_records(env.observation_for_player(1).decision_memory_json())[0]
     reference = DecisionReference(
         role=2,
         definition=None,
@@ -1668,7 +1669,7 @@ def test_opponent_memory_context_changes_and_empty_choices() -> None:
     )
 
 
-def test_curated_long_game_opponent_memory_preserves_distinct_snapshots() -> None:
+def test_curated_long_game_decision_memory_preserves_distinct_snapshots() -> None:
     manifest = json.loads(
         Path(
             "managym/academy/packs/tla-ur-lessons-vs-gw-allies/v2/manifest.json"
@@ -1686,7 +1687,7 @@ def test_curated_long_game_opponent_memory_preserves_distinct_snapshots() -> Non
     for _ in range(600):
         env.step(rng.randrange(env.action_count()))
     memory = read_records(
-        env.observation_for_player(env.current_agent_index()).opponent_memory_json()
+        env.observation_for_player(env.current_agent_index()).decision_memory_json()
     )
     assert len(memory) == 484
     decision = capture_text_decision(env)

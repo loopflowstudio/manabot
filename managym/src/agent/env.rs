@@ -125,6 +125,8 @@ struct NativeActionTrace {
     seed: u64,
     /// Fixed at reset; forks share it rather than copying the decklists.
     player_configs: Arc<[PlayerConfig]>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    decision_memory_include_own: bool,
     actions: Vec<usize>,
 }
 
@@ -141,6 +143,7 @@ pub struct Env {
     capture_exposure: bool,
     retained_exposure: Vec<String>,
     skip_trivial: bool,
+    decision_memory_include_own: bool,
     /// Configured seed for the next reset.
     seed: u64,
     /// Originating reset seed, independent of pending resets and branch RNG seeds.
@@ -234,6 +237,7 @@ impl Env {
             capture_exposure: false,
             retained_exposure: Vec::new(),
             skip_trivial,
+            decision_memory_include_own: false,
             seed,
             reset_seed: seed,
             profiler: Profiler::new(enable_profiler, 64),
@@ -263,6 +267,7 @@ impl Env {
             heuristic_events: self.heuristic_events.clone(),
             player_policies: self.player_policies,
             reset_seed: self.reset_seed,
+            decision_memory_include_own: self.decision_memory_include_own,
             capture_generation: GAME_GENERATION.fetch_add(1, Ordering::Relaxed),
             ..Self::new(self.seed, self.skip_trivial, false, false)
         }
@@ -288,6 +293,7 @@ impl Env {
         self.action_trace = Some(NativeActionTrace {
             seed: self.seed,
             player_configs: Arc::from(player_configs.clone()),
+            decision_memory_include_own: self.decision_memory_include_own,
             actions: Vec::new(),
         });
         let mut game = if self.capture_cards {
@@ -295,6 +301,7 @@ impl Env {
         } else {
             Game::new(player_configs, self.seed, self.skip_trivial)
         };
+        game.decision_memory_include_own = self.decision_memory_include_own;
         if self.capture_exposure {
             game.card_capture
                 .as_mut()
@@ -416,6 +423,15 @@ impl Env {
     }
 
     /// Set chooser policies without changing game configuration or world identity.
+    pub fn with_decision_memory_include_own(mut self, enabled: bool) -> Self {
+        assert!(
+            self.game.is_none(),
+            "decision history must be configured before reset"
+        );
+        self.decision_memory_include_own = enabled;
+        self
+    }
+
     pub fn with_player_policies(mut self, policies: [PlayerPolicy; 2]) -> Self {
         self.player_policies = policies;
         self

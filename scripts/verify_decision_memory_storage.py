@@ -1,9 +1,8 @@
-"""Opponent-memory ownership and bounded execution measurements.
+"""Decision-memory ownership and bounded execution over independent real games.
 
-Default mode uses one controlled census-maximum prefix. --independent-games
-instead retains real Elemental games beside 256 native buffers, then executes
-one logical minibatch for all five arms. Neither mode establishes throughput,
-learning or CUDA worker admission. No artificial resource pressure is induced.
+Retain 256 native Elemental streams and execute one selected logical minibatch.
+This checks host/device ownership and exact archives, not playing strength.
+The former controlled repeated-detail fixture is retained only in frozen evidence.
 """
 
 import argparse
@@ -17,7 +16,6 @@ import resource
 import sys
 from threading import Event, Thread
 import time
-import tracemalloc
 from typing import Literal
 
 import numpy as np
@@ -25,21 +23,15 @@ import psutil
 import torch
 
 import manabot.backends.torch as backend
-from manabot.backends.torch.arrays import array_fields
 from manabot.backends.torch.collection import CollectionSession
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.memory_store import (
     MEMORY_FIELDS,
-    CompactObservation,
     MemoryStore,
-    Prefix,
     PrefixIdentity,
     PrefixObservation,
-    archive_memory,
-    gather_bytes,
-    restore_memory,
 )
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
@@ -175,8 +167,8 @@ def execution_proof(
                     ModelConfig(
                         world=managym.WORLD_SETUP,
                         hidden_dim=64,
-                        opponent_memory=encoder,
-                        opponent_memory_summaries=summaries,
+                        decision_memory=encoder,
+                        decision_memory_summaries=summaries,
                         attention_on=True,
                         attention_layers=2,
                         policy_film=True,
@@ -241,10 +233,10 @@ def execution_proof(
                 del model.prepare_admitted, model.forward_distribution
                 phases["after_adam"] = residency(device)
                 gradients = []
-                if model.opponent_memory is not None:
+                if model.decision_memory is not None:
                     gradients = [
                         p.grad
-                        for p in model.opponent_memory.parameters()
+                        for p in model.decision_memory.parameters()
                         if p.grad is not None
                     ]
                     assert gradients and all(torch.isfinite(g).all() for g in gradients)
@@ -297,260 +289,6 @@ def execution_proof(
     return results
 
 
-def measure(
-    source: Path,
-    *,
-    streams: int = 256,
-    selected_rows: int = 256,
-    device_name: Literal["cpu", "cuda"] = "cpu",
-    collection_rows: int = 2,
-    bootstrap_rows: int = 2,
-    learner_rows: int = 2,
-) -> dict[str, object]:
-    """Use retained counts and a valid controlled fixture; never claim replay bytes."""
-    device = torch.device(device_name)
-    census = json.loads(source.read_text())
-    record_count = int(census["terminal_records"]["maximum"])
-    detail_count = int(census["terminal_details"]["maximum"])
-    capacities = (int(census["record_capacity"]), int(census["detail_capacity"]))
-    space = ObservationSpace(
-        ObservationConfig(
-            max_opponent_records=capacities[0], max_opponent_details=capacities[1]
-        )
-    )
-    env = managym.Env(seed=111)
-    env.reset(Match().to_rust())
-    buffers = {
-        key: value[None]
-        for key, value in space.encode(
-            env.observation_for_player(env.current_agent_index())
-        ).items()
-    }
-    headers, details = buffers["opponent_records"][0], buffers["opponent_details"][0]
-    headers.fill(0)
-    details.fill(0)
-
-    def words(value: int) -> tuple[int, int]:
-        return value >> 16, value & 65535
-
-    kind = words(managym.catalog_token_value("OpponentMemory::Priority"))
-    field = words(managym.catalog_token_value("OpponentMemory::Life"))
-    bounds = np.linspace(0, detail_count, record_count + 1, dtype=np.int64)
-    for ordinal, (start, stop) in enumerate(zip(bounds[:-1], bounds[1:], strict=True)):
-        headers[ordinal] = [
-            *words(ordinal),
-            0,
-            1,
-            0,
-            3,
-            *words(ordinal),
-            *words(ordinal),
-            1,
-            3,
-            *kind,
-            start,
-            stop - start,
-            2,
-            1,
-        ]
-    details[:detail_count, 2:4] = field
-    details[:detail_count, 4] = -1
-    # Distinct exact numeric words prevent interning an unrealistically repeated
-    # record body; these are synthetic facts, not retained gameplay evidence.
-    details[:detail_count, 5] = np.arange(detail_count) >> 16
-    details[:detail_count, 6] = np.arange(detail_count) & 65535
-    store = MemoryStore(capacities)
-    start_time = time.perf_counter()
-    prefix = store.capture(
-        buffers, 0, PrefixIdentity("controlled-census-max", 0, "root")
-    )
-    capture_seconds = time.perf_counter() - start_time
-    # Retain all intermediate prefix versions, then 64 decisions per stream.
-    tails = []
-    tail = prefix.tail
-    while tail is not None:
-        tails.append(tail)
-        tail = tail.previous
-    references = [
-        Prefix(
-            PrefixIdentity(f"controlled-{row // 64}", row % 2, "root"),
-            tails[row % len(tails)],
-        )
-        for row in range(streams * 64)
-    ]
-    ownership = store.measure(references)
-    ordinary = {k: v for k, v in buffers.items() if k not in MEMORY_FIELDS}
-    tracemalloc.start()
-    compact = CompactObservation(ordinary, [prefix], capacities)
-    gather_peak = tracemalloc.get_traced_memory()[1]
-    tracemalloc.stop()
-    torch.set_num_threads(1)
-    model = ActorCritic(
-        space,
-        ModelConfig(
-            world=managym.WORLD_SETUP,
-            hidden_dim=64,
-            opponent_memory="gru",
-            opponent_memory_summaries=4,
-            attention_on=True,
-            attention_layers=2,
-            policy_film=True,
-            value_aggregation="masked_mean",
-        ),
-    )
-    tracemalloc.start()
-    started = time.perf_counter()
-    prepared = model.prepare(compact)
-    prepare_seconds = time.perf_counter() - started
-    preparation_peak = tracemalloc.get_traced_memory()[1]
-    tracemalloc.stop()
-    prepared_arrays = array_fields(prepared, np.ndarray)
-    memory_arrays = array_fields(prepared.memory, np.ndarray)
-    prepared_bytes = sum(a.nbytes for a in memory_arrays.values())
-    incident = archive_memory([prefix] * 16, capacities)
-    restored = restore_memory(incident)
-    assert all(p.tail is not None and p.tail.key == prefix.tail.key for p in restored)
-    terminal_details = 0
-    terminal_records = 0
-    receipt = source.with_name("native.jsonl")
-    for line in receipt.read_text().splitlines():
-        game = json.loads(line)
-        for terminal in game.get("terminal", []):
-            terminal_details += terminal["details"]
-            terminal_records += terminal["records"]
-    native_bytes = streams * sum(buffers[k].nbytes for k in MEMORY_FIELDS)
-    gather_selected = gather_bytes([prefix] * selected_rows)
-    # At the preparation overlap: prior Prepared + next raw and Prepared.
-    # Temporaries, ordinary arrays and activations remain separate, not a fit.
-    host_two = gather_selected + 2 * selected_rows * prepared_bytes
-    device_input = selected_rows * prepared_bytes
-    host_owned = (
-        native_bytes
-        + host_two
-        + sum(
-            ownership[key]
-            for key in (
-                "unique_chunk_bytes",
-                "python_metadata_bytes",
-                "intern_index_bytes",
-            )
-        )
-    )
-    memory_array_bytes = {k: a.nbytes for k, a in memory_arrays.items()}
-    all_field_bytes = sum(a.nbytes for a in prepared_arrays.values())
-    retained = PrefixObservation(ordinary, [prefix], capacities)
-    del compact, prepared, prepared_arrays, memory_arrays, model
-    execution = execution_proof(
-        space,
-        retained,
-        device,
-        collection_rows=collection_rows,
-        bootstrap_rows=bootstrap_rows,
-        learner_rows=learner_rows,
-    )
-    return {
-        "source_sha256": {
-            name: sha256(Path(name).read_bytes()).hexdigest()
-            for name in (
-                "manabot/env/memory_store.py",
-                "scripts/verify_opponent_memory_storage.py",
-                "manabot/policy/opponent_memory.py",
-                "manabot/policy/prepare.py",
-                "manabot/policy/admission.py",
-                "manabot/training/rollout/collection.py",
-                "manabot/backends/torch/state.py",
-                "manabot/backends/torch/rollout.py",
-                "manabot/sim/rollout.py",
-                "manabot/backends/torch/collection.py",
-                "manabot/backends/torch/learner.py",
-                "manabot/backends/torch/policy.py",
-                "manabot/training/execution.py",
-                "manabot/training/updates/ppo.py",
-                "manabot/training/updates/damped_policy.py",
-                "manabot/training/regime.py",
-            )
-        },
-        "fixture": "controlled valid distinct facts at census terminal maxima; no replay corpus",
-        "census": {
-            "games": census["games"],
-            "decisions": census["decisions"],
-            "step_digest": census["step_digest"],
-        },
-        "capacities": list(capacities),
-        "records": record_count,
-        "details": detail_count,
-        "streams": streams,
-        "selected_rows": selected_rows,
-        "retained_fixture": ownership,
-        "census_terminal_payload_bytes_without_interning": terminal_records * 72
-        + terminal_details * 32,
-        "capture_seconds": capture_seconds,
-        "gather_one_peak_bytes": gather_peak,
-        "prepare_one_peak_bytes": preparation_peak,
-        "prepare_seconds": prepare_seconds,
-        "prepared_memory_array_bytes": memory_array_bytes,
-        "prepared_memory_bytes_one": prepared_bytes,
-        "prepared_all_fields_bytes_one": all_field_bytes,
-        "native_memory_buffers_bytes": native_bytes,
-        "gather_selected_worst_case_bytes": gather_selected,
-        "host_two_batches_worst_case_bytes": host_two,
-        "device_memory_inputs_worst_case_bytes": device_input,
-        "incident_16_complete_prefixes_bytes": incident.nbytes,
-        "incident_within_32_mib_evidence_budget": incident.nbytes <= 32 * 1024**2,
-        "archive_identity_round_trip": True,
-        "host_owned_memory_components_bytes": host_owned,
-        "host_limit_bytes": 40 * 1024**3,
-        "device_one_width64_detail_activation_bytes": selected_rows
-        * detail_count
-        * 64
-        * 4,
-        "device": device_name,
-        "torch_version": str(torch.__version__),
-        "cuda_available": torch.cuda.is_available(),
-        "device_limit_bytes": torch.cuda.get_device_properties(device).total_memory
-        if device.type == "cuda"
-        else None,
-        "execution_proof": execution,
-        "bounded_execution_host_memory_components_bytes": native_bytes
-        + max(
-            collection_rows * (gather_bytes([prefix]) + prepared_bytes),
-            bootstrap_rows * (gather_bytes([prefix]) + prepared_bytes),
-            learner_rows * (gather_bytes([prefix]) + 2 * prepared_bytes),
-        )
-        + sum(
-            ownership[key]
-            for key in (
-                "unique_chunk_bytes",
-                "python_metadata_bytes",
-                "intern_index_bytes",
-            )
-        ),
-        "execution_row_counts": {
-            "collection_limit": collection_rows,
-            "bootstrap_limit": bootstrap_rows,
-            "learner_limit": learner_rows,
-            "logical_optimizer_rows": max(collection_rows, bootstrap_rows, learner_rows)
-            * 2
-            + 1,
-            "controlled_host_prefetch_batches": 2,
-            "collector_recovery_test_streams": 1,
-            "collector_recovery_test_quota": 16,
-            "real_update_test_learner_rows": 4,
-            "pilot_streams_not_executed": streams,
-            "pilot_selected_rows_not_executed": selected_rows,
-        },
-        "accounting_note": "Host ownership arithmetic excludes temporary preparation and activation peaks; never summed with device bytes or used to admit a job. Phase RSS samples and cumulative self high-water are measured independently. CUDA peaks are null on CPU. Fixture shares tails and does not estimate independent games. Bootstrap raw arrays expire after preparation; two learner Prepared host batches can coexist with one temporary raw gather. No rollout schedule changed.",
-        "excluded": [
-            "other native/rollout fields",
-            "temporary preparation beyond retained arrays",
-            "model and optimizer",
-            "attention/activations/gradients",
-            "CUDA allocator and transfer staging",
-            "native game logs",
-        ],
-    }
-
-
 def independent_measure(
     source: Path,
     *,
@@ -573,11 +311,18 @@ def independent_measure(
     if device.type == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("CUDA requested but unavailable; no fallback")
     census = json.loads(source.read_text())
-    capacities = (int(census["record_capacity"]), int(census["detail_capacity"]))
+    capacities = (
+        int(census["record_capacity"]),
+        int(census["detail_capacity"]),
+        int(census["reference_capacity"]),
+        int(census["member_capacity"]),
+    )
     space = ObservationSpace(
         ObservationConfig(
-            max_opponent_records=capacities[0],
-            max_opponent_details=capacities[1],
+            max_decision_records=capacities[0],
+            max_decision_details=capacities[1],
+            max_decision_references=capacities[2],
+            max_decision_members=capacities[3],
         )
     )
     torch.set_num_threads(1)
@@ -749,7 +494,6 @@ def independent_measure(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--independent-games", action="store_true")
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
@@ -770,26 +514,14 @@ def main() -> None:
         < 1
     ):
         parser.error("stream and selected row counts must be positive")
-    if args.independent_games and (args.streams != 256 or args.selected_rows != 256):
+    if args.streams != 256 or args.selected_rows != 256:
         parser.error("independent pilot proof requires 256 streams and selected rows")
-    result = (
-        independent_measure(
-            args.source,
-            device_name=args.device,
-            collection_rows=args.collection_rows,
-            bootstrap_rows=args.bootstrap_rows,
-            learner_rows=args.learner_rows,
-        )
-        if args.independent_games
-        else measure(
-            args.source,
-            streams=args.streams,
-            selected_rows=args.selected_rows,
-            device_name=args.device,
-            collection_rows=args.collection_rows,
-            bootstrap_rows=args.bootstrap_rows,
-            learner_rows=args.learner_rows,
-        )
+    result = independent_measure(
+        args.source,
+        device_name=args.device,
+        collection_rows=args.collection_rows,
+        bootstrap_rows=args.bootstrap_rows,
+        learner_rows=args.learner_rows,
     )
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(result, indent=2) + "\n")

@@ -62,6 +62,9 @@ class PlayerSetup(BaseModel):
 
 class GameInputs(BaseModel):
     stream: int = 0
+    decision_memory_include_own: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
     seed: int
     players: list[PlayerSetup]
     actions: list[int | str] = []
@@ -138,6 +141,9 @@ class FailureEvidence(BaseModel):
 class NativeTrainingTrace(BaseModel):
     model_config = ConfigDict(extra="forbid")
     player_configs: list[PlayerSetup]
+    decision_memory_include_own: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
     actions: list[int]
 
 
@@ -225,6 +231,7 @@ class TrainingExposureReceipt(BaseModel):
                     stream=self.stream,
                     seed=self.game.seed,
                     players=self.game.trace.player_configs,
+                    decision_memory_include_own=self.game.trace.decision_memory_include_own,
                     actions=self.game.trace.actions,
                 )
             ],
@@ -444,18 +451,30 @@ class _Capture:
 
 
 class ScalarCapture(_Capture):
-    def __init__(self, seed: int, skip_trivial: bool = True) -> None:
+    def __init__(
+        self,
+        seed: int,
+        skip_trivial: bool = True,
+        *,
+        decision_memory_include_own: bool = False,
+    ) -> None:
         super().__init__()
         self.seed = seed
         self.skip_trivial = skip_trivial
-        self.inputs = GameInputs(seed=seed, players=[])
+        self.inputs = GameInputs(
+            seed=seed,
+            players=[],
+            decision_memory_include_own=decision_memory_include_own,
+        )
         self.journal: Path | None = None
 
     def reset(self, env: managym.Env, players: list[managym.PlayerConfig]) -> Any:
         # The heterogeneous native observation/info tuple stays at this boundary.
         self.started = time.perf_counter()
         self.inputs = GameInputs(
-            seed=self.seed, players=[PlayerSetup.retain(p) for p in players]
+            seed=self.seed,
+            players=[PlayerSetup.retain(p) for p in players],
+            decision_memory_include_own=self.inputs.decision_memory_include_own,
         )
         self.journal = None
         with self._guard(lambda: self.evidence("reset")):
@@ -596,6 +615,7 @@ class CapturedVector(_Capture):
         player_policies: tuple[str, str] | None = None,
         seed_stride: int | None = None,
         stream_offset: int = 0,
+        decision_memory_include_own: bool = False,
     ) -> None:
         super().__init__()
         self.stride = seed_stride or num_envs
@@ -603,6 +623,7 @@ class CapturedVector(_Capture):
         self.player_policies = resolve_player_policies(opponent_policy, player_policies)
         self.native = managym.VectorEnv(
             num_envs=num_envs,
+            decision_memory_include_own=decision_memory_include_own,
             seed=seed,
             skip_trivial=skip_trivial,
             player_policies=self.player_policies,
@@ -618,7 +639,10 @@ class CapturedVector(_Capture):
             self.native.enable_exposure_capture()
         self.games = [
             GameInputs(
-                stream=stream_offset + i, seed=min(seed + i, 2**64 - 1), players=[]
+                stream=stream_offset + i,
+                seed=min(seed + i, 2**64 - 1),
+                players=[],
+                decision_memory_include_own=decision_memory_include_own,
             )
             for i in range(num_envs)
         ]

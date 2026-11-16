@@ -25,10 +25,10 @@ import torch
 import torch.nn as nn
 
 from manabot.backends.torch._continuation import ContinuationEncoder
+from manabot.backends.torch._decision_memory import DecisionMemory
 from manabot.backends.torch._facts import FactEncoder, RecordVocabulary
 from manabot.backends.torch._name_candidates import NameCandidateEncoder
 from manabot.backends.torch._numerics import buffer_on
-from manabot.backends.torch._opponent_memory import OpponentMemory
 from manabot.backends.torch._recent_events import RecentEventEncoder
 from manabot.backends.torch._semantic_cards import (
     SemanticCardEncoder,
@@ -142,14 +142,14 @@ class ActorCritic(nn.Module):
 
         # Extract dimensions from the observation encoder.
         enc = observation_space.encoder
-        if config.opponent_memory != "none" and not enc.config.max_opponent_records:
+        if config.decision_memory != "none" and not enc.config.max_decision_records:
             raise ValueError(
-                "opponent-memory model requires explicit observation capacities"
+                "decision-memory model requires explicit observation capacities"
             )
-        if config.opponent_memory != "none" and not config.catalog_records():
-            raise ValueError("opponent memory requires a catalog world")
-        if config.opponent_memory != "none" and not enc.one_token:
-            raise ValueError("opponent memory requires policy input v11")
+        if config.decision_memory != "none" and not config.catalog_records():
+            raise ValueError("decision memory requires a catalog world")
+        if config.decision_memory != "none" and not enc.one_token:
+            raise ValueError("decision memory requires policy input v11")
         if config.recent_events and (
             config.world is None or enc.config.policy_history_version != 1
         ):
@@ -183,7 +183,7 @@ class ActorCritic(nn.Module):
                 embed_dim,
                 decklists=True,
                 records=config.catalog_records(),
-                opponent_memory=config.opponent_memory != "none",
+                decision_memory=config.decision_memory != "none",
             )
         else:
             # Generic worlds still distinguish card definitions. The content
@@ -300,15 +300,15 @@ class ActorCritic(nn.Module):
             if config.value_aggregation == "value_token"
             else None
         )
-        self.opponent_memory = (
-            OpponentMemory(
-                config.opponent_memory, config.opponent_memory_summaries, embed_dim
+        self.decision_memory = (
+            DecisionMemory(
+                config.decision_memory, config.decision_memory_summaries, embed_dim
             )
-            if config.opponent_memory != "none"
+            if config.decision_memory != "none"
             else None
         )
         self.memory_summaries = (
-            config.opponent_memory_summaries if self.opponent_memory is not None else 0
+            config.decision_memory_summaries if self.decision_memory is not None else 0
         )
         self.recent_events = (
             RecentEventEncoder(embed_dim) if config.recent_events else None
@@ -725,9 +725,9 @@ class ActorCritic(nn.Module):
                 + int(self.value_token is not None),
             )
         summaries = None
-        if self.opponent_memory is not None:
+        if self.decision_memory is not None:
             assert obs.memory is not None and self.semantic_cards is not None
-            summaries = self.opponent_memory(
+            summaries = self.decision_memory(
                 obs.memory,
                 self.semantic_cards.token_embedding,
                 self.name_candidates.public_definitions(state.programs),

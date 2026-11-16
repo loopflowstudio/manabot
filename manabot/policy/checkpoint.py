@@ -47,7 +47,7 @@ GRUS = (
     "semantic_cards.encoder",
     "facts.program_sequence",
     "shared_effects.reducer.gru",
-    "opponent_memory.gru",
+    "decision_memory.gru",
 )
 _GRU_LEAVES = {
     "weight_ih_l0": "input_weight",

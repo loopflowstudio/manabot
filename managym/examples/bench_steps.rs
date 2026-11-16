@@ -22,7 +22,19 @@ fn main() {
     // board is an explicitly selected workload with its own count and digest.
     let layers = std::env::args().any(|arg| arg == "--layers");
     let tail_samples = std::env::args().any(|arg| arg == "--tail-samples");
-    let memory_census = std::env::args().any(|arg| arg == "--opponent-memory-census");
+    let memory_census = std::env::args().any(|arg| arg == "--decision-memory-census");
+    let record_directory = std::env::args().find_map(|argument| {
+        argument
+            .strip_prefix("--decision-memory-records=")
+            .map(std::path::PathBuf::from)
+    });
+    if let Some(directory) = &record_directory {
+        assert!(
+            memory_census,
+            "record retention requires the decision-memory census"
+        );
+        std::fs::create_dir_all(directory).expect("create census record directory");
+    }
     let mut samples = Vec::new();
     let seeds = if layers { 512..528 } else { 0..512 };
     let games = seeds.end - seeds.start;
@@ -49,8 +61,10 @@ fn main() {
                 let obs = env.observation_for_player(viewer).unwrap();
                 prefixes.push([
                     viewer,
-                    obs.opponent_memory.len(),
-                    obs.opponent_memory.detail_count(),
+                    obs.decision_memory.len(),
+                    obs.decision_memory.detail_count(),
+                    obs.decision_memory.reference_count(),
+                    obs.decision_memory.member_count(),
                 ]);
             }
             let count = env.action_count().unwrap();
@@ -75,12 +89,15 @@ fn main() {
         if memory_census {
             let terminal: Vec<_> = (0..2).map(|viewer| {
                 let obs = env.observation_for_player(viewer).unwrap();
-                let rows = &obs.opponent_memory;
+                let rows = &obs.decision_memory;
+                if let Some(directory) = &record_directory {
+                    std::fs::write(directory.join(format!("seed-{seed}-viewer-{viewer}.json")), serde_json::to_vec(rows).expect("serialize complete viewer log")).expect("retain complete viewer log");
+                }
                 let pass_records = rows.iter().filter(|row| row.choice.kind.as_deref() == Some("PassPriority")).count();
                 let pass_events: u32 = rows.iter().filter(|row| row.choice.kind.as_deref() == Some("PassPriority")).map(|row| row.count).sum();
                 let mut kinds = std::collections::BTreeMap::<String, usize>::new();
                 for row in rows.iter() { *kinds.entry(row.kind.clone()).or_default() += 1; }
-                serde_json::json!({"viewer":viewer, "records":rows.len(), "details":rows.detail_count(), "pass_records":pass_records, "pass_events":pass_events, "kinds":kinds})
+                serde_json::json!({"viewer":viewer, "records":rows.len(), "details":rows.detail_count(), "references": rows.reference_count(), "members": rows.member_count(), "pass_records":pass_records, "pass_events":pass_events, "kinds":kinds})
             }).collect();
             println!(
                 "{}",

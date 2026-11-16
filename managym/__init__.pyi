@@ -33,7 +33,7 @@ def observation_layout(
     policy_history: bool = False,
     turn_state: bool = True,
     legacy: bool = False,
-    opponent_memory: bool = False,
+    decision_memory: bool = False,
 ) -> dict[str, ObservationArrayLayout]:
     """Column names, value encodings and fixed extents of each encoded array.
 
@@ -141,6 +141,7 @@ class Env:
         enable_profiler: bool = False,
         enable_behavior_tracking: bool = False,
         *,
+        decision_memory_include_own: bool = False,
         player_policies: tuple[
             Literal["agent", "random", "heuristic"],
             Literal["agent", "random", "heuristic"],
@@ -328,6 +329,7 @@ class VectorEnv:
         opponent_policy: Literal["none", "random", "heuristic"] | None = None,
         seed_stride: int | None = None,
         *,
+        decision_memory_include_own: bool = False,
         player_policies: tuple[
             Literal["agent", "random", "heuristic"],
             Literal["agent", "random", "heuristic"],
@@ -966,7 +968,7 @@ class Observation:
         text: str, *, continuation_json: str | None = None
     ) -> Observation: ...
     def continuation_json(self) -> str: ...
-    def opponent_memory_json(self) -> str: ...
+    def decision_memory_json(self) -> str: ...
     game_over: bool
     won: bool
     turn: Turn

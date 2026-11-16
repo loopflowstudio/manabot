@@ -7,15 +7,15 @@ from typing import Any, Dict, Optional
 
 import gymnasium as gym
 from gymnasium import spaces
+
+# Local imports
+from manabot.infra.log import getLogger
+import managym
 from managym.decision import (
     Command,
     SemanticContractError,
     SemanticTransition,
 )
-
-# Local imports
-from manabot.infra.log import getLogger
-import managym
 
 # Local directory imports
 from .failures import CapturedSearch, ScalarCapture
@@ -57,7 +57,7 @@ class Env(gym.Env):
         seed: int = 0,
         enable_profiler: bool = False,
         enable_behavior_tracking: bool = False,
-    ):
+    ) -> None:
         """Gymnasium-compatible wrapper around one native game.
 
         A finished game stays finished: ``step`` returns the terminal
@@ -65,7 +65,10 @@ class Env(gym.Env):
         """
         super().__init__()
         self.seed = seed
-        self._capture = ScalarCapture(seed)
+        self._capture = ScalarCapture(
+            seed,
+            decision_memory_include_own=obs_space.encoder.config.decision_memory_include_own,
+        )
         self.skip_trivial = True
         self.enable_profiler = enable_profiler
         self.enable_behavior_tracking = enable_behavior_tracking
@@ -75,6 +78,7 @@ class Env(gym.Env):
         )
         self._engine = managym.Env(
             seed=self.seed,
+            decision_memory_include_own=obs_space.encoder.config.decision_memory_include_own,
             skip_trivial=self.skip_trivial,
             enable_profiler=self.enable_profiler,
             enable_behavior_tracking=self.enable_behavior_tracking,

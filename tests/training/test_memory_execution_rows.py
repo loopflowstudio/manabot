@@ -47,19 +47,19 @@ from manabot.training.updates.bootstrap import bootstrap_predictions
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
 import managym
-from tests.model.test_opponent_memory import memory_input, policy
+from tests.model.test_decision_memory import memory_input, policy
 
 
 def mixed_rows() -> tuple[ObservationSpace, PrefixObservation]:
     space, dense = memory_input()
-    store = MemoryStore((4, 1024))
+    store = MemoryStore((4, 1024, 1024, 16384))
     prefix = store.capture(dense, 0, PrefixIdentity("game", 0, "root"))
     empty = Prefix(PrefixIdentity("empty", 1, "root"), None)
     # Duplicated, shuffled and empty prefixes; unequal final execution chunk.
     return space, PrefixObservation(
         {k: np.repeat(v, 5, axis=0) for k, v in dense.items()},
         [prefix, empty, prefix, prefix, empty],
-        (4, 1024),
+        (4, 1024, 1024, 16384),
     )
 
 
@@ -120,7 +120,7 @@ def test_memory_execution_preserves_sampling_bootstrap_and_adam(
             {k: v for k, v in rows.items() if k not in ACTION_FIELDS},
             np.arange(5),
             memory=rows.prefixes,
-            memory_capacities=(4, 1024),
+            memory_capacities=(4, 1024, 1024, 16384),
         ),
         actual.actions[None],
         actual.logprobs[None],
@@ -216,17 +216,24 @@ def test_memory_execution_preserves_sampling_bootstrap_and_adam(
             actual_diag["optimizer_exposures"] == expected_diag["optimizer_exposures"]
         )
     assert gathered and max(gathered) == 2
-    assert not MEMORY_FIELDS.intersection(rows)
+    assert not set(MEMORY_FIELDS).intersection(rows)
 
 
 def replace_config(config: ModelConfig) -> ModelConfig:
     return config.model_copy(update={"value_kind": "categorical_wdl"})
 
 
-def test_memory_chunked_collector_restore_keeps_sampling() -> None:
+@pytest.mark.parametrize("include_own", [False, True])
+def test_memory_chunked_collector_restore_keeps_sampling(include_own: bool) -> None:
 
     space = ObservationSpace(
-        ObservationConfig(max_opponent_records=64, max_opponent_details=65536)
+        ObservationConfig(
+            max_decision_records=64,
+            decision_memory_include_own=include_own,
+            max_decision_details=65536,
+            max_decision_references=1024,
+            max_decision_members=16384,
+        )
     )
     model = policy(space, "gru", 4)
 

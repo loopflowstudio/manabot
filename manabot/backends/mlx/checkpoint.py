@@ -51,8 +51,8 @@ def require_supported(model: ModelConfig, observation: ObservationConfig) -> Non
         reasons.append(f"policy_input_version={observation.policy_input_version}")
     if model.belief_count_buckets:
         reasons.append("belief inputs")
-    if model.opponent_memory != "none":
-        reasons.append("opponent memory")
+    if model.decision_memory != "none":
+        reasons.append("decision memory")
     if model.recent_events:
         reasons.append("policy history input (recent_events)")
     if model.value_aggregation != "masked_mean":

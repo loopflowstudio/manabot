@@ -1,7 +1,7 @@
 """Torch-specific headless opponent-memory policy and update proofs.
 
 The CLI selects this backend; native replay and text verification stay in
-manabot.verify.opponent_memory. Controlled FiLM weights test connectivity,
+manabot.verify.decision_memory. Controlled FiLM weights test connectivity,
 while the ordinary local recipe separately exercises one unmodified update.
 """
 
@@ -14,8 +14,8 @@ from manabot.backends import resolve
 from manabot.backends.torch.arrays import on_device
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
+from manabot.env.decision_memory import blank_memory
 from manabot.env.observation import ObservationSpace
-from manabot.env.opponent_memory import blank_memory
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.recipes.local import local_smoke
 from manabot.training.execution import execute_regime
@@ -32,7 +32,12 @@ def prove_policies(
 ) -> list[dict[str, object]]:
     torch.set_num_threads(1)
     blank = blank_memory(obs)
-    for key in obs.keys() - {"opponent_records", "opponent_details"}:
+    for key in obs.keys() - {
+        "decision_records",
+        "decision_reference_details",
+        "decision_references",
+        "decision_members",
+    }:
         np.testing.assert_array_equal(obs[key], blank[key])
     results: list[dict[str, object]] = []
     for encoder in ("transformer", "gru"):
@@ -44,8 +49,8 @@ def prove_policies(
                     {
                         "world": managym.WORLD_SETUP,
                         "hidden_dim": 16,
-                        "opponent_memory": encoder,
-                        "opponent_memory_summaries": summaries,
+                        "decision_memory": encoder,
+                        "decision_memory_summaries": summaries,
                         "attention_on": True,
                         "attention_layers": 2,
                         "policy_film": True,
@@ -68,11 +73,11 @@ def prove_policies(
             )
             assert delta > 1e-8
             gradients: dict[str, float] = {}
-            assert model.opponent_memory is not None
+            assert model.decision_memory is not None
             temporal = (
-                model.opponent_memory.gru
+                model.decision_memory.gru
                 if encoder == "gru"
-                else model.opponent_memory.transformer
+                else model.decision_memory.transformer
             )
             assert temporal is not None
             for name, loss in (
@@ -109,10 +114,13 @@ def prove_policies(
 def ordinary_update(out: Path) -> dict[str, object]:
     regime = local_smoke(steps=1, device="cpu")
     regime.id = "opponent-memory-software-demo"
-    regime.agent.opponent_memory = "gru"
-    regime.agent.opponent_memory_summaries = 1
+    regime.agent.decision_memory = "gru"
+    regime.agent.decision_memory_summaries = 1
     regime.observation = ObservationConfig(
-        max_opponent_records=1024, max_opponent_details=1048576
+        max_decision_records=1024,
+        max_decision_details=8192,
+        max_decision_references=256,
+        max_decision_members=16384,
     )
     stage = regime.stages[0]
     assert isinstance(stage, TrainSelfPlay)
@@ -126,7 +134,7 @@ def ordinary_update(out: Path) -> dict[str, object]:
         )
     assert run.status == "completed" and run.updates_through() == 1
     model, _ = load_checkpoint(run.stages[0].artifacts["raw"]["path"])
-    assert model.opponent_memory is not None
+    assert model.decision_memory is not None
     assert all(torch.isfinite(parameter).all() for parameter in model.parameters())
     return {
         "status": run.status,

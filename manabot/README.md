@@ -8,7 +8,7 @@ credit, filter, update, repeat. [How a manabot learns](../docs/learning.md)
 explains it, [training.md](../docs/training.md) covers running it, and
 [training loops](../docs/training-loop.md) lists the updates we maintain,
 their pieces and a loop to copy. The network guide covers the intended
-[whole-game opponent memory](../docs/observation-and-model.md#whole-game-opponent-memory)
+[whole-game opponent memory](../docs/observation-and-model.md#whole-game-decision-memory)
 interface, including encoder selection, replay and checkpoint compatibility.
 
 ## Quickstart
@@ -501,7 +501,7 @@ identities. Main defaults to v11 and loads deprecated v9/v10 checkpoints
 until 0.4.0; see
 [policy inputs](../docs/observation-and-model.md#policy-inputs) for the layout
 and the saved-checkpoint and world admission requirements. Text representation
-`manabot-text-9` renders each native payload once with exact public source and
+`manabot-text-10` renders each native payload once with exact public source and
 member labels and timestamp ranks. Its within-observation token reducer is not
 persistent game memory. Whole-game opponent records share exact historical
 reference and rules snapshots through a prompt-local alias table; every record,

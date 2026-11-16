@@ -939,15 +939,17 @@ class TrainingRegime(Strict):
             raise ValueError(
                 "learning-state continuation requires one step-target stage without process recovery"
             )
-        if self.agent.opponent_memory != "none" and not (
+        if self.agent.decision_memory != "none" and not (
             self.observation.policy_input_version == 11
-            and self.observation.max_opponent_records
-            and self.observation.max_opponent_details
+            and self.observation.max_decision_records
+            and self.observation.max_decision_details
+            and self.observation.max_decision_references
+            and self.observation.max_decision_members
         ):
             raise ValueError(
-                "opponent memory requires v11 and explicit record/detail capacities"
+                "decision memory requires v11 and all explicit companion capacities"
             )
-        if self.observation.max_opponent_records and any(
+        if self.observation.max_decision_records and any(
             isinstance(stage, TrainSelfPlay)
             and any(
                 getattr(stage.execution, name) is None
@@ -956,7 +958,7 @@ class TrainingRegime(Strict):
             for stage in self.stages
         ):
             raise ValueError(
-                "opponent-memory collection requires explicit collection_rows, bootstrap_rows and learner_rows"
+                "decision-memory collection requires explicit collection_rows, bootstrap_rows and learner_rows"
             )
         if self.agent.recent_events and self.agent.world is None:
             raise ValueError("recent events require a world for public identities")

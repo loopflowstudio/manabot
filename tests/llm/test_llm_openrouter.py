@@ -369,7 +369,7 @@ def test_preloaded_campaign_opponent_keeps_timing_and_model_seat_control(
     assert summary.observations["policy_inference"] >= 0
 
 
-def test_checkpoint_opponent_records_its_inputs_and_replays(
+def test_checkpoint_decision_records_its_inputs_and_replays(
     tmp_path: Path,
 ) -> None:
     config = GameConfig(max_decisions=8, opponent_checkpoint=tmp_path / "policy.pt")

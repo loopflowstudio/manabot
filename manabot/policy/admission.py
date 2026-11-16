@@ -42,7 +42,7 @@ from manabot.env.shared_effects import (
     MEMBER_ROWS,
 )
 from manabot.infra.config import ModelConfig
-from manabot.policy.opponent_memory import admit_memory
+from manabot.policy.decision_memory import admit_memory, validate_memory_vocabulary
 from manabot.policy.prepare import (
     NAMED_DETAIL_KINDS,
     NUMBER_TOKEN_KINDS,
@@ -83,22 +83,34 @@ def legal_mask(mask: np.ndarray) -> np.ndarray:
 
 def check(obs: ObservationBuffers, spec: Spec, legal: np.ndarray) -> None:
     """Admit raw rows before masking or trimming; legal-mask errors belong to the backend."""
-    retained = bool(spec.space.encoder.config.max_opponent_records)
-    if retained != ("opponent_records" in obs):
-        raise ValueError("opponent-memory model and input contract disagree")
+    retained = bool(spec.space.encoder.config.max_decision_records)
+    if retained != ("decision_records" in obs):
+        raise ValueError("decision-memory model and input contract disagree")
     admit_memory(obs)
+    if (
+        retained
+        and not spec.space.encoder.config.decision_memory_include_own
+        and (obs["decision_records"][..., 18] == 1).any()
+    ):
+        raise ValueError("own-seat decision memory is disabled")
     if retained:
-        for key in ("opponent_records", "opponent_details"):
+        for axis, key in enumerate(
+            (
+                "decision_records",
+                "decision_reference_details",
+                "decision_references",
+                "decision_members",
+            )
+        ):
             expected = spec.space.encoder.shapes[key]
             if isinstance(obs, CompactObservation):
-                axis = 0 if key == "opponent_records" else 1
                 if (
                     obs.memory_capacities[axis] != expected[0]
                     or obs[key].shape[1] > expected[0]
                 ):
-                    raise ValueError(f"opponent-memory capacity mismatch: {key}")
+                    raise ValueError(f"decision-memory capacity mismatch: {key}")
             elif obs[key].shape[1:] != expected:
-                raise ValueError(f"opponent-memory capacity mismatch: {key}")
+                raise ValueError(f"decision-memory capacity mismatch: {key}")
     lookup = spec.tables.definition_rows
     if spec.space.encoder.one_token and any(
         key not in obs for key in ("stack", "stack_valid")
@@ -120,8 +132,12 @@ def check(obs: ObservationBuffers, spec: Spec, legal: np.ndarray) -> None:
     if spec.space.encoder.one_token:
         ids.append(obs["stack"][..., STACK_DEFINITION_INDEX])
     if retained:
-        details = obs["opponent_details"]
-        ids.append(record_word(details, 5)[details[..., 4] == -3])
+        ids.append(obs["decision_references"][..., 1])
+        details = obs["decision_reference_details"]
+        ids.append(
+            record_word(details, 2)[(details[..., 0] == 0) & (details[..., 1] == 7)] + 1
+        )
+        validate_memory_vocabulary(obs, spec.tables)
     for values in ids:
         definition_ids(values, size, lookup)
     keys = (

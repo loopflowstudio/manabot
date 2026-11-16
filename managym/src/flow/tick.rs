@@ -33,7 +33,7 @@ impl Game {
             )));
         }
 
-        let pending_memory = crate::agent::opponent_memory::capture(
+        let pending_memory = crate::agent::decision_memory::capture(
             self,
             &action_space,
             &action_space.actions[action],
@@ -45,7 +45,7 @@ impl Game {
             return Err(error);
         }
 
-        crate::agent::opponent_memory::commit(self, pending_memory);
+        crate::agent::decision_memory::commit(self, pending_memory);
         if let Some(choice) = exposure {
             self.card_capture
                 .as_mut()

@@ -107,10 +107,19 @@ class ObservationConfig(BaseConfig):
     )
     max_focus_objects: int = 2
     # Memory capacities are explicit until the replay census sizes the pilot.
-    max_opponent_records: int = Field(
+    decision_memory_include_own: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
+    max_decision_records: int = Field(
         default=0, ge=0, exclude_if=lambda value: value == 0
     )
-    max_opponent_details: int = Field(
+    max_decision_details: int = Field(
+        default=0, ge=0, exclude_if=lambda value: value == 0
+    )
+    max_decision_references: int = Field(
+        default=0, ge=0, exclude_if=lambda value: value == 0
+    )
+    max_decision_members: int = Field(
         default=0, ge=0, exclude_if=lambda value: value == 0
     )
     max_events: int = 32
@@ -292,10 +301,10 @@ class ModelConfig(BaseConfig):
     this Python type changes neither field meanings nor ordinary reload admission.
     """
 
-    opponent_memory: Literal["none", "transformer", "gru"] = Field(
+    decision_memory: Literal["none", "transformer", "gru"] = Field(
         default="none", exclude_if=lambda value: value == "none"
     )
-    opponent_memory_summaries: Literal[1, 4] = Field(
+    decision_memory_summaries: Literal[1, 4] = Field(
         default=4, exclude_if=lambda value: value == 4
     )
     # Public identity/history v1; false preserves historical receipt bytes.
@@ -389,11 +398,11 @@ class ModelConfig(BaseConfig):
 
     @model_validator(mode="after")
     def validate_value_architecture(self) -> "ModelConfig":
-        if self.opponent_memory != "none" and (
+        if self.decision_memory != "none" and (
             not self.attention_on or not self.policy_film or self.recent_events
         ):
             raise ValueError(
-                "opponent memory requires attention and policy_film, with recent_events disabled"
+                "decision memory requires attention and policy_film, with recent_events disabled"
             )
         if self.hidden_dim < 1 or self.num_attention_heads < 1:
             raise ValueError("embedding width and head count must be positive")

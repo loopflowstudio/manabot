@@ -355,9 +355,9 @@ publish, land or choose the next Graph step from here.
   (about 20 s on CPU), save and reload the policy as it says, call both
   maintained rules directly on a collected batch, and compare the tables'
   signatures with `inspect.signature`.
-- Opponent memory (`ModelConfig.opponent_memory`): start from
+- Decision memory (`ModelConfig.decision_memory`): start from
   `local_smoke(steps=3, device="cpu")`'s `model_dump()`, set the agent fields,
-  `observation.max_opponent_records=1024`, `max_opponent_details=1048576` and
+  `observation.max_decision_records=1024`, `max_decision_details=8192, max_decision_references=256, max_decision_members=16384` and
   `stages[0].execution.{collection,bootstrap,learner}_rows=2`, validate, and
   train each arm plus the plain incumbent with one `--seed` (each 10-40 s on
   CPU, up to 4.4 GB RSS). Compare `stages[0]` `collection_seconds` at equal
@@ -365,7 +365,7 @@ publish, land or choose the next Graph step from here.
   `PyAgentError` within one update. Play reloaded checkpoints with `manabot
   sim` (decks from `run.json` `regime.match`), and test reliance by comparing
   `forward_distribution` on `{k: v[None]}`-batched `space.encode` buffers with
-  `manabot.env.opponent_memory.blank_memory`. For the LLM text, render
+  `manabot.env.decision_memory.blank_memory`. For the LLM text, render
   `capture_text_decision` at every decision of seeded random `Match()` games
   and track bytes against the 262,144 default budget. LLM tests need
   `uv run --isolated --extra dev --extra llm`.

@@ -35,26 +35,26 @@ from manabot.training.rollout.collection import (
     RecordedObservations,
     SeatRoutedCollector,
 )
-from tests.model.test_opponent_memory import memory_input, policy
+from tests.model.test_decision_memory import memory_input, policy
 
 
 def test_memory_prefix_tail_fork_reset_and_duplicate_gather() -> None:
     space, dense = memory_input()
-    store = MemoryStore((4, 1024))
+    store = MemoryStore((4, 1024, 1024, 16384))
     identity = PrefixIdentity("game-1", 0, "root")
     before = store.capture(dense, 0, identity)
     # Coalescing changes no row counts; old samples keep their multiplicity.
-    dense["opponent_records"][0, 0, 3] = 2
-    dense["opponent_records"][0, 0, 9] = 1
+    dense["decision_records"][0, 0, 3] = 2
+    dense["decision_records"][0, 0, 9] = 1
     after = store.capture(dense, 0, identity)
     assert before.tail is not None and after.tail is not None
-    assert before.tail.detail is after.tail.detail
+    assert before.tail.tables[1:] == after.tail.tables[1:]
     assert store.capture(dense, 0, identity).tail is after.tail
-    assert before.tail.record is not after.tail.record
-    dense["opponent_details"][0, 0, 6] = 9
+    assert before.tail.tables[0] is not after.tail.tables[0]
+    dense["decision_records"][0, 0, 21] = 9
     fork = store.capture(dense, 0, PrefixIdentity("game-1", 0, "fork"))
     assert fork.tail is not None
-    assert fork.tail.detail is not after.tail.detail
+    assert fork.tail.tables[0] is not after.tail.tables[0]
     for key in MEMORY_FIELDS:
         dense[key].fill(0)  # Later games overwrite native buffers.
     empty = store.capture(dense, 0, PrefixIdentity("game-2", 1, "root"))
@@ -62,19 +62,19 @@ def test_memory_prefix_tail_fork_reset_and_duplicate_gather() -> None:
         {},
         np.array([0, 1, 2, 3]),
         memory=(before, after, fork, empty),
-        memory_capacities=(4, 1024),
+        memory_capacities=(4, 1024, 1024, 16384),
     )
     selected = recorded.gather(np.array([2, 0, 2, 3, 1]))
     assert isinstance(selected, CompactObservation)
     np.testing.assert_array_equal(
-        selected["opponent_records"][:, 0, 3], [2, 1, 2, 0, 2]
+        selected["decision_records"][:, 0, 3], [2, 1, 2, 0, 2]
     )
     np.testing.assert_array_equal(
-        selected["opponent_details"][:, 0, 6], [9, 20, 9, 0, 20]
+        selected["decision_records"][:, 0, 21], [9, 20, 9, 0, 20]
     )
     assert recorded.ordered((4, 1)) == {}
-    assert "opponent_records" not in recorded.rows
-    archive = archive_memory(selected.prefixes, (4, 1024))
+    assert "decision_records" not in recorded.rows
+    archive = archive_memory(selected.prefixes, (4, 1024, 1024, 16384))
     restored = gather_memory(restore_memory(archive))
     for key in MEMORY_FIELDS:
         np.testing.assert_array_equal(restored[key], selected[key])
@@ -85,8 +85,8 @@ def test_memory_prefix_tail_fork_reset_and_duplicate_gather() -> None:
     with pytest.raises(ValueError, match="missing"):
         restore_memory(replace(archive, chunks=archive.chunks[:-1]))
     with pytest.raises(ValueError):
-        before.tail.detail.rows.setflags(write=True)
-    assert space.encoder.shapes["opponent_records"] == (4, 18)
+        before.tail.tables[0].chunk.rows.setflags(write=True)
+    assert space.encoder.shapes["decision_records"] == (4, 74)
 
 
 @pytest.mark.parametrize("encoder", ["transformer", "gru"])
@@ -96,10 +96,12 @@ def test_compact_memory_prepares_exactly_as_dense(
     summaries: int,
 ) -> None:
     space, dense = memory_input()
-    store = MemoryStore((4, 1024))
+    store = MemoryStore((4, 1024, 1024, 16384))
     prefix = store.capture(dense, 0, PrefixIdentity("game", 1, "root"))
     compact = CompactObservation(
-        {k: v for k, v in dense.items() if k not in MEMORY_FIELDS}, [prefix], (4, 1024)
+        {k: v for k, v in dense.items() if k not in MEMORY_FIELDS},
+        [prefix],
+        (4, 1024, 1024, 16384),
     )
     model = policy(space, encoder, summaries)
     expected = array_fields(model.prepare(dense), np.ndarray)
@@ -108,7 +110,7 @@ def test_compact_memory_prepares_exactly_as_dense(
     for key in expected:
         np.testing.assert_array_equal(actual[key], expected[key], err_msg=key)
     with pytest.raises(ValueError, match="capacity mismatch"):
-        model.prepare(CompactObservation(compact, [prefix], (8, 1024)))
+        model.prepare(CompactObservation(compact, [prefix], (8, 1024, 1024, 16384)))
     # Cropped arrays without their explicit raw contract are rejected.
     with pytest.raises(ValueError, match="capacity mismatch"):
         model.prepare(dict(compact))
@@ -117,7 +119,9 @@ def test_compact_memory_prepares_exactly_as_dense(
         dense[key].fill(0)
     empty = store.capture(dense, 0, PrefixIdentity("empty", 1, "root"))
     empty_compact = CompactObservation(
-        {k: v for k, v in dense.items() if k not in MEMORY_FIELDS}, [empty], (4, 1024)
+        {k: v for k, v in dense.items() if k not in MEMORY_FIELDS},
+        [empty],
+        (4, 1024, 1024, 16384),
     )
     expected_empty = array_fields(model.prepare(dense), np.ndarray)
     actual_empty = array_fields(model.prepare(empty_compact), np.ndarray)
@@ -135,7 +139,12 @@ def test_memory_collector_recovery_retains_old_batches_and_incident_budget(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     space = ObservationSpace(
-        ObservationConfig(max_opponent_records=64, max_opponent_details=65536)
+        ObservationConfig(
+            max_decision_records=64,
+            max_decision_details=65536,
+            max_decision_references=1024,
+            max_decision_members=16384,
+        )
     )
     model = policy(space, encoder, summaries)
 
@@ -157,7 +166,7 @@ def test_memory_collector_recovery_retains_old_batches_and_incident_budget(
         first = original.collect(model, 16)
         before = first.observations(np.array([15, 0, 15])).observation
         assert isinstance(first.next_obs, PrefixObservation)
-        assert not MEMORY_FIELDS.intersection(first.next_obs)
+        assert not set(MEMORY_FIELDS).intersection(first.next_obs)
         bootstrap_before = first.next_obs.materialize()
         with torch.no_grad():
             expected_value = model.get_value(
@@ -179,7 +188,7 @@ def test_memory_collector_recovery_retains_old_batches_and_incident_budget(
                 learner_input, behavior = admitted.rows(
                     np.array([15, 0, 15]), torch.device("cpu")
                 )
-                assert not MEMORY_FIELDS.intersection(behavior.observation)
+                assert not set(MEMORY_FIELDS).intersection(behavior.observation)
                 assert torch.isfinite(model.get_value(learner_input)).all()
             # Prepared input cannot keep temporary raw padded arrays alive.
             assert gathered and all(ref() is None for ref in gathered)
@@ -212,9 +221,9 @@ def test_memory_collector_recovery_retains_old_batches_and_incident_budget(
                 model.get_value(selected_input), model.get_value(expected_input)
             )
         torch.testing.assert_close(actual_value, expected_value)
-        assert not MEMORY_FIELDS.intersection(first.next_obs)
+        assert not set(MEMORY_FIELDS).intersection(first.next_obs)
         snapshot = original.snapshot()
-        assert not MEMORY_FIELDS.intersection(snapshot.buffers)
+        assert not set(MEMORY_FIELDS).intersection(snapshot.buffers)
         encoded = BytesIO()
         save(snapshot, encoded)
         encoded.seek(0)
@@ -260,8 +269,8 @@ def test_memory_collector_recovery_retains_old_batches_and_incident_budget(
             evidence_bytes=1,
             max_rows=1,
         )
-        assert not captured.shapes["opponent_memory"]["complete"]
-        assert captured.shapes["opponent_memory"]["required_bytes"] > 1
+        assert not captured.shapes["decision_memory"]["complete"]
+        assert captured.shapes["decision_memory"]["required_bytes"] > 1
         assert not any(key.startswith("memory/") for key in captured.evidence)
         assert not captured.full_batch_captured
         exact = capture_incident(
@@ -274,7 +283,7 @@ def test_memory_collector_recovery_retains_old_batches_and_incident_budget(
             evidence_bytes=32 * 1024**2,
             max_rows=1,
         )
-        assert exact.shapes["opponent_memory"]["complete"]
+        assert exact.shapes["decision_memory"]["complete"]
         assert int(exact.evidence["batch_row_indexes"][0]) == 7
         assert "memory/offsets" in exact.evidence
         shuffled = NumericalError(
@@ -302,7 +311,12 @@ def test_memory_collector_recovery_retains_old_batches_and_incident_budget(
 
 def test_memory_frozen_opponent_uses_the_compact_raw_contract() -> None:
     space = ObservationSpace(
-        ObservationConfig(max_opponent_records=64, max_opponent_details=65536)
+        ObservationConfig(
+            max_decision_records=64,
+            max_decision_details=65536,
+            max_decision_references=1024,
+            max_decision_members=16384,
+        )
     )
     model = policy(space, "transformer", 4)
     collector = SeatRoutedCollector(
@@ -320,8 +334,8 @@ def test_memory_frozen_opponent_uses_the_compact_raw_contract() -> None:
         batch = collector.collect(model, 4)
         assert batch.actions.size == 4
         assert isinstance(batch.next_obs, PrefixObservation)
-        assert not MEMORY_FIELDS.intersection(batch.next_obs)
+        assert not set(MEMORY_FIELDS).intersection(batch.next_obs)
         assert len(batch.recorded.memory) == 4
-        assert not MEMORY_FIELDS.intersection(batch.recorded.rows)
+        assert not set(MEMORY_FIELDS).intersection(batch.recorded.rows)
     finally:
         collector.close()

@@ -122,8 +122,8 @@ class ObservationRows:
         self._keys = [key for key in keys if key not in MEMORY_FIELDS]
         self.memory: list[Prefix] = []
         self.memory_capacities = (
-            (buffers["opponent_records"].shape[1], buffers["opponent_details"].shape[1])
-            if "opponent_records" in buffers
+            tuple(buffers[key].shape[1] for key in MEMORY_FIELDS)
+            if "decision_records" in buffers
             else None
         )
         self.rows = 0
@@ -219,7 +219,7 @@ class RecordedObservations:
     # Recorded rows' bucket needs [N, len(AXES)], -1 where unmeasured.
     needs: np.ndarray | None = None
     memory: tuple[Prefix, ...] = ()
-    memory_capacities: tuple[int, int] | None = None
+    memory_capacities: tuple[int, int, int, int] | None = None
 
     def gather(self, indexes: np.ndarray) -> dict[str, np.ndarray]:
         """Rows for flat time-major rollout `indexes`, as [batch, ...]."""
@@ -566,11 +566,17 @@ class SeatRoutedCollector:
 
         if root is None:
             self._env = (
-                ShardedVectorEnv(num_envs, seed, workers)
+                ShardedVectorEnv(
+                    num_envs,
+                    seed,
+                    workers,
+                    decision_memory_include_own=observation_space.encoder.config.decision_memory_include_own,
+                )
                 if workers > 1
                 else CapturedVector(
                     num_envs=num_envs,
                     seed=seed,
+                    decision_memory_include_own=observation_space.encoder.config.decision_memory_include_own,
                     skip_trivial=True,
                     player_policies=("agent", "agent"),
                 )
@@ -1487,6 +1493,7 @@ class SeatRoutedCollector:
                 native_trace=native_trace,
                 observation=self.observation_space.encoder.config
                 if outcome == "resource_limit"
+                or self.observation_space.encoder.config.decision_memory_include_own
                 else None,
                 discarded_samples=discarded,
                 learned_samples=learned,

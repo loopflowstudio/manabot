@@ -2973,7 +2973,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         stack_objects => [Rows("stack"), Rows("relations")],
         recent_events => [Rows("events")],
         policy_history => [Rows("events")],
-        opponent_memory => [Rows("opponent_records and opponent_details")],
+        decision_memory => [Rows("decision_records, decision_references, decision_reference_details and decision_members")],
     });
     fields.extend(encoding!(SharedEffectData {
         effect => [Rows("v7 effects columns 0..10, 11 and effect_details")],

@@ -28,13 +28,13 @@ from managym.decision_capture import (
     PlayerReference,
     UnavailableReference,
 )
-from managym.opponent_memory import (
+from managym.decision_memory import (
+    DecisionRecord,
     DecisionReference,
-    OpponentDecisionRecord,
     read_records,
 )
 
-REPRESENTATION_VERSION = "manabot-text-9"
+REPRESENTATION_VERSION = "manabot-text-10"
 _ZONES = ("library", "hand", "battlefield", "graveyard", "stack", "exile", "command")
 _PHASES = ("beginning", "first main", "combat", "second main", "ending")
 _STEPS = (
@@ -1230,7 +1230,7 @@ class _Renderer:
             )
         if not capture.history.rows:
             lines.append("Empty." if capture.history.capacity else "History disabled.")
-        lines.extend(_memory_lines(read_records(state.opponent_memory_json())))
+        lines.extend(_memory_lines(read_records(state.decision_memory_json())))
         if capture.frames:
             lines += ["", "Current stack and continuation relations:"]
             lines.extend(
@@ -1289,7 +1289,7 @@ def _memory_reference(reference: DecisionReference, snapshot: str) -> str:
     )
 
 
-def _memory_lines(memory: list[OpponentDecisionRecord]) -> list[str]:
+def _memory_lines(memory: list[DecisionRecord]) -> list[str]:
     """Whole-game opponent records with each historical snapshot printed once.
 
     A log repeats the same untapped sources at many choices; printing each
@@ -1355,7 +1355,7 @@ def _memory_lines(memory: list[OpponentDecisionRecord]) -> list[str]:
         ]
         records.append(
             f"{record.ordinal + 1}. {record.kind}/{choice.kind or 'unavailable'}; "
-            f"count: {record.count}; span: {record.first_position}..{record.last_position}; "
+            f"actor: {'You' if record.actor == 1 else 'Opponent'}; count: {record.count}; span: {record.first_position}..{record.last_position}; "
             + "; ".join(
                 [
                     *changes,
@@ -1367,7 +1367,7 @@ def _memory_lines(memory: list[OpponentDecisionRecord]) -> list[str]:
         )
     return [
         "",
-        "Opponent decisions, chronological whole-game viewer history "
+        "Decision history, chronological whole-game public signals "
         "(decision/choice; paired life/hand values and board rows are You/Opponent; "
         "board counts are total/tapped/land/creature/artifact/enchantment/"
         "planeswalker/battle; role is the viewer-relative controller, or owner "

@@ -1583,7 +1583,7 @@ impl Game {
         drop(validation_timer);
         #[cfg(feature = "benchmark")]
         let _rules_timer = crate::benchmark_search::Timer::new("rules_execution");
-        let pending_memory = crate::agent::opponent_memory::capture(
+        let pending_memory = crate::agent::decision_memory::capture(
             self,
             self.current_action_space.as_ref().unwrap(),
             action,
@@ -1593,7 +1593,7 @@ impl Game {
         self.execute_action(&action).unwrap_or_else(|error| {
             panic!("structured search offer admitted an unexecutable action: {error}")
         });
-        crate::agent::opponent_memory::commit(self, pending_memory);
+        crate::agent::decision_memory::commit(self, pending_memory);
         Ok(self.finish_action_step())
     }
 

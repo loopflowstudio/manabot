@@ -19,7 +19,7 @@ from manabot.infra.config import ObservationConfig
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from manabot.semantic.text_observation import capture_text_decision, render_decision
 import managym
-from managym.opponent_memory import read_records
+from managym.decision_memory import read_records
 
 
 class DemoBackend(Protocol):
@@ -69,18 +69,18 @@ class Proof:
         before = self.env.state_digest()
         for viewer in range(2):
             obs = self.env.observation_for_player(viewer)
-            source = obs.opponent_memory_json()
+            source = obs.decision_memory_json()
             assert (
                 source
-                == self.replay.observation_for_player(viewer).opponent_memory_json()
+                == self.replay.observation_for_player(viewer).decision_memory_json()
             )
             expected = self.space.encode(obs)
             native = self.space.encoder.allocate()
             self.env.encode_observation_into(obs, native)
             restored = self.space.encode(managym.Observation.from_json(obs.toJSON()))
             for key in (
-                "opponent_records",
-                "opponent_details",
+                "decision_records",
+                "decision_reference_details",
                 "actions",
                 "action_focus",
             ):
@@ -149,12 +149,17 @@ def _native_proof(out: Path, disclosure: Literal["open", "closed"]) -> Proof:
         _root(disclosure),
         out,
         ObservationSpace(
-            ObservationConfig(max_opponent_records=128, max_opponent_details=131072)
+            ObservationConfig(
+                max_decision_records=128,
+                max_decision_details=131072,
+                max_decision_references=1024,
+                max_decision_members=16384,
+            )
         ),
     )
     # A branch's public play must leave the parent's log and legal choices alone.
     parent = [
-        proof.env.observation_for_player(v).opponent_memory_json() for v in range(2)
+        proof.env.observation_for_player(v).decision_memory_json() for v in range(2)
     ]
     branch = proof.env.clone_env()
     contract = SemanticDecisionContract.from_env(branch)
@@ -166,10 +171,10 @@ def _native_proof(out: Path, disclosure: Literal["open", "closed"]) -> Proof:
     )
     Proof(branch, branch_replay, out / "branch", proof.space).checkpoint("cast")
     assert parent == [
-        proof.env.observation_for_player(v).opponent_memory_json() for v in range(2)
+        proof.env.observation_for_player(v).decision_memory_json() for v in range(2)
     ]
     assert any(
-        parent[v] != branch.observation_for_player(v).opponent_memory_json()
+        parent[v] != branch.observation_for_player(v).decision_memory_json()
         for v in range(2)
     )
     proof.choose("cast", "Accumulate Wisdom")
@@ -177,7 +182,7 @@ def _native_proof(out: Path, disclosure: Literal["open", "closed"]) -> Proof:
     # Private selection is unavailable to the opponent even with open decklists.
     observer = 1 - proof.env.current_agent_index()
     retained = read_records(
-        proof.env.observation_for_player(observer).opponent_memory_json()
+        proof.env.observation_for_player(observer).decision_memory_json()
     )
     assert any(record.choice.kind is None for record in retained)
     proof.checkpoint("private-selection")
@@ -191,7 +196,7 @@ def _native_proof(out: Path, disclosure: Literal["open", "closed"]) -> Proof:
     # The selected Mountain (seed 23) becomes public via the normal land action.
     proof.choose("play_land", "Mountain")
     after = read_records(
-        proof.env.observation_for_player(observer).opponent_memory_json()
+        proof.env.observation_for_player(observer).decision_memory_json()
     )
     assert after[: len(retained)] == retained
     assert any(
@@ -206,7 +211,7 @@ def _native_proof(out: Path, disclosure: Literal["open", "closed"]) -> Proof:
         record
         for v in range(2)
         for record in read_records(
-            proof.env.observation_for_player(v).opponent_memory_json()
+            proof.env.observation_for_player(v).decision_memory_json()
         )
     ]
     assert any(record.choice.declared is False for record in all_records)
@@ -253,16 +258,16 @@ def run_demo(out: Path, backend: DemoBackend) -> None:
 
 
 def main() -> None:
-    from manabot.backends.torch import verify_opponent_memory
+    from manabot.backends.torch import verify_decision_memory
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out", type=Path, default=Path(".runs/opponent-memory-demo"))
+    parser.add_argument("--out", type=Path, default=Path(".runs/decision-memory-demo"))
     out = parser.parse_args().out
     # The training proof creates a new run store; refuse before any proof
     # replaces part of an earlier receipt.
     if out.exists() and any(out.iterdir()):
         parser.error(f"--out {out} is not empty; choose a fresh output directory")
-    run_demo(out, verify_opponent_memory)
+    run_demo(out, verify_decision_memory)
 
 
 if __name__ == "__main__":

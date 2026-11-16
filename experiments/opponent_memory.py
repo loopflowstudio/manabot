@@ -27,6 +27,7 @@ class Arm:
     summaries: int
 
 
+# CPU/probe candidates only; K selection precedes the three paid arms.
 ARMS = (
     Arm("no-history", "none", 0),
     Arm("transformer-k1", "transformer", 1),
@@ -65,13 +66,19 @@ class Census:
     kinds: dict[str, int]
     record_capacity: int
     detail_capacity: int
+    prefix_references: Quantiles
+    terminal_references: Quantiles
+    prefix_members: Quantiles
+    terminal_members: Quantiles
+    reference_capacity: int
+    member_capacity: int
     padded_bytes_per_observation: int
 
 
 def census(path: Path) -> Census:
     """Analyze the dated seeded-workload substitution, without policy buffers.
 
-    Input is bench_steps --opponent-memory-census NDJSON. The original step
+    Input is bench_steps --decision-memory-census NDJSON. The original step
     digest admits the regenerated workload; this is not retained-command replay.
     Capacities round observed maxima upward and remain subject to calibration.
     """
@@ -83,6 +90,8 @@ def census(path: Path) -> Census:
         viewer: int
         records: int
         details: int
+        references: int
+        members: int
         pass_records: int
         pass_events: int
         kinds: dict[str, int]
@@ -92,7 +101,7 @@ def census(path: Path) -> Census:
         seed: int
         steps: int
         capped: bool
-        prefixes: list[tuple[int, int, int]]
+        prefixes: list[tuple[int, int, int, int, int]]
         terminal: list[Terminal]
 
     class Summary(BaseModel):
@@ -139,6 +148,10 @@ def census(path: Path) -> Census:
         raise ValueError("census is missing prefixes or terminal viewers")
     records = quantiles([row.records for row in terminal])
     details = quantiles([row.details for row in terminal])
+    references = quantiles([row.references for row in terminal])
+    members = quantiles([row.members for row in terminal])
+    reference_capacity = 1 << (max(1, references.maximum) - 1).bit_length()
+    member_capacity = 1 << (max(1, members.maximum) - 1).bit_length()
     record_capacity = 1 << (max(1, records.maximum) - 1).bit_length()
     detail_capacity = 1 << (max(1, details.maximum) - 1).bit_length()
     kinds: dict[str, int] = {}
@@ -159,7 +172,19 @@ def census(path: Path) -> Census:
         kinds,
         record_capacity,
         detail_capacity,
-        record_capacity * 18 * 4 + detail_capacity * 8 * 4,
+        quantiles([row[3] for row in prefixes]),
+        references,
+        quantiles([row[4] for row in prefixes]),
+        members,
+        reference_capacity,
+        member_capacity,
+        (
+            record_capacity * 74
+            + detail_capacity * 6
+            + reference_capacity * 14
+            + member_capacity * 2
+        )
+        * 4,
     )
 
 

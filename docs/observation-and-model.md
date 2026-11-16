@@ -10,7 +10,7 @@ outputs. This guide is the network between them.
 - [What the network does](#what-the-network-does)
 - [Sizes in the TLA pilot](#sizes-in-the-tla-pilot)
 - [Policy inputs](#policy-inputs)
-- [Whole-game opponent memory](#whole-game-opponent-memory)
+- [Whole-game decision memory](#whole-game-decision-memory)
 - [State, records and history](#state-records-and-history)
 - [What we know](#what-we-know)
 - [Where the code lives](#where-the-code-lives)
@@ -66,7 +66,7 @@ observation dictionary and does no validation or lookups of its own
    ([readout comparison](../experiments/value-readout-252.md)).
 
 The card GRU encodes a card's rules program. Optional recent events are off by
-default. [Whole-game opponent memory](#whole-game-opponent-memory) adds a
+default. [Whole-game decision memory](#whole-game-decision-memory) adds a
 separate encoder over past opponent decisions, recomputed from the observation
 at every forward rather than carried between calls.
 
@@ -545,7 +545,7 @@ shared object embeddings; an empty window gives exactly zero context.
 History-off keeps the historical `[E,7]` tensor and parameters. This is not
 complete decision history, and no training benefit has been measured.
 
-## Whole-game opponent memory
+## Whole-game decision memory
 
 **Unreleased.** The native projection, Torch encoders and shared rollout prefix
 storage are implemented as a bounded draft. The original dense rollout would need over
@@ -553,9 +553,10 @@ storage are implemented as a bounded draft. The original dense rollout would nee
 but the controlled size proof does not establish host or GPU fit at the census
 maxima. Bootstrap retains prefixes; controlled CPU execution reports host
 residency separately from device inputs and activations.
-An independent 256-stream CPU cohort now has a measured 27.33 GiB host peak
-with 2/2/2 execution limits; see the [resource report](../experiments/opponent_memory.md#independent-game-host-measurement-2026-11-16)
-for its scope. CUDA worker admission and the five-arm pilot remain outstanding;
+The earlier repeated-reference layout measured a 27.33 GiB host peak in an
+independent 256-stream CPU cohort with 2/2/2 execution limits; see the [resource report](../experiments/opponent_memory.md#independent-game-host-measurement-2026-11-16)
+for its scope. Host residency and runtime cost of the new snapshot layout have
+not been measured. CUDA worker admission and the three-arm pilot remain outstanding;
 the intended interface follows.
 
 To let a Torch policy use the opponent's earlier choices, select an encoder and
@@ -565,8 +566,8 @@ one or four summary tokens in its model configuration:
 from manabot.infra.config import ModelConfig
 
 model = ModelConfig(
-    opponent_memory="transformer",
-    opponent_memory_summaries=4,
+    decision_memory="transformer",
+    decision_memory_summaries=4,
     attention_on=True,
     attention_layers=2,
     policy_film=True,
@@ -582,8 +583,11 @@ the missing fields:
 from manabot.infra.config import ObservationConfig
 
 observation = ObservationConfig(
-    max_opponent_records=1024,
-    max_opponent_details=1_048_576,
+    max_decision_records=1024,
+    max_decision_details=8192,
+    max_decision_references=256,
+    max_decision_members=16_384,
+    decision_memory_include_own=False,
 )
 # On each self-play stage:
 stage.execution.collection_rows = 2
@@ -591,24 +595,24 @@ stage.execution.bootstrap_rows = 2
 stage.execution.learner_rows = 2
 ```
 
-These are the census-sized capacities; a game that exceeds them stops with a
+These are bounds selected from the seeded census; a game that exceeds them stops with a
 typed capacity error rather than dropping records. The policy receives the whole game's viewer-safe
 opponent decision records at each decision. For example, a pass with mana open
 and a card in hand remains available after later turns; a recent-event window
 can lose that context. The encoder produces summary tokens that join the board
 attention, allowing both legal-action probabilities and the value estimate to
 depend on the earlier choice. This does not establish a learning benefit; the
-[five-arm pilot](../experiments/opponent_memory.md) compares both encoders and
-both summary counts with a no-history control.
+[three-arm pilot](../experiments/opponent_memory.md) compares both encoders with
+a no-history control, after supervised probes select one shared summary count.
 
 | Setting | Choices and behavior |
 | --- | --- |
-| `opponent_memory` | `"none"` (default), `"transformer"` or `"gru"`. Memory is opt-in. |
-| `opponent_memory_summaries` | 1 or 4 for either encoder; default 4. Ignored when memory is `"none"`. |
+| `decision_memory` | `"none"` (default), `"transformer"` or `"gru"`. Memory is opt-in. |
+| `decision_memory_summaries` | 1 or 4 for either encoder; default 4. Ignored when memory is `"none"`. |
 | `attention_on`, `policy_film` | Both must be `True` for memory. FiLM carries board context to actions without focus objects. |
 | `recent_events` | Must be `False` when opponent memory is enabled. The bounded event encoder remains a separate option. |
 
-A no-history control can use `opponent_memory="none"` with the same positive
+A no-history control can use `decision_memory="none"` with the same positive
 observation capacities. Native encoding, immutable prefix retention and input
 validation still carry the full log. The control creates no memory parameters
 or prepared memory features, and its current-state predictions match the
@@ -618,7 +622,7 @@ The LLM text observation lists every opponent record chronologically. Repeated
 historical references and rules descriptions appear once in alias tables; the
 aliases resolve snapshots at the choice, never today's objects. Paired life and
 hand values, and the two board rows, are ordered You/Opponent. Text representation
-`manabot-text-9` prints the first record's context in full, then only changed
+`manabot-text-10` prints the first record's context in full, then only changed
 turn, phase, step, life, hand, board and untapped-source values. Omitted context
 fields keep the previous record's value; `none` explicitly clears a reference
 group. Choices and responses apply only to their own record, including empty
@@ -634,7 +638,7 @@ harness must check its tokenizer and chat-template budget.
 Run the headless software proof with:
 
 ```bash
-uv run --extra dev python -m manabot.verify.opponent_memory --out .runs/opponent-memory-demo
+uv run --extra dev python -m manabot.verify.decision_memory --out .runs/decision-memory-demo
 ```
 
 Use a fresh output directory. It retains both viewers' logs, captures, text,
@@ -655,7 +659,8 @@ MLX raises `UnsupportedPolicy` for a memory-enabled configuration.
 ### What a record means
 
 managym records committed, nontrivial opponent choices separately for each
-viewer. Your own choices and decisions with only one legal action are excluded.
+viewer. By default, your own choices are excluded; the optional own-seat mode is
+described below. Decisions with only one legal action are always excluded.
 A pass is eligible only when the opponent holds priority, has at least one
 untapped mana source and has a card in hand. This rule never tests whether a
 hidden card is castable. Consecutive eligible passes with identical public
@@ -720,12 +725,39 @@ measurement covers its recorded cohort and one logical execution minibatch.
 Recipes without memory retain their historical execution when row limits are
 omitted.
 
-Record and companion-row capacities belong to the supplied observation space:
-`ObservationConfig.max_opponent_records` and `max_opponent_details`. Both default
-to zero (disabled); memory requires both to be positive and policy input v11.
-They are fixture capacities until resource sizing and calibration establish
-a practical training configuration. The seeded census's candidate bounds are
-1,024 records and 1,048,576 details; these do not certify learned-game lengths.
+Record, snapshot, program-detail and member capacities belong to the supplied
+observation space: `max_decision_records`, `max_decision_references`,
+`max_decision_details` and `max_decision_members`. All default to zero (disabled)
+and must be positive together for v11 memory. The example uses the repeated seeded census
+maxima rounded upward; it does not admit learned-game tails.
+
+The native viewer log interns exact immutable reference snapshots. Records own
+ordered mana-context, response and choice members, including repeated references.
+Life, hand and board counts occupy fixed named record columns with exact two-word
+integer transport. Eligible exact registered faces may omit their repeated rule
+program; preparation expands them through the same semantic route as full
+snapshots. Local table indexes and appearance identities are never numerical
+learning features. The nonlinear featurizer binds each detail's field, typed
+value and position before reference pooling, then pools the three member groups
+separately. Transformer records use pre-norm attention; summaries are normalized
+before the existing board-token join.
+
+`decision_memory_include_own=True` additionally records your own public signals,
+using the opposing viewer's entitled projection **at emission**, rebased to your
+seat. Non-announced references must also be entitled to you; the other viewer's
+private knowledge is never declassified into your history.
+It never stores your private choice or hand view as public evidence. Actor roles
+remain explicit and different actors never coalesce. Native scalar/vector
+constructors take the same default-false keyword; library training wrappers pass
+it from `ObservationConfig`. Configure it before reset, since missing history
+cannot be filled in later. Primary census and CPU comparisons keep it false.
+Reciprocal decklist-disclosure observability belongs to PR #547; this change
+adds no competing disclosure flag.
+
+The existing J1 join remains. Zero summary outputs do not establish a
+control-equivalent initial function because attention normalization changes.
+Shared-trunk/gated initialization and supervised probes remain post-measurement
+work; no new training arm is added here.
 
 Overflow or mismatched companion shapes raise a typed Capacity error with the
 required counts. Keep the failed game's evidence, increase the relevant
@@ -810,7 +842,7 @@ this proof first.
 | All objects, effects and frames as global attention tokens | Unmeasured. Moves attention from N² to (N + E + F)². Memberships need not become tokens. Compact transport alone does not justify it. |
 | One whole-observation GRU or pooled vector | Rejected as the sole interface: it loses direct target addressing and imposes an arbitrary order. A summary may supplement object outputs. |
 | Effective state plus a finite event window, omitting active effects | Rejected by the expiry, source and eviction cases. Recovering active records from the suffix is as hard as the missing state, and impossible once the event is gone. |
-| Whole-game opponent decision memory | Supplements complete typed state through summary tokens; see the intended interface above. |
+| Whole-game decision memory | Supplements complete typed state through summary tokens; see the intended interface above. |
 
 ### Unresolved and unmeasured
 

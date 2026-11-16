@@ -179,7 +179,7 @@ impl Game {
             );
             ids.extend(frame.sacrifice.and_then(|r| r.definition));
         }
-        for record in agent.opponent_memory.iter() {
+        for record in agent.decision_memory.iter() {
             for reference in record
                 .context
                 .mana_sources

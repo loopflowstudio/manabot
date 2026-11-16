@@ -24,13 +24,13 @@ fn value_dict<'py>(py: Python<'py>, layout: &ValueLayout) -> PyResult<Bound<'py,
 /// one-token rows and `stack`. A `None` extent is a caller-selected capacity.
 /// Seats are viewer-relative. No game or buffer is created.
 #[pyfunction]
-#[pyo3(signature = (*, policy_history=false, turn_state=true, legacy=false, opponent_memory=false))]
+#[pyo3(signature = (*, policy_history=false, turn_state=true, legacy=false, decision_memory=false))]
 fn observation_layout(
     py: Python<'_>,
     policy_history: bool,
     turn_state: bool,
     legacy: bool,
-    opponent_memory: bool,
+    decision_memory: bool,
 ) -> PyResult<PyObject> {
     let out = PyDict::new_bound(py);
     let layout = if legacy {
@@ -39,13 +39,13 @@ fn observation_layout(
         InputLayout::OneToken
     };
     let mut arrays = native_layout::observation_layout(policy_history, turn_state, layout);
-    if opponent_memory {
+    if decision_memory {
         if legacy {
             return Err(pyo3::exceptions::PyValueError::new_err(
                 "opponent memory requires v11",
             ));
         }
-        arrays.extend(native_layout::opponent_memory_layout());
+        arrays.extend(native_layout::decision_memory_layout());
     }
     for (key, array) in arrays {
         let value = PyDict::new_bound(py);

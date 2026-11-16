@@ -39,7 +39,7 @@ class _RecordTables:
 
 
 def _record_tables(
-    vocabulary: dict[tuple[int, int], int], *, opponent_memory: bool = False
+    vocabulary: dict[tuple[int, int], int], *, decision_memory: bool = False
 ) -> _RecordTables:
     """A name whose card token exists reads that token's row, so a granted
     keyword and the printed keyword share one embedding; every other name,
@@ -54,7 +54,7 @@ def _record_tables(
         return size - 1
 
     for space, name, value, kind, token in managym.record_vocabulary():
-        if name.startswith("OpponentMemory::") and not opponent_memory:
+        if name.startswith("DecisionMemory::") and not decision_memory:
             continue
         key = (int(RecordNamespace[space.upper()]), value)
         if key in names:
@@ -102,7 +102,7 @@ class SemanticCardEncoder(nn.Module):
         decklists: bool = False,
         *,
         records: bool = False,
-        opponent_memory: bool = False,
+        decision_memory: bool = False,
     ) -> None:
         """`decklists` adds a projection of the pooled
         decklist rows into each player's knowledge vector; `records` adds the
@@ -155,7 +155,7 @@ class SemanticCardEncoder(nn.Module):
             padded_tokens=len(rows) * width,
         )
         tables = (
-            _record_tables(vocabulary, opponent_memory=opponent_memory)
+            _record_tables(vocabulary, decision_memory=decision_memory)
             if records
             else None
         )

@@ -270,7 +270,7 @@ def capture_incident(
                         f"memory/{name}": torch.from_numpy(
                             getattr(archive, name).copy()
                         )
-                        for name in ("offsets", "records", "details")
+                        for name in ("offsets", "indexes")
                     }
                 )
                 memory_metadata["complete"] = True
@@ -282,7 +282,7 @@ def capture_incident(
     tensors.update(batch_tensors)
     evidence: dict[str, Tensor] = dict(memory_tensors)
     shapes: dict[str, object] = (
-        {"opponent_memory": memory_metadata} if memory_metadata else {}
+        {"decision_memory": memory_metadata} if memory_metadata else {}
     )
     remaining = evidence_bytes - memory_bytes
     failed = tensors.get("failed")

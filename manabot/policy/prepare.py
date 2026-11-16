@@ -54,7 +54,7 @@ from manabot.env.observation import (
 )
 from manabot.env.shared_effects import DETAIL_DIM, EFFECT_ROWS, MEMBER_DIM
 from manabot.policy.buckets import has_history_events
-from manabot.policy.opponent_memory import MemoryRows, prepare_memory
+from manabot.policy.decision_memory import MemoryRows, prepare_memory
 
 Array = np.ndarray
 
@@ -660,7 +660,9 @@ def prepare(
         is_agent=ownership,
         # Full-catalog preparation skips the scan for referenced definitions.
         programs=tables.programs(
-            _referenced_definitions(obs, tables, candidates)
+            _referenced_definitions(
+                obs, tables, candidates, include_memory=bool(memory_summaries)
+            )
             if select_programs
             else None
         )
@@ -677,7 +679,7 @@ def prepare(
 
 
 def _referenced_definitions(
-    obs: ObservationBuffers, tables: Tables, candidates: Array
+    obs: ObservationBuffers, tables: Tables, candidates: Array, *, include_memory: bool
 ) -> Array:
     """Catalog subset read by learning, in sorted row order (zero is padding)."""
     references = [
@@ -692,9 +694,8 @@ def _referenced_definitions(
         references.extend(
             obs["events"][..., col][obs["events_valid"] == 1] for col in (2, 7)
         )
-    if "opponent_details" in obs:
-        details = obs["opponent_details"]
-        references.append(record_word(details, 5)[details[..., 4] == -3])
+    if include_memory and "decision_references" in obs:
+        references.append(obs["decision_references"][..., 1])
     if "stack" in obs:
         references.append(obs["stack"][..., STACK_DEFINITION_INDEX])
     if tables.catalog_records:

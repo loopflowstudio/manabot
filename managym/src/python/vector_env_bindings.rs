@@ -60,8 +60,10 @@ struct ObservationBuffers {
     opponent_permanents: Py<PyAny>,
     actions: Py<PyAny>,
     events: Py<PyAny>,
-    opponent_records: Option<Py<PyAny>>,
-    opponent_details: Option<Py<PyAny>>,
+    decision_records: Option<Py<PyAny>>,
+    decision_reference_details: Option<Py<PyAny>>,
+    decision_references: Option<Py<PyAny>>,
+    decision_members: Option<Py<PyAny>>,
     action_focus: Py<PyAny>,
     agent_player_valid: Py<PyAny>,
     opponent_player_valid: Py<PyAny>,
@@ -132,7 +134,7 @@ impl PyVectorEnv {
     }
 
     #[new]
-    #[pyo3(signature = (num_envs, seed=0, skip_trivial=true, opponent_policy=None, seed_stride=None, *, player_policies=None))]
+    #[pyo3(signature = (num_envs, seed=0, skip_trivial=true, opponent_policy=None, seed_stride=None, *, player_policies=None, decision_memory_include_own=false))]
     fn new(
         num_envs: usize,
         seed: u64,
@@ -140,9 +142,11 @@ impl PyVectorEnv {
         opponent_policy: Option<&str>,
         seed_stride: Option<u64>,
         player_policies: Option<Vec<String>>,
+        decision_memory_include_own: bool,
     ) -> PyResult<Self> {
         let policies = parse_player_policies(player_policies, opponent_policy)?;
-        let mut inner = VectorEnv::new(num_envs, seed, skip_trivial, policies);
+        let mut inner = VectorEnv::new(num_envs, seed, skip_trivial, policies)
+            .with_decision_memory_include_own(decision_memory_include_own);
         if let Some(stride) = seed_stride {
             inner = inner.with_seed_stride(stride).map_err(map_agent_err)?;
         }
@@ -513,28 +517,41 @@ pub(super) fn input_buffer_config(
         policy_history,
         ..ObservationEncoderConfig::default()
     };
-    match (
-        buffers.contains("opponent_records")?,
-        buffers.contains("opponent_details")?,
-    ) {
-        (true, true) => {
-            let [records, width] = shape("opponent_records")?;
-            let [details, detail_width] = shape("opponent_details")?;
-            if width != crate::agent::opponent_memory::RECORD_DIM
-                || detail_width != crate::agent::opponent_memory::DETAIL_DIM
-            {
+    let memory_fields = [
+        "decision_records",
+        "decision_references",
+        "decision_reference_details",
+        "decision_members",
+    ];
+    let present = memory_fields
+        .map(|field| buffers.contains(field))
+        .into_iter()
+        .collect::<PyResult<Vec<_>>>()?;
+    if present.iter().any(|&value| value) {
+        if !present.iter().all(|&value| value) {
+            return Err(PyValueError::new_err(
+                "opponent memory requires all companion buffers",
+            ));
+        }
+        for (field, width) in memory_fields.into_iter().zip([
+            crate::agent::decision_memory::RECORD_DIM,
+            crate::agent::decision_memory::REFERENCE_DIM,
+            crate::agent::decision_memory::DETAIL_DIM,
+            crate::agent::decision_memory::MEMBER_DIM,
+        ]) {
+            let [capacity, actual] = shape(field)?;
+            if capacity == 0 || actual != width {
                 return Err(PyValueError::new_err(
                     "invalid opponent-memory companion widths",
                 ));
             }
-            config.max_opponent_records = records;
-            config.max_opponent_details = details;
-        }
-        (false, false) => {}
-        _ => {
-            return Err(PyValueError::new_err(
-                "opponent memory requires both companion buffers",
-            ))
+            match field {
+                "decision_records" => config.max_decision_records = capacity,
+                "decision_references" => config.max_decision_references = capacity,
+                "decision_reference_details" => config.max_decision_details = capacity,
+                "decision_members" => config.max_decision_members = capacity,
+                _ => unreachable!(),
+            }
         }
     }
     // One layout: every v9 buffer is present at its fixed width.
@@ -809,25 +826,49 @@ fn read_observation_buffers(
             "float32",
         )?
         .unbind(),
-        opponent_records: if c.max_opponent_records > 0 {
+        decision_records: if c.max_decision_records > 0 {
             required(
-                "opponent_records",
+                "decision_records",
                 &[
                     n,
-                    c.max_opponent_records,
-                    crate::agent::opponent_memory::RECORD_DIM,
+                    c.max_decision_records,
+                    crate::agent::decision_memory::RECORD_DIM,
                 ],
             )?
         } else {
             None
         },
-        opponent_details: if c.max_opponent_details > 0 {
+        decision_reference_details: if c.max_decision_details > 0 {
             required(
-                "opponent_details",
+                "decision_reference_details",
                 &[
                     n,
-                    c.max_opponent_details,
-                    crate::agent::opponent_memory::DETAIL_DIM,
+                    c.max_decision_details,
+                    crate::agent::decision_memory::DETAIL_DIM,
+                ],
+            )?
+        } else {
+            None
+        },
+        decision_references: if c.max_decision_references > 0 {
+            required(
+                "decision_references",
+                &[
+                    n,
+                    c.max_decision_references,
+                    crate::agent::decision_memory::REFERENCE_DIM,
+                ],
+            )?
+        } else {
+            None
+        },
+        decision_members: if c.max_decision_members > 0 {
+            required(
+                "decision_members",
+                &[
+                    n,
+                    c.max_decision_members,
+                    crate::agent::decision_memory::MEMBER_DIM,
                 ],
             )?
         } else {
@@ -1290,8 +1331,10 @@ struct SendObservationFieldSlices {
     opponent_permanents: SendSlice<f32>,
     actions: SendSlice<f32>,
     events: SendSlice<f32>,
-    opponent_records: Option<SendSlice<f32>>,
-    opponent_details: Option<SendSlice<f32>>,
+    decision_records: Option<SendSlice<f32>>,
+    decision_reference_details: Option<SendSlice<f32>>,
+    decision_references: Option<SendSlice<f32>>,
+    decision_members: Option<SendSlice<f32>>,
     action_focus: SendSlice<i32>,
     agent_player_valid: SendSlice<f32>,
     opponent_player_valid: SendSlice<f32>,
@@ -1352,29 +1395,59 @@ impl SendObservationFieldSlices {
         let events_valid_ptr = self.events_valid.row_ptr(env_index, config.max_events)?;
 
         Ok(EncodedObservationMut {
-            opponent_records: if let Some(buffer) = self.opponent_records {
+            decision_records: if let Some(buffer) = self.decision_records {
                 // SAFETY: registration validates storage and each env owns a disjoint row.
                 unsafe {
                     slice::from_raw_parts_mut(
                         buffer.row_ptr(
                             env_index,
-                            config.max_opponent_records * crate::agent::opponent_memory::RECORD_DIM,
+                            config.max_decision_records * crate::agent::decision_memory::RECORD_DIM,
                         )?,
-                        config.max_opponent_records * crate::agent::opponent_memory::RECORD_DIM,
+                        config.max_decision_records * crate::agent::decision_memory::RECORD_DIM,
                     )
                 }
             } else {
                 &mut []
             },
-            opponent_details: if let Some(buffer) = self.opponent_details {
+            decision_reference_details: if let Some(buffer) = self.decision_reference_details {
                 // SAFETY: registration validates storage and each env owns a disjoint row.
                 unsafe {
                     slice::from_raw_parts_mut(
                         buffer.row_ptr(
                             env_index,
-                            config.max_opponent_details * crate::agent::opponent_memory::DETAIL_DIM,
+                            config.max_decision_details * crate::agent::decision_memory::DETAIL_DIM,
                         )?,
-                        config.max_opponent_details * crate::agent::opponent_memory::DETAIL_DIM,
+                        config.max_decision_details * crate::agent::decision_memory::DETAIL_DIM,
+                    )
+                }
+            } else {
+                &mut []
+            },
+            decision_references: if let Some(buffer) = self.decision_references {
+                // SAFETY: registration validates storage and each env owns a disjoint row.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(
+                            env_index,
+                            config.max_decision_references
+                                * crate::agent::decision_memory::REFERENCE_DIM,
+                        )?,
+                        config.max_decision_references
+                            * crate::agent::decision_memory::REFERENCE_DIM,
+                    )
+                }
+            } else {
+                &mut []
+            },
+            decision_members: if let Some(buffer) = self.decision_members {
+                // SAFETY: registration validates storage and each env owns a disjoint row.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(
+                            env_index,
+                            config.max_decision_members * crate::agent::decision_memory::MEMBER_DIM,
+                        )?,
+                        config.max_decision_members * crate::agent::decision_memory::MEMBER_DIM,
                     )
                 }
             } else {
@@ -1734,15 +1807,25 @@ fn with_observation_field_slices<R>(
     let opponent_permanents_buffer =
         typed_numpy_buffer::<f32>(py, &buffers.opponent_permanents, "opponent_permanents")?;
     let actions_buffer = typed_numpy_buffer::<f32>(py, &buffers.actions, "actions")?;
-    let opponent_records_buffer = buffers
-        .opponent_records
+    let decision_records_buffer = buffers
+        .decision_records
         .as_ref()
-        .map(|value| typed_numpy_buffer::<f32>(py, value, "opponent_records"))
+        .map(|value| typed_numpy_buffer::<f32>(py, value, "decision_records"))
         .transpose()?;
-    let opponent_details_buffer = buffers
-        .opponent_details
+    let decision_reference_details_buffer = buffers
+        .decision_reference_details
         .as_ref()
-        .map(|value| typed_numpy_buffer::<f32>(py, value, "opponent_details"))
+        .map(|value| typed_numpy_buffer::<f32>(py, value, "decision_reference_details"))
+        .transpose()?;
+    let decision_references_buffer = buffers
+        .decision_references
+        .as_ref()
+        .map(|value| typed_numpy_buffer::<f32>(py, value, "decision_references"))
+        .transpose()?;
+    let decision_members_buffer = buffers
+        .decision_members
+        .as_ref()
+        .map(|value| typed_numpy_buffer::<f32>(py, value, "decision_members"))
         .transpose()?;
     let events_buffer = typed_numpy_buffer::<f32>(py, &buffers.events, "events")?;
     let action_focus_buffer = typed_numpy_buffer::<i32>(py, &buffers.action_focus, "action_focus")?;
@@ -1825,13 +1908,21 @@ fn with_observation_field_slices<R>(
             "opponent_permanents",
         )?,
         actions: send_slice_from_buffer(py, &actions_buffer, "actions")?,
-        opponent_records: opponent_records_buffer
+        decision_records: decision_records_buffer
             .as_ref()
-            .map(|buffer| send_slice_from_buffer(py, buffer, "opponent_records"))
+            .map(|buffer| send_slice_from_buffer(py, buffer, "decision_records"))
             .transpose()?,
-        opponent_details: opponent_details_buffer
+        decision_reference_details: decision_reference_details_buffer
             .as_ref()
-            .map(|buffer| send_slice_from_buffer(py, buffer, "opponent_details"))
+            .map(|buffer| send_slice_from_buffer(py, buffer, "decision_reference_details"))
+            .transpose()?,
+        decision_references: decision_references_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "decision_references"))
+            .transpose()?,
+        decision_members: decision_members_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "decision_members"))
             .transpose()?,
         events: send_slice_from_buffer(py, &events_buffer, "events")?,
         action_focus: send_slice_from_buffer(py, &action_focus_buffer, "action_focus")?,

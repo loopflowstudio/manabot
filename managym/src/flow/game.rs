@@ -728,7 +728,8 @@ pub struct Game {
     pub(crate) payment_sources: RefCell<crate::flow::mana::SharedSources>,
     /// Derived public suffix, updated only by emit; excluded from rules-state
     /// hashing like other projections. Ordinary observation reads share it.
-    pub(crate) opponent_memory: [crate::agent::opponent_memory::DecisionLog; 2],
+    pub(crate) decision_memory_include_own: bool,
+    pub(crate) decision_memory: [crate::agent::decision_memory::DecisionLog; 2],
     pub(crate) policy_history: crate::agent::policy_history::HistoryWindow,
     pub skip_trivial: bool,
     pub current_action_space: Option<ActionSpace>,
@@ -756,7 +757,8 @@ impl Clone for Game {
             payment_cache: self.payment_cache.clone(),
             payment_sources: Default::default(),
             policy_history: self.policy_history.clone(),
-            opponent_memory: self.opponent_memory.clone(),
+            decision_memory: self.decision_memory.clone(),
+            decision_memory_include_own: self.decision_memory_include_own,
             skip_trivial: self.skip_trivial,
             current_action_space: self.current_action_space.clone(),
             decision_epoch: self.decision_epoch,

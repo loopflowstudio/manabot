@@ -41,7 +41,14 @@ class ShardedVectorEnv:
     Call close at the end of the owning training run, including failure paths.
     """
 
-    def __init__(self, num_envs: int, seed: int, workers: int) -> None:
+    def __init__(
+        self,
+        num_envs: int,
+        seed: int,
+        workers: int,
+        *,
+        decision_memory_include_own: bool = False,
+    ) -> None:
         if workers not in (2, 4) or workers > num_envs:
             raise ValueError(
                 "parallel producers require 2 or 4 workers and at least one stream each"
@@ -62,6 +69,7 @@ class ShardedVectorEnv:
                     seed_stride=num_envs,
                     stream_offset=index * num_envs // workers,
                     skip_trivial=True,
+                    decision_memory_include_own=decision_memory_include_own,
                     player_policies=("agent", "agent"),
                 ),
             )

@@ -214,7 +214,13 @@ def replay_attempt(attempt: GameAttempt) -> dict[str, object]:
     Process interrupts escape. Divergence before the retained failing action is
     distinct from reproducing the original failure.
     """
-    env = managym.Env(seed=attempt.seed, skip_trivial=True)
+    env = managym.Env(
+        seed=attempt.seed,
+        skip_trivial=True,
+        decision_memory_include_own=bool(
+            attempt.observation and attempt.observation.decision_memory_include_own
+        ),
+    )
     env.reset(Match(attempt.matchup).to_rust())
     frame: str | None = None
     agreement = ReplayAgreement(attempt.outcome)
