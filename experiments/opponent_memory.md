@@ -20,17 +20,69 @@ judgment, not a precomputed verdict.
 ## Method (planned, not executed)
 
 A supervised probe comes first, then three paid arms across three independent
-seed labels, shared across arms for blocking: nine runs, not nine independent
-seeds. The seed, not
+seed labels, shared across arms for blocking: nine branch runs from three
+no-history trunks, not nine independent seeds. The seed, not
 an evaluation game, is the unit of learning evidence. No factorial cross and no
 dedicated control-deck training arm in this pilot; stratify the existing
 Elemental matchups instead.
 
-The probe fits transformer and GRU encoders with one and four summaries on frozen
-policy games split by whole game, with privileged labels kept outside every
-observation. Held-out probe loss chooses one shared summary count K (CPU cost
-breaks ties, then K=1). A weak probe does not show that reinforcement learning
-cannot use memory.
+### Supervised probe (planned, not executed)
+
+Do summaries of the opponent's past decisions say anything about the opponent's
+hand that the current public state does not? The probe answers that on a
+laptop, at no cost, and fixes the summary count K for the paid arms:
+
+```bash
+uv run python -m experiments.opponent_memory probe --out .runs/decision-memory-probe
+```
+
+It prints one table of held-out per-card log loss, each memory row also as its
+difference from the state-only row with a game-bootstrap interval, separately
+for open and closed decklists (values appear when it runs):
+
+```text
+candidate          open                     closed
+analytic           <loss>                   <loss>
+state only         <loss>                   <loss>
+transformer K=1    <loss>  <diff [lo, hi]>  <loss>  <diff [lo, hi]>
+transformer K=4    ...
+gru K=1            ...
+gru K=4            ...
+selected K: <1|4> (<reason>)
+games <n>  rows <n>  capacity overflows <n>
+```
+
+and writes the same content to `summary.json` in the output directory. Use a
+fresh directory.
+
+- **Games.** The native heuristic plays both seats over the Elemental 10-deck
+  roster, uniform ordered pairs, half with open and half with closed decklists,
+  forced decisions skipped. No trained policy can read this layout before the
+  pilot's own trunks exist, and none may be rebound to it. Games split 70/15/15
+  into fit, validation and test by game seed; no game appears in two splits.
+- **Rows.** Each acting decision of each viewer with a non-empty log, at most
+  16 per viewer per game. Capacities are the census bounds; a game exceeding
+  them is a typed capacity error and is counted, never truncated.
+- **Label.** Which card definitions the opponent holds, from the privileged
+  native hand snapshot. The recorder stores labels beside the observation,
+  never in an observation key, a prepared policy input, a cache or a replay.
+- **Candidates.** The production memory encoder and the embeddings it reads,
+  fitted from scratch for transformer and GRU at K=1 and K=4, each with a linear
+  head over its summaries joined to a public state vector (opponent hand and
+  library size, turn, per-definition public-zone counts, decklist counts when
+  open). Baselines on the same rows: that state vector alone through the same
+  head, and the analytic hand size × unseen-deck frequency. Three fitting seeds.
+- **Choosing K.** K=4 only if its validation loss beats K=1, averaged over both
+  encoders, with an interval excluding zero; otherwise the cheaper on CPU, then
+  K=1. The test split is read once, for the table.
+- **Cost.** Local CPU, no rental. The game count is sized from a 20-game timing
+  smoke so that all fits finish within two hours.
+
+Limits: these are scripted games, not learned play, so the probe can mislead K;
+hand presence is one use of memory among several; a weak probe does not show
+that reinforcement learning cannot use memory. Repeating the probe on the
+trunks' own self-play games is an optional check inside the budget and does not
+change the chosen K.
 
 | Arm | Changes from the incumbent |
 | --- | --- |
@@ -63,20 +115,33 @@ separately; the shared engine still captures decisions with history input disabl
 
 ### Common-trunk initialization (planned, unimplemented)
 
-Branch each seed's three arms from one compatible current-layout trunk checkpoint,
-with an explicit copy of matching shared parameters and recorded source identities.
-The arms do not start as unrelated randomly initialized agents. Older-world
-checkpoints cannot be rebound or admitted by bypassing world/shape checks.
-The three seed labels 39101–39103 provide independent learning units; the three
-branches within each label form a blocked comparison.
+Each seed label trains one no-history trunk on the memory-enabled observation
+space, then branches three arms from its checkpoint: no history, transformer-K
+and GRU-K. The arms do not start as unrelated randomly initialized agents. The
+three seed labels 39101–39103 provide independent learning units; the three
+branches within each label form a blocked comparison. Older-world checkpoints
+cannot be rebound or admitted by bypassing world/shape checks.
 
-Before the pilot, implement and prove a control-equivalent J1 initialization:
-matching ordinary inputs must produce the incumbent's action distribution and
-value at initialization, and a staged gradient check must show how learning
-reaches the new join and memory encoder. Zero-valued summaries alone are not
-inert attention tokens. The explicit shared-parameter copy, gated join and these
-proofs are deferred; current CPU timing does not establish them. Probe-first K
-selection precedes this three-arm pilot.
+A memory arm starts as its trunk exactly: the
+[gated join](../docs/observation-and-model.md#starting-from-a-no-history-trunk)
+blends each board layer's board-only and joint attention outputs by
+`tanh(scale * gate)`, with the gates at zero. Zero-valued summaries alone are
+not inert attention tokens, and a mask would be exact but could never learn.
+Before the pilot, tests show that
+
+- an arm built from a trunk gives the trunk's logits and value with zero
+  tolerance on padded, live, compact and empty-history inputs, for both
+  encoders and K=1 and 4;
+- at initialization the gates have non-zero gradient and every memory-encoder
+  gradient is exactly zero, and after one real damped update the encoder
+  gradients are non-zero;
+- a checkpoint round trip keeps the gates.
+
+The gate scale is fixed once for all arms from the calibrated horizon, so that
+a gate pushed consistently in one direction can reach 0.5 within the first 10%
+of a run. Each layer's gate value is a logged training metric. If the gates stay
+near zero, the pilot compared three copies of the control and says nothing
+about memory; report that rather than the curves.
 
 ### Shared software before a paid run
 
@@ -132,22 +197,27 @@ this one experiment.
    rebind old worlds or substitute freshly played games without dating the change.
    Random games size the first capacity; the paid pilot must also report its own
    lengths, failures and peak memory because learned play can be longer.
-2. **Probe and calibration, at most USD 3 combined.** On one authorized GPU host, interleave real
+2. **Probe, then calibration at most USD 3.** Run the probe locally and date the
+   chosen K here. Then, on one authorized GPU host, interleave real
    no-history repeats with the selected memory arms using retained replay inputs and
    short production-path updates. Include initialization/checkpoint reload and
    native encoding, preparation, collection inference, learner and peak memory.
    No artificial load. Separate replayed phase timings from whole-update rates.
    Record host CPU/quota, GPU, source/world/input and precision. Use these readings
-   to choose one common learner-decision horizon and milestone spacing that fit
-   the training allowance; date that choice here before training. If three arms
+   to choose one common learner-decision horizon, trunk length, gate scale and
+   milestone spacing that fit the training allowance; date that choice here
+   before training. If three arms
    cannot fit meaningful learning, report that rather than covertly narrowing the
    comparison or making a learning claim from smoke updates.
-3. **Learning pilot, at most USD 27.** Nine runs from compatible common trunks,
-   three arms × three independent seed labels 39101–39103,
-   three arms, at most USD 3.00 each including startup and finalization. Inspect
-   PR #547 / Task 4b0591 before freezing: if mixed per-game disclosure training
-   has landed, use a balanced open/closed mix identically across arms; otherwise
-   train open lists and label closed-list evaluation as a disclosure shift.
+3. **Learning pilot, at most USD 27.** Twelve runs: one no-history trunk for
+   each independent seed label 39101–39103, then three branches from each. The
+   per-run cap, including startup and finalization, is set at calibration so
+   that all twelve fit the allowance. Inspect
+   PR #547 / Task 4b0591 before freezing: it merged on 2026-11-16 as
+   `c035d5566a4a6546f212deabb67524c47bc8a7d6`. Sync its game-level
+   `decklists_open` input and mixed per-game disclosure, plus #550's native
+   library/hand knowledge, before training. Use a balanced open/closed mix
+   identically across arms (`UniformDecks(decklists="mixed")`).
    Build the
    current-world Elemental uniform 10-deck self-play recipe with
    `manabot.recipes.builders`, both learner seats and ordinary complete-game
@@ -184,14 +254,10 @@ this one experiment.
    retain partial coverage explicitly if the allowance cannot finish them.
    A heuristic curve is optional context only, after the primary comparisons.
 
-If affordable from the same allocation, fit a linear hand-content probe on frozen
-summary tokens and the identical probe on the control's pooled state. Collect
-labels from a privileged offline recorder only, never from policy inputs. Split
-by whole held-out games/deals and training seed, fit on separate probe-training
-games, and show hand-size/deck-frequency baselines and uncertainty. No encoder
-fine-tuning, training changes or additional rentals solely for the probe. Its
-labels cannot enter native viewer observations, caches or replay projections.
-Mark this diagnostic deferred if data collection/fitting does not fit the cap.
+If affordable from the same allocation, repeat the supervised probe on the
+trunks' own self-play games, with the same recorder, split, candidates and
+baselines. No additional rental solely for it, and no change to the chosen K.
+Mark this check deferred if collection and fitting do not fit the cap.
 
 USD 8 remains for failures/retries and unresolved startup cost, inside the same
 USD 50 total, not an additional budget. The task already authorizes this amount.

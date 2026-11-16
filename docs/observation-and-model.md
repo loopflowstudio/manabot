@@ -556,10 +556,11 @@ residency separately from device inputs and activations.
 The earlier repeated-reference layout measured a 27.33 GiB host peak in an
 independent 256-stream CPU cohort with 2/2/2 execution limits; see the [resource report](../experiments/opponent_memory.md#independent-game-host-measurement-2026-11-16)
 for its scope. Host residency of the new snapshot layout has not been measured;
-on CPU, log-control collection costs 1.44× the history-disabled median
-([report](../experiments/opponent_memory.md#shared-snapshots-and-table-wide-admission-2026-11-16)).
-CUDA worker admission and the three-arm pilot remain outstanding;
-the intended interface follows.
+on CPU, log-control collection costs 1.73× the history-disabled median
+([report](../experiments/opponent_memory.md#final-post-sync-admission-measurement--2026-11-16)).
+The gated join, [branching from a trunk](#starting-from-a-no-history-trunk),
+the supervised probe, CUDA worker admission and the three-arm pilot remain
+outstanding; the intended interface follows.
 
 To let a Torch policy use the opponent's earlier choices, select an encoder and
 one or four summary tokens in its model configuration:
@@ -613,6 +614,7 @@ a no-history control, after supervised probes select one shared summary count.
 | `decision_memory_summaries` | 1 or 4 for either encoder; default 4. Ignored when memory is `"none"`. |
 | `attention_on`, `policy_film` | Both must be `True` for memory. FiLM carries board context to actions without focus objects. |
 | `recent_events` | Must be `False` when decision memory is enabled. The bounded event encoder remains a separate option. |
+| `decision_memory_gate_scale` | Positive float, default 1.0. Multiplies each board layer's learned gate parameter inside `tanh`; a larger scale opens the join in fewer updates. Ignored when memory is `"none"`. |
 
 A no-history control can use `decision_memory="none"` with the same positive
 observation capacities. Native encoding, immutable prefix retention and input
@@ -759,10 +761,71 @@ cannot tell the policy that. Memory adds no disclosure flag: PR #547 makes
 disclosure one game-level setting with a public bit and rejects asymmetric
 settings, which makes the bit reciprocal.
 
-The existing J1 join remains. Zero summary outputs do not establish a
-control-equivalent initial function because attention normalization changes.
-Shared-trunk/gated initialization and supervised probes remain post-measurement
-work; no new training arm is added here.
+### Starting from a no-history trunk
+
+A memory policy can continue a no-history policy trained on the same
+observation space, and it starts as exactly that policy:
+
+```python
+from manabot.backends.torch.checkpoint import branch_from_trunk
+from manabot.infra.config import ModelConfig
+
+policy, space = branch_from_trunk(
+    "trunk-39101.safetensors",
+    ModelConfig(
+        decision_memory="gru",
+        decision_memory_summaries=1,
+        attention_on=True,
+        attention_layers=2,
+        policy_film=True,
+        value_aggregation="masked_mean",
+    ),
+)
+```
+
+On any input, including long and empty histories, the returned policy gives the
+trunk's action probabilities and value bit for bit. Its checkpoints record the
+trunk's `checkpoint_source` beside their own.
+
+The trunk is an ordinary `decision_memory="none"` policy whose
+`ObservationConfig` declares the same positive decision capacities as the
+branch, so the two share one world binding. `branch_from_trunk` copies every
+trunk parameter and initializes only the memory encoder and the join gates. It
+raises, without returning a policy, when
+
+- the trunk's observation space differs in any buffer shape (the usual world
+  binding error, naming the trunk's revision and the differing buffers);
+- the trunk's other model settings differ from the requested configuration;
+- any parameter other than `decision_memory.*` and the gates would be left
+  uninitialized, or any trunk parameter would go unused.
+
+There is no tolerant variant: a trunk from an older world, or one trained
+without the decision capacities, cannot be branched. Train a new trunk.
+
+Summaries join the board as extra tokens. A token of zeros would still take
+attention weight and change every board row, so each board attention layer
+instead computes its output twice, over board and value tokens alone and over
+those plus the summaries, and gives each board and value row
+
+```text
+board_only + tanh(scale * gate) * (joint - board_only)
+```
+
+with one learned scalar `gate` per layer, initialized to zero. Summary rows take
+the joint output. At initialization every board row therefore equals the
+no-history computation; the gates receive gradient from the first update and
+the encoder from the second, once a gate has moved. A memory policy built
+without a trunk has the same zero gates and starts as its own board-only
+function. Every memory policy is gated; there is no ungated join.
+
+Training logs `decision_memory/gate_<layer>`, the value of
+`tanh(scale * gate)` for each board layer. A gate that stays near zero means
+the run is still a no-history policy, whatever its configuration says; read
+that metric before comparing a memory run with its control. A gate moves about
+one learning rate per update, so a short run can end before it opens. Raise
+`decision_memory_gate_scale` for the whole comparison in that case, never for
+one run. The second attention pass adds to forward cost in memory policies
+only.
 
 Overflow or mismatched companion shapes raise a typed Capacity error with the
 required counts. Keep the failed game's evidence, increase the relevant

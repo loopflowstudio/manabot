@@ -243,10 +243,25 @@ def main() -> None:
     import json
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=("census",))
-    parser.add_argument("source", type=Path)
+    parser.add_argument("operation", choices=("census", "probe"))
+    parser.add_argument("source", type=Path, nargs="?")
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--epochs", type=int, default=8)
+    parser.add_argument("--max-games", type=int, default=120)
+    parser.add_argument("--wall-seconds", type=float, default=7200)
     args = parser.parse_args()
+    if args.operation == "probe":
+        from manabot.backends.torch.decision_memory_probe import run_probe
+
+        run_probe(
+            args.out,
+            epochs=args.epochs,
+            max_games=args.max_games,
+            wall_seconds=args.wall_seconds,
+        )
+        return
+    if args.source is None:
+        parser.error("census requires a source path")
     summary = census(args.source)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(asdict(summary), indent=2) + "\n")

@@ -765,6 +765,32 @@ class ActorCritic(nn.Module):
             self.last_raw_logits = logits.detach().cpu()
         return logits, self._value_from_objects(encoded, state.validity)
 
+    def encode_decision_memory(self, obs: Prepared[torch.Tensor]) -> torch.Tensor:
+        """Differentiable summaries for offline probes, from admitted policy input.
+
+        Uses the same definition, token and name embeddings as policy inference.
+        No board attention or action/value head is evaluated.
+        """
+        if not isinstance(obs, Prepared) or not isinstance(obs.legal, torch.Tensor):
+            raise TypeError("memory encoding requires device Prepared rows")
+        if obs.guard is not None:
+            obs.guard(self)
+        if obs.binding != self._binding():
+            raise ValueError(
+                "observation was admitted for a different policy configuration"
+            )
+        if self.decision_memory is None or self.semantic_cards is None:
+            raise ValueError("policy has no decision memory encoder")
+        assert obs.memory is not None and obs.programs is not None
+        return self.decision_memory(
+            obs.memory,
+            self.semantic_cards.token_embedding,
+            self.name_candidates.public_definitions(
+                self.semantic_cards.definitions(obs.programs)
+            ),
+            self.name_candidates.embedding,
+        )
+
     def architecture_receipt(self) -> ArchitectureReceipt:
         """This model's receipt; `named_parameters` yields each shared parameter once."""
         return architecture_receipt(

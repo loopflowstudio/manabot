@@ -360,6 +360,10 @@ admission. Admission-rejection fixtures must mark the config as submitted
   Replay compares these through
   `manabot.env.replay.matches_retained_error`, retaining original class names and
   full vector diagnostic payloads in evidence.
+- Native `Env.encode_observation_into` reports capacity overflow as `ValueError`
+  with `observation capacity exceeded:`; the Python memory encoder raises
+  `managym.AgentError` with `Capacity:`. Collectors that count capacity failures
+  must recognize those specific messages and propagate other failures.
 - Frozen experiment scheduling/analysis tests use an explicit compatible-world
   fixture for synthetic outcomes, with separate real-runtime rejection tests.
   Pin declared input capacities rather than inheriting fresh defaults; never
