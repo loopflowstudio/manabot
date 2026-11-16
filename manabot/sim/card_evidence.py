@@ -10,10 +10,10 @@ from typing import Literal
 from etude.storage import DirectoryStorage
 from pydantic import JsonValue, model_validator
 
-from manabot.env.card_capture import CapturedCards, Seat
 from manabot.infra.config import MatchConfig
 from manabot.infra.identity import StrictModel, canonical_json, canonical_sha256
 from manabot.sim.replay import replay_game
+from managym.card_capture import CapturedCards, Seat
 
 CAPTURE_VERSION = 1
 

@@ -21,18 +21,18 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
-from manabot.env.failures import read_failure
 from manabot.env.match import Match
 from manabot.env.observation import ObservationEncoder
-from manabot.env.replay import (
+from manabot.env.replay import require_replay_runtime
+from manabot.infra.config import MatchConfig, ObservationConfig
+import managym
+from managym.recording import read_failure
+from managym.replay import (
     ReplayAgreement,
     matches_retained_error,
     replay_failure_inputs,
-    require_replay_runtime,
     run_bounded_replay,
 )
-from manabot.infra.config import MatchConfig, ObservationConfig
-import managym
 
 GameOutcome = Literal[
     "completed",
@@ -315,7 +315,7 @@ def main() -> None:
     entry = json.loads(line)
     evidence = (
         read_failure(args.ledger)
-        if entry.get("schema") == "native-failure-v1"
+        if entry.get("schema") in {"native-failure-v1", "training-game-checkpoint-v1"}
         else None
     )
     if evidence is None:

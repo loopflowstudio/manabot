@@ -257,6 +257,10 @@ class RunRecord[RegimeT](Strict):
 class TrainingRun(RunRecord[TrainingRegime]):
     """A run whose recipe passes current execution admission."""
 
+    game_journal_directory: str | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+
     def updates_through(self, stage_id: str | None = None) -> int:
         """Completed learner iterations; collection records are not updates."""
         learning = {s.id for s in self.regime.stages if isinstance(s, TrainSelfPlay)}

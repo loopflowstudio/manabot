@@ -12,12 +12,13 @@ import torch
 from typer.testing import CliRunner
 
 from manabot.backends import resolve
-from manabot.env.failures import GameInputs, TrainingExposureReceipt
+from manabot.env.failures import TrainingExposureReceipt
 from manabot.infra.identity import canonical_sha256
 from manabot.sim.recording import TrainingGames, record_actions, record_games
 from manabot.sim.replay import read_trace, replay_games
 from manabot.training.loops.minimal import train
 from managym.academy.launch import read_games
+from managym.recording import GameInputs
 
 
 @pytest.fixture(scope="module")
