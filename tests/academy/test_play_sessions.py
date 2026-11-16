@@ -366,7 +366,7 @@ def test_imported_sideboards_policy_identity_and_override_precedence(
         assert game.trace.config.hero_source == original_source
         assert game.trace.config.to_rust()[seat].sideboard == {"Swamp": 1}
         assert game.trace.config.to_rust()[1 - seat].sideboard == {"Forest": 1}
-        assert game.trace.config.to_rust()[seat].disclosure == "closed"
+        assert game.trace.config.to_rust().decklists == "closed"
         assert game.current_message()["frame"]["projection"]["opponent"]["hand"] == []
         game.close("new_game")
     finally:

@@ -158,9 +158,9 @@ impl PyVectorEnv {
     fn reset_all(
         &mut self,
         py: Python<'_>,
-        player_configs: Vec<PyPlayerConfig>,
+        player_configs: Bound<'_, PyAny>,
     ) -> PyResult<Vec<PyResetResult>> {
-        let configs = player_configs.into_iter().map(PlayerConfig::from).collect();
+        let configs = super::bindings::game_setup(&player_configs)?;
         let results = self.inner.reset_all(configs).map_err(map_agent_err)?;
         self.last_info = results.iter().map(|(_, info)| info.clone()).collect();
 
@@ -217,10 +217,9 @@ impl PyVectorEnv {
     fn reset_all_into_buffers(
         &mut self,
         py: Python<'_>,
-        player_configs: Vec<PyPlayerConfig>,
+        player_configs: Bound<'_, PyAny>,
     ) -> PyResult<()> {
-        let configs: Vec<PlayerConfig> =
-            player_configs.into_iter().map(PlayerConfig::from).collect();
+        let configs = super::bindings::game_setup(&player_configs)?;
         self.run_into_buffers(py, move |inner, write_buffers, config| {
             inner.reset_all_into(configs, |env_index, obs, reward, terminated, truncated| {
                 write_buffers
@@ -233,12 +232,12 @@ impl PyVectorEnv {
     fn reset_each_into_buffers(
         &mut self,
         py: Python<'_>,
-        player_configs: Vec<Vec<PyPlayerConfig>>,
+        player_configs: Vec<Bound<'_, PyAny>>,
     ) -> PyResult<()> {
         let configs = player_configs
             .into_iter()
-            .map(|row| row.into_iter().map(PlayerConfig::from).collect())
-            .collect();
+            .map(|row| super::bindings::game_setup(&row))
+            .collect::<PyResult<Vec<_>>>()?;
         self.run_into_buffers(py, move |inner, write_buffers, config| {
             inner.reset_each_into(configs, |env_index, obs, reward, terminated, truncated| {
                 write_buffers
@@ -251,12 +250,15 @@ impl PyVectorEnv {
     fn reassign_roots_into_buffers(
         &mut self,
         py: Python<'_>,
-        player_configs: Vec<Option<Vec<PyPlayerConfig>>>,
+        player_configs: Vec<Option<Bound<'_, PyAny>>>,
     ) -> PyResult<()> {
         let configs = player_configs
             .into_iter()
-            .map(|row| row.map(|players| players.into_iter().map(PlayerConfig::from).collect()))
-            .collect();
+            .map(|row| {
+                row.map(|players| super::bindings::game_setup(&players))
+                    .transpose()
+            })
+            .collect::<PyResult<Vec<_>>>()?;
         self.run_into_buffers(py, move |inner, buffers, config| {
             inner.reassign_roots_into(
                 configs,
@@ -334,11 +336,14 @@ impl PyVectorEnv {
             .map_err(map_agent_err)
     }
 
-    fn current_player_configs(&self) -> Vec<Vec<PyPlayerConfig>> {
+    fn current_player_configs(&self, py: Python<'_>) -> PyResult<Vec<PyObject>> {
         self.inner
             .current_player_configs()
             .into_iter()
-            .map(|players| players.into_iter().map(PyPlayerConfig::from).collect())
+            .zip(self.inner.current_decklists())
+            .map(|(players, disclosure)| {
+                super::bindings::python_game_setup(py, players, disclosure)
+            })
             .collect()
     }
 

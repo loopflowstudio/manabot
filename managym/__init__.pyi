@@ -376,7 +376,7 @@ class VectorEnv:
     def set_training_decks(
         self, decks: List[PlayerConfig], distinct: bool = True
     ) -> None: ...
-    def current_player_configs(self) -> list[list[PlayerConfig]]: ...
+    def current_player_configs(self) -> list[GameSetup]: ...
     def current_matchup_indices(self) -> list[tuple[int, int]]: ...
     def current_agent_indices(self) -> list[int]: ...
     def reset_seeds_into_buffers(self, seeds: list[int]) -> None: ...
@@ -395,13 +395,13 @@ class PlayerConfig:
         decklist: Dict[str, int],
         sideboard: Optional[Dict[str, int]] = None,
         world: str | None = None,
-        disclosure: Literal["open", "closed"] = "open",
+        disclosure: Literal["open", "closed"] | None = None,
     ) -> None: ...
     name: str
     world: str | None
     """``WORLD_SETUP`` submits the deck to the world (reset admits it); ``None``
     runs it as given. Any other value raises: content packs are retired."""
-    # Whether the opponent knows this player's main deck and sideboard.
+    # Deprecated per-seat hint, removed in 0.4.0; use GameSetup.decklists.
     disclosure: Literal["open", "closed"]
     @property
     def deck(self) -> Deck: ...
@@ -954,6 +954,7 @@ class EventData:
     controller_id: int
 
 class Observation:
+    decklists_open: bool
     shared_effects: list[SharedEffect] | None
     continuation: list[ContinuationFrame]
 
@@ -1097,3 +1098,16 @@ class Heuristic:
     def __init__(self, max_actions: int | None = None) -> None: ...
     def select_action(self, observation: Observation) -> int: ...
     def reset(self) -> None: ...
+
+class GameSetup(list[PlayerConfig]):
+    decklists: Literal["open", "closed", "mixed"]
+    def __init__(
+        self,
+        players: list[PlayerConfig],
+        *,
+        decklists: Literal["open", "closed", "mixed"] = "open",
+    ) -> None: ...
+
+def resolve_decklists(
+    player_configs: list[PlayerConfig], seed: int
+) -> Literal["open", "closed"]: ...

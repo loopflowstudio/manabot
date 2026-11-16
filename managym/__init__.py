@@ -6,7 +6,7 @@ shared decision/protocol adapters live beside this module.
 
 from collections.abc import Callable
 import sys
-from typing import ParamSpec, TypeVar
+from typing import Literal, ParamSpec, TypeVar
 import warnings
 
 from . import _managym
@@ -50,3 +50,22 @@ learning_token_value = _deprecated_alias(
 learning_record_names = _deprecated_alias(
     "learning_record_names", _managym.record_vocabulary
 )
+
+
+class GameSetup(list[_managym.PlayerConfig]):
+    """Two seats and one game disclosure; mixed draws 50/50 from the reset seed.
+
+    List behavior retains seat ordering for callers inspecting decks. Native
+    reset reads ``decklists`` once, independently of deck and shuffle draws.
+    """
+
+    def __init__(
+        self,
+        players: list[_managym.PlayerConfig],
+        *,
+        decklists: Literal["open", "closed", "mixed"] = "open",
+    ) -> None:
+        if decklists not in ("open", "closed", "mixed"):
+            raise ValueError("decklists must be open, closed or mixed")
+        super().__init__(players)
+        self.decklists = decklists

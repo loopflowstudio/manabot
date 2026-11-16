@@ -89,7 +89,8 @@ PLAYER_BENT_INDEX = PLAYER_CARDS_DRAWN_INDEX + 1
 PLAYER_EXTRA_TURNS_INDEX = PLAYER_BENT_INDEX + 4
 # Additional combat phases still to come this turn (active player's row).
 PLAYER_ADDITIONAL_COMBATS_INDEX = PLAYER_EXTRA_TURNS_INDEX + 1
-PLAYER_DIM = PLAYER_ADDITIONAL_COMBATS_INDEX + 1
+PLAYER_DECKLISTS_OPEN_INDEX = PLAYER_ADDITIONAL_COMBATS_INDEX + 1
+PLAYER_DIM = PLAYER_DECKLISTS_OPEN_INDEX + 1
 # Cast-permission terms follow the printed characteristics; validity is last.
 CARD_PERMISSION_INDEX = 40
 CARD_X_INDEX = CARD_PERMISSION_INDEX + 13
@@ -477,6 +478,7 @@ class ObservationEncoder:
             ("opponent_player", obs.opponent),
         ):
             out[key] = self._encode_player_features(player, obs.turn)[np.newaxis, ...]
+            out[key][0, PLAYER_DECKLISTS_OPEN_INDEX] = float(obs.decklists_open)
         for key, cards, is_mine in (
             ("agent_cards", agent_cards, 1.0),
             ("opponent_cards", opponent_cards, 0.0),

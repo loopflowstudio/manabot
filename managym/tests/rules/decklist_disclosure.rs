@@ -11,20 +11,27 @@ use managym::{
     },
     cards::setups::authored_setup,
     possible_worlds::HiddenHandConstraints,
-    state::{game_object::PlayerId, player::DecklistDisclosure, zone::ZoneType},
+    state::{
+        game_object::PlayerId,
+        player::{DecklistDisclosure, DecklistMode, GameSetup},
+        zone::ZoneType,
+    },
     Env, Game, PlayerConfig,
 };
 
-fn configs(disclosure: DecklistDisclosure) -> Vec<PlayerConfig> {
+fn configs(disclosure: DecklistDisclosure) -> GameSetup {
     let pack = authored_setup("two_deck").unwrap();
-    ["ur_lessons", "gw_allies"]
-        .iter()
-        .map(|key| {
-            pack.player_config(key, key)
-                .unwrap()
-                .with_disclosure(disclosure)
-        })
-        .collect()
+    GameSetup {
+        players: ["ur_lessons", "gw_allies"]
+            .iter()
+            .map(|key| pack.player_config(key, key).unwrap())
+            .collect(),
+        decklists: if disclosure.is_open() {
+            DecklistMode::Open
+        } else {
+            DecklistMode::Closed
+        },
+    }
 }
 
 fn by_name(game: &Game, counts: &BTreeMap<u32, u32>) -> BTreeMap<String, u32> {
@@ -190,9 +197,23 @@ fn closed_opponent_refuses_hidden_information_sampling() {
 }
 
 #[test]
-fn open_disclosure_is_omitted_from_serialized_setup() {
-    let open = serde_json::to_string(&configs(DecklistDisclosure::Open)).unwrap();
-    assert!(!open.contains("disclosure"));
-    let closed = serde_json::to_string(&configs(DecklistDisclosure::Closed)).unwrap();
-    assert!(closed.contains("\"disclosure\":\"closed\""));
+fn mixed_game_disclosure_is_seeded_and_independent_of_the_deal() {
+    let mut seen = [false; 2];
+    for seed in 0..8 {
+        let mut setup = configs(DecklistDisclosure::Closed);
+        setup.decklists = DecklistMode::Mixed;
+        let game = Game::new(setup, seed, true);
+        let disclosure = game.state.disclosure;
+        seen[usize::from(disclosure.is_open())] = true;
+        let control = Game::new(configs(disclosure), seed, true);
+        for seat in [PlayerId(0), PlayerId(1)] {
+            let view = Observation::for_player(&game, seat);
+            assert_eq!(view.decklists_open, disclosure.is_open());
+            assert_eq!(
+                view.to_json(),
+                Observation::for_player(&control, seat).to_json()
+            );
+        }
+    }
+    assert_eq!(seen, [true, true]);
 }

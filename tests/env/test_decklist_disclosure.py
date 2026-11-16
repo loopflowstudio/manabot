@@ -64,6 +64,14 @@ def test_opponent_lists_appear_exactly_when_open(decklists: Decklists) -> None:
 
     # Python reference and native encoders agree.
     space = ObservationSpace(ObservationConfig())
+    assert obs.decklists_open == (decklists == "open")
+    for viewer in (0, 1):
+        view = env.observation_for_player(viewer)
+        encoded = space.encode(view)
+        native_buffers = env.encode_observation(view)
+        for key in ("agent_player", "opponent_player"):
+            assert encoded[key][0, -1] == float(decklists == "open")
+            np.testing.assert_array_equal(encoded[key], native_buffers[key])
     python = space.encode(obs)["decklists"]
     native = env.encode_observation(obs)["decklists"]
     assert python.shape == native.shape == (2, 60, DECKLIST_DIM)
@@ -75,6 +83,7 @@ def test_opponent_lists_appear_exactly_when_open(decklists: Decklists) -> None:
     # LLM text and the Academy projection carry the same disclosure.
     text = capture_text_decision(env).text
     assert ("Decklist: closed." in text) == (decklists == "closed")
+    assert f"Decklists: {decklists} (" in text
     assert text.count("Main deck:") == (2 if decklists == "open" else 1)
     projection = serialize_observation(obs)
     assert "main_counts" in projection["agent"]
@@ -111,15 +120,15 @@ def test_open_is_the_default_and_omitted_from_serialized_configuration() -> None
     assert default.decklists == "open"
     assert "decklists" not in default.model_dump()
     assert _match("closed").model_dump()["decklists"] == "closed"
-    hero, villain = Match(_match("closed")).swapped().to_rust()
-    assert hero.disclosure == villain.disclosure == "closed"
-    with pytest.raises(ValueError):
+    setup = Match(_match("closed")).swapped().to_rust()
+    assert setup.decklists == "closed"
+    with pytest.warns(DeprecationWarning, match="0.4.0"), pytest.raises(ValueError):
         managym.PlayerConfig("x", {"Island": 1}, disclosure="partial")
 
 
-def test_match_from_players_retains_disclosure_and_rejects_mixed_settings() -> None:
+def test_match_from_players_retains_setup_and_rejects_different_worlds() -> None:
     players = Match(_match("closed")).to_rust()
-    actual = MatchConfig.from_players(*players)
+    actual = MatchConfig.from_players(*players, decklists=players.decklists)
     assert actual.decklists == "closed"
     assert actual.hero_deck == players[0].decklist
     assert actual.villain_sideboard == players[1].sideboard
@@ -128,14 +137,9 @@ def test_match_from_players_retains_disclosure_and_rejects_mixed_settings() -> N
         players[1].name,
         players[0].world,
     )
-    players[1].disclosure = "open"
-    with pytest.raises(
-        ValueError, match=r"same disclosure: seat 0 .*closed.*seat 1 .*open"
-    ):
-        MatchConfig.from_players(*players)
     players[1] = managym.Deck({"Island": 40}).player()
     with pytest.raises(ValueError, match=r"same world: seat 0 .*seat 1"):
-        MatchConfig.from_players(*players)
+        MatchConfig.from_players(*players, decklists=players.decklists)
 
 
 @pytest.mark.parametrize("viewer", [0, 1])
@@ -263,3 +267,38 @@ def test_public_reveal_then_departure_updates_closed_known_hand() -> None:
             assert not obs.game_over, "game ended before revealed card left hand"
             obs, *_ = env.step(rng.randrange(len(actions)))
     pytest.fail("no public reveal followed by hand departure in bounded game")
+
+
+def test_deprecated_seat_disclosure_rejects_disagreement() -> None:
+    with pytest.warns(DeprecationWarning, match="0.4.0"):
+        first = managym.PlayerConfig("first", {"Island": 12}, disclosure="closed")
+    second = managym.PlayerConfig("second", {"Mountain": 12})
+    with pytest.raises(ValueError, match="per-seat disclosure values disagree"):
+        managym.Env(seed=7).reset([first, second])
+
+
+@pytest.mark.parametrize("viewer", [0, 1])
+def test_closed_draw_in_mixed_run_matches_closed_game(viewer: int) -> None:
+    torch.set_num_threads(1)
+    space = ObservationSpace()
+    policy = ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
+    match = Match(_match("closed"))
+    modes: set[bool] = set()
+    for seed in range(8):
+        mixed, closed = managym.Env(seed=seed), managym.Env(seed=seed)
+        setup = match.to_rust()
+        setup.decklists = "mixed"
+        mixed.reset(setup)
+        modes.add(mixed.observation_for_player(viewer).decklists_open)
+        closed.reset(match.to_rust())
+        view = mixed.observation_for_player(viewer)
+        if view.decklists_open:
+            continue
+        control = closed.observation_for_player(viewer)
+        assert view.toJSON() == control.toJSON()
+        for key, value in space.encode(view).items():
+            np.testing.assert_array_equal(value, space.encode(control)[key])
+        left = policy.prepare({k: v[None] for k, v in space.encode(view).items()})
+        right = policy.prepare({k: v[None] for k, v in space.encode(control).items()})
+        np.testing.assert_equal(asdict(left), asdict(right))
+    assert modes == {False, True}

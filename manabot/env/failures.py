@@ -47,17 +47,36 @@ class PlayerSetup(BaseModel):
     )
 
     @classmethod
-    def retain(cls, player: managym.PlayerConfig) -> "PlayerSetup":
+    def retain(
+        cls, player: managym.PlayerConfig, decklists: Literal["open", "closed"] = "open"
+    ) -> "PlayerSetup":
         return cls(
             name=player.name,
             decklist=player.decklist,
             sideboard=player.sideboard,
             world=player.world,
-            disclosure=player.disclosure,
+            disclosure=decklists,
         )
 
     def native(self) -> managym.PlayerConfig:
-        return managym.PlayerConfig(**self.model_dump())
+        return managym.PlayerConfig(**self.model_dump(exclude={"disclosure"}))
+
+
+def _retain_players(
+    players: list[managym.PlayerConfig], seed: int
+) -> list[PlayerSetup]:
+    disclosure = managym.resolve_decklists(players, seed)
+    return [PlayerSetup.retain(player, disclosure) for player in players]
+
+
+def retained_setup(players: list[PlayerSetup]) -> managym.GameSetup:
+    """Rebuild retained per-seat spelling as one game value, rejecting disagreement."""
+    values = {player.disclosure for player in players}
+    if len(values) != 1:
+        raise ValueError("retained per-seat disclosure values disagree")
+    return managym.GameSetup(
+        [player.native() for player in players], decklists=values.pop()
+    )
 
 
 class GameInputs(BaseModel):
@@ -67,6 +86,12 @@ class GameInputs(BaseModel):
     actions: list[int | str] = []
     actor: int | None = None
     frame: str | None = None
+
+    @model_validator(mode="after")
+    def uniform_disclosure(self) -> "GameInputs":
+        if len({player.disclosure for player in self.players}) > 1:
+            raise ValueError("retained per-seat disclosure values disagree")
+        return self
 
     def restart(self, seed: int) -> None:
         """Keep the stream's setup, discard all inputs from its previous game."""
@@ -139,6 +164,12 @@ class NativeTrainingTrace(BaseModel):
     model_config = ConfigDict(extra="forbid")
     player_configs: list[PlayerSetup]
     actions: list[int]
+
+    @model_validator(mode="after")
+    def uniform_disclosure(self) -> "NativeTrainingTrace":
+        if len({player.disclosure for player in self.player_configs}) > 1:
+            raise ValueError("retained per-seat disclosure values disagree")
+        return self
 
 
 class NativeTrainingGame(BaseModel):
@@ -455,7 +486,8 @@ class ScalarCapture(_Capture):
         # The heterogeneous native observation/info tuple stays at this boundary.
         self.started = time.perf_counter()
         self.inputs = GameInputs(
-            seed=self.seed, players=[PlayerSetup.retain(p) for p in players]
+            seed=self.seed,
+            players=_retain_players(players, self.seed),
         )
         self.journal = None
         with self._guard(lambda: self.evidence("reset")):
@@ -625,7 +657,6 @@ class CapturedVector(_Capture):
         self.next_seeds = [game.seed for game in self.games]
         self._generations = self.native.current_game_generations()
         # Sampled roots pick setups natively at reset; evidence reads them back.
-        self._sampled_roots = False
         self._action_cutoff: int | None = None
 
     def __getattr__(self, name: str) -> Any:
@@ -729,7 +760,6 @@ class CapturedVector(_Capture):
 
     def set_uniform_roster(self, roster: list[managym.PlayerConfig]) -> None:
         self.native.set_uniform_roster(roster)
-        self._sampled_roots = True
 
     def set_training_decks(
         self,
@@ -743,7 +773,6 @@ class CapturedVector(_Capture):
         self.native.set_training_decks(
             decks, distinct=sampling == "uniform-distinct-v1"
         )
-        self._sampled_roots = True
         self.identities["deck_source"] = {
             "digest": digest,
             "sampling_policy": sampling,
@@ -757,7 +786,7 @@ class CapturedVector(_Capture):
         self, players: list[list[managym.PlayerConfig]]
     ) -> None:
         for game, setup, seed in zip(self.games, players, self.next_seeds, strict=True):
-            game.players = [PlayerSetup.retain(p) for p in setup]
+            game.players = _retain_players(setup, seed)
             game.restart(seed)
         with self._guard(lambda: self._evidence_for(self.games, "reset")):
             self.native.reset_each_into_buffers(players)
@@ -772,7 +801,7 @@ class CapturedVector(_Capture):
             proposed, players, self.native.current_game_seeds(), strict=True
         ):
             if setup is not None:
-                game.players = [PlayerSetup.retain(p) for p in setup]
+                game.players = _retain_players(setup, seed)
                 game.restart(seed)
         with self._guard(lambda: self._evidence_for(proposed, "reset")):
             self.native.reassign_roots_into_buffers(players)
@@ -801,12 +830,13 @@ class CapturedVector(_Capture):
             if old != new
         ]
         self._generations = generations
-        if self._sampled_roots and restarted:
+        if restarted:
             # Sampled roots record the native setup actually created.
             players = self.native.current_player_configs()
             for index in restarted:
                 self.games[index].players = [
-                    PlayerSetup.retain(player) for player in players[index]
+                    PlayerSetup.retain(player, players[index].decklists)
+                    for player in players[index]
                 ]
         for index in restarted:
             self.games[index].restart(seeds[index])

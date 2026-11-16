@@ -86,7 +86,7 @@ def test_uniform_collector_recovers_changed_terminal_roots(
         first.stream_matches, first._env.current_player_configs(), strict=True
     ):
         assert match.config.decklists == "closed"
-        assert all(p.disclosure == "closed" for p in players)
+        assert players.decklists == "closed"
         assert (match.hero_deck, match.villain_deck) == (
             players[0].decklist,
             players[1].decklist,
@@ -158,9 +158,7 @@ def test_uniform_collector_recovers_changed_terminal_roots(
     restored.restore(first.snapshot(), lambda: None)
     assert all(m.config.decklists == "closed" for m in restored.stream_matches)
     assert all(
-        p.disclosure == "closed"
-        for pair in restored._env.current_player_configs()
-        for p in pair
+        pair.decklists == "closed" for pair in restored._env.current_player_configs()
     )
     assert first._self_play_decks == restored._self_play_decks
     left, right = first.collect(agent, 64), restored.collect(agent, 64)

@@ -77,12 +77,13 @@ class GameConfig:
         if self.decklists == "closed" and self.mirror is not None:
             raise ValueError("Search requires open decklists.")
 
-    def to_rust(self) -> list[managym.PlayerConfig]:
+    def to_rust(self) -> managym.GameSetup:
         """Order human/opponent setup roles by their recorded native seats."""
         configs = self._role_configs()
-        for config in configs:
-            config.disclosure = self.decklists
-        return configs if self.human_seat == 0 else list(reversed(configs))
+        return managym.GameSetup(
+            configs if self.human_seat == 0 else list(reversed(configs)),
+            decklists=self.decklists,
+        )
 
     def _role_configs(self) -> list[managym.PlayerConfig]:
         """Rebuild the recorded root with its explicit outside-game copies."""

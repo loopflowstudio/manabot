@@ -184,7 +184,7 @@ impl Game {
     /// Whether `viewer` knows `owner`'s main deck and sideboard: always its
     /// own, and the opponent's when that decklist is open.
     pub fn decklist_known(&self, owner: PlayerId, viewer: PlayerId) -> bool {
-        owner == viewer || self.state.players[owner.0].disclosure.is_open()
+        owner == viewer || self.state.disclosure.is_open()
     }
 
     /// Refuse hidden-information sampling for `viewer` when the opponent's

@@ -12,7 +12,7 @@ use crate::{
         player_policy::PlayerPolicy,
     },
     infra::profiler::{InfoDict, InfoValue},
-    state::player::PlayerConfig,
+    state::player::{GameSetup, PlayerConfig},
 };
 
 /// Preserve encoder capacity errors across the buffer boundary. Pointer/shape
@@ -93,7 +93,7 @@ impl RootRoster {
 #[derive(Debug)]
 pub struct VectorEnv {
     envs: Vec<Env>,
-    player_configs: Vec<Vec<PlayerConfig>>,
+    player_configs: Vec<GameSetup>,
     player_policies: [PlayerPolicy; 2],
     next_seeds: Vec<u64>,
     seed_stride: u64,
@@ -201,7 +201,6 @@ impl VectorEnv {
                 "uniform roster requires every exact Elemental setup once".into(),
             ));
         }
-        require_uniform_disclosure(&roster)?;
         self.uniform_roster = RootRoster {
             players: roster,
             distinct: false,
@@ -252,7 +251,6 @@ impl VectorEnv {
                 ));
             }
         }
-        require_uniform_disclosure(&decks)?;
         self.uniform_roster = RootRoster {
             players: decks,
             distinct: distinct_pairs,
@@ -262,6 +260,10 @@ impl VectorEnv {
     }
 
     /// The setups each game was actually reset with, in seat order.
+    pub fn current_decklists(&self) -> Vec<crate::state::player::DecklistDisclosure> {
+        self.envs.iter().map(Env::decklists).collect()
+    }
+
     pub fn current_player_configs(&self) -> Vec<Vec<PlayerConfig>> {
         self.envs
             .iter()
@@ -438,8 +440,9 @@ impl VectorEnv {
 
     pub fn reset_all(
         &mut self,
-        player_configs: Vec<PlayerConfig>,
+        player_configs: impl Into<GameSetup>,
     ) -> Result<Vec<(Observation, InfoDict)>, AgentError> {
+        let player_configs = player_configs.into();
         Self::validate_player_configs(player_configs.len())?;
         self.fresh_roots.fill(true);
         self.player_configs = vec![player_configs; self.envs.len()];
@@ -500,24 +503,25 @@ impl VectorEnv {
 
     pub fn reset_all_into<F>(
         &mut self,
-        player_configs: Vec<PlayerConfig>,
+        player_configs: impl Into<GameSetup>,
         write: F,
     ) -> Result<Vec<InfoDict>, AgentError>
     where
         F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError>,
     {
-        self.reset_each_into(vec![player_configs; self.envs.len()], write)
+        self.reset_each_into(vec![player_configs.into(); self.envs.len()], write)
     }
 
     /// Retain one exact setup per stream, including through terminal auto-reset.
-    pub fn reset_each_into<F>(
+    pub fn reset_each_into<F, S: Into<GameSetup>>(
         &mut self,
-        player_configs: Vec<Vec<PlayerConfig>>,
+        player_configs: Vec<S>,
         write: F,
     ) -> Result<Vec<InfoDict>, AgentError>
     where
         F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError>,
     {
+        let player_configs: Vec<GameSetup> = player_configs.into_iter().map(Into::into).collect();
         self.validate_actions_len(player_configs.len())?;
         for configs in &player_configs {
             Self::validate_player_configs(configs.len())?;
@@ -538,9 +542,9 @@ impl VectorEnv {
     /// Every setup is built (game creation admits its decks against the world's
     /// one catalog) and encoded before any new root is published. A live
     /// game cannot be reassigned, even when its stream was masked in the last step.
-    pub fn reassign_roots_into<V, F>(
+    pub fn reassign_roots_into<V, F, S: Into<GameSetup>>(
         &mut self,
-        configs: Vec<Option<Vec<PlayerConfig>>>,
+        configs: Vec<Option<S>>,
         validate: V,
         write: F,
     ) -> Result<Vec<InfoDict>, AgentError>
@@ -558,6 +562,7 @@ impl VectorEnv {
         let mut prepared = Vec::new();
         for (index, setup) in configs.into_iter().enumerate() {
             if let Some(setup) = setup {
+                let setup: GameSetup = setup.into();
                 if !self.fresh_roots[index] {
                     return Err(AgentError("cannot reassign a live game".into()));
                 }
@@ -566,7 +571,7 @@ impl VectorEnv {
                 crate::cards::deck_admission::admit_submitted(&setup)
                     .map_err(|error| AgentError(error.to_string()))?;
                 let content = crate::cards::content_pack::default_content_pack();
-                for player in &setup {
+                for player in setup.iter() {
                     for name in player.deck.main.keys() {
                         if content.definition_id(name).is_none() {
                             return Err(AgentError(format!("unknown card in decklist: {name}")));
@@ -763,7 +768,7 @@ impl VectorEnv {
             usize,
             &mut Env,
             &mut u64,
-            &[PlayerConfig],
+            &GameSetup,
             &RootRoster,
             &mut bool,
         ) -> Result<R, AgentError>,
@@ -824,7 +829,7 @@ impl VectorEnv {
         env: &mut Env,
         next_seed: &mut u64,
         action: i64,
-        player_configs: &[PlayerConfig],
+        player_configs: &GameSetup,
         seed_stride: u64,
     ) -> Result<StepResult, AgentError> {
         let mut out = Self::step_one_on_env(env, action)?;
@@ -872,16 +877,19 @@ impl VectorEnv {
         env: &mut Env,
         next_seed: &mut u64,
         seed_stride: u64,
-        player_configs: &[PlayerConfig],
+        player_configs: &GameSetup,
     ) -> Result<(Observation, InfoDict), AgentError> {
         let seed = *next_seed;
         *next_seed = seed.saturating_add(seed_stride);
         env.set_seed(seed);
         let configs = if roster.is_empty() {
-            player_configs.to_vec()
+            player_configs.clone()
         } else {
             let (a, b) = roster.pair(seed);
-            vec![roster.players[a].clone(), roster.players[b].clone()]
+            GameSetup {
+                players: vec![roster.players[a].clone(), roster.players[b].clone()],
+                decklists: player_configs.decklists,
+            }
         };
         env.reset(configs)
     }
@@ -894,21 +902,6 @@ fn uniform_pair(seed: u64, size: usize) -> (usize, usize) {
     (rng.gen_range(0..size), rng.gen_range(0..size))
 }
 
-/// A training roster draws every game from one disclosure, so a mixed roster
-/// is refused before it replaces the installed one.
-fn require_uniform_disclosure(players: &[PlayerConfig]) -> Result<(), AgentError> {
-    let Some(first) = players.first() else {
-        return Ok(());
-    };
-    match players.iter().find(|p| p.disclosure != first.disclosure) {
-        Some(other) => Err(AgentError(format!(
-            "training roster requires the same disclosure: {} has {:?}, {} has {:?}",
-            first.name, first.disclosure, other.name, other.disclosure
-        ))),
-        None => Ok(()),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::{cell::RefCell, collections::BTreeMap};
@@ -919,7 +912,7 @@ mod tests {
             player_policy::PlayerPolicy, vector_env::VectorEnv,
         },
         infra::profiler::InfoValue,
-        state::player::PlayerConfig,
+        state::player::{GameSetup, PlayerConfig},
     };
 
     #[test]
@@ -1277,48 +1270,6 @@ mod tests {
             .iter()
             .map(|d| setup.player_config(&d.key, &d.key).unwrap())
             .collect()
-    }
-
-    #[test]
-    fn training_rosters_reject_mixed_disclosure_atomically() {
-        use crate::state::player::DecklistDisclosure;
-
-        for elemental in [false, true] {
-            let mut roster = if elemental {
-                elemental_roster()
-            } else {
-                ["Island", "Mountain"]
-                    .map(|name| {
-                        PlayerConfig::new(name, BTreeMap::from([(name.into(), 12)]))
-                            .submit_to_world()
-                    })
-                    .to_vec()
-            };
-            for player in &mut roster {
-                player.disclosure = DecklistDisclosure::Closed;
-            }
-            let mut vector = VectorEnv::new(2, 174, true, [PlayerPolicy::Agent; 2]);
-            let install = |vector: &mut VectorEnv, players: Vec<PlayerConfig>| {
-                if elemental {
-                    vector.set_uniform_roster(players)
-                } else {
-                    vector.set_training_decks(players, true)
-                }
-            };
-            install(&mut vector, roster.clone()).unwrap();
-            let mut mixed = roster.clone();
-            mixed[1].disclosure = DecklistDisclosure::Open;
-            assert!(install(&mut vector, mixed)
-                .unwrap_err()
-                .to_string()
-                .contains("same disclosure"));
-            vector.reset_all(roster[..2].to_vec()).unwrap();
-            for players in vector.current_player_configs() {
-                assert!(players
-                    .iter()
-                    .all(|p| p.disclosure == DecklistDisclosure::Closed));
-            }
-        }
     }
 
     #[test]
@@ -1798,7 +1749,10 @@ mod tests {
             assert_eq!(vector.current_game_seeds(), seeds);
         }
         assert!(terminals.iter().all(|count| *count > 0));
-        assert_eq!(vector.player_configs, configs);
+        assert_eq!(
+            vector.player_configs,
+            configs.into_iter().map(GameSetup::from).collect::<Vec<_>>()
+        );
     }
 
     #[test]

@@ -397,7 +397,7 @@ Capacities are configuration; widths are the layout.
 
 | Key | Shape | Holds |
 | --- | --- | --- |
-| `agent_player`, `opponent_player` | 1 × 73 | Player state |
+| `agent_player`, `opponent_player` | 1 × 74 | Player state and public game disclosure |
 | `agent_cards`, `opponent_cards` | 60 × 56 | Cards outside the battlefield and stack |
 | `agent_permanents`, `opponent_permanents` | 40 × 51 | Permanents with their characteristics |
 | `stack`, `stack_valid` | 32 × 37 (`max_stack_objects`), 32 | Spells and abilities, top first |
@@ -408,6 +408,14 @@ Capacities are configuration; widths are the layout.
 | `decklists`, `known_hand`, `semantic_cards` | 2 × 60 × 5, 2 × 60 × 2, 2 × 60 | Disclosed lists, known-hand minima, definition joins |
 | `actions`, `action_focus`, `name_candidates` | 512 × 22, 512 × 2, 512 × 4 | Legal actions, the objects each names, name choices |
 | `events` | 32 × 7, or 32 × 12 with recent events | Public events |
+
+The game-level `decklists_open` flag is column 73 of each player row: 1
+means both players know both lists, 0 means neither knows the opponent's list.
+The native game supplies it for both viewers; it accompanies the other game
+facts on both player learning tokens and is explicit in the text observation.
+Closed opponent list rows remain zero, while public reveals still update
+`known_hand`. This width change uses ordinary checkpoint world binding to
+refuse older layouts; it adds no policy-input version.
 
 Allocate and collect every key from the supplied `ObservationSpace`, on both
 the scalar and vector paths. Fact, relation, effect and action overflow is a

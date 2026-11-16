@@ -37,6 +37,7 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub struct GameState {
+    pub disclosure: crate::state::player::DecklistDisclosure,
     /// Immutable physical cards, in deal order, including both sideboards.
     pub cards: CardVec,
     /// Every object a game has made: its cards, tokens and copies of spells,

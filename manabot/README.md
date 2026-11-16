@@ -89,7 +89,6 @@ from managym import Deck
 
 decks = (Deck({"Island": 40}), Deck({"Mountain": 40}))
 source = UniformDecks(decks=decks, decklists="closed")
-{player.disclosure for player in source.players()}  # {'closed'}
 source.match_config().decklists                     # 'closed'
 ```
 
@@ -102,14 +101,22 @@ the retained record of each game says closed. What the opponent shows during
 play still arrives: a revealed card appears in `known_hand` while it stays in
 that hand.
 
-The setting belongs to the match, not to a seat. `MatchConfig.from_players(first,
-second)` records two native players as a match and raises `ValueError`, naming
-both seats, when their disclosure or world differ; a training roster whose
-players do not share one disclosure is refused before it replaces the roster
-in use. Give both players the same setting. Evaluation matchups stay open.
+The native `GameSetup(players, decklists="closed")` carries one value for the
+whole game. `MatchConfig.from_players(first, second, decklists="closed")`
+records native seats and rejects differing worlds. The old
+`PlayerConfig.disclosure` alias warns and will be removed in 0.4.0; disagreeing
+legacy seat values raise when creating a game. Evaluation matchups stay open.
+
+A sampled source can also use `decklists="mixed"`: each game draws open or
+closed with equal probability from its reset seed, separately from deck and
+shuffle RNG. Auto-reset and recovery reproduce that draw; retained matchups,
+attempts and replays record the resolved setting. Both seats see the public
+`decklists_open` observation bit (1 open, 0 closed), encoded alongside the
+other game facts on the player tokens and stated in the text observation.
+Older checkpoints with a different player-buffer shape fail normal world binding.
 
 An open source serializes without a `decklists` key, so saved regimes and their
-source digests are unchanged; a closed source has its own digest, so a run
+source digests are unchanged; closed and mixed sources have their own digests, so a run
 resumes only under the setting it started with.
 
 

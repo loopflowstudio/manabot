@@ -181,6 +181,7 @@ columns! { player {
     70: BENT_AIR => ("bent_air", ValueLayout::FLAG),
     71: EXTRA_TURNS => ("extra_turns", ValueLayout::COUNT),
     72: ADDITIONAL_COMBATS => ("additional_combats", ValueLayout::COUNT),
+    73: DECKLISTS_OPEN => ("decklists_open", ValueLayout::FLAG),
 } }
 
 // Input v10 player turn state, one row per seat (agent first).

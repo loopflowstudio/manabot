@@ -215,7 +215,7 @@ population = UniformDecks(
 ```
 
 Add `decklists="closed"` to train without either player knowing the other's
-list; the default is open
+list, or `decklists="mixed"` for a seeded 50/50 per-game draw; the default is open
 ([closed training](../manabot/README.md#closed-decklists)).
 
 TLA Limited games outgrow the default observation capacities; a run on

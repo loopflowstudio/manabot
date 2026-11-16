@@ -192,18 +192,19 @@ class MatchConfig(BaseConfig):
         return self
 
     @classmethod
-    def from_players(cls, first: PlayerConfig, second: PlayerConfig) -> "MatchConfig":
+    def from_players(
+        cls,
+        first: PlayerConfig,
+        second: PlayerConfig,
+        *,
+        decklists: Literal["open", "closed"],
+    ) -> "MatchConfig":
         """Record a native root in seat order, rejecting asymmetric match settings."""
-        for setting, left, right in (
-            ("world", first.world, second.world),
-            ("disclosure", first.disclosure, second.disclosure),
-        ):
-            if left != right:
-                raise ValueError(
-                    f"players require the same {setting}: "
-                    f"seat 0 ({first.name}) has {left!r}, "
-                    f"seat 1 ({second.name}) has {right!r}"
-                )
+        if first.world != second.world:
+            raise ValueError(
+                f"players require the same world: seat 0 ({first.name}) has {first.world!r}, "
+                f"seat 1 ({second.name}) has {second.world!r}"
+            )
         return cls(
             hero=first.name,
             villain=second.name,
@@ -212,7 +213,7 @@ class MatchConfig(BaseConfig):
             hero_sideboard=first.sideboard,
             villain_sideboard=second.sideboard,
             world=first.world,
-            decklists=first.disclosure,
+            decklists=decklists,
         )
 
     @classmethod

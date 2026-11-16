@@ -32,12 +32,12 @@ class UniformDecks(StrictModel):
 
     Independent sampling keeps duplicate lists from different source events as
     separate entries. Optional stable entry IDs distinguish those events in game
-    receipts; deck content identity remains owned by `Deck`. `decklists` applies
-    one disclosure to every sampled game; open is omitted from serialized sources
-    so their recovery identities remain unchanged.
+    receipts; deck content identity remains owned by `Deck`. `decklists` selects
+    a fixed disclosure or a balanced, seeded per-game draw ("mixed"). Open is
+    omitted from serialized sources so their recovery identities remain unchanged.
     """
 
-    decklists: Literal["open", "closed"] = Field(
+    decklists: Literal["open", "closed", "mixed"] = Field(
         default="open", exclude_if=lambda value: value == "open"
     )
     decks: tuple[Deck, ...] = Field(min_length=1)
@@ -78,8 +78,6 @@ class UniformDecks(StrictModel):
 
     def players(self) -> list[managym.PlayerConfig]:
         players = [deck.player() for deck in self.decks]
-        for player in players:
-            player.disclosure = self.decklists
         if self.entry_ids is not None:
             for player, name in zip(players, self.entry_ids, strict=True):
                 player.name = name
@@ -89,5 +87,7 @@ class UniformDecks(StrictModel):
         """A representative root; sampled roots come from the native draw."""
         players = self.players()
         return MatchConfig.from_players(
-            players[0], players[1] if len(players) > 1 else players[0]
+            players[0],
+            players[1] if len(players) > 1 else players[0],
+            decklists="closed" if self.decklists == "closed" else "open",
         )
