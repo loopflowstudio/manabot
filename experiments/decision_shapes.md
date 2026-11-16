@@ -314,3 +314,28 @@ comparison with those attempts. Its500-update damping horizon is retained with
 a coherent6-hour allocation/regime window on an existing lease; no new rental.
 A common-population study comparison remains unfinished. This operational
 workaround does not alter native card admission or the held-out evidence.
+
+## 2026-11-16 continuation after the Yue repair
+
+Continue the original seed26502 mana-taps run9b87af18dcdb from its paused
+update66 toward the same absolute target500, on all900training decks. Preserve
+its raw policy, EMA and Adam exports and500-update damping schedule; collector
+and RNG streams start a new segment as the existing portable continuation
+contract records. The completed500-update baseline remains retained; no
+baseline restart. The169-update filtered calibration remains separate.
+
+Backport only MTG350's announced tap/life reservation repair fromcfee31352e
+(already landed throughPR551) onto the frozen study engine, preserving the
+experimental source-tap path and checkpoint ABI. Do not import current-main
+world/layout changes or PR524 source preferences. Directed debug tests for
+announced life and nested Yue payment pass. Native/checkpoint admission is
+required before launch.
+
+Disable training_game_logs for this continuation. Retain ordinary update/phase
+timings and existing error capture; a new hard native hang may have less
+pre-call evidence, so bounded diagnostic retries can re-enable the opt-in.
+One exclusive8CPU/48GB L4,12-hour job within a13-hour capped lease, maximum
+USD9 including startup; no automatic replacement rentals. Launcher study
+rental total at planning USD32.24696207357906484849877806, within the existing
+USD55 total authorization. This is a crash-fix/placement continuation of the
+same exploratory question, not a new protocol or a clean completed study.

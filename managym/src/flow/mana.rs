@@ -1342,39 +1342,46 @@ impl Game {
                 sacrifice: true,
             });
         }
+        let sources = self.shared_payment_sources(player);
+        let life = self.payable_life(player).max(0) as u32;
+        let mut model = PaymentModel { sources, life };
+        // An announcement survives nested mana decisions in pending_choice;
+        // its resources are owed in every phase, not only mana spending.
+        if let Some(
+            PendingChoice::ManaPayment { payment, .. }
+            | PendingChoice::SacrificePayment { payment, .. }
+            | PendingChoice::Waterbend { payment, .. },
+        ) = &self.pending_choice
+        {
+            self.reserve_announced_payment(payment, &mut model);
+        }
         if let Some(PendingChoice::ManaPayment {
-            payment, sacrifice, ..
+            sacrifice: Some(source),
+            ..
         }) = &self.pending_choice
         {
-            if let Some(reservation) = self.payment_reservation(payment) {
-                reserved.push(reservation);
-            }
-            if let Some(source) = sacrifice {
-                reserved.push(SourceReservation {
-                    permanent: *source,
-                    tap: false,
-                    sacrifice: true,
-                });
-            }
+            reserved.push(SourceReservation {
+                permanent: *source,
+                tap: false,
+                sacrifice: true,
+            });
         }
-        if let Some(PendingChoice::SacrificePayment { payment, .. }) = &self.pending_choice {
-            if let Some(reservation) = self.payment_reservation(payment) {
-                reserved.push(reservation);
-            }
-        }
-        fn reserve(decision: &Decision, game: &Game, reserved: &mut Vec<SourceReservation>) {
+        fn reserve(
+            decision: &Decision,
+            game: &Game,
+            reserved: &mut Vec<SourceReservation>,
+            model: &mut PaymentModel,
+        ) {
             match decision {
                 Decision::ManaSpend { completion, .. } => {
                     if let SpendCompletion::Upfront(next) = completion.as_ref() {
-                        reserve(next, game, reserved);
+                        reserve(next, game, reserved, model);
                     }
                     if let SpendCompletion::Announced {
                         payment, sacrifice, ..
                     } = completion.as_ref()
                     {
-                        if let Some(r) = game.payment_reservation(payment) {
-                            reserved.push(r);
-                        }
+                        game.reserve_announced_payment(payment, model);
                         if let Some(source) = sacrifice {
                             reserved.push(SourceReservation {
                                 permanent: *source,
@@ -1398,37 +1405,18 @@ impl Game {
                         sacrifice: ability.tap_source || ability.sacrifice_source,
                     });
                     if let Some(next) = resume {
-                        reserve(next, game, reserved);
+                        reserve(next, game, reserved, model);
                     }
                 }
                 Decision::ManaChoice {
                     resume: Some(next), ..
-                } => reserve(next, game, reserved),
+                } => reserve(next, game, reserved, model),
                 _ => {}
             }
         }
         if let Some(suspended) = &self.state.suspended_decision {
-            reserve(&suspended.decision, self, &mut reserved);
+            reserve(&suspended.decision, self, &mut reserved, &mut model);
         }
-        let sources = self.shared_payment_sources(player);
-        let mut life = self.payable_life(player).max(0) as u32;
-        if let Some(
-            PendingChoice::ManaPayment { payment, .. }
-            | PendingChoice::SacrificePayment { payment, .. },
-        ) = &self.pending_choice
-        {
-            if let Payment::Activation {
-                source,
-                ability_index,
-                ..
-            } = payment.as_ref()
-            {
-                if let Some(ability) = self.activation_ability(*source, *ability_index) {
-                    life = life.saturating_sub(ability.life_cost);
-                }
-            }
-        }
-        let mut model = PaymentModel { sources, life };
         for reservation in reserved {
             model.reserve(reservation);
         }
@@ -1513,6 +1501,24 @@ impl Game {
                 }
             })
             .collect()
+    }
+
+    /// Reserve costs still owed by an announced payment. ManaUpfront's life
+    /// fee instead lives on its Output obligation and must not be debited here.
+    fn reserve_announced_payment(&self, payment: &Payment, model: &mut PaymentModel) {
+        if let Some(reservation) = self.payment_reservation(payment) {
+            model.reserve(reservation);
+        }
+        if let Payment::Activation {
+            source,
+            ability_index,
+            ..
+        } = payment
+        {
+            if let Some(ability) = self.activation_ability(*source, *ability_index) {
+                model.life = model.life.saturating_sub(ability.life_cost);
+            }
+        }
     }
 
     fn payment_reservation(&self, payment: &Payment) -> Option<SourceReservation> {
@@ -3011,6 +3017,133 @@ mod tests {
         game_object::{ObjectId, PermanentId},
         mana::{Mana, ManaCost, ManaRestriction, SpendEffect, SpendingContext},
     };
+
+    /// Synthetic announced life fee: the same obligation moves from
+    /// Waterbend to spending, while a mana caller has its own Output fee.
+    #[test]
+    fn announced_payment_reserves_life_across_nested_callers() {
+        use crate::flow::{
+            decision::{Decision, EffectFrame, SpendCompletion, SuspendedResolution},
+            game::{ActivationSource, Game, Payment, PendingChoice},
+        };
+        use crate::state::{
+            card::ActivatedAbilityDefinition, game_object::PlayerId, player::PlayerConfig,
+        };
+        use std::collections::BTreeMap;
+
+        let player = PlayerId(0);
+        let deck = BTreeMap::from([("Gray Ogre".into(), 8), ("Sunbaked Canyon".into(), 8)]);
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("p0", deck.clone()),
+                PlayerConfig::new("p1", deck),
+            ],
+            350,
+            true,
+        );
+        let source = game
+            .scenario_force_battlefield(player, "Gray Ogre", true)
+            .unwrap();
+        let canyon = game
+            .scenario_force_battlefield(player, "Sunbaked Canyon", true)
+            .unwrap();
+        let object = game.state.permanents[source].as_ref().unwrap().object;
+        game.state.objects[object].activated_abilities = vec![ActivatedAbilityDefinition {
+            mana_cost: ManaCost::parse("1"),
+            waterbend: true,
+            tap_source: true,
+            life_cost: 2,
+            ..Default::default()
+        }];
+        let payment = Payment::Activation {
+            source: ActivationSource::Permanent(source),
+            ability_index: 0,
+            targets: vec![],
+            x: 0,
+        };
+        for life in [2, 4] {
+            game.scenario_set_life(player, life);
+            game.pending_choice = Some(PendingChoice::Waterbend {
+                player,
+                payment: Box::new(payment.clone()),
+                remaining_generic: 1,
+                tapped: 0,
+            });
+            assert_eq!(game.can_activate_mana_ability(player, canyon, 0), life == 4);
+            // The life fee remains reserved after the announcement moves
+            // into spending, including when a nested upfront owns that caller.
+            game.pending_choice = None;
+            let announced = Decision::ManaSpend {
+                player,
+                cost: ManaCost::parse("1"),
+                spent: Default::default(),
+                completion: Box::new(SpendCompletion::Announced {
+                    payment: payment.clone(),
+                    sacrifice: None,
+                    waterbend: true,
+                }),
+            };
+            for decision in [
+                announced.clone(),
+                Decision::ManaUpfront {
+                    player,
+                    permanent: canyon,
+                    ability_index: 0,
+                    tap_remaining: 0,
+                    resume: Some(Box::new(announced)),
+                },
+            ] {
+                *game.state.suspended_decision_mut() = Some(SuspendedResolution {
+                    frame: EffectFrame::new(player, vec![]),
+                    decision,
+                });
+                let model = game.payment_model(player, None);
+                assert_eq!(model.life, (life - 2) as u32);
+                let source = model
+                    .sources
+                    .iter()
+                    .find(|s| s.permanent == source)
+                    .unwrap();
+                assert!(!source.waterbend);
+                let payable = model.payable(
+                    Mana::default(),
+                    game.payment_obligations(player),
+                    SourcePolicy::All,
+                );
+                assert_eq!(payable, life == 4);
+            }
+            *game.state.suspended_decision_mut() = None;
+        }
+        // Execute the nearby payable case: Canyon's fee commits before its
+        // color choice; the announced fee is still owed, exactly once.
+        game.pending_choice = Some(PendingChoice::Waterbend {
+            player,
+            payment: Box::new(payment),
+            remaining_generic: 1,
+            tapped: 0,
+        });
+        game.activate_mana_ability(player, canyon, 0).unwrap();
+        assert_eq!(game.state.players[0].life, 3);
+        assert!(game.state.permanents[canyon].as_ref().unwrap().tapped);
+        assert!(game.mana_choice_completes_payment(player, &Mana::parse("R")));
+        let mut fork = game.clone();
+        for candidate in [&mut game, &mut fork] {
+            candidate
+                .execute_action(&crate::agent::action::Action::ChooseMode { player, mode: 0 })
+                .unwrap();
+            candidate.finish_action_step();
+            assert!(candidate.pending_choice.is_none());
+            assert!(candidate.state.suspended_decision.is_none());
+            assert_eq!(candidate.state.players[0].life, 1);
+            assert_eq!(candidate.state.players[0].mana_pool, Mana::default());
+            assert!(candidate.state.permanents[source].as_ref().unwrap().tapped);
+            assert_eq!(candidate.state.stack_objects.len(), 0);
+        }
+        assert_eq!(
+            crate::search_state::witness(&game),
+            crate::search_state::witness(&fork)
+        );
+    }
 
     #[test]
     fn over_tap_diagnostics_keep_production_spending_and_forks() {
