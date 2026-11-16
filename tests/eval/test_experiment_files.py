@@ -81,6 +81,7 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
         "mps_retest",
         "mtg183-elemental-eval",
         "one_token_layout",
+        "opponent_memory",
         "precision_ladder",
         "seat_comparison",
         "tla_frontier",
