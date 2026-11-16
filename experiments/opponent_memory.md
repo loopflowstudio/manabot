@@ -272,9 +272,11 @@ collection, selected gathers, bootstrap and recovery. Bootstrap retains prefixes
 without keeping padded memory through the update. The original controlled proof
 combined host and device bytes; the new proof separates them and establishes
 finite one-row CPU execution, not pilot fit.
-Calibrate explicit collection, bootstrap and learner row sizes with separate
-host RSS and CUDA peaks before concrete job wiring; record any workload choice
-here. Preserve every record and typed overflow.
+Collection, frozen-opponent and bootstrap inference still materialize every
+selected prefix at once; explicit execution row limits must bound them, with
+output and gradient parity, before sizing. Then calibrate those row sizes with
+separate host RSS and CUDA peaks before concrete job wiring; record any
+workload choice here. Preserve every record and typed overflow.
 Do not adopt memory or remove recent events. This report launches no new run.
 
 Evidence that would change this recommendation is a measured comparison at
