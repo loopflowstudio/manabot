@@ -207,7 +207,7 @@ struct Class<'a> {
 }
 
 struct Chooser<'a> {
-    model: &'a PaymentModel,
+    model: &'a PaymentModel<'a>,
     pool: &'a Mana,
     cost: &'a ManaCost,
     probe: PaymentProbe,
@@ -537,12 +537,13 @@ impl ClassSearch<'_, '_> {
     }
 }
 
-impl PaymentModel {
+impl PaymentModel<'_> {
     /// This board after tapping `taps`.
-    fn tapped(&self, taps: impl Iterator<Item = usize>) -> PaymentModel {
+    fn tapped(&self, taps: impl Iterator<Item = usize>) -> PaymentModel<'_> {
         let mut after = PaymentModel {
             sources: self.sources.clone(),
             life: self.life,
+            cache: self.cache,
         };
         for index in taps {
             after.reserve(SourceReservation {
@@ -718,14 +719,16 @@ mod tests {
         mana::{Mana, ManaCost, SpendingContext},
     };
 
-    fn lands(outputs: &[&str]) -> PaymentModel {
+    fn lands(outputs: &[&str]) -> PaymentModel<'static> {
         PaymentModel {
             sources: outputs
                 .iter()
                 .enumerate()
                 .map(|(index, output)| source(index, Some(output), Vec::new()))
-                .collect(),
+                .collect::<Vec<_>>()
+                .into(),
             life: 20,
+            cache: None,
         }
     }
 
@@ -1209,9 +1212,9 @@ mod tests {
         let mut model = lands(&["G", "R", "G", "R", "U", "U"]);
         let modal = || tapping_ability(vec![Mana::parse("G"), Mana::parse("R")]);
         for index in 6..12 {
-            model.sources.push(source(index, None, vec![modal()]));
+            std::sync::Arc::make_mut(&mut model.sources).push(source(index, None, vec![modal()]));
         }
-        model.sources.push(source(
+        std::sync::Arc::make_mut(&mut model.sources).push(source(
             12,
             None,
             vec![ManaActivation {
@@ -1220,20 +1223,20 @@ mod tests {
                 ..tapping_ability(vec![Mana::parse("UU")])
             }],
         ));
-        model.sources.push(source(
+        std::sync::Arc::make_mut(&mut model.sources).push(source(
             13,
             None,
             vec![ManaActivation {
                 tap_source: false,
                 tap_count: 2,
-                tap_candidates: (6..12).map(PermanentId).collect(),
+                tap_candidates: (6..12).map(PermanentId).collect::<Vec<_>>().into(),
                 ..tapping_ability(vec![Mana::parse("RRR")])
             }],
         ));
         for index in 14..18 {
             let mut creature = source(index, None, Vec::new());
             creature.waterbend = true;
-            model.sources.push(creature);
+            std::sync::Arc::make_mut(&mut model.sources).push(creature);
         }
         assert!(model.direct(&[pay("1G")], SourcePolicy::All).is_none());
         let followups = ["RR", "UU", "3", "RRR"];
