@@ -105,7 +105,8 @@ The native `GameSetup(players, decklists="closed")` carries one value for the
 whole game. `MatchConfig.from_players(first, second, decklists="closed")`
 records native seats and rejects differing worlds. The old
 `PlayerConfig.disclosure` alias warns and will be removed in 0.4.0; disagreeing
-legacy seat values raise when creating a game. Evaluation matchups stay open.
+legacy seat values raise when creating a game. Evaluation matchups take
+`MatchConfig.decklists`, open or closed, never mixed.
 
 A sampled source can also use `decklists="mixed"`: each game draws open or
 closed with equal probability from its reset seed, separately from deck and
