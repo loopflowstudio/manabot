@@ -213,6 +213,40 @@ has not moved. Raw rows/comparison are ignored `.lf/tmp/mtg350/main-*`.
 
 ## Remaining work
 
+### Concept review — 2026-11-15
+
+Outcome: nothing to change and no open product choice. Advance to the next
+Graph step; no additional implement direction. Reviewed the current patch
+against the retained-game proof and the existing README/QA instructions;
+this review ran no new games or timing measurements.
+
+The experience remains one announcement with nested payment choices. The
+largest mismatch was an offered filter that spent a resource already owed
+to that announcement, leaving no completion. Reservation at the shared native
+authority fixes that mismatch without teaching people a reservation operation.
+Payment and saved callers own the lifecycle; reservations, search obligations
+and cached witnesses remain derived. The existing usage docs already express
+this model, so no further documentation or skill redesign is needed.
+
+Normal path: Yue's nearby funded Prism choice remains available and completes.
+Failure path: the underfunded filter is absent before resources are committed
+to it. Recovery retains committed taps and the actual pending decision;
+stale Commands are rejected and exact forks preserve that decision while
+cache mutations stay independent. This is prevention, not recovery of an
+already stranded historical frame: the retained changed-runtime proof starts
+at the first changed offer and uses a fresh candidate-owned Command. Original
+evidence is never rebound or rewritten.
+
+Counterexamples remain decisive: one more floating mana makes Prism legal;
+restricted mana can seed a filter even when the parent cannot spend it;
+selected tap identity can change feasibility; an upfront life fee must not
+be charged again as an announced fee. None permits merging resource classes,
+dropping caller obligations or turning the cache into persisted authority.
+No API, persistence, browser or policy-input migration follows from this
+review. Next show gate/Engine Budget results and the focused delivery copy,
+including changed-runtime provenance and the marginal local mixed speedup.
+The one-screen review is `scratch/concept-review.html`.
+
 Implementation and focused checks are complete on main `2176882620`. The
 retained-game proof and four-cell witness parity pass. Current-main timing is
 one sequential matched pair; earlier pre-integration timing passed in both
