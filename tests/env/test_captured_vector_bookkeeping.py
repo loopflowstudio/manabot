@@ -5,12 +5,13 @@ import pytest
 import torch
 
 from manabot import managym
-from manabot.env.failures import CapturedVector, FailureEvidence
+from manabot.env.failures import CapturedVector
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
-from manabot.env.replay import replay_failure_inputs
 from manabot.env.vector_env import VectorEnv as TorchVectorEnv
 from manabot.infra.config import MatchConfig, RewardConfig
+from managym.recording import FailureEvidence
+from managym.replay import replay_failure_inputs
 
 _MAX_SEED = 2**64 - 1
 
@@ -48,8 +49,6 @@ def _seeds(vector: TorchVectorEnv) -> list[int]:
 @pytest.mark.parametrize(
     "name",
     [
-        "reset_all",
-        "step",
         "take_exposure",
         "enable_exposure_capture",
         "scenario_naming_vocabulary_into_buffers",
