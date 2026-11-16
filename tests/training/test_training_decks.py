@@ -475,12 +475,14 @@ def test_failure_records_actual_sampled_decks(
             probe = managym.VectorEnv(num_envs=1, seed=attempt.seed)
             if sampled:
                 probe.set_training_decks(decks.players())
-            root = Match(decks.match_config()).to_rust()
-            root = managym.GameSetup(root, decklists=disclosure)
-            probe.reset_all(root)
+            probe.reset_all(
+                managym.GameSetup(
+                    Match(decks.match_config()).to_rust(), decklists=disclosure
+                )
+            )
+            (root,) = probe.current_player_configs()
             assert attempt.matchup == MatchConfig.from_players(
-                *probe.current_player_configs()[0],
-                decklists=probe.current_player_configs()[0].decklists,
+                *root, decklists=root.decklists
             )
             assert attempt.decks_digest == (decks.digest if sampled else None)
         scope = CaptureScope(tmp_path / "failures")
@@ -664,9 +666,9 @@ def test_mixed_source_closed_streams_match_all_closed_inputs(
     )
     for vector, mode in ((mixed, "mixed"), (closed, "closed")):
         vector.set_training_decks(decks.players())
-        root = Match(decks.match_config()).to_rust()
-        root = managym.GameSetup(root, decklists=mode)
-        vector.reset_all(root)
+        vector.reset_all(
+            managym.GameSetup(Match(decks.match_config()).to_rust(), decklists=mode)
+        )
     actual = mixed.current_player_configs()
     mask = np.array([setup.decklists == "closed" for setup in actual])
     assert mask.any() and not mask.all()

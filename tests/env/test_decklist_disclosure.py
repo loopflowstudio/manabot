@@ -1,6 +1,7 @@
 """Open and closed decklists through the match, encoders, text and Academy wire."""
 
 from dataclasses import asdict
+from functools import cache
 import random
 
 import numpy as np
@@ -33,6 +34,30 @@ def _env(decklists: DecklistDisclosure) -> tuple[managym.Env, managym.Observatio
     env = managym.Env(seed=3)
     obs, _ = env.reset(Match(_match(decklists)).to_rust())
     return env, obs
+
+
+@cache
+def _policy() -> ActorCritic:
+    torch.set_num_threads(1)
+    return ActorCritic(
+        ObservationSpace(), ModelConfig(hidden_dim=8, num_attention_heads=2)
+    )
+
+
+def _prepared(
+    space: ObservationSpace, obs: managym.Observation
+) -> Prepared[np.ndarray]:
+    return _policy().prepare({k: v[None] for k, v in space.encode(obs).items()})
+
+
+def _assert_same_view(a: managym.Observation, b: managym.Observation) -> None:
+    """Viewer JSON, every encoded buffer and the Prepared input all agree."""
+    space = ObservationSpace()
+    assert a.toJSON() == b.toJSON()
+    left, right = space.encode(a), space.encode(b)
+    for key, value in left.items():
+        np.testing.assert_array_equal(value, right[key], err_msg=key)
+    np.testing.assert_equal(asdict(_prepared(space, a)), asdict(_prepared(space, b)))
 
 
 @pytest.mark.parametrize("decklists", ["open", "closed"])
@@ -147,9 +172,7 @@ def test_match_from_players_retains_setup_and_rejects_different_worlds() -> None
 def test_unseen_opponent_list_does_not_change_observation_or_prepared(
     viewer: int,
 ) -> None:
-    torch.set_num_threads(1)
     space = ObservationSpace()
-    policy = ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
 
     def game(land: str, disclosure: DecklistDisclosure) -> managym.Env:
         decks = [{"Forest": 40}, {land: 40}]
@@ -165,16 +188,6 @@ def test_unseen_opponent_list_does_not_change_observation_or_prepared(
         )
         return env
 
-    def prepared(obs: managym.Observation) -> Prepared[np.ndarray]:
-        return policy.prepare({k: v[None] for k, v in space.encode(obs).items()})
-
-    def assert_same_view(a: managym.Observation, b: managym.Observation) -> None:
-        assert a.toJSON() == b.toJSON()
-        buffers = [space.encode(obs) for obs in (a, b)]
-        for key, value in buffers[0].items():
-            np.testing.assert_array_equal(value, buffers[1][key], err_msg=key)
-        np.testing.assert_equal(asdict(prepared(a)), asdict(prepared(b)))
-
     # Open control: the substitution is visible everywhere it could leak.
     opened = [
         game(land, "open").observation_for_player(viewer)
@@ -185,11 +198,11 @@ def test_unseen_opponent_list_does_not_change_observation_or_prepared(
         space.encode(opened[0])["decklists"], space.encode(opened[1])["decklists"]
     )
     assert not np.array_equal(
-        prepared(opened[0]).deck_rows, prepared(opened[1]).deck_rows
+        _prepared(space, opened[0]).deck_rows, _prepared(space, opened[1]).deck_rows
     )
 
     left, right = game("Island", "closed"), game("Mountain", "closed")
-    assert_same_view(*(env.observation_for_player(viewer) for env in (left, right)))
+    _assert_same_view(*(env.observation_for_player(viewer) for env in (left, right)))
     decisions = 0
     # All-land decks have identical action ordering until the opponent plays a
     # land. Equal sizes preserve shuffle RNG and the viewer's private cards.
@@ -198,7 +211,7 @@ def test_unseen_opponent_list_does_not_change_observation_or_prepared(
         if a.opponent_permanents:
             break
         if left.current_agent_index() == viewer:
-            assert_same_view(a, b)
+            _assert_same_view(a, b)
             decisions += 1
         index = 0
         if left.current_agent_index() != viewer and decisions == 0:
@@ -218,9 +231,7 @@ def test_unseen_opponent_list_does_not_change_observation_or_prepared(
 
 
 def test_public_reveal_then_departure_updates_closed_known_hand() -> None:
-    torch.set_num_threads(1)
     space = ObservationSpace()
-    policy = ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
     env = managym.Env(seed=0)
     obs, _ = env.reset(Match(_match("closed")).to_rust())
     rng = random.Random(0)
@@ -232,7 +243,7 @@ def test_public_reveal_then_departure_updates_closed_known_hand() -> None:
             view = env.observation_for_player(1 - owner)
             encoded = space.encode(view)
             assert not encoded["decklists"][1].any()
-            prepared = policy.prepare({k: v[None] for k, v in encoded.items()})
+            prepared = _policy().prepare({k: v[None] for k, v in encoded.items()})
             assert revealed is not None
             selected = encoded["known_hand"][1, :, 0] == revealed + 1
             if prepared_row is None:
@@ -350,28 +361,16 @@ def test_game_setup_rewrap_preserves_disclosure(
 
 @pytest.mark.parametrize("viewer", [0, 1])
 def test_closed_draw_in_mixed_run_matches_closed_game(viewer: int) -> None:
-    torch.set_num_threads(1)
-    space = ObservationSpace()
-    policy = ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
     match = Match(_match("closed"))
     modes: set[bool] = set()
     for seed in range(8):
         mixed, closed = managym.Env(seed=seed), managym.Env(seed=seed)
-        setup = match.to_rust()
-        setup = managym.GameSetup(setup, decklists="mixed")
-        mixed.reset(setup)
-        modes.add(mixed.observation_for_player(viewer).decklists_closed)
+        mixed.reset(managym.GameSetup(match.to_rust(), decklists="mixed"))
         closed.reset(match.to_rust())
         view = mixed.observation_for_player(viewer)
-        if not view.decklists_closed:
-            continue
-        control = closed.observation_for_player(viewer)
-        assert view.toJSON() == control.toJSON()
-        for key, value in space.encode(view).items():
-            np.testing.assert_array_equal(value, space.encode(control)[key])
-        left = policy.prepare({k: v[None] for k, v in space.encode(view).items()})
-        right = policy.prepare({k: v[None] for k, v in space.encode(control).items()})
-        np.testing.assert_equal(asdict(left), asdict(right))
+        modes.add(view.decklists_closed)
+        if view.decklists_closed:
+            _assert_same_view(view, closed.observation_for_player(viewer))
     assert modes == {False, True}
 
 

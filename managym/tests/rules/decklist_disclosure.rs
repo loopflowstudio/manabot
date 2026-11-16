@@ -26,11 +26,7 @@ fn configs(disclosure: DecklistDisclosure) -> GameSetup {
             .iter()
             .map(|key| pack.player_config(key, key).unwrap())
             .collect(),
-        decklists: if disclosure.is_open() {
-            DecklistMode::Open
-        } else {
-            DecklistMode::Closed
-        },
+        decklists: disclosure.into(),
     }
 }
 

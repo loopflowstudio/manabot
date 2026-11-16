@@ -5462,14 +5462,8 @@ pub(crate) fn game_setup(value: &Bound<'_, PyAny>) -> PyResult<crate::state::pla
     let (decklists, conflict) = if value.is_instance(&setup_type)? {
         let name: String = value.getattr("decklists")?.extract()?;
         let decklists = match name.as_str() {
-            "open" => DecklistMode::Open,
-            "closed" => DecklistMode::Closed,
             "mixed" => DecklistMode::Mixed,
-            _ => {
-                return Err(PyValueError::new_err(
-                    "decklists must be open, closed or mixed",
-                ))
-            }
+            fixed => parse_disclosure(fixed)?.into(),
         };
         (
             decklists,

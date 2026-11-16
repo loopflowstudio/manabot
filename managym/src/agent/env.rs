@@ -25,7 +25,11 @@ use crate::{
     infra::profiler::{empty_info_dict, insert_info, InfoDict, InfoValue, Profiler},
     possible_worlds::{MaterializeMode, PossibleWorldSpace, PossibleWorldSpaceProjection},
     search_state::{witness, SearchStateWitness},
-    state::{game_object::PlayerId, player::PlayerConfig, zone::ZoneType},
+    state::{
+        game_object::PlayerId,
+        player::{DecklistDisclosure, GameSetup, PlayerConfig},
+        zone::ZoneType,
+    },
 };
 use rand::Rng;
 use std::{
@@ -124,7 +128,7 @@ struct NativeActionTrace {
     seed: u64,
     /// Fixed at reset; forks share it rather than copying the decklists.
     player_configs: Arc<[PlayerConfig]>,
-    disclosure: crate::state::player::DecklistDisclosure,
+    disclosure: DecklistDisclosure,
     actions: Vec<usize>,
 }
 
@@ -137,8 +141,8 @@ impl serde::Serialize for NativeActionTrace {
         struct RetainedSeat<'a> {
             #[serde(flatten)]
             player: &'a PlayerConfig,
-            #[serde(skip_serializing_if = "crate::state::player::DecklistDisclosure::is_open")]
-            disclosure: crate::state::player::DecklistDisclosure,
+            #[serde(skip_serializing_if = "DecklistDisclosure::is_open")]
+            disclosure: DecklistDisclosure,
         }
         let players: Vec<_> = self
             .player_configs
@@ -308,7 +312,7 @@ impl Env {
 
     pub fn reset(
         &mut self,
-        player_configs: impl Into<crate::state::player::GameSetup>,
+        player_configs: impl Into<GameSetup>,
     ) -> Result<(Observation, InfoDict), AgentError> {
         let player_configs = player_configs.into();
         // Admit submitted decks at the fallible environment boundary, before
@@ -458,7 +462,7 @@ impl Env {
     }
 
     /// The current game's resolved disclosure; open before the first reset.
-    pub fn decklists(&self) -> crate::state::player::DecklistDisclosure {
+    pub fn decklists(&self) -> DecklistDisclosure {
         self.game
             .as_ref()
             .map_or(Default::default(), |game| game.state.disclosure)
