@@ -46,7 +46,7 @@ class RecordedDecision:
 
     @property
     def chosen(self) -> int:
-        """Action aligned with the commitment; answers remain on commitment."""
+        """Index of the one legal offer the commitment names."""
         if isinstance(self.commitment, int):
             return self.commitment
         if self.frame is None:

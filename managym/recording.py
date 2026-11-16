@@ -896,7 +896,11 @@ class ScalarCapture(_Capture):
         transition_only: bool = True,
         annotation: DecisionAnnotation | dict[str, object] | None = None,
     ) -> Any:
-        """Retain and execute one original atomic Command, including its answers."""
+        """Retain and execute one action-aligned native Command.
+
+        The native executor rejects a Command with answers; a rejected or stale
+        Command leaves no row, digest or reducer callback.
+        """
         from managym.replay import RecordedDecision
 
         self._activate_journal(env)
