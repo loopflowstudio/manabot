@@ -347,7 +347,10 @@ def main() -> None:
         parser.error("seconds must be in (0, 300]")
     if not args.worker:
         run_bounded_replay("managym.replay", args.seconds)
-    evidence = read_failure(args.path)
+    try:
+        evidence = read_failure(args.path)
+    except (OSError, ValueError) as error:
+        parser.error(f"cannot read journal {args.path}: {error}")
     try:
         require_replay_runtime(
             evidence.identities,

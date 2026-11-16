@@ -1277,10 +1277,7 @@ impl Game {
         submission: &OfferSubmission,
     ) -> Result<(bool, usize), StructuredOfferError> {
         let command = offers.decode(submission)?;
-        let mut checkpoint = self.clone();
-        checkpoint.card_capture = self.card_capture.clone();
-        checkpoint.statistics = self.statistics.clone();
-        checkpoint.capture_originals = self.capture_originals.clone();
+        let checkpoint = self.rollback_snapshot();
         match self.apply_legacy_command_inner(&command, &mut None) {
             Ok(result) => Ok(result),
             Err(error) => {
@@ -1508,10 +1505,7 @@ impl Game {
         if matches!(command, AtomicCommand::SearchAction { .. }) {
             return self.apply_search_action(command);
         }
-        let mut checkpoint = self.clone();
-        checkpoint.card_capture = self.card_capture.clone();
-        checkpoint.statistics = self.statistics.clone();
-        checkpoint.capture_originals = self.capture_originals.clone();
+        let checkpoint = self.rollback_snapshot();
         if matches!(command, AtomicCommand::DeclarationSequence { .. }) {
             return match self.apply_legacy_command_inner(command, &mut None) {
                 Ok((done, _)) => Ok(done),
@@ -1572,13 +1566,7 @@ impl Game {
         #[cfg(feature = "benchmark")]
         let _rules_timer = crate::benchmark_search::Timer::new("rules_execution");
         let action = action.clone();
-        let exposure = self.current_action_space.as_ref().and_then(|space| {
-            space
-                .actions
-                .iter()
-                .position(|a| a == &action)
-                .and_then(|index| self.exposure_choice(space, index))
-        });
+        let exposure = self.exposure_for_action(&action);
         self.current_action_space.take();
         self.execute_action(&action).unwrap_or_else(|error| {
             panic!("structured search offer admitted an unexecutable action: {error}")
@@ -1629,13 +1617,7 @@ impl Game {
                             "priority pass is no longer offered".to_string(),
                         )
                     })?;
-                let exposure = self.current_action_space.as_ref().and_then(|space| {
-                    space
-                        .actions
-                        .iter()
-                        .position(|a| a == &action)
-                        .and_then(|index| self.exposure_choice(space, index))
-                });
+                let exposure = self.exposure_for_action(&action);
                 self.current_action_space.take();
                 self.execute_action(&action)
                     .map_err(|error| StructuredOfferError::StaleOrIllegal(error.0))?;
@@ -1678,13 +1660,7 @@ impl Game {
                         )
                     })?;
 
-                let exposure = self.current_action_space.as_ref().and_then(|space| {
-                    space
-                        .actions
-                        .iter()
-                        .position(|a| a == &action)
-                        .and_then(|index| self.exposure_choice(space, index))
-                });
+                let exposure = self.exposure_for_action(&action);
                 self.current_action_space.take();
                 self.execute_action(&action)
                     .map_err(|error| StructuredOfferError::StaleOrIllegal(error.0))?;
@@ -1765,13 +1741,7 @@ impl Game {
                     ));
                 }
                 let action = action.clone();
-                let exposure = self.current_action_space.as_ref().and_then(|space| {
-                    space
-                        .actions
-                        .iter()
-                        .position(|a| a == &action)
-                        .and_then(|index| self.exposure_choice(space, index))
-                });
+                let exposure = self.exposure_for_action(&action);
                 self.current_action_space.take();
                 self.execute_action(&action)
                     .map_err(|error| StructuredOfferError::StaleOrIllegal(error.0))?;

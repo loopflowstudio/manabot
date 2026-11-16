@@ -714,7 +714,8 @@ pub(crate) enum CombatDamagePass {
 
 #[derive(Debug)]
 pub struct Game {
-    /// Evaluation-only facts. Never cloned, hashed, or exposed to policies.
+    /// Optional private counters and facts. Search clones omit them; rollback
+    /// snapshots preserve them. Never hashed or exposed to policies.
     pub(crate) statistics: Option<crate::flow::statistics::Statistics>,
     pub(crate) capture_originals:
         std::collections::BTreeMap<usize, crate::flow::card_capture::CardSnapshot>,

@@ -155,11 +155,17 @@ hashed-v6 speedup.
 
 Jack Heart said "i think the stats colelcted in game is probably more general"
 and "ok add thisninto the foncept review for 540 before another pursue round".
-The review proposes independent managym statistics and private recording; their
-inclusion in #540 versus separate delivery remains open, not an approved API.
-Existing evaluation statistics replay retained traces before reduction and
-eligibility; native capture retains lists. Neither proves a bounded live counter
-option. Keep experiment eligibility and participant mapping outside engine facts.
+The subsequent task direction includes both standalone capabilities in #540.
+Native optional statistics now consume shared setup/movement/committed-choice
+facts independently of retained capture lists. Portable recording/replay lives
+in managym; runner adapters own destinations and non-engine phase markers.
+Evaluation retains replay eligibility and participant mapping outside engine
+counts, using the same native counting formulas for retained facts. Installed
+CPython 3.12/3.13 engine-only proofs passed without manabot, Torch or Etude.
+Stats-only does not imply constant total Env memory: intrinsic action traces,
+physical-copy provenance and undrained generation summaries can grow. Search
+clones omit sinks; transactional rollback must restore them. Keep missing
+historical exposure unavailable rather than converting it into zero counts.
 
 Durable pre-call intent is not proof of native entry: interruption before entry
 or after return but before acknowledgment leaves the same unknown outcome. Runner

@@ -11,6 +11,24 @@ from managym.recording import ScalarCapture, read_failure
 from managym.replay import replay_failure_inputs, require_replay_runtime
 
 
+@pytest.mark.parametrize("contents", [None, "", "not JSON\n"])
+def test_replay_cli_reports_unreadable_journal(
+    tmp_path: Path, contents: str | None
+) -> None:
+    path = tmp_path / "game.jsonl"
+    if contents is not None:
+        path.write_text(contents)
+    result = subprocess.run(
+        [sys.executable, "-m", "managym.replay", str(path), "--seconds", "5"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 2
+    assert f"cannot read journal {path}" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
 @pytest.mark.parametrize(
     "method,phase",
     [("semantic_decision_frame_json", "preparing"), ("step", "executing")],

@@ -2,7 +2,7 @@
 // Private game facts at setup and committed boundaries; no rule events or RNG.
 
 use crate::agent::{
-    action::{ActionSpace, ActionType},
+    action::{Action, ActionSpace, ActionType},
     observation::Observation,
 };
 use crate::flow::decision::EffectFrame;
@@ -137,6 +137,26 @@ impl CardCapture {
 }
 
 impl Game {
+    /// Transactions preserve diagnostic sinks; search clones deliberately omit them.
+    pub(crate) fn rollback_snapshot(&self) -> Self {
+        let mut snapshot = self.clone();
+        snapshot.card_capture = self.card_capture.clone();
+        snapshot.statistics = self.statistics.clone();
+        snapshot.capture_originals = self.capture_originals.clone();
+        snapshot.capture_drawing = self.capture_drawing;
+        snapshot
+    }
+
+    /// Bind an atomic action to the same published choice as indexed stepping.
+    pub(crate) fn exposure_for_action(&self, action: &Action) -> Option<ExposureChoice> {
+        let space = self.current_action_space.as_ref()?;
+        let index = space
+            .actions
+            .iter()
+            .position(|candidate| candidate == action)?;
+        self.exposure_choice(space, index)
+    }
+
     pub(crate) fn exposure_choice(
         &self,
         space: &ActionSpace,

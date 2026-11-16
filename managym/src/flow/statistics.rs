@@ -53,11 +53,8 @@ impl Statistics {
     }
 
     pub fn movement(&mut self, card: &CardSnapshot, draw: bool) {
-        self.row(card.owner, card.definition, &card.name);
-        if draw {
-            self.row(card.owner, card.definition, &card.name)
-                .drawn_copies += 1;
-        }
+        self.row(card.owner, card.definition, &card.name)
+            .drawn_copies += u64::from(draw);
     }
 
     pub fn choice(&mut self, choice: &ExposureChoice) {
@@ -276,6 +273,17 @@ mod tests {
             expected
         );
         assert!(command_game.apply_atomic_command(&command).is_err());
+        // The legacy transaction rejects the same stale choice after taking a
+        // rollback snapshot. Neither rejection may discard accumulated counts.
+        assert!(command_game
+            .apply_legacy_offer_submission(
+                &offers,
+                &OfferSubmission {
+                    offer_id: offers.projection().offers[0].id,
+                    answers: Vec::new(),
+                },
+            )
+            .is_err());
         assert_eq!(
             serde_json::to_value(command_game.statistics.as_ref().unwrap().rows()).unwrap(),
             expected
