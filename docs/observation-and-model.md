@@ -549,8 +549,9 @@ complete decision history, and no training benefit has been measured.
 
 **Unreleased.** The native projection and Torch encoders are implemented as a
 bounded draft. The census found that the current dense rollout store would need
-over 500 GiB at the planned pilot size. Complete prefix storage needs redesign
-before ordinary training or the five-arm pilot; the intended interface follows.
+over 500 GiB at the planned pilot size. Shared immutable prefix storage must be
+implemented before ordinary training or the five-arm pilot; the intended
+interface follows.
 
 To let a Torch policy use the opponent's earlier choices, select an encoder and
 one or four summary tokens in its model configuration:

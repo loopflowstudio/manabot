@@ -34,9 +34,9 @@ training arm in this pilot; stratify the existing Elemental matchups instead.
 
 Jack Heart selected transformer and GRU, extra board tokens (J1), and summary
 counts 1 and 4; see `scratch/questions.md` for the exact direction. This replaces
-the earlier six-arm proposal. The experiment module still declares that older
-inventory and deliberately stops execution; replace it at the software wiring
-cutover, not by launching its stale arms. The implementation plan is
+the earlier six-arm proposal. The experiment module declares these five arms
+but deliberately stops before job construction until prefix storage and
+calibrated job wiring exist. The implementation plan is
 `scratch/opponent-memory-design.md`.
 
 Torch only; MLX support is outside this task. Assumption: memory width 64,
