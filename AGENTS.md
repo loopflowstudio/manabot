@@ -618,6 +618,14 @@ with other instructions ("Add {G}{G}. You gain 2 life.") lists its output first;
 the untargeted rest (`ActivatedAbilityDefinition::mana_suffix`) runs once, off
 the stack, as the source's frame before the output choice (CR 605.3b).
 
+### Collector recovery
+
+Collector snapshots require a completed update boundary and current-self
+opponents. Retain opponent memory as a compact chunk archive, then validate it
+against native action-journal replay; never copy the configured padded memory
+buffers into a recovery snapshot. Numerical incidents are bounded diagnostics,
+not collector snapshots, and must report omitted complete prefixes explicitly.
+
 ### Etude training records
 
 Etude preserves a checkpoint's source suffix. Worker tests wait for a registered

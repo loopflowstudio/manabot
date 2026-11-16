@@ -252,7 +252,11 @@ def test_opponent_memory_collects_bootstraps_and_learns_from_real_prefixes(
     try:
         batch = collector.collect(model, 16)
         assert batch.actions.size == 16
-        assert batch.ordered_obs()["opponent_records"][..., 17].any()
+        assert (
+            batch.observations(np.arange(batch.actions.size))
+            .observation["opponent_records"][..., 17]
+            .any()
+        )
         assert model.opponent_memory is not None
         before = {
             name: parameter.detach().clone()

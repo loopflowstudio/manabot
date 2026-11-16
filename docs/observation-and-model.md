@@ -547,11 +547,12 @@ complete decision history, and no training benefit has been measured.
 
 ## Whole-game opponent memory
 
-**Unreleased.** The native projection and Torch encoders are implemented as a
-bounded draft. The census found that the current dense rollout store would need
-over 500 GiB at the planned pilot size. Shared immutable prefix storage must be
-implemented before ordinary training or the five-arm pilot; the intended
-interface follows.
+**Unreleased.** The native projection, Torch encoders and shared rollout prefix
+storage are implemented as a bounded draft. The original dense rollout would need over
+500 GiB at the planned pilot size. Prefix storage removes that repeated ownership,
+but the controlled size proof does not establish host or GPU fit at the census
+maxima. Bootstrap lifetime and separate host/device accounting need revision.
+Resource sizing, CUDA admission and the five-arm pilot remain outstanding; the intended interface follows.
 
 To let a Torch policy use the opponent's earlier choices, select an encoder and
 one or four summary tokens in its model configuration:
@@ -627,10 +628,25 @@ the encoder choice and weights through ordinary persistence. Restoring a game
 still requires its original replay or exact native state; weights alone do not
 restore a game in progress.
 
+Collection retains immutable game/viewer prefixes, sharing unchanged records and
+details across decisions. Coalescing creates a new tail version; previously
+sampled decisions keep their original count. Only selected learner prefixes are
+padded for preparation. Ordinary collector recovery replays its bounded native
+journal and checks a compact chunk archive. Numerical incidents select rows and
+budget whole prefixes before copying them; evidence that cannot fit is explicitly
+marked incomplete. These diagnostics do not resume games.
+
+**Proposed before calibration:** retain bootstrap memory as prefix references
+and gather it only for admission or value evaluation. The draft currently keeps
+padded bootstrap arrays through the update. Size collection, bootstrap and
+learner forwards explicitly; the host RSS limit and GPU memory are separate
+limits. These execution choices must preserve every record and the learning
+schedule.
+
 Record and companion-row capacities belong to the supplied observation space:
 `ObservationConfig.max_opponent_records` and `max_opponent_details`. Both default
 to zero (disabled); memory requires both to be positive and policy input v11.
-They are fixture capacities until the storage revision and calibration establish
+They are fixture capacities until resource sizing and calibration establish
 a practical training configuration. The seeded census's candidate bounds are
 1,024 records and 1,048,576 details; these do not certify learned-game lengths.
 

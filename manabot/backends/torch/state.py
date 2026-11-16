@@ -18,6 +18,7 @@ from torch import Tensor
 
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
+from manabot.env.memory_store import MEMORY_FIELDS, CompactObservation, archive_memory
 from manabot.policy.protocol import BackendPolicy
 from manabot.training.state.backend import IncidentCapture, NumericalIncident
 
@@ -166,18 +167,53 @@ def capture_incident(
 ) -> IncidentCapture:
     tensors = dict(error.tensors)
     batch_tensors: dict[str, Tensor] = {}
+    memory_tensors: dict[str, Tensor] = {}
+    memory_metadata: dict[str, object] = {}
+    memory_bytes = 0
+    selected_all = True
     if batch is not None:
-        for name in (
-            "actions",
-            "logprobs",
-            "values",
-            "rewards",
-            "dones",
-        ):
-            batch_tensors[f"batch/{name}"] = torch.as_tensor(getattr(batch, name))
-        # Packed rows remain compact in incident artifacts. Offsets and slots
-        # are required to reconstruct original Commands and full distributions.
-        packed = batch.action_data
+        # Select before gathering any observation. Failed tensors may describe
+        # either learner rows or action slots; reduce only the latter.
+        failure = tensors.get("failed")
+        selected = np.arange(min(max_rows, batch.actions.size), dtype=np.int64)
+        if "indexes" in tensors:
+            indexes = tensors["indexes"].detach().cpu().flatten()
+            if ((indexes < 0) | (indexes >= batch.actions.size)).any():
+                raise ValueError("invalid incident rollout indexes")
+            selected = indexes.numpy()[:max_rows]
+            if (
+                failure is not None
+                and failure.ndim
+                and failure.shape[0] == len(indexes)
+            ):
+                reduced = failure.detach().cpu().reshape(len(indexes), -1).any(-1)
+                offending = indexes[reduced].numpy()[:max_rows]
+                if len(offending):
+                    selected = offending
+        elif failure is not None:
+            failed_rows = failure.detach().cpu()
+            if tuple(failed_rows.shape) == batch.actions.shape:
+                offending = failed_rows.flatten().nonzero().flatten().numpy()[:max_rows]
+            elif tuple(failed_rows.shape[:-1]) == batch.actions.shape:
+                offending = (
+                    failed_rows.any(-1).flatten().nonzero().flatten().numpy()[:max_rows]
+                )
+            else:
+                offending = np.array([], dtype=np.int64)
+            if len(offending):
+                selected = offending
+        selected_all = (
+            np.array_equal(selected, np.arange(batch.actions.size))
+            and len(batch.next_done) <= max_rows
+        )
+        batch_tensors["batch_row_indexes"] = torch.as_tensor(selected)
+        for name in ("actions", "logprobs", "values", "rewards", "dones"):
+            batch_tensors[f"batch/{name}"] = torch.as_tensor(
+                getattr(batch, name).reshape(-1)[selected]
+            )
+        packed = type(batch.action_data).concatenate(
+            [batch.action_data.row(int(row)) for row in selected]
+        )
         for name in ("offsets", "slots", "log_probabilities"):
             batch_tensors[f"packed_actions/{name}"] = torch.as_tensor(
                 getattr(packed, name)
@@ -189,23 +225,66 @@ def capture_incident(
                 for key, value in packed.fields.items()
             }
         )
+        recorded = batch.recorded.index[selected]
         batch_tensors.update(
             {
-                f"observation/{k}": torch.as_tensor(v)
-                for k, v in batch.ordered_obs().items()
+                f"observation/{key}": torch.as_tensor(value[recorded])
+                for key, value in batch.recorded.rows.items()
             }
         )
         batch_tensors.update(
             {
-                f"next_observation/{k}": torch.as_tensor(v)
-                for k, v in batch.next_obs.items()
+                f"next_observation/{key}": torch.as_tensor(value[:max_rows])
+                for key, value in batch.next_obs.items()
+                if key not in MEMORY_FIELDS
             }
         )
+        if batch.recorded.memory_capacities is not None:
+            prefixes = [batch.recorded.memory[int(row)] for row in recorded]
+            next_count = 0
+            if isinstance(batch.next_obs, CompactObservation):
+                next_prefixes = batch.next_obs.prefixes[:max_rows]
+                next_count = len(next_prefixes)
+                prefixes.extend(next_prefixes)
+            archive = archive_memory(prefixes, batch.recorded.memory_capacities)
+            memory_metadata = {
+                "required_bytes": archive.nbytes,
+                "capacities": list(archive.capacities),
+                "learner_rows": len(selected),
+                "bootstrap_rows": next_count,
+                "identities": [
+                    {"game": p.game, "viewer": p.viewer, "branch": p.branch}
+                    for p in archive.identities
+                ],
+                "keys": list(archive.keys),
+            }
+            # Atomic prefix capture: no partial detail rows presented as exact.
+            if archive.nbytes <= evidence_bytes:
+                memory_bytes = archive.nbytes
+                memory_tensors = {
+                    f"memory/chunks/{i}": torch.from_numpy(rows.copy())
+                    for i, rows in enumerate(archive.chunks)
+                }
+                memory_tensors.update(
+                    {
+                        f"memory/{name}": torch.from_numpy(
+                            getattr(archive, name).copy()
+                        )
+                        for name in ("offsets", "records", "details")
+                    }
+                )
+                memory_metadata["complete"] = True
+            else:
+                memory_metadata["complete"] = False
+                memory_metadata["omitted"] = (
+                    "complete prefixes exceed evidence byte budget"
+                )
     tensors.update(batch_tensors)
-    full_batch = _tensor_bytes(batch_tensors) <= evidence_bytes // 2
-    evidence: dict[str, Tensor] = {}
-    shapes: dict[str, object] = {}
-    remaining = evidence_bytes
+    evidence: dict[str, Tensor] = dict(memory_tensors)
+    shapes: dict[str, object] = (
+        {"opponent_memory": memory_metadata} if memory_metadata else {}
+    )
+    remaining = evidence_bytes - memory_bytes
     failed = tensors.get("failed")
     row_shape = failed.shape if failed is not None else None
     row_indexes: Tensor | None = None
@@ -232,7 +311,7 @@ def capture_incident(
             "finite_min": float(finite_values.min()) if finite_values.numel() else None,
             "finite_max": float(finite_values.max()) if finite_values.numel() else None,
         }
-        if name in batch_tensors and full_batch:
+        if name in batch_tensors:
             sample = tensor
         elif (
             row_shape is not None
@@ -250,8 +329,16 @@ def capture_incident(
             remaining -= needed
         else:
             shapes[name]["omitted"] = "evidence byte budget"
+    if batch is not None:
+        shapes["batch_layout"] = {
+            "trajectory_shape": list(batch.actions.shape),
+            "selected_flat_indexes": selected.tolist(),
+        }
     if row_indexes is not None:
-        evidence["row_indexes"] = row_indexes.cpu()
+        needed = row_indexes.numel() * row_indexes.element_size()
+        if needed <= remaining:
+            evidence["row_indexes"] = row_indexes.cpu()
+            remaining -= needed
     # torch optimizer/RNG state is a heterogeneous library boundary. Nothing
     # from process locals, credentials or arbitrary objects enters this payload.
     state: dict[str, Any] = {
@@ -281,6 +368,8 @@ def capture_incident(
         shapes,
         size,
         bool(batch_tensors)
+        and selected_all
+        and bool(memory_metadata.get("complete", True))
         and all(
             name in evidence and evidence[name].shape == value.shape
             for name, value in batch_tensors.items()

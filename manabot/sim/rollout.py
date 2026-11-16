@@ -27,6 +27,7 @@ import numpy as np
 from manabot.env.env import Env
 from manabot.env.failures import CapturedVector
 from manabot.env.match import Match
+from manabot.env.memory_store import MEMORY_FIELDS, CompactObservation
 from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import MatchConfig
 from manabot.model.world import validate_agent_setup
@@ -73,10 +74,24 @@ class BatchedSampler:
     def select(self, buffers: ObservationBuffers, rows: np.ndarray) -> np.ndarray:
         """Actions (len(rows),) for the given rows of the observation buffers."""
 
-        obs = self.agent.prepare(
-            {key: buffers[key][rows] for key in self.agent.observation_space.shapes},
-            inference=True,
-        )
+        if isinstance(buffers, CompactObservation):
+            if np.array_equal(rows, np.arange(len(buffers.prefixes))):
+                selected = buffers
+            else:
+                selected = CompactObservation(
+                    {
+                        key: buffers[key][rows]
+                        for key in self.agent.observation_space.shapes
+                        if key not in MEMORY_FIELDS
+                    },
+                    [buffers.prefixes[int(row)] for row in rows],
+                    buffers.memory_capacities,
+                )
+        else:
+            selected = {
+                key: buffers[key][rows] for key in self.agent.observation_space.shapes
+            }
+        obs = self.agent.prepare(selected, inference=True)
         actions = self.agent.sample(
             obs,
             deterministic=self.deterministic,

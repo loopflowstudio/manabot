@@ -4,8 +4,8 @@
 
 **Exploratory.** Can a learned memory of the opponent's past decisions become
 an affordable training basis without materially hurting throughput or early
-learning? This pilot has no measured answer yet: no census, calibration,
-training or paired evaluation results are retained. The USD 50 allocation is a
+learning? Census and controlled storage measurements are retained below;
+calibration, training and paired evaluation have not run. The USD 50 allocation is a
 budget, not a measured cost. No playing-strength finding follows from this report.
 
 The incumbent is the current no-history policy. The best guess is a small
@@ -35,8 +35,8 @@ training arm in this pilot; stratify the existing Elemental matchups instead.
 Jack Heart selected transformer and GRU, extra board tokens (J1), and summary
 counts 1 and 4; see `scratch/questions.md` for the exact direction. This replaces
 the earlier six-arm proposal. The experiment module declares these five arms
-but deliberately stops before job construction until prefix storage and
-calibrated job wiring exist. The implementation plan is
+but deliberately stops before job construction until bootstrap storage,
+resource sizing and calibrated job wiring are ready. The implementation plan is
 `scratch/opponent-memory-design.md`.
 
 Torch only; MLX support is outside this task. Assumption: memory width 64,
@@ -256,7 +256,8 @@ or rental, and there is no launcher run ID or cost to record.
 ## What the results support
 
 The census establishes that dense whole-rollout history storage does not fit the
-planned load. Native/Torch bounded proofs do not resolve that storage problem.
+planned load. The shared-prefix implementation below removes dense rollout
+ownership, while selected-batch resource sizing remains unresolved.
 There is no basis
 to compare any candidate with today's no-history incumbent, choose a transformer
 over a GRU, choose the number of summary tokens, or judge the value of passes.
@@ -266,14 +267,14 @@ neither equivalence nor a regression.
 
 ## Recommendation
 
-Keep the no-history incumbent. Review the design revision in
-`scratch/opponent-memory-design.md`: retain shared immutable game/viewer prefixes,
-gather and pad only selected learner prefixes, and retain compact incident
-evidence. Replace dense memory ownership in the same cut. Verify its storage at
-the measured census size before concrete job wiring and calibration. Preserve
-every record and typed overflow; a smaller history capacity or silent long-game
-discard does not fix this failure. Do not adopt memory or remove recent events.
-This report launches no new run.
+Keep the no-history incumbent. Shared immutable game/viewer prefixes now back
+collection, selected gathers, bootstrap and recovery. Revise bootstrap to retain
+prefixes without keeping padded memory through the update. The controlled proof
+below combines host and device bytes; it does not establish a host-cap failure.
+Calibrate explicit collection, bootstrap and learner row sizes with separate
+host RSS and CUDA peaks before concrete job wiring; record any workload choice
+here. Preserve every record and typed overflow.
+Do not adopt memory or remove recent events. This report launches no new run.
 
 Evidence that would change this recommendation is a measured comparison at
 matched learner decisions across independent training seeds, with whole-deal
@@ -315,9 +316,9 @@ missing. Deliver that software before the replay census and calibration; the
 existing inclusive USD 50 approval remains sufficient, with no new approval
 needed. No experiment result or adoption decision follows from this check.
 
-No commit/run ID, launcher cost or measured result yet. The memory-software PR,
-replay corpus identity, census, calibrated horizon, concrete launch wiring and
-evaluation jobs are outstanding. No paid run is authorized by this design file
+No paid launcher run ID or cost exists. Census and controlled storage evidence
+are retained below. The memory-software PR, calibrated horizon, concrete launch
+wiring and evaluation jobs are outstanding; no original Command corpus was found. No paid run is authorized by this design file
 beyond the task's existing inclusive USD 50 authority.
 
 Design validation (2026-11-15): Ruff check/format and syntax checks passed;
@@ -359,6 +360,77 @@ passed. Both encoders completed the bounded 16-row exact-quota CPU update;
 optional-layout/legacy and malformed-word admission checks also passed. Strict
 library Clippy, Ruff and formatting passed; the CPython 3.13 extension was rebuilt
 and replaced atomically. Full gate/CI/CUDA admission and the demo remain pending.
-The storage revision is sent back to review before dependent job wiring. This
-is a draft implementation and a measured storage failure, not completed software
-delivery or a completed experiment.
+That checkpoint sent the storage revision back to review. The subsequent shared
+storage cut and its resource limit are recorded below; software delivery and
+the experiment remain incomplete.
+
+
+### Shared-prefix storage proof, 2026-11-16
+
+The transport now owns immutable record/detail chunks and persistent tails.
+Coalescing versions a tail; forks, resets and subsequent updates cannot mutate
+already sampled rows. Only selected prefixes are padded. Collector recovery
+serializes reachable chunks once and validates them against native journal
+replay. Incidents preflight complete selected prefixes against the 32 MiB
+budget; missing evidence is explicit. Configured observation capacities and the
+independent dense encoders remain unchanged.
+
+Command: `uv run --no-sync python scripts/verify_opponent_memory_storage.py --source experiments/data/opponent-memory/20261116-census/summary.json --out experiments/data/opponent-memory/20261116-storage/receipt.json`.
+The manifest-backed receipt is published in the artifact store and names source
+byte hashes. It uses a **controlled valid synthetic prefix** with 595 records
+and 665,431 distinct detail facts, then retains 16,384 decision references over
+its immutable tails. It does not reconstruct the original corpus or create a
+full padded rollout. The retained census counts imply 1,807,045,512 terminal
+payload bytes before interning across its 1,024 viewer logs; counts alone cannot
+establish their actual cross-record deduplication.
+
+| Component | Bytes | Meaning |
+| --- | ---: | --- |
+| Unique controlled chunks | 21,336,632 | Measured ownership of the one synthetic prefix and all its tails. |
+| Prefix/tail/array metadata | 4,117,503 | CPython ownership accounting for the controlled decision references. |
+| Intern indexes | 196,168 | Retained weak lookup indexes, separately counted. |
+| One selected raw gather peak | 21,344,084 | Host allocation measurement at the maxima. |
+| One host preparation peak | 89,325,995 | Host allocation measurement, excluding the already retained raw gather/model. |
+| One prepared memory input | 37,306,992 | Sum of its array byte sizes. |
+| 256 native padded memory buffers | 8,608,808,960 | Configured buffers remain dense. |
+| 256 selected raw prefixes | 5,462,177,792 | Arithmetic envelope if every selected prefix has both maxima. |
+| Two host batches, raw + prepared | 30,025,535,488 | Includes one-ahead preparation. |
+| One device memory input | 9,550,589,952 | Tensor byte envelope, not measured CUDA residency. |
+| 16 duplicate incident prefixes | 21,565,792 | Shared archive fits 32 MiB; exact tail identities round-trip. |
+
+**Dependent wiring remains stopped.** The original accounting summed a
+48,210,584,703-byte (44.9 GiB) envelope and compared it with the declared
+42,949,672,960 bytes (40 GiB). The concept review correction below supersedes
+that comparison: the envelope combines host and device allocations, while the
+execution limit checks host RSS. The retained receipt bytes are unchanged.
+It excludes ordinary observations, native game logs, preparation temporaries,
+transfer staging, model/optimizer and attention/gradient allocations. This is a
+conservative synthetic envelope, not a measured CUDA peak or evidence that
+ordinary census minibatches require this amount. It establishes neither a safe
+batch size nor throughput. The draft still scans/hashes the dense native prefix
+on capture; sharing its ownership does not remove that work.
+
+Focused storage/model/native parity checks pass, including both encoders and
+summary counts, both viewers/disclosures, coalesced versions, duplicate/shuffled
+gathers, bootstrap, frozen inference, later-update lifetime, serialized supported
+collector replay, corrupt/missing chunks and incident preflight. Existing recovery,
+closure and numerical-health checks also pass. Software gate/CI, headless demo,
+CUDA calibration, calibrated Etude declarations, paid training/evaluation and
+software delivery remain outstanding. No rental or scored run occurred.
+
+### Concept-review correction to resource accounting, 2026-11-16
+
+The retained 44.9 GiB total combines host and device bytes. The recipe's
+`Execution.memory_bytes` limits process-tree host RSS, so comparing that sum
+with 40 GiB does not establish a host-cap failure. The receipt remains unchanged;
+its accounting also excludes the padded bootstrap arrays retained through the
+update, preparation temporaries and detail activations. It establishes no fit.
+
+Keep dependent wiring stopped. Next implement direction: retain bootstrap
+prefixes and gather them only for admission/value evaluation; account for host
+and device peaks separately, including collection, frozen inference, bootstrap,
+learner prefetch and backward. A smaller learner minibatch alone cannot bound
+the other forwards. The controlled fixture's shared tails do not estimate
+independent-game deduplication. Record explicit execution row sizes before
+calibration; preserve full histories, learner clocks, five arms and USD 50 cap.
+No runtime change, new test run or paid experiment occurred in this review.

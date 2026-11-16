@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from manabot.env.memory_store import CompactObservation
 from manabot.env.observation import (
     FACT_COMBAT_RESTRICTION,
     FACT_DETAIL_INDEX,
@@ -88,7 +89,15 @@ def check(obs: ObservationBuffers, spec: Spec, legal: np.ndarray) -> None:
     admit_memory(obs)
     if enabled:
         for key in ("opponent_records", "opponent_details"):
-            if obs[key].shape[1:] != spec.space.encoder.shapes[key]:
+            expected = spec.space.encoder.shapes[key]
+            if isinstance(obs, CompactObservation):
+                axis = 0 if key == "opponent_records" else 1
+                if (
+                    obs.memory_capacities[axis] != expected[0]
+                    or obs[key].shape[1] > expected[0]
+                ):
+                    raise ValueError(f"opponent-memory capacity mismatch: {key}")
+            elif obs[key].shape[1:] != expected:
                 raise ValueError(f"opponent-memory capacity mismatch: {key}")
     lookup = spec.tables.definition_rows
     if spec.space.encoder.one_token and any(

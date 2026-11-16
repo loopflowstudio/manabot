@@ -168,10 +168,10 @@ def census(path: Path) -> Census:
 def runs(revision: str) -> list[Run]:
     """Stop before job construction until the shared memory software ships."""
     raise RuntimeError(
-        "Opponent-memory rollout storage is not ready at the measured pilot size. "
-        "The 512-game census requires 513.125 GiB in the dense rollout store "
-        "at the planned minimum. Review and implement immutable prefix storage, "
-        "then wire calibrated jobs before allocating training. "
+        "Opponent-memory resource sizing is not ready at the measured pilot size. "
+        "Immutable prefix storage is implemented, but the controlled census-max "
+        "256-row gather/prefetch/device envelope exceeds the declared 40 GiB. "
+        "Calibrate an explicit batch size and wire jobs before allocating training. "
         "See experiments/opponent_memory.md."
     )
 

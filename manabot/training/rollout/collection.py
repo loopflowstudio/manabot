@@ -33,6 +33,16 @@ import numpy as np
 
 from manabot.env.failures import CapturedVector
 from manabot.env.match import Match, Reward
+from manabot.env.memory_store import (
+    MEMORY_FIELDS,
+    CompactObservation,
+    MemoryArchive,
+    MemoryStore,
+    Prefix,
+    PrefixIdentity,
+    archive_memory,
+    restore_memory,
+)
 from manabot.env.observation import (
     ACTION_TYPE_DIM,
     ActionEnum,
@@ -99,14 +109,22 @@ class _ObservationRows:
     copies used rows once. Beside the observation fields it keeps each row's
     bucket needs as admission measured them for the acting policy
     (`manabot.policy.buckets.row_needs`; -1 where none were measured), so the
-    learner regroups them instead of measuring the rows again.
+    learner regroups them instead of measuring the rows again. Opponent memory
+    is retained only as immutable prefix references in the collector's shared
+    MemoryStore; it never enters these dense per-update arrays.
     """
 
     def __init__(
         self, buffers: ObservationBuffers, keys: list[str], capacity: int
     ) -> None:
         self._buffers = buffers
-        self._keys = keys
+        self._keys = [key for key in keys if key not in MEMORY_FIELDS]
+        self.memory: list[Prefix] = []
+        self.memory_capacities = (
+            (buffers["opponent_records"].shape[1], buffers["opponent_details"].shape[1])
+            if "opponent_records" in buffers
+            else None
+        )
         self.rows = 0
         self.capacity = max(capacity, 1)
         self._arrays = self._allocate(self.capacity)
@@ -122,9 +140,19 @@ class _ObservationRows:
             for key in self._keys
         }
 
-    def append(self, rows: np.ndarray, needs: np.ndarray | None = None) -> int:
+    def append(
+        self,
+        rows: np.ndarray,
+        needs: np.ndarray | None = None,
+        *,
+        prefixes: tuple[Prefix, ...] = (),
+    ) -> int:
         """Copy buffer `rows` (and their bucket `needs`, when measured) to the end
         of the store; return the first store row."""
+        if self.memory_capacities is not None:
+            if len(prefixes) != len(rows):
+                raise ValueError("missing opponent-memory prefix references")
+            self.memory.extend(prefixes)
         start, stop = self.rows, self.rows + len(rows)
         if stop > self.capacity:
             self.capacity = max(2 * self.capacity, stop)
@@ -189,11 +217,18 @@ class RecordedObservations:
     index: np.ndarray
     # Recorded rows' bucket needs [N, len(AXES)], -1 where unmeasured.
     needs: np.ndarray | None = None
+    memory: tuple[Prefix, ...] = ()
+    memory_capacities: tuple[int, int] | None = None
 
     def gather(self, indexes: np.ndarray) -> dict[str, np.ndarray]:
         """Rows for flat time-major rollout `indexes`, as [batch, ...]."""
         recorded = self.index[indexes]
-        return {key: value[recorded] for key, value in self.rows.items()}
+        rows = {key: value[recorded] for key, value in self.rows.items()}
+        if self.memory_capacities is not None:
+            return CompactObservation(
+                rows, [self.memory[int(i)] for i in recorded], self.memory_capacities
+            )
+        return rows
 
     def gather_needs(self, indexes: np.ndarray) -> np.ndarray | None:
         """Bucket needs of rollout `indexes` measured at collection, or None if
@@ -204,10 +239,10 @@ class RecordedObservations:
         return needs if bool((needs >= 0).all()) else None
 
     def ordered(self, shape: tuple[int, ...]) -> dict[str, np.ndarray]:
-        """Every rollout row gathered into `shape` (time, trajectory) order."""
+        """Ordinary fields in trajectory order; memory requires selected indexes."""
         return {
-            key: value.reshape(*shape, *value.shape[1:])
-            for key, value in self.gather(np.arange(len(self.index))).items()
+            key: array[self.index].reshape(*shape, *array.shape[1:])
+            for key, array in self.rows.items()
         }
 
 
@@ -241,11 +276,20 @@ class RolloutBatch:
         [time,trajectory,...] for bounded inspection. Learners always select a
         minibatch. Object data and compact actions are the only retained owners.
         """
+        if indexes is None and self.recorded.memory_capacities is not None:
+            raise ValueError(
+                "opponent memory requires explicit selected rollout indexes"
+            )
         trajectory_shape = self.actions.shape if indexes is None else None
         if indexes is None:
             indexes = np.arange(self.actions.size)
         rows = self.action_data.unpack(indexes)
-        rows.observation.update(self.recorded.gather(indexes))
+        observed = self.recorded.gather(indexes)
+        if isinstance(observed, CompactObservation):
+            observed.update(rows.observation)
+            rows.observation = observed
+        else:
+            rows.observation.update(observed)
         if trajectory_shape is not None:
             rows.observation = {
                 key: value.reshape(*trajectory_shape, *value.shape[1:])
@@ -257,7 +301,7 @@ class RolloutBatch:
         return rows
 
     def ordered_obs(self) -> ObservationBuffers:
-        """Non-action fields gathered into [time, trajectory, ...] order."""
+        """Ordinary non-action fields in [time, trajectory, ...] order."""
         return self.recorded.ordered(self.actions.shape)
 
 
@@ -353,6 +397,7 @@ class CollectorSnapshot:
     current_games: CurrentGames | None = None
     adaptive: AdaptiveSnapshot | None = None
     decks_digest: str | None = None
+    memory: MemoryArchive | None = None
 
 
 _ACTION_TYPE_NAMES = {int(member): member.name.lower() for member in ActionEnum}
@@ -587,6 +632,11 @@ class SeatRoutedCollector:
             self._observations = _ObservationRows(
                 self._buffers, self._observation_keys, 0
             )
+            self._memory_store = (
+                MemoryStore(self._observations.memory_capacities)
+                if self._observations.memory_capacities is not None
+                else None
+            )
 
             if opponent_mode == "random":
                 self._opponent: Any = RandomBatchController(seed=seed + 1)
@@ -623,7 +673,11 @@ class SeatRoutedCollector:
             raise ValueError("collector snapshot requires committed adaptive scores")
         return CollectorSnapshot(
             deepcopy(self._journal),
-            {key: value.copy() for key, value in self._buffers.items()},
+            {
+                key: value.copy()
+                for key, value in self._buffers.items()
+                if key not in MEMORY_FIELDS
+            },
             self.numerics.snapshot_rng(),
             deepcopy(self.stats),
             CurrentGames(self._env.current_game_seeds(), deepcopy(self._game_actions))
@@ -639,6 +693,12 @@ class SeatRoutedCollector:
             if self._sampler is not None
             else None,
             self._decks_digest,
+            archive_memory(
+                self._capture_memory(np.arange(self.num_envs)),
+                self._memory_store.capacities,
+            )
+            if self._memory_store is not None
+            else None,
         )
 
     def restore(self, state: CollectorSnapshot, check: Callable[[], None]) -> None:
@@ -709,6 +769,25 @@ class SeatRoutedCollector:
                 continue
             if not np.array_equal(self._buffers[key], expected):
                 raise ValueError(f"collector replay diverged: {key}")
+        if self._memory_store is not None:
+            if (
+                state.memory is None
+                or state.memory.capacities != self._memory_store.capacities
+            ):
+                raise ValueError("missing or incompatible collector memory archive")
+            expected_prefixes = restore_memory(state.memory)
+            actual_prefixes = self._capture_memory(np.arange(self.num_envs))
+            if len(expected_prefixes) != len(actual_prefixes) or any(
+                expected.identity != actual.identity
+                or [c.key for c in expected.records] != [c.key for c in actual.records]
+                or [c.key for c in expected.details] != [c.key for c in actual.details]
+                for expected, actual in zip(
+                    expected_prefixes, actual_prefixes, strict=True
+                )
+            ):
+                raise ValueError("collector replay diverged: opponent memory")
+        elif state.memory is not None:
+            raise ValueError("unexpected collector memory archive")
         self._journal = deepcopy(state.journal)
         self.numerics.restore_rng(state.sampling_rng)
         self.stats = deepcopy(state.stats)
@@ -771,11 +850,35 @@ class SeatRoutedCollector:
     ) -> np.ndarray:
         if self.opponent_mode == "self":
             return inference.opponent_actions(self._slice_obs_rows(rows))
-        return self._opponent.select(self._buffers, rows)
+        if self.opponent_mode == "random":
+            return self._opponent.select(self._buffers, rows)
+        return self._opponent.select(self._slice_obs_rows(rows), np.arange(len(rows)))
+
+    def _capture_memory(self, rows: np.ndarray) -> tuple[Prefix, ...]:
+        if self._memory_store is None:
+            return ()
+        seeds = self._env.current_game_seeds()
+        seats = self._env.current_agent_indices()
+        return tuple(
+            self._memory_store.capture(
+                self._buffers,
+                int(row),
+                PrefixIdentity(str(seeds[row]), int(seats[row]), str(seeds[row])),
+            )
+            for row in rows
+        )
 
     def _slice_obs_rows(self, rows: np.ndarray) -> ObservationBuffers:
         """Host observation rows with the training action-focus dtype."""
-        obs = {key: self._buffers[key][rows] for key in self.observation_space.shapes}
+        obs = {
+            key: self._buffers[key][rows]
+            for key in self.observation_space.shapes
+            if key not in MEMORY_FIELDS
+        }
+        if self._memory_store is not None:
+            obs = CompactObservation(
+                obs, self._capture_memory(rows), self._memory_store.capacities
+            )
         # Training convention (VectorEnv): action_focus as float32.
         obs["action_focus"] = obs["action_focus"].astype(np.float32)
         return obs
@@ -1391,11 +1494,18 @@ class SeatRoutedCollector:
         acting: np.ndarray,
         inference: CollectionScope,
     ) -> np.ndarray:
-        sampled = inference.sample(self._slice_obs_rows(rows), self.profiler)
+        observation = self._slice_obs_rows(rows)
+        sampled = inference.sample(observation, self.profiler)
         acts, logprobs, values = sampled.actions, sampled.logprobs, sampled.values
         outcomes, needs = sampled.outcomes, sampled.needs
         with self.profiler.track("Rollout recording"):
-            first = self._observations.append(rows, needs)
+            first = self._observations.append(
+                rows,
+                needs,
+                prefixes=observation.prefixes
+                if isinstance(observation, CompactObservation)
+                else (),
+            )
             packed = PackedActions.pack(
                 {
                     key: self._buffers[key][rows]
@@ -1462,10 +1572,9 @@ class SeatRoutedCollector:
         rewards = np.zeros((num_steps, num_envs), dtype=np.float32)
         dones = np.zeros((num_steps, num_envs), dtype=bool)
         values = np.zeros((num_steps, num_envs), dtype=np.float32)
-        next_obs = {
-            key: self._buffers[key][:num_envs].copy()
-            for key in self.observation_space.shapes
-        }
+        if num_envs > self.num_envs:
+            raise ValueError("bootstrap rows exceed native streams")
+        next_obs = self._slice_obs_rows(np.arange(num_envs))
         next_done = np.zeros((num_envs,), dtype=bool)
         # Flatten in time-major order, matching scalar credit/selected actions.
         action_data = PackedActions.concatenate(
@@ -1513,6 +1622,8 @@ class SeatRoutedCollector:
                 self._observations.arrays(),
                 obs_rows.reshape(-1),
                 self._observations.needs(),
+                tuple(self._observations.memory),
+                self._observations.memory_capacities,
             ),
             actions=actions,
             logprobs=logprobs,

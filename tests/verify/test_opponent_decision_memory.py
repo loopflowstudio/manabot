@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 from manabot.env.match import Match
+from manabot.env.memory_store import CompactObservation, MemoryStore, PrefixIdentity
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ObservationConfig
 import managym
@@ -69,6 +70,17 @@ def test_opponent_memory_live_native_python_replay_fork_and_roundtrip(
         env.encode_observation_into(obs, actual)
         for key in ("opponent_records", "opponent_details"):
             np.testing.assert_array_equal(actual[key], expected[key])
+        store = MemoryStore((32, 32768))
+        prefix = store.capture(
+            {key: value[None] for key, value in actual.items()},
+            0,
+            PrefixIdentity("native-replay", seat, "root"),
+        )
+        compact = CompactObservation({}, [prefix], (32, 32768))
+        for key, width in (("opponent_records", 18), ("opponent_details", 8)):
+            rows = compact[key].shape[1]
+            np.testing.assert_array_equal(compact[key][0], expected[key][:rows])
+            assert compact[key].shape[-1] == width
         restored = managym.Observation.from_json(obs.toJSON())
         assert json.loads(restored.opponent_memory_json()) == json.loads(
             obs.opponent_memory_json()
