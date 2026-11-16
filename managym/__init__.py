@@ -4,9 +4,12 @@ The engine types are implemented by PyO3 and described in ``__init__.pyi``;
 shared decision/protocol adapters live beside this module.
 """
 
-from collections.abc import Callable
+from __future__ import annotations
+
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 import sys
-from typing import Literal, ParamSpec, TypeVar
+from typing import Literal, ParamSpec, TypeVar, overload
 import warnings
 
 from . import _managym
@@ -52,20 +55,38 @@ learning_record_names = _deprecated_alias(
 )
 
 
-class GameSetup(list[_managym.PlayerConfig]):
-    """Two seats and one game disclosure; mixed draws 50/50 from the reset seed.
+@dataclass(frozen=True, init=False)
+class GameSetup(Sequence[_managym.PlayerConfig]):
+    """Read-only seats and one game disclosure; slices preserve disclosure.
 
-    List behavior retains seat ordering for callers inspecting decks. Native
-    reset reads ``decklists`` once, independently of deck and shuffle draws.
+    Native reset resolves mixed 50/50 from the reset seed, independently of
+    deck and shuffle draws. Iterating exposes seats, not a complete game setup.
     """
+
+    players: tuple[_managym.PlayerConfig, ...]
+    decklists: Literal["open", "closed", "mixed"]
 
     def __init__(
         self,
-        players: list[_managym.PlayerConfig],
+        players: Sequence[_managym.PlayerConfig],
         *,
         decklists: Literal["open", "closed", "mixed"] = "open",
     ) -> None:
         if decklists not in ("open", "closed", "mixed"):
             raise ValueError("decklists must be open, closed or mixed")
-        super().__init__(players)
-        self.decklists = decklists
+        object.__setattr__(self, "players", tuple(players))
+        object.__setattr__(self, "decklists", decklists)
+
+    def __len__(self) -> int:
+        return len(self.players)
+
+    @overload
+    def __getitem__(self, index: int) -> _managym.PlayerConfig: ...
+
+    @overload
+    def __getitem__(self, index: slice) -> "GameSetup": ...
+
+    def __getitem__(self, index: int | slice) -> _managym.PlayerConfig | "GameSetup":
+        if isinstance(index, slice):
+            return GameSetup(self.players[index], decklists=self.decklists)
+        return self.players[index]

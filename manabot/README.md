@@ -102,7 +102,9 @@ play still arrives: a revealed card appears in `known_hand` while it stays in
 that hand.
 
 The native `GameSetup(players, decklists="closed")` carries one value for the
-whole game. `MatchConfig.from_players(first, second, decklists="closed")`
+whole game. It is a read-only seat sequence; slicing preserves disclosure.
+A plain list of seats uses the open default.
+`MatchConfig.from_players(first, second, decklists="closed")`
 records native seats and rejects differing worlds. The old
 `PlayerConfig.disclosure` alias warns and will be removed in 0.4.0; disagreeing
 legacy seat values raise when creating a game. Evaluation matchups take

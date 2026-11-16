@@ -48,7 +48,7 @@ class PlayerSetup(BaseModel):
 
     @classmethod
     def retain(
-        cls, player: managym.PlayerConfig, decklists: Literal["open", "closed"] = "open"
+        cls, player: managym.PlayerConfig, decklists: Literal["open", "closed"]
     ) -> "PlayerSetup":
         return cls(
             name=player.name,
@@ -58,25 +58,10 @@ class PlayerSetup(BaseModel):
             disclosure=decklists,
         )
 
-    def native(self) -> managym.PlayerConfig:
-        return managym.PlayerConfig(**self.model_dump(exclude={"disclosure"}))
 
-
-def _retain_players(
-    players: list[managym.PlayerConfig], seed: int
-) -> list[PlayerSetup]:
+def _retain_players(players: managym.GameSetup, seed: int) -> list[PlayerSetup]:
     disclosure = managym.resolve_decklists(players, seed)
     return [PlayerSetup.retain(player, disclosure) for player in players]
-
-
-def retained_setup(players: list[PlayerSetup]) -> managym.GameSetup:
-    """Rebuild retained per-seat spelling as one game value, rejecting disagreement."""
-    values = {player.disclosure for player in players}
-    if len(values) != 1:
-        raise ValueError("retained per-seat disclosure values disagree")
-    return managym.GameSetup(
-        [player.native() for player in players], decklists=values.pop()
-    )
 
 
 class GameInputs(BaseModel):
@@ -92,6 +77,19 @@ class GameInputs(BaseModel):
         if len({player.disclosure for player in self.players}) > 1:
             raise ValueError("retained per-seat disclosure values disagree")
         return self
+
+    def setup(self) -> managym.GameSetup:
+        """Rebuild retained seats with one game value, rejecting disagreement."""
+        values = {player.disclosure for player in self.players}
+        if len(values) != 1:
+            raise ValueError("retained per-seat disclosure values disagree")
+        return managym.GameSetup(
+            [
+                managym.PlayerConfig(**player.model_dump(exclude={"disclosure"}))
+                for player in self.players
+            ],
+            decklists=values.pop(),
+        )
 
     def restart(self, seed: int) -> None:
         """Keep the stream's setup, discard all inputs from its previous game."""
@@ -482,7 +480,7 @@ class ScalarCapture(_Capture):
         self.inputs = GameInputs(seed=seed, players=[])
         self.journal: Path | None = None
 
-    def reset(self, env: managym.Env, players: list[managym.PlayerConfig]) -> Any:
+    def reset(self, env: managym.Env, players: managym.GameSetup) -> Any:
         # The heterogeneous native observation/info tuple stays at this boundary.
         self.started = time.perf_counter()
         self.inputs = GameInputs(
@@ -779,12 +777,10 @@ class CapturedVector(_Capture):
             "deck_ids": [player.name for player in decks],
         }
 
-    def reset_all_into_buffers(self, players: list[managym.PlayerConfig]) -> None:
+    def reset_all_into_buffers(self, players: managym.GameSetup) -> None:
         self.reset_each_into_buffers([players for _ in self.games])
 
-    def reset_each_into_buffers(
-        self, players: list[list[managym.PlayerConfig]]
-    ) -> None:
+    def reset_each_into_buffers(self, players: list[managym.GameSetup]) -> None:
         for game, setup, seed in zip(self.games, players, self.next_seeds, strict=True):
             game.players = _retain_players(setup, seed)
             game.restart(seed)
@@ -793,7 +789,7 @@ class CapturedVector(_Capture):
         self._synchronize()
 
     def reassign_roots_into_buffers(
-        self, players: list[list[managym.PlayerConfig] | None]
+        self, players: list[managym.GameSetup | None]
     ) -> None:
         """Retain new setups only after native atomic fresh-root validation."""
         proposed = [game.model_copy(deep=True) for game in self.games]

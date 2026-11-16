@@ -18,7 +18,6 @@ from manabot.env.failures import (
     GameInputs,
     TrainingExposureReceipt,
     capture_scope,
-    retained_setup,
 )
 from manabot.infra.config import MatchConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256
@@ -40,7 +39,7 @@ def record_actions(
     """Reconstruct one complete game, refusing missing or unoffered decisions."""
     if len(setup.players) != 2:
         raise ValueError("a game requires two player setups")
-    native = retained_setup(setup.players)
+    native = setup.setup()
     first, second = native
     game: dict[str, Any] = {
         "match_id": f"recorded:{canonical_sha256({'setup': setup.model_dump(), 'source': source})}",

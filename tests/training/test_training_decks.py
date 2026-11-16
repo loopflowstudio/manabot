@@ -474,7 +474,7 @@ def test_failure_records_actual_sampled_decks(
             if sampled:
                 probe.set_training_decks(decks.players())
             root = Match(decks.match_config()).to_rust()
-            root.decklists = disclosure
+            root = managym.GameSetup(root, decklists=disclosure)
             probe.reset_all(root)
             assert attempt.matchup == MatchConfig.from_players(
                 *probe.current_player_configs()[0],
@@ -663,7 +663,7 @@ def test_mixed_source_closed_streams_match_all_closed_inputs(
     for vector, mode in ((mixed, "mixed"), (closed, "closed")):
         vector.set_training_decks(decks.players())
         root = Match(decks.match_config()).to_rust()
-        root.decklists = mode
+        root = managym.GameSetup(root, decklists=mode)
         vector.reset_all(root)
     actual = mixed.current_player_configs()
     mask = np.array([setup.decklists == "closed" for setup in actual])

@@ -77,7 +77,7 @@ from manabot.training.state.game_errors import (
     GameErrorState,
     GameOutcome,
 )
-from managym import WORLD_SETUP, Deck
+from managym import WORLD_SETUP, Deck, GameSetup
 
 OPPONENT_MODES = ("random", "frozen", "self", "learning")
 
@@ -573,7 +573,7 @@ class SeatRoutedCollector:
             elif matchup_curriculum in ("fixed", "elemental-uniform"):
                 setup = match.to_rust()
                 if deck_source is not None:
-                    setup.decklists = deck_source.decklists
+                    setup = GameSetup(setup, decklists=deck_source.decklists)
                 self._env.reset_all_into_buffers(setup)
             else:
                 self._env.reset_each_into_buffers(

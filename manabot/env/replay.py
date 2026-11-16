@@ -19,7 +19,6 @@ import numpy as np
 from manabot.env.failures import (
     FailureEvidence,
     GameInputs,
-    retained_setup,
     runtime_identities,
 )
 import managym
@@ -151,9 +150,9 @@ def _replay_game_inputs(
     try:
         agreement.at_retained_failure = retained_phase == "reset"
         if evidence.mode == "vector":
-            env.reset_all(retained_setup(game.players))
+            env.reset_all(game.setup())
         else:
-            env.reset(retained_setup(game.players))
+            env.reset(game.setup())
         phase = "prefix"
         for index, action in enumerate(game.actions):
             if (

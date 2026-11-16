@@ -5434,7 +5434,8 @@ pub(crate) fn game_setup(value: &Bound<'_, PyAny>) -> PyResult<crate::state::pla
             "deprecated per-seat disclosure values disagree",
         ));
     }
-    let decklists = if value.hasattr("decklists")? {
+    let setup_type = value.py().import_bound("managym")?.getattr("GameSetup")?;
+    let decklists = if value.is_instance(&setup_type)? {
         let name: String = value.getattr("decklists")?.extract()?;
         match name.as_str() {
             "open" => DecklistMode::Open,
