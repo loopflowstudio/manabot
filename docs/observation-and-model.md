@@ -555,8 +555,10 @@ maxima. Bootstrap retains prefixes; controlled CPU execution reports host
 residency separately from device inputs and activations.
 The earlier repeated-reference layout measured a 27.33 GiB host peak in an
 independent 256-stream CPU cohort with 2/2/2 execution limits; see the [resource report](../experiments/opponent_memory.md#independent-game-host-measurement-2026-11-16)
-for its scope. Host residency and runtime cost of the new snapshot layout have
-not been measured. CUDA worker admission and the three-arm pilot remain outstanding;
+for its scope. Host residency of the new snapshot layout has not been measured;
+on CPU, log-control collection costs 1.44× the history-disabled median
+([report](../experiments/opponent_memory.md#shared-snapshots-and-table-wide-admission-2026-11-16)).
+CUDA worker admission and the three-arm pilot remain outstanding;
 the intended interface follows.
 
 To let a Torch policy use the opponent's earlier choices, select an encoder and
@@ -610,7 +612,7 @@ a no-history control, after supervised probes select one shared summary count.
 | `decision_memory` | `"none"` (default), `"transformer"` or `"gru"`. Memory is opt-in. |
 | `decision_memory_summaries` | 1 or 4 for either encoder; default 4. Ignored when memory is `"none"`. |
 | `attention_on`, `policy_film` | Both must be `True` for memory. FiLM carries board context to actions without focus objects. |
-| `recent_events` | Must be `False` when opponent memory is enabled. The bounded event encoder remains a separate option. |
+| `recent_events` | Must be `False` when decision memory is enabled. The bounded event encoder remains a separate option. |
 
 A no-history control can use `decision_memory="none"` with the same positive
 observation capacities. Native encoding, immutable prefix retention and input
@@ -751,8 +753,11 @@ remain explicit and different actors never coalesce. Native scalar/vector
 constructors take the same default-false keyword; library training wrappers pass
 it from `ObservationConfig`. Configure it before reset, since missing history
 cannot be filled in later. Primary census and CPU comparisons keep it false.
-Reciprocal decklist-disclosure observability belongs to PR #547; this change
-adds no competing disclosure flag.
+Disclosure is currently per player (`PlayerConfig.disclosure`), and no
+observation states whether the opponent knows your list, so own-seat records
+cannot tell the policy that. Memory adds no disclosure flag: PR #547 makes
+disclosure one game-level setting with a public bit and rejects asymmetric
+settings, which makes the bit reciprocal.
 
 The existing J1 join remains. Zero summary outputs do not establish a
 control-equivalent initial function because attention normalization changes.

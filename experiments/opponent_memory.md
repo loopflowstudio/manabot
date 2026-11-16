@@ -19,24 +19,31 @@ judgment, not a precomputed verdict.
 
 ## Method (planned, not executed)
 
-Use five arms with three independent training seeds per arm, sharing
-seed labels across arms for blocking. The seed, not an evaluation game, is the
-unit of learning evidence. No factorial cross and no dedicated control-deck
-training arm in this pilot; stratify the existing Elemental matchups instead.
+A supervised probe comes first, then three paid arms with three independent
+training seeds each, sharing seed labels across arms for blocking. The seed, not
+an evaluation game, is the unit of learning evidence. No factorial cross and no
+dedicated control-deck training arm in this pilot; stratify the existing
+Elemental matchups instead.
 
-| Arm | Changes from best guess |
+The probe fits transformer and GRU encoders with one and four summaries on frozen
+policy games split by whole game, with privileged labels kept outside every
+observation. Held-out probe loss chooses one shared summary count K (CPU cost
+breaks ties, then K=1). A weak probe does not show that reinforcement learning
+cannot use memory.
+
+| Arm | Changes from the incumbent |
 | --- | --- |
 | No history | Incumbent; no memory tokens or recent events |
-| Transformer, four summaries | Best guess: two record-transformer layers, four summary tokens |
-| GRU, four summaries | Single-layer GRU, same record width and four summary tokens |
-| Transformer, one summary | One summary token instead of four |
-| GRU, one summary | Single-layer GRU, one summary token |
+| Transformer, K summaries | Two pre-norm bidirectional record-transformer layers |
+| GRU, K summaries | Single-layer GRU over the full prefix, same record width |
 
-Jack Heart selected transformer and GRU, extra board tokens (J1), and summary
-counts 1 and 4; see `scratch/questions.md` for the exact direction. This replaces
-the earlier six-arm proposal. The experiment module declares these five arms
-but deliberately stops before job construction until resource sizing, CUDA admission
-and calibrated job wiring are ready. The implementation plan is
+Jack Heart selected transformer and GRU with extra board tokens (J1), then
+"Probe first; choose K, then run three arms", which replaces the five-arm pilot;
+see `scratch/questions.md` for the exact direction. The experiment module lists
+the four probe candidates and the control but stops before job construction
+until resource sizing, CUDA admission and calibrated job wiring are ready.
+Opponent-only records are the measured workload; the default-false
+`decision_memory_include_own` option adds no arm. The implementation plan is
 `scratch/opponent-memory-design.md`.
 
 Torch only; MLX support is outside this task. Assumption: memory width 64,
@@ -107,18 +114,18 @@ this one experiment.
    rebind old worlds or substitute freshly played games without dating the change.
    Random games size the first capacity; the paid pilot must also report its own
    lengths, failures and peak memory because learned play can be longer.
-2. **Calibration, at most USD 3.** On one authorized GPU host, interleave real
-   no-history repeats with the four memory arms using retained replay inputs and
+2. **Probe and calibration, at most USD 3 combined.** On one authorized GPU host, interleave real
+   no-history repeats with the selected memory arms using retained replay inputs and
    short production-path updates. Include initialization/checkpoint reload and
    native encoding, preparation, collection inference, learner and peak memory.
    No artificial load. Separate replayed phase timings from whole-update rates.
    Record host CPU/quota, GPU, source/world/input and precision. Use these readings
    to choose one common learner-decision horizon and milestone spacing that fit
-   the training allowance; date that choice here before training. If five arms
+   the training allowance; date that choice here before training. If three arms
    cannot fit meaningful learning, report that rather than covertly narrowing the
    comparison or making a learning claim from smoke updates.
-3. **Learning pilot, at most USD 27.** Fifteen fresh runs, seeds 39101–39103,
-   five arms, at most USD 1.80 each including startup and finalization. Inspect
+3. **Learning pilot, at most USD 27.** Nine fresh runs, seeds 39101–39103,
+   three arms, at most USD 3.00 each including startup and finalization. Inspect
    PR #547 / Task 4b0591 before freezing: if mixed per-game disclosure training
    has landed, use a balanced open/closed mix identically across arms; otherwise
    train open lists and label closed-list evaluation as a disclosure shift.
@@ -248,6 +255,14 @@ throughput comparison. Focused CPU checks exercise both encoder choices, both
 summary counts, independent actor/value gradients, checkpoint reload, padded/live/
 compact/bucketed paths and bounded ordinary updates. Those fixtures establish
 implementation health, not learnability or readiness at the intended load.
+
+Shared viewer snapshots now replace repeated reference programs: the padded
+memory payload falls from 33,628,160 to 645,120 bytes per viewer (98.1%) at
+capacities 1,024 records, 8,192 details, 256 snapshots and 16,384 members. With
+table-wide admission, CPU log-control collection is **1.44×** its history-disabled
+incumbent median (2.203 s versus 1.528 s per 250 decisions), so the roughly 10%
+guide is not met on CPU; see the
+[dated entry](#shared-snapshots-and-table-wide-admission-2026-11-16).
 
 Training/evaluation declarations still stop before constructing jobs. Dependent
 wiring is stopped pending full resource admission; there was no paid run
@@ -832,3 +847,28 @@ coalesced-tail versions, typed overflow and fork/replay identity stay required.
 The unchanged-contract checks passed 16 tests. This is CPU attribution, not
 256-stream admission, a whole training update, CUDA throughput, learning or
 strength evidence. No rental, paid calibration or pilot ran.
+
+### Shared snapshots and table-wide admission, 2026-11-16
+
+Each native viewer log interns exact entitled reference snapshots once; records
+own ordered mana/response/choice members and fixed context columns. At seed 166's
+484-record prefix, detail rows fall from 546,812 to 4,863 and live table bytes
+from 17,532,832 to 333,320. Canonical expanded histories, independent Python
+encoding, prefix gather and every ordinary frozen buffer match the earlier layout.
+The featurizer changed (nonlinear field/value binding before pooling, separate
+member groups), so learned outputs are not comparable with the earlier layout.
+
+Admission then replaced per-record, per-group and per-reference loops with
+table-wide checks. Against the shared-snapshot commit `f5688cf686`, five
+alternating CPU processes per source reduced log-control collection from
+**7.353 s [6.202, 7.845] to 2.203 s [1.747, 5.803]** per 250 decisions/two games,
+and 484-record dense admission from 78.301 ms to 2.596 ms. A 4,298-case
+differential corpus found no acceptance or rejection mismatch; it is finite and
+does not compare first-error precedence. Collector action, value, log-probability
+and ordinary-buffer digests matched across sources. Learned long-prefix cost ranges
+overlap and remain inconclusive. Host load ranged 37.71–192.42 without induced
+load, so these are bounded CPU readings, not CUDA, learner-update, host-fit,
+learnability or strength results. Two later behavior-preserving simplifications
+(`Prefix.tables`, a hoisted `definition_programs()` lookup) passed the same
+corpus; the final measurement re-freezes their source hashes. Receipts remain
+local in `.runs/decision-memory-admission/` until evidence packaging.
