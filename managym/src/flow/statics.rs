@@ -223,7 +223,9 @@ impl Game {
         let context = Context::evaluate(self, sources);
         let mut objects = vec![None; self.state.permanents.len()];
         let mut library_top_visibility = [false; 2];
+        let mut dynamic_activations = false;
         for (id, object) in context.objects {
+            dynamic_activations = dynamic_activations || object.view.has_dynamic_activations();
             if !self.is_phased_out(id)
                 && object
                     .view
@@ -238,10 +240,7 @@ impl Game {
         LayerBoard {
             reads_mana: context.reads_mana,
             reads_tapped: context.reads_tapped,
-            dynamic_activations: objects
-                .iter()
-                .flatten()
-                .any(|view| view.has_dynamic_activations()),
+            dynamic_activations,
             objects,
             library_top_visibility,
         }
