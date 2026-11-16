@@ -353,3 +353,12 @@ its unsubmitted request was retained as refused. A compatible A40offer is
 available at USD0.59/hour (8CPU,48GBhost RAM,48GBGPU RAM). Use that hardware
 with the already validated8-hour job and a10-hour/USD9capped lease. Model,
 learning state, population, source fix and update target are unchanged.
+
+2026-11-16 actual placement: A40 creation was refused and its queued run
+d8fcdefb8954 cancelled at USD0. The A6000 create returned an error and was
+reconciled absent before further rental. L40S physical pod54nyt8pei6pcsj was
+then confirmed under leasemtg265-resume-l40s-940d649e7262. Use6-hour job
+(19,200second training watchdog plus reserves), inside the8-hour/USD9lease;
+priceUSD1.09/hour. Absolute500-update target,66update parent, optimizer/EMA,
+900decks and learning schedule unchanged. If wall-limited, export learner
+state rather than exceed the cap. Slow journaling remains disabled.
