@@ -17,7 +17,7 @@ run as proof of non-inferiority. Report the size and uncertainty of regressions;
 the roughly 10% throughput cost mentioned in the task is context for that
 judgment, not a precomputed verdict.
 
-## Method (planned, not executed)
+## Method (paid pilot planned)
 
 A supervised probe comes first, then three paid arms across three independent
 seed labels, shared across arms for blocking: nine branch runs from three
@@ -26,34 +26,22 @@ an evaluation game, is the unit of learning evidence. No factorial cross and no
 dedicated control-deck training arm in this pilot; stratify the existing
 Elemental matchups instead.
 
-### Supervised probe (planned, not executed)
+### Supervised probe
 
-Do summaries of the opponent's past decisions say anything about the opponent's
-hand that the current public state does not? The probe answers that on a
-laptop, at no cost, and fixes the summary count K for the paid arms:
+Do summaries of the opponent's past decisions improve hand prediction over the
+coarse current-state vector below? The probe runs locally, at no rental cost,
+and fixes the summary count K for the paid arms:
 
 ```bash
 uv run python -m experiments.opponent_memory probe --out .runs/decision-memory-probe
 ```
 
-It prints one table of held-out per-card log loss, each memory row also as its
-difference from the state-only row with a game-bootstrap interval, separately
-for open and closed decklists (values appear when it runs):
-
-```text
-candidate          open                     closed
-analytic           <loss>                   <loss>
-state only         <loss>                   <loss>
-transformer K=1    <loss>  <diff [lo, hi]>  <loss>  <diff [lo, hi]>
-transformer K=4    ...
-gru K=1            ...
-gru K=4            ...
-selected K: <1|4> (<reason>)
-games <n>  rows <n>  capacity overflows <n>
-```
-
-and writes the same content to `summary.json` in the output directory. Use a
-fresh directory.
+The command prints held-out per-card log loss and paired differences from the
+state-only baseline, separately by disclosure, then the selected K and counts.
+It writes `summary.json`, `selection.json`, sampled inputs, separate labels,
+action journals, fitted weights, predictions and source/runtime receipts. Use a
+fresh directory. The [completed local probe](#supervised-probe-result--2026-11-16)
+selected K=1 for both paid memory arms.
 
 - **Games.** The native heuristic plays both seats over the Elemental 10-deck
   roster, with a separate stateful selector per native seat, uniform ordered
@@ -88,8 +76,13 @@ fresh directory.
 - **Cost.** Local CPU, no rental. The game count is sized from a 20-game timing
   smoke so that all fits finish within two hours.
 
-Limits: these are scripted games, not learned play, so the probe can mislead K;
-hand presence is one use of memory among several; a weak probe does not show
+Limits: these are scripted games, not learned play, so the probe can mislead K.
+The state vector omits current known-hand minima, exact library positions,
+stack and sideboard knowledge; improvement over it cannot establish information
+beyond the full native observation. The frequency baseline approximates hand
+presence and uses the roster-wide main-deck prior for closed lists. Capacity
+exclusions remove whole games and can bias the sample against long prefixes.
+Hand presence is one use of memory among several; a weak probe does not show
 that reinforcement learning cannot use memory. Repeating the probe on the
 trunks' own self-play games is an optional check inside the budget and does not
 change the chosen K.
@@ -276,7 +269,7 @@ USD 50 total, not an additional budget. The task already authorizes this amount.
 
 Jack Heart's 2026-11-16 direction was to consider the remaining #547/#550
 experiments in this series after both landed. The history layout must settle
-first, and these share the same USD50 total. The core probe, K selection and
+first, and these share the same USD 50 total. The core probe, K selection and
 three-arm pilot retain priority.
 
 - **B1:** compare the mixed-training control with open-only and closed-only
@@ -1103,3 +1096,85 @@ The artifact guard passed; no servers, watchers or background workers remain. Th
 software/cost evidence only: the 10% guide, common-trunk/control-equivalent
 initialization, CUDA/update/resource admission, probe, learnability and strength remain
 unresolved.
+
+
+## Supervised probe result — 2026-11-16
+
+**Use K=1 for both pilot encoders.** The validation difference K4−K1, averaged
+across both encoders and three fitting seeds, was +0.002763 log loss with a
+95% game-bootstrap interval [−0.000620, +0.006803]. K4 did not meet the
+predeclared improvement criterion. Aggregate fit wall time across the six
+memory fits per K was 1917.7 s for K1 and 2047.2 s for K4, selecting
+K1 under the CPU-cost tie-break. These are supervised fit times, not policy
+collection throughput or CUDA admission.
+
+The corrected command exited 0:
+
+```bash
+uv run python -m experiments.opponent_memory probe --max-games 60 --out .runs/decision-memory-probe-roster-20261116
+```
+
+Source `383f33c11a` integrates main `5af8490a1c9b`, including #547 and #550.
+World is `w17` with the current v11 disclosure/library/memory layout;
+the release CP313 extension SHA256 is
+`58a9f152d8ca0bd09bbc61fb978124112593e04a2aa60926a1194c015e6c3875`.
+Runtime: ordinary CPython 3.13.15, Torch 2.15.0, macOS ARM64, CPU float32,
+one Torch thread. The 20-game smoke took 41.85 s to collect and 9.39 s for
+one transformer epoch, admitting the predeclared 60-game ceiling. The completed
+run took 4218.49 s (70.31 min), within its 7,200 s cap.
+Launcher cost: USD 0; no rental or paid arm was launched.
+
+Of 60 attempted games, 57 completed, three exceeded capacity and none hit the
+2,000-decision cap. Whole failing games were excluded, with their errors and
+committed action prefixes retained. The corpus has 1,812 sampled decisions and
+94 target definitions from roster main decks **and sideboards**. Fit games:
+19 open/20 closed; validation: five per disclosure; test: four per disclosure.
+Each native seat owns a separate stateful heuristic. Labels were taken before
+the corresponding action and remain outside observations, Prepared and journals.
+The test split was scored only after `selection.json` recorded K.
+
+Below: game-weighted per-card Bernoulli log loss and paired difference from
+state-only; lower is better. Intervals resample whole games, conditional on the
+three fitting seeds 39101–39103. There are only four test games per disclosure.
+
+| Candidate | Open loss [95% CI] | Open Δ state [95% CI] | Closed loss [95% CI] | Closed Δ state [95% CI] |
+| --- | --- | --- | --- | --- |
+| analytic | 0.076012 [0.038787, 0.114522] | — | 0.170632 [0.134304, 0.206960] | — |
+| state-only | 0.082362 [0.055015, 0.119659] | — | 0.137563 [0.098612, 0.176514] | — |
+| transformer-k1 | 0.082100 [0.059532, 0.117065] | -0.000262 [-0.003547, +0.003640] | 0.121899 [0.085031, 0.158767] | -0.015664 [-0.020007, -0.011310] |
+| transformer-k4 | 0.082033 [0.057248, 0.120137] | -0.000329 [-0.007129, +0.005664] | 0.122076 [0.083831, 0.160321] | -0.015487 [-0.023381, -0.006887] |
+| gru-k1 | 0.076052 [0.052790, 0.110854] | -0.006311 [-0.013658, +0.001037] | 0.121987 [0.087174, 0.156800] | -0.015576 [-0.021861, -0.010578] |
+| gru-k4 | 0.078884 [0.053209, 0.116479] | -0.003478 [-0.012013, +0.004759] | 0.126261 [0.091968, 0.160554] | -0.011302 [-0.015960, -0.002949] |
+
+On these held-out closed games, every memory row has a negative paired
+interval relative to the coarse state baseline. Every open-list paired-difference interval crosses
+zero. This readout is conditional on scripted play, a small corpus, one fitting
+recipe and capacity admission. The baseline omits current known-hand/library,
+stack and sideboard facts; the result cannot establish information beyond the
+full native observation. It supplies the planned K choice, with no RL,
+playing-strength or policy-adoption result. Own-seat inclusion remains off.
+
+Three interrupted attempts preceded this result: the first predated integration
+of the upstream knowledge/disclosure world; the second shared one stateful
+heuristic across seats; the third omitted four sideboard-only target definitions.
+All stopped before K selection. Their logs and source receipts are retained;
+the corrected corpus and fits use none of their rows or weights. A directed
+replay at seed 48103, decision 101 catches the selector bug, and target coverage now
+rejects any physical hand definition absent from the roster vocabulary.
+
+Evidence is manifest-backed under
+`experiments/data/opponent-memory/20261116-supervised-probe`: the complete
+archive, per-member integrity record, summary, selection, runtime, stdout and
+interrupted-attempt receipts (eight manifest entries). An isolated empty-cache
+fetch downloaded the 122-byte selection record from the bucket and matched its
+original bytes. The full archive was verified locally; it was not fetched again.
+All 1,855 archive members were verified locally
+against their original bytes (108,150,319 bytes before compression).
+
+Validation: 10 native debug tests passed; focused Python check runs passed
+43, 65, 151 and 5 cases, followed by the corrected recorder/target regressions.
+Final closeout: `uv run --extra dev pytest tests/verify/test_decision_memory_probe.py tests/infra/test_experiment_data_untracked.py -q` — 7 passed in 75.51 s.
+The ordinary world-admission/monitoring checks passed. These are software and
+probe checks; gate still owns full CI. Gated J1/trunk copy, current-world CUDA
+cost/resource/update/reload admission and the three-arm pilot remain outstanding.
+B1/B2 stay deferred until calibration shows what fits the same USD 50 total.

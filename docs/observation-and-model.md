@@ -593,8 +593,9 @@ on the recorded CPU world before #547/#550 integration, log-control collection
 costs 1.73× the history-disabled median
 ([report](../experiments/opponent_memory.md#final-post-sync-admission-measurement--2026-11-16)).
 The gated join, [branching from a trunk](#starting-from-a-no-history-trunk),
-the supervised probe, CUDA worker admission and the three-arm pilot remain
-outstanding; the intended interface follows.
+CUDA worker admission and the three-arm pilot remain outstanding; the intended
+interface follows. The [completed supervised probe](../experiments/opponent_memory.md#supervised-probe-result--2026-11-16)
+selected one summary token for both pilot encoders.
 The combined disclosure/library layout needs fresh cost and CUDA admission;
 those earlier timings do not measure it.
 
@@ -796,6 +797,11 @@ rows carry `decklists_open`. That bit also tells the policy whether the
 opponent knows its list, so own-seat memory adds no disclosure flag.
 
 
+`ActorCritic.encode_decision_memory(device_prepared)` exposes the same
+production summaries as a differentiable `[batch, K, hidden_dim]` tensor for
+offline probes. It uses the policy's token, name and definition embeddings;
+its input is admitted Prepared data, and it evaluates no action or value head.
+
 ### Starting from a no-history trunk
 
 A memory policy can continue a no-history policy trained on the same
@@ -882,12 +888,12 @@ is enabled. An active effect cannot depend on the policy remembering when it
 began. Opponent memory supplements that state with evidence of past behavior;
 it does not make hidden cards observable.
 
-| Layer | Holds |
-| --- | --- |
-| Effective state | Current characteristics, zones, stack, pending decisions, known-hand minima, exact viewer-known library positions and game-level disclosure. |
-| Shared records | Each active effect's payload, duration, timestamp, controller, source and memberships. |
-| Recent events | An optional bounded suffix of public events. |
-| Opponent memory | Whole-game viewer-safe opponent decision records, summarized for board attention. |
+| Layer | Holds | Representation | Must not carry |
+| --- | --- | --- | --- |
+| Effective state | Current characteristics from `Game::characteristics`, zones, stack, suspended decisions, waiting triggers, hand minima, exact library positions, game-level disclosure | Object rows, library facts and the 64 × 49 relation table | Raw effect bookkeeping a consumer must replay to learn the current value |
+| Shared records | Each active effect once: payload, duration, timestamp rank, controller, source definition, exact visible source and memberships | `effects`, `effect_details`, `effect_members`; local facts for copy exceptions and other per-object kinds | A recomputed layer result, or a merged record that loses a future difference |
+| Recent events | Chronological public events, explicitly bounded | At most 32 rows of arrival, damage, life, cast, resolved and countered; optional and off by default | Anything needed to know the current rules state. Effect creation is not an event kind, and an activation adds no row |
+| Decision memory | Whole-game viewer-safe decision records; optional own public signals | Unreleased: four decision tables and transformer/GRU summaries for board attention | Unavailable information, or a substitute for current native rules facts |
 
 ### Counterexamples
 

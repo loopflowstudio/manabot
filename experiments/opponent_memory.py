@@ -251,6 +251,8 @@ def main() -> None:
     parser.add_argument("--wall-seconds", type=float, default=7200)
     args = parser.parse_args()
     if args.operation == "probe":
+        if args.source is not None:
+            parser.error("probe takes no source path; it collects fresh native games")
         from manabot.backends.torch.decision_memory_probe import run_probe
 
         run_probe(
