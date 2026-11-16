@@ -10,6 +10,7 @@ pub mod observation;
 pub mod observation_encoder;
 pub mod observation_json;
 pub mod observation_layout;
+pub mod opponent_memory;
 pub mod player_policy;
 pub mod policy_history;
 pub mod record_vocabulary;

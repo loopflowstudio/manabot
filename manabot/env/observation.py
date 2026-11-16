@@ -23,6 +23,7 @@ import gymnasium as gym
 import numpy as np
 
 from manabot.env.legacy_input import LEGACY_PERMANENT_DIM, legacy_card_lists
+from manabot.env.opponent_memory import encode_records
 
 # Local imports
 from manabot.env.shared_effects import (
@@ -44,6 +45,7 @@ from managym.enums import (  # noqa: F401
     StepEnum,
     ZoneEnum,
 )
+from managym.opponent_memory import read_records
 
 # Host observations at policy, simulation and rollout boundaries.
 type ObservationBuffers = Mapping[str, np.ndarray]
@@ -326,6 +328,10 @@ class ObservationEncoder:
         self.max_stack_objects = config.max_stack_objects if self.one_token else 0
         self.event_dim = 12 if config.policy_history_version == 1 else 7
         self.turn_state = config.policy_input_version in (10, 11)
+        if bool(config.max_opponent_records) != bool(config.max_opponent_details):
+            raise ValueError("opponent memory requires both capacities")
+        if config.max_opponent_records and not self.one_token:
+            raise ValueError("opponent memory requires policy input v11")
 
         # Preserve attack/decline independently of action family and focus.
         self.action_dim = (
@@ -341,6 +347,14 @@ class ObservationEncoder:
     @property
     def shapes(self) -> Dict[str, Tuple[int, ...]]:
         return {
+            **(
+                {
+                    "opponent_records": (self.config.max_opponent_records, 18),
+                    "opponent_details": (self.config.max_opponent_details, 8),
+                }
+                if self.config.max_opponent_records
+                else {}
+            ),
             "relations": (RELATION_ROWS, self.relation_dim),
             "facts": (self.config.max_facts, FACT_DIM),
             **SHARED_EFFECT_SHAPES,
@@ -632,6 +646,14 @@ class ObservationEncoder:
             obs.continuation, obs.agent.player_index
         )
 
+        if self.config.max_opponent_records:
+            out.update(
+                encode_records(
+                    read_records(obs.opponent_memory_json()),
+                    self.config.max_opponent_records,
+                    self.config.max_opponent_details,
+                )
+            )
         for key, value in out.items():
             log.debug(f"[SHAPES] {key}: {value.shape}")
         return out

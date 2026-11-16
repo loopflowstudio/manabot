@@ -54,6 +54,7 @@ from manabot.env.observation import (
 )
 from manabot.env.shared_effects import DETAIL_DIM, EFFECT_ROWS, MEMBER_DIM
 from manabot.policy.buckets import has_history_events
+from manabot.policy.opponent_memory import MemoryRows, prepare_memory
 
 Array = np.ndarray
 
@@ -453,7 +454,8 @@ class Prepared[A]:
     programs: CatalogPrograms[A] | None = None
     belief: BeliefRows[A] | None = None
     events: EventRows[A] | None = None
-    live_index: A | None = None  # flat valid object slots, including value token
+    memory: MemoryRows[A] | None = None
+    live_index: A | None = None  # flat valid slots, including memory/value tokens
     live_offsets: A | None = None  # [B+1] cumulative live-token counts
     legal_support: bool = True  # every observation has a legal action
     # A serving scope may bound this batch's lifetime without changing its rows.
@@ -474,6 +476,7 @@ def prepare(
     bucketed: bool = False,
     live_tokens: bool = False,
     value_token: bool = False,
+    memory_summaries: int = 0,
     binding: str = "",
     action_capacity: int | None = None,
     select_programs: bool = False,
@@ -586,6 +589,8 @@ def prepare(
             (ownership, belief.owners == 0, np.zeros((batch, 1), bool)), 1
         )
     present = validity != 0
+    if memory_summaries:
+        present = np.concatenate((present, np.ones((batch, memory_summaries), bool)), 1)
     if value_token:
         present = np.concatenate((present, np.ones((batch, 1), bool)), 1)
     return Prepared(
@@ -663,6 +668,7 @@ def prepare(
         else None,
         belief=belief,
         events=_events(obs, tables, objects),
+        memory=prepare_memory(obs, tables),
         live_index=np.flatnonzero(present) if live_tokens else None,
         live_offsets=np.concatenate(([0], present.sum(1).cumsum()))
         if live_tokens
@@ -686,6 +692,9 @@ def _referenced_definitions(
         references.extend(
             obs["events"][..., col][obs["events_valid"] == 1] for col in (2, 7)
         )
+    if "opponent_details" in obs:
+        details = obs["opponent_details"]
+        references.append(record_word(details, 5)[details[..., 4] == -3])
     if "stack" in obs:
         references.append(obs["stack"][..., STACK_DEFINITION_INDEX])
     if tables.catalog_records:

@@ -273,6 +273,32 @@ fn encoded_to_dict<'py>(
         "actions",
         to_numpy_array_f32(py, &np, &encoded.actions, &[config.max_actions, ACTION_DIM])?,
     )?;
+    if config.max_opponent_records > 0 {
+        dict.set_item(
+            "opponent_records",
+            to_numpy_array_f32(
+                py,
+                &np,
+                &encoded.opponent_records,
+                &[
+                    config.max_opponent_records,
+                    crate::agent::opponent_memory::RECORD_DIM,
+                ],
+            )?,
+        )?;
+        dict.set_item(
+            "opponent_details",
+            to_numpy_array_f32(
+                py,
+                &np,
+                &encoded.opponent_details,
+                &[
+                    config.max_opponent_details,
+                    crate::agent::opponent_memory::DETAIL_DIM,
+                ],
+            )?,
+        )?;
+    }
     dict.set_item(
         "events",
         to_numpy_array_f32(
@@ -3116,6 +3142,7 @@ pub struct PyObservation {
     pub stack_objects: Vec<PyStackObject>,
     #[pyo3(get, set)]
     pub recent_events: Vec<PyEventData>,
+    pub opponent_memory: crate::agent::opponent_memory::DecisionLog,
     pub policy_history: crate::agent::policy_history::HistoryWindow,
 }
 
@@ -3158,6 +3185,7 @@ impl From<Observation> for PyObservation {
                 .map(PyStackObject::from)
                 .collect(),
             policy_history: value.policy_history,
+            opponent_memory: value.opponent_memory,
             continuation: value.continuation,
             recent_events: value
                 .recent_events
@@ -3208,6 +3236,7 @@ impl From<PyObservation> for Observation {
                 .map(StackObjectData::from)
                 .collect(),
             policy_history: value.policy_history,
+            opponent_memory: value.opponent_memory,
             continuation: value.continuation,
             recent_events: value
                 .recent_events
@@ -3232,6 +3261,10 @@ impl PyObservation {
             observation.continuation = parse_continuation_frames_json(frames)?;
         }
         Ok(Self::from(observation))
+    }
+
+    fn opponent_memory_json(&self) -> String {
+        serde_json::to_string(&self.opponent_memory).expect("opponent memory serializes")
     }
 
     fn continuation_json(&self) -> String {

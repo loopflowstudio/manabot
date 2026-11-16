@@ -41,6 +41,7 @@ from manabot.env.shared_effects import (
     MEMBER_ROWS,
 )
 from manabot.infra.config import ModelConfig
+from manabot.policy.opponent_memory import admit_memory
 from manabot.policy.prepare import (
     NAMED_DETAIL_KINDS,
     NUMBER_TOKEN_KINDS,
@@ -81,6 +82,14 @@ def legal_mask(mask: np.ndarray) -> np.ndarray:
 
 def check(obs: ObservationBuffers, spec: Spec, legal: np.ndarray) -> None:
     """Admit raw rows before masking or trimming; legal-mask errors belong to the backend."""
+    enabled = spec.model.opponent_memory != "none"
+    if enabled != ("opponent_records" in obs):
+        raise ValueError("opponent-memory model and input contract disagree")
+    admit_memory(obs)
+    if enabled:
+        for key in ("opponent_records", "opponent_details"):
+            if obs[key].shape[1:] != spec.space.encoder.shapes[key]:
+                raise ValueError(f"opponent-memory capacity mismatch: {key}")
     lookup = spec.tables.definition_rows
     if spec.space.encoder.one_token and any(
         key not in obs for key in ("stack", "stack_valid")
@@ -101,6 +110,9 @@ def check(obs: ObservationBuffers, spec: Spec, legal: np.ndarray) -> None:
         ids.extend((obs["known_hand"][..., 0], obs["decklists"][..., 0]))
     if spec.space.encoder.one_token:
         ids.append(obs["stack"][..., STACK_DEFINITION_INDEX])
+    if enabled:
+        details = obs["opponent_details"]
+        ids.append(record_word(details, 5)[details[..., 4] == -3])
     for values in ids:
         definition_ids(values, size, lookup)
     keys = (

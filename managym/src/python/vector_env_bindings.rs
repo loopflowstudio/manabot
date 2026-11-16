@@ -60,6 +60,8 @@ struct ObservationBuffers {
     opponent_permanents: Py<PyAny>,
     actions: Py<PyAny>,
     events: Py<PyAny>,
+    opponent_records: Option<Py<PyAny>>,
+    opponent_details: Option<Py<PyAny>>,
     action_focus: Py<PyAny>,
     agent_player_valid: Py<PyAny>,
     opponent_player_valid: Py<PyAny>,
@@ -511,6 +513,30 @@ pub(super) fn input_buffer_config(
         policy_history,
         ..ObservationEncoderConfig::default()
     };
+    match (
+        buffers.contains("opponent_records")?,
+        buffers.contains("opponent_details")?,
+    ) {
+        (true, true) => {
+            let [records, width] = shape("opponent_records")?;
+            let [details, detail_width] = shape("opponent_details")?;
+            if width != crate::agent::opponent_memory::RECORD_DIM
+                || detail_width != crate::agent::opponent_memory::DETAIL_DIM
+            {
+                return Err(PyValueError::new_err(
+                    "invalid opponent-memory companion widths",
+                ));
+            }
+            config.max_opponent_records = records;
+            config.max_opponent_details = details;
+        }
+        (false, false) => {}
+        _ => {
+            return Err(PyValueError::new_err(
+                "opponent memory requires both companion buffers",
+            ))
+        }
+    }
     // One layout: every v9 buffer is present at its fixed width.
     let fixed = [
         (
@@ -783,6 +809,30 @@ fn read_observation_buffers(
             "float32",
         )?
         .unbind(),
+        opponent_records: if c.max_opponent_records > 0 {
+            required(
+                "opponent_records",
+                &[
+                    n,
+                    c.max_opponent_records,
+                    crate::agent::opponent_memory::RECORD_DIM,
+                ],
+            )?
+        } else {
+            None
+        },
+        opponent_details: if c.max_opponent_details > 0 {
+            required(
+                "opponent_details",
+                &[
+                    n,
+                    c.max_opponent_details,
+                    crate::agent::opponent_memory::DETAIL_DIM,
+                ],
+            )?
+        } else {
+            None
+        },
         events: require_numpy_array(
             buffers,
             "events",
@@ -1240,6 +1290,8 @@ struct SendObservationFieldSlices {
     opponent_permanents: SendSlice<f32>,
     actions: SendSlice<f32>,
     events: SendSlice<f32>,
+    opponent_records: Option<SendSlice<f32>>,
+    opponent_details: Option<SendSlice<f32>>,
     action_focus: SendSlice<i32>,
     agent_player_valid: SendSlice<f32>,
     opponent_player_valid: SendSlice<f32>,
@@ -1300,6 +1352,34 @@ impl SendObservationFieldSlices {
         let events_valid_ptr = self.events_valid.row_ptr(env_index, config.max_events)?;
 
         Ok(EncodedObservationMut {
+            opponent_records: if let Some(buffer) = self.opponent_records {
+                // SAFETY: registration validates storage and each env owns a disjoint row.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(
+                            env_index,
+                            config.max_opponent_records * crate::agent::opponent_memory::RECORD_DIM,
+                        )?,
+                        config.max_opponent_records * crate::agent::opponent_memory::RECORD_DIM,
+                    )
+                }
+            } else {
+                &mut []
+            },
+            opponent_details: if let Some(buffer) = self.opponent_details {
+                // SAFETY: registration validates storage and each env owns a disjoint row.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(
+                            env_index,
+                            config.max_opponent_details * crate::agent::opponent_memory::DETAIL_DIM,
+                        )?,
+                        config.max_opponent_details * crate::agent::opponent_memory::DETAIL_DIM,
+                    )
+                }
+            } else {
+                &mut []
+            },
             relations: if let Some(buffer) = self.relations {
                 // SAFETY: the registered buffer is partitioned into disjoint rows.
                 unsafe {
@@ -1654,6 +1734,16 @@ fn with_observation_field_slices<R>(
     let opponent_permanents_buffer =
         typed_numpy_buffer::<f32>(py, &buffers.opponent_permanents, "opponent_permanents")?;
     let actions_buffer = typed_numpy_buffer::<f32>(py, &buffers.actions, "actions")?;
+    let opponent_records_buffer = buffers
+        .opponent_records
+        .as_ref()
+        .map(|value| typed_numpy_buffer::<f32>(py, value, "opponent_records"))
+        .transpose()?;
+    let opponent_details_buffer = buffers
+        .opponent_details
+        .as_ref()
+        .map(|value| typed_numpy_buffer::<f32>(py, value, "opponent_details"))
+        .transpose()?;
     let events_buffer = typed_numpy_buffer::<f32>(py, &buffers.events, "events")?;
     let action_focus_buffer = typed_numpy_buffer::<i32>(py, &buffers.action_focus, "action_focus")?;
     let agent_player_valid_buffer =
@@ -1735,6 +1825,14 @@ fn with_observation_field_slices<R>(
             "opponent_permanents",
         )?,
         actions: send_slice_from_buffer(py, &actions_buffer, "actions")?,
+        opponent_records: opponent_records_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "opponent_records"))
+            .transpose()?,
+        opponent_details: opponent_details_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "opponent_details"))
+            .transpose()?,
         events: send_slice_from_buffer(py, &events_buffer, "events")?,
         action_focus: send_slice_from_buffer(py, &action_focus_buffer, "action_focus")?,
         agent_player_valid: send_slice_from_buffer(

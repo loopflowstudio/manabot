@@ -1,13 +1,12 @@
-Exploratory: determine whether a best-guess whole-game opponent-memory design is practical to train without materially hurting throughput or early learning, within USD 50 total.
+# Whole-game opponent memory
 
-No runs have launched. This is a pilot for choosing the next software basis,
-not a claim about playing strength or long-run learning equivalence. A result
-to be cited as a finding needs its own prospective run. The experiment module
-currently stops launch and evaluation explicitly: the shared log, encoders and
-matched-decision evaluation integration must ship first as an ordinary PR from
-this checkout. This report and module are the design, not delivered machinery.
+## Question
 
-## Question and design
+**Exploratory.** Can a learned memory of the opponent's past decisions become
+an affordable training basis without materially hurting throughput or early
+learning? This pilot has no measured answer yet: no census, calibration,
+training or paired evaluation results are retained. The USD 50 allocation is a
+budget, not a measured cost. No playing-strength finding follows from this report.
 
 The incumbent is the current no-history policy. The best guess is a small
 transformer over the opponent's whole-game decision records, with four learned
@@ -18,31 +17,43 @@ run as proof of non-inferiority. Report the size and uncertainty of regressions;
 the roughly 10% throughput cost mentioned in the task is context for that
 judgment, not a precomputed verdict.
 
-Assumption: use six arms with three independent training seeds per arm, sharing
+## Method (planned, not executed)
+
+Use five arms with three independent training seeds per arm, sharing
 seed labels across arms for blocking. The seed, not an evaluation game, is the
 unit of learning evidence. No factorial cross and no dedicated control-deck
 training arm in this pilot; stratify the existing Elemental matchups instead.
 
 | Arm | Changes from best guess |
 | --- | --- |
-| no-history | Incumbent; no memory tokens or recent events |
-| recent-events | Existing pooled 32-row recent-event encoder, no decision memory |
-| transformer-k4 | Best guess: two record-transformer layers, four summary tokens |
-| gru-k4 | Single-layer GRU, same record width and four summary tokens |
-| transformer-k1 | One summary token instead of four |
-| transformer-k4-no-passes | Filter eligible passes out of the same native log |
+| No history | Incumbent; no memory tokens or recent events |
+| Transformer, four summaries | Best guess: two record-transformer layers, four summary tokens |
+| GRU, four summaries | Single-layer GRU, same record width and four summary tokens |
+| Transformer, one summary | One summary token instead of four |
+| GRU, one summary | Single-layer GRU, one summary token |
+
+Jack Heart selected transformer and GRU, extra board tokens (J1), and summary
+counts 1 and 4; see `scratch/questions.md` for the exact direction. This replaces
+the earlier six-arm proposal. The experiment module still declares that older
+inventory and deliberately stops execution; replace it at the software wiring
+cutover, not by launching its stale arms. The implementation plan is
+`scratch/opponent-memory-design.md`.
 
 Torch only; MLX support is outside this task. Assumption: memory width 64,
 four attention heads, feedforward width 128;
 keep the current small Elemental board model, optimizer, precision and learning
-rule fixed across arms. Initialize fresh models; checkpoints from before the
+rule fixed across arms. Use the baseline's 64-wide two-layer board attention,
+masked-mean value and FiLM in every arm, so J1 also reaches objectless actions.
+Override sampled_self_play's per-wall fitted schedule with one calibrated
+learner-decision schedule across arms and disable capacity recovery; long-game
+overflow must remain a visible failure. Initialize fresh models; checkpoints from before the
 layout change cannot be rebound. Keep parameter counts visible: these are design
 alternatives with different costs, not parameter-matched architecture claims.
 Run all arms on one new input layout and retain all log records even for the
 control; measure the common log/encoding overhead against pre-change replay
 receipts separately, so a shared input cost is not hidden by the control.
 
-## Shared software before a paid run
+### Shared software before a paid run
 
 Build on integrated main, inspect PRs #549 and #550 and reconcile their edits to
 policy history, observation encoders and search. Do not rewrite their frozen
@@ -84,7 +95,7 @@ for privacy, coalescing, ordering, scalar/vector parity, replay/fork identity,
 empty histories, overflow and encoder gradients. Do not add schedule tests for
 this one experiment.
 
-## Smallest execution sequence
+### Smallest execution sequence
 
 1. **No rental: replay census.** Locate PR #549's retained 512 random games and
    replay their original Commands under a compatible engine; record exact source
@@ -97,17 +108,17 @@ this one experiment.
    Random games size the first capacity; the paid pilot must also report its own
    lengths, failures and peak memory because learned play can be longer.
 2. **Calibration, at most USD 3.** On one authorized GPU host, interleave real
-   no-history repeats with the five other arms using retained replay inputs and
+   no-history repeats with the four memory arms using retained replay inputs and
    short production-path updates. Include initialization/checkpoint reload and
    native encoding, preparation, collection inference, learner and peak memory.
    No artificial load. Separate replayed phase timings from whole-update rates.
    Record host CPU/quota, GPU, source/world/input and precision. Use these readings
    to choose one common learner-decision horizon and milestone spacing that fit
-   the training allowance; date that choice here before training. If six arms
+   the training allowance; date that choice here before training. If five arms
    cannot fit meaningful learning, report that rather than covertly narrowing the
    comparison or making a learning claim from smoke updates.
-3. **Learning pilot, at most USD 27.** Eighteen fresh runs, seeds 39101–39103,
-   six arms, at most USD 1.50 each including startup and finalization. Inspect
+3. **Learning pilot, at most USD 27.** Fifteen fresh runs, seeds 39101–39103,
+   five arms, at most USD 1.80 each including startup and finalization. Inspect
    PR #547 / Task 4b0591 before freezing: if mixed per-game disclosure training
    has landed, use a balanced open/closed mix identically across arms; otherwise
    train open lists and label closed-list evaluation as a disclosure shift.
@@ -136,14 +147,13 @@ this one experiment.
    validation, and report failures beside scores. If this exceeds the allowance,
    report incomplete coverage rather than silently changing deals. Reuse the
    arena's replay-checked game path; do not duplicate a game runner here.
-   The recent-event control is included as a history arm in these comparisons.
    At the endpoint also play each history checkpoint against a copy of itself
    with history blanked before preparation, on the same paired deals and both
    disclosures. Preserve shapes and all current board/legality information;
-   blank only that arm's memory input (recent events for the pooled arm). Tag
+   blank that arm's records, including length/count/presence cues. Tag
    these `reliance`, separately from primary `control` games. This is a test of
    reliance under an intervention, not evidence that memory improves learning.
-   There are 18,000 primary games and 6,000 endpoint reliance games at three
+   There are 14,400 primary games and 4,800 endpoint reliance games at three
    milestones and three seeds. Quote/calibrate their cost before allocating;
    retain partial coverage explicitly if the allowance cannot finish them.
    A heuristic curve is optional context only, after the primary comparisons.
@@ -164,7 +174,7 @@ quote full startup plus `Job.max_hours`, launch with `--max-usd` bounded by the
 remaining total, record each launcher's cost once, and verify rentals ended.
 Never start an unsupported arm or substitute a no-history policy for it.
 
-## Readout and adoption
+### Planned analysis
 
 Report learner decisions/second and the candidate/incumbent ratio with repeated
 same-host baseline variability; include common native-log overhead, model size,
@@ -187,6 +197,94 @@ flow and loss/entropy/value diagnostics separately from durable strength.
 The report's Etude clock is `learner_transitions`, the existing learner-decision
 coordinate; attach it to checkpoint exports when wiring the run.
 
+Separate learned skill from deck strength by retaining every deck/seat leg of a
+whole deal. Keep rules, world, exposure and disclosure matched across arms;
+a rule change or disclosure shift is not a memory effect. Use policy-only
+inference for the primary comparison; any search-assisted result needs separate
+compute accounting and cannot stand in for it. Report paired whole-deal score
+differences and uncertainty within seeds, then use training seeds as the unit of
+evidence for the method.
+
+## Results
+
+The effect on playing strength is unmeasured: there is no paired score difference
+in percentage points and no uncertainty interval. There are no trained seeds or
+completed evaluation deals from which to estimate either. The planned 19,200
+games are a design count, not an observed sample; no score denominator has been
+populated. In a partial evaluation, missing games must remain identified as
+missing in the planned denominator, never scored as zero or dropped.
+
+The 2026-11-16 no-rental census regenerated the source seed workload: 512 games,
+102,209 decisions, zero capped games and step digest `17459788495858550277`,
+matching the retained reference. This is the original two-deck matchup, not an
+Elemental 10-deck or learned-game capacity certificate. It is not retained-Command
+replay. There are 102,209 acting-decision prefixes and 1,024 terminal viewer logs.
+
+| Rows | p50 | p90 | p95 | p99 | Max |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Prefix records | 46 | 121 | 164 | 313.92 | 582 |
+| Terminal records | 68 | 192.70 | 302.70 | 442.08 | 595 |
+| Prefix details | 14,504 | 56,546 | 83,419 | 255,418.88 | 616,295 |
+| Terminal details | 26,571.50 | 107,218.30 | 250,918.15 | 420,561.22 | 665,431 |
+
+Eligible passes numbered 17,748 before and after coalescing; none in this workload
+had identical consecutive contexts. Power-of-two candidate capacities are 1,024
+records and 1,048,576 details, or 33,628,160 bytes per padded observation. At the
+planned 256-stream × 64-decision minimum, the existing dense `_ObservationRows`
+store requires **513.125 GiB for memory alone**, before its 25% spare allocation,
+native buffers, other observations and complete-game overshoot. The recipe's
+declared limit is 40 GiB. This is a storage counterexample, not a safe capacity
+configuration to launch.
+
+The [manifest-backed census receipt](data/opponent-memory/20261116-census/native.jsonl),
+[summary](data/opponent-memory/20261116-census/summary.json) and
+[source identity](data/opponent-memory/20261116-census/source.json) retain the
+measurements; the engine patch is stored beside them. Reproduce the analysis with
+`uv run python -m experiments.opponent_memory census experiments/data/opponent-memory/20261116-census/native.jsonl --out .runs/opponent-memory-census/summary.json`.
+
+Whole-training throughput, GPU memory, CUDA admission and baseline timing noise
+remain unmeasured. The census run includes diagnostic reads and is not an ordinary
+throughput comparison. Focused CPU checks exercise both encoder choices, both
+summary counts, independent actor/value gradients, checkpoint reload, padded/live/
+compact/bucketed paths and bounded ordinary updates. Those fixtures establish
+implementation health, not learnability or readiness at the intended load.
+
+Training/evaluation declarations still stop before constructing jobs. Dependent
+wiring is stopped at the measured storage counterexample; there was no paid run
+or rental, and there is no launcher run ID or cost to record.
+
+## What the results support
+
+The census establishes that dense whole-rollout history storage does not fit the
+planned load. Native/Torch bounded proofs do not resolve that storage problem.
+There is no basis
+to compare any candidate with today's no-history incumbent, choose a transformer
+over a GRU, choose the number of summary tokens, or judge the value of passes.
+Open versus closed decklists, matchup-specific advantages, the learning noise
+floor and memory reliance all remain unresolved. Absence of runs supports
+neither equivalence nor a regression.
+
+## Recommendation
+
+Keep the no-history incumbent. Review the design revision in
+`scratch/opponent-memory-design.md`: retain shared immutable game/viewer prefixes,
+gather and pad only selected learner prefixes, and retain compact incident
+evidence. Replace dense memory ownership in the same cut. Verify its storage at
+the measured census size before concrete job wiring and calibration. Preserve
+every record and typed overflow; a smaller history capacity or silent long-game
+discard does not fix this failure. Do not adopt memory or remove recent events.
+This report launches no new run.
+
+Evidence that would change this recommendation is a measured comparison at
+matched learner decisions across independent training seeds, with whole-deal
+paired uncertainty, affordable whole-training cost and disclosed failures.
+Comparable early learning at an acceptable cost could justify keeping memory
+available even without a resolved strength gain; noisy curves alone would not
+establish non-inferiority. The roughly 10% throughput guide informs that judgment
+rather than deciding it automatically.
+
+## Caveats
+
 The strongest confound is that short self-play horizons can hide small effects
 inside training variance. Open lists could make past choices more interpretable or reduce
 their usefulness; report the interaction without assuming either. Learning
@@ -201,7 +299,21 @@ and its option and reconcile PR #549's event kinds with decision records, keepin
 any independent public knowledge needed by observations, text, replay and Academy.
 Do not remove those surfaces in this task or treat replacement as already done.
 
-## Run ledger
+## Appendix: execution evidence and dated changes
+
+2026-11-15 execution check at `1ecbde8b4348c8ce1871cf8deb5272e71b3e8537`:
+the locked Etude client (`d60236d015a4b2a01055b2c861856f06bb1852a2`),
+run through an isolated `uv run --no-project --with` environment, returned no
+rows for `etude runs --experiment opponent_memory`. Its
+`etude status --experiment opponent_memory` returned `last loop: never`;
+this does not establish live provider rental state. No launch or rental was
+requested in this execution step, and there is no run ID or launcher cost to
+record. Execution is blocked: this committed revision still explicitly raises
+in both `runs()` and `eval()` because the shared decision log, native/Python
+inputs, transformer/GRU encoders and concrete training/evaluation jobs are
+missing. Deliver that software before the replay census and calibration; the
+existing inclusive USD 50 approval remains sufficient, with no new approval
+needed. No experiment result or adoption decision follows from this check.
 
 No commit/run ID, launcher cost or measured result yet. The memory-software PR,
 replay corpus identity, census, calibrated horizon, concrete launch wiring and
@@ -215,3 +327,38 @@ stop was exercised. Full `tests/eval/test_experiment_files.py` and report
 construction await the development environment/native extension. An initial
 isolated import failed at missing `managym._managym`; a discovery attempt using
 the older PyPI SDK missed existing experiment files. Neither is experiment data.
+
+2026-11-15 reporting revision: reorganized the design into question, planned
+method, results, support, recommendation and caveats. No new run or result was
+added. The missing software and measurements remain outstanding; no result
+files were produced for publication, so the artifact manifest is unchanged.
+
+2026-11-16 kickoff reconciliation: five arms now replace the earlier six-arm
+proposal, following the recorded transformer/GRU × 1/4 summary direction. The
+planned count is 15 training runs and 19,200 evaluation games; the inclusive
+USD 50 allocation is unchanged. No census, training or evaluation was run.
+The shared implementation and gate plan is `scratch/opponent-memory-design.md`.
+
+
+2026-11-16 census source substitution: PR #549 retains aggregate displacement
+statistics and a reproducible seed harness, but no Command corpus was located in
+its body, comments or changed-file inventory. Source
+`95b8d4d0bbf16b3eef30a127561b7d6b46c1b10f:managym/examples/bench_steps.rs`
+specifies seeds 0–511, per-game ChaCha8 uniform legal-index choices, a 2,000-step
+cap and the curated UR Lessons/GW Allies matchup. The no-rental census will
+regenerate that workload and compare its step digest with the retained reference.
+This is a dated corpus substitution, not replay of retained original Commands.
+The census reports capacities without policy tensor allocation; it supplies no
+learning or throughput-adoption claim.
+
+
+2026-11-16 implementation checkpoint: native memory tests (6), structured
+Command tests (10), focused Python memory/transport/update checks (29), text and
+package-boundary checks (101), artifact tracking and native observability checks
+passed. Both encoders completed the bounded 16-row exact-quota CPU update;
+optional-layout/legacy and malformed-word admission checks also passed. Strict
+library Clippy, Ruff and formatting passed; the CPython 3.13 extension was rebuilt
+and replaced atomically. Full gate/CI/CUDA admission and the demo remain pending.
+The storage revision is sent back to review before dependent job wiring. This
+is a draft implementation and a measured storage failure, not completed software
+delivery or a completed experiment.

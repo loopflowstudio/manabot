@@ -928,6 +928,14 @@ class TrainingRegime(Strict):
             raise ValueError(
                 "learning-state continuation requires one step-target stage without process recovery"
             )
+        if self.agent.opponent_memory != "none" and not (
+            self.observation.policy_input_version == 11
+            and self.observation.max_opponent_records
+            and self.observation.max_opponent_details
+        ):
+            raise ValueError(
+                "opponent memory requires v11 and explicit record/detail capacities"
+            )
         if self.agent.recent_events and self.agent.world is None:
             raise ValueError("recent events require a world for public identities")
         if self.agent.recent_events and not 1 <= self.observation.max_events <= 32:

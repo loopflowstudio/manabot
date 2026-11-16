@@ -154,6 +154,7 @@ impl Game {
                 id_gen,
             }),
             policy_history: Default::default(),
+            opponent_memory: Default::default(),
             skip_trivial,
             current_action_space: None,
             decision_epoch: 0,

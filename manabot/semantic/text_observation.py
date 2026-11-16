@@ -27,6 +27,7 @@ from managym.decision_capture import (
     PlayerReference,
     UnavailableReference,
 )
+from managym.opponent_memory import read_records
 
 REPRESENTATION_VERSION = "manabot-text-7"
 _ZONES = ("library", "hand", "battlefield", "graveyard", "stack", "exile", "command")
@@ -1224,6 +1225,38 @@ class _Renderer:
             )
         if not capture.history.rows:
             lines.append("Empty." if capture.history.capacity else "History disabled.")
+        memory = read_records(state.opponent_memory_json())
+        if memory:
+            lines += [
+                "",
+                "Opponent decisions, chronological whole-game viewer history:",
+            ]
+            for record in memory:
+                context = record.context
+                choice = record.choice
+                names = ", ".join(
+                    reference.name or "unavailable" for reference in choice.references
+                )
+                lines.append(
+                    f"{record.ordinal + 1}. Turn {context.turn}, step {context.step}: {record.kind}; "
+                    f"life {context.life}, hand sizes {context.hand}, board counts (total/tapped/land/creature/artifact/enchantment/planeswalker/battle) {context.board_counts}; "
+                    f"choice {choice.kind or 'unavailable'}, mode {choice.mode}, ability {choice.ability}, "
+                    f"named {choice.named}, declared {choice.declared}; "
+                    f"subjects [{names}]; count {record.count}, span {record.first_position}..{record.last_position}."
+                )
+                for label, references in (
+                    ("Untapped mana source at choice", context.mana_sources),
+                    ("Response", record.response),
+                    ("Chosen subjects", choice.references),
+                ):
+                    for reference in references:
+                        lines.append(
+                            f"  {label}: {reference.name or 'unavailable'}; role {reference.role}; "
+                            f"P/T {reference.power}/{reference.toughness}; tapped {reference.tapped}, "
+                            f"ready {reference.ready}, attacking {reference.attacking}, blocking {reference.blocking}; "
+                            f"untapped mana alternatives W/U/B/R/G/C {reference.mana}; "
+                            f"effective rules snapshot {reference.description or 'unavailable'}."
+                        )
         if capture.frames:
             lines += ["", "Current stack and continuation relations:"]
             lines.extend(

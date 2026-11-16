@@ -7,7 +7,9 @@ The central loop is self-play: play a batch, turn game results into per-decision
 credit, filter, update, repeat. [How a manabot learns](../docs/learning.md)
 explains it, [training.md](../docs/training.md) covers running it, and
 [training loops](../docs/training-loop.md) lists the updates we maintain,
-their pieces and a loop to copy.
+their pieces and a loop to copy. The network guide covers the intended
+[whole-game opponent memory](../docs/observation-and-model.md#whole-game-opponent-memory)
+interface, including encoder selection, replay and checkpoint compatibility.
 
 ## Quickstart
 

@@ -29,7 +29,11 @@ class ObservationArrayLayout(TypedDict):
     element: NotRequired[ObservationValueLayout]
 
 def observation_layout(
-    *, policy_history: bool = False, turn_state: bool = True, legacy: bool = False
+    *,
+    policy_history: bool = False,
+    turn_state: bool = True,
+    legacy: bool = False,
+    opponent_memory: bool = False,
 ) -> dict[str, ObservationArrayLayout]:
     """Column names, value encodings and fixed extents of each encoded array.
 
@@ -962,6 +966,7 @@ class Observation:
         text: str, *, continuation_json: str | None = None
     ) -> Observation: ...
     def continuation_json(self) -> str: ...
+    def opponent_memory_json(self) -> str: ...
     game_over: bool
     won: bool
     turn: Turn

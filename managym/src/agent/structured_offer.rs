@@ -1352,6 +1352,19 @@ impl Game {
                         })
                     })
                     .ok_or(StructuredOfferError::WrongDecision)?;
+                // Validate the declared target even when native trivial-choice
+                // skipping will commit it before an external prompt appears.
+                let wanted = self.resolve_bound_target(targets[0])?;
+                let requirements = self.state[*object].target_requirements();
+                if requirements.len() != 1
+                    || !self
+                        .legal_targets_for_requirement(*player, *object, &requirements[0])
+                        .contains(&wanted)
+                {
+                    return Err(StructuredOfferError::StaleOrIllegal(
+                        "structured target is no longer legal".into(),
+                    ));
+                }
                 let mut done = self.record_compound_step(cast, commands)?;
                 let mut actions = 1;
 
@@ -1362,7 +1375,6 @@ impl Game {
                     .action_space()
                     .is_some_and(|space| space.kind == ActionSpaceKind::ChooseTarget)
                 {
-                    let wanted = self.resolve_bound_target(targets[0])?;
                     let target = self
                         .action_space()
                         .and_then(|space| {
@@ -1405,6 +1417,12 @@ impl Game {
                         })
                     })
                     .collect::<Result<_, _>>()?;
+                let legal: BTreeSet<_> = declaration_order.iter().copied().collect();
+                if selected.len() != attackers.len() || !selected.is_subset(&legal) {
+                    return Err(StructuredOfferError::StaleOrIllegal(
+                        "attacker declaration contains a duplicate or unoffered permanent".into(),
+                    ));
+                }
                 let mut actions = 0;
                 let mut done = false;
                 // The final choice may skip trivial windows all the way to a
@@ -1565,11 +1583,17 @@ impl Game {
         drop(validation_timer);
         #[cfg(feature = "benchmark")]
         let _rules_timer = crate::benchmark_search::Timer::new("rules_execution");
+        let pending_memory = crate::agent::opponent_memory::capture(
+            self,
+            self.current_action_space.as_ref().unwrap(),
+            action,
+        );
         let action = action.clone();
         self.current_action_space.take();
         self.execute_action(&action).unwrap_or_else(|error| {
             panic!("structured search offer admitted an unexecutable action: {error}")
         });
+        crate::agent::opponent_memory::commit(self, pending_memory);
         Ok(self.finish_action_step())
     }
 
@@ -1577,157 +1601,9 @@ impl Game {
         &mut self,
         command: &AtomicCommand,
     ) -> Result<bool, StructuredOfferError> {
-        let binding = match command {
-            AtomicCommand::PassPriority { binding, .. }
-            | AtomicCommand::CastSpell { binding, .. }
-            | AtomicCommand::DeclareAttackers { binding, .. }
-            | AtomicCommand::DeclarationSequence { binding, .. }
-            | AtomicCommand::SearchAction { binding, .. } => *binding,
-        };
-        if binding != OfferSetBinding(self.decision_epoch) {
-            return Err(StructuredOfferError::StaleOrIllegal(
-                "offer set no longer names the current decision".to_string(),
-            ));
-        }
-        if self.is_game_over() {
-            return Err(StructuredOfferError::GameOver);
-        }
-        let action_space = self
-            .current_action_space
-            .as_ref()
-            .ok_or(StructuredOfferError::NoActiveActionSpace)?;
-        match command {
-            AtomicCommand::PassPriority { player, .. } => {
-                if action_space.kind != ActionSpaceKind::Priority {
-                    return Err(StructuredOfferError::WrongDecision);
-                }
-                let action = action_space
-                    .actions
-                    .iter()
-                    .find(|action| {
-                        matches!(action, Action::PassPriority { player: legal } if legal == player)
-                    })
-                    .cloned()
-                    .ok_or_else(|| {
-                        StructuredOfferError::StaleOrIllegal(
-                            "priority pass is no longer offered".to_string(),
-                        )
-                    })?;
-                self.current_action_space.take();
-                self.execute_action(&action)
-                    .map_err(|error| StructuredOfferError::StaleOrIllegal(error.0))?;
-                Ok(self.finish_action_step())
-            }
-            AtomicCommand::CastSpell {
-                player,
-                object,
-                targets,
-                ..
-            } => {
-                if action_space.kind != ActionSpaceKind::Priority {
-                    return Err(StructuredOfferError::WrongDecision);
-                }
-                if targets.len() != 1 {
-                    return Err(StructuredOfferError::StaleOrIllegal(format!(
-                        "single-target cast requires one target, got {}",
-                        targets.len()
-                    )));
-                }
-                let action = action_space
-                    .actions
-                    .iter()
-                    .find(|action| {
-                        matches!(
-                            action,
-                            Action::CastSpell {
-                                player: legal_player,
-                                object: legal_card,
-                            } if legal_player == player && legal_card == object
-                        )
-                    })
-                    .cloned()
-                    .ok_or_else(|| {
-                        StructuredOfferError::StaleOrIllegal(
-                            "spell is no longer offered".to_string(),
-                        )
-                    })?;
-
-                self.current_action_space.take();
-                self.execute_action(&action)
-                    .map_err(|error| StructuredOfferError::StaleOrIllegal(error.0))?;
-                let target_action = Action::ChooseTarget {
-                    player: *player,
-                    target: self.resolve_bound_target(targets[0])?,
-                };
-                self.execute_action(&target_action)
-                    .map_err(|error| StructuredOfferError::StaleOrIllegal(error.0))?;
-                Ok(self.finish_action_step())
-            }
-            AtomicCommand::DeclareAttackers {
-                player, attackers, ..
-            } => {
-                let (legal_player, declaration_order) = self.current_attacker_declaration()?;
-                if player != &legal_player {
-                    return Err(StructuredOfferError::StaleOrIllegal(
-                        "attacker declaration actor is no longer current".to_string(),
-                    ));
-                }
-
-                let legal: BTreeSet<_> = declaration_order.iter().copied().collect();
-                let selected: BTreeSet<_> = attackers
-                    .iter()
-                    .map(|object_ref| {
-                        self.lookup_current_permanent(*object_ref).map_err(|_| {
-                            StructuredOfferError::StaleOrIllegal(format!(
-                                "attacker object {}@{} is no longer current",
-                                object_ref.slot(),
-                                object_ref.generation()
-                            ))
-                        })
-                    })
-                    .collect::<Result<_, _>>()?;
-                if selected.len() != attackers.len() {
-                    return Err(StructuredOfferError::StaleOrIllegal(
-                        "attacker declaration contains a duplicate permanent".to_string(),
-                    ));
-                }
-                if let Some(attacker) = selected.iter().find(|attacker| !legal.contains(attacker)) {
-                    return Err(StructuredOfferError::StaleOrIllegal(format!(
-                        "permanent {} is not offered as an attacker",
-                        attacker.0
-                    )));
-                }
-
-                self.current_action_space.take();
-                let combat = self.state.combat.as_mut().ok_or_else(|| {
-                    StructuredOfferError::StaleOrIllegal(
-                        "attacker declaration has no combat state".to_string(),
-                    )
-                })?;
-                combat.attackers_to_declare.clear();
-                for attacker in declaration_order {
-                    self.declare_attacker(attacker, selected.contains(&attacker))
-                        .map_err(|error| StructuredOfferError::StaleOrIllegal(error.0))?;
-                }
-                Ok(self.finish_action_step())
-            }
-            AtomicCommand::DeclarationSequence { .. } => {
-                unreachable!("sequence routed to canonical lowering")
-            }
-            AtomicCommand::SearchAction { action, .. } => {
-                let offered = action_space.actions.iter().any(|legal| legal == action);
-                if !offered {
-                    return Err(StructuredOfferError::StaleOrIllegal(
-                        "search action is no longer offered".to_string(),
-                    ));
-                }
-                let action = action.clone();
-                self.current_action_space.take();
-                self.execute_action(&action)
-                    .map_err(|error| StructuredOfferError::StaleOrIllegal(error.0))?;
-                Ok(self.finish_action_step())
-            }
-        }
+        // One canonical choice sequence for ordinary and compound commits.
+        self.apply_legacy_command_inner(command, &mut None)
+            .map(|(done, _)| done)
     }
 
     /// Recover the complete, still-undecided attacker batch from the current

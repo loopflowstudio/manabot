@@ -47,6 +47,7 @@ GRUS = (
     "semantic_cards.encoder",
     "facts.program_sequence",
     "shared_effects.reducer.gru",
+    "opponent_memory.gru",
 )
 _GRU_LEAVES = {
     "weight_ih_l0": "input_weight",
@@ -57,6 +58,8 @@ _GRU_LEAVES = {
 _ATTENTION_LEAVES = {
     ".mha.in_proj_weight": ".mha.qkv_weight",
     ".mha.in_proj_bias": ".mha.qkv_bias",
+    ".self_attn.in_proj_weight": ".self_attn.qkv_weight",
+    ".self_attn.in_proj_bias": ".self_attn.qkv_bias",
 }
 # Checkpoint fields carried, JSON-encoded, in the container metadata.
 _METADATA_KEYS = ("hypers", "world_binding", "architecture", "source")

@@ -245,6 +245,11 @@ checkpoints or experiment evidence.
   (`ModelConfig.record_vocabulary="catalog"`, the fresh default, omitted from
   regimes); native `agent/record_vocabulary.rs` lists every name the encoders
   hash, so a new hashed name must appear there or the policy rejects it.
+  Schema-specific labels use an owner prefix (for example `OpponentMemory::Role`):
+  the token namespace is shared, and an unprefixed label can collide with an
+  existing rules field that has a different token meaning. Optional model
+  capabilities select their catalog rows explicitly so disabled capabilities
+  do not grow the default model's lookup buffers or parameters.
 
 ## Commands
 

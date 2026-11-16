@@ -40914,6 +40914,22 @@
    "sha256": "f645e2b876253be1357794bef82fd827f0089cdeb7170c7c376ffb43eeb64a5c",
    "bytes": 562310
   },
+  "experiments/data/opponent-memory/20261116-census/engine-source.patch": {
+   "sha256": "d8c991f0fb2946db10e612a246cfdceb2d78001c9cf96b5a32513f43d22db1ae",
+   "bytes": 79945
+  },
+  "experiments/data/opponent-memory/20261116-census/native.jsonl": {
+   "sha256": "2ebeef4e34c800be063dbcbab0e1d9e9131f5cd2d13b5441ccd823caa35e3ba8",
+   "bytes": 1518157
+  },
+  "experiments/data/opponent-memory/20261116-census/source.json": {
+   "sha256": "988b7f7cdb53080a2cc62b12386e1a7fc8c80a2cd8da1dae604628d667f04355",
+   "bytes": 20853
+  },
+  "experiments/data/opponent-memory/20261116-census/summary.json": {
+   "sha256": "da4bb8e09b684b28a5d6ee87453f211de72b3e9dd361e7a5265ac979d5500c6d",
+   "bytes": 1244
+  },
   "experiments/data/pooling-filter/evidence.json": {
    "sha256": "5fd1af3f1c6897e87fd1014b30f79102b4fee4102a43a9f40773954c13a4219d",
    "bytes": 403261

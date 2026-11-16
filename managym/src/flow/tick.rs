@@ -33,6 +33,11 @@ impl Game {
             )));
         }
 
+        let pending_memory = crate::agent::opponent_memory::capture(
+            self,
+            &action_space,
+            &action_space.actions[action],
+        );
         let exposure = self.exposure_choice(&action_space, action);
         let selected_action = action_space.actions[action].clone();
         if let Err(error) = self.execute_action(&selected_action) {
@@ -40,6 +45,7 @@ impl Game {
             return Err(error);
         }
 
+        crate::agent::opponent_memory::commit(self, pending_memory);
         if let Some(choice) = exposure {
             self.card_capture
                 .as_mut()

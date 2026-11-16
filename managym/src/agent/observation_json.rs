@@ -51,6 +51,9 @@ impl Serialize for ObservationJson<'_> {
         map.serialize_entry("game_over", &value.game_over)?;
         map.serialize_entry("opponent", &sorted_record(&value.opponent))?;
         map.serialize_entry("opponent_cards", &CardsJson(&value.opponent_cards))?;
+        if !value.opponent_memory.is_empty() {
+            map.serialize_entry("opponent_memory", &sorted_record(&value.opponent_memory))?;
+        }
         map.serialize_entry(
             "opponent_permanents",
             &sorted_record(&value.opponent_permanents),

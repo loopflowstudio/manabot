@@ -406,6 +406,38 @@ columns! { event {
     6: CONTROLLER => ("controller", ValueLayout::new("id", "Raw player seat; -1 absent", "-1, 0 or 1")),
 } }
 
+columns! { opponent_record {
+    0: ORDINAL_HIGH => ("ordinal_high", ValueLayout::new("word", "Exact 16-bit half of an i32/u32 or catalog name hash", "0..65535")),
+    1: ORDINAL_LOW => ("ordinal_low", ValueLayout::new("word", "Exact 16-bit half of an i32/u32 or catalog name hash", "0..65535")),
+    2: COUNT_HIGH => ("count_high", ValueLayout::new("word", "Exact 16-bit half of an i32/u32 or catalog name hash", "0..65535")),
+    3: COUNT_LOW => ("count_low", ValueLayout::new("word", "Exact 16-bit half of an i32/u32 or catalog name hash", "0..65535")),
+    4: TURN_HIGH => ("turn_high", ValueLayout::new("word", "Exact 16-bit half of an i32/u32 or catalog name hash", "0..65535")),
+    5: TURN_LOW => ("turn_low", ValueLayout::new("word", "Exact 16-bit half of an i32/u32 or catalog name hash", "0..65535")),
+    6: FIRST_HIGH => ("first_high", ValueLayout::new("word", "Exact 16-bit half of an i32/u32 or catalog name hash", "0..65535")),
+    7: FIRST_LOW => ("first_low", ValueLayout::new("word", "Exact 16-bit half of an i32/u32 or catalog name hash", "0..65535")),
+    8: LAST_HIGH => ("last_high", ValueLayout::new("word", "Exact 16-bit half of an i32/u32 or catalog name hash", "0..65535")),
+    9: LAST_LOW => ("last_low", ValueLayout::new("word", "Exact 16-bit half of an i32/u32 or catalog name hash", "0..65535")),
+    10: PHASE => ("phase", ValueLayout::COUNT),
+    11: STEP => ("step", ValueLayout::COUNT),
+    12: KIND_HIGH => ("kind_high", ValueLayout::new("word", "Exact 16-bit half of an i32/u32 or catalog name hash", "0..65535")),
+    13: KIND_LOW => ("kind_low", ValueLayout::new("word", "Exact 16-bit half of an i32/u32 or catalog name hash", "0..65535")),
+    14: DETAIL_OFFSET => ("detail_offset", ValueLayout::COUNT),
+    15: DETAIL_COUNT => ("detail_count", ValueLayout::COUNT),
+    16: CHOOSER_ROLE => ("chooser_role", ValueLayout::COUNT),
+    17: VALID => ("valid", ValueLayout::FLAG),
+} }
+
+columns! { opponent_detail {
+    0: GROUP => ("group", ValueLayout::COUNT),
+    1: REFERENCE => ("reference", ValueLayout::COUNT),
+    2: FIELD_HIGH => ("field_high", ValueLayout::new("word", "Exact 16-bit half of an i32/u32 or catalog name hash", "0..65535")),
+    3: FIELD_LOW => ("field_low", ValueLayout::new("word", "Exact 16-bit half of an i32/u32 or catalog name hash", "0..65535")),
+    4: TOKEN_KIND => ("token_kind", ValueLayout::new("category", "-4 naming row; -3 definition join; -2 catalog name; -1 exact integer; positive learning TokenKind", "-4..9")),
+    5: VALUE_HIGH => ("value_high", ValueLayout::new("word", "Exact 16-bit half of an i32/u32 or catalog name hash", "0..65535")),
+    6: VALUE_LOW => ("value_low", ValueLayout::new("word", "Exact 16-bit half of an i32/u32 or catalog name hash", "0..65535")),
+    7: ORDINAL => ("ordinal", ValueLayout::COUNT),
+} }
+
 columns! { history {
     0: KIND => ("kind", ValueLayout::new("category", "HistoryKind: 0 arrival, 1 damage, 2 life, 3 cast, 4 resolved, 5 countered", "0..5")),
     1: AMOUNT => ("amount", ValueLayout::new("number", "Unscaled signed value", "signed; no fixed bound")),
@@ -581,6 +613,20 @@ fn fact_row_kind(kind: FactKind) -> &'static str {
         FactKind::KeywordCounterTimestamp => "id: CounterKind token; timestamp: counter timestamp rank",
         FactKind::ContinuationProgram => "object: controller; id: frame index + 1; detail: signed i32 catalog token value; value: TokenKind; value_2: zero-based ordinal. Source program then effect execution are separate occurrences, each resetting ordinal to 0",
     }
+}
+
+/// Optional v11 memory arrays; both capacities belong to the caller.
+pub fn opponent_memory_layout() -> BTreeMap<String, ArrayLayout> {
+    BTreeMap::from([
+        (
+            "opponent_records".into(),
+            ArrayLayout::features(&["opponent_record"], &[None], opponent_record::COLUMNS),
+        ),
+        (
+            "opponent_details".into(),
+            ArrayLayout::features(&["opponent_detail"], &[None], opponent_detail::COLUMNS),
+        ),
+    ])
 }
 
 /// Every array `encode` writes, keyed by its buffer name, without allocating

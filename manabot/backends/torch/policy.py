@@ -28,6 +28,7 @@ from manabot.backends.torch._continuation import ContinuationEncoder
 from manabot.backends.torch._facts import FactEncoder, RecordVocabulary
 from manabot.backends.torch._name_candidates import NameCandidateEncoder
 from manabot.backends.torch._numerics import buffer_on
+from manabot.backends.torch._opponent_memory import OpponentMemory
 from manabot.backends.torch._recent_events import RecentEventEncoder
 from manabot.backends.torch._semantic_cards import (
     SemanticCardEncoder,
@@ -141,6 +142,14 @@ class ActorCritic(nn.Module):
 
         # Extract dimensions from the observation encoder.
         enc = observation_space.encoder
+        if (config.opponent_memory != "none") != bool(enc.config.max_opponent_records):
+            raise ValueError(
+                "opponent-memory model and explicit observation capacities must agree"
+            )
+        if config.opponent_memory != "none" and not config.catalog_records():
+            raise ValueError("opponent memory requires a catalog world")
+        if config.opponent_memory != "none" and not enc.one_token:
+            raise ValueError("opponent memory requires policy input v11")
         if config.recent_events and (
             config.world is None or enc.config.policy_history_version != 1
         ):
@@ -174,6 +183,7 @@ class ActorCritic(nn.Module):
                 embed_dim,
                 decklists=True,
                 records=config.catalog_records(),
+                opponent_memory=config.opponent_memory != "none",
             )
         else:
             # Generic worlds still distinguish card definitions. The content
@@ -289,6 +299,16 @@ class ActorCritic(nn.Module):
             nn.Parameter(torch.randn(1, 1, embed_dim) / embed_dim**0.5)
             if config.value_aggregation == "value_token"
             else None
+        )
+        self.opponent_memory = (
+            OpponentMemory(
+                config.opponent_memory, config.opponent_memory_summaries, embed_dim
+            )
+            if config.opponent_memory != "none"
+            else None
+        )
+        self.memory_summaries = (
+            config.opponent_memory_summaries if self.opponent_memory is not None else 0
         )
         self.recent_events = (
             RecentEventEncoder(embed_dim) if config.recent_events else None
@@ -506,6 +526,7 @@ class ActorCritic(nn.Module):
             bucketed=self.bucketed_shapes,
             live_tokens=self.live_tokens and self.config.attention_on,
             value_token=self.value_token is not None,
+            memory_summaries=self.memory_summaries,
             binding=spec.binding,
             action_capacity=capacity,
             select_programs=not inference and not self.bucketed_shapes,
@@ -687,10 +708,26 @@ class ActorCritic(nn.Module):
                 obs.live_index,
                 obs.live_offsets,
                 obs.batch,
-                state.objects.shape[1] + int(self.value_token is not None),
+                state.objects.shape[1]
+                + self.memory_summaries
+                + int(self.value_token is not None),
+            )
+        summaries = None
+        if self.opponent_memory is not None:
+            assert obs.memory is not None and self.semantic_cards is not None
+            summaries = self.opponent_memory(
+                obs.memory,
+                self.semantic_cards.token_embedding,
+                self.name_candidates.public_definitions(state.programs),
+                self.name_candidates.embedding,
             )
         encoded = self._attend_objects(
-            state.objects, state.is_agent, state.validity, obs.attention_columns, live
+            state.objects,
+            state.is_agent,
+            state.validity,
+            obs.attention_columns,
+            live,
+            summaries,
         )
         # The optional trailing token is a critic input, never an action focus.
         post_attention_objects = encoded[:, : state.validity.shape[1]]
@@ -741,11 +778,12 @@ class ActorCritic(nn.Module):
         validity: torch.Tensor,
         columns: torch.Tensor | None = None,
         live: LiveTokens | None = None,
+        summaries: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """Attend using host-prepared columns or live-token coordinates."""
         if self.live_tokens and self.config.attention_on:
             assert live is not None
-            return self._attend_live(objects, is_agent, live)
+            return self._attend_live(objects, is_agent, live, summaries)
         original_slots = objects.shape[1]
         if not self.config.attention_on:
             columns = None
@@ -754,6 +792,17 @@ class ActorCritic(nn.Module):
             is_agent = is_agent.index_select(1, columns)
             validity = validity.index_select(1, columns)
         key_padding_mask = validity == 0
+        if summaries is not None:
+            objects = torch.cat((objects, summaries.to(objects.dtype)), 1)
+            key_padding_mask = torch.cat(
+                (
+                    key_padding_mask,
+                    key_padding_mask.new_zeros(
+                        (objects.shape[0], self.memory_summaries)
+                    ),
+                ),
+                1,
+            )
         if self.value_token is not None:
             objects = torch.cat(
                 (objects, self.value_token.expand(objects.shape[0], -1, -1)), dim=1
@@ -770,9 +819,19 @@ class ActorCritic(nn.Module):
         if columns is not None:
             # Restore the optional neutral value token in the same scatter,
             # at the slot immediately after the original object coordinates.
-            if self.value_token is not None:
-                columns = torch.cat((columns, columns.new_tensor([original_slots])))
-                original_slots += 1
+            extras = self.memory_summaries + int(self.value_token is not None)
+            if extras:
+                columns = torch.cat(
+                    (
+                        columns,
+                        torch.arange(
+                            original_slots,
+                            original_slots + extras,
+                            device=columns.device,
+                        ),
+                    )
+                )
+                original_slots += extras
             objects = objects.new_zeros(
                 (objects.shape[0], original_slots, objects.shape[2])
             ).index_copy(1, columns, objects)
@@ -783,16 +842,22 @@ class ActorCritic(nn.Module):
         objects: torch.Tensor,
         is_agent: torch.Tensor,
         tokens: LiveTokens,
+        summaries: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        """`_attend_objects` over valid objects only, returned at [B,N(+1),D].
+        """`_attend_objects` over valid objects, summaries and optional value token.
 
-        The value token is one more live token per observation, ownerless as
+        Memory summaries and the value token are ownerless live tokens, as
         on the padded path. Padding slots come back zero, as every padded
         layer leaves them, so focus joins and every value aggregation read the
         same values.
         """
         batch = objects.shape[0]
         owner = torch.where(is_agent, 1.0, -1.0).to(objects.dtype)
+        if summaries is not None:
+            objects = torch.cat((objects, summaries.to(objects.dtype)), 1)
+            owner = torch.cat(
+                (owner, owner.new_zeros((batch, self.memory_summaries))), 1
+            )
         if self.value_token is not None:
             objects = torch.cat(
                 (objects, self.value_token.expand(batch, -1, -1).to(objects.dtype)),
@@ -820,6 +885,8 @@ class ActorCritic(nn.Module):
         it, though critic gradients still reach the shared encoder. All
         variants share value_head's parameter names and MLP.
         """
+        if self.value_token is None:
+            objects = objects[:, : validity.shape[1]]
         if self.config.value_aggregation == "historical_mean":
             return self.value_head(objects)
         if self.value_token is not None:
@@ -1250,10 +1317,15 @@ class GameObjectAttention(nn.Module):
         owned_objects = objects
         if self.perspective is not None:
             perspective_scale = torch.where(is_agent.unsqueeze(-1), 1.0, -1.0)
-            # A trailing value token has no owner; real-object indexes stay fixed.
+            # Appended memory/value tokens are neutral; real-object indexes stay fixed.
             if objects.shape[1] > is_agent.shape[1]:
                 perspective_scale = torch.cat(
-                    (perspective_scale, torch.zeros_like(perspective_scale[:, :1])),
+                    (
+                        perspective_scale,
+                        perspective_scale.new_zeros(
+                            (objects.shape[0], objects.shape[1] - is_agent.shape[1], 1)
+                        ),
+                    ),
                     dim=1,
                 )
             owned_objects = objects + perspective_scale * self.perspective
