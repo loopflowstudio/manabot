@@ -63,3 +63,19 @@ The frozen source, $5 job cap and prior $0.00 settlement remain unchanged.
 
 The all-off arm includes existing capture frame reads; this comparison measures
 incremental option cost and does not separately attribute those baseline reads.
+
+2026-11-16 bounded retry preflight (23:09–23:10 UTC): Etude still reported
+`mtg338-a6000-2e3aec59e889` unavailable at $0.00. A complete provider inventory
+lookup through Etude's `RunPodAPI.named` at 23:09:57 UTC found no
+`etude-2e3aec59e889` pod. Availability at 23:10:09 UTC again quoted the A6000
+at $0.69/hour, 0 of 1 in use. The separate required
+`runpodctl pod list` then exited 1 with `network_error`:
+`lookup rest.runpod.io: no such host`. The earlier availability invocation
+omitted storage credentials and failed locally before querying the provider;
+injecting both Doppler projects allowed the availability read above.
+
+The retry stopped at the inventory read error, as planned. No fresh create,
+run ID, worker or rental was started; all three further creates remain unused.
+There is no new launcher cost or cleanup action to report. Measurements remain
+absent. Before resuming, obtain a successful provider inventory and recheck the
+previous session's settlement; keep the same frozen source and $5 job cap.
