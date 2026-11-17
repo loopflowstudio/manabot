@@ -52,12 +52,14 @@ def register_checkpoint(
     expected_sha256: str | None = None,
     expected_bytes: int | None = None,
     allow_deck_repetition: bool = False,
+    blank_decision_memory: bool = False,
 ) -> CheckpointAdmission:
     """Admit local bytes; a missing producer seed remains unknown, never invented.
 
     The world and both ABI hashes come from the checkpoint's own
     `ObservationSpace`, never the matchup's fresh defaults: serving compares
     them with the loaded space and refuses a registration that disagrees.
+    Blanking registers the same bytes as a distinct memory-ablation player.
     """
     digest, size = file_sha256(path), path.stat().st_size
     if (expected_sha256 is not None and digest != expected_sha256) or (
@@ -91,6 +93,7 @@ def register_checkpoint(
             "device": "cpu",
             "batch_size": 1,
             **({"allow_deck_repetition": True} if allow_deck_repetition else {}),
+            **({"blank_decision_memory": True} if blank_decision_memory else {}),
         },
         compute_class_id="policy-cpu-one-thread-one-pass",
         checkpoint_sha256=digest,

@@ -268,6 +268,7 @@ class MatchConfig(BaseConfig):
         *,
         hero: str = "gaea",
         villain: str = "urza",
+        decklists: DecklistDisclosure = "open",
     ) -> "MatchConfig":
         """Resolve both complete setups of an authored setup (preset or `pack_key`)."""
         import managym
@@ -281,6 +282,7 @@ class MatchConfig(BaseConfig):
             villain_deck=second.decklist,
             hero_sideboard=first.sideboard,
             villain_sideboard=second.sideboard,
+            decklists=decklists,
         )
 
 

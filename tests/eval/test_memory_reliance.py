@@ -41,13 +41,22 @@ def test_blanked_registration_serves_empty_history_without_mutating_input(
         player_id="intact-memory",
         display_name="Intact memory",
     ).registration
-    blanked = PlayerRegistration.model_validate(
-        {
-            **intact.model_dump(),
-            "player_id": "blanked-memory",
-            "player_spec": {**intact.player_spec, "blank_decision_memory": True},
-        }
-    )
+    blanked = register_checkpoint(
+        path,
+        backend=BACKEND,
+        match=setup,
+        content_suite=SELECTED_SUITE,
+        player_id="blanked-memory",
+        display_name="Intact memory",
+        blank_decision_memory=True,
+    ).registration
+    expected = {
+        **intact.model_dump(),
+        "player_id": "blanked-memory",
+        "player_spec": {**intact.player_spec, "blank_decision_memory": True},
+    }
+    assert blanked.model_dump() == expected
+    assert "blank_decision_memory" not in intact.player_spec
     assert blanked.checkpoint_sha256 == intact.checkpoint_sha256
     assert blanked.identity_sha256 != intact.identity_sha256
     execution = EvalExecution(deadline_unix=time.time() + 120)
