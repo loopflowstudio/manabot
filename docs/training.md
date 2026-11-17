@@ -225,8 +225,9 @@ reproduction, use the experiment's recorded revision and lock.
 
 An experiment worth repeating is written as a recipe instead.
 [`experiments/tla_frontier.py`](../experiments/tla_frontier.py) states the
-settings of its regime record in its own `settings` function and trains them on
-the current loop, and
+settings of its regime record in its own `settings` function (reading only the
+record's 134-deck `deck_source` as a `UniformDecks`) and trains them on the
+current loop, and
 [`experiments/seat_comparison.py`](../experiments/seat_comparison.py) compares
 two arms of one config across seeds.
 

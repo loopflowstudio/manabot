@@ -20,7 +20,6 @@ from manabot.infra.config import (
     RewardConfig,
 )
 from manabot.training.learning import DampedPolicyLearning, Learning
-from manabot.training.regime import TrainSelfPlay
 from manabot.training.rollout.adaptive import (
     AdaptiveConfig,
     AdaptiveSampler,
@@ -145,22 +144,3 @@ def test_mirror_roles_share_one_supporting_game_and_duplicates_are_rejected() ->
     with pytest.raises(ValueError, match="duplicate completed adaptive role"):
         sampler.commit(results, [])
     assert sampler.snapshot() == state
-
-
-def test_adaptive_recipe_excludes_one_seat_and_static_curriculum() -> None:
-    config = _config()
-    stage = TrainSelfPlay(id="train", operation="train_self_play", adaptive=config)
-    assert stage.learning_seats == "both"
-    assert (
-        "adaptive"
-        not in TrainSelfPlay(id="old", operation="train_self_play").model_dump()
-    )
-    for options in (
-        {"learning_seats": "one"},
-        {"matchup_curriculum": "elemental-uniform"},
-        {"behavior": "ema-self"},
-    ):
-        with pytest.raises(ValueError, match="adaptive sampling requires"):
-            TrainSelfPlay(
-                id="train", operation="train_self_play", adaptive=config, **options
-            )

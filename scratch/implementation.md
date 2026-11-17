@@ -93,3 +93,26 @@ nightly baseline remains a gate obligation; publication stays with the caller.
 - Ruff check, format check and `git diff --check` pass. Before scratch edits,
   code/test/workflow diff removes 1,140 lines and adds 17. `lf context` reports
   the unchanged default 16k-token/131072-byte targets and no usage entries.
+
+## Regime reader deletion — 2026-11-17 (compress)
+
+- `uv run --extra dev --extra artifacts --extra reports --extra notebook
+  --extra evaluation pytest -q -n 4` over the 21 changed or affected test
+  files (model admission/inference/MLX/semantic precision, package
+  boundaries, adaptive, batch closure, monitor evaluation, monitoring, MPS,
+  precision, regimes, self-play, self-play loop, time cohort, training decks,
+  two-seat, outcome tables, report helpers, experiment files, tracking):
+  187 passed, 3 skipped (21.22s). Report-module importers (sampling report,
+  eval performance, inference receipts, recipe Etude, boundaries): 119 passed
+  (7.93s). Ruff check and format pass on every changed Python file.
+- tla_frontier: `settings(FrontierConfig(size=...)).model_dump(mode="json")`
+  for w64 and w160l8 compared equal to dumps taken before the rewrite.
+- Whole-tree `pytest --collect-only`: 2,740 collected, one error that is on
+  HEAD too: tests/test_policy_container_support.py imports
+  `manabot.policy.checkpoint.require_supported`, which lives in
+  `manabot.backends.mlx.checkpoint`. Not in the CI lists; not changed here.
+- `uv run python scripts/check_loopflow_workflows.py` asserts in `_coverage`
+  (graph step ids); no `.lf` or script file is touched by this cut.
+- Not run: CUDA test (`test_cuda_semantic_policy_admission`, now reading the
+  record's agent/observation/match with the live configs; validated on CPU
+  only), node page proof beyond the cohort tests, full suite, nightly.

@@ -9,47 +9,7 @@ import pytest
 from manabot.reports import training as monitoring
 from manabot.reports.training import (
     Dashboard,
-    training_dashboard,
 )
-from manabot.reports.update_metrics import stage_rows
-from manabot.training.records import RegimeRun, StageRecord
-from manabot.training.regime import TrainingRegime, TrainSelfPlay
-import managym
-from tests.fixtures.saved_regimes import direct_self_play
-
-
-def _recipe() -> TrainingRegime:
-    value = direct_self_play()
-    value.world = managym.WORLD_VERSION
-    value.id = f"test-{value.world}-{value.id}"
-    value.stages = value.stages[:1]
-    stage = value.stages[0]
-    assert isinstance(stage, TrainSelfPlay)
-    stage.updates = 2
-    stage.transitions = 16
-    stage.streams = 2
-    stage.learning.epochs = 1
-    value.agent.hidden_dim = 8
-    value.agent.num_attention_heads = 2
-    value.schedule_clock = "iteration_fraction"
-    return value
-
-
-def test_retained_rows_without_coordinates_stay_unavailable() -> None:
-    run = RegimeRun(
-        id="saved-fixture",
-        regime=_recipe(),
-        regime_digest="fixture",
-        seed=197,
-        seed_streams={},
-        identities={},
-        stages=[StageRecord(id="policy-0", diagnostics=[{"policy_loss": -0.4}])],
-    )
-    dashboard = training_dashboard(run, stage_rows(run, {}))
-    assert dashboard.summary["history_incomplete"] is True
-    assert "progress/training_seconds" not in dashboard.rows[0]
-    assert dashboard.rows[0]["rl/policy_loss"] == -0.4
-    assert dashboard.rows[0]["availability/rl/value_loss"] is False
 
 
 def _history(directory: Path, run_id: str) -> list[dict[str, object]]:
@@ -152,70 +112,3 @@ def test_publisher_waits_for_evaluation_completion_without_losing_local_progress
     dashboard.rows[0]["monitor/attempted_games"] = 7
     with pytest.raises(ValueError, match="published prefix"):
         monitoring.publish_dashboard(dashboard, tmp_path)
-
-
-def test_numerical_projection_distinguishes_unsampled_and_rejected_updates(
-    tmp_path: Path,
-) -> None:
-    from manabot.reports.experiment import ReportEvidence, write_dashboard
-    from manabot.training.records import NumericalFailure
-
-    run = RegimeRun(
-        id="numerical-fixture",
-        regime=_recipe(),
-        regime_digest="fixture",
-        seed=1,
-        seed_streams={},
-        identities={},
-        status="failed",
-        stages=[
-            StageRecord(
-                id="policy-0",
-                diagnostics=[
-                    {
-                        "numerical": {
-                            "legal_logit_gap_max": 104.0,
-                            "legal_underflow_count": 2,
-                            "parameter_delta_l2": 0.01,
-                            "sampled_steps": 1,
-                        },
-                        "coordinates": {"updates": 1},
-                    },
-                    {
-                        "numerical": {
-                            "legal_logit_gap_max": 105.0,
-                            "legal_underflow_count": 3,
-                            "sampled_steps": 0,
-                        },
-                        "coordinates": {"updates": 2},
-                    },
-                ],
-                numerical_failure=NumericalFailure(
-                    invariant="nonfinite_gradients",
-                    iteration=3,
-                    health={"rejected_steps": 1, "rejected_updates": 1},
-                ),
-            )
-        ],
-    )
-    dashboard = training_dashboard(run, stage_rows(run, {}))
-    assert len(dashboard.rows) == 3
-    assert dashboard.rows[0]["numerical/parameter_delta_l2"] == 0.01
-    assert "numerical/parameter_delta_l2" not in dashboard.rows[1]
-    assert dashboard.rows[-1]["progress/updates"] == 2
-    assert dashboard.rows[-1]["numerical/rejected_steps"] == 1
-    assert dashboard.rows[-1]["failure/invariant"] == "nonfinite_gradients"
-    evidence = ReportEvidence(tmp_path, (run,), (), (), (), ())
-    path = write_dashboard(
-        evidence,
-        tmp_path / "health.html",
-        question="Numerical controls",
-        docs="metrics.md",
-        sections=[],
-    )
-    html = path.read_text()
-    assert "Numerical health" in html and "training.md#numerical-health" in html
-    assert "Measured parameter movement" in html
-    assert (
-        "nonfinite_gradients" in path.with_name("health-diagnostics.json").read_text()
-    )

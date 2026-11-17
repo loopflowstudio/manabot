@@ -27,7 +27,6 @@ from manabot.env.failures import CaptureScope, capture_scope
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
-from manabot.infra.identity import canonical_sha256
 from manabot.model.catalog import checkpoint_incompatibility, inspect_checkpoint
 from manabot.model.world import (
     checkpoint_world,
@@ -38,7 +37,6 @@ from manabot.sim.recording import record_games
 from manabot.sim.replay import read_trace, replay_games
 from manabot.sim.rollout import allocate_buffers
 from manabot.training.decks import UniformDecks
-from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.training.rollout import collection
 from manabot.training.rollout.collection import (
     Collector,
@@ -54,7 +52,6 @@ from manabot.training.state.game_errors import (
     open_ledger,
     replay_attempt,
 )
-from manabot.training.validation import validate_regime
 import managym
 from managym import MAX_DECKLIST_BYTES, Deck, DeckImportError, Decklist
 from managym.disclosure import DecklistSampling
@@ -102,23 +99,6 @@ def _collector(decks: UniformDecks) -> Collector:
     )
 
 
-def _regime(decks: object) -> TrainingRegime:
-    return TrainingRegime(
-        id="decks-proof",
-        world=managym.WORLD_VERSION,
-        deck_source=decks,
-        agent=ModelConfig(hidden_dim=8, num_attention_heads=2, world=WORLD),
-        stages=[
-            TrainSelfPlay(
-                id="self",
-                operation="train_self_play",
-                behavior="current-self",
-                streams=2,
-            )
-        ],
-    )
-
-
 def test_experiment_builds_a_source_and_checks_its_decks_in_one_batch(
     tmp_path: Path,
 ) -> None:
@@ -157,7 +137,6 @@ def test_experiment_builds_a_source_and_checks_its_decks_in_one_batch(
     )
     admitted = UniformDecks(decks=(*source.decks, repaired))
     admitted.check()
-    validate_regime(_regime(admitted))
     unsupported = Deck({"Swamp": 9, "Ally": 1})
     checked = managym.check_decks([*admitted.decks, unsupported])
     assert checked[:3] == [[], [], []]
@@ -167,35 +146,6 @@ def test_experiment_builds_a_source_and_checks_its_decks_in_one_batch(
     stored = source.model_copy(update={"decks": (*source.decks, unsupported)})
     with pytest.raises(ValueError, match="not admitted"):
         stored.check()
-
-
-def test_regime_records_its_source_and_rejects_bad_decks_before_training(
-    decks: UniformDecks,
-) -> None:
-    regime = validate_regime(_regime(decks))
-    # The source is the regime's only record of its setups; nothing is reread.
-    record = regime.model_dump(mode="json")
-    assert "match" not in record and regime.match is None
-    assert TrainingRegime.model_validate(record) == regime
-    assert canonical_sha256(
-        TrainingRegime.model_validate(record).model_dump(mode="json")
-    ) == canonical_sha256(record)
-    assert regime.root_match.world == managym.WORLD_SETUP
-    authored = MatchConfig(
-        hero="forest",
-        villain="swamp",
-        hero_deck={"Forest": 40},
-        villain_deck={"Swamp": 40},
-    )
-    with pytest.raises(ValueError, match="remove the authored match"):
-        TrainingRegime.model_validate({**record, "match": authored.model_dump()})
-    wrong = regime.model_copy(deep=True)
-    wrong.agent.world = "elemental-world-v2"
-    with pytest.raises(ValueError, match="complete world"):
-        validate_regime(wrong)
-    bad = _regime(decks.model_copy(update={"decks": (*decks.decks, Deck({"Ally": 1}))}))
-    with pytest.raises(ValueError, match="Ally"):
-        validate_regime(bad)
 
 
 @pytest.mark.parametrize("disclosure", ["closed", "mixed"])
@@ -519,9 +469,9 @@ def test_source_disclosure_preserves_open_identity(
     assert configured.decklists == mode
     if mode == "closed":
         assert configured.match_config().decklists == "closed"
-    record = _regime(configured).model_dump(mode="json")
-    assert record["deck_source"]["decklists"] == mode
-    assert TrainingRegime.model_validate(record).deck_source == configured
+    record = configured.model_dump(mode="json")
+    assert record["decklists"] == mode
+    assert UniformDecks.model_validate(record) == configured
 
 
 def test_closed_fixed_roots_survive_auto_reset(decks: UniformDecks) -> None:

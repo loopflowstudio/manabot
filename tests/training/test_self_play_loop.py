@@ -30,6 +30,31 @@ def _settings(learning: Learning | DampedPolicyLearning) -> SelfPlay:
     return SelfPlay.model_validate(values)
 
 
+@pytest.mark.parametrize(
+    ("fields", "refusal"),
+    [
+        ({"precision": "tf32"}, "precision tf32 requires CUDA"),
+        ({"precision": "bf16"}, "precision bf16 requires CUDA or MPS"),
+        ({"behavior": "random"}, "both learning seats"),
+        ({"batch_closure": "exact-quota"}, "both learning seats"),
+        (
+            {
+                "learning_seats": "one",
+                "batch_closure": "exact-quota",
+                "games_per_stream": 2,
+            },
+            "requires complete games",
+        ),
+    ],
+)
+def test_settings_refuse_what_the_loop_cannot_run(
+    fields: dict[str, object], refusal: str
+) -> None:
+    values = gray_ogre_self_play(horizon=2).model_dump()
+    with pytest.raises(ValueError, match=refusal):
+        SelfPlay.model_validate({**values, **fields})
+
+
 @pytest.mark.parametrize("averaging", [None, 0.9])
 def test_resume_keeps_adam_ema_counts_and_immutable_policies(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, averaging: float | None

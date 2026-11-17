@@ -1,153 +1,22 @@
-"""Batch closure is declared apart from learning seats; saved regimes keep theirs."""
+"""The collector closes a batch at the exact quota or at complete games."""
 
-import json
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-from pydantic import ValidationError
 import pytest
 
 from manabot.backends.torch.collection import (
     CollectionSession as TorchCollectionSession,
 )
 from manabot.env.match import Match, Reward
-from manabot.infra.config import MatchConfig, RewardConfig
-from manabot.infra.identity import canonical_sha256
+from manabot.infra.config import RewardConfig
 from manabot.training.learning import BatchClosure
-from manabot.training.regime import FrozenOpponent, TrainingRegime, TrainSelfPlay
 from manabot.training.rollout.collection import Collector, collect, open_collector
 from manabot.training.state.game_errors import GameErrorPolicy
-import managym
 from tests.training.test_two_seat_learning import ScriptedGames, _agent
 
 ROOT = Path(__file__).resolve().parents[2]
-OPPONENT = FrozenOpponent(path="target.pt", sha256="a" * 64)
-
-
-def _stage(**fields: object) -> TrainSelfPlay:
-    return TrainSelfPlay.model_validate(
-        {"id": "self-play", "operation": "train_self_play", **fields}
-    )
-
-
-def _regime(stage: TrainSelfPlay) -> TrainingRegime:
-    return TrainingRegime(
-        id="closure",
-        world=managym.WORLD_VERSION,
-        match=MatchConfig(),
-        stages=[stage],
-    )
-
-
-def _saved(**fields: object) -> dict[str, object]:
-    """A regime as old saves spell it: the stage has no `batch_closure` key."""
-    dumped = _regime(_stage()).model_dump(mode="json")
-    stage = {"id": "self-play", "operation": "train_self_play", **fields}
-    return {**dumped, "stages": [stage]}
-
-
-def _closure(regime: TrainingRegime) -> BatchClosure:
-    stage = regime.stages[0]
-    assert isinstance(stage, TrainSelfPlay)
-    return stage.batch_closure
-
-
-@pytest.mark.parametrize(
-    "fields",
-    [
-        {},
-        {"learning_seats": "one"},
-        {"behavior": "random"},
-        {"behavior": "frozen", "opponent": OPPONENT},
-    ],
-)
-def test_new_regimes_default_to_complete_games(fields: dict[str, object]) -> None:
-    regime = _regime(_stage(**fields))
-    assert _closure(regime) == "complete-games"
-    assert _closure(TrainingRegime.model_validate(regime.model_dump())) == (
-        "complete-games"
-    )
-
-
-@pytest.mark.parametrize(
-    ("fields", "closure"),
-    [
-        ({"learning_seats": "one"}, "exact-quota"),
-        ({"behavior": "random"}, "exact-quota"),
-        (
-            {"behavior": "frozen", "opponent": OPPONENT.model_dump()},
-            "exact-quota",
-        ),
-        ({"learning_seats": "one", "games_per_stream": 2}, "complete-games"),
-        (
-            {"learning_seats": "one", "game_errors": GameErrorPolicy().model_dump()},
-            "complete-games",
-        ),
-        ({}, "complete-games"),
-        ({"learning_seats": "both", "games_per_stream": 1}, "complete-games"),
-    ],
-)
-def test_saved_stages_resolve_as_they_ran_and_keep_their_bytes(
-    fields: dict[str, object], closure: BatchClosure
-) -> None:
-    regime = TrainingRegime.model_validate(_saved(**fields))
-    assert _closure(regime) == closure
-    (stage,) = regime.model_dump(mode="json")["stages"]
-    assert "batch_closure" not in stage
-
-
-def test_schema_one_stage_is_a_saved_one_seat_exact_quota() -> None:
-    regime = TrainingRegime.model_validate({**_saved(), "schema_version": 1})
-    stage = regime.stages[0]
-    assert isinstance(stage, TrainSelfPlay)
-    assert (stage.learning_seats, stage.batch_closure) == ("one", "exact-quota")
-    (dumped,) = regime.model_dump(mode="json")["stages"]
-    assert "learning_seats" not in dumped and "batch_closure" not in dumped
-
-
-def test_explicit_closure_survives_a_round_trip() -> None:
-    exact = _regime(_stage(learning_seats="one", batch_closure="exact-quota"))
-    complete = _regime(_stage(learning_seats="one", batch_closure="complete-games"))
-    (exact_stage,) = exact.model_dump(mode="json")["stages"]
-    (complete_stage,) = complete.model_dump(mode="json")["stages"]
-    assert "batch_closure" not in exact_stage
-    assert complete_stage["batch_closure"] == "complete-games"
-    for regime in (exact, complete):
-        assert _closure(TrainingRegime.model_validate(regime.model_dump())) == (
-            _closure(regime)
-        )
-
-
-@pytest.mark.parametrize(
-    "fields",
-    [
-        {"learning_seats": "both"},
-        {"learning_seats": "one", "games_per_stream": 2},
-        {"learning_seats": "one", "game_errors": GameErrorPolicy()},
-    ],
-)
-def test_exact_quota_rejects_settings_that_need_whole_games(
-    fields: dict[str, object],
-) -> None:
-    with pytest.raises(ValidationError, match="complete games"):
-        _stage(batch_closure="exact-quota", **fields)
-
-
-def test_exact_quota_accepts_capacity_recovery() -> None:
-    stage = _stage(
-        learning_seats="one",
-        batch_closure="exact-quota",
-        game_errors=GameErrorPolicy(recover_capacity=True),
-    )
-    regime = _regime(stage)
-    assert _closure(TrainingRegime.model_validate(regime.model_dump())) == "exact-quota"
-
-
-def test_a_game_error_policy_does_not_choose_the_closure() -> None:
-    without = _stage(learning_seats="one")
-    with_policy = _stage(learning_seats="one", game_errors=GameErrorPolicy())
-    assert without.batch_closure == with_policy.batch_closure == "complete-games"
 
 
 @pytest.mark.parametrize(
@@ -175,18 +44,6 @@ def test_collector_rejects_exact_quota_with_whole_game_settings(
             batch_closure="exact-quota",
             **fields,
             numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
-        )
-
-
-def test_continuation_preserves_closure() -> None:
-    first = _stage(learning_seats="one", batch_closure="exact-quota")
-    second = _stage(id="next", initial="self-play", learning_seats="one")
-    with pytest.raises(ValidationError, match="batch closure"):
-        TrainingRegime(
-            id="closure",
-            world=managym.WORLD_VERSION,
-            match=MatchConfig(),
-            stages=[first, second],
         )
 
 
@@ -225,22 +82,3 @@ def test_one_seat_complete_games_end_every_trajectory_at_a_result() -> None:
     assert collector.stats.games >= 2
     # Stream 1's shorter game leaves it idle while stream 0 finishes.
     assert collector.stats.idle_stream_steps > 0
-
-
-@pytest.mark.parametrize(
-    ("name", "digest"),
-    [
-        (
-            "elemental-two-seat-181-v1",
-            "d7dd8111d943e9017ccc7a58021f1b0ac3ce911fd0f0992450903f18a17ec0de",
-        ),
-        (
-            "elemental-long-183-v1",
-            "e55196d26df5a51087b211e9671eb4a47980fdb84ff129819e178326ad04b05e",
-        ),
-    ],
-)
-def test_saved_regime_digests_do_not_move(name: str, digest: str) -> None:
-    payload = json.loads((ROOT / f"experiments/regimes/{name}.json").read_text())
-    regime = TrainingRegime.model_validate(payload)
-    assert canonical_sha256(regime.model_dump(mode="json")) == digest

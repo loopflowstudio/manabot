@@ -176,7 +176,7 @@ adapters:
 `uv run pytest tests/eval/test_local_evaluation.py::test_cli_completes_without_training_cloud_or_callback -q`
 (a fresh process rejecting managed evaluation imports; adapter-only tests cannot
 establish that boundary). Tracking or report discovery:
-`uv run pytest tests/training/test_experiment_report.py tests/training/test_recipe_etude.py -q`;
+`uv run pytest tests/training/test_time_cohort.py tests/training/test_recipe_etude.py -q`;
 the recipe proof checks local tracking, stop/resume, immutable checkpoints and
 belief output provenance.
 

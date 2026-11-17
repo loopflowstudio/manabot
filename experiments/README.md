@@ -13,8 +13,10 @@ instruments. Only a few experiment files are kept, each as the baseline to copy
 for the next experiment of its kind; a finished experiment's code is removed
 and its report under [`reports/`](reports/) names the last commit with it. The
 regime files retired experiments trained stay under `regimes/` as records;
-nothing on main parses them
-([saved regimes](../docs/training.md#saved-regimes)).
+nothing on main reads one as a regime
+([saved regimes](../docs/training.md#saved-regimes)). `tla_frontier.py` reads
+the deck corpus (`deck_source`) of its record and states every other setting
+itself.
 
 ## Etude experiment files
 

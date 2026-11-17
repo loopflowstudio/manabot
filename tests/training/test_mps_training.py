@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 import torch
 
-from experiments.tla_frontier import frozen
+from experiments import tla_frontier
 import manabot.backends.torch as torch_backend
 from manabot.backends.torch import (
     _facts as fact_encoder,
@@ -42,7 +42,6 @@ from manabot.env.observation import (
 from manabot.env.shared_effects import SHARED_EFFECT_SHAPES
 from manabot.infra.config import RewardConfig
 from manabot.training.learning import DampedPolicyLearning, Learning
-from manabot.training.regime import Execution, TrainSelfPlay
 from manabot.training.rollout.collection import (
     close_collector,
     collect,
@@ -51,12 +50,6 @@ from manabot.training.rollout.collection import (
 from manabot.training.updates import damped_policy, ppo
 import managym
 from tests.model.prepared_routes import effect_rows, fact_rows
-
-
-def test_mps_admits_bf16_and_rejects_tf32() -> None:
-    assert Execution(device="mps", precision="bf16").precision == "bf16"
-    with pytest.raises(ValueError, match="precision tf32 requires CUDA"):
-        Execution(device="mps", precision="tf32")
 
 
 def test_float64_operand_keeps_cpu_tensor_ops_and_gradients_identical() -> None:
@@ -197,14 +190,14 @@ def test_mps_w64_single_selected_row_without_program_facts(
     """
     torch.set_num_threads(1)
     torch.manual_seed(197)
-    plan = frozen()[0]["w64"]
-    stage = plan.stages[0]
-    assert isinstance(stage, TrainSelfPlay)
-    assert isinstance(stage.learning, DampedPolicyLearning)
-    agent = ActorCritic(ObservationSpace(plan.observation), plan.agent).to("mps")
+    decks = tla_frontier.corpus()
+    learning = tla_frontier.learning("w64")
+    agent = ActorCritic(
+        ObservationSpace(tla_frontier.OBSERVATION), tla_frontier.model("w64")
+    ).to("mps")
     collector = open_collector(
         agent.observation_space,
-        Match(plan.root_match),
+        Match(decks.match_config()),
         Reward(RewardConfig()),
         num_envs=2,
         seed=197,
@@ -212,7 +205,7 @@ def test_mps_w64_single_selected_row_without_program_facts(
         learning_seats="one",
         batch_closure="exact-quota",
         workers=1,
-        deck_source=plan.deck_source,
+        deck_source=decks,
         numerics=TorchCollectionSession(device="mps", seed=197, precision="float32"),
     )
     try:
@@ -239,7 +232,7 @@ def test_mps_w64_single_selected_row_without_program_facts(
     monkeypatch.setattr(damped_policy, "compute_targets", singleton)
     learner = Learner(agent, "mps", minibatch_rows=256)
     result = damped_policy.update_damped_iteration(
-        torch_backend, learner, batch, stage.learning, 1
+        torch_backend, learner, batch, learning, 1
     )
     assert result["retained"] == result["optimizer_exposures"] == 1
     assert result["numerical"]["optimizer_steps"] == 1

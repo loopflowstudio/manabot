@@ -1,13 +1,13 @@
 """Task c5fba4: frontier self-play on the 17Lands TLA trophy corpus at two model sizes.
 
 One seed per size trains under the same damped self-play rule, population,
-input v9, four producers and wall budget; the large size is the frozen w64
-regime with only its width, depth, heads and damping horizon replaced. The
+input v9, four producers and wall budget; the large size is w64 with only its
+width, depth, heads and damping horizon replaced. The
 design and results are `experiments/reports/tla-frontier-c5fba4-results.md`.
 
 This file is the experiment `tla_frontier` for Etude: `train(config)` runs one
-size on the current self-play loop with the settings its regime record holds
-(`settings`), `training_jobs()` declares one wall-bounded job per size,
+size on the current self-play loop with the settings its executed run recorded,
+stated here (`settings`), `training_jobs()` declares one wall-bounded job per size,
 `eval_jobs(state)` plays the comparisons below and `report()` draws them.
 
     uv run etude launch experiments/tla_frontier.py --revision COMMIT --rent l4
@@ -87,22 +87,22 @@ from manabot.eval.agents import AGENTS, game_players, registration
 from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.models import EvaluationKey
 from manabot.experiment.setup import machine_setup
-from manabot.infra.config import ObservationConfig
+from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import StrictModel, canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.infra.runtime import regime_tag
 from manabot.policy.checkpoint import read_container
 from manabot.sim.matchup import DeckMatchup
 from manabot.sim.registration import ETUDE_COMPUTE_CLASS, PlayerRegistration
+from manabot.training.decks import UniformDecks
 from manabot.training.learning import DampedPolicyLearning, IterationSchedule
 from manabot.training.panels import ML, PERF
-from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.training.report import (
     against_earlier_self,
     against_fixed,
     job_labels,
 )
-from manabot.training.state.game_errors import GameErrorState
+from manabot.training.state.game_errors import GameErrorPolicy, GameErrorState
 import managym
 
 if TYPE_CHECKING:
@@ -111,7 +111,9 @@ if TYPE_CHECKING:
 ROOT = Path(__file__).resolve().parents[1]
 # Etude names the experiment for this file.
 EXPERIMENT = Path(__file__).stem
-REGIME = ROOT / "experiments/regimes/tla-frontier-c5fba4-w64.json"
+# The executed w64 run's saved record. Only its `deck_source`, the 134-deck
+# corpus, is read (`corpus`); every other setting is stated in this file.
+CORPUS = ROOT / "experiments/regimes/tla-frontier-c5fba4-w64.json"
 GAMES_PER_PAIR = 4
 # Etude divides the rental's CPUs between game processes. At cpu32's
 # USD0.96/hour, these hours and Etude's 15-minute setup allowance fit the pass ceiling.
@@ -248,43 +250,69 @@ def _regime_id(label: SizeLabel) -> str:
     return f"tla-frontier-c5fba4-{label}"
 
 
-def frozen() -> tuple[dict[SizeLabel, TrainingRegime], Protocol]:
-    """Both regimes and the protocol.
+# The executed runs' input capacities, shared by both sizes.
+OBSERVATION = ObservationConfig(
+    policy_input_version=9,
+    max_facts=512,
+    max_cards_per_player=128,
+    max_permanents_per_player=96,
+    max_actions=64,
+    action_overflow="first-legal",
+    max_focus_objects=2,
+    max_events=32,
+)
 
-    The large regime is the shared w64 regime with `PROTOCOL.large`'s network
-    and damping horizon. The executed values are fixed by revision ab2b757d9.
-    """
-    protocol = PROTOCOL
-    small = TrainingRegime.model_validate_json(REGIME.read_bytes())
-    stage = _stage(small)
-    size = protocol.large.model_dump(exclude={"expected_updates"})
-    schedule = _schedule(small).model_copy(
-        update={"steps": protocol.large.expected_updates}
+
+def corpus() -> UniformDecks:
+    """The population both sizes train on and the evaluation pairs index."""
+    return UniformDecks.model_validate(json.loads(CORPUS.read_bytes())["deck_source"])
+
+
+def model(size: SizeLabel) -> ModelConfig:
+    network = (
+        {"hidden_dim": 64, "attention_layers": 2, "num_attention_heads": 4}
+        if size == SMALL
+        else PROTOCOL.large.model_dump(exclude={"expected_updates"})
     )
-    learning = stage.learning.model_copy(update={"iteration_schedule": schedule})
-    large = TrainingRegime.model_validate(
-        small.model_copy(
-            update={
-                "id": _regime_id(LARGE),
-                "agent": small.agent.model_copy(update=size),
-                "stages": [stage.model_copy(update={"learning": learning})],
-            }
-        ).model_dump()
+    return ModelConfig(
+        world="world",
+        value_kind="scalar",
+        value_aggregation="masked_mean",
+        attention_on=True,
+        belief_count_buckets=0,
+        belief_card_vocab_size=0,
+        belief_owner_role_vocab_size=2,
+        belief_hidden_zone_vocab_size=7,
+        **network,
     )
-    return {SMALL: small, LARGE: large}, protocol
 
 
-def _stage(regime: TrainingRegime) -> TrainSelfPlay:
-    stage = regime.stages[0]
-    assert isinstance(stage, TrainSelfPlay)
-    return stage
-
-
-def _schedule(regime: TrainingRegime) -> IterationSchedule:
-    learning = _stage(regime).learning
-    assert isinstance(learning, DampedPolicyLearning)
-    assert learning.iteration_schedule is not None
-    return learning.iteration_schedule
+def learning(size: SizeLabel) -> DampedPolicyLearning:
+    """One rule for both sizes; the damping horizon is each size's expected reach."""
+    return DampedPolicyLearning(
+        gradient="damped_policy",
+        policy_lambda=0.5,
+        value_lambda=0.8,
+        filter_kind="quantile",
+        filter_scope="actor_critic",
+        advantage_quantile=0.75,
+        min_advantage=0.01,
+        reference="action_type_uniform",
+        clip=0.2,
+        collection_kl=0.1,
+        learning_rate_scale=0.5,
+        learning_rate_power=1.1,
+        learning_rate_min=5e-06,
+        learning_rate_max=0.0001,
+        tau_scale=0.05,
+        tau_power=0.3,
+        max_grad_norm=0.267,
+        ema=0.999,
+        iteration_schedule=IterationSchedule(
+            steps=2474 if size == SMALL else PROTOCOL.large.expected_updates,
+            reference_steps=10000,
+        ),
+    )
 
 
 # -- Training -----------------------------------------------------------------
@@ -303,36 +331,40 @@ class FrontierConfig(BaseModel):
 
 
 def settings(config: FrontierConfig) -> SelfPlay:
-    """The size's regime record as current self-play settings.
+    """The size's executed settings on the current self-play loop.
 
     Population, input capacities, model, learning rule with its damping
     horizon, game-error recovery, precision and forward layout are the
-    record's; the world is the installed one. Exports fall on the protocol's
-    cadence, which every milestone is a multiple of.
+    executed runs'; the world is the installed one. Exports fall on the
+    protocol's cadence, which every milestone is a multiple of.
     """
-    regimes, protocol = frozen()
-    regime = regimes[config.size]
-    stage = _stage(regime)
+    protocol = PROTOCOL
     if any(update % protocol.export_every for update in protocol.milestones):
         raise ValueError("milestones must fall on the export cadence")
     from manabot.training.loops.self_play import SelfPlay
 
     return SelfPlay(
-        deck_source=regime.deck_source,
-        observation=regime.observation,
-        model=regime.agent,
-        learning=stage.learning,
+        deck_source=corpus(),
+        observation=OBSERVATION,
+        model=model(config.size),
+        learning=learning(config.size),
         behavior="current-self",
         streams=config.streams,
-        transitions=stage.transitions,
-        learning_seats=stage.learning_seats,
-        batch_closure=stage.batch_closure,
-        game_errors=stage.game_errors,
+        transitions=64,
+        learning_seats="both",
+        batch_closure="complete-games",
+        game_errors=GameErrorPolicy(
+            threshold=0.25,
+            window=100,
+            warmup=100,
+            max_game_actions=40000,
+            recover_capacity=True,
+        ),
         device=config.device,
-        precision=stage.execution.resolved_precision,
+        precision="float32",
         workers=config.workers,
-        bucketed_shapes=stage.execution.resolved_bucketed_shapes,
-        live_tokens=stage.execution.resolved_live_tokens,
+        bucketed_shapes=False,
+        live_tokens=False,
         checkpoint_every=protocol.export_every,
     )
 
@@ -346,7 +378,7 @@ def train(config: FrontierConfig) -> None:
 
 def training_jobs(revision: str) -> list[TrainingJob]:
     """One capped GPU job per size, named for its regime; no automatic retry."""
-    _, protocol = frozen()
+    protocol = PROTOCOL
     return [
         TrainingJob(
             name=_regime_id(label),
@@ -371,7 +403,7 @@ def _source() -> list[Path]:
     return [
         *sorted((ROOT / "manabot").rglob("*.py")),
         Path(__file__),
-        REGIME,
+        CORPUS,
     ]
 
 
@@ -383,7 +415,7 @@ def environment(
     """The frontier's environment, or a named one of the checks beside it."""
     return Environment(
         name=name,
-        # The protocol names the world and corpus, and `frozen` rejects drift.
+        # The protocol names the corpus by digest.
         files=canonical_sha256(protocol.model_dump(mode="json")),
         config={"purpose": purpose},
     )
@@ -892,7 +924,7 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
     """Play the available comparisons; Etude owns already-delivered matches."""
     if state.experiment != EXPERIMENT:
         raise ValueError("frontier evaluation requires this experiment's runs")
-    _, protocol = frozen()
+    protocol = PROTOCOL
     closed = with_launcher_ends(state)
     return evaluation_jobs(
         "tla-frontier-c5fba4-paired-v1",
@@ -970,10 +1002,9 @@ def evaluation_jobs(
 # -- Evaluation callback ------------------------------------------------------
 
 
-def deck_matchup(regime: TrainingRegime, protocol: Protocol, pair: Pair) -> DeckMatchup:
-    """The frozen pair's two lists, as the regime's population names them."""
-    source = regime.deck_source
-    assert source is not None and source.entry_ids is not None
+def deck_matchup(source: UniformDecks, protocol: Protocol, pair: Pair) -> DeckMatchup:
+    """The frozen pair's two lists, as the population names them."""
+    assert source.entry_ids is not None
     return DeckMatchup(
         population_sha256=protocol.corpus_sha256,
         entries=(source.entry_ids[pair.first], source.entry_ids[pair.second]),
@@ -1025,18 +1056,16 @@ def _registration(
 
 def play(match: Match[Pair], agents: Sequence[object]) -> Tables:
     """One sampled pair/deal, four policy/deck/seat legs, with failure denominators."""
-    regimes, protocol = frozen()
-    # The sizes share observation and population; only their models differ.
-    regime = regimes[SMALL]
+    protocol = PROTOCOL
     pair = Pair.model_validate(match.config)
     if pair not in protocol.pairs:
         raise ValueError("evaluation conditions differ from frozen schedule")
-    matchup = deck_matchup(regime, protocol, pair)
+    matchup = deck_matchup(corpus(), protocol, pair)
     candidate, candidate_path = _registration(
-        match.players[0], "candidate", matchup, regime.observation
+        match.players[0], "candidate", matchup, OBSERVATION
     )
     opponent, opponent_path = _registration(
-        match.players[1], "opponent", matchup, regime.observation
+        match.players[1], "opponent", matchup, OBSERVATION
     )
     paths = {
         name: str(path)
@@ -1121,8 +1150,7 @@ def report() -> Report:
     equal-hours pair is drawn once, at Large's update; a pair that is also an
     equal-update or endpoint pair is played once, under that tag.
     """
-    regimes, _ = frozen()
-    jobs = {_regime_id(label): regimes[label].agent for label in SIZES}
+    jobs = {_regime_id(label): model(label) for label in SIZES}
     small, large = jobs
     return Report(
         score=Score(table="games", value="score", reference=0.5, unit="games"),

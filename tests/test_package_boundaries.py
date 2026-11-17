@@ -732,28 +732,3 @@ assert 'torch' not in sys.modules
         text=True,
     )
     assert result.returncode == 0, result.stderr
-
-
-def test_live_training_and_evaluation_without_saved_regime_readers() -> None:
-    probe = """
-import importlib
-import importlib.abc
-import sys
-
-class RefuseSavedRegimes(importlib.abc.MetaPathFinder):
-    def find_spec(self, fullname, path=None, target=None):
-        if fullname in {'manabot.training.regime', 'manabot.training.records'}:
-            raise AssertionError('Saved regime import: ' + fullname)
-
-sys.meta_path.insert(0, RefuseSavedRegimes())
-for module in (
-    'manabot.training.loops.self_play',
-    'manabot.training.report',
-    'manabot.backends.torch.collection',
-    'manabot.backends.torch.runtime',
-    'manabot.eval.duel',
-    'manabot.eval.monitor',
-):
-    importlib.import_module(module)
-"""
-    subprocess.run([sys.executable, "-c", probe], cwd=REPO_ROOT, check=True)

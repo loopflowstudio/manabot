@@ -60,11 +60,6 @@ No native rule, observation layout, frozen evidence or strategic label changes.
 Use atomic directory allocation rather than replacing journals or resuming a
 partly played game. Existing flat match evidence stays untouched.
 
-2026-11-16 idea, not planned: `manabot.training.report.job_labels` takes
-`(word, TrainingRegime)` but reads only `regime.agent` (width, layers). Taking
-a `ModelConfig` would let a recipe-only experiment label its jobs and drop the
-module's saved-regime import; one caller (`experiments/tla_frontier.py`).
-
 2026-11-16 idea, not planned: an evaluation with no valid game is refused by
 three rules (Elemental's callback; Duel's 200-valid reader; the shared deal
 callback returns score-null rows). At Etude d9a6bc8 a raising callback is a
@@ -78,9 +73,11 @@ RunPod/Vast/Lium report no L4 capacity; leave performance pending at USD 3.
 
 2026-11-17 write-docs choices for the regime-reader deletion (mine, reversible;
 nobody answered these). The docs are written to them:
-- tla_frontier is treated as current: it stays, restating its settings in code,
-  and no code parses `experiments/regimes/*.json`. Open: is it current, or
-  should the file go with the readers and its report stand as the record?
+- tla_frontier is treated as current: it stays, restating its settings in code.
+  It reads one thing from its regime JSON, the 134-deck `deck_source`, as a
+  `UniformDecks` (my choice in compress: too large to restate, and the pairs
+  index it). Open: is it current, or should the file go with the readers and
+  its report stand as the record?
 - `manabot training-report` stays for Etude sources only. From Etude logs it
   has no phase breakdown or cost (one warning per run), so it is a run list by
   active time, throughput and a timeline. Open: keep that, or delete it too
@@ -92,3 +89,11 @@ nobody answered these). The docs are written to them:
   f577362135 (state.pt) and 83b77e6c64 (experiment modules), are commits of
   this branch and not on main; a squash merge leaves them reachable only
   through the PR ref. Not changed here.
+
+2026-11-17 compress choices (mine, reversible): deleted `HostFacts` /
+`MemoryLimit`, which the plan had kept for historical receipts; their only
+reader was the deleted run record. Kept the training-report page's script and
+`CohortRun` payload unchanged though its flamegraph and phase table can no
+longer show anything; stripping them, or deleting the command, waits on the
+open question above. Left the `notebook` extra and plotting dependencies in
+pyproject for the same reason: CLAUDE.md's commands name `--extra notebook`.

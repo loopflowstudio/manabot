@@ -16,12 +16,10 @@ from manabot.backends.torch.rl import transition_gae
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
-    MatchConfig,
     ModelConfig,
     RewardConfig,
 )
 from manabot.training.learning import DampedPolicyLearning
-from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.training.rollout.collection import (
     Collector,
     RolloutBatch,
@@ -31,7 +29,6 @@ from manabot.training.rollout.collection import (
     open_collector,
 )
 from manabot.training.updates.damped_policy import update_damped_iteration
-import managym
 from tests.model.prepared_routes import device_input
 
 
@@ -233,40 +230,6 @@ def test_off_policy_opponents_cannot_train_both_seats(mode: str) -> None:
             opponent_agent=agent,
             learning_seats="both",
             numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
-        )
-
-
-def test_self_play_defaults_to_both_and_rejects_off_policy_rows() -> None:
-    stage = TrainSelfPlay(id="train", operation="train_self_play")
-    assert stage.learning_seats == "both"
-    assert stage.model_dump()["learning_seats"] == "both"
-    assert (
-        TrainSelfPlay(
-            id="random", operation="train_self_play", behavior="random"
-        ).learning_seats
-        == "one"
-    )
-    assert "games_per_stream" not in stage.model_dump()
-    with pytest.raises(ValueError, match="both learning seats"):
-        TrainSelfPlay(
-            id="train",
-            operation="train_self_play",
-            behavior="random",
-            learning_seats="both",
-        )
-
-
-def test_live_continuation_cannot_silently_change_seat_recipe() -> None:
-    first = TrainSelfPlay(id="a", operation="train_self_play", learning_seats="one")
-    second = TrainSelfPlay(
-        id="b", operation="train_self_play", initial="a", learning_seats="both"
-    )
-    with pytest.raises(ValueError, match="continuation must preserve"):
-        TrainingRegime(
-            id="invalid",
-            world=managym.WORLD_VERSION,
-            match=MatchConfig(),
-            stages=[first, second],
         )
 
 

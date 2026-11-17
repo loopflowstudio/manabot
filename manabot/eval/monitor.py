@@ -1,5 +1,5 @@
 """Monitoring protocols and retained-row statistics. Training coordinates describe the
-measured checkpoint; experiment.checkpoint_evaluation owns execution and admission."""
+measured checkpoint."""
 
 from __future__ import annotations
 

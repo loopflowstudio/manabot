@@ -1,6 +1,5 @@
 """Training contracts, credit boundaries, and experiment controls."""
 
-import json
 from pathlib import Path
 
 import numpy as np
@@ -10,19 +9,8 @@ import torch
 from manabot.backends.torch.rl import selected_rows
 from manabot.policy.prepare import reference_distribution
 from manabot.training.learning import DampedPolicyLearning
-from manabot.training.regime import TrainingRegime
-from manabot.training.validation import validate_regime
-from managym import WORLD_VERSION
-from tests.fixtures.saved_regimes import direct_self_play
 
 ROOT = Path(__file__).resolve().parents[2]
-
-
-def recipe() -> TrainingRegime:
-    value = direct_self_play()
-    value.world = WORLD_VERSION
-    value.agent.world = "ur-lessons-vs-gw-allies"
-    return value
 
 
 def test_reference_has_full_support_and_is_permutation_invariant():
@@ -50,26 +38,8 @@ def test_reference_has_full_support_and_is_permutation_invariant():
     assert selected_rows(torch.zeros(4), 0.25, 0.01).numel() == 0
 
 
-def test_modified_models_are_revalidated_before_execution():
-    value = recipe()
-    value.stages[0].transitions = 0
-    with pytest.raises(ValueError):
-        validate_regime(value)
-
-
 def test_legacy_learning_discriminator_is_rejected() -> None:
     with pytest.raises(ValueError):
         DampedPolicyLearning.model_validate({"gradient": "ataraxos_move"})
     rule = DampedPolicyLearning(gradient="damped_policy")
     assert rule.model_dump()["gradient"] == "damped_policy"
-
-
-def test_frozen_regimes_read_their_pack_selectors_as_world() -> None:
-    value = json.loads(
-        (ROOT / "experiments/regimes/elemental-long-183-v1.json").read_text()
-    )
-    assert value["match"]["content_pack"] == "elemental-world-v2"
-    regime = TrainingRegime.model_validate(value)
-    assert regime.match is not None
-    assert regime.match.world == regime.agent.world == "elemental-world-v2"
-    assert regime.match.model_dump(mode="json")["world"] == "elemental-world-v2"

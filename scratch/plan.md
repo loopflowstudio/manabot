@@ -19,11 +19,26 @@ f577362135562e569033fe33e48c7ef0411a829d. No old-folder loader.
 Second cut (orphans of the retired executor): TrainingState/TrainingRuntime
 recovery members and their Torch functions (policy/optimizer/RNG state, Adam
 admission, clone/validate, device metrics), collector restore_rng, VerifyStore
-(stage reader now in reports/snapshot.py), reports/selection.py,
+and its stage reader, reports/selection.py,
 training/clock.py and its test, report_baseline, local_checkpoint_file,
 HardwareInventory, replay_prefix, host_facts and its CPU/cgroup/RunPod readers
-and exclusive tests. Kept: StepCalibration (retained reader) and HostFacts /
-MemoryLimit schemas for historical receipts.
+and exclusive tests.
+Third cut (PR #500 steer, built 2026-11-17 in compress): the saved-regime
+schema and every reader of it. Gone: training/regime.py, records.py,
+validation.py; experiment/records.py (StepCalibration, ExperimentRun) and
+checkpoint_evaluation.py; reports/analysis, experiment, learning, notebook,
+records, snapshot, study, time_profile and regime_study.ipynb; infra/host.py
+(HostFacts/MemoryLimit: their one reader was RegimeRunRecord); ladder_precision
+and `precision="auto"`; read_updates, stage_rows, self_play_figures,
+training_dashboard, native_cohort; tests/fixtures/regime_builders.py,
+saved_regimes.py and experiment-demo/, and the tests only for these.
+Still to delete, not to maintain: the training-report page's flamegraph and
+phase table (`time_cohort.js` `flamegraph`, `aggregate().phases`, their HTML
+sections) and `CohortRun.elapsed_seconds/phases/phase_coverage/cost_usd`:
+an Etude run never sets them, so they are unreachable. Then the `notebook`
+extra, core `nbformat` and `matplotlib` in `reports`/`evaluation`: no Python
+on main imports them (pyproject, uv.lock, release.yml, docs/development.md
+and the `--extra notebook` commands in CLAUDE.md change together).
 
 ## Built
 
@@ -72,15 +87,13 @@ and interrupted attempts keep their journals while a retry completes.
 ## Concept follow-up
 
 The five directions from design-train-api.md (97338108bc review) are built:
-TrainingRun names the live handle throughout docs; retained readers describe
-saved regimes; report update readers live in reports/update_metrics.py;
-SelectionGameSpec lives in rollout/selection_data.py; Collector.operation is
-public. Live loop, Torch collection/runtime and duel/monitor import without
-training.regime or training.records (fresh-interpreter boundary check).
+TrainingRun names the live handle throughout docs; SelectionGameSpec lives in
+rollout/selection_data.py; Collector.operation is public. The saved-regime
+readers that review kept apart are deleted (Delete list, third cut), and with
+them the fresh-interpreter boundary test that refused their import.
 The evaluation guide uses the local recipe's actual final EMA policy path.
-Serialized keys and frozen records are unchanged. Focused import/outcome/timing
-and resume/recipe/retained-reader checks: 25 passed; local recipe completed
-two updates. Commands and evidence: implementation.md.
+Serialized keys and frozen records are unchanged. Commands and evidence:
+implementation.md.
 
 Fifth concept review (928ee3f4bc): the QA fixes settle as built — an invalid
 game row means a native failure only, and an all-invalid Elemental group is
@@ -134,67 +147,28 @@ passed). Commands and limits: implementation.md.
   .lf/prompts/20261117-065016-7oIWNJ-steer.md). Jack Heart: "i also would
   have expected this pr to involve more deletion of the executor and training
   regime code, no?"; offered keep / thin reader / delete, he answered "3".
-  First independent deletion slice is built (below); the GPU measurement stays
-  pending, not abandoned.
-  - Built 2026-11-17: deleted `experiment/config.py` and `attacks.py`, their
-    exclusive tests and `tests/training/wdl_baseline.py`; removed only builder
-    assertions from mixed history/closure tests. No live source callers existed.
-    Updated the integration inventory. `training.report` survives because current
-    Etude experiment reports use its panels; `job_labels` now takes ModelConfig,
-    and tla_frontier passes its models. Production deletion: 583 lines; total
-    code/test/workflow diff: 1,140 lines deleted, 17 added (before scratch).
-    Remaining reader deletion below is unbuilt; current tla_frontier still reads
-    regime JSON. Its settings migration must precede deleting regime.py.
-    Focused history, collector, panel and import-boundary checks: 13 passed.
-    Integration workflow collection: see implementation.md.
-  - Delete the retained regime/stage records and code that exists only to read
-    them: `manabot/training/regime.py` (928 lines: TrainingRegime,
-    TrainSelfPlay, other Stages, Execution, RecoveryPolicy, CheckpointCadence,
-    import/origin records), reader-only parts of `manabot/experiment/` (1,367
-    lines), `manabot/reports/`, `manabot/training/records.py` (247),
-    `report.py` (72), `validation.py` (60), and tests only for them (~45 test
-    files import these modules; tests/fixtures/saved_regimes.py and
-    regime_builders.py among them).
-  - Check every name for live users first; move what live code needs to where
-    it is used and say what was kept and why. Known live users at 89fbdafed8:
-    `ladder_precision` (infra/config.py, backends/torch/learner.py);
-    `manabot.experiment.numerics` (recipes/elemental.py);
-    `manabot.experiment.setup.machine_setup` (experiments/elemental.py,
-    seat_comparison.py, batched_baseline.py, tla_frontier.py);
-    `training.records.StageRecord` (reports/update_metrics.py) and
-    `PhaseTiming` plus `experiment.records.ExperimentRun`
-    (reports/time_profile.py, time_cohort.py).
-  - Stop-and-say condition: `experiments/tla_frontier.py` still imports
-    TrainingRegime/TrainSelfPlay and training.report as its settings holder
-    for new launches (its executed runs are historical, report
-    tla-frontier-c5fba4-results.md). Settle whether it is current before
-    deleting that part. The nightly path (recipes/baseline.py,
-    verify/learning_regression.py) imports none of these modules;
-    `regime_digest` there is a serialized field name, kept.
-  - Docs for this deletion are written (intended behavior, code not yet
-    changed): docs/training.md (Saved regimes, reduced precision, update
-    metrics), docs/experiment-metrics.md (rewritten around Etude runs),
-    docs/experiments.md (retained comparisons, report example),
-    docs/evaluation.md (attack plans, ownership), docs/observation-and-model.md
-    (SelfPlay examples replace regime ones), docs/workflows.md,
-    docs/development.md, manabot/README.md, manabot/model/training.md,
-    manabot/model/agent.md, experiments/README.md. They name
-    f4e1822faf (on main; executor, schema and readers) as the one revision
-    that reads and runs the records. What they commit the code to, each my
-    choice (questions.md): `manabot.experiment` keeps only `setup` and
-    `numerics`; `manabot.training.report` stays and `job_labels` takes each
-    job's `ModelConfig`; tla_frontier stays, its settings written in its own
-    file with the regime JSON unread; `manabot.reports` keeps
-    `update_metrics.updates_from_run`, `self_play.self_play_points` over one
-    run's rows, `training --evaluations`, the Etude-only `training-report`,
-    `belief`, `inference` and `evaluation`; StepCalibration, AttackPlan,
-    checkpoint_evaluation, snapshot, notebook, study, learning, analysis,
-    experiment dashboard and time profile go; no `precision="auto"`.
-  - Name the last revision that reads the records in the guide beside the
-    state.pt revision; the PR says plainly which reports can no longer be
-    rebuilt from main. Frozen evidence, experiment ids, reports under
-    experiments/, serialized keys and checkpoint fields are untouched.
-    Report the line counts removed.
+  Built (Delete list, third cut). What survives and why:
+  - `experiments/tla_frontier.py` states its settings in code (`OBSERVATION`,
+    `model`, `learning`, `settings`) and reads only the 134-deck `deck_source`
+    of `experiments/regimes/tla-frontier-c5fba4-w64.json` as `UniformDecks`
+    (`corpus`). Both sizes' `settings()` dumps equal the record-derived ones
+    from before the cut. `Protocol` is unchanged, so the environment digest is.
+  - `manabot.experiment`: `setup`, `numerics`. `manabot.training.report`.
+  - `manabot.reports`: `update_metrics.updates_from_run`,
+    `self_play.self_play_points(rows, window_updates)` (no `stage`),
+    `training` (`--evaluations` only), `time_sources`/`time_cohort` (Etude
+    runs only; a regime `run.json` is warned as unrecognized), `belief`,
+    `inference`, `evaluation`.
+  - SelfPlay's own refusals (tf32/bf16 device, both-seat and exact-quota
+    rules) had only regime-schema tests; ported as
+    `test_settings_refuse_what_the_loop_cannot_run`.
+  - Lines: manabot+experiments 5,686 deleted / 269 added; tests 3,086 / 184;
+    experiment-demo fixture 12,970 deleted. The PR must say which reports can
+    no longer be rebuilt from main (docs/training.md "Saved regimes" has the
+    list and names f4e1822faf).
+  - Docs were written ahead of the code; three lines changed to match it
+    (corpus read: docs/training.md, experiments/README.md,
+    docs/deck-building.md).
 - Gate and publication are the caller's steps. The full nightly baseline
   (`.github/workflows/baseline.yml`, workflow_dispatch: `etude train` then
   `evaluate`) has not run since the corpus fix; dispatch it on the PR branch

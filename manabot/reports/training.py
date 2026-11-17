@@ -1,14 +1,12 @@
-"""Project training rows for reports, and publish evaluation curves to Etude.
+"""Publish saved monitor results to Etude as evaluation curves.
 
-`training_dashboard` names a run's update rows (`update_metrics.stage_rows`)
-for offline reports; self-play rows already live in the run's own Etude run.
 `evaluation_dashboard` projects saved monitor results, and `publish_dashboard`
 appends settled rows once, checked against Etude's durable row digests on
 retry. In-progress evaluation stays in the summary until settled.
 """
 
 import argparse
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 import fcntl
 import json
@@ -26,8 +24,6 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue
 from manabot.eval.monitor import MonitorResult
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
-from manabot.reports.records import ReportRun
-from manabot.training.update_metrics import MetricRow
 
 Scalar = int | float | str | bool
 
@@ -51,135 +47,6 @@ def _scalars(value: Mapping[str, object], prefix: str = "") -> dict[str, Scalar]
             if not isinstance(item, float) or math.isfinite(item):
                 result[name] = item
     return result
-
-
-def training_dashboard(
-    run: ReportRun, updates: Mapping[str, Sequence[MetricRow]]
-) -> Dashboard:
-    """Name each stage's rows; `updates` maps stage IDs to their flat rows."""
-    rows: list[dict[str, Scalar]] = []
-    missing_coordinates = 0
-    for stage in run.stages:
-        specification = next(s for s in run.regime.stages if s.id == stage.id)
-        for ordinal, diagnostic in enumerate(updates.get(stage.id, ())):
-            row: dict[str, Scalar] = {
-                "progress/observation": len(rows),
-                "stage/id": stage.id,
-                "stage/operation": specification.operation,
-                "stage/ordinal": ordinal,
-            }
-            coordinate = {
-                name.removeprefix("coordinates/"): value
-                for name, value in diagnostic.items()
-                if name.startswith("coordinates/")
-            }
-            if coordinate:
-                row.update(_scalars(coordinate, "progress"))
-                elapsed = coordinate.get("training_seconds")
-                if isinstance(elapsed, (int, float)) and elapsed > 0:
-                    for counter in (
-                        "environment_decisions",
-                        "learner_transitions",
-                        "optimizer_exposures",
-                        "optimizer_updates",
-                        "games",
-                    ):
-                        count = coordinate.get(counter)
-                        if isinstance(count, (int, float)):
-                            row[f"throughput/{counter}_per_second"] = count / elapsed
-                    admitted = [
-                        c.training_seconds
-                        for c in run.monitoring_checkpoints
-                        if c.artifact is not None and c.training_seconds <= elapsed
-                    ]
-                    if admitted:
-                        row["progress/checkpoint_age_seconds"] = elapsed - max(admitted)
-            else:
-                missing_coordinates += 1
-            row["availability/original_coordinates"] = bool(coordinate)
-            if specification.operation in {"train_self_play", "train_compound"}:
-                row["objective/meaning"] = "clipped policy objective; not log loss"
-                for metric in (
-                    "loss",
-                    "policy_loss",
-                    "value_loss",
-                    "entropy",
-                    "collection_kl",
-                    "reference_kl",
-                    "value_residual_abs_mean",
-                    "advantage_abs_mean",
-                    "learning_rate",
-                    "tau",
-                    "collection_kl_coefficient",
-                    "retained",
-                    "rows",
-                    "schedule_progress",
-                    "behavior_iteration",
-                ):
-                    value = diagnostic.get(metric)
-                    row[f"availability/rl/{metric}"] = isinstance(value, (float, int))
-                    if isinstance(value, (float, int)) and math.isfinite(value):
-                        row[f"rl/{metric}"] = value
-                if diagnostic.get("rows") and isinstance(
-                    diagnostic.get("retained"), (int, float)
-                ):
-                    row["rl/retained_fraction"] = (
-                        diagnostic["retained"] / diagnostic["rows"]
-                    )
-            for name, value in diagnostic.items():
-                if (
-                    name.startswith("numerical/")
-                    and isinstance(value, (int, float))
-                    and math.isfinite(value)
-                ):
-                    row[name] = value
-            rows.append(row)
-        if stage.numerical_failure is not None:
-            failure = stage.numerical_failure
-            rows.append(
-                {
-                    "progress/observation": len(rows),
-                    "stage/id": stage.id,
-                    "stage/operation": specification.operation,
-                    "progress/updates": failure.iteration - 1,
-                    "failure/invariant": failure.invariant,
-                    **{
-                        f"numerical/{key}": value
-                        for key, value in failure.health.items()
-                    },
-                }
-            )
-    return Dashboard(
-        run_id="training-" + canonical_sha256({"run": run.id})[:24],
-        config={
-            "training_run_id": run.id,
-            "regime": run.regime.model_dump(mode="json"),
-            "regime_digest": run.regime_digest,
-            "seed": run.seed,
-            "seed_streams": run.seed_streams,
-            "identities": run.identities,
-            "purpose": "training-monitoring-not-scientific-evaluation",
-        },
-        summary={
-            "parent_run_id": run.parent_run_id,
-            "status": run.status,
-            "error": run.error,
-            "history_incomplete": bool(missing_coordinates),
-            "rows_without_original_coordinates": missing_coordinates,
-            "checkpoint_interval_seconds": run.monitoring_checkpoint_seconds,
-            "checkpoint_interval_updates": run.monitoring_checkpoint_updates,
-            "stages": [
-                s.model_dump(mode="json", exclude={"diagnostics"}) for s in run.stages
-            ],
-            "monitoring_checkpoints": [
-                c.model_dump(mode="json") for c in run.monitoring_checkpoints
-            ],
-            "elapsed_seconds": run.prior_seconds + run.seconds,
-            "monitoring_export_seconds": run.monitoring_export_seconds,
-            "metric_limits": "RL loss/KL/entropy are last optimized minibatch values; residuals use lambda targets. Missing values are unavailable, never zero. Historical stage totals do not reconstruct update coordinates.",
-        },
-        rows=rows,
-    )
 
 
 def _recorded_rows(data: RunData) -> dict[int, str]:

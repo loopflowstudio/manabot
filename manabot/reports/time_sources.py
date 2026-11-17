@@ -1,6 +1,6 @@
-"""Read-only discovery of native training artifacts and Etude tracking sources.
+"""Read-only discovery of Etude runs for the training-time report.
 
-The optional Etude SDK owns storage and metric decoding. A frozen read view records
+The Etude SDK owns storage and metric decoding. A frozen read view records
 full-file or byte-range digests, so the offline report identifies exactly what it
 used. Source failures remain coverage warnings; no launcher or provider is called.
 """
@@ -14,15 +14,15 @@ import math
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from manabot.reports.experiment import RetainedExecution, RetainedRun
 from manabot.reports.time_cohort import (
     CohortRun,
     TimeCohort,
+    TimeSlice,
     TimingSource,
+    TrainingInterval,
+    TrainingProfile,
     lineage_roots,
-    native_cohort,
 )
-from manabot.reports.time_profile import TimeSlice, TrainingInterval, TrainingProfile
 
 if TYPE_CHECKING:
     from etude.storage import Storage
@@ -37,15 +37,9 @@ class _ReadSnapshot:
         self.name = storage.name
         self.listed = storage.keys("")
         self.cache: dict[tuple[str, int | None, int | None], bytes] = {}
-        self.native_prefixes: list[str] = []
 
     def keys(self, prefix: str) -> list[str]:
-        return [
-            key
-            for key in self.listed
-            if key.startswith(prefix)
-            and not any(key.startswith(p) for p in self.native_prefixes)
-        ]
+        return [key for key in self.listed if key.startswith(prefix)]
 
     def uri(self, key: str) -> str:
         return self.storage.uri(key)
@@ -326,21 +320,19 @@ def _etude_families(
 def load_time_sources(
     sources: Sequence[str], *, training_clock: str = "training_seconds"
 ) -> TimeCohort:
-    """Discover local/S3 native and Etude evidence; failed sources stay visible.
+    """Discover local/S3 Etude runs; failed sources stay visible.
 
     Local paths are explicit: a misspelled directory is a failure, not an empty
     history. Archives are listed as a coverage gap rather than silently expanded.
+    A `run.json` that is not an Etude declaration (a saved regime record, say)
+    is named in the warnings and holds no run.
     """
     # Optional report entry point: ordinary training does not require Etude.
     from etude.storage import storage_from_uri
     from etude.train.read import read_all
 
-    native: dict[str, RetainedRun] = {}
-    native_sources: dict[str, list[str]] = defaultdict(list)
-    conflicts: set[str] = set()
-    executions: list[RetainedExecution] = []
     tracked: dict[str, tuple[CohortRun, str | None]] = {}
-    tracked_conflicts: set[str] = set()
+    conflicts: set[str] = set()
     receipts: list[TimingSource] = []
     warnings: list[str] = []
     for source in dict.fromkeys(sources):
@@ -349,49 +341,31 @@ def load_time_sources(
             if not source.startswith("s3://") and not Path(source).is_dir():
                 raise FileNotFoundError("Evidence directory unavailable")
             snapshot = _ReadSnapshot(storage_from_uri(source))
-            for key in snapshot.listed:
-                if not (
-                    key.endswith("/run.json")
-                    or key == "run.json"
-                    or key.endswith("/experiment.json")
-                    or key == "experiment.json"
-                ):
-                    continue
+            declarations = [
+                key
+                for key in snapshot.listed
+                if key == "run.json" or key.endswith("/run.json")
+            ]
+            for key in declarations:
                 try:
-                    body = snapshot.get(key)
-                    data = json.loads(body)
-                    if isinstance(data, dict) and "regime" in data and "stages" in data:
-                        run = RetainedRun.model_validate_json(body)
-                        native_sources[run.id].append(snapshot.uri(key))
-                        snapshot.native_prefixes.append(key.removesuffix("run.json"))
-                        if run.id in conflicts:
-                            continue
-                        if run.id in native and native[run.id].model_dump(
-                            exclude_unset=True
-                        ) != run.model_dump(exclude_unset=True):
-                            conflicts.add(run.id)
-                            native.pop(run.id)
-                            warnings.append(
-                                f"Conflicting native snapshots excluded: {run.id}"
-                            )
-                        else:
-                            native[run.id] = run
-                    elif key.endswith("experiment.json"):
-                        executions.append(RetainedExecution.model_validate_json(body))
-                    # Etude's run.json: nested before 0.4, flat with an experiment since.
-                    elif not isinstance(data, dict) or not (
-                        "declaration" in data or "experiment" in data
-                    ):
-                        warnings.append(f"Unrecognized run record: {snapshot.uri(key)}")
+                    data = json.loads(snapshot.get(key))
                 except (ValueError, OSError) as error:
                     warnings.append(
                         f"Unreadable record: {snapshot.uri(key)} ({type(error).__name__})"
                     )
+                    continue
+                # Etude's run.json: nested before 0.4, flat with an experiment since.
+                if (
+                    not isinstance(data, dict)
+                    or "regime" in data
+                    or not ("declaration" in data or "experiment" in data)
+                ):
+                    warnings.append(f"Unrecognized run record: {snapshot.uri(key)}")
             for run in read_all(snapshot):
                 projected, parent = _etude_run(run, training_clock)
                 row = (replace(projected, source_uris=(source,)), parent)
                 identifier = row[0].id
-                if identifier in tracked_conflicts:
+                if identifier in conflicts:
                     continue
                 if identifier in tracked and (
                     tracked[identifier][1] != parent
@@ -399,7 +373,7 @@ def load_time_sources(
                     != replace(row[0], source_uris=())
                 ):
                     tracked.pop(identifier)
-                    tracked_conflicts.add(identifier)
+                    conflicts.add(identifier)
                     warnings.append(
                         f"Conflicting Etude snapshots excluded: {identifier}"
                     )
@@ -427,10 +401,7 @@ def load_time_sources(
                 )
             if not snapshot.listed:
                 warnings.append(f"{source}: no stored objects found.")
-            elif not any(
-                key == "run.json" or key.endswith("/run.json")
-                for key in snapshot.listed
-            ):
+            elif not declarations:
                 warnings.append(
                     f"{source}: no run declarations found among {len(snapshot.listed)} stored objects."
                 )
@@ -443,20 +414,6 @@ def load_time_sources(
         finally:
             if snapshot is not None:
                 receipts.extend(snapshot.receipts())
-    cohort = native_cohort(tuple(native.values()), executions, receipts)
     return TimeCohort(
-        tuple(
-            replace(
-                run,
-                source_uris=tuple(
-                    uri
-                    for member in run.members
-                    for uri in native_sources.get(member, [])
-                ),
-            )
-            for run in cohort.runs
-        )
-        + _etude_families(tuple(tracked.values())),
-        cohort.sources,
-        tuple(warnings) + cohort.warnings,
+        _etude_families(tuple(tracked.values())), tuple(receipts), tuple(warnings)
     )
