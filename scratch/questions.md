@@ -70,3 +70,8 @@ three rules (Elemental's callback; Duel's 200-valid reader; the shared deal
 callback returns score-null rows). At Etude d9a6bc8 a raising callback is a
 `failed` match record that a later `done` replaces, so Elemental's rule needs
 no state. A declared minimum of valid results per match would be Etude's.
+
+2026-11-17 reversible choice: use an isolated launcher database for the approved
+L4 comparison instead of upgrading the shared launcher. Copy provider/storage
+configuration only, so no other queued work can occupy the comparison machine.
+RunPod/Vast/Lium report no L4 capacity; leave performance pending at USD 3.

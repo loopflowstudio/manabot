@@ -2,8 +2,8 @@
 
 Design: design-train-api.md. Etude pin d9a6bc8f06b20948601d540be80e285d46010465;
 Pydantic required. Jack Heart, 2026-11-16: "the whole point is the adoption";
-"These should be done/mainatined in this task". No paid/launched run or landing
-with this pin. Publication and gate remain the caller's steps.
+"These should be done/mainatined in this task". The 2026-11-17 steer approves one L4 comparison under `--max-usd 3`;
+no landing with this pin. Publication and gate remain the caller's steps.
 
 ## Delete — do not maintain
 
@@ -60,7 +60,8 @@ regression, host facts: 9 passed). Not shown: CUDA batching, real Rust panic or 
 injection, launched/provider runs, browser proof, full suite, automatic
 policy→sampler scheduling. LLM experiments stay blocked on EXP-70/frozen
 checkpoints; their declarations share Agents but are not a runnable adoption
-proof. origin/main equals the merge base (c035d5566a); no upstream sync needed.
+proof. The earlier validation used merge base c035d5566a; origin/main now names
+3afd92d8f3. No new comparison or sync was performed.
 
 QA retry fix: each Elemental callback invocation writes its own
 `arena/<match-key>/attempt-*` (`elemental_play.evidence_directory`), so failed
@@ -95,12 +96,9 @@ passed). Commands and limits: implementation.md.
   positioning.md). No shipped doc changes for it: docs/evaluation.md
   ("Failure") already says native `AgentError`/`PanicException` give invalid
   score-null rows and "Other Python exceptions fail the match".
-  - Red CI on PR #500:
-    `tests/eval/test_evaluation_match.py::test_policy_exception_retains_player_failure`
-    expects a `RuntimeError` from `build_code_player` to become a `crash` row;
-    `native_game.execute_game` re-raises anything `is_game_error` rejects
-    (05bdc978da). The guide sides with the code, so the test is the stale
-    half: assert propagation, and keep a native-error case for the crash row.
+  - Fixed the stale red-CI test: RuntimeError propagates without a result row;
+    native AgentError retains a crash row naming the responsible player.
+    Focused `-k policy_exception`: 2 passed (8.34s); Ruff check/format pass.
   - Speed against main on one rented L4, `--max-usd 3`, both sides in one
     session: Elemental training updates/s with collection and learning
     seconds per update and the cost of `run.save()`; evaluation games/s and
@@ -108,6 +106,10 @@ passed). Commands and limits: implementation.md.
     CUDA batching worked. Numbers, method and limits go to implementation.md
     and the PR description; terminate the machine and confirm. More than a few
     percent slower: say where the time goes, do not optimize unasked.
+    Blocked 2026-11-17: RunPod quotes $0.69/hour but no available L4; Vast
+    and Lium also report none. No machine rented, no spend, no CUDA or speed
+    numbers. Shared launcher DB unchanged; isolated launcher has no rentals.
+    Retry when L4 capacity returns, keeping the approved USD 3 cap.
 - Gate and publication are the caller's steps. The full nightly baseline
   (`.github/workflows/baseline.yml`, workflow_dispatch: `etude train` then
   `evaluate`) has not run since the corpus fix; dispatch it on the PR branch

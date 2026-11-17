@@ -9,7 +9,7 @@ from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND
 from manabot.eval.match import derive_seed, play_cell
 from manabot.eval.models import MatchRow
 from manabot.sim.replay import read_trace, replay_games
-from managym import WORLD_VERSION
+from managym import WORLD_VERSION, AgentError
 from tests.eval.arena_fixture import arena_fixture
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -253,19 +253,28 @@ def test_native_worker_crash_and_timeout_are_retained(
     assert timed_out["winner"] is None
 
 
-def test_policy_exception_retains_player_failure(monkeypatch):
+@pytest.mark.parametrize("error_type", [RuntimeError, AgentError])
+def test_policy_exception_propagates_or_retains_native_failure(
+    monkeypatch: pytest.MonkeyPatch, error_type: type[Exception]
+) -> None:
     from manabot.sim.native_game import execute_game
 
     _, players = selected_players()
     game = {"player_seeds": {p.player_id: 1 for p in players}}
 
-    def fail(*args, **kwargs):
-        raise RuntimeError("policy failed")
+    def fail(*args: object, **kwargs: object) -> None:
+        raise error_type("policy failed")
 
     monkeypatch.setattr("manabot.sim.native_game.build_code_player", fail)
-    messages = []
+    messages: list[tuple[str, object]] = []
+    if error_type is RuntimeError:
+        with pytest.raises(RuntimeError, match="policy failed"):
+            execute_game(game, players, {}, 1, messages.append)
+        assert all(kind != "result" for kind, _ in messages)
+        return
     execute_game(game, players, {}, 1, messages.append)
     result = messages[-1][1]
+    assert isinstance(result, dict)
     assert result["termination_reason"] == "crash"
     assert result["failed_player_id"] == players[0].player_id
     assert "policy failed" in result["failure"]

@@ -51,3 +51,11 @@ nightly baseline remains a gate obligation; publication stays with the caller.
   workflows guides run as written on a fresh ETUDE_HOME. Fixed snapshot
   stranding an empty output on a wrong source (opens the source first);
   `pytest tests/training/test_learning_dashboard.py -q -k snapshot`: 1 passed.
+
+## CI fix and L4 capacity — 2026-11-17
+
+- `uv run --extra dev --extra artifacts pytest tests/eval/test_evaluation_match.py -q -k policy_exception`: 2 passed, 10 deselected (8.34s). The prior RuntimeError crash-row expectation was stale after 05bdc978da; the replacement asserts propagation without a result, alongside native AgentError retaining the responsible player's crash row. `uv run --extra dev ruff check tests/eval/test_evaluation_match.py` (after import sorting), format check and `git diff --check` pass.
+- Requested exploratory comparison: same-machine L4 training updates/s, phase seconds/update and actual saves; CUDA managed evaluation games/s and decisions/s on matched checkpoints/deals, under `--max-usd 3`. No workloads ran: provider capacity prevented rental. CUDA batching remains unproved and no relative performance conclusion is possible.
+- Shared `~/.etude/launcher.sqlite` needs `provider_refusal_lookup`; left it unchanged. Created an isolated launcher at `/tmp/mtg329-performance-etude`, initialized through Etude, with only existing provider/storage settings and L4 templates copied. Credentials were injected from Doppler `etude/prd` and `manabot/prd` without printing values.
+- `ETUDE_HOME=/tmp/mtg329-performance-etude doppler run --project etude --config prd -- doppler run --project manabot --config prd -- uv run --extra artifacts etude availability mtg329-speed-l4`: 2026-11-17 14:45:49 UTC, NVIDIA L4, at least 6 vCPUs/48 GB, $0.69/hour, ceiling $0.70, none available. Equivalent Vast/Lium queries at 14:46:08/09 UTC also returned none available (their $0 placeholders are not prices). No capacity at the queried providers; no total-run cost measured.
+- No rent/launch command issued, no spend or rented machine to terminate. `ETUDE_HOME=/tmp/mtg329-performance-etude uv run etude machines` shows only the owned local machine. Recheck capacity before preparing/running the comparison; do not increase the USD 3 cap or substitute hardware. Current `origin/main` is 3afd92d8f3; no cross-revision measurement was taken.
