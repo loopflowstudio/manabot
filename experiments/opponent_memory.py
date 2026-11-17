@@ -82,7 +82,10 @@ def training_jobs(revision: str, trunks: str = "") -> list[RunRequest]:
     for seed in SEEDS:
         runs = _runs(state, "trunk", seed)
         if len(runs) != 1:
-            raise ValueError(f"seed {seed}: expected one trunk, found {len(runs)}")
+            raise ValueError(
+                f"seed {seed}: expected one decision-memory-trunk run in {trunks}, "
+                f"found {len(runs)}; launch and finish the trunks first"
+            )
         if runs[0].state != "finished":
             raise ValueError(f"seed {seed}: trunk is unfinished ({runs[0].state})")
         parents[seed] = _published_trunk(storage, runs[0].name, seed)

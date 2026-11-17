@@ -205,7 +205,8 @@ def test_executor_branches_from_control_with_fresh_learning_state(
         torch.testing.assert_close(initial.state_dict()[key], value, rtol=0, atol=0)
     assert all(value == 0 for value in initial.memory_gates().values())
     # Compare the executor's exported initialization on a real nonempty prefix.
-    env = managym.Env(seed=198)
+    config = initial.observation_space.encoder.config
+    env = managym.Env(seed=198, decision_memory=config.max_decision_records > 0)
     obs, _ = env.reset(Match(configuration.root_match).to_rust())
     for _ in range(8):
         if obs.game_over:

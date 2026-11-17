@@ -334,7 +334,11 @@ def play(
             summary.opponent_sha256 = opponent.sha256
             opponent.admit(players, config.opponent_seed)
         with observe("native_reset"):
-            env = managym.Env(seed=config.seed, skip_trivial=config.skip_trivial)
+            env = managym.Env(
+                seed=config.seed,
+                skip_trivial=config.skip_trivial,
+                decision_memory=True,
+            )
             env.reset(players)
         with observe("clone_replay"):
             replay = env.clone_env()

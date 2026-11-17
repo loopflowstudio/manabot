@@ -107,7 +107,8 @@ def test_worker_branches_from_one_published_trunk(
     for key, value in expected.state_dict().items():
         torch.testing.assert_close(initial.state_dict()[key], value, rtol=0, atol=0)
     assert all(gate == 0 for gate in initial.memory_gates().values())
-    env = managym.Env(seed=198)
+    config = initial.observation_space.encoder.config
+    env = managym.Env(seed=198, decision_memory=config.max_decision_records > 0)
     observation, _ = env.reset(Match(spec.regime.root_match).to_rust())
     for _ in range(8):
         if observation.game_over:
@@ -400,7 +401,9 @@ def test_pilot_branches_from_three_published_ema_trunks(
     with pytest.raises(ValueError, match="seed 39102: trunk receipt names seed 39101"):
         opponent_memory._published_trunk(storage, "trunk-39101", 39102)
     runs.pop()
-    with pytest.raises(ValueError, match="seed 39103: expected one trunk"):
+    with pytest.raises(
+        ValueError, match="seed 39103: expected one decision-memory-trunk run"
+    ):
         opponent_memory.training_jobs("HEAD", trunks=str(storage.root))
 
 

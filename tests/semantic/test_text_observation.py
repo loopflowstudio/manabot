@@ -1359,7 +1359,7 @@ def test_decision_memory_text_lists_every_record_and_snapshot_once() -> None:
     # A whole-game log repeats the same untapped sources at many choices; the
     # prompt must keep every record without repeating their rules snapshots,
     # or ordinary games pass the default budget after about 120 decisions.
-    env = managym.Env(seed=0)
+    env = managym.Env(seed=0, decision_memory=True)
     env.reset(Match().to_rust())
     rng = random.Random(0)
     for _ in range(160):
@@ -1393,7 +1393,7 @@ def test_decision_memory_text_reference_alias_preserves_historical_status() -> N
     from manabot.semantic.text_observation import _memory_lines
     from managym.decision_memory import DecisionReference
 
-    env = managym.Env(seed=0)
+    env = managym.Env(seed=0, decision_memory=True)
     env.reset(Match().to_rust())
     for _ in range(12):
         env.step(0)
@@ -1538,7 +1538,7 @@ def test_distinct_long_game_decision_memory_fits_default_text_budget(
     # Fixed native setup with a long library and peaceful play. Every record is
     # emitted by this game, with changing turn/step/hand/board/source snapshots;
     # no repeated prefix or hand-written chronological records size this proof.
-    env = managym.Env(seed=7)
+    env = managym.Env(seed=7, decision_memory=True)
     deck = {"Mountain": 60, "Island": 20, "Gray Ogre": 120}
     configs = [managym.PlayerConfig(name, deck) for name in ("a", "b")]
     env.reset(managym.GameSetup(configs, decklists=disclosure))
@@ -1592,7 +1592,7 @@ def test_decision_memory_context_changes_and_empty_choices() -> None:
     from manabot.semantic.text_observation import _memory_lines
     from managym.decision_memory import DecisionReference
 
-    env = managym.Env(seed=0)
+    env = managym.Env(seed=0, decision_memory=True)
     env.reset(Match().to_rust())
     for _ in range(12):
         env.step(0)
@@ -1676,7 +1676,7 @@ def test_curated_long_game_decision_memory_preserves_distinct_snapshots() -> Non
         ).read_text()
     )
     matchup = manifest["matchup"]
-    env = managym.Env(seed=166)
+    env = managym.Env(seed=166, decision_memory=True)
     env.reset(
         [
             managym.PlayerConfig(role, matchup[role]["cards"])
