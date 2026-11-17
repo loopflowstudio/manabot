@@ -137,7 +137,8 @@ def _etude_run(run: "RunData", training_clock: str) -> tuple[CohortRun, str | No
     silent = len(writers) - len(observed_writers)
     if silent:
         warnings.append(
-            f"{silent} attempts logged no clock coordinates; active time includes observed attempts only."
+            f"{silent} attempt{'s' if silent > 1 else ''} logged no clock coordinates; "
+            "active time includes observed attempts only."
         )
     active: float | None = (
         0.0 if names.get(training_clock) == "time" and observed_writers else None
