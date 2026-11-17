@@ -1,7 +1,8 @@
-- step: {name: engine-measure, id: engine-optimization}
-- step: {name: implement, id: implement-performance}
-- compress
-- graph: refresh
-- concept-review
-- engine-performance-review
-- loop: implement-performance
+- engine-measure
+- loop:
+    - implement
+    - compress
+    - graph: refresh
+    - concept-review
+    - engine-performance-review
+    - loop-or-next
