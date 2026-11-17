@@ -38,11 +38,10 @@ fn float_a_forest_then_restore_the_decision() {
     let actor = usize::from(frame.actor);
     let before = env.state_digest().unwrap();
     let original = env.semantic_observation(actor).unwrap().viewer_state;
-    assert!(env.mana_controls(actor).is_err());
-    env.enable_mana_controls();
-    assert!(env.fork().unwrap().mana_controls(actor).is_err());
-    assert!(env.mana_controls(1 - actor).unwrap().offers.is_empty());
-    let controls = env.mana_controls(actor).unwrap();
+    assert!(env.mana_controls().is_err());
+    env.enable_mana_controls(actor).unwrap();
+    assert!(env.fork().unwrap().mana_controls().is_err());
+    let controls = env.mana_controls().unwrap();
     let [ControlOffer::Float {
         id, label, output, ..
     }] = controls.offers.as_slice()
@@ -63,7 +62,7 @@ fn float_a_forest_then_restore_the_decision() {
     });
     assert!(env.execute_mana_control(&answered).is_err());
     assert_eq!(env.state_digest().unwrap(), before);
-    let transition = env.execute_mana_control(&tap).unwrap();
+    let (transition, _) = env.execute_mana_control(&tap).unwrap();
     assert_eq!(transition.receipt.before_revision, controls.revision);
     let floated = env.observation_for_player(actor).unwrap();
     assert!(floated.agent_permanents[0].tapped);
@@ -73,7 +72,7 @@ fn float_a_forest_then_restore_the_decision() {
         .unwrap_err()
         .to_string()
         .contains("stale_revision"));
-    let controls = env.mana_controls(actor).unwrap();
+    let controls = env.mana_controls().unwrap();
     let changes = || {
         let current = env.semantic_observation(actor).unwrap().viewer_state;
         original
@@ -90,12 +89,12 @@ fn float_a_forest_then_restore_the_decision() {
         panic!("{controls:?}\n{}", changes());
     };
     assert_eq!(label, "Undo: Forest tapped for {G}");
-    let transition = env
+    let (transition, _) = env
         .execute_mana_control(&command("undo", controls.revision, *id as u32))
         .unwrap();
     assert!(transition.receipt.after_revision > controls.revision);
     assert_eq!(env.state_digest().unwrap(), before);
-    assert!(env.mana_controls(actor).unwrap().undo.is_none());
+    assert!(env.mana_controls().unwrap().undo.is_none());
 }
 
 #[test]
@@ -116,8 +115,8 @@ fn floating_after_a_pass_reopens_priority_for_the_other_player() {
     env.scenario_refresh().unwrap();
     let first = env.current_agent_index().unwrap();
     let second = 1 - first;
-    env.enable_mana_controls_for(second).unwrap();
-    assert!(env.mana_controls(first).unwrap().offers.is_empty());
+    env.enable_mana_controls(second).unwrap();
+    assert!(env.mana_controls().unwrap().offers.is_empty());
     let pass = |env: &mut Env, name| {
         let frame = env.semantic_decision_frame().unwrap();
         let offer = frame
@@ -132,7 +131,7 @@ fn floating_after_a_pass_reopens_priority_for_the_other_player() {
     assert_eq!(env.current_agent_index(), Some(second));
     let before = env.state_digest().unwrap();
     let float = |env: &mut Env, name| {
-        let frame = env.mana_controls(second).unwrap();
+        let frame = env.mana_controls().unwrap();
         let ControlOffer::Float { id, .. } = frame.offers[0] else {
             panic!("{frame:?}")
         };
@@ -140,7 +139,7 @@ fn floating_after_a_pass_reopens_priority_for_the_other_player() {
             .unwrap()
     };
     float(&mut env, "float");
-    let frame = env.mana_controls(second).unwrap();
+    let frame = env.mana_controls().unwrap();
     let ControlOffer::Undo { id, .. } = frame.offers[0] else {
         panic!("{frame:?}")
     };
@@ -170,7 +169,7 @@ fn position(board: &[&str], hand: &str) -> Env {
     }
     env.scenario_force_card_in_hand(seat, hand).unwrap();
     env.scenario_refresh().unwrap();
-    env.enable_mana_controls();
+    env.enable_mana_controls(seat).unwrap();
     env
 }
 
@@ -187,9 +186,7 @@ fn choose(env: &mut Env, verb: OfferVerb, index: usize) {
 }
 
 fn undo(env: &mut Env, before: &str) {
-    let controls = env
-        .mana_controls(env.current_agent_index().unwrap())
-        .unwrap();
+    let controls = env.mana_controls().unwrap();
     let id = controls
         .offers
         .iter()
@@ -209,7 +206,7 @@ fn any_colour_land_undo_includes_choosing_red() {
     let seat = env.current_agent_index().unwrap();
     let before = env.state_digest().unwrap();
     choose(&mut env, OfferVerb::ActivateAbility, 0);
-    assert!(env.mana_controls(seat).unwrap().undo.is_none());
+    assert!(env.mana_controls().unwrap().undo.is_none());
     choose(&mut env, OfferVerb::ChooseMode, 3);
     assert_eq!(
         env.observation_for_player(seat)
@@ -228,7 +225,6 @@ fn payment_taps_can_be_undone_until_the_spell_is_paid() {
         &["Mountain", "Mountain", "Mountain", "Mountain"],
         "Gray Ogre",
     );
-    let seat = env.current_agent_index().unwrap();
     choose(&mut env, OfferVerb::Cast, 0);
     let before = env.state_digest().unwrap();
     choose(&mut env, OfferVerb::TapForMana, 0);
@@ -236,30 +232,28 @@ fn payment_taps_can_be_undone_until_the_spell_is_paid() {
     for _ in 0..3 {
         choose(&mut env, OfferVerb::TapForMana, 0);
     }
-    assert!(env.mana_controls(seat).unwrap().undo.is_none());
+    assert!(env.mana_controls().unwrap().undo.is_none());
 }
 
 #[test]
 fn casting_commits_floated_mana() {
     let mut env = position(&["Forest"], "Llanowar Elves");
-    let seat = env.current_agent_index().unwrap();
-    let controls = env.mana_controls(seat).unwrap();
+    let controls = env.mana_controls().unwrap();
     let ControlOffer::Float { id, .. } = controls.offers[0] else {
         panic!()
     };
     env.execute_mana_control(&command("float", controls.revision, id as u32))
         .unwrap();
     choose(&mut env, OfferVerb::Cast, 0);
-    assert!(env.mana_controls(seat).unwrap().undo.is_none());
+    assert!(env.mana_controls().unwrap().undo.is_none());
 }
 
 #[test]
 fn disabled_controls_reject_both_methods_without_mutation() {
     let mut env = position(&["Forest"], "Llanowar Elves").fork().unwrap();
-    let seat = env.current_agent_index().unwrap();
     let frame = env.semantic_decision_frame().unwrap();
     let before = env.state_digest().unwrap();
-    assert!(env.mana_controls(seat).is_err());
+    assert!(env.mana_controls().is_err());
     assert!(env
         .execute_mana_control(&command("float", frame.revision, frame.offers.len() as u32))
         .is_err());
@@ -271,9 +265,7 @@ fn disabled_controls_reject_both_methods_without_mutation() {
 }
 
 fn assert_refusal(env: &Env, code: &str) {
-    let controls = env
-        .mana_controls(env.current_agent_index().unwrap())
-        .unwrap();
+    let controls = env.mana_controls().unwrap();
     let status = serde_json::to_value(controls.undo.unwrap()).unwrap();
     assert!(status["offer"].is_null());
     assert_eq!(status["reason"]["code"], code);
@@ -370,7 +362,7 @@ fn every_catalog_mana_output_has_a_proved_undo_or_a_reason() {
         let id = source_id(&position, name);
         let before = position.state_digest().unwrap();
         let verify = |env: &mut Env| {
-            let control = env.mana_controls(seat).unwrap();
+            let control = env.mana_controls().unwrap();
             if control
                 .offers
                 .iter()
@@ -407,8 +399,8 @@ fn every_catalog_mana_output_has_a_proved_undo_or_a_reason() {
         };
         if !printed.mana_abilities.is_empty() {
             let mut env = position.fork().unwrap();
-            env.enable_mana_controls();
-            let controls = env.mana_controls(seat).unwrap();
+            env.enable_mana_controls(seat).unwrap();
+            let controls = env.mana_controls().unwrap();
             let offer = controls
                 .offers
                 .iter()
@@ -428,7 +420,7 @@ fn every_catalog_mana_output_has_a_proved_undo_or_a_reason() {
         for (ability, modes) in abilities {
             for mode in 0..modes {
                 let mut env = position.fork().unwrap();
-                env.enable_mana_controls();
+                env.enable_mana_controls(seat).unwrap();
                 activate(&mut env, name, ability);
                 // Chosen tap costs, then the output. A singleton output is forced.
                 while env
@@ -458,10 +450,9 @@ fn every_catalog_mana_output_has_a_proved_undo_or_a_reason() {
 #[test]
 fn choosing_which_mana_to_spend_restores_the_pool_and_once_each_turn_use() {
     let mut env = position(&["Forest", "Mountain", "Scarecrow Guide"], "Forest");
-    let seat = env.current_agent_index().unwrap();
     let original = env.state_digest().unwrap();
     for _ in 0..2 {
-        let controls = env.mana_controls(seat).unwrap();
+        let controls = env.mana_controls().unwrap();
         let ControlOffer::Float { id, .. } = controls.offers[0] else {
             panic!()
         };
@@ -471,11 +462,11 @@ fn choosing_which_mana_to_spend_restores_the_pool_and_once_each_turn_use() {
     let before = env.state_digest().unwrap();
     activate(&mut env, "Scarecrow Guide", 0);
     choose(&mut env, OfferVerb::ChooseMode, 0);
-    assert!(env.mana_controls(seat).unwrap().undo.is_none());
+    assert!(env.mana_controls().unwrap().undo.is_none());
     choose(&mut env, OfferVerb::ChooseMode, 1);
     undo(&mut env, &before);
     // Undoing the paid ability also uncovers the two earlier floats.
-    let controls = env.mana_controls(seat).unwrap();
+    let controls = env.mana_controls().unwrap();
     let ControlOffer::Undo { id, .. } = controls.offers.last().unwrap() else {
         panic!()
     };

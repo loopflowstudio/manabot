@@ -677,17 +677,17 @@ those are [mana controls](#mana-controls), which no policy is offered.
 Float a Forest at priority and take it back:
 
 ```python
-env.enable_mana_controls()
-controls = json.loads(env.mana_controls_json(viewer))
+env.enable_mana_controls(seat)
+controls = json.loads(env.mana_controls_json())
 # {"revision": 41,
 #  "offers": [{"id": 3, "verb": "float", "label": "Tap for mana: {G}",
 #              "source": {...Forest...}, "output": {"green": 1}}],
 #  "undo": None}
 
-env.execute_mana_control_json(json.dumps(
+transition, observation = env.execute_mana_control_json(json.dumps(
     {"command_id": "c1", "expected_revision": 41, "offer_id": 3, "answers": []}
 ))
-controls = json.loads(env.mana_controls_json(viewer))
+controls = json.loads(env.mana_controls_json())
 # {"revision": 42,
 #  "offers": [{"id": 3, "verb": "undo", "label": "Undo: Forest tapped for {G}"}],
 #  "undo": {"activation": {"label": "Forest tapped for {G}", ...},
@@ -698,16 +698,16 @@ Executing the undo offer at revision 42 leaves `env.state_digest` equal to its
 value before the float, at revision 43.
 
 Mana controls are a second offer set published beside a decision's action
-offers, for an `Env` that called `enable_mana_controls()`. Academy's live game
-is the only caller. They are not `Action`s: the action space, observations,
+offers to the one seat named by `enable_mana_controls(seat)`; another chooser
+sees no offers. Academy's live game, enabling the human seat, is the only
+caller. They are not `Action`s: the action space, observations,
 encoders, `Env.step`, `VectorEnv`, search forks and `semantic_decision_frame_json`
 are the same whether or not controls are enabled, and a fork or clone of an
 enabled `Env` starts with controls off. Calling either method on an `Env` that
-did not enable them is an error. `managym.mana_controls` gives the same two
-calls typed models. Academy enables controls for the human seat with
-`enable_mana_controls(viewer=seat)`. It passes `with_observation=True` to
-`execute_mana_control_json` to receive the JSON transition and the live acting
-observation, including the events produced by that Command.
+did not enable them is an error. `managym.mana_controls.mana_controls` reads
+the frame as typed models. `execute_mana_control_json` returns the JSON
+transition and the chooser's live observation, including the events produced
+by that Command.
 
 A control is answered with the native `Command`, bound to the published
 revision. Control offer ids continue the decision frame's numbering (action

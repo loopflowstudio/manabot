@@ -414,24 +414,27 @@ impl ManaActivation {
     }
 }
 
-#[derive(Debug, Default)]
+/// Controls for the one seat a person plays; other choosers never see them.
+#[derive(Debug)]
 pub(crate) struct ManaControls {
-    pub(crate) viewer: Option<PlayerId>,
+    pub(crate) viewer: PlayerId,
     revision: Option<u64>,
     entries: Vec<Entry>,
     pending: Option<ManaActivation>,
 }
 
 impl ManaControls {
-    pub(crate) fn reset(&mut self) {
-        *self = Self {
-            viewer: self.viewer,
-            ..Self::default()
-        };
+    pub(crate) fn new(viewer: PlayerId) -> Self {
+        Self {
+            viewer,
+            revision: None,
+            entries: Vec::new(),
+            pending: None,
+        }
     }
 
-    pub(crate) fn permits(&self, actor: PlayerId) -> bool {
-        self.viewer.is_none_or(|viewer| viewer == actor)
+    pub(crate) fn reset(&mut self) {
+        *self = Self::new(self.viewer);
     }
 
     pub(crate) fn semantic_command(
@@ -490,7 +493,7 @@ impl ManaControls {
         Ok(transition)
     }
 
-    pub(crate) fn frame(&self, game: &Game, viewer: PlayerId) -> ControlFrame {
+    pub(crate) fn frame(&self, game: &Game) -> ControlFrame {
         let mut frame = ControlFrame {
             revision: game.decision_epoch,
             offers: Vec::new(),
@@ -499,8 +502,7 @@ impl ManaControls {
         let Some(space) = game.action_space() else {
             return frame;
         };
-        if !self.permits(viewer)
-            || space.player != Some(viewer)
+        if space.player != Some(self.viewer)
             || (self.pending.is_some() && self.revision == Some(game.decision_epoch))
         {
             return frame;
@@ -571,7 +573,7 @@ impl ManaControls {
             .checked_sub(space.actions.len())
             .ok_or(SemanticError::UnknownOffer(command.offer_id))?;
         let offer = self
-            .frame(game, actor)
+            .frame(game)
             .offers
             .into_iter()
             .nth(index)

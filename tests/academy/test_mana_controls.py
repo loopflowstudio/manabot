@@ -133,7 +133,7 @@ def test_float_and_undo_through_live_table(
             try:
                 assert branch.current_projection()["agent"]["mana"][4] == 1
                 with pytest.raises(managym.AgentError, match="disabled"):
-                    pending.root.mana_controls_json(0)
+                    pending.root.mana_controls_json()
             finally:
                 branch.return_to_recorded()
 

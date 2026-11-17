@@ -442,7 +442,7 @@ impl Game {
             .map_err(|error| SemanticError::IllegalCommand(error.to_string()))?;
         self.validate_object_preconditions(command)?;
 
-        if let Some(controls) = controls.filter(|c| c.permits(actor)) {
+        if let Some(controls) = controls.filter(|c| c.viewer == actor) {
             return controls.semantic_command(self, command, actor, public_commitment, &atomic);
         }
         let done = self

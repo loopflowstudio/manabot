@@ -1033,7 +1033,7 @@ class GameSession:
                 env = managym.Env(seed=seed)
                 obs, _ = env.reset(config.to_rust())
                 if not self.watch_mode:
-                    env.enable_mana_controls(viewer=config.human_seat)
+                    env.enable_mana_controls(config.human_seat)
                 observe_policies((policy,), env, obs)
             except BaseException as exc:
                 # PyO3's PanicException derives directly from BaseException and has
@@ -1401,9 +1401,7 @@ class GameSession:
         before = self.env.state_digest()
         observation = context.frame["projection"]
         subjects = json.loads(self.env.presentation_subjects_json())
-        result, self.obs = self.env.execute_mana_control_json(
-            native, with_observation=True
-        )
+        result, self.obs = self.env.execute_mana_control_json(native)
         transition = json.loads(result)
         subjects.update(json.loads(self.env.presentation_subjects_json()))
         self.presentation.observe(self.obs, event_subjects=subjects)
@@ -1415,7 +1413,7 @@ class GameSession:
             reverses = activation.command_id
         else:
             source = offer.source
-            after = mana_controls(self.env, self.human_seat)
+            after = mana_controls(self.env)
             if after.undo is not None:
                 label = after.undo.activation.label
             else:
@@ -2106,7 +2104,7 @@ class GameSession:
         if not self.watch_mode:
             self.published_prompt = replace(
                 self.published_prompt,
-                mana_controls=mana_controls(self.env, self.human_seat),
+                mana_controls=mana_controls(self.env),
             )
         frame = ExperienceFrame.model_validate(self.published_prompt.frame)
         address = DecisionAddressV2.from_frame(

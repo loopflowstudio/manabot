@@ -1129,20 +1129,13 @@ impl Env {
         ))
     }
 
-    pub fn enable_mana_controls(&mut self) {
-        self.mana_controls.get_or_insert_with(Default::default);
-    }
-
-    pub fn enable_mana_controls_for(&mut self, viewer: usize) -> Result<(), AgentError> {
-        let player = Self::player_id(viewer)?;
-        self.enable_mana_controls();
-        let controls = self.mana_controls.as_mut().unwrap();
-        controls.viewer = Some(player);
-        controls.reset();
+    /// Offer mana controls to the seat a person plays, from this game on.
+    pub fn enable_mana_controls(&mut self, viewer: usize) -> Result<(), AgentError> {
+        self.mana_controls = Some(ManaControls::new(Self::player_id(viewer)?));
         Ok(())
     }
 
-    pub fn mana_controls(&self, viewer: usize) -> Result<ControlFrame, AgentError> {
+    pub fn mana_controls(&self) -> Result<ControlFrame, AgentError> {
         let controls = self
             .mana_controls
             .as_ref()
@@ -1151,21 +1144,10 @@ impl Env {
             .game
             .as_ref()
             .ok_or_else(|| AgentError("mana controls require a game".into()))?;
-        if viewer >= game.state.players.len() {
-            return Err(AgentError("viewer out of bounds".into()));
-        }
-        Ok(controls.frame(game, PlayerId(viewer)))
+        Ok(controls.frame(game))
     }
 
     pub fn execute_mana_control(
-        &mut self,
-        command: &SemanticCommand,
-    ) -> Result<SemanticTransition, AgentError> {
-        self.step_mana_control(command)
-            .map(|(transition, _)| transition)
-    }
-
-    pub(crate) fn step_mana_control(
         &mut self,
         command: &SemanticCommand,
     ) -> Result<(SemanticTransition, Observation), AgentError> {
