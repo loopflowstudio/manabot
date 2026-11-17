@@ -124,7 +124,11 @@ publish, land or choose the next Graph step from here.
   a 403 there is a real failure. `[data-testid=recorded-decision-evidence]`
   holds Value/Update/Policy or "not retained". `etude train
   manabot/recipes/local.py --config '{"record_games": 0.25}'` prints the games
-  command; `play_cell` with two legs
+  command. Every self-play recipe takes the same flat keys: `etude train
+  manabot/recipes/elemental.py --config '{"updates": 2, "streams": 4,
+  "record_games": 1, "statistics": true}' --until updates=1` records eight
+  Elemental games and statistics in about 9 s on CPU; a changed key on
+  `--resume` must refuse with `run_identity_conflict`. `play_cell` with two legs
   writes `games/<cell>.jsonl`. Count `read_records(<dir>)` against the games
   played: duplicates mean a second file in that directory. A different-world
   record can be made by editing `identities.world`/`card_digest` in a copy.

@@ -56,7 +56,28 @@ and hides the labelled smoke. With benchmarks included and Select largest, the l
 <code>training_seconds</code>, so it honestly shows "unavailable" with four warnings.</p>
 <img src="qa8-report.png" alt="Training run time report with local smoke and belief policy selected">
 
-<h2>Fixed in this pass</h2>
+<h2>6. Instrumentation keys on every self-play recipe (RunSettings, a23f14a56d)</h2>
+<p>All through <code>uv run etude train</code> with <code>ETUDE_HOME=/tmp/qa329/etude</code>.</p>
+<ul>
+<li>Wrong input on Elemental, nothing written: <code>{"record_game": 1}</code> → <code>etude: unknown config fields: record_game</code>;
+<code>{"record_games": 2}</code> → "less than or equal to 1"; <code>{"diagnostics": "loud"}</code> → "'off', 'standard' or 'detailed'".
+<code>{"stall_seconds": 0}</code> is refused the same way by belief_policy, baseline and local.</li>
+<li><code>elemental.py --config '{"updates":2,"streams":4,"record_games":1,"statistics":true,"diagnostics":"detailed"}' --until updates=1</code>:
+exit 0 in 9 s; <code>out/games/</code> 8 records, <code>out/statistics/</code> 8 rows (<code>read_statistics</code> yields
+<code>GameStatistics(seed=10001, …, terminal=True, winner=1, …)</code>). The same run without the keys has no
+<code>games/</code> or <code>statistics/</code>, so the keys reach SelfPlay (before 8606b72454 Elemental ignored them).</li>
+<li>Resume with <code>record_games: 0</code> → <code>run_identity_conflict: record_games was 1.0, is 0.0</code>. Resume omitting
+<code>--config</code> keeps the stored config, trains update 2 and adds a second games and statistics file.</li>
+<li>Returning user opens the recorded Elemental game: <code>ACADEMY_FRONTEND_BUILD=… managym academy replay
+…/out/games --game 0 --no-open</code>. "Training game · Finished · Seat 2 wins", 517 positions, policy choices shown,
+no page errors.</li>
+</ul>
+<img src="qa9-elemental-replay.png" alt="Recorded Elemental training game in Academy replay" style="max-width:100%">
+<p>Nothing broke; no code change. Etude's conflict hint ("use --resume --until …") is printed even when the
+command already used both; the real cause is the changed <code>--config</code>, which the next clause names. Etude-side wording.</p>
+<p>QA skill: added the Elemental instrumentation route and the expected resume refusal.</p>
+
+<h2>Fixed in earlier pass (section 5)</h2>
 <p><code>manabot/reports/time_cohort.js</code> printed "1 lanes", "1 selected logical runs" and "1 recorded
 attempts/writers". A small <code>count(n, noun, plural)</code> now pluralizes the coverage cell, the
 "runs shown" line and the cohort summary. Rerendered page above: "1 lane; 0 warnings", "1 selected logical run ·
