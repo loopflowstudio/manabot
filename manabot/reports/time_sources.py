@@ -17,10 +17,8 @@ from typing import TYPE_CHECKING
 from manabot.reports.time_cohort import (
     CohortRun,
     TimeCohort,
-    TimeSlice,
     TimingSource,
     TrainingInterval,
-    TrainingProfile,
     lineage_roots,
 )
 
@@ -240,17 +238,6 @@ def _etude_run(run: "RunData", training_clock: str) -> tuple[CohortRun, str | No
         )
 
     status = run.outcome.state if run.outcome else "running or unfinished"
-    profile = TrainingProfile(
-        identifier,
-        run.experiment,
-        status,
-        TimeSlice(
-            "Logged active training", active, (TimeSlice("Unattributed", active),)
-        )
-        if active is not None
-        else None,
-        tuple(warnings),
-    )
     return CohortRun(
         id=identifier,
         label=declared.job_name or run.experiment,
@@ -262,14 +249,10 @@ def _etude_run(run: "RunData", training_clock: str) -> tuple[CohortRun, str | No
         status=status,
         members=tuple(f"{identifier}/{w}" for w in writers),
         active_seconds=active,
-        elapsed_seconds=None,
         learner_transitions=count("learner_transitions"),
         updates=count("updates"),
         environment_steps=count("steps"),
-        cost_usd=None,
-        phases={},
         intervals=tuple(intervals),
-        profiles=(profile,),
         warnings=tuple(warnings),
     ), parent
 
@@ -307,7 +290,6 @@ def _etude_families(
                 updates=leaf.updates if complete else None,
                 environment_steps=leaf.environment_steps if complete else None,
                 intervals=tuple(i for r in members for i in r.intervals),
-                profiles=tuple(p for r in members for p in r.profiles),
                 warnings=tuple(warnings),
                 source_uris=tuple(
                     dict.fromkeys(uri for r in members for uri in r.source_uris)

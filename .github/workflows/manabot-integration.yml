@@ -46,7 +46,7 @@ jobs:
         run: |
           uv sync --python 3.13 --no-install-package managym \
             --no-default-groups --group play-runtime \
-            --extra dev --extra play --extra notebook --extra artifacts \
+            --extra dev --extra play --extra artifacts \
             --extra reports --extra llm --extra evaluation
 
       - name: Build managym extension

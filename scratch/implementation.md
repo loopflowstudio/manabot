@@ -116,3 +116,65 @@ nightly baseline remains a gate obligation; publication stays with the caller.
 - Not run: CUDA test (`test_cuda_semantic_policy_admission`, now reading the
   record's agent/observation/match with the live configs; validated on CPU
   only), node page proof beyond the cohort tests, full suite, nightly.
+
+## Learning comparison method — 2026-11-17, before runs
+
+Exploratory question: does moving execution change uninterrupted learning?
+Compare origin/main 3afd92d8f3 with this branch, fresh local baseline runs,
+CPU float32, seed 197, three updates, two streams and 16 transitions (complete
+actual games, both seats), identical horizon-3 damped-policy schedule and
+width-64/depth-2 FiLM model. Compare every raw and EMA tensor, including the
+initial policy if available. A bitwise match settles only this short
+uninterrupted case; real divergence triggers the planned strength comparison.
+The main source is a temporary git archive, not another worktree. Use the same
+compiled native extension (engine implementation unchanged), Torch and host;
+main keeps its pinned Etude SDK. No runtime/RNG recovery equivalence is claimed.
+CPU cost: no rental. Combined remote measurement cap remains USD 10; no remote
+measurement has run. Resume strength and CUDA speed/admission remain separate.
+
+## Report cleanup and CPU comparison — 2026-11-17
+
+- Deleted the unreachable flamegraph, phase table and per-run synthetic profile
+  hierarchy, plus elapsed/phase/cost payload fields. Removed notebook extra,
+  nbformat, matplotlib and their now-exclusive lock dependencies. Updated both
+  integration workflows, release install, development guide and AGENTS/CLAUDE
+  command together. Historical install commands in the saved-regime guide
+  still name the historical revision's notebook extra.
+- `uv run --locked --extra dev --extra artifacts pytest tests/training/test_time_cohort.py -q`:
+  8 passed (0.26s), after deleting one assertion on the removed phase fields.
+  `uv run --isolated --locked --extra dev --extra artifacts --extra reports --extra evaluation pytest tests/training/test_time_cohort.py -q`:
+  8 passed (0.81s), with the reduced dependency graph. Ruff check and format
+  check pass for the three affected Python files.
+- CPU method above completed against main 3afd92d8f3 and branch 9421c945d9,
+  CPython 3.13.15, Torch 2.15.0, NumPy 2.4.2, native world w17. All 117
+  initial raw tensors match bitwise. After three updates, all 117 raw and
+  all 117 EMA tensors match bitwise (zero unequal; maximum absolute error 0).
+  Both sides: 6 complete games, 1,421 environment decisions/learner transitions,
+  268 optimizer updates. Branch cumulative optimizer updates: 89, 148, 268.
+  Step 2 is unnecessary for this short uninterrupted case under the approved
+  method; no broader strength or resume equivalence is implied.
+- Main used its unchanged `local_smoke(steps=3, seconds=180, device='cpu')`
+  through `execute_regime`; branch used `LocalConfig(updates=3)` through the
+  real `etude train` CLI, declared seed 197. Main's SDK was its d60236d pin;
+  the archived source was verified with its supported `.manabot-source.json`
+  bundle. The shared native implementation has no main/branch diff. Outputs
+  and comparison JSON remain in `/tmp/mtg329-learning`, CLI scripts/logs in
+  `/tmp/mtg329-learning-{main,branch}*`; these temporary paths are not archival
+  evidence. The numbers and method above are the retained result.
+- Broader GPU capacity check, 2026-11-17 15:25:25 UTC, isolated
+  `ETUDE_HOME=/tmp/mtg329-performance-etude`, Doppler etude/prd + manabot/prd:
+  `uv run --extra artifacts etude availability mtg329-speed-4090{,-vast,-lium} --timeout 30`
+  (three separate commands). RunPod NVIDIA GeForce RTX 4090: $0.89/hour,
+  none available. Vast RTX 4090: available, 24 vCPUs/64 GB,
+  $0.42702738444444444/hour. Lium: `reply is missing valid required fields`;
+  capacity is unknown, not absent. Each template has a $1/hour ceiling.
+  No rent/launch was issued; no paid cost or machine to terminate. The
+  same-GPU speed/CUDA/resume workload remains to be prepared and run under
+  the total USD 10 cap; this capacity check is not a failed GPU measurement.
+- Required isolated dependency integration check:
+  `uv run --isolated --locked --extra dev --extra artifacts pytest tests/training/test_artifact_storage.py tests/training/test_etude_sdk.py tests/training/test_etude_source.py tests/training/test_recipe_etude.py -q`:
+  12 passed (15.73s). `node --check manabot/reports/time_cohort.js` and
+  `git diff --check` pass. `lf context` retains default targets (16k tokens,
+  131072 bytes), reports no usage entries; protected scratch notes untouched.
+  Final isolated `etude machines` lists only owned local; no watcher/server
+  was started. Gate, publication, CUDA/resume and nightly remain unrun.

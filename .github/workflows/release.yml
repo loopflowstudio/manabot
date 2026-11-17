@@ -190,7 +190,7 @@ jobs:
         shell: bash
         run: |
           wheel=$(echo "$GITHUB_WORKSPACE"/dist/manabot-*.whl)
-          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --torch-backend cpu "${wheel}[academy,reports,artifacts,evaluation,notebook,llm,openrouter]"
+          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --torch-backend cpu "${wheel}[academy,reports,artifacts,evaluation,llm,openrouter]"
           cd "$RUNNER_TEMP"
           unset PYTHONPATH
           uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" python -c 'import managym.academy.server; import manabot.reports.time_sources; import nbclient; import transformers; import httpx'

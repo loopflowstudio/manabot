@@ -33,14 +33,9 @@ records, snapshot, study, time_profile and regime_study.ipynb; infra/host.py
 and `precision="auto"`; read_updates, stage_rows, self_play_figures,
 training_dashboard, native_cohort; tests/fixtures/regime_builders.py,
 saved_regimes.py and experiment-demo/, and the tests only for these.
-Still to delete, not to maintain (unreachable whichever way the open
-`training-report` question in questions.md goes): the training-report page's flamegraph and
-phase table (`time_cohort.js` `flamegraph`, `aggregate().phases`, their HTML
-sections) and `CohortRun.elapsed_seconds/phases/phase_coverage/cost_usd`:
-an Etude run never sets them, so they are unreachable. Then the `notebook`
-extra, core `nbformat` and `matplotlib` in `reports`/`evaluation`: no Python
-on main imports them (pyproject, uv.lock, release.yml, docs/development.md
-and the `--extra notebook` commands in CLAUDE.md change together).
+Report cleanup complete: deleted the phase/flamegraph views, synthetic profile
+hierarchy and unused CohortRun timing/cost fields. Removed the notebook extra,
+nbformat and matplotlib requirements, with workflow/install commands updated.
 
 ## Built
 
@@ -103,18 +98,16 @@ Etude's failed match. Nothing further to change; no new open choice.
 
 ## Remaining
 
-- Delete the unreachable training-report parts and the unused plotting
-  dependencies (Delete list, "Still to delete").
 - Learning check, main against the branch (steer 2026-11-17,
   .lf/prompts/20261117-065538-msrXVy-steer.md; quotes in positioning.md).
   Exploratory: question, method, confounds and cost cap written before scored
   runs; numbers and limits to implementation.md and the PR.
-  - Step 1 on CPU, no rental, not yet run: fresh run, same recipe, config and
-    seed, uninterrupted; compare every raw and EMA policy tensor after a few
-    updates; report equal / summation-order only / different.
-  - Step 2 only on a real difference: Elemental, several seeds a side, curves
-    and paired-deal strength including head-to-head at matched updates; if it
-    cannot fit the cap, stop and say the cost.
+  - Step 1 complete on CPU: three-update fresh local baseline, seed 197,
+    main 3afd92d8f3 versus branch 9421c945d9. All 117 raw and 117 EMA tensors
+    match bitwise; the 117 initial raw tensors also match. Six games, 1,421
+    decisions and 268 optimizer updates on both sides. Evidence: implementation.md.
+  - Step 2 is unnecessary for this uninterrupted case under the approved
+    method: Step 1 found no difference.
   - Step 3 on the GPU: one branch run stopped and resumed against one
     uninterrupted run to the same update count; strength and curves, not
     tensors.
@@ -128,8 +121,12 @@ Etude's failed match. Nothing further to change; no new open choice.
   replacing the L4-only steer); the report names it. Lium rental is untested:
   confirm start and termination. Terminate every machine and confirm.
   Seen 2026-11-17 14:45–14:50 UTC: no L4 at RunPod, Vast or Lium; nothing
-  rented, nothing spent (implementation.md). Not yet checked: 4090s or other
-  GPUs under the wider steer.
+  rented, nothing spent (implementation.md). At 15:25 UTC the broader query
+  found a Vast 4090 available at $0.42702738444444444/hour (24 vCPUs/64 GB);
+  RunPod had no 4090 capacity at $0.89/hour, Lium returned invalid required
+  fields. Nothing rented. Next measurement must prepare the full same-machine
+  training/evaluation/resume workload, recheck availability, launch under the
+  USD 10 cap and confirm termination; availability alone is no CUDA proof.
 - Gate and publication are the caller's steps. The full nightly baseline
   (`.github/workflows/baseline.yml`, workflow_dispatch: `etude train` then
   `evaluate`) has not run since the corpus fix; dispatch it on the PR branch

@@ -68,7 +68,6 @@ def test_etude_written_logs_are_selectable_without_invented_phases(
     assert len(cohort.runs) == 2
     assert sorted(r.active_seconds for r in cohort.runs) == [10, 100]
     assert sorted(r.learner_transitions for r in cohort.runs) == [100, 200]
-    assert all(r.elapsed_seconds is None and not r.phases for r in cohort.runs)
     assert all(
         r.intervals and r.intervals[0].basis.startswith("Logged") for r in cohort.runs
     )
@@ -163,14 +162,10 @@ def _cohort_run(identifier: str, **fields: object) -> CohortRun:
         "status": "finished",
         "members": (identifier,),
         "active_seconds": 10.0,
-        "elapsed_seconds": None,
         "learner_transitions": 100,
         "updates": 1,
         "environment_steps": None,
-        "cost_usd": None,
-        "phases": {},
         "intervals": (),
-        "profiles": (),
         "warnings": (),
     }
     return CohortRun(**{**values, **fields})  # type: ignore[arg-type]

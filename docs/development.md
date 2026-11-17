@@ -137,7 +137,7 @@ it does not restore an unfinished collection.
 Changes to observation encoding or action selection also require
 `uv run --extra dev pytest tests/env/test_observation.py tests/training/test_action_cutoff.py tests/verify/test_native_buffer_capacities.py -q`.
 Collector or batch-closure changes also require
-`uv run --extra dev --extra notebook --extra artifacts --extra reports pytest tests/training/test_batch_closure.py tests/model/test_layer_input.py tests/semantic/test_elemental_world.py -q`.
+`uv run --extra dev --extra artifacts --extra reports pytest tests/training/test_batch_closure.py tests/model/test_layer_input.py tests/semantic/test_elemental_world.py -q`.
 Fixtures asserting exact rollout shapes or transition counts must explicitly
 select `batch_closure="exact-quota"` as well as one learning seat; whole-game
 closure treats the transition quota as a minimum.
@@ -773,26 +773,18 @@ resolution fails, check for an incompatible Python version, an older exact
 Torch/Etude pin in your project, or a missing wheel on the selected backend.
 Do not bypass dependency checks with `--no-deps`.
 
-Notebook file generation remains a core dependency because ordinary experiment
-reporting creates an editable notebook. Pandas is no longer a direct requirement;
-no library entry point consumes it.
-
 Choose extras for the features you use:
 
 | Extra | Use |
 |---|---|
 | `academy` | The same as `managym[academy]`: the server dependencies for `managym academy`, the [browser UI](academy.md#running-academy) that the engine wheel carries |
-| `evaluation` | Etude evaluation and plots |
+| `evaluation` | Etude evaluation |
 | `reports` | Reports and Etude S3 report sources |
 | `artifacts` | Artifact-store access |
-| `notebook` | Jupyter and notebook execution |
 | `llm` | Local transformer inference |
 | `openrouter` | OpenRouter inference |
 
-For notebook work, use `'manabot[notebook]'` in the install command and retain
-the resolved versions in your lockfile.
-In a checkout, use `uv sync --locked --extra notebook`. If a command reports
-a missing optional dependency, install its named extra in the same environment
+If a command reports a missing optional dependency, install its named extra in the same environment
 and retry. Development groups are not installed as part of a downstream package.
 
 Experiment recipes (`etude train experiments/<experiment>.py`), experiment drivers and data-ledger tools need a
