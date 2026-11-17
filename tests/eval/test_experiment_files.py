@@ -278,7 +278,7 @@ def test_opponent_memory_discovery_declares_trunks_and_empty_evaluation() -> Non
                 "decision-memory-wide-trunk"
                 if wide
                 else (
-                    "decision-memory-trunk-3"
+                    "decision-memory-trunk-4"
                     if run.seed == 39103
                     else "decision-memory-trunk-2"
                 )

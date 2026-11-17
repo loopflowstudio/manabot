@@ -95,7 +95,7 @@ SIZES = {
 TRUNK_NAME = "trunk-2"
 # Seed 39103 lost its only trunk-2 attempt to a provider capacity refusal
 # before any work; its trunk is the same recipe under a fresh run identity.
-TRUNK_NAMES = {39101: TRUNK_NAME, 39102: TRUNK_NAME, 39103: "trunk-3"}
+TRUNK_NAMES = {39101: TRUNK_NAME, 39102: TRUNK_NAME, 39103: "trunk-4"}
 ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENT = Path(__file__).stem
 
