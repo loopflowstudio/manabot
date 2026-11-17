@@ -39,9 +39,9 @@ optimizations, so those worker rates do not measure the chunk cache.
 The [chunk-cache candidate](#record-aligned-chunk-cache-candidate--2026-11-17)
 reduces CPU fixture preparation and yields 1.14–1.20× GRU fixture speedups with
 exact feature/output/gradient/state comparisons. GRU remains 0.30–0.46× the
-matched incumbent fixture rate. Warm cache arrays add 61.6 MB for 256 prefixes,
-so the original retained-byte no-growth condition is unmet; the candidate is
-returned for design review. No optimized CUDA-worker or learning result follows.
+matched incumbent fixture rate. Warm cache arrays add 61.6 MB for 256 prefixes;
+raw transport and cached features are now budgeted separately and the cache is
+kept. No optimized CUDA-worker or learning result follows.
 
 ## Current method and limits
 
@@ -1521,3 +1521,10 @@ frozen before/candidate sources, fixture identity, harnesses, both timing
 matrices, exact hashes, differential proof and ownership accounting. Its corpus
 is the existing `20261117-host-cost` fixture; the evidence bundle does not
 regenerate it or change frozen probe/CUDA bytes.
+
+2026-11-17: kept and committed at `574112a0aa`. The retained-byte no-growth
+condition was a design-review bar, not a person's; the cache is accepted with
+accounted transport ownership (30.7 MB cold, 28.7 MB of it raw chunk bytes) and cached features (61.6 MB warm per 256
+prefixes) reported as separate budgets. The measured numbers above are
+unchanged. Capture and per-decision whole-prefix encoding remain the next
+host-cost targets.
