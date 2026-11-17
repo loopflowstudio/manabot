@@ -41750,6 +41750,14 @@
    "sha256": "c2998cdeb774ef19c6b6f9a7d5b20cf2ae569cad31dce881cc5bbd4cee555b41",
    "bytes": 14533131
   },
+  "experiments/data/opponent-memory/20261117-host-cost/stage1-members.json": {
+   "sha256": "03f3a4cc4153f7c49e98356eca14460913f930d776af4bc7eae7609d4168a6a6",
+   "bytes": 16492
+  },
+  "experiments/data/opponent-memory/20261117-host-cost/stage1-output.tar.gz": {
+   "sha256": "295af228b5ddb97d6648e3251bfcda034e95be045a327a99416476d3c305b8f8",
+   "bytes": 2674809
+  },
   "experiments/data/pooling-filter/evidence.json": {
    "sha256": "5fd1af3f1c6897e87fd1014b30f79102b4fee4102a43a9f40773954c13a4219d",
    "bytes": 403261

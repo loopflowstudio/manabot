@@ -1,9 +1,9 @@
 """Exploratory whole-game opponent-memory pilot (Task 3dca91).
 
 The report (`opponent_memory.md`) owns the design, evidence and open decisions.
-`training_jobs(..., calibration=True)` declares the bounded exploratory CUDA
-measurement. Pilot training and evaluation stop until its results date a branch
-recipe; `branch_jobs` freezes the three arms from each published trunk.
+`training_jobs` stops paid work pending CPU host-cost reductions and GRU-only
+repricing. Frozen CUDA runs retain their original source and transformer workers;
+`branch_jobs` freezes control and GRU from each published trunk.
 `census` and `probe` are the USD0 commands. Nothing runs on import.
 """
 
@@ -64,12 +64,12 @@ def branch_jobs(
     max_hours: float,
     max_usd: Decimal,
 ) -> list[RunRequest]:
-    """Freeze matched branches from published trunk inputs without launching.
+    """Freeze control/GRU branches from published trunk inputs without launching.
 
     Calibration supplies the shared branch recipe, horizon, gate scale and caps.
     Each seed maps to exactly one producer receipt and EMA export, reused by all
-    three arms. The ordinary training declaration stays stopped until CUDA
-    admission and calibration.
+    both arms. The ordinary training declaration stays stopped pending CPU
+    host-cost reductions and repricing.
     """
     if not trunks or any(seed not in SEEDS for seed in trunks):
         raise ValueError("branches require declared pilot seed labels")
@@ -102,10 +102,11 @@ def branch_jobs(
 
 
 def eval_jobs(state: ExperimentState) -> list[Job]:
-    """Stop rather than score unmatched updates as matched learner decisions."""
+    """Keep evaluation stopped with the unlaunched, unpriced GRU-only pilot."""
     raise RuntimeError(
-        "Wire paired Elemental 10x10 evaluation to retained learner-decision "
-        "checkpoint clocks after the software prerequisite; see the report."
+        "Pilot evaluation is stopped pending CPU host-cost reductions and "
+        "GRU-only repricing. Retain actual learner-decision checkpoint clocks; "
+        "see experiments/opponent_memory.md."
     )
 
 
