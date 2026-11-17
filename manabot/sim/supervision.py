@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from contextlib import nullcontext
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import io
 from multiprocessing.connection import Connection
 from pathlib import Path
@@ -281,6 +281,13 @@ class ReplayOutcome:
     process: dict[str, int] = field(default_factory=dict)
     # Heterogeneous user row types cross this explicit extension boundary.
     statistics_rows: list[list[Any]] = field(default_factory=list)
+    analysis_error: str | None = None
+
+
+@dataclass(frozen=True)
+class _ReplayMessage:
+    outcome: ReplayOutcome
+    rows: bytes | None
 
 
 def replay_worker(
@@ -291,11 +298,16 @@ def replay_worker(
 ) -> None:
     """Replay child entry; over its thread budget, the outcome is an error."""
     try:
-        reduction = (
-            Reduction(cloudpickle.loads(reducer_payload))
-            if reducer_payload is not None
-            else None
-        )
+        analysis_error = None
+        try:
+            reduction = (
+                Reduction(cloudpickle.loads(reducer_payload))
+                if reducer_payload is not None
+                else None
+            )
+        except Exception as exc:
+            reduction = None
+            analysis_error = f"analysis setup: {type(exc).__name__}: {exc}"
         if card_evidence_dir is None and reduction is None:
             outcome = ReplayOutcome([replay_games([game]).to_dict() for game in games])
         else:
@@ -315,14 +327,24 @@ def replay_worker(
                 receipts,
                 tuple(references),
                 statistics_rows=reduction.rows if reduction is not None else [],
+                analysis_error=reduction.error if reduction is not None else None,
             )
+        if analysis_error is not None:
+            outcome = replace(outcome, analysis_error=analysis_error)
         REPLAY_BUDGET.account(outcome.process)
-        # A user may define reducers/row dataclasses in their script. Cloudpickle
-        # keeps that code portable without re-importing the parent's __main__.
+        # Keep user-row decoding separate from the completed verification receipt.
         if reducer_payload is None:
             connection.send(outcome)
         else:
-            connection.send_bytes(_reducer_bytes(outcome))
+            rows = None
+            try:
+                rows = _reducer_bytes(outcome.statistics_rows)
+            except Exception as exc:
+                outcome = replace(
+                    outcome,
+                    analysis_error=f"analysis result transport: {type(exc).__name__}: {exc}",
+                )
+            connection.send(_ReplayMessage(replace(outcome, statistics_rows=[]), rows))
     except BaseException as exc:
         connection.send(ReplayOutcome(error=f"{type(exc).__name__}: {exc}"))
     finally:
@@ -340,7 +362,12 @@ def replay_retained(
     if seconds <= 0:
         return ReplayOutcome(error="allocation deadline exhausted before replay")
     started = time.monotonic()
-    payload = _reducer_bytes(tuple(reducers)) if reducers else None
+    transport_error = None
+    try:
+        payload = _reducer_bytes(tuple(reducers)) if reducers else None
+    except Exception as exc:
+        payload = None
+        transport_error = f"analysis setup transport: {type(exc).__name__}: {exc}"
     process = ChildProcess(
         "manabot.sim.supervision:replay_worker", (games, card_evidence_dir, payload)
     )
@@ -357,7 +384,26 @@ def replay_retained(
                         error=f"replay worker exited {process.exitcode}"
                     )
             try:
-                return receiver.recv()
+                message = receiver.recv()
+                if isinstance(message, _ReplayMessage):
+                    outcome = message.outcome
+                    if message.rows is not None:
+                        try:
+                            outcome = replace(
+                                outcome, statistics_rows=cloudpickle.loads(message.rows)
+                            )
+                        except Exception as exc:
+                            outcome = replace(
+                                outcome,
+                                analysis_error=f"analysis result decoding: {type(exc).__name__}: {exc}",
+                            )
+                else:
+                    outcome = message
+                return (
+                    replace(outcome, analysis_error=transport_error)
+                    if transport_error
+                    else outcome
+                )
             except EOFError:
                 return ReplayOutcome(error="replay worker exited without a result")
         return ReplayOutcome(error="replay wall-clock budget exhausted")

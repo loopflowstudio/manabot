@@ -424,9 +424,45 @@ one list of rows per reducer, in the order given. A judgement such as "attacked
 when the attack was good" belongs in a reducer of your own, since the engine
 has no opinion on good.
 
-The same reducers run during scalar play: pass `reducers=[...]` to
-`ScalarCapture` and read `capture.rows()` after each game. One definition
-serves both.
+The same reducers run during scalar or vector play. Pass `reducers=[...]` to
+`ScalarCapture` or `CapturedVector`, and call `capture.rows()` for tables from
+completed or closed games:
+
+```python
+from managym.recording import CapturedVector
+
+capture = CapturedVector(num_envs=32, seed=7, reducers=[Behaviour(), HeldSpells()])
+# Reset and step through the capture, using ordinary or buffered vector calls.
+# No games_path is needed: these questions cover every game, not a saved sample.
+capture.close()
+print(capture.rows())
+```
+
+Each vector stream receives a deep copy of your reducers and owns independent
+per-game state. `start` resets that state at every native root, including
+autoreset and same-seed replacement. Only committed, active-stream decisions
+reach `decision`; rejected isolated calls do not. `end` receives the old game's
+card facts before autoreset discards them, or an interrupted result on root
+replacement/close. Per-game rows are combined and the original reducer's
+`finish(rows)` aggregates them; do not depend on stream-local mutable state in
+`finish`. Rows accumulate until the capture is released, so return compact
+per-game summaries. Record annotations are available to live hooks even when
+record sampling is off.
+
+A catchable custom callback error stops the custom analysis and is available
+as `capture.analysis_error`; `capture.rows()` raises `AnalysisFailure` instead
+of returning a partial table. It does not fail a committed native step or rewrite
+the game record. A strict vector batch failure leaves commitment coverage
+unknown, so its custom table is unavailable. Native errors still follow the
+call's existing strict/isolated behavior. Offline `reduce` also raises
+`AnalysisFailure` when its question fails.
+
+With no reducers registered, there is no analysis observation read, card/exposure
+capture or Python callback. Enabled hooks materialize each active chooser's full
+observation and retain native card/exposure history; this is additional work on
+the buffered path, not a zero-cost extension. Callbacks execute synchronously
+in the calling producer's Python thread; they must return promptly. Built-in
+native summaries remain the cheaper option when they answer the question.
 
 manabot evaluation also accepts named reducers on `play_cell`. Those hooks run
 inside its existing verification replay, sharing native card facts with audited

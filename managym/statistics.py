@@ -115,6 +115,10 @@ class Reducer[T]:
         return rows
 
 
+class AnalysisFailure(ValueError):
+    """A custom analysis failed; the source game and verification are unchanged."""
+
+
 class Reduction:
     """Feed several reducers one verified traversal; aggregate after all games.
 
@@ -123,26 +127,66 @@ class Reduction:
     """
 
     def __init__(self, reducers: Sequence[Reducer[Any]]) -> None:
+        self.error: str | None = None
         self.reducers = tuple(reducers)
         self.rows: list[list[Any]] = [[] for _ in reducers]
 
-    def start(self, setup: list["PlayerSetup"]) -> None:
+    def fail(self, error: str) -> None:
+        """Quarantine this analysis without throwing into its game owner."""
+        if self.error is None:
+            self.error = error
+            for rows in self.rows:
+                rows.clear()
+
+    def _call(self, phase: str, *arguments: object) -> list[Any]:
+        if self.error is not None:
+            return []
+        results = []
         for reducer in self.reducers:
-            reducer.start(setup)
+            try:
+                results.append(getattr(reducer, phase)(*arguments))
+            except Exception as exc:
+                self.fail(
+                    f"{type(reducer).__name__}.{phase}: {type(exc).__name__}: {exc}"
+                )
+                return []
+        return results
+
+    def start(self, setup: list["PlayerSetup"]) -> None:
+        self._call("start", setup)
 
     def decision(self, decision: "RecordedDecision") -> None:
-        for reducer in self.reducers:
-            reducer.decision(decision)
+        self._call("decision", decision)
 
     def end(self, result: "ReplayStop", capture: CapturedCards) -> None:
-        for reducer, rows in zip(self.reducers, self.rows, strict=True):
-            rows.extend(reducer.end(result, capture))
+        results = self._call("end", result, capture)
+        if self.error is None:
+            try:
+                for rows, new in zip(self.rows, results, strict=True):
+                    rows.extend(new)
+            except Exception as exc:
+                self.fail(f"invalid reducer rows: {type(exc).__name__}: {exc}")
 
     def finish(self) -> list[list[Any]]:
-        return [
-            reducer.finish(rows)
-            for reducer, rows in zip(self.reducers, self.rows, strict=True)
-        ]
+        if self.error is not None:
+            return [[] for _ in self.reducers]
+        tables = []
+        for reducer, rows in zip(self.reducers, self.rows, strict=True):
+            try:
+                tables.append(reducer.finish(rows))
+            except Exception as exc:
+                self.fail(
+                    f"{type(reducer).__name__}.finish: {type(exc).__name__}: {exc}"
+                )
+                return [[] for _ in self.reducers]
+        return tables
+
+    def tables(self) -> list[list[Any]]:
+        """Read final tables, raising an analysis error instead of partial results."""
+        tables = self.finish()
+        if self.error is not None:
+            raise AnalysisFailure(self.error)
+        return tables
 
 
 @dataclass(frozen=True)
@@ -335,4 +379,4 @@ def reduce(
             reduction.decision(decision)
         assert replay.stop is not None
         reduction.end(replay.stop, replay.cards())
-    return reduction.finish()
+    return reduction.tables()

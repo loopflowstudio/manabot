@@ -563,9 +563,14 @@ eligibility and bootstrap intervals remain evaluation responsibilities.
 
 Only complete, successfully audited games contribute reducer rows. Rejected
 games remain in the evaluation's original records and outcome diagnostics.
-A reducer exception fails its supervised replay/statistics job, reports the
-error, and publishes no custom tables; it never retries or rewrites the played
-game. Tables are mode 0600 and are not attached to Academy viewer records.
+A catchable reducer exception stops custom analysis and publishes no custom
+tables. Its separate `analysis_error` does not invalidate successfully completed
+verification, audited card evidence or game scores. Callback, aggregation and
+question/result transport failures are analysis failures. An experiment that
+requires the table must check this status and can reject the evaluation without
+relabeling verified games. It never retries or rewrites the played game.
+A worker death or deadline still leaves unfinished verification unavailable;
+a hung callback shares that supervised deadline. Tables are mode 0600 and are not attached to Academy viewer records.
 Ordinary canonical game records support these hooks; legacy traces and
 constructed scenario roots retain their existing verification reader.
 

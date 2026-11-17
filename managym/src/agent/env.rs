@@ -357,6 +357,31 @@ impl Env {
         Ok((observation, info))
     }
 
+    /// Prepare an atomic root replacement without dropping optional recording sinks.
+    /// Unlike a search branch, this continues the producer's retained evidence.
+    pub(crate) fn replacement_root(&self) -> Result<Self, AgentError> {
+        let mut replacement = Self::new(self.seed(), self.skip_trivial, false, false)
+            .with_player_policies(self.player_policies);
+        replacement.collect_statistics = self.collect_statistics;
+        replacement.capture_cards = self.capture_cards;
+        replacement.capture_exposure = self.capture_exposure;
+        replacement.record_terminal = self.record_terminal;
+        replacement.retained_statistics = self.retained_statistics.clone();
+        if self.drained_generation != Some(self.capture_generation) {
+            if let Some(summary) = self.statistics() {
+                replacement.retained_statistics.push(summary);
+            }
+        }
+        replacement.retained_exposure = self.retained_exposure.clone();
+        if self.capture_exposure && self.game.is_some() {
+            replacement.retained_exposure.push(self.exposure_json()?);
+        }
+        if self.profiler.is_enabled() {
+            replacement.profiler = Profiler::new(true, 64);
+        }
+        Ok(replacement)
+    }
+
     pub fn enable_statistics(&mut self) -> Result<(), AgentError> {
         if self.game.is_some() {
             return Err(AgentError("statistics must be enabled before reset".into()));

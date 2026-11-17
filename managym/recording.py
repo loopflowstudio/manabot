@@ -27,7 +27,7 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 import managym
 from managym.bots import BeliefSummary
-from managym.card_capture import captured_cards
+from managym.card_capture import CapturedCards, captured_cards
 from managym.decision import Command, DecisionFrame
 from managym.disclosure import DecklistDisclosure
 from managym.journal import DurableJournal, json_line
@@ -914,14 +914,23 @@ class ScalarCapture(_Capture):
 
     def rows(self) -> list[list[Any]]:
         """Reducer tables for the games completed or closed so far."""
-        return self._reduction.finish()
+        return self._reduction.tables()
+
+    @property
+    def analysis_error(self) -> str | None:
+        return self._reduction.error
 
     def _finish_reducers(self, env: managym.Env, end: GameEnd) -> None:
         if self._reducers_finished or not self.reducers:
             return
         from managym.replay import ReplayStop
 
-        captured = captured_cards(env)
+        try:
+            captured = captured_cards(env)
+        except Exception as exc:
+            self._reduction.fail(f"card facts: {type(exc).__name__}: {exc}")
+            self._reducers_finished = True
+            return
         result = ReplayStop(
             "complete" if end.status == "complete" else "interrupted",
             len(self.inputs.actions),
@@ -1073,9 +1082,9 @@ class ScalarCapture(_Capture):
                     winner=env.winner_index(),
                     digest=env.state_digest() if self._selected(inputs) else None,
                 )
-                self._finish_reducers(env, end)
                 self._write_game(inputs, end)
                 self._flush_statistics()
+                self._finish_reducers(env, end)
             if self._game_journal is not None:
                 self._publish(self._snapshot(), "ready")
             return result
@@ -1130,6 +1139,14 @@ def resolve_player_policies(
     return _retained_player_policies(opponent_policy)
 
 
+class _ExposureSummary(BaseModel):
+    """Narrow the native per-generation receipt once at the extension boundary."""
+
+    seed: int
+    terminal: bool
+    cards: CapturedCards
+
+
 class CapturedVector(_Capture):
     """Instrument the strict native vector API without isolating or retrying rows.
 
@@ -1149,9 +1166,18 @@ class CapturedVector(_Capture):
         player_policies: tuple[str, str] | None = None,
         seed_stride: int | None = None,
         stream_offset: int = 0,
+        reducers: list[Reducer[Any]] | None = None,
         **recording: Unpack[RecordingOptions],
     ) -> None:
         super().__init__(**recording)
+        # Each stream owns game-local state. Only returned rows cross streams;
+        # the original reducer instances own the one final aggregation.
+        self._reduction = Reduction(reducers or [])
+        self._reductions = (
+            [Reduction(deepcopy(reducers)) for _ in range(num_envs)] if reducers else []
+        )
+        self._analysis_active = [False] * num_envs if reducers else []
+        self._analysis_indices = [0] * num_envs if reducers else []
         self.stride = seed_stride or num_envs
         self.skip_trivial = skip_trivial
         self.player_policies = resolve_player_policies(opponent_policy, player_policies)
@@ -1164,6 +1190,8 @@ class CapturedVector(_Capture):
         )
         if self.statistics_path is not None:
             self.native.enable_statistics()
+        if self._reductions:
+            self.native.enable_exposure_capture()
         self._closed = False
         self.games = [
             GameInputs(
@@ -1229,6 +1257,52 @@ class CapturedVector(_Capture):
                 rows.extend(row for row in self.statistics() if row is not None)
             self._write_statistics(rows)
 
+    @property
+    def analysis_error(self) -> str | None:
+        return self._reduction.error
+
+    def rows(self) -> list[list[Any]]:
+        """Tables across completed/closed games; unfinished games add no rows yet."""
+        return self._reduction.tables()
+
+    def _end_analysis(
+        self,
+        index: int,
+        raw: str,
+        *,
+        winner: int | None = None,
+        reason: str | None = None,
+    ) -> None:
+        from managym.replay import ReplayStop
+
+        if not self._analysis_active[index]:
+            return
+        reduction = self._reductions[index]
+        if self._reduction.error is not None:
+            self._analysis_active[index] = False
+            return
+        try:
+            receipt = _ExposureSummary.model_validate_json(raw)
+            reduction.end(
+                ReplayStop(
+                    "complete" if receipt.terminal else "interrupted",
+                    self._analysis_indices[index],
+                    reason,
+                    winner,
+                ),
+                receipt.cards,
+            )
+        except Exception as exc:
+            reduction.fail(f"card facts: {type(exc).__name__}: {exc}")
+        self._analysis_active[index] = False
+        if reduction.error is not None:
+            self._reduction.fail(reduction.error)
+        if self._reduction.error is None:
+            for total, rows in zip(self._reduction.rows, reduction.rows, strict=True):
+                total.extend(rows)
+        for rows in reduction.rows:
+            rows.clear()
+
     def close(self) -> None:
         if self._closed:
             return
@@ -1242,6 +1316,9 @@ class CapturedVector(_Capture):
                 ),
             )
         self._flush_statistics(partial=True)
+        if any(self._analysis_active):
+            for index, raw in enumerate(self.native.current_exposure()):
+                self._end_analysis(index, raw, reason="capture closed")
         self._close_output()
         self.flush_policy_actions()
 
@@ -1394,7 +1471,21 @@ class CapturedVector(_Capture):
         if restarted:
             self._flush_statistics()
         players = self.native.current_player_configs() if restarted else []
-        infos = self.native.get_last_info() if any(self.recording_mask()) else []
+        infos = (
+            self.native.get_last_info()
+            if any(self.recording_mask()) or self._reductions
+            else []
+        )
+        if restarted and self._reductions:
+            for index, receipts in enumerate(self.native.take_exposure()):
+                for raw in receipts:
+                    info = infos[index] if completed else {}
+                    self._end_analysis(
+                        index,
+                        raw,
+                        winner=info.get("winner_index"),
+                        reason=info.get("game_error") if completed else "root replaced",
+                    )
         for index in restarted:
             game = self.games[index]
             if game.actions and self._selected(game):
@@ -1417,6 +1508,13 @@ class CapturedVector(_Capture):
                 PlayerSetup.retain(player, players[index].decklists)
                 for player in players[index]
             ]
+        if self._reductions and self._reduction.error is None:
+            for index in restarted:
+                self._analysis_indices[index] = 0
+                self._analysis_active[index] = True
+                self._reductions[index].start(self.games[index].players)
+                if self._reductions[index].error is not None:
+                    self._reduction.fail(self._reductions[index].error)
         self.next_seeds = [
             min(game.seed + self.stride, 2**64 - 1) for game in self.games
         ]
@@ -1528,6 +1626,17 @@ class CapturedVector(_Capture):
         summaries = (
             self.native.current_action_summaries() if self._action_cutoff else []
         )
+        hook_annotations: list[DecisionAnnotation | None] = []
+        if self._reductions and self._reduction.error is None:
+            hook_annotations = [
+                None
+                if annotation is None
+                else DecisionAnnotation.model_validate(annotation)
+                for annotation in (annotations or [None] * len(self.games))
+            ]
+        hook_observations = (
+            self.native.decision_observations(enabled) if hook_annotations else []
+        )
         attempted = []
         for index, (game, action, selected, actor, frame) in enumerate(
             zip(self.games, actions, enabled, actors, frames, strict=True)
@@ -1575,23 +1684,53 @@ class CapturedVector(_Capture):
                     game.annotations.append(retained)
                 game.actions.append(int(action))
                 attempted.append(game)
-        with self._guard(lambda: self._evidence_for(attempted, "step")):
-            if self._game_journal is not None:
-                self._publish(self._evidence_for(self.games, "step"), "executing")
-            result = None
-            if not buffered:
-                result = self.native.step(actions)
-            elif isolated:
-                self.native.step_isolated_into_buffers(
-                    actions, enabled, recover_capacity
+        try:
+            with self._guard(lambda: self._evidence_for(attempted, "step")):
+                if self._game_journal is not None:
+                    self._publish(self._evidence_for(self.games, "step"), "executing")
+                result = None
+                if not buffered:
+                    result = self.native.step(actions)
+                elif isolated:
+                    self.native.step_isolated_into_buffers(
+                        actions, enabled, recover_capacity
+                    )
+                else:
+                    self.native.step_into_buffers(actions, active)
+        except BaseException:
+            if self._reductions:
+                self._reduction.fail(
+                    "vector batch failed: committed analysis coverage is unknown"
                 )
-            else:
-                self.native.step_into_buffers(actions, active)
-        infos = self.native.get_last_info() if isolated and any(selected_games) else []
+            raise
+        infos = (
+            self.native.get_last_info()
+            if isolated and (any(selected_games) or self._reductions)
+            else []
+        )
         for index, (game, on) in enumerate(zip(self.games, enabled, strict=True)):
             if on and not (infos and infos[index].get("game_error")):
                 game.committed = len(game.actions)
         self._returned()
+        if hook_observations:
+            from managym.replay import RecordedDecision
+
+            for index, observation in enumerate(hook_observations):
+                if observation is not None and not (
+                    infos and infos[index].get("game_error")
+                ):
+                    reduction = self._reductions[index]
+                    reduction.decision(
+                        RecordedDecision(
+                            self._analysis_indices[index],
+                            observation,
+                            int(actions[index]),
+                            hook_annotations[index],
+                        )
+                    )
+                    self._analysis_indices[index] += 1
+                    if reduction.error is not None:
+                        self._reduction.fail(reduction.error)
         self._synchronize(completed=True)
         return result
 

@@ -339,6 +339,8 @@ def play_cell(
             receipts = outcome.receipts
             for name, value in outcome.process.items():
                 perf.counters[name] = max(perf.counters.get(name, 0), value)
+            if outcome.analysis_error is not None:
+                reduction.fail(outcome.analysis_error)
             if outcome.error is not None:
                 replay_errors.append(outcome.error)
             if receipts is None:
@@ -347,7 +349,7 @@ def play_cell(
                 ]
             replay_receipts.extend(receipts)
             card_evidence.extend(ref.model_dump() for ref in outcome.card_evidence)
-            if outcome.statistics_rows:
+            if outcome.statistics_rows and reduction.error is None:
                 for combined, reducer_rows in zip(
                     reduction.rows, outcome.statistics_rows, strict=True
                 ):
@@ -542,10 +544,18 @@ def play_cell(
             # Tables contain private facts. Keep them separate from viewer
             # records, and aggregate once across all supervised deal blocks.
             tables = None
-            if not replay_errors:
-                tables = TypeAdapter(dict[str, list[Any]]).dump_python(
-                    dict(zip(reducers, reduction.finish(), strict=True)), mode="json"
-                )
+            if not replay_errors and reduction.error is None:
+                try:
+                    tables = TypeAdapter(dict[str, list[Any]]).dump_python(
+                        dict(zip(reducers, reduction.finish(), strict=True)),
+                        mode="json",
+                    )
+                except Exception as exc:
+                    reduction.fail(
+                        f"analysis table encoding: {type(exc).__name__}: {exc}"
+                    )
+            if reduction.error is not None:
+                tables = None
             statistics_path = out_dir / "statistics.json"
             atomic_private_json(
                 statistics_path,
@@ -557,7 +567,8 @@ def play_cell(
                         for r in rows
                     ),
                     "replay_passed": replay_payload["passed"],
-                    "error": replay_payload.get("error"),
+                    "error": reduction.error or replay_payload.get("error"),
+                    "analysis_error": reduction.error,
                 },
             )
             trace_receipt["statistics_path"] = str(statistics_path)

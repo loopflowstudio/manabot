@@ -165,6 +165,94 @@ def test_reducer_failure_is_reported_without_rewriting_game(
     path = Path(trace["path"])
     original = path.read_bytes()
     outcome = replay_retained(read_trace(path), 60, reducers=[Broken()])
-    assert outcome.error is not None and "my statistic failed" in outcome.error
-    assert outcome.statistics_rows == []
+    assert outcome.error is None
+    assert "my statistic failed" in outcome.analysis_error
+    assert outcome.statistics_rows == [[]]
+    assert all(receipt["passed"] for receipt in outcome.receipts)
     assert path.read_bytes() == original
+
+
+@pytest.mark.parametrize("phase", ["start", "decision", "end", "finish"])
+def test_analysis_failure_does_not_void_evaluation(tmp_path: Path, phase: str) -> None:
+    class Broken(DecisionDistribution):
+        def start(self, setup: Any) -> None:
+            if phase == "start":
+                raise ValueError("optional question failed")
+            super().start(setup)
+
+        def decision(self, decision: RecordedDecision) -> None:
+            if phase == "decision":
+                raise ValueError("optional question failed")
+            super().decision(decision)
+
+        def end(self, result: Any, capture: Any) -> list[DecisionCount]:
+            if phase == "end":
+                raise ValueError("optional question failed")
+            return super().end(result, capture)
+
+        def finish(self, rows: list[DecisionCount]) -> list[DecisionCount]:
+            if phase == "finish":
+                raise ValueError("optional question failed")
+            return super().finish(rows)
+
+    fixture = arena_fixture()
+    rows, trace, replay = play_cell(
+        key=fixture.key,
+        player_a=fixture.anchors[0],
+        player_b=fixture.anchors[1],
+        deal_seeds=(3,),
+        legs=(0, 1),
+        out_dir=tmp_path,
+        card_evidence_dir=tmp_path / "card-evidence",
+        reducers={"broken": Broken()},
+    )
+    assert replay["passed"] and all(row["replay_passed"] for row in rows)
+    assert all(row["score_a"] is not None for row in rows)
+    assert len(trace["card_evidence"]) == 2
+    statistics = json.loads(Path(trace["statistics_path"]).read_text())
+    assert statistics["tables"] is None
+    assert "optional question failed" in statistics["analysis_error"]
+    assert statistics["complete_verified_games"] == 2
+    assert statistics["replay_passed"]
+
+
+def test_analysis_transport_error_preserves_verification(
+    evaluation: tuple[Path, dict[str, Any], dict[str, Any]],
+) -> None:
+    class Untransportable(DecisionDistribution):
+        def __reduce_ex__(self, protocol: int) -> Any:
+            raise ValueError("cannot transport question")
+
+    _, trace, _ = evaluation
+    outcome = replay_retained(
+        read_trace(Path(trace["path"])), 60, reducers=[Untransportable()]
+    )
+    assert outcome.error is None
+    assert "cannot transport question" in outcome.analysis_error
+    assert all(receipt["passed"] for receipt in outcome.receipts)
+
+
+@pytest.mark.parametrize("decode", [False, True])
+def test_bad_result_transport_preserves_completed_audit(
+    evaluation: tuple[Path, dict[str, Any], dict[str, Any]], decode: bool
+) -> None:
+    def rejected() -> Any:
+        raise ValueError("bad analysis row")
+
+    class BadRow:
+        def __reduce_ex__(self, protocol: int) -> Any:
+            if not decode:
+                raise ValueError("bad analysis row")
+            return rejected, ()
+
+    class BadResult(Reducer[Any]):
+        def end(self, result: Any, capture: Any) -> list[Any]:
+            return [BadRow()]
+
+    _, trace, _ = evaluation
+    outcome = replay_retained(
+        read_trace(Path(trace["path"])), 60, reducers=[BadResult()]
+    )
+    assert outcome.error is None
+    assert "bad analysis row" in outcome.analysis_error
+    assert all(receipt["passed"] for receipt in outcome.receipts)

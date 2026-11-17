@@ -212,6 +212,28 @@ impl VectorEnv {
         self.envs.iter_mut().map(Env::take_exposure).collect()
     }
 
+    /// Detached chooser observations only for requested active streams.
+    /// Optional Python analyses call this; the buffered policy path does not.
+    pub fn decision_observations(
+        &self,
+        active: &[bool],
+    ) -> Result<Vec<Option<Observation>>, AgentError> {
+        self.validate_actions_len(active.len())?;
+        self.validate_ready_for_step()?;
+        self.envs
+            .iter()
+            .zip(active)
+            .map(|(env, on)| {
+                if *on {
+                    env.observation_for_player(env.current_agent_index().unwrap_or(0))
+                        .map(Some)
+                } else {
+                    Ok(None)
+                }
+            })
+            .collect()
+    }
+
     pub fn current_exposure(&self) -> Result<Vec<String>, AgentError> {
         self.envs.iter().map(Env::exposure_json).collect()
     }
@@ -662,7 +684,7 @@ impl VectorEnv {
                         }
                     }
                 }
-                let mut env = Env::new(self.envs[index].seed(), self.skip_trivial, false, false);
+                let mut env = self.envs[index].replacement_root()?;
                 let (obs, info) = env.reset(setup.clone())?;
                 validate(index, &obs)?;
                 prepared.push((index, setup, env, obs, info));
@@ -995,6 +1017,22 @@ mod tests {
         infra::profiler::InfoValue,
         state::player::{GameSetup, PlayerConfig},
     };
+
+    #[test]
+    fn decision_observations_keep_chooser_and_active_mask() {
+        let mut vector = VectorEnv::new(2, 42, true, [PlayerPolicy::Agent; 2]);
+        assert!(vector.decision_observations(&[true, false]).is_err());
+        vector.reset_all(sample_player_configs()).unwrap();
+        let before = vector.state_digests(None).unwrap();
+        let observations = vector.decision_observations(&[true, false]).unwrap();
+        assert_eq!(
+            observations[0].as_ref().unwrap().agent.player_index,
+            i32::try_from(vector.envs[0].current_agent_index().unwrap()).unwrap()
+        );
+        assert!(observations[1].is_none());
+        assert_eq!(vector.state_digests(None).unwrap(), before);
+        assert!(vector.decision_observations(&[true]).is_err());
+    }
 
     #[test]
     fn state_digests_match_scalar_and_respect_mask() {
@@ -1439,6 +1477,43 @@ mod tests {
             }
         }
         assert!(terminals > 0 && changed > 0);
+    }
+
+    #[test]
+    fn reassignment_preserves_recording_sinks_and_rejected_setup() {
+        let mut vector = VectorEnv::new(1, 23, true, [PlayerPolicy::Agent; 2]);
+        vector.enable_statistics().unwrap();
+        vector.enable_exposure_capture().unwrap();
+        vector.reset_all(sample_player_configs()).unwrap();
+        let generation = vector.current_game_generations();
+        assert!(vector
+            .reassign_roots_into(
+                vec![Some(sample_player_configs())],
+                |_, _| Err(AgentError("injected admission".into())),
+                |_, _, _, _, _| Ok(()),
+            )
+            .is_err());
+        assert_eq!(vector.current_game_generations(), generation);
+        assert!(vector.take_exposure()[0].is_empty());
+        assert!(vector.take_statistics().is_empty());
+        vector
+            .reassign_roots_into(
+                vec![Some(sample_player_configs())],
+                |_, _| Ok(()),
+                |_, _, _, _, _| Ok(()),
+            )
+            .unwrap();
+        assert_eq!(vector.take_exposure()[0].len(), 1);
+        let summaries = vector.take_statistics();
+        assert_eq!(summaries.len(), 1);
+        assert_eq!(summaries[0].generation, generation[0]);
+        assert!(!summaries[0].terminal);
+        assert!(vector.statistics()[0].is_some());
+        vector.step(&[0]).unwrap();
+        vector.reset_all(sample_player_configs()).unwrap();
+        let receipt: serde_json::Value =
+            serde_json::from_str(&vector.take_exposure()[0][0]).unwrap();
+        assert_eq!(receipt["trace"]["actions"], serde_json::json!([0]));
     }
 
     #[test]

@@ -481,6 +481,17 @@ impl PyVectorEnv {
         self.inner.take_exposure()
     }
 
+    fn decision_observations(&self, active: Vec<bool>) -> PyResult<Vec<Option<PyObservation>>> {
+        self.inner
+            .decision_observations(&active)
+            .map(|rows| {
+                rows.into_iter()
+                    .map(|row| row.map(PyObservation::from))
+                    .collect()
+            })
+            .map_err(map_agent_err)
+    }
+
     fn current_exposure(&self) -> PyResult<Vec<String>> {
         self.inner.current_exposure().map_err(map_agent_err)
     }
