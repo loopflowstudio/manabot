@@ -118,3 +118,10 @@ do not start a server loop or rent again until Etude can reconcile it.
 2026-11-17 realign choice (mine, reversible): the GPU retry uses a fresh
 isolated launcher home rather than the one holding the unresolved Lium intent;
 that home is kept untouched as evidence, and Lium is not retried.
+
+2026-11-17 realign: no open manabot Task names Lium, and none was filed. Etude
+0.4.1's `Pod.created_at: AwareDatetime` rejects Lium's timezone-naive value
+after paid creation, and `etude terminate` then refuses the unreconciled
+intent (experiments/reports/etude-execution.md, Retry). Proposed, not filed:
+an Etude Task to accept/normalize Lium timestamps and reconcile an interrupted
+create. Lium stays excluded from this Task's retry either way.
