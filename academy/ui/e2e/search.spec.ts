@@ -82,6 +82,9 @@ test('timeouts retain Play and initial Watch choices across reload and explicit 
   await expect(page.getByRole('button', { name: 'Retry search', exact: true })).toBeEnabled();
   expect(frames.at(-1)!.revision).toBe(pending.revision);
   await page.goto(addresses.watch_timeout);
+  // A repeated deal whose first Watch decision belongs to the timed-out seat.
+  await page.getByLabel('Deal mode').selectOption('repeat');
+  await page.getByLabel('Seed').fill('1');
   await page.getByRole('button', { name: 'Start watching' }).click();
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Retry search', exact: true })).toBeVisible();
