@@ -149,3 +149,30 @@ through the shared-effect section (including performance, delivery and accountin
 and the training failure recovery discussion. Other sections were not read in this
 pass, and that memory was not curated. Its v7 batching traces do not establish a
 hashed-v6 speedup.
+
+
+## Private journals and live statistics (a82046, 2026-11-15)
+
+Jack Heart said "i think the stats colelcted in game is probably more general"
+and "ok add thisninto the foncept review for 540 before another pursue round".
+The subsequent task direction includes both standalone capabilities in #540.
+Native optional statistics now consume shared setup/movement/committed-choice
+facts independently of retained capture lists. Portable recording/replay lives
+in managym; runner adapters own destinations and non-engine phase markers.
+Evaluation retains replay eligibility and participant mapping outside engine
+counts, using the same native counting formulas for retained facts. Installed
+CPython 3.12/3.13 engine-only proofs passed without manabot, Torch or Etude.
+Stats-only does not imply constant total Env memory: intrinsic action traces,
+physical-copy provenance and undrained generation summaries can grow. Search
+clones omit sinks; transactional rollback must restore them. Keep missing
+historical exposure unavailable rather than converting it into zero counts.
+
+Durable pre-call intent is not proof of native entry: interruption before entry
+or after return but before acknowledgment leaves the same unknown outcome. Runner
+phase markers remain necessary to distinguish learning from game work. Academy's
+Recording is a viewer read projection, not a private pending-call recorder.
+The final journal CPU microprobe measured 29.37% lower time with equal bytes and
+sync requests; it did not reproduce the 30% prediction or measure training speed.
+
+Coverage: read this Wave's full objective and memory and listed its directory;
+no immediate child directories or memories exist. No other Wave was read here.
