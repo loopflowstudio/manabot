@@ -57,5 +57,12 @@ state.pt parity does not prove the revised save API.
   `uv run --extra dev ruff check` and `ruff format --check` on recording and
   game-error fixtures, plus `git diff --check`: pass.
 
+- Compress pass at 15d69f186f (merged state, rebuilt cp313 extension): the
+  eleven files of the two commands above in one run, same flags: 233 passed
+  (39.73s). Then docs only: README, engine-python.md and .lf/skills/qa.md named
+  the removed `manabot train --training-game-logs`; they now give the Etude
+  `--config '{"training_game_logs": true}'` form. `uv run python
+  scripts/check_loopflow_workflows.py`: valid.
+
 Not shown: CUDA batching, real Rust panic injection, native hang/load injection,
 launched or provider runs, browser proof, a full-suite run.

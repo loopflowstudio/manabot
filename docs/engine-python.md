@@ -214,7 +214,7 @@ against host deletion: collect private files before removing the machine.
 A journal can identify engine work, but cannot identify what its caller does
 between calls. The runner must record inference, learning and other phases
 outside native execution. Training provides those markers through
-[`--training-game-logs`](training.md#diagnosing-stalled-training).
+[`training_game_logs`](training.md#diagnosing-stalled-training).
 
 ## Add training or migrate an existing project
 
