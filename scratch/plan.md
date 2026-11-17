@@ -112,6 +112,24 @@ passed). Commands and limits: implementation.md.
     numbers. Shared launcher DB unchanged; isolated launcher has no rentals.
     Rechecked 14:50 UTC through the isolated launcher: still none available.
     Retry when L4 capacity returns, keeping the approved USD 3 cap.
+    Steers 2026-11-17 (.lf/prompts/20261117-065538-msrXVy-steer.md,
+    -cZtiPA-steer.md, 20261117-065639-rst6T1-steer.md; quotes in
+    positioning.md): any reasonable single GPU (L4, 4090 or similar price)
+    may stand in, both sides on one machine in one session, the report names
+    the GPU; Lium rental is untested, so confirm start and termination. Total
+    cap `--max-usd 10` including this speed run.
+  - Learning check, main against the branch (exploratory: question, method,
+    confounds and cost cap written before scored runs; numbers and limits to
+    implementation.md and the PR). Step 1 on CPU, no rental: fresh run, same
+    recipe, config and seed, uninterrupted; compare every raw and EMA policy
+    tensor after a few updates and report equal / summation-order only /
+    different. Step 2 only on a real difference: Elemental, several seeds a
+    side, curves and paired-deal strength including head-to-head at matched
+    updates; if it cannot fit the cap, stop and say the cost. Step 3 on the
+    rented GPU: one branch run stopped and resumed against one uninterrupted
+    run to the same update count; compare strength and curves, not tensors.
+    Evaluation speed: cite Etude's own measurements; measure only that
+    Manabot's players run on CUDA and games/s against main.
 - Steer 2026-11-17 on PR #500 (complete text:
   .lf/prompts/20261117-065016-7oIWNJ-steer.md). Jack Heart: "i also would
   have expected this pr to involve more deletion of the executor and training
@@ -141,6 +159,25 @@ passed). Commands and limits: implementation.md.
     deleting that part. The nightly path (recipes/baseline.py,
     verify/learning_regression.py) imports none of these modules;
     `regime_digest` there is a serialized field name, kept.
+  - Docs for this deletion are written (intended behavior, code not yet
+    changed): docs/training.md (Saved regimes, reduced precision, update
+    metrics), docs/experiment-metrics.md (rewritten around Etude runs),
+    docs/experiments.md (retained comparisons, report example),
+    docs/evaluation.md (attack plans, ownership), docs/observation-and-model.md
+    (SelfPlay examples replace regime ones), docs/workflows.md,
+    docs/development.md, manabot/README.md, manabot/model/training.md,
+    manabot/model/agent.md, experiments/README.md. They name
+    f4e1822faf (on main; executor, schema and readers) as the one revision
+    that reads and runs the records. What they commit the code to, each my
+    choice (questions.md): `manabot.experiment` keeps only `setup` and
+    `numerics`; `manabot.training.report` stays and `job_labels` takes each
+    job's `ModelConfig`; tla_frontier stays, its settings written in its own
+    file with the regime JSON unread; `manabot.reports` keeps
+    `update_metrics.updates_from_run`, `self_play.self_play_points` over one
+    run's rows, `training --evaluations`, the Etude-only `training-report`,
+    `belief`, `inference` and `evaluation`; StepCalibration, AttackPlan,
+    checkpoint_evaluation, snapshot, notebook, study, learning, analysis,
+    experiment dashboard and time profile go; no `precision="auto"`.
   - Name the last revision that reads the records in the guide beside the
     state.pt revision; the PR says plainly which reports can no longer be
     rebuilt from main. Frozen evidence, experiment ids, reports under

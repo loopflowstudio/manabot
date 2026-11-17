@@ -151,8 +151,7 @@ installation), `baseline.py`, `elemental.py`, and `belief_policy.py` with
 file that defines `train` runs the same way
 (`uv run etude train experiments/batched_baseline.py`). A recipe's device is a
 config field with the recipe's own default (`cpu` for local and Elemental,
-`cuda` for baseline); nothing selects a device automatically. Frozen
-zero-argument regime builders are data readers, not executable recipes.
+`cuda` for baseline); nothing selects a device automatically.
 
 `manabot train` exits with migration guidance naming the `etude train` command above. Its
 `--out` directories, which kept the learner in one `state.pt`, are not read
@@ -181,20 +180,53 @@ Silicon; no recipe runs on it. This support makes no speed or strength claim.
 ### Saved regimes
 
 Before recipes were functions, a run was a saved `TrainingRegime` executed by
-`execute_regime`. Saved regime files, their `run.json` records and their
-checkpoints stay readable: `manabot.training.regime` holds the record schema,
-`manabot.training.records` reads every retained record and `load_checkpoint`
-loads every world-bound checkpoint as before, with serialized keys unchanged.
-Nothing on main executes a regime, and no entry point stands in for one. The
-last revision with the executor is `f4e1822faf46bbc9cdc43909293f8cbc8de4a300`;
-the experiment modules that launched regimes were removed after revision
-`83b77e6c64`, and each of their reports under
-[`experiments/reports/`](../experiments/reports/) names that revision. For an
-exact reproduction, use the experiment's recorded revision and lock.
+`execute_regime`, and its results were `run.json` and `RegimeRun` records read
+by `manabot.training.records`, the declaration and receipt models in
+`manabot.experiment` and the notebook dashboard in `manabot.reports`. None of that is on main: there is no regime
+schema, no reader of those records and no loading path for them.
+
+```python
+from manabot.training.regime import TrainingRegime
+```
+
+```text
+ModuleNotFoundError: No module named 'manabot.training.regime'
+```
+
+To read, rerun or rebuild a report from those records, check out revision
+`f4e1822faf46bbc9cdc43909293f8cbc8de4a300`, which has the executor, the record
+schema and every reader, and install from its lock:
+
+```sh
+git worktree add ../manabot-regimes f4e1822faf46bbc9cdc43909293f8cbc8de4a300
+cd ../manabot-regimes && uv sync --extra dev --extra reports --extra notebook
+```
+
+What stays on main:
+
+- The records themselves. Regime files under
+  [`experiments/regimes/`](../experiments/regimes/), protocols, experiment
+  ids, published results and the reports under
+  [`experiments/reports/`](../experiments/reports/) are unchanged bytes.
+  Reports that were built from regime records can no longer be regenerated
+  from main: every report naming a regime, a `RegimeRun` or an
+  `experiments/data/<name>/` SQLite store is rebuilt from the revision it
+  records, or from the one above.
+- Policy checkpoints. `load_checkpoint` loads every world-bound checkpoint as
+  before, with serialized keys unchanged, including fields named for the
+  regime that wrote them (`regime_digest`, the regime tag).
+- Run history written through Etude. Update rows, row tables, checkpoints and
+  evaluation runs are read with `etude.train.read`, `etude report` and
+  [the readers that remain](experiment-metrics.md).
+
+The experiment modules that launched regimes were removed after revision
+`83b77e6c64`, and each of their reports names that revision. For an exact
+reproduction, use the experiment's recorded revision and lock.
 
 An experiment worth repeating is written as a recipe instead.
-[`experiments/tla_frontier.py`](../experiments/tla_frontier.py) reads its
-regime record as data and trains it on the current loop, and
+[`experiments/tla_frontier.py`](../experiments/tla_frontier.py) states the
+settings of its regime record in its own `settings` function and trains them on
+the current loop, and
 [`experiments/seat_comparison.py`](../experiments/seat_comparison.py) compares
 two arms of one config across seeds.
 
@@ -495,9 +527,8 @@ A recipe sets it from its own update count
 (`gray_ogre_self_play(horizon=config.updates)`), so the horizon follows a
 config field and resuming under another is refused like any other changed
 config; to train under another horizon, start a new run. Extending a run past
-its horizon is allowed and trains on at the final rates. An unset `horizon` is omitted from serialization, so saved regimes that
-hold a `Learning` record keep their bytes; their stages took progress from the
-stage's own length and run only from the revision
+its horizon is allowed and trains on at the final rates. An unset `horizon` is omitted from serialization. Saved regimes took progress
+from each stage's own length and run only from the revision
 [saved regimes](#saved-regimes) names.
 
 Evaluation is outside training and does not consume the training clock. Saved
@@ -538,11 +569,9 @@ observation, and rejects `games_per_stream`. It accepts `game_errors` only with
 stream refills to the quota, and the rows earlier updates learned from stay, counted
 as `learned_samples`.
 
-Saved regimes' stages never declared their closure, and reading one resolves
-omission the way those runs behaved: one seat with neither `games_per_stream` nor
-`game_errors` is exact quota, anything else complete games. Their digests are
-unchanged. `SelfPlay` always states its closure. `AttackPlan` schema 1 retains
-its exact-quota attackers; schema 2 uses the template's closure.
+Saved regimes' stages never declared their closure: one seat with neither
+`games_per_stream` nor `game_errors` ran as exact quota, anything else as
+complete games. `SelfPlay` always states its closure.
 
 ### Costs and counters
 
@@ -766,9 +795,11 @@ for table in history.read_table("self_play_outcomes", "updates"):
 1.0 ({'deck': '7d663f0e…', 'opponent_deck': 'fc948195…', 'position': 'draw', 'wins': 1, 'losses': 1, 'draws': 0}, ...)
 ```
 
-`manabot.reports.update_metrics.read_updates` reads the same tables and
-projects their counts as `self_play_outcomes/<deck>/<opponent>/<play|draw>/wins`
-(and `losses`/`draws`) for existing reports. Etude selects resumed and duplicate
+`manabot.reports.update_metrics.updates_from_run(history)` reads the same
+tables and projects their counts as
+`self_play_outcomes/<deck>/<opponent>/<play|draw>/wins` (and `losses`/`draws`)
+on each update's row, which is what
+[the self-play panels](experiment-metrics.md#self-play) plot. Etude selects resumed and duplicate
 updates before fetching tables; unreferenced tables supply no results, and a
 missing or damaged selected table raises, naming the file to restore. Historical
 scalar outcome metrics remain readable unchanged. Runs that recorded
@@ -846,9 +877,9 @@ Retained bytes live in `s3://etudefantasia/manabot/` and W&B metrics under
 versioned). Use the standard AWS credential
 chain; never put keys in recipes. Training exports are retained as Etude
 checkpoints; experiment results are published with
-`uv run --extra artifacts python -m manabot.data publish <path>`. Older
-saved regime run record (`RegimeRun`) manifests remain readable as `StoredArtifact`
-(`manabot.infra.artifacts`), which `load_checkpoint` accepts directly, caching
+`uv run --extra artifacts python -m manabot.data publish <path>`. A
+`StoredArtifact` (`manabot.infra.artifacts`) names retained bytes by location
+and digest; `load_checkpoint` accepts one directly, caching
 under `MANABOT_ARTIFACT_CACHE` (default `.runs/artifact-cache`) and rehashing
 on every hit. Storage never relaxes world, architecture or setup admission.
 A policy file is a [safetensors container](../manabot/backends/README.md#policy-checkpoints)
@@ -934,11 +965,9 @@ settings:
 settings = settings.model_copy(update={"device": "cuda", "precision": "tf32", "bucketed_shapes": True})
 ```
 
-Retained regime builders resolve `Execution.precision="auto"` alongside
-`bucketed_shapes` and `live_tokens`. It selects BF16 for models at least
-256 wide on CUDA and MPS, and float32 otherwise. Explicit choices and saved precision are preserved;
-a saved stage predating the field reads as float32. Current `SelfPlay` settings
-use explicit precision, defaulting to float32.
+`SelfPlay` settings state their precision, defaulting to float32; nothing
+resolves it from the device or the model's width. Saved regimes recorded the
+precision they ran with, and a checkpoint keeps what its run recorded.
 
 | `precision` | What changes |
 | --- | --- |

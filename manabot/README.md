@@ -58,8 +58,9 @@ loads them into the next attempt
 ([recovery](../docs/training.md#recovery)). Remote storage, rentals and
 scientific runs require explicit allocation.
 
-Saved `TrainingRegime` files no longer execute; the guide names the last
-revision that runs them ([saved regimes](../docs/training.md#saved-regimes)).
+Saved `TrainingRegime` files and their run records are not read or run
+here; the guide names the revision that does both
+([saved regimes](../docs/training.md#saved-regimes)).
 Simulation retains its presets and `--set` overrides.
 
 `manabot/recipes/baseline.py` is a complete ordinary training run: current-world Allies/Lessons self-play (128 updates by default), its horizon-dependent schedule,
@@ -132,8 +133,8 @@ attempts and replays record the resolved setting. Both seats see the public
 (1 open, 0 closed) accompanies the other game facts on the player tokens.
 Older checkpoints with a different player-buffer shape fail normal world binding.
 
-An open source serializes without a `decklists` key, so saved regimes and their
-source digests are unchanged; closed and mixed sources have their own digests, so a run
+An open source serializes without a `decklists` key, so earlier source
+digests are unchanged; closed and mixed sources have their own digests, so a run
 resumes only under the setting it started with.
 
 
@@ -145,8 +146,7 @@ Lease and spending limits remain in hours and dollars. See
 [continuation](../docs/training.md#portable-learner-continuation).
 
 New self-play training learns from both seats by default (`baseline-v3`).
-Set `SelfPlay.learning_seats="one"` for an explicit one-seat control;
-saved schema-1 regimes read with their historical one-seat behavior.
+Set `SelfPlay.learning_seats="one"` for an explicit one-seat control.
 Batches close after complete games by default, whoever learns; `batch_closure`
 declares it, and `"exact-quota"` is the one-seat alternative. See
 [batch closure](../docs/training.md#batch-closure).
@@ -475,8 +475,6 @@ for critic units and evaluation registration. This is a search
 compatibility path, not a calibrated strength preset.
 
 Declare training comparisons with [typed Python experiments](../docs/experiments.md#declaring-a-comparison).
-Versioned presets, named component overrides and variant matrices resolve to complete
-existing regimes with provenance; resolution never launches training.
 
 Each current experiment is one module in [experiments/](../experiments/), holding
 its recipes and anything only it needs to run and report; `manabot/` keeps
@@ -640,7 +638,7 @@ from .sibling import Thing
 ```
 
 The learned compound-decision decoder has been removed; checkpoints and
-regimes that select it fail validation. See
+configurations that select it fail validation. See
 [compound decisions](../docs/training.md#compound-decisions-removed).
 
 Self-play update diagnostics live in the run's Etude metrics and referenced
@@ -743,8 +741,7 @@ still separate remaining integration work.
 Runtime configuration uses `Config` names (`ModelConfig`, `MatchConfig`,
 `ObservationConfig`, `RewardConfig`, `RuntimeConfig`). Recipes declare tracking
 through Etude and pass their seed to the self-play loop.
-`experiment/config.py::Experiment` retains historical comparison declarations;
-current launch files return Etude jobs. Built-in recipes live in `manabot/recipes/`.
+Launch files return Etude jobs. Built-in recipes live in `manabot/recipes/`.
 Search distillation (the exp-10 BC/value loops and the `train_supervised`
 regime stage) is retired; replaying that workflow requires pinned source. Historical checkpoint dictionary keys remain unchanged,
 but old `ataraxos_move` recipes require pinned source rather than runtime aliases.
@@ -780,8 +777,8 @@ with those packages blocked.
   search and batched games.
 - `training/`: loops, seat-routed collection, learning rules and numerical
   health. `loops/self_play.py` is the self-play loop and its resumable state;
-  `learning.py` holds learning settings; `regime.py` reads saved regimes; `records.py`
-  reads retained run records.
+  `learning.py` holds learning settings; `report.py` holds the report panels
+  experiments share.
 - `training/rollout/`: on-policy collection, stream producers, matchups and
   complete-game accounting.
 - `training/updates/`: an update learns from one collected batch. The damped
@@ -798,12 +795,13 @@ with those packages blocked.
   fits and persists hand samplers.
 - `recipes/`: our recipes (`elemental.py`, `belief_sampler.py`, local and
   baseline) and the settings builders they share.
-- `experiment/`: retained comparison records, checkpoint evaluation,
-  machine setup and numerical validation.
+- `experiment/`: what an experiment file runs on its machine: setup of the
+  pinned engine and environment, and the CUDA numerics gate.
 - `eval/`: evaluation protocols, admission, comparisons, population ratings,
   GIH reduction/query and MTG Arena log export.
-- `reports/`: retained-run projections, dashboards, report templates and
-  historical evidence readers.
+- `reports/`: readers of Etude training runs (update rows, the training-time
+  cohort report, published evaluation curves), sampler quality and LLM
+  receipts.
 - `infra/`: runtime context, shared file operations and provenance identities.
 
 A policy checkpoint can be loaded for play without a trainer. Resuming a run
@@ -812,10 +810,8 @@ Adam and the cumulative counts) and the `game-attempts/` ledgers. Moving files c
 it does not admit an old run under new source or alter its frozen world,
 protocol or cost limits.
 
-Reports use `reports.records.RetainedRun` to read recorded stage parameters as
-JSON without translating historical learning tags or adding current execution
-defaults; measured run fields are read through
-`training.records.RegimeRunRecord`. Reading or publishing a historical result does not make its regime runnable.
+Reports read Etude runs. Saved regime run records have no reader here
+([saved regimes](../docs/training.md#saved-regimes)).
 
 [GIH card evaluation](../docs/evaluation.md#card-data) uses simulation replay capture and Etude
 tables for copy-weighted card rankings, explicit cohorts and offline Arena-log export.

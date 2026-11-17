@@ -234,19 +234,16 @@ seeds. Training time and evaluation time remain separate.
 
 ### Retained comparisons
 
-`manabot.experiment.config.Experiment` still resolves saved comparison
-snapshots into `TrainingRegime` values and provenance receipts. The record
-models and reports still read their original fields. Resolution does not
-launch work, and those declarations declare no jobs.
-The local comparison scheduler, checkpoint follower and study executor are
-retired; revision `f4e1822faf46bbc9cdc43909293f8cbc8de4a300` is the last with
-them. Use an experiment's recorded revision and lock to reproduce it; do not
-translate its schedules or recovery contracts silently.
+Comparisons declared as `manabot.experiment.config.Experiment` snapshots
+resolved into saved regimes; neither the declarations nor their receipts are
+read on main. [Saved regimes](training.md#saved-regimes) names the revision
+that reads and runs them. Use an experiment's recorded revision and lock to
+reproduce it; do not translate its schedules or recovery contracts silently.
 
-`StepCalibration.from_export(path)` remains a reader of a retained completed
-single-stage export. Its `updates_for(hours)` gives an author a target; a new
-recipe fixes its learning horizon before launch and leaves the stopping target
-to Etude. Equal updates do not imply equal transitions, exposures or dollars.
+A new recipe fixes its learning horizon before launch and leaves the stopping
+target to Etude. To size that horizon from an earlier run, read its updates
+and training seconds from its Etude clocks. Equal updates do not imply equal
+transitions, exposures or dollars.
 
 ## Writing a report
 
@@ -267,13 +264,11 @@ from manabot.training.report import (
 
 
 def report() -> Report:
-    regimes, _ = frozen()
-    jobs = {_regime_id(label): regimes[label] for label in SIZES}
-    small, large = jobs
+    small, large = (job.name for job in training_jobs())
     return Report(
         score=Score(table="games", value="score", reference=0.5, unit="games"),
         clock="updates",
-        labels=job_labels({small: ("Small", jobs[small]), large: ("Large", jobs[large])}),
+        labels=job_labels({small: ("Small", MODELS[SMALL]), large: ("Large", MODELS[LARGE])}),
         evals=(
             against_earlier_self(
                 "Model vs itself at half training time",

@@ -1,19 +1,34 @@
 # Reading the experiment report
 
+An experiment's page is drawn by `etude report` from its Etude runs
+([writing a report](experiments.md#writing-a-report)). This guide defines the
+metrics those pages and the readers in `manabot.reports` show, and what each
+does not measure. Everything here reads Etude runs; the notebook dashboard
+over saved regime records, its study and snapshot readers, and their
+training-time profile are at the revision
+[saved regimes](training.md#saved-regimes) names.
+
 ## Select a training cohort
 
-Generate a self-contained training-time report from local evidence and Etude logs:
+Generate a self-contained training-time report from Etude runs, local or stored:
 
 ```sh
 uv run --extra reports manabot training-report \
-  --source /path/to/saved-training \
+  --source ~/.etude/track \
   --source s3://your-bucket/your-etude-prefix \
   --out training-time.html
 ```
 
+```text
+training-time.html: 12 logical runs; 12 source/coverage warnings
+```
+
 The page provides search, sorting, run checkboxes, a largest-five selection,
-time-weighted phase totals, descriptive per-run statistics, throughput grouped by
-recipe/hardware, and a training-only timeline. Selecting a recovered run includes
+logged active training time, descriptive per-run statistics, throughput grouped
+by recipe/hardware, and a training-only timeline. It does not break a run's
+time into phases or report rental cost, and carries one warning per run saying
+so: read phases from the `PERF` panels of `etude report` ([costs](#costs)) and
+cost from the launcher's record. Selecting a recovered run includes
 its available attempts. Work counters come from the retained trajectory, while
 duration includes failed/replayed attempts. Incomplete or branching ancestry
 leaves ambiguous work counts unavailable. Unknown hardware is not pooled.
@@ -30,49 +45,30 @@ report's evidence snapshot. Restoring against different source bytes is rejected
 retain the original HTML and its `*-training-time.json` alongside the selection.
 The URL also preserves selected identities for that snapshot.
 
-Native phase counters retain their existing meanings. For generic Etude logs,
 `training_seconds` must be a declared cumulative **time** clock measuring active
 training; `--training-clock NAME` selects another explicitly equivalent clock.
 `learner_transitions`, `updates` and `steps` are distinct declared step clocks.
 Resumed attempts need the active-time resume coordinate to establish their added
-duration. Arbitrary metric names are not interpreted as timing phases. Generic
-logs without regime timing remain selectable, but their elapsed-time breakdown
-and measured cost stay unavailable. No rental ceilings are converted into spend.
+duration. Metric names are not interpreted as timing phases, and no rental
+ceilings are converted into spend. A directory of saved regime records
+is not a source: it holds no Etude run, and the report says so in its
+warnings.
 
 The reader uses the optional Etude SDK and existing credentials. Local/S3 reads
 happen only during report generation; the resulting page needs no server or
 network. Source failures remain visible, archives are not automatically expanded,
-and no checkpoints are downloaded. Supply verified extracted archive directories
-to include archived training records. A snapshot covers its configured sources,
+and no checkpoints are downloaded. A snapshot covers its configured sources,
 not an assumed complete training history.
 
 The accepted cross-project scope is recorded in
 Training time reports from selected Etude runs (the plan was retired; the
 cohort report in [training time](../experiments/reports/training-time.md) is the record).
 
-## Experiment notebooks
-
-The notebook is the editable report generator. Run All reads local evidence and
-writes one HTML dashboard. HTML is the default read-only surface; it does not
-poll, train, evaluate, or access a tracker. Change the notebook's question,
-selected metrics and plotting code to regenerate that surface. Existing notebooks
-are create-once: use a new filename to adopt a newer generator without losing edits.
-
-## Freshness
-
-Rendered time is the UTC time of report generation. Evidence as-of is the
-execution coordinator's saved `last_seen_unix`, not the JSON file modification
-time (copies change modification time). Age is seconds since that heartbeat.
-A running status with an old heartbeat is stale, not proof that training is still
-running. A completed execution is labeled final; otherwise status is in-flight.
-Checkpoint age is lag in recorded training seconds from the latest diagnostic,
-not wall-clock time since export. Missing time coordinates are unavailable.
-
 ## Learning
 
 Progress is shown separately for each variant and independent training seed.
 Updates are collect/update iterations, including empty-filter skips; planned
-updates come from declared stages. An active-time recipe labels its update safety ceiling separately from
+updates come from the job's target. An active-time recipe labels its update safety ceiling separately from
 the active-hour target. Learner transitions, native decisions and
 optimizer exposures count different work. SPS explicitly means cumulative
 learner transitions divided by recorded training seconds at the latest diagnostic.
@@ -85,13 +81,18 @@ loss, is not necessarily comparable across recipes, and can be absent on an
 empty-filter update. Do not infer strength from the loss. Latest rows without a loss remain unavailable rather
 than carrying a stale optimized value forward without a label.
 
-Deeper example in a notebook cell (figures go into the HTML `sections` list):
+To read a run's scalars yourself, each update's row holds them by name:
 
 ```python
-sections.append(('Collection KL', 'learning',
-                 [metric_figure(evidence, 'rl/collection_kl')]))
-# Inspect all retained learning/resource scalars before selecting other panels.
-rows = evidence.metrics(evidence.runs[0])
+from etude.train.read import read
+from manabot.reports.update_metrics import updates_from_run
+
+updates = updates_from_run(read(runs_dir, experiment, run_id))
+[(update, row.get("collection_kl")) for update, row in updates.items()][:2]
+```
+
+```text
+[(1, 0.0), (2, 0.0031)]
 ```
 
 ## Evaluation
@@ -108,26 +109,19 @@ measure training-seed uncertainty. One deal can yield a zero-width interval,
 including in the tiny demo; this does not establish precision. Monitoring deals
 are inspected development evidence, not the scientific held-out endpoint cohort.
 
-Deeper analysis: `compatible_panels(evidence)` returns complete MonitorResult
-records, retaining raw game rows, score/draw intervals, protocol, artifact digest
-and opponent identity. Report paired independent-seed effects under the scientific
+A `MonitorResult` (`monitor.json`) retains raw game rows, score/draw
+intervals, protocol, artifact digest and opponent identity;
+`python -m manabot.reports.training --evaluations` publishes saved results as
+Etude curves ([training](training.md#checkpoint-evaluation)). Report paired independent-seed effects under the scientific
 protocol before making a method claim; never pool games as independent fits.
 
 ## Comparisons
 
-The `strength_figures` cross-run comparison includes only stage/update
-coordinates present exactly once for every expected run in a compatible cohort. Protocol, opponent, world,
-ABI and inference envelope must agree. Missing runs or unmatched milestones
-produce unavailable panels. No interpolation, cherry-picked best checkpoint,
-or unequal-latest ranking is performed. Points and intervals remain per seed. The default dashboard instead makes each
-retained seed’s monitoring history available independently, so an unrun seed
-does not hide the ongoing run; this is not a matched multi-seed comparison.
-
-New notebooks lead with `strength_figures(evidence)`, using completed self-play
-steps, followed by learner transitions and active training time. Other training
-units are not combined on this step axis. Optional optimizer-call and exposure
-axes retain their measured units; a missing historical counter suppresses that
-panel instead of plotting zero. Edited existing notebooks remain unchanged.
+A comparison across runs is drawn only at coordinates every compared run
+reached: Etude's report plots each job's checkpoints on the report's clock,
+and `eval_jobs(state)` plays pairs at shared milestones. Protocol, opponent,
+world and inference identity must agree. No interpolation, cherry-picked best
+checkpoint or unequal-latest ranking is performed, and points stay per seed.
 
 The time axis is original checkpoint cumulative recorded training seconds. The
 work axis is cumulative native environment decisions, explicitly a work proxy,
@@ -136,32 +130,23 @@ transitions, exposures, seconds or dollars. Curves show these differences; they
 do not assert an equal-cost treatment effect. Sparse single-point fixtures do
 not establish learning trends.
 
-For deeper analysis use `matched_milestones(evidence)` and inspect
-`coordinates.optimizer_exposures` or `coordinates.learner_transitions`. Equal-cost
-analysis needs overlapping observed support and a predeclared cutoff/selection
-rule; do not extrapolate absent checkpoints. Keep regime-specific configuration,
+Equal-cost analysis needs overlapping observed support and a predeclared cutoff/selection
+rule; do not extrapolate absent checkpoints. Keep recipe-specific configuration,
 independent seeds and held-out scientific cohorts attached to any conclusion.
 
 ## Costs
 
-The training-only time profile shows a flamegraph-style hierarchy for each saved
-attempt: setup, stages, collection, learning, stage exports and remaining time.
-Widths are aggregate elapsed seconds, not chronological spans. Unattributed time
-is visible; historical inference/simulation and learning subphases are unavailable
-unless separately profiled. Diagnostics can include failure accounting, so they
-are not universally pure diagnostic computation. Monitoring exports and recovery
-costs are already inside stage time and are not added again.
-
-Self-play stages always retain host phase timers. `StageRecord.collection_timings`
-holds observation preparation, policy inference and action selection, rollout
-recording, opponent policy, environment step/encoding, and batch assembly.
-`StageRecord.learning_timings` holds batch transfer and behavior checks, targets,
-selection and health diagnostics, and per minibatch forward and loss, backward and
-gradient clipping, optimizer step and minibatch diagnostics, plus the EMA update;
-nested phases are keyed by path (`Minibatches/Forward and loss`). The report nests
-both beneath their parent and keeps each level's residual visible as Unattributed.
-Seconds and call counts are attempt-local; reused collectors and learners start
-fresh counters at each stage.
+Every self-play update logs host phase timers under `time/`, which Etude's
+`PERF` panels (`manabot.training.panels`) draw. A key is the phase's path,
+lowercased with underscores (`time/collection/observation_preparation`).
+Collection holds observation preparation, policy inference and action
+selection, rollout recording, opponent policy, environment step/encoding and
+batch assembly. Learning holds batch transfer and behavior checks, targets,
+selection and health diagnostics, and per minibatch forward and loss, backward
+and gradient clipping, optimizer step and minibatch diagnostics, plus the EMA
+update. A parent's seconds minus its children's are unattributed time, which
+stays visible rather than being spread over the children. Seconds and call
+counts are attempt-local.
 
 PPO's `Minibatches/Preparation wait and transfer` measures the caller's wait
 for the next host minibatch and its device upload. Host preparation overlaps the
@@ -176,62 +161,19 @@ intervals, not GPU kernel timings or utilization, and PyTorch tracing stays off.
 Learned state, diagnostics and collected batches are identical with timers on or
 off (`tests/training/test_phase_timing.py`). A timer costs about 1 µs, and reading
 cumulative stats about 0.3 ms per update: under 0.02% of a ten-second update.
-`execution.profile_collection` is retained so historical regimes validate; it no
-longer changes behavior.
 
-The main dashboard includes this view. To generate a standalone training-only
-report from saved records in a notebook or script run through `uv run`:
-
-```python
-from pathlib import Path
-from manabot.reports.experiment import load_evidence, write_time_profile
-
-write_time_profile(load_evidence(Path("saved-experiment")), Path("training-time.html"))
-```
-
-Completed stages copied into a recovery child are excluded from that child's
-cost. Missing parent records or inconsistent timing totals produce a visible
-attribution warning rather than normalized percentages. The downloadable training
-time JSON contains the hierarchy, intervals and source-file hashes.
-
-The training-attempt timeline uses execution start/end timestamps where available;
-otherwise it uses the run's recorded calendar span. These bases are labeled:
-process lifetime includes work outside a regime, and calendar spans may include
-downtime. Running intervals stop at the saved heartbeat, not the rendering time.
-Missing timestamps remain unavailable. Overlapping lane durations cannot be added
-to obtain elapsed time; cross-machine clock uncertainty is unrecorded. Evaluation
-lanes and causal critical-path attribution are deferred.
-
-Elapsed wall seconds and additive worker-process seconds come from ExperimentRun.
-Process seconds include concurrent learner and evaluator duration; evaluator
-seconds are already included and must not be added again. They are occupied
-process time, not CPU utilization or hardware-normalized compute. Host dollars
-are available only when an hourly rate was configured; absent prices are unknown.
-
-Saved regime run records (`RegimeRun`) give stage costs for collection,
-optimization, export and diagnostics.
-Resource curves expose sampled process RSS in bytes; the summary uses MiB.
-Sampling misses peaks and does not measure the whole host. Load averages measure
-contention but do not correct throughput. Failures, interrupted attempts and
-pending work remain visible; a missing cost record is not zero cost. Timing has
-no statistical uncertainty estimate; repeat calibration for performance claims.
-
-Deeper examples: `evidence.executions` retains attempt allowances, failures,
-conservative crash charges and costs; `evidence.runs` retains per-stage costs,
-imported producer references and artifacts. Add `progress/host_load_1m` or
-`progress/process_cpu_seconds` through `metric_figure`. Do not sum ancestor costs
-again when recovery receipts already charge them. Source preparation and external
-costs absent from these receipts remain unavailable.
+Etude records each job's wall time and cost; a resumed run's attempts each
+carry their own. Process seconds are occupied time, not CPU utilization or
+hardware-normalized compute, and host dollars exist only where the launcher
+recorded a price. Failures, interrupted attempts and pending work remain
+visible; a missing cost record is not zero cost. Timing has no statistical
+uncertainty estimate; repeat calibration for performance claims.
 
 ## Sampling
 
-The default diagnostics are separate per regime and metric, with independent seeds
-identified by color. Solid lines use a trailing arithmetic mean of **up to 25 saved
-diagnostic records**, not 25 games, samples, or elapsed seconds. Faint lines are raw
-values. The window restarts at missing values, missing update coordinates and stage
-boundaries. Smoothing shows local variation; it is not a confidence interval or a
-reconstruction of unrecorded minibatches. Raw scalar JSON is downloadable from HTML;
-`metric_figure` and `evidence.metrics(run)` remain available to edited notebooks.
+Diagnostics are plotted per job and metric, one line per training seed. A
+smoothed line shows local variation; it is not a confidence interval or a
+reconstruction of unrecorded minibatches.
 
 For Ataraxos move updates, each learner timestep is an optimized minibatch across
 selected environments. The loop overwrites `loss`, `policy_loss`, `value_loss`,
@@ -252,8 +194,7 @@ terminal-outcome test.
 The report totals these only where both are present, names the record count, and
 separately counts explicit skips and records without a loss. Missing retention is
 unavailable, never zero. Optimizer exposures can differ from selected rows because
-recipes can reuse rows or select actor and critic samples differently. Stage/run
-counters and diagnostic samples cannot reconstruct absent historical updates.
+recipes can reuse rows or select actor and critic samples differently.
 
 Entropy is `−sum(p log p)` over legal offers, in nats. A uniform binary distribution
 has entropy ln(2), about 0.6931, but that value alone cannot establish two legal
@@ -264,36 +205,10 @@ measures dispersion, not competence; a confident wrong policy can have low entro
 The saved history investigation that measured these counts was retired with the
 September world; `git log` keeps it.
 
-## Scientific studies and software demonstrations
-
-`load_study` reads the existing `study/study.json` export as a scientific cohort,
-separately from MonitorResult. The notebook explicitly selects this path; it does
-not relabel monitoring games. `study_strength_figures` separates opponent, phase and
-raw/EMA variant, requiring one complete cell per declared regime/seed at each shared
-cutoff, matching world/inference identity and four-leg deals. It checks summary
-scores against terminal arena rows. Incomplete cohorts have no comparative point.
-Thin lines retain seed variation; black diamonds show means with the existing
-training-seed/common-deal bootstrap's descriptive 95% intervals when at least three
-seeds and a shared x coordinate exist. These are score fractions (win + half draw);
-monitoring plots are explicitly win fractions. No line extrapolates to initialization.
-Zero-work evaluations appear if retained and matched; otherwise baseline is unavailable.
-
-Cost plots retain each seed's actual checkpoint time. An equal cutoff is not an
-equal-cost effect; different information, parameter counts and optimizer exposures
-can change both collection and learning cost. The saved experiment's cost analysis
-owns common-window comparisons. Two sparse checkpoints cannot explain learning
-speed. Scientific *development* cohorts remain distinct from held-out endpoints,
-and both remain distinct from earlier single-seed monitoring.
-
-Passing pipeline, artifact reload and exact-replay smoke checks shows software
-execution. A positive control must separately demonstrate a predeclared behavioral
-improvement under a suitable training/evaluation design. This reporting change
-neither runs that study nor treats changing weights/loss/entropy as its substitute.
-
 ## Opponent asymmetry
 
-The overview and default learning curves separate the **model's** deck from its
-opponent. Each row uses `seat_decks[player_a_seat]`, never leg parity or seat zero
+Read a model's results by the deck **it** played, separately from its
+opponent's. Each row uses `seat_decks[player_a_seat]`, never leg parity or seat zero
 alone. Model-playing-Lessons means the opponent plays Allies. Greedy's creature
 and attack choices on Allies may be stronger than its targeting choices on
 Lessons: this is a hypothesis about the fixed opponent, not a causal conclusion
@@ -307,46 +222,9 @@ cohorts supply no rate. Missing seat metadata supplies no deck estimate. Bands
 measure deal noise conditional on one checkpoint; they do not measure independent
 training-seed variability. No significance claim follows from inspecting a peak.
 
-Default panels show one seed at a time in expandable sections. Pending seeds
-remain named in the overview; there is no pooled partial-cohort average. The
-short interpretation computes first-to-latest change and observed range using
-only that panel. It does not impute initialization, infer strategic causes or
-select a best checkpoint. `deck_results`, `checkpoint_panels` and `panel_figures`
-in `manabot.reports.learning` expose the same calculations to notebooks.
-
-## Portable snapshots
-
-For an actively written experiment, take a read-only SQLite online backup and
-export its saved regime run record (`RegimeRun`) rows before reporting. Do not
-copy a live `.sqlite` file without its transaction state:
-
-```bash
-uv run python -m manabot.reports.snapshot SOURCE_DIRECTORY SNAPSHOT_DIRECTORY
-```
-
-The destination must not exist. The command copies only reporting evidence,
-retains source hashes and capture times in `snapshot.json`, and never loads a
-checkpoint or launches games. SQLite is transaction-consistent; atomic monitor
-JSON files and the sealed files of training's Etude runs, which hold self-play
-update rows, are captured separately within the stated window. Their completion
-timestamps and original checkpoint coordinates stay intact. A snapshot's saved
-`running` status is not a live process check. Older records without a distinct
-active clock say unavailable; recorded training and elapsed wall remain separate.
-
-Create a fresh notebook with `write_comparison_notebook(snapshot, notebook_path)`
-to adopt a newer default without overwriting a personal notebook. Execute with
-`nbclient` using the notebook directory as its working directory. The HTML embeds
-SVG graphs, uses system fonts, and writes sibling metric-guide HTML, raw monitoring
-JSON and diagnostic JSON. Keep that directory together when copying. The editable
-notebook uses a relative data root. Its source receipt records exact run IDs,
-checkpoint digests, deal/leg rows and fixed opponent registrations. Absolute
-checkpoint/trace paths in the source are provenance; reporting does not open them.
-Newer additive producer metadata is retained in read-only reporting projections;
-this is not permission to execute a newer recipe through an older trainer.
-
 ## Numerical health
 
-Numerical diagnostics live below the playing-strength story. Gradient norms,
+Numerical diagnostics are read apart from playing strength. Gradient norms,
 rounded legal zeros, skipped steps and measured parameter movement describe
 optimizer behavior, not competence. Missing cadence samples stay unavailable.
 See the [numerical health contract](https://github.com/loopflowstudio/manabot/blob/main/docs/numerical-health.md)
@@ -356,21 +234,25 @@ not certainty of winning future games.
 
 ## Self-play
 
-In an existing experiment notebook, add this cell after loading `evidence` and
-creating `sections`, before the HTML export:
+A run's self-play outcomes, pooled into windows of updates:
 
 ```python
-from manabot.reports.self_play import self_play_figures
+from etude.train.read import read
+from manabot.reports.self_play import self_play_points
+from manabot.reports.update_metrics import updates_from_run
 
-sections.append((
-    'Self-play balance', 'self-play',
-    self_play_figures(evidence, window_updates=100),
-))
+updates = updates_from_run(read(runs_dir, experiment, run_id))
+points = self_play_points(list(updates.values()), window_updates=100)
+points[0]
 ```
 
-Run All adds deck and play/draw win-rate panels to the saved report. New default
-notebooks already include this section. `window_updates` defaults to 100 and
-must be a positive integer; use 1 to inspect individual updates.
+```text
+SelfPlayPoint(update=100, deck='7d663f0e…', opponent_deck='fc948195…', position='play', wins=212, losses=187, draws=1)
+```
+
+`window_updates` defaults to 100 and must be a positive integer; use 1 to
+inspect individual updates. Each point holds joint deck, opposing deck,
+starting position, win/loss/draw counts and the window's last update.
 
 Self-play deck and play/draw win rates describe the training distribution, not
 playing strength. The panels plot completed outcomes in non-overlapping
@@ -379,14 +261,11 @@ observation on the play (seat 0, the engine's first player) and one on the draw
 (seat 1). A drawn game counts in the denominator but not as a win. Rates weight
 completed games, not updates or stream allocations.
 
-Separate panels keep cross-deck and mirror matchups apart. The deck view pools
-both starting seats; the play/draw view pools both decks within that matchup.
-`self_play_points(evidence.updates(run), window_updates=1)`, from the same module,
-exposes joint deck, opposing deck, starting position, win/loss/draw counts and
-update coordinates for further notebook analysis.
+Keep cross-deck and mirror matchups apart. A deck view pools both starting
+seats; a play/draw view pools both decks within that matchup.
 In a mirror match, pooled deck win rate is mechanically 50% without draws;
-play/draw imbalance remains informative. Different training seeds and stages
-never share a curve. No uncertainty interval claims independent training seeds.
+play/draw imbalance remains informative. Different training seeds never
+share a curve. No uncertainty interval claims independent training seeds.
 
 Keep the complete Etude metric run when copying evidence, including
 `artifacts/`. Each update references an immutable Etude row table of
@@ -398,6 +277,5 @@ file: restore the original bytes from the run's retained source (or rerun
 `uv run etude sync` after an interrupted delivery) and regenerate the report.
 Do not edit the table or replace missing evidence with zero counts.
 
-Historical scalar metrics and retained stage diagnostics remain readable without
-conversion. Runs without recorded outcomes show them as unavailable. This
-instrumentation does not change losses, actions or schedules.
+Runs without recorded outcomes yield no points. This instrumentation does not
+change losses, actions or schedules.

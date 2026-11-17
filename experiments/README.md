@@ -12,7 +12,8 @@ anything only it needs to run and report. `manabot/` keeps the reusable
 instruments. Only a few experiment files are kept, each as the baseline to copy
 for the next experiment of its kind; a finished experiment's code is removed
 and its report under [`reports/`](reports/) names the last commit with it. The
-regime files retired experiments trained stay under `regimes/` as records
+regime files retired experiments trained stay under `regimes/` as records;
+nothing on main parses them
 ([saved regimes](../docs/training.md#saved-regimes)).
 
 ## Etude experiment files
@@ -40,7 +41,7 @@ has not been run, so typing the command again launches what is new.
 | --- | --- | --- | --- | --- |
 | [elemental](elemental.py) | the current recipe, with a checkpoint ladder | `elemental`: fresh seeds of the ten-deck recipe | 10×10 heuristic grid and checkpoint pairs, played by [`elemental_play`](elemental_play.py) | grid score, deck matrix and rankings, crosstable of pairs |
 | [seat_comparison](seat_comparison.py) | comparing method arms | `seat-comparison-one` and `seat-comparison-both`, four seeds each | — | score by update, one-seat dotted |
-| [tla_frontier](tla_frontier.py) | comparing model sizes on a deck corpus | one wall-bounded job per size, named for its regime | each size against its earlier self, the heuristic and the other size | progress curves and head to head |
+| [tla_frontier](tla_frontier.py) | comparing model sizes on a deck corpus | one wall-bounded job per size, named for the regime record whose settings it restates | each size against its earlier self, the heuristic and the other size | progress curves and head to head |
 | [batched_baseline](batched_baseline.py) | one GPU recipe ([size and batching study](reports/longer-learning-017.md)) | `batched_baseline` | — | — |
 | [belief](belief.py) | a job that starts from another run | `policy`, then `sampler` from its final checkpoint once state shows it finished ([guide](../docs/training.md#a-recipe-that-starts-from-another-run)) | — | — |
 
@@ -93,9 +94,9 @@ history.
 
 New experiments add nothing under `protocols/` or `regimes/`: an experiment is
 its module at a commit and its one report
-([work boundaries](../docs/workflows.md#experiments)). The files still there are
-read by an experiment module or are the only written record of an earlier
-experiment. Job, identity and superseded protocol files that nothing reads were
+([work boundaries](../docs/workflows.md#experiments)). The protocol files
+still there are read by an experiment module or are the only written record of
+an earlier experiment; the regime files are records only. Job, identity and superseded protocol files that nothing reads were
 removed from the tree; they remain at
 [revision ac601834d](https://github.com/loopflowstudio/manabot/tree/ac601834d/experiments/protocols),
 where older documents that name them by path can find them.

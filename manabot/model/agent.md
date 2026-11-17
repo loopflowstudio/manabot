@@ -233,8 +233,7 @@ boundary. The cached catalog is never part of the state dict or a checkpoint.
 ## Capacity identity and accounting
 
 `ModelConfig.hidden_dim`, positive `attention_layers`, optional
-`attention_feedforward_dim`, and `num_attention_heads` own the capacity configuration. Retained regime fixtures reuse those fields;
-they introduce no second model schema. Heads must divide width when
+`attention_feedforward_dim`, and `num_attention_heads` own the capacity configuration; there is no second model schema. Heads must divide width when
 attention is enabled. Unset feedforward expansion is head-count times width,
 so changing heads can change parameter counts as well as attention semantics.
 The default ladder fixes four heads and compares 64/1, 64/2 and 128/2.
@@ -254,7 +253,7 @@ The identity hashes resolved ModelConfig and observation settings under layout
 version 1. Equation/ownership changes require a new layout version even for equal
 shapes. World/content bindings, source/runtime digests and exact checkpoint bytes
 remain separate authorities. Run identities record the architecture hash; ordinary
-PPO and BC/regime exports record the receipt. Reload validates present receipts,
+policy exports record the receipt. Reload validates present receipts,
 including same-shaped metadata discrepancies. Old checkpoints without receipts
 retain strict world/input/state-dict admission; no weight transfer or metadata
 reinterpretation is performed. Trainability records export-time flags and is

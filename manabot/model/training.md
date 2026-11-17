@@ -1,6 +1,6 @@
 # Training ownership and learning rules
 
-RL entry points resolve a `TrainingRegime` and call
+RL entry points build `SelfPlay` settings and call
 `manabot.training.loops.self_play.self_play`. Bounded diagnostics may use the
 same collector (`open_collector`, `collect`) and update rules (`update_damped_iteration`,
 `update_iteration`) directly. A new
@@ -8,8 +8,8 @@ loop or optimizer implementation needs a concrete unsupported behavior and a
 current consumer; an old import or test is not a reason to retain one.
 
 `Learner` owns the admitted train-mode `ActorCritic`, Adam (epsilon 1e-5), device and
-native-stream minibatch width. The executor owns collection, EMA, schedules,
-tracking, checkpoint exports, failure receipts and recovery. Belief stages
+native-stream minibatch width. The loop owns collection, EMA and schedules;
+Etude owns tracking, checkpoints, saved state and resume. Belief stages
 retain their separate data/target contracts.
 
 ## Credit and behavior

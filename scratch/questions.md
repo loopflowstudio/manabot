@@ -75,3 +75,20 @@ no state. A declared minimum of valid results per match would be Etude's.
 L4 comparison instead of upgrading the shared launcher. Copy provider/storage
 configuration only, so no other queued work can occupy the comparison machine.
 RunPod/Vast/Lium report no L4 capacity; leave performance pending at USD 3.
+
+2026-11-17 write-docs choices for the regime-reader deletion (mine, reversible;
+nobody answered these). The docs are written to them:
+- tla_frontier is treated as current: it stays, restating its settings in code,
+  and no code parses `experiments/regimes/*.json`. Open: is it current, or
+  should the file go with the readers and its report stand as the record?
+- `manabot training-report` stays for Etude sources only. From Etude logs it
+  has no phase breakdown or cost (one warning per run), so it is a run list by
+  active time, throughput and a timeline. Open: keep that, or delete it too
+  and rely on `etude report`'s PERF panels?
+- `SelfPlayPoint` loses `stage`; `self_play_points` takes one run's rows.
+  `self_play_figures` (drew from the notebook evidence object) goes.
+- The guide names f4e1822faf for reading and running regime records because it
+  is on main. The two revisions already named in docs/training.md,
+  f577362135 (state.pt) and 83b77e6c64 (experiment modules), are commits of
+  this branch and not on main; a squash merge leaves them reachable only
+  through the PR ref. Not changed here.

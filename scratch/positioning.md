@@ -90,3 +90,15 @@ that regime.py (928 lines) and manabot/experiment/ (about 1,370) survive as
 readers of historical records, with options keep / thin reader / "Delete it:
 name the last revision that reads those records, as was done for state.pt.
 Old reports can then no longer be rebuilt from main.": "3".
+
+Jack Heart, 2026-11-17: "ok maybe we should do a slight test to make sure that
+learning is no worse under this system up to some reasonable number of
+requests. I will note that etude did test evaluation perf semi-extnesvely when
+doing its part of the work".
+
+Jack Heart, 2026-11-17, asked whether a Lium 4090 may stand in when no L4 is
+available: "yes, i dont really care what gpu as long as its reasonable".
+
+Jack Heart, 2026-11-17, asked whether a Lium 4090 (about USD 0.41 an hour) may
+stand in when no L4 is available: "yes, i dont really care what gpu as long as
+its reasonable". This replaces "rent nothing other than an L4".

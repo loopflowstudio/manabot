@@ -161,36 +161,30 @@ tokens. On CPU, where the recurrent catalog encoder dominates learning, a
 learner forward and backward is therefore slower than on the padded path,
 most of all for small decks.
 
-A training stage's execution settings choose it, with
-[live-token attention](#live-token-attention), from the device. Both default to
-`auto`, which the regime resolves when it is built: on for a CUDA
-`train_self_play` stage, off on CPU and MPS and for every other operation:
+A loop's settings choose it, with
+[live-token attention](#live-token-attention). Both are plain `SelfPlay`
+fields that default to off, and a recipe turns them on for the device it runs
+on:
 
 ```python
-from manabot.training.regime import Execution, TrainingRegime, TrainSelfPlay
+from manabot.recipes.builders import gray_ogre_self_play
 
-stage = TrainSelfPlay(
-    id="self-play", operation="train_self_play", execution=Execution(device="cuda")
+settings = gray_ogre_self_play(horizon=100).model_copy(
+    update={"device": "cuda", "bucketed_shapes": True, "live_tokens": True}
 )
-regime = TrainingRegime(id="example", world=world, match=match, stages=[stage])
-execution = regime.stages[0].execution
-execution.bucketed_shapes, execution.live_tokens  # (True, True)
+settings.bucketed_shapes, settings.live_tokens  # (True, True)
 ```
 
-The regime keeps the resolved value: a stage that resolves on records both
-fields as `true` in `run.json`; one that resolves off omits them, so CPU and
-MPS regimes keep their hashes, and a saved regime that omits them reads as off
-([stage operations](training.md#stage-operations)). Builders that rebuild a
-regime (`with_capacity`, `with_agent`) resolve `auto` again and keep explicit
-values. To compare the paths on CUDA, write
-`Execution(device="cuda", bucketed_shapes=False, live_tokens=False)`, or pass
-`--padded-shapes` to the CLI recipes ([run training](training.md#run-training)).
-Bucketed shapes may still be written explicitly on CPU or MPS, where they are
-slower to learn, as described above.
+The baseline recipe does this when its `device` is `cuda` and
+`padded_shapes` is false; to compare the paths on CUDA, run it with
+`--config '{"device": "cuda", "padded_shapes": true}'`
+([run training](training.md#run-training)). Nothing resolves the switches
+from the device: `live_tokens=True` off CUDA fails validation, and bucketed
+shapes may be written explicitly on CPU or MPS, where they are slower to
+learn, as described above.
 
-The stage's collection and learner policies, including a frozen opponent,
-use the resolved layout. Code that builds a policy outside a regime chooses it
-itself: `ActorCritic(...)` and `load_checkpoint(...)` default both switches to
+The loop's collection and learner policies use the settings' layout. Code
+that builds a policy outside a loop chooses it itself: `ActorCritic(...)` and `load_checkpoint(...)` default both switches to
 off; pass `bucketed_shapes=True` or `live_tokens=True` to enable them.
 [Served evaluation](evaluation.md#shared-inference) accepts both switches and
 leaves them off: its batches are small, and the padded forward was the faster
@@ -357,16 +351,16 @@ explicitly before constructing the collector and model:
 ```python
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ObservationConfig
-from manabot.recipes.local import local_smoke
+from manabot.recipes.builders import gray_ogre_self_play
 
-regime = local_smoke(steps=1).model_copy(
+settings = gray_ogre_self_play(horizon=1).model_copy(
     update={"observation": ObservationConfig(policy_input_version=10)}
 )
-space = ObservationSpace(regime.observation)
+space = ObservationSpace(settings.observation)
 ```
 
-Use that `space` for `open_collector` and `ActorCritic(space, regime.agent)`;
-the serialized `TrainingRegime` keeps the selection. V10 is v9 plus this state,
+Use that `space` for `open_collector` and `ActorCritic(space, settings.model)`;
+the run's saved settings keep the selection. V10 is v9 plus this state,
 in the same native scalar, vector and Python encoders, the LLM text observation
 and the learning tokens.
 
@@ -566,9 +560,9 @@ retained single-place fact ([engine knowledge](engine.md#remembered-library-posi
 
 ### Optional recent public events
 
-`ModelConfig(recent_events=True)` (or `with_recent_events` / `ModelOverride`)
-adds shared policy/value context from a bounded suffix of public events; the
-regime derives `observation.policy_history_version=1`. `Game::emit` maintains
+`ModelConfig(recent_events=True)` adds shared policy/value context from a
+bounded suffix of public events; `SelfPlay` derives
+`observation.policy_history_version=1` from it. `Game::emit` maintains
 the projection at the same append as the rules ledger, keeping at most 32
 rows; private arrivals produce no row, and owner (not controller) is recorded.
 History-on uses an `[E,12]` tensor (`1 <= E <= 32`) with a validity mask:

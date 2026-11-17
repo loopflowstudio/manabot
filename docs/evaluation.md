@@ -372,22 +372,21 @@ weights. Tests: `tests/verify/test_checkpoint_scenarios.py`.
 
 ## Frozen-policy attacks
 
-Bounded adversarial evaluation, not exact exploitability. An `AttackPlan`
-(`manabot/experiment/attacks.py`) fixes target checkpoint bytes and SHA-256,
-producer seeds, at least two independent attacker seeds, a strictly increasing
-`cumulative_updates` ladder, shared `final_deal_seeds`, a one-stage self-play
-`template` regime and time budgets (`total_seconds`, `evaluation_seconds`,
-`game_seconds`, `max_commands`) plus a predeclared `prediction`. Each
-target/attacker pair becomes an ordinary TrainingRegime against the frozen
-target; rungs continue one attacker.
+Bounded adversarial evaluation, not exact exploitability: train fresh
+attackers against one frozen target checkpoint and measure how far they get.
+An attack plan fixed the target's bytes and SHA-256, producer seeds, at least
+two independent attacker seeds, a strictly increasing ladder of cumulative
+updates, shared final deal seeds, time budgets and a prediction; each
+target/attacker pair trained as a one-stage self-play regime against the
+frozen target, and rungs continued one attacker.
 
-The plan is a record: its executor ran saved regimes and was removed with
-them (last at revision `f4e1822faf46bbc9cdc43909293f8cbc8de4a300`). Literal seed
-reuse across producers and attackers is rejected. In an executed plan every
-attacker faced its target before training and at every rung on all four legs;
-only terminal, replay-verified games counted. A failed cell stopped the cohort,
-and results kept `plan.json`, `result.json`, `report.md`, `training.sqlite`, run
-directories and arena evidence. Final paired improvement bootstraps over
+Main cannot run or read a plan: the current loop has no frozen opponent, and
+the plan schema went with the [saved regimes](training.md#saved-regimes) it
+produced. Revision `f4e1822faf46bbc9cdc43909293f8cbc8de4a300` has both. In an
+executed plan every attacker faced its target before training and at every
+rung on all four legs; only terminal, replay-verified games counted. A failed
+cell stopped the cohort, and results kept `plan.json`, `result.json`,
+`report.md`, `training.sqlite`, run directories and arena evidence. Final paired improvement bootstraps over
 attacker seeds and is exploratory. A failed bounded attacker never certifies equilibrium. The
 real-PPO positive control raised score against a deliberately passive toy
 target from .59375 to 1.0 in 64 updates. History:
@@ -447,9 +446,9 @@ Simulation (`manabot.sim`) owns native games, Commands and bounded local replay.
 Evaluation (`manabot.eval`) owns admission (`eval.admission`), requests and
 results (`eval.evaluation`, `eval.results`), paired cells (`eval.match`),
 ratings (`eval.rating`, seat-aware Bradley-Terry with paired-block bootstrap)
-and Etude player loading/building (`eval.agent_loader`, `eval.agents`). Training monitoring is an adapter in
-`manabot.experiment.checkpoint_evaluation`; local execution imports neither it
-nor the managed player loader. `manabot.eval.models` holds only the identities
+and Etude player loading/building (`eval.agent_loader`, `eval.agents`). Training monitoring (`manabot.eval.monitor`) holds
+the request and result of one measured checkpoint; local execution does not
+import the managed player loader. `manabot.eval.models` holds only the identities
 `EvaluationKey` (the arena a game was played in) and `MatchRow` (one played
 leg); wire field names keep their recorded meanings because frozen evidence
 carries them. Tests load the INT-6 fixture's key and anchors through
