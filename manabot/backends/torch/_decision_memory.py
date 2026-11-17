@@ -26,7 +26,6 @@ if TYPE_CHECKING:
 class CachedNode:
     lifetime: tuple[PrefixIdentity, int | None]
     references: torch.Tensor
-    records: torch.Tensor
     state: torch.Tensor
 
 
@@ -34,7 +33,8 @@ class CollectionMemory:
     """Weak node results for one unchanged inference scope; open tails never enter.
 
     Scope guards bind parameter versions, device and module modes. Values own only
-    detached node-local tensors, never their weak keys or a whole execution tree.
+    detached states and cumulative reference joins, never their weak keys or a
+    whole execution tree. Complete roots replace all cached ancestry in preparation.
     """
 
     def __init__(self) -> None:
@@ -50,16 +50,19 @@ class CollectionMemory:
         roots: dict[str, int] = {}
         rejected = {prefix.tail.key for prefix in retained.prefixes if prefix.tail}
         for prefix in retained.prefixes:
-            for node in prefix.tail.chunks() if prefix.tail else ():
+            node = prefix.tail
+            while node is not None:
                 cached = self.nodes.get(node)
-                if cached is None or cached.lifetime != (
-                    prefix.identity,
-                    prefix.native_epoch,
+                if (
+                    node.key not in rejected
+                    and cached is not None
+                    and cached.lifetime == (prefix.identity, prefix.native_epoch)
                 ):
-                    rejected.add(node.key)
-                    roots.pop(node.key, None)
-                elif node.key not in rejected:
                     roots[node.key] = len(cached.references)
+                    break
+                rejected.add(node.key)
+                roots.pop(node.key, None)
+                node = node.previous
         return roots
 
     def bind(
@@ -69,21 +72,21 @@ class CollectionMemory:
         if retained is None or batch.memory is None or batch.memory.fold is None:
             return batch
         fold = batch.memory.fold
-        nodes = {
-            node.key: node
-            for prefix in retained.prefixes
-            for node in (prefix.tail.chunks() if prefix.tail else ())
-        }
-        lifetimes = {
-            node.key: (prefix.identity, prefix.native_epoch)
-            for prefix in retained.prefixes
-            for node in (prefix.tail.chunks() if prefix.tail else ())
-        }
         root_keys = {
             key
             for index, key in enumerate(fold.keys)
             if fold.record_slices[index][0] < 0
         }
+        nodes: dict[str, Tail] = {}
+        lifetimes: dict[str, tuple[PrefixIdentity, int | None]] = {}
+        for prefix in retained.prefixes:
+            node = prefix.tail
+            while node is not None and node.key not in nodes:
+                nodes[node.key] = node
+                lifetimes[node.key] = (prefix.identity, prefix.native_epoch)
+                if node.key in root_keys:
+                    break
+                node = node.previous
         cached = [self.nodes[nodes[key]] for key in fold.keys if key in root_keys]
         open_keys = {prefix.tail.key for prefix in retained.prefixes if prefix.tail}
         complete = {
@@ -95,23 +98,29 @@ class CollectionMemory:
             if key in complete and key not in root_keys
         ]
 
-        reference_slices, record_slices = fold.reference_slices, fold.record_slices
+        reference_slices = fold.reference_slices
+        indexes = {key: i for i, key in enumerate(fold.keys)}
+        ancestry: dict[int, tuple[tuple[int, int], ...]] = {}
+        for index, key in enumerate(fold.keys):
+            parent = nodes[key].previous
+            previous = (
+                ancestry[indexes[parent.key]] if parent and key not in root_keys else ()
+            )
+            ancestry[index] = (*previous, reference_slices[index])
 
-        def retain(
-            states: torch.Tensor, references: torch.Tensor, records: torch.Tensor
-        ) -> None:
+        def retain(states: torch.Tensor, references: torch.Tensor) -> None:
             for index, weak, lifetime in pending:
                 node = weak()
                 if node is None:
                     continue
-                start, count = reference_slices[index]
-                record_start, record_count = record_slices[index]
                 self.nodes[node] = CachedNode(
                     lifetime,
-                    references[start : start + count].detach().clone(),
-                    records[record_start : record_start + record_count]
-                    .detach()
-                    .clone(),
+                    torch.cat(
+                        [
+                            references[start : start + count]
+                            for start, count in ancestry[index]
+                        ]
+                    ).detach(),
                     states[index + 1].detach().clone(),
                 )
 
@@ -265,7 +274,7 @@ class DecisionMemory(nn.Module):
                         0, level.nodes, hidden[-1][level.schedule.restore]
                     )
                 if rows.fold.retain is not None:
-                    rows.fold.retain(states, references, records)
+                    rows.fold.retain(states, references)
                 summaries = self._summaries(states[rows.fold.tails])
                 return summaries * (rows.fold.tails != 0)[:, None, None]
             packed = PackedSequence(

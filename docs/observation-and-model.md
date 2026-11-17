@@ -834,6 +834,15 @@ passes. Reset, fork and replay restoration change the generation even when a
 seed repeats. These cursors are transport metadata, never policy features or
 replay identities. Dense imports and archives still validate the complete prefix.
 
+During collection, each complete GRU node caches a detached state and cumulative
+reference embeddings for the unchanged policy's inference scope. Preparation
+stops at that root and builds only its new suffix, including the open tail;
+cached ancestors contribute no raw feature validation, assembly or device
+transfer. New chunks share one host featurization batch. Scope closure or a
+parameter change invalidates neural results; these caches never enter a replay,
+checkpoint or search fork. Learning continues to fold unique nodes with gradients
+inside each execution chunk.
+
 A control is a log-enabled policy with `decision_memory="none"`: it retains and
 validates the log and reserves its vocabulary without encoding it. An incumbent
 has history disabled. The true history-disabled incumbent remains the throughput
@@ -894,8 +903,7 @@ that metric before comparing a memory run with its control. A gate moves about
 one learning rate per Adam optimizer step, rather than per collection iteration,
 so a short run can end before it opens. Raise
 `decision_memory_gate_scale` for the whole comparison in that case, never for
-one run. The second attention pass adds to forward cost in memory policies
-only.
+one run.
 
 For an endpoint reliance comparison, a checkpoint evaluation registration may
 explicitly set `player_spec.blank_decision_memory=True`. Scalar and shared

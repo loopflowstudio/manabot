@@ -2254,3 +2254,51 @@ Incumbent median **312.082 s**; its two workers differ by **8.1%**, so ratios ca
 The additive join removes most of the earlier learner/inference excess. GRU preparation exceeds control by 42.621 s over 4,025 calls (10.589 ms/call); both log arms retain about 17 s more than incumbents. Memory capture is nested within retention, and backward/optimizer tracks are nested within forward/loss; do not sum nested tracks. No new paid launch or pilot follows in this slice.
 
 All **134 outputs / 182,750,320 bytes** fetched through public SDK digest checks and archive members verified by size/SHA256. Evidence: `experiments/data/opponent-memory/20261117-cuda-additive`, including output archive, member manifest and launcher/attempt/run records. Frozen output bytes and source identities remain unchanged.
+
+### Many-stream preparation cut — 2026-11-17
+
+Whole-game CPU harness: 32 streams, one native worker, one Torch thread, one whole game per stream, mixed disclosure, open gates and one real damped-policy update. One sequential fresh process per arm/execution-row limit before and after the cut. These are bounded exploratory measurements, with no timing ranges or statistical speedup claim. Gates, sampling groups, capacities and model shapes are unchanged.
+
+| Rows | Arm | Decisions | Preparation before/after s | Retention before/after s | Nested capture before/after s | Collection s | Update s | Total s | Total / incumbent | Decisions/s |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 32 | incumbent | 6858 | 0.9090 / 0.9137 | 0.0548 / 0.0540 | 0.0000 / 0.0000 | 5.560 | 27.249 | 32.808 | 1.000 | 209.03 |
+| 32 | control | 6503 | 0.9869 / 1.0040 | 0.3854 / 0.3955 | 0.3279 / 0.3365 | 5.631 | 25.986 | 31.617 | 0.964 | 205.68 |
+| 32 | gru-k1 | 6514 | 2.0480 / 1.8330 | 0.3958 / 0.4067 | 0.3317 / 0.3416 | 8.354 | 28.507 | 36.861 | 1.124 | 176.72 |
+| 128 | incumbent | 6858 | 0.8997 / 0.9055 | 0.0529 / 0.0549 | 0.0000 / 0.0000 | 5.435 | 22.081 | 27.516 | 1.000 | 249.23 |
+| 128 | control | 6503 | 0.9862 / 0.9994 | 0.3871 / 0.3954 | 0.3292 / 0.3365 | 5.610 | 20.923 | 26.533 | 0.964 | 245.09 |
+| 128 | gru-k1 | 6514 | 2.0883 / 1.8192 | 0.4018 / 0.4032 | 0.3370 / 0.3390 | 8.322 | 22.442 | 30.763 | 1.118 | 211.74 |
+| 256 | incumbent | 6858 | 0.9299 / 0.9059 | 0.0544 / 0.0538 | 0.0000 / 0.0000 | 5.427 | 21.692 | 27.118 | 1.000 | 252.89 |
+| 256 | control | 6503 | 0.9825 / 1.0024 | 0.3907 / 0.3905 | 0.3333 / 0.3317 | 5.557 | 20.550 | 26.107 | 0.963 | 249.09 |
+| 256 | gru-k1 | 6514 | 2.0943 / 1.8253 | 0.4017 / 0.3998 | 0.3372 / 0.3350 | 8.302 | 22.091 | 30.393 | 1.121 | 214.33 |
+
+Capture is nested in retention. Each arm retains its original completed-game decision total (incumbent 6,858; control 6,503; GRU 6,514), so stage-time ratios and decisions/s are both shown. All nine cases preserve **exact rollout, prefix, final-gradient and updated-state hashes** against the prior implementation. Existing stateless/fold tolerances remain unchanged. CPU timings do not establish CUDA cost, matched learning or strength. No paid launch, pilot, PR, calibration-job rename or Task completion follows.
+
+Attribution: the 32-stream cProfile comparison has 445 GRU preparation calls
+versus 309 control calls (their acting games differ). Before the cut, GRU
+preparation is 3.183 s profiled; fold assembly is 1.046 s, including 0.715 s
+in chunk-feature lookup/build and 0.776 s in 1,844 dense-featurization calls
+(including canonical empties). These nested costs must not be summed. Cache
+binding/root lookup are small; model cache updates occur in forward, outside
+this track. Already cached complete nodes were **not** having raw features
+rebuilt or transferred by the old code; the avoidable work was repeated
+ancestry/routing plus many small new-fragment featurization calls. Cumulative
+root reference joins now cut off cached ancestry entirely, unused cached record
+embeddings are deleted, and new fragments share one host arithmetic batch.
+No cached complete-node feature is admitted, assembled, pinned or transferred.
+
+Afterward fold assembly is 0.686 s; dense-featurization calls fall 1,844 → 723
+and their cumulative time 0.776 → 0.429 s. Profiled preparation is 2.811 s.
+Unprofiled GRU preparation at 32/128/256 rows falls
+2.048/2.088/2.094 → 1.833/1.819/1.825 s. Required open-tail features and ordinary
+policy preparation remain; this does not eliminate the whole GRU preparation
+premium. CPU transfer bookkeeping remains about 0.35 s, and CPU cannot attribute
+CUDA pin/copy or synchronization costs. The A40's +10.589 ms/call is an observed
+aggregate, **not** a directly profiled Python attribution; no claim that this
+CPU saving removes all 42.621 CUDA seconds is supported without the next rental.
+
+The new collection root equals stateless encoding at the existing tolerances,
+including mixed lifetimes, late references, coalescing, reset, fork and parameter
+updates. The narrow collection/learner/chunk checks passed (32 cases); Ruff and
+whitespace checks passed. Evidence archive:
+`experiments/data/opponent-memory/20261117-many-stream-preparation`, with source,
+runner, before/after profiles, all 18 unprofiled receipts/logs and member digests.

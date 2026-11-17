@@ -148,3 +148,42 @@ def test_collection_fold_preserves_shuffled_repeated_and_empty_policy_rows() -> 
             strict=True,
         ):
             torch.testing.assert_close(a, b, atol=2e-6, rtol=2e-5)
+
+
+def test_warm_collection_prepares_only_the_open_tail() -> None:
+    """A cached root carries the full reference join without its ancestry."""
+    space, raw = chunk_input()
+    capacities = tuple(space.encoder.shapes[key][0] for key in MEMORY_FIELDS)
+    store = MemoryStore(capacities)
+    prefix = store.capture(raw, 0, PrefixIdentity("game", 0, "root"))
+    selected = PrefixObservation(raw, [prefix], capacities)
+    model = policy(space, "gru", 1)
+    with PolicyInference(model, cache_catalog=False) as scope, torch.no_grad():
+        model(scope.prepare(selected))
+        warm = scope.prepare(selected)
+        assert warm.memory is not None and warm.memory.fold is not None
+        assert warm.memory.fold.node_count == 2
+        assert len(warm.memory.numbers) == 1
+        assert len(warm.memory.reference_numbers) == 0
+        assert len(warm.memory.detail_numbers) == 0
+        dense = on_device(model.prepare(selected.materialize(), inference=True), "cpu")
+        torch.testing.assert_close(
+            model.encode_decision_memory(warm),
+            model.encode_decision_memory(dense),
+            atol=2e-6,
+            rtol=2e-5,
+        )
+        # Shared content under a different game lifetime cannot use this root.
+        mixed = PrefixObservation(
+            {key: np.repeat(value, 2, axis=0) for key, value in raw.items()},
+            [prefix, replace(prefix, native_epoch=2)],
+            capacities,
+        )
+        actual = scope.prepare(mixed)
+        expected = on_device(model.prepare(mixed.materialize(), inference=True), "cpu")
+        torch.testing.assert_close(
+            model.encode_decision_memory(actual),
+            model.encode_decision_memory(expected),
+            atol=2e-6,
+            rtol=2e-5,
+        )

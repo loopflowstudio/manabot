@@ -62,7 +62,7 @@ class MemoryFold[A]:
     """One causal node tree; index zero is the zero initial state.
 
     Collection can supply detached root states [roots, 64] and the references
-    introduced by those roots. Local detail routes index only newly embedded
+    introduced through those roots. Local detail routes index only newly embedded
     references; member routes index cached references followed by new ones.
     Node keys/slices and the optional result sink are ephemeral serving metadata,
     never game facts. Learner folds have no cached roots or result sink.
@@ -77,7 +77,7 @@ class MemoryFold[A]:
     root_nodes: A | None = None
     root_states: A | None = None
     root_references: A | None = None
-    retain: Callable[[A, A, A], None] | None = None
+    retain: Callable[[A, A], None] | None = None
 
 
 @dataclass(frozen=True)
@@ -542,6 +542,66 @@ def validate_retained_memory(
             node.features.admission = binding
 
 
+def _prepare_chunk_features(nodes: list[Tail], tables: Tables) -> None:
+    """Featurize new nodes together; cached fragments contribute no raw features.
+
+    Concatenated records are only a host arithmetic batch, never a GRU sequence.
+    Split the immutable results back onto their original nodes, with local joins.
+    """
+    pending = [
+        node
+        for node in nodes
+        if node.features.prepared is None
+        or node.features.prepared[0] != tables.memory_binding
+    ]
+    if not pending:
+        return
+    blocks: dict[str, list[np.ndarray]] = {key: [] for key in _FIELDS}
+    detail_base = 0
+    for node in pending:
+        local = chunk_observation(node)
+        local[_FIELDS[2]][..., 10] += detail_base
+        for key in blocks:
+            blocks[key].append(local[key])
+        detail_base += len(node.chunk.rows[1])
+    prepared = _prepare_dense_memory(
+        {key: np.concatenate(parts, axis=1) for key, parts in blocks.items()}, tables
+    )
+    assert prepared is not None
+    record_base = reference_base = member_base = 0
+    record_fields = {"numbers", "kinds", "choices", "choice_names"}
+    reference_fields = {"reference_numbers", "reference_definitions"}
+    for node in pending:
+        record_end = record_base + len(node.chunk.rows[0])
+        reference_end = reference_base + len(node.chunk.rows[2])
+        member_end = member_base + len(node.chunk.rows[3])
+        detail_start, detail_end = np.searchsorted(
+            prepared.detail_references, [reference_base, reference_end]
+        )
+        values: dict[str, np.ndarray] = {}
+        for feature in fields(MemoryFeatures):
+            name = feature.name
+            value = getattr(prepared, name)
+            if name in record_fields:
+                value = value[record_base:record_end]
+            elif name in reference_fields:
+                value = value[reference_base:reference_end]
+            elif name.startswith("detail_"):
+                value = value[detail_start:detail_end]
+                if name == "detail_references":
+                    value = value - reference_base
+            else:
+                value = value[member_base:member_end]
+                if name == "member_groups":
+                    value = value - record_base * 3
+            # Own only this node's bytes, never the entire transient batch.
+            value = value.copy()
+            value.setflags(write=False)
+            values[name] = value
+        node.features.prepared = (tables.memory_binding, MemoryFeatures(**values))
+        record_base, reference_base, member_base = record_end, reference_end, member_end
+
+
 def _chunk_features(node: Tail, tables: Tables) -> MemoryFeatures[np.ndarray]:
     """Read the vocabulary-bound immutable feature owner shared by both encodes."""
     cached = node.features.prepared
@@ -633,8 +693,15 @@ def _prepare_fold(
     roots = roots or {}
     selected_nodes: dict[str, Tail] = {}
     for prefix in obs.prefixes:
-        for node in prefix.tail.chunks() if prefix.tail else ():
-            selected_nodes.setdefault(node.key, node)
+        pending: list[Tail] = []
+        node = prefix.tail
+        while node is not None and node.key not in selected_nodes:
+            pending.append(node)
+            if node.key in roots:
+                break
+            node = node.previous
+        for node in reversed(pending):
+            selected_nodes[node.key] = node
     cached = [node for node in selected_nodes.values() if node.key in roots]
     root_offsets: dict[str, int] = {}
     reference_base = 0
@@ -652,53 +719,55 @@ def _prepare_fold(
     arrays: dict[str, list[np.ndarray]] = {f.name: [] for f in fields(MemoryFeatures)}
     record_base = 0
     parents: list[int] = []
-    for prefix in obs.prefixes:
-        for node in prefix.tail.chunks() if prefix.tail else ():
-            if node.key in indexes:
-                continue
-            parent = indexes[node.previous.key] if node.previous else 0
-            if node.key in roots:
-                count = roots[node.key]
-                start = root_offsets[node.key]
-                joined = np.concatenate(
-                    (references[parent], np.arange(start, start + count))
-                )
-                record_starts.append(-1)
-                reference_slices.append((start, count))
-                record_slices.append((-1, 0))
-                nodes.append(node)
-                indexes[node.key] = len(nodes)
-                references.append(joined)
-                parents.append(parent)
-                depths.append(-1)
-                continue
-            fragment = _chunk_features(node, tables)
-            count = len(fragment.reference_numbers)
-            reference_slices.append((reference_base, count))
-            record_slices.append((record_base, len(fragment.numbers)))
+    _prepare_chunk_features(
+        [node for node in selected_nodes.values() if node.key not in roots], tables
+    )
+    for node in selected_nodes.values():
+        parent = (
+            indexes[node.previous.key] if node.previous and node.key not in roots else 0
+        )
+        if node.key in roots:
+            count = roots[node.key]
+            start = root_offsets[node.key]
             joined = np.concatenate(
-                (references[parent], np.arange(reference_base, reference_base + count))
+                (references[parent], np.arange(start, start + count))
             )
-            # Fragment member joins are relative to the newly introduced rows;
-            # negative values name a reference owned by a predecessor chunk.
-            cursor = node.previous.cursor if node.previous else MemoryCursor()
-            for name in arrays:
-                value = getattr(fragment, name)
-                if name == "detail_references":
-                    value = value + reference_base - root_reference_count
-                elif name == "member_references":
-                    value = joined[value + cursor.references]
-                elif name == "member_groups":
-                    value = value + record_base * 3
-                arrays[name].append(value)
-            record_starts.append(record_base)
-            reference_base += count
-            record_base += len(fragment.numbers)
+            record_starts.append(-1)
+            reference_slices.append((start, count))
+            record_slices.append((-1, 0))
             nodes.append(node)
             indexes[node.key] = len(nodes)
             references.append(joined)
             parents.append(parent)
-            depths.append(depths[parent - 1] + 1 if parent else 0)
+            depths.append(-1)
+            continue
+        fragment = _chunk_features(node, tables)
+        count = len(fragment.reference_numbers)
+        reference_slices.append((reference_base, count))
+        record_slices.append((record_base, len(fragment.numbers)))
+        joined = np.concatenate(
+            (references[parent], np.arange(reference_base, reference_base + count))
+        )
+        # Fragment member joins are relative to the newly introduced rows;
+        # negative values name a reference owned by a predecessor chunk.
+        cursor = node.previous.cursor if node.previous else MemoryCursor()
+        for name in arrays:
+            value = getattr(fragment, name)
+            if name == "detail_references":
+                value = value + reference_base - root_reference_count
+            elif name == "member_references":
+                value = joined[value + cursor.references]
+            elif name == "member_groups":
+                value = value + record_base * 3
+            arrays[name].append(value)
+        record_starts.append(record_base)
+        reference_base += count
+        record_base += len(fragment.numbers)
+        nodes.append(node)
+        indexes[node.key] = len(nodes)
+        references.append(joined)
+        parents.append(parent)
+        depths.append(depths[parent - 1] + 1 if parent else 0)
     # Sequence lengths retain original policy row order; the fold owns routes.
     empty = _empty_memory(tables)
     levels: list[MemoryLevel[np.ndarray]] = []
