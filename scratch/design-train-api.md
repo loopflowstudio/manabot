@@ -561,3 +561,51 @@ any seed, so with several seeds every sampler would start from one policy.
 Should a dependent job wait for and pair with its same-seed parent in one
 command? It matters when the belief experiment gets more than seed 0 or runs
 unattended. Today's two-pass, one-seed form is the reversible choice in use.
+
+## Concept review of the implemented change — 2026-11-16 (ffbd701ccb)
+
+Read against the code, not run. The six directions above are in the code
+(9336e7aa08, 852c0d866b). The interaction is the designed one: one `train(config)`,
+one visible loop, new/resume/continue as separate commands, saves read without
+Etude or Manabot. What is left is words that point the wrong way. Next
+implement direction, in this order; no behavior or serialized key changes:
+
+1. **The guide teaches a class name the code does not use.** `docs/training.md`
+   quotes `def self_play(settings: SelfPlay, run: Run, ...)` and says "The loop
+   takes Etude's `Run`"; the loop is annotated `TrainingRun`
+   (`etude.train.tracking`, the only exported handle at d9a6bc8). The loop is
+   offered as the template to copy, so quote the real signature and name.
+   In the same docs `TrainingRun` still means the retired record
+   (`docs/workflows.md:56,76`, `docs/experiment-metrics.md:211,319`,
+   `docs/training.md:850`): say "saved regime run record (`RegimeRun`)" there,
+   so the word has one meaning.
+2. **"Recipe" and "regime" are crossed in the retained readers.** A recipe is a
+   `train(config)` function; a regime is a saved record nothing executes.
+   `reports/records.py` ("Read retained recipes ... No recipe is ... passed to
+   an executor"), `training/validation.py` ("Validate a recipe; execution
+   additionally requires ...", "Every execution entry point"),
+   `training/report.py` ("for a `TrainingJob` is its regime id") and
+   `experiment/__init__.py` ("allocation and execution above the training run")
+   describe the retired executor. Rewrite as readers of saved regimes.
+3. **The live loop still imports the regime schema.** `loops/self_play.py` →
+   `training/update_metrics.py` → `training.records` → `training.regime`, only
+   because the row writer (`metric_row`, `phase_seconds`, `time_since`,
+   `OUTCOME_TABLE`) shares a file with the retained-run readers (`read_updates`,
+   `updates_from_run`, `stage_rows`; one user, `reports/analysis.py`). Move the
+   readers under `manabot/reports/`. Likewise `backends/torch/collection.py`
+   and `training/state/backend.py` reach `regime.SelectionGameSpec` through
+   `rollout/selection_data.py`: define it there and let `regime.py` import it,
+   as `Precision` already is. Then "regime.py reads saved regimes" holds for
+   every live import; add that to the boundary test if cheap.
+4. **`step` reads the collector's private `_operation`** (`self_play.py:507,512`),
+   the scope the loop itself passed in as `operation=`. Make the field public.
+
+Left alone on purpose: `experiment/checkpoint_evaluation.py` (still exercised
+by `tests/training/test_monitor_evaluation.py` and the release stage);
+`experiment/numerics.py` and `setup.py` staying in `manabot/experiment/`;
+`recipes/local.py` inheriting `BaselineConfig`.
+
+Open product choice: unchanged from the review above (a dependent job pairing
+with its same-seed parent in one command). Nobody has answered it; it is
+Etude's, and the two-pass, one-seed form stays the reversible choice in use.
+It does not block this Task. No new open choice.
