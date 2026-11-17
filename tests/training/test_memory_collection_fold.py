@@ -1,4 +1,4 @@
-"""Frozen collection reuses complete nodes without changing the acting policy."""
+"""Frozen collection reuses stable records without changing the acting policy."""
 
 from dataclasses import replace
 import gc
@@ -11,7 +11,12 @@ import torch
 from manabot.backends.torch.arrays import on_device
 from manabot.backends.torch.policy import PolicyInference
 from manabot.env.decision_memory import MEMORY_FIELDS
-from manabot.env.memory_store import MemoryStore, PrefixIdentity, PrefixObservation
+from manabot.env.memory_store import (
+    MemoryStore,
+    PrefixIdentity,
+    PrefixObservation,
+    record_tail,
+)
 from tests.model.test_decision_memory import policy
 from tests.training.test_memory_chunk_cache import chunk_input
 
@@ -50,7 +55,7 @@ def test_collection_fold_matches_dense_cold_warm_coalesced_fork_reset_and_update
             )
         assert prepared.memory is not None and prepared.memory.fold is not None
         assert len(prepared.memory.numbers) == 1
-        assert len(scope.memory.nodes) == 2
+        assert len(scope.memory.nodes) == 64
         changed = {key: value.copy() for key, value in raw.items()}
         changed["decision_records"][0, 64, 3] = 2
         changed["decision_records"][0, 64, 9] = 65
@@ -104,7 +109,7 @@ def test_collection_cache_has_weak_node_ownership_and_empty_history_is_zero() ->
         model(prepared)
         prepared = scope.prepare(selected)  # warm Prepared also owns no raw nodes
         model(prepared)
-        assert len(scope.memory.nodes) == 2
+        assert len(scope.memory.nodes) == 64
         weak = [weakref.ref(node) for node in prefix.tail.chunks()]
         del selected, prefix
         gc.collect()
@@ -183,7 +188,7 @@ def test_warm_collection_prepares_only_the_open_tail() -> None:
         # predecessor for another. Rejecting the former must not expose the
         # latter to the wrong lifetime through the global root map.
         assert prefix.tail is not None and prefix.tail.previous is not None
-        older = prefix.tail.previous.previous
+        older = record_tail(prefix).previous.previous
         assert older is not None
         scope.memory.nodes[older] = replace(
             scope.memory.nodes[older], lifetime=(prefix.identity, 2)
@@ -197,3 +202,160 @@ def test_warm_collection_prepares_only_the_open_tail() -> None:
             atol=2e-6,
             rtol=2e-5,
         )
+
+
+def test_native_open_segment_reuses_records_and_preserves_issued_versions() -> None:
+    """Append/coalesce work is bounded by new records, across snapshot order."""
+    from manabot.env.memory_store import archive_memory, gather_memory, restore_memory
+
+    space, raw = chunk_input()
+    capacities = tuple(space.encoder.shapes[key][0] for key in MEMORY_FIELDS)
+    store = MemoryStore(capacities)
+    identity = PrefixIdentity("game", 0, "root")
+    model = policy(space, "gru", 1, live=True)
+    issued = []
+    with PolicyInference(model, cache_catalog=False) as scope, torch.no_grad():
+        for length in (5, 6, 7, 31, 32, 33):
+            source = {key: value.copy() for key, value in raw.items()}
+            source["decision_records"][:, length:] = 0
+            source["decision_members"][:, length * 4 :] = 0
+            counts = (length, 0, 2, length * 4)
+            # Detail counts come from this fixture's exact snapshot program.
+            counts = (
+                length,
+                int((source[MEMORY_FIELDS[1]][0, :, 5] == 1).sum()),
+                2,
+                length * 4,
+            )
+            prefix = store.capture_live(
+                source, 0, identity, epoch=1, counts=counts, tail_version=length
+            )
+            obs = PrefixObservation(source, [prefix], capacities)
+            actual = scope.prepare(obs)
+            expected = on_device(
+                model.prepare(obs.materialize(), inference=True), "cpu"
+            )
+            torch.testing.assert_close(
+                model.encode_decision_memory(actual),
+                model.encode_decision_memory(expected),
+                atol=2e-6,
+                rtol=2e-5,
+            )
+            if length in (6, 7, 32, 33):
+                assert len(actual.memory.numbers) == 2
+            issued.append(prefix)
+        original = gather_memory(issued)
+        # Revisit old snapshots after the shared segment grew/sealed.
+        for prefix in reversed(issued):
+            obs = PrefixObservation(raw, [prefix], capacities)
+            actual = scope.prepare(obs)
+            expected = on_device(
+                model.prepare(obs.materialize(), inference=True), "cpu"
+            )
+            torch.testing.assert_close(
+                model.encode_decision_memory(actual),
+                model.encode_decision_memory(expected),
+                atol=2e-6,
+                rtol=2e-5,
+            )
+        for key, value in gather_memory(
+            restore_memory(archive_memory(issued, capacities))
+        ).items():
+            np.testing.assert_array_equal(value, original[key])
+
+
+def test_coalesced_open_record_keeps_both_versions_and_reuses_earlier_fragments() -> (
+    None
+):
+    space, raw = chunk_input()
+    capacities = tuple(space.encoder.shapes[key][0] for key in MEMORY_FIELDS)
+    store = MemoryStore(capacities)
+    identity = PrefixIdentity("game", 0, "root")
+    raw["decision_records"][:, 7:] = 0
+    raw["decision_members"][:, 28:] = 0
+    counts = (7, int((raw[MEMORY_FIELDS[1]][0, :, 5] == 1).sum()), 2, 28)
+    before = store.capture_live(
+        raw, 0, identity, epoch=1, counts=counts, tail_version=7
+    )
+    model = policy(space, "gru", 4)
+    with PolicyInference(model, cache_catalog=False) as scope, torch.no_grad():
+        obs = PrefixObservation(raw, [before], capacities)
+        model(scope.prepare(obs))
+        previous = record_tail(before)
+        raw["decision_records"][0, 6, 3] = 2
+        raw["decision_records"][0, 6, 9] = 7
+        after = store.capture_live(
+            raw, 0, identity, epoch=1, counts=counts, tail_version=8
+        )
+        current = record_tail(after)
+        assert current is not previous and current.previous is previous.previous
+        for prefix in (after, before, after):
+            obs = PrefixObservation(raw, [prefix], capacities)
+            actual = scope.prepare(obs)
+            assert len(actual.memory.numbers) == 1
+            expected = on_device(
+                model.prepare(obs.materialize(), inference=True), "cpu"
+            )
+            torch.testing.assert_close(
+                model.encode_decision_memory(actual),
+                model.encode_decision_memory(expected),
+                atol=2e-6,
+                rtol=2e-5,
+            )
+
+
+def test_identical_native_prefixes_do_not_share_a_growing_segment() -> None:
+    space, raw = chunk_input()
+    capacities = tuple(space.encoder.shapes[key][0] for key in MEMORY_FIELDS)
+    store = MemoryStore(capacities)
+    source = {key: np.repeat(value, 2, axis=0) for key, value in raw.items()}
+    source["decision_records"][:, 5:] = 0
+    source["decision_members"][:, 20:] = 0
+    details = int((source[MEMORY_FIELDS[1]][0, :, 5] == 1).sum())
+    first = [
+        store.capture_live(
+            source,
+            row,
+            PrefixIdentity(str(row), 0, "root"),
+            epoch=1,
+            counts=(5, details, 2, 20),
+            tail_version=5,
+        )
+        for row in range(2)
+    ]
+    assert first[0].tail is first[1].tail  # immutable content is interned
+    assert record_tail(first[0]) is not record_tail(first[1])
+    model = policy(space, "gru", 1)
+    with PolicyInference(model, cache_catalog=False) as scope, torch.no_grad():
+        for row, length in ((0, 7), (1, 7)):
+            source["decision_records"][row, :length] = raw["decision_records"][
+                0, :length
+            ]
+            source["decision_members"][row, : length * 4] = raw["decision_members"][
+                0, : length * 4
+            ]
+            if row == 1:
+                source["decision_records"][row, 5, 21] += (
+                    1  # viewer's life at this decision
+                )
+            prefix = store.capture_live(
+                source,
+                row,
+                first[row].identity,
+                epoch=1,
+                counts=(length, details, 2, length * 4),
+                tail_version=length,
+            )
+            obs = PrefixObservation(
+                {key: value[row : row + 1] for key, value in source.items()},
+                [prefix],
+                capacities,
+            )
+            actual = scope.prepare(obs)
+            dense = on_device(model.prepare(obs.materialize(), inference=True), "cpu")
+            torch.testing.assert_close(
+                model.encode_decision_memory(actual),
+                model.encode_decision_memory(dense),
+                atol=2e-6,
+                rtol=2e-5,
+            )

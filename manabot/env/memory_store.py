@@ -63,6 +63,7 @@ class ChunkFeatures:
 
     admission: tuple[str, int, bool] | None = None
     prepared: "tuple[str, MemoryFeatures[np.ndarray]] | None" = None
+    record_tail: "RecordNode | None" = None
 
     @property
     def nbytes(self) -> int:
@@ -125,6 +126,9 @@ class Prefix:
     tail: Tail | None
     # Native transport lifetime only; archives restore facts without this epoch.
     native_epoch: int | None = None
+    serving: "RecordVersion" = field(
+        default_factory=lambda: RecordVersion(), compare=False
+    )
 
     @property
     def counts(self) -> tuple[int, ...]:
@@ -138,6 +142,128 @@ class Prefix:
     @property
     def detail_count(self) -> int:
         return self.counts[1]
+
+
+@dataclass(eq=False, slots=True, weakref_slot=True)
+class RecordNode:
+    """One admitted record's serving fragment, never a persisted prefix identity."""
+
+    previous: "RecordNode | None"
+    rows: tuple[np.ndarray, ...]
+    cursor: MemoryCursor
+    features: ChunkFeatures = field(default_factory=ChunkFeatures)
+
+    key: str = field(init=False)
+
+    def __post_init__(self) -> None:
+        # Execution metadata only. Weak cache keys and live nodes prevent reuse.
+        self.key = f"record:{id(self)}"
+
+
+@dataclass
+class RecordVersion:
+    """An issued prefix's private view of one growing segment."""
+
+    segment: "RecordSegment" = field(default_factory=lambda: RecordSegment())
+    tail: RecordNode | None = None
+
+
+@dataclass
+class RecordSegment:
+    """Shared immutable record views of successive native open-chunk versions.
+
+    Only the last record can coalesce. Its previous version stays owned by the
+    issued Prefix; stable records are shared until the chunk's last owner dies.
+    """
+
+    parent: "Prefix | None" = None
+    stable: list[RecordNode] = field(default_factory=list)
+    last: RecordNode | None = None
+
+
+def record_tail(prefix: Prefix) -> RecordNode | None:
+    """Resolve one issued snapshot; native open segments belong to its stream."""
+    if prefix.tail is None or prefix.serving.tail is not None:
+        return prefix.serving.tail
+    segment = prefix.serving.segment
+    if segment.parent is not None:
+        parent = record_tail(segment.parent)
+    else:
+        pending: list[Tail] = []
+        node = prefix.tail.previous
+        while node is not None and node.features.record_tail is None:
+            pending.append(node)
+            node = node.previous
+        parent = node.features.record_tail if node else None
+        for node in reversed(pending):
+            parent = _record_chunk(node, parent, RecordSegment())
+            node.features.record_tail = parent
+    prefix.serving.tail = _record_chunk(prefix.tail, parent, segment)
+    return prefix.serving.tail
+
+
+def _record_chunk(
+    node: Tail, parent: RecordNode | None, segment: RecordSegment
+) -> RecordNode:
+    """Slice a certified chunk; only its last record can have another version."""
+    records, details, references, members = node.chunk.rows
+    start = min(len(segment.stable), len(records) - 1)
+    if start:
+        parent = segment.stable[start - 1]
+    cursor = parent.cursor if parent else MemoryCursor()
+    member_start, reference_start, detail_start = (
+        cursor.members,
+        cursor.references,
+        cursor.details,
+    )
+    base = node.previous.cursor if node.previous else MemoryCursor()
+    for index in range(start, len(records)):
+        header = records[index : index + 1]
+        member_end = member_start + int(header[0, 15:18].sum())
+        joins = members[member_start - base.members : member_end - base.members]
+        reference_end = int(joins[:, 0].max(initial=reference_start))
+        snapshots = references[
+            reference_start - base.references : reference_end - base.references
+        ]
+        detail_end = detail_start + int(snapshots[:, 11].sum())
+        blocks = (
+            header,
+            details[detail_start - base.details : detail_end - base.details],
+            snapshots,
+            joins,
+        )
+        candidate = (
+            segment.stable[index] if index < len(segment.stable) else segment.last
+        )
+        if (
+            candidate is None
+            or candidate.previous is not parent
+            or any(
+                not np.array_equal(a, b)
+                for a, b in zip(candidate.rows, blocks, strict=True)
+            )
+        ):
+            end = int(header[0, 8]) * 65536 + int(header[0, 9]) + 1
+            candidate = RecordNode(
+                parent,
+                blocks,
+                MemoryCursor(
+                    base.records + index + 1, end, member_end, reference_end, detail_end
+                ),
+            )
+        if index < len(records) - 1 and index == len(segment.stable):
+            segment.stable.append(candidate)
+        if index >= len(segment.stable):
+            # Resolving an older issued version must not evict the current tail.
+            segment.last = candidate
+        parent = candidate
+        member_start, reference_start, detail_start = (
+            member_end,
+            reference_end,
+            detail_end,
+        )
+    assert parent is not None
+    return parent
 
 
 class PrefixObservation(dict[str, np.ndarray]):
@@ -457,6 +583,11 @@ class MemoryStore:
                 return previous.prefix
             if previous.prefix.tail is not None:
                 tail = previous.prefix.tail.previous
+        old_tail = (
+            previous.prefix.tail
+            if previous is not None and previous.epoch == epoch
+            else None
+        )
         cursor = tail.cursor if tail else MemoryCursor()
         rows = tuple(
             buffers[key][row, :count]
@@ -464,7 +595,13 @@ class MemoryStore:
         )
         for blocks in record_chunks(rows, _CHUNK_ROWS, cursor):
             tail = self._append(tail, self._intern(blocks))
-        prefix = Prefix(identity, tail, epoch)
+        serving = RecordVersion()
+        if tail is not None and old_tail is not None:
+            if tail.previous is old_tail.previous:
+                serving.segment = previous.prefix.serving.segment
+            elif tail.previous is old_tail:
+                serving.segment.parent = previous.prefix
+        prefix = Prefix(identity, tail, epoch, serving)
         self._streams[row, identity.viewer] = _StreamCapture(
             epoch, tail_version, prefix
         )
@@ -475,12 +612,47 @@ class MemoryStore:
         tails: dict[str, Tail] = {}
         owned = {id(p): p for p in prefixes}
         owned.update((id(c.prefix), c.prefix) for c in self._streams.values())
+        pending = list(owned.values())
+        while pending:
+            parent = pending.pop().serving.segment.parent
+            if parent is not None and id(parent) not in owned:
+                owned[id(parent)] = parent
+                pending.append(parent)
         for prefix in owned.values():
             tail = prefix.tail
             while tail is not None and tail.key not in tails:
                 tails[tail.key] = tail
                 chunks[tail.chunk.key] = tail.chunk
                 tail = tail.previous
+        records: dict[int, RecordNode] = {}
+        segments: dict[int, RecordSegment] = {}
+        for prefix in list(owned.values()):
+            segment = prefix.serving.segment
+            segments[id(segment)] = segment
+            candidates = [prefix.serving.tail, segment.last, *segment.stable]
+            for candidate in candidates:
+                while candidate is not None and id(candidate) not in records:
+                    records[id(candidate)] = candidate
+                    candidate = candidate.previous
+        for tail in tails.values():
+            candidate = tail.features.record_tail
+            while candidate is not None and id(candidate) not in records:
+                records[id(candidate)] = candidate
+                candidate = candidate.previous
+        # Record views can keep a partial chunk's backing bytes alive after its
+        # canonical node dies. Count each physical immutable owner exactly once.
+        backing: dict[int, int] = {}
+        for rows in [
+            *(c.rows for c in chunks.values()),
+            *(r.rows for r in records.values()),
+        ]:
+            for array in rows:
+                owner = array
+                while isinstance(owner, np.ndarray) and owner.base is not None:
+                    owner = owner.base
+                backing[id(owner)] = (
+                    owner.nbytes if isinstance(owner, np.ndarray) else len(owner)
+                )
         metadata = sys.getsizeof(prefixes) + sum(
             sys.getsizeof(p)
             + sys.getsizeof(p.identity)
@@ -502,14 +674,26 @@ class MemoryStore:
             + sum(sys.getsizeof(a) + sys.getsizeof(a.base) + 33 for a in c.rows)
             for c in chunks.values()
         )
+        metadata += sum(
+            sys.getsizeof(r)
+            + sys.getsizeof(r.key)
+            + sys.getsizeof(r.cursor)
+            + sys.getsizeof(r.features)
+            + sum(sys.getsizeof(a) for a in r.rows)
+            for r in records.values()
+        )
+        metadata += sum(
+            sys.getsizeof(s) + sys.getsizeof(s.stable) for s in segments.values()
+        )
+        metadata += sum(sys.getsizeof(p.serving) for p in owned.values())
         return {
-            "unique_chunk_bytes": sum(
-                a.nbytes for c in chunks.values() for a in c.rows
-            ),
+            "unique_chunk_bytes": sum(backing.values()),
+            "record_view_count": len(records),
             "chunk_count": len(chunks),
             "tail_count": len(tails),
             "python_metadata_bytes": metadata,
-            "feature_cache_bytes": sum(node.features.nbytes for node in tails.values()),
+            "feature_cache_bytes": sum(node.features.nbytes for node in tails.values())
+            + sum(node.features.nbytes for node in records.values()),
             "intern_index_bytes": sum(
                 sys.getsizeof(index.data)
                 + sum(sys.getsizeof(ref) for ref in index.data.values())

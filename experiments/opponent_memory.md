@@ -2444,3 +2444,44 @@ Branch/main step-duration ratio is 0.9707×; search-total ratio is 0.9754×. Eng
 Validation: 12 targeted native debug checks; the 63 memory/storage/collection/learner/execution cases (the demo was corrected for search forks retaining history without appending); 30 recording/collection/probe checks; five interruption and game-error recovery cases. Final cache snapshot/lifetime checks and artifact tracking validation are retained with the evidence. No CUDA launch, pilot, PR or Task completion. Matched learning and paired strength remain unrun.
 
 Evidence: `experiments/data/opponent-memory/20261117-history-off-main`. The comparison preserves main and benchmark-reference source revisions, build/measurement commands, source diffs, raw receipts, arrays, benchmark binaries/digests and test logs.
+
+### Per-record collection cache — 2026-11-17
+
+Bounded exploratory CPU harness: 32 whole-game streams, one worker and Torch thread, execution rows 32, mixed disclosure, open gates and one real damped-policy update. One fresh process per arm and implementation. The 256-stream runs use the same collection-row limit, profile preparation, and omit learning. Both implementations use the same rebuilt native engine; the baseline restores the prior host/collection fold. The shared store keeps full changed-chunk admission. No paid launch, pilot, PR, model-shape change or calibration-job rename.
+
+
+32-stream collection and update:
+
+| Implementation | Arm | Decisions | Retention s | Preparation s | Inference s | Collection s | Update s | Total / incumbent | Decisions/s |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| before | incumbent | 6858 | 0.051 | 0.827 | 3.130 | 4.818 | 25.929 | 1.000 | 223.04 |
+| before | control | 6503 | 0.362 | 0.825 | 2.906 | 5.029 | 24.879 | 0.973 | 217.44 |
+| before | gru-k1 | 6514 | 0.378 | 1.610 | 4.666 | 7.710 | 27.174 | 1.135 | 186.73 |
+| after | incumbent | 6858 | 0.052 | 0.835 | 3.139 | 4.840 | 25.843 | 1.000 | 223.51 |
+| after | control | 6503 | 0.354 | 0.806 | 2.832 | 4.889 | 24.511 | 0.958 | 221.19 |
+| after | gru-k1 | 6514 | 0.355 | 1.620 | 3.443 | 6.371 | 27.289 | 1.097 | 193.52 |
+
+256-stream collection-only preparation profiles:
+
+| Implementation | Arm | Decisions | Retention s | Preparation s | Inference s | Collection s | Update s | Total / incumbent | Decisions/s |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| before | incumbent | 55010 | 0.353 | 7.738 | 23.714 | 37.713 | 0.000 | 1.000 | 1458.65 |
+| before | control | 53658 | 2.592 | 8.671 | 23.593 | 42.259 | 0.000 | 1.121 | 1269.73 |
+| before | gru-k1 | 54650 | 2.640 | 14.691 | 35.805 | 60.575 | 0.000 | 1.606 | 902.18 |
+| after | incumbent | 55010 | 0.358 | 7.809 | 23.974 | 38.151 | 0.000 | 1.000 | 1441.89 |
+| after | control | 53658 | 2.661 | 8.775 | 23.816 | 42.718 | 0.000 | 1.120 | 1256.10 |
+| after | gru-k1 | 54650 | 2.757 | 18.584 | 27.268 | 56.253 | 0.000 | 1.474 | 971.50 |
+
+Raw prefix digests and sampled actions/rewards/dones remain exact. On the 32-stream GRU array proof, maximum absolute differences are rollout 2.38e-07, final gradients 1.79e-05, updated state 5.28e-06; every array passes the existing fold tolerances (rollout 2e-6/2e-5, gradient/state 2e-5/2e-4 absolute/relative). GRU floating hashes are not relabelled as identical. Control/incumbent retain all four hashes.
+
+This is the permitted store fallback: raw chunk hashing, changed-chunk admission and archive/recovery identities stay unchanged. Append-only serving segments cache host features per record/version; collection caches states through the penultimate record and recomputes the last record to preserve coalescing. The learner retains its chunk fold and logical loss semantics. Cumulative reference joins share storage when no new snapshot appears. Interned raw chunks can be shared across streams, so growing segments belong to the native stream, not the chunk. A whole-game counterexample exposed that ownership error; the regression covers identical starts followed by divergent continuations.
+
+An initial per-record recurrence used one packed call per record and raised profiled preparation from 14.970 to 21.367 s while lowering inference 36.421 to 28.023 s at 256 streams. The final implementation packs each unbranched suffix once and retains its intermediate outputs. Those initial receipts are retained as diagnostic evidence, not substituted for the final table.
+
+Retention includes capture; these are nested costs. This fallback does not claim to reduce repeated raw admission or hashing. Arms finish different decision totals, so stage-time ratios alone are not throughput comparisons. Each case is a single observation, with no confidence range. Profiled CPU results do not measure CUDA pin/copy/synchronization, matched learning or playing strength. Receipt limitation strings inherited a prior two-stream description; executed source and decision counts establish 32/256 streams, and the 256-stream runs contain no learner update.
+
+Evidence: `experiments/data/opponent-memory/20261117-record-cache`. Source, runners, raw receipts, profiles, arrays and member hashes are retained. The Task session owns any further CUDA measurement and the still-unrun matched training/paired strength comparison.
+
+The separate 256-stream numeric proof retains all 54,650 sampled actions, rewards and dones exactly. Maximum absolute logprob/value differences are 2.38e-7/3.58e-7, within the existing 2e-6 absolute / 2e-5 relative fold tolerances. Its additional baseline replay is a numeric proof only; the original baseline timing/profile receipts were restored and remain the table inputs.
+
+At 256 streams, retained raw bytes stay 193.44 MB and feature caches fall 484.23 → 212.87 MB, while Python metadata rises 20.26 → 84.64 MB for 84,866 record views. At 32 streams after the update, feature caches rise 61.58 → 87.08 MB because learner chunk fragments and collection record fragments coexist. These measured owners include raw view backings and host feature caches; detached neural cache state is scope-bound and is not included in these store counts. The existing incident/state limits are unchanged.

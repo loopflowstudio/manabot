@@ -20,7 +20,7 @@ from managym.decision_memory import (
 )
 
 if TYPE_CHECKING:
-    from manabot.env.memory_store import PrefixObservation, Tail
+    from manabot.env.memory_store import PrefixObservation, RecordNode, Tail
     from manabot.env.observation import ObservationBuffers
     from manabot.policy.prepare import Packed, Tables
 
@@ -30,7 +30,7 @@ _WIDTHS = tuple(MEMORY_WIDTHS[key] for key in _FIELDS)
 
 @dataclass(frozen=True)
 class MemoryFeatures[A]:
-    """Prefix-independent features owned by one record chunk."""
+    """Prefix-independent features owned by one admitted run of records."""
 
     numbers: A
     kinds: A
@@ -49,12 +49,17 @@ class MemoryFeatures[A]:
 
 @dataclass(frozen=True)
 class MemoryLevel[A]:
-    """Independent chain nodes at one depth, packed for a single GRU call."""
+    """Independent chains packed for one GRU call.
+
+    Collection's record_nodes routes every packed output to its recurrent state;
+    learner chunks retain only terminal states through nodes/schedule.restore.
+    """
 
     records: A
     parents: A
     nodes: A
     schedule: Packed[A]
+    record_nodes: A | None = None
 
 
 @dataclass(frozen=True)
@@ -486,10 +491,16 @@ def _expand_details(
     return expanded, owners
 
 
-def chunk_observation(node: "Tail") -> dict[str, np.ndarray]:
+def _node_rows(node: Tail | RecordNode) -> tuple[np.ndarray, ...]:
+    from manabot.env.memory_store import RecordNode
+
+    return node.rows if isinstance(node, RecordNode) else node.chunk.rows
+
+
+def chunk_observation(node: "Tail | RecordNode") -> dict[str, np.ndarray]:
     """Local companion offsets for featurization; temporal words stay absolute."""
     cursor = node.previous.cursor if node.previous else MemoryCursor()
-    arrays = dict(zip(_FIELDS, (a[None] for a in node.chunk.rows), strict=True))
+    arrays = dict(zip(_FIELDS, (a[None] for a in _node_rows(node)), strict=True))
     references = arrays[_FIELDS[2]].copy()
     references[..., 10] -= cursor.details
     arrays[_FIELDS[2]] = references
@@ -534,7 +545,7 @@ def validate_retained_memory(
     # Vocabulary, own-seat and definition checks are independent of those joins,
     # so admit the new chunks across all selected rows in one arithmetic batch.
     headers, details, references = (
-        np.concatenate([node.chunk.rows[index] for node in pending.values()])
+        np.concatenate([_node_rows(node)[index] for node in pending.values()])
         for index in range(3)
     )
     if not include_own and (headers[:, 18] == 1).any():
@@ -559,7 +570,7 @@ def validate_retained_memory(
         node.features.admission = binding
 
 
-def _prepare_chunk_features(nodes: list[Tail], tables: Tables) -> None:
+def _prepare_chunk_features(nodes: list[Tail | RecordNode], tables: Tables) -> None:
     """Featurize new nodes together; cached fragments contribute no raw features.
 
     Concatenated records are only a host arithmetic batch, never a GRU sequence.
@@ -580,7 +591,7 @@ def _prepare_chunk_features(nodes: list[Tail], tables: Tables) -> None:
         local[_FIELDS[2]][..., 10] += detail_base
         for key in blocks:
             blocks[key].append(local[key])
-        detail_base += len(node.chunk.rows[1])
+        detail_base += len(_node_rows(node)[1])
     prepared = _prepare_dense_memory(
         {key: np.concatenate(parts, axis=1) for key, parts in blocks.items()}, tables
     )
@@ -589,9 +600,9 @@ def _prepare_chunk_features(nodes: list[Tail], tables: Tables) -> None:
     record_fields = {"numbers", "kinds", "choices", "choice_names"}
     reference_fields = {"reference_numbers", "reference_definitions"}
     for node in pending:
-        record_end = record_base + len(node.chunk.rows[0])
-        reference_end = reference_base + len(node.chunk.rows[2])
-        member_end = member_base + len(node.chunk.rows[3])
+        record_end = record_base + len(_node_rows(node)[0])
+        reference_end = reference_base + len(_node_rows(node)[2])
+        member_end = member_base + len(_node_rows(node)[3])
         detail_start, detail_end = np.searchsorted(
             prepared.detail_references, [reference_base, reference_end]
         )
@@ -619,7 +630,9 @@ def _prepare_chunk_features(nodes: list[Tail], tables: Tables) -> None:
         record_base, reference_base, member_base = record_end, reference_end, member_end
 
 
-def _chunk_features(node: Tail, tables: Tables) -> MemoryFeatures[np.ndarray]:
+def _chunk_features(
+    node: Tail | RecordNode, tables: Tables
+) -> MemoryFeatures[np.ndarray]:
     """Read the vocabulary-bound immutable feature owner shared by both encodes."""
     cached = node.features.prepared
     if cached is None or cached[0] != tables.memory_binding:
@@ -705,13 +718,16 @@ def _prepare_fold(
     No neural tensors or raw prefix owners escape preparation. The tree and its
     autograd state belong to this execution chunk, never to the rollout cache.
     """
+    from manabot.env.memory_store import record_tail
     from manabot.policy.prepare import pack
 
+    collection = roots is not None
+    tails = [record_tail(p) if collection else p.tail for p in obs.prefixes]
     roots = roots or {}
-    selected_nodes: dict[str, Tail] = {}
-    for prefix in obs.prefixes:
-        pending: list[Tail] = []
-        node = prefix.tail
+    selected_nodes: dict[str, Tail | RecordNode] = {}
+    for tail in tails:
+        pending: list[Tail | RecordNode] = []
+        node = tail
         while node is not None and node.key not in selected_nodes:
             pending.append(node)
             if node.key in roots:
@@ -726,7 +742,7 @@ def _prepare_fold(
         root_offsets[node.key] = reference_base
         reference_base += roots[node.key]
     root_reference_count = reference_base
-    nodes: list[Tail] = []
+    nodes: list[Tail | RecordNode] = []
     reference_slices: list[tuple[int, int]] = []
     record_slices: list[tuple[int, int]] = []
     indexes: dict[str, int] = {}
@@ -788,26 +804,66 @@ def _prepare_fold(
     # Sequence lengths retain original policy row order; the fold owns routes.
     empty = _empty_memory(tables)
     levels: list[MemoryLevel[np.ndarray]] = []
-    for depth in range(max(depths, default=-1) + 1):
-        selected = [i for i, value in enumerate(depths) if value == depth]
-        lengths = np.array([len(nodes[i].chunk.rows[0]) for i in selected], np.int64)
-        schedule = pack(lengths)
-        records = np.concatenate(
-            [
-                np.arange(record_starts[i], record_starts[i] + length)
-                for i, length in zip(selected, lengths, strict=True)
-            ]
-        )
-        levels.append(
-            MemoryLevel(
-                records[schedule.gather],
-                np.array([parents[i] for i in selected], np.int64)[
-                    np.argsort(schedule.restore)
-                ],
-                np.array(selected, np.int64) + 1,
-                schedule,
+    if collection:
+        # One packed sequence per unbranched suffix, retaining the GRU output
+        # after every record. Per-record state caching needs no per-record call.
+        children: dict[int, list[int]] = {}
+        for i, parent in enumerate(parents):
+            if record_starts[i] >= 0:
+                children.setdefault(parent, []).append(i)
+        paths: dict[int, list[list[int]]] = {}
+        ends: dict[int, int] = {0: -1}
+        ends.update((i + 1, -1) for i, start in enumerate(record_starts) if start < 0)
+        for i, start in enumerate(record_starts):
+            if start < 0 or (
+                parents[i] not in ends and len(children.get(parents[i], ())) == 1
+            ):
+                continue
+            path = [i]
+            while len(children.get(path[-1] + 1, ())) == 1:
+                path.append(children[path[-1] + 1][0])
+            depth = ends[parents[i]] + 1
+            paths.setdefault(depth, []).append(path)
+            ends[path[-1] + 1] = depth
+        for paths_at_depth in paths.values():
+            schedule = pack(np.array([len(path) for path in paths_at_depth], np.int64))
+            selected = np.array([i for path in paths_at_depth for i in path], np.int64)
+            levels.append(
+                MemoryLevel(
+                    np.array([record_starts[i] for i in selected], np.int64)[
+                        schedule.gather
+                    ],
+                    np.array([parents[path[0]] for path in paths_at_depth], np.int64)[
+                        np.argsort(schedule.restore)
+                    ],
+                    np.array([path[-1] + 1 for path in paths_at_depth], np.int64),
+                    schedule,
+                    (selected + 1)[schedule.gather],
+                )
             )
-        )
+    else:
+        for depth in range(max(depths, default=-1) + 1):
+            selected = [i for i, value in enumerate(depths) if value == depth]
+            lengths = np.array(
+                [len(_node_rows(nodes[i])[0]) for i in selected], np.int64
+            )
+            schedule = pack(lengths)
+            records = np.concatenate(
+                [
+                    np.arange(record_starts[i], record_starts[i] + length)
+                    for i, length in zip(selected, lengths, strict=True)
+                ]
+            )
+            levels.append(
+                MemoryLevel(
+                    records[schedule.gather],
+                    np.array([parents[i] for i in selected], np.int64)[
+                        np.argsort(schedule.restore)
+                    ],
+                    np.array(selected, np.int64) + 1,
+                    schedule,
+                )
+            )
     lengths = tuple(p.record_count for p in obs.prefixes)
     return replace(
         empty,
@@ -818,9 +874,7 @@ def _prepare_fold(
         lengths=lengths,
         fold=MemoryFold(
             tuple(levels),
-            np.array(
-                [indexes[p.tail.key] if p.tail else 0 for p in obs.prefixes], np.int64
-            ),
+            np.array([indexes[tail.key] if tail else 0 for tail in tails], np.int64),
             len(nodes),
             keys=tuple(node.key for node in nodes),
             reference_slices=tuple(reference_slices),

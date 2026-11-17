@@ -583,20 +583,33 @@ complete decision history, and no training benefit has been measured.
 **Unreleased.** Whole-game native logs, shared immutable prefixes and Torch
 encoders are implemented with bounded execution rows. Memory stays opt-in.
 The [cost report](../experiments/opponent_memory.md) records the current
-optimized A40 calibration: control costs 1.143× incumbent time, GRU-K1 1.548×,
-with a 0.253 GB CUDA allocated peak. These are exploratory cost measurements;
-matched training and paired strength evaluation have not run. Transformer
-probe and earlier calibration evidence remain separate.
+suffix A40 calibration: control costs 1.105× incumbent time and GRU-K1 1.201×. These are exploratory cost measurements;
+matched training and paired strength evaluation have not run. These CUDA receipts
+precede the record-cache and native opt-in cuts below. Transformer probe and
+earlier calibration evidence remain separate.
 
 Collection retains native table cursors and reuses unchanged prefix versions.
-The GRU folds complete record chunks in both collection and learning. During
-collection, an unchanged inference scope caches detached complete-node
-embeddings and recurrent states; every open tail is recomputed. Native game
-generation and prefix identity bound cache reuse, and scope exit discards the
+The learner folds shared complete chunks. Collection featurizes individual
+appended records and caches detached recurrent states after every record except
+the current last one. That last record is recomputed so coalesced passes keep
+their multiplicity. Each native stream owns its open serving segment; earlier
+issued prefixes retain their exact version. Unbranched new suffixes run in one
+packed GRU call, whose intermediate outputs supply the per-record states. Native
+game generation and prefix identity bound cache reuse, and scope exit discards the
 cache before a parameter update. These tensors never become observations,
 replays, checkpoints or search-fork state. Dense stateless encoding remains the
 reference, and arbitrary imported prefixes still undergo complete admission.
-The transformer keeps its full-sequence encoder.
+The transformer keeps its full-sequence encoder. Raw storage and recovery keep
+content-addressed immutable chunks and full changed-chunk admission; this cache
+cut does not remove that retention cost.
+
+To disable history, set `decision_memory="none"`, all four decision-memory
+capacities to zero and `decision_memory_include_own=False`. Training then leaves
+native decision logs empty and bypasses capture. Positive record capacity enables
+capture even for a log-only control. Direct native callers opt in with
+`managym.Env(decision_memory=True)` or `managym.VectorEnv(decision_memory=True)`;
+`decision_memory_include_own=True` also enables it. Search clones retain existing
+facts and never append hypothetical decisions.
 
 To let a Torch policy use the opponent's earlier choices, select an encoder and
 one or four summaries in its model configuration:
@@ -723,13 +736,13 @@ text carry the same viewer-safe records.
 ### Replay, reset and checkpoints
 
 A new game starts with an empty log; turn boundaries preserve it. Rejected or
-stale Commands append nothing. Search forks inherit the viewer's prefix and
-append independently; sampled hidden cards never relabel that prefix. Replaying
-the original Commands reconstructs the records, including after resume or an
-Academy reconnect. Each seat keeps its own view.
+stale Commands append nothing. Search forks inherit the viewer's prefix without
+appending hypothetical choices; sampled hidden cards never relabel that prefix.
+When capture is enabled, replaying the original Commands reconstructs the records,
+including after resume. Each seat keeps its own view.
 
 The policy summary depends on the entire available prefix. Collection may reuse
-complete-node results within an unchanged inference scope; the cache is discarded
+stable-record results within an unchanged inference scope; the cache is discarded
 before parameter updates and excluded from game persistence. Training remains per decision;
 recurrent sequence batches and burn-in are unnecessary. A checkpoint retains
 the encoder choice and weights through ordinary persistence. Restoring a game
@@ -751,8 +764,8 @@ marked incomplete. These diagnostics do not resume games.
 
 Bootstrap retains immutable prefixes with ordinary next-state fields. Collection,
 frozen opponents and bootstrap select prefix references and assemble one execution
-chunk directly from admitted fragments. Feature caches expire with unreachable
-chunks and hold no learned embeddings or recurrent state. Sampling still uses one
+chunk directly from admitted fragments. Host feature caches expire with their
+prefix/segment owners and hold no learned embeddings or recurrent state. Sampling still uses one
 RNG call in the original group order.
 
 For GRU learning, each execution chunk prepares the distinct record chunks in
@@ -762,7 +775,7 @@ prefixes share gradient paths: their loss contributions still add with the
 logical actor and critic denominators. Rows keep their selected order; sampling
 and optimizer boundaries are unchanged. This temporary tree and its neural
 states expire with that execution chunk's backward graph. Collection uses the
-same causal fold with detached cached roots, recomputing each selected open tail.
+same causal fold with detached record roots, recomputing only each current last record.
 Bootstrap without an inference scope folds without cached roots. Dense inputs
 and the transformer retain the stateless full-prefix encoder.
 
@@ -838,12 +851,14 @@ passes. Reset, fork and replay restoration change the generation even when a
 seed repeats. These cursors are transport metadata, never policy features or
 replay identities. Dense imports and archives still validate the complete prefix.
 
-During collection, each complete GRU node caches a detached state and cumulative
-reference embeddings for the unchanged policy's inference scope. Preparation
-stops at that root and builds only its new suffix, including the open tail;
-cached ancestors contribute no raw feature validation, assembly or device
-transfer. New chunks share one host featurization batch. Scope closure or a
-parameter change invalidates neural results; these caches never enter a replay,
+During collection, each record except the current last one caches a detached
+state and cumulative reference embeddings for the unchanged policy's inference
+scope. Preparation stops at that root and builds only newly appended records
+and the current last record; cached ancestors contribute no feature assembly or
+device transfer. Coalesced versions keep their own last-record fragment. New
+record fragments share one host featurization batch, and unbranched suffixes
+share one packed GRU call while retaining all intermediate states. Scope closure
+or a parameter change invalidates neural results; these caches never enter a replay,
 checkpoint or search fork. Learning continues to fold unique nodes with gradients
 inside each execution chunk.
 
