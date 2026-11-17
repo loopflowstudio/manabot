@@ -1,10 +1,10 @@
 """Exploratory whole-game opponent-memory pilot (Task 3dca91).
 
-The report owns the design and software prerequisites. This declaration cannot
-launch until those prerequisites are delivered; the existing recent-event option
-must not silently stand in for a decision-record encoder. No rentals or games run
-on import. The implementation step will replace the explicit launch stop with
-recipes from manabot.recipes.builders and replay-checked evaluation jobs.
+The report (`opponent_memory.md`) owns the design, evidence and open decisions.
+`training_jobs` and `eval_jobs` stop explicitly until CUDA admission and
+calibration date a branch recipe; `branch_jobs` then freezes the three arms from
+each seed's published trunk. `census` and `probe` are the USD0 commands behind
+the report's capacity and supervised-probe entries. Nothing runs on import.
 """
 
 from __future__ import annotations

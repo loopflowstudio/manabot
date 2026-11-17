@@ -75,6 +75,7 @@ _PARENT_FILES = {
     "ema": "parent-ema.pt",
     "optimizer": "parent-optimizer.pt",
 }
+_INITIAL_WEIGHTS = "initial-weights.pt"
 
 
 class StagedExport(Strict):
@@ -83,6 +84,27 @@ class StagedExport(Strict):
     key: str = Field(min_length=1)
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     bytes: int = Field(ge=1)
+
+    def input(self, name: str) -> Input:
+        """The Etude input that delivers this export as `name`."""
+        return Input(name=name, key=self.key, sha256=self.sha256, size_bytes=self.bytes)
+
+    def delivered(self, path: Path) -> dict[str, str | int]:
+        """The regime's file reference for this export once delivered at `path`."""
+        return {"path": str(path), "sha256": self.sha256, "bytes": self.bytes}
+
+
+def _inputs(files: dict[str, tuple[str, StagedExport]]) -> tuple[Input, ...]:
+    return tuple(export.input(name) for name, export in files.values())
+
+
+def _delivered(
+    files: dict[str, tuple[str, StagedExport]], inputs: Path
+) -> dict[str, dict[str, str | int]]:
+    """Import role -> file reference under the worker's inputs directory."""
+    return {
+        role: export.delivered(inputs / name) for role, (name, export) in files.items()
+    }
 
 
 class LearnerContinuation(Strict):
@@ -130,15 +152,7 @@ class LearnerContinuation(Strict):
         }
 
     def inputs(self) -> tuple[Input, ...]:
-        return tuple(
-            Input(
-                name=name,
-                key=export.key,
-                sha256=export.sha256,
-                size_bytes=export.bytes,
-            )
-            for name, export in self.files().values()
-        )
+        return _inputs(self.files())
 
 
 class PretrainedInitialization(Strict):
@@ -213,15 +227,7 @@ class PretrainedInitialization(Strict):
         }
 
     def inputs(self) -> tuple[Input, ...]:
-        return tuple(
-            Input(
-                name=name,
-                key=export.key,
-                sha256=export.sha256,
-                size_bytes=export.bytes,
-            )
-            for name, export in self.files().values()
-        )
+        return _inputs(self.files())
 
 
 RUST_TOOLCHAIN = "1.98.1"
@@ -335,49 +341,34 @@ class TrainingJob(Strict):
     def bound_regime(self, inputs: Path) -> TrainingRegime:
         """Bind staged inputs to the regime's single starting state."""
         if self.pretrained is not None:
-            serialized = self.regime.model_dump(mode="json")
-            serialized["stages"][0]["pretrained"] = PretrainedPolicy(
-                source_stage=self.pretrained.source_stage,
-                weights=self.pretrained.weights,
-                **{
-                    role: {
-                        "path": str(inputs / name),
-                        "sha256": export.sha256,
-                        "bytes": export.bytes,
-                    }
-                    for role, (name, export) in self.pretrained.files().items()
-                },
+            field = "pretrained"
+            state = PretrainedPolicy.model_validate(
+                {
+                    "source_stage": self.pretrained.source_stage,
+                    "weights": self.pretrained.weights,
+                    **_delivered(self.pretrained.files(), inputs),
+                }
             ).model_dump(mode="json")
-            return TrainingRegime.model_validate(serialized)
-        if self.initial_checkpoint is not None:
-            serialized = self.regime.model_dump(mode="json")
-            serialized["stages"][0]["initial_weights"] = {
-                "path": str(inputs / "initial-weights.pt"),
-                "sha256": self.initial_checkpoint.sha256,
-                "bytes": self.initial_checkpoint.bytes,
-            }
-            return TrainingRegime.model_validate(serialized)
-        if self.continuation is None:
+        elif self.initial_checkpoint is not None:
+            field = "initial_weights"
+            state = self.initial_checkpoint.delivered(inputs / _INITIAL_WEIGHTS)
+        elif self.continuation is not None:
+            field = "learning_state"
+            state = LearningStateImport.model_validate(
+                {
+                    "source_stage": self.continuation.source_stage,
+                    **(
+                        {"monitoring_update": self.continuation.from_update}
+                        if self.continuation.from_monitoring
+                        else {}
+                    ),
+                    **_delivered(self.continuation.files(), inputs),
+                }
+            ).model_dump(mode="json")
+        else:
             return self.regime
         serialized = self.regime.model_dump(mode="json")
-        serialized["stages"][0]["learning_state"] = LearningStateImport.model_validate(
-            {
-                "source_stage": self.continuation.source_stage,
-                **(
-                    {"monitoring_update": self.continuation.from_update}
-                    if self.continuation.from_monitoring
-                    else {}
-                ),
-                **{
-                    role: {
-                        "path": str(inputs / name),
-                        "sha256": export.sha256,
-                        "bytes": export.bytes,
-                    }
-                    for role, (name, export) in self.continuation.files().items()
-                },
-            }
-        ).model_dump(mode="json")
+        serialized["stages"][0][field] = state
         return TrainingRegime.model_validate(serialized)
 
     @property
@@ -426,14 +417,7 @@ class TrainingJob(Strict):
         elif spec.continuation is not None:
             inputs = spec.continuation.inputs()
         elif spec.initial_checkpoint is not None:
-            inputs = (
-                Input(
-                    name="initial-weights.pt",
-                    key=spec.initial_checkpoint.key,
-                    sha256=spec.initial_checkpoint.sha256,
-                    size_bytes=spec.initial_checkpoint.bytes,
-                ),
-            )
+            inputs = (spec.initial_checkpoint.input(_INITIAL_WEIGHTS),)
         else:
             inputs = ()
         job = EtudeTrainingJob(
