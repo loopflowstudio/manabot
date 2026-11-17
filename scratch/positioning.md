@@ -83,3 +83,10 @@ still version 0.3.2.
 Jack Heart, 2026-11-17: "have we measured performance impact of this change".
 Nothing had been. Offered main against the branch on one L4 under USD 3:
 "yes l4 approved".
+
+Jack Heart, 2026-11-17, on PR #500: "i also would have expected this pr to
+involve more deletion of the executor and training regime code, no?" Shown
+that regime.py (928 lines) and manabot/experiment/ (about 1,370) survive as
+readers of historical records, with options keep / thin reader / "Delete it:
+name the last revision that reads those records, as was done for state.pt.
+Old reports can then no longer be rebuilt from main.": "3".
