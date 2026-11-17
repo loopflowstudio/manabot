@@ -431,7 +431,9 @@ def _capture_loss_worker(
 
         def step(self, action: int) -> None:
             if game.get("block_native"):
-                connection.recv()  # The supervisor's deadline kills the blocked call.
+                # Expire the supervisor's injected deadline only once blocked.
+                Path(game["blocked_marker"]).touch()
+                connection.recv()
             os._exit(7)
 
     def environment(*args: Any, **kwargs: Any) -> tuple[Any, dict[str, Any]]:
@@ -447,7 +449,7 @@ def _capture_loss_worker(
 
 @pytest.mark.parametrize("block_native", [False, True])
 def test_canonical_journal_retains_worker_loss_at_native_boundary(
-    tmp_path: Path, block_native: bool
+    tmp_path: Path, block_native: bool, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from manabot.infra.identity import canonical_sha256
     from manabot.sim.matchup import selected_match
@@ -465,11 +467,24 @@ def test_canonical_journal_retains_worker_loss_at_native_boundary(
         match_hypers=selected_match().model_dump(),
         decisions=[],
         block_native=block_native,
+        blocked_marker=str(tmp_path / "blocked"),
         integrity=dict(
             private_exposures=0, root_mutations=0, illegal_actions=0, truncations=0
         ),
     )
     path = tmp_path / "failure.jsonl"
+    marker = tmp_path / "blocked"
+
+    class _Clock:
+        """The game's budget lasts until the worker is blocked in native code."""
+
+        time = staticmethod(time.time)
+
+        @staticmethod
+        def monotonic() -> float:
+            return 1e9 if marker.exists() else 0.0
+
+    monkeypatch.setattr("manabot.sim.supervision.time", _Clock)
     settled = supervise_game(
         game,
         players,
