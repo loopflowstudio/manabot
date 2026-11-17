@@ -8,6 +8,7 @@ regime or evidence is changed. The branch arm is a normal Etude recipe.
 import argparse
 from collections.abc import Callable
 import json
+import os
 from pathlib import Path
 import time
 from typing import TYPE_CHECKING, Literal
@@ -37,13 +38,10 @@ def settings(config: Config) -> "SelfPlay":
 
 
 def train(config: Config) -> None:
-    import os
-
     from etude.train.tracking import track
 
-    from manabot.training.loops.self_play import CLOCKS, SelfPlay, self_play
+    from manabot.training.loops.self_play import CLOCKS, self_play
 
-    inputs = SelfPlay.model_validate(settings(config))
     with track(clocks=CLOCKS, config=config) as run:
         # Time the real save calls, including calls that decide no save is due.
         save = run.save
@@ -58,13 +56,13 @@ def train(config: Config) -> None:
 
         run.save = timed_save
         try:
-            self_play(inputs, run, updates=config.updates)
+            self_play(settings(config), run, updates=config.updates)
         finally:
             with (run.out / "save-times.jsonl").open("a") as output:
                 output.write(json.dumps(durations) + "\n")
 
 
-def training_jobs() -> list["TrainingJob"]:
+def training_jobs() -> list[TrainingJob]:
     return [TrainingJob(name="comparison", train=train, config=Config(), seeds=(197,))]
 
 
@@ -120,11 +118,9 @@ def main_arm(path: Path, out: Path) -> None:
 
 
 def measured_load(
-    checkpoint: "CheckpointRef",
+    checkpoint: CheckpointRef,
 ) -> Callable[[list[object]], list[object]]:
     """Retain actual CUDA forward batch sizes in Etude's inference process."""
-    import os
-
     import torch
 
     from manabot.eval.agent_loader import load
@@ -144,9 +140,6 @@ def measured_load(
 
 def evaluate(path: Path, out: Path) -> None:
     """Replay-checked paired deals through the production managed callback."""
-    import os
-
-    from etude.checkpoints import CheckpointRef
     from etude.eval.records import (
         Benchmark,
         CheckpointSlot,
