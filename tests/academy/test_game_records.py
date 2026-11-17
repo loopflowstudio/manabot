@@ -83,6 +83,11 @@ def test_interrupted_record_import_is_closed_and_readable(
     assert shown["outputs"]["value"] == 0.31
     assert shown["winner"] is None
     assert not server.SESSION_REGISTRY
+    # The launcher opens the recording in a browser that holds no credential.
+    from fastapi.testclient import TestClient
+
+    anonymous = TestClient(server.app).get(f"/api/traces/{imported['id']}/recording")
+    assert anonymous.status_code == 200, anonymous.text
 
 
 def test_retained_exposure_receipt_opens_without_export(

@@ -212,7 +212,17 @@ def train_command(
             status = result.status
             typer.echo(f"local: {status}; run: {result.id}")
             if status == "completed":
-                typer.echo(f"checkpoint: {result.stages[-1].artifacts['raw']['path']}")
+                artifacts = result.stages[-1].artifacts
+                typer.echo(f"checkpoint: {artifacts['raw']['path']}")
+                games = [
+                    v["path"] for k, v in artifacts.items() if k.startswith("games/")
+                ]
+                if games:
+                    directory = Path(games[0]).parent
+                    typer.echo(
+                        f"games: {directory} (open one with: "
+                        f"managym academy replay {directory} --game 0)"
+                    )
             elif result.error:
                 typer.echo(result.error, err=True)
         else:

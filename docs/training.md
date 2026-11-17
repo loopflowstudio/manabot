@@ -813,7 +813,7 @@ allocation deadline carries forward.
 Capture is independent of `game_errors`. Strict native calls retain private
 evidence (`manabot.env.failures`) before propagating the original exception,
 under the TrainingRun's `failures/` directory or `.runs/game-failures/`
-elsewhere. Files are create-only, mode 0600 and fsynced; a storage failure is
+elsewhere. Failure evidence is immutable, mode 0600 and fsynced; a storage failure is
 attached to the original exception. Coverage includes strict self-play,
 `sim.rollout` and vector environments, search players (flat-MC and rollout
 pool roots), selection journals, and arena evaluation, which journals
@@ -848,7 +848,8 @@ uv run manabot train --recipe local --record-games 0.25 --out .runs/demo
 uv run --no-project managym academy replay .runs/demo/games --game 0
 ```
 
-The second command opens one of the run's own games in Academy, decision by
+A local run that recorded games ends by printing a `games:` line with that
+second command. It opens one of the run's own games in Academy, decision by
 decision, with the policy's probabilities, value and update number at each
 ([watch a game from your training loop](academy.md#watch-a-game-from-your-training-loop)).
 
@@ -909,14 +910,16 @@ stall the watchdog first writes each producer's games in progress to its
 ask for the same at any time:
 
 ```sh
-touch .runs/demo/diagnostics.request     # read at the next update, where the stop file is
+touch .runs/demo/diagnostics.request     # the watchdog reads it within a second
 ```
 
 or start a resumed attempt already detailed, continuing from the last
-checkpoint:
+checkpoint of a regime run that retains `recovery`
+([process recovery](#exact-cpu-process-recovery)):
 
 ```sh
-uv run manabot train --recipe local --diagnostics detailed --out .runs/demo
+uv run manabot train --regime recipe.json --seed 197 --out .runs/demo-2 \
+  --resume-from RUN_ID --diagnostics detailed
 ```
 
 Python callers pass `diagnostics="detailed"` to `execute_regime`; remote

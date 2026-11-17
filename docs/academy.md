@@ -224,8 +224,8 @@ The first command opens a file of recorded games; the second opens one game
 from a directory of them, here a training run's; the third reopens a game
 already in **Games**, by the id shown there. All land in **Replay**, ready to
 step from the first recorded choice or resume a saved position
-([replay controls](#inspect-a-replay)). The heading names both players and
-says which kind of game it is: **Training game**, one the training loop itself
+([replay controls](#inspect-a-replay)). The heading says which kind of game
+it is: **Training game**, one the training loop itself
 played, **Evaluation game**, one played afterwards to measure policies, or
 **Recorded game** for a record that says neither.
 

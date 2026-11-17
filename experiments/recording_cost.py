@@ -1,7 +1,7 @@
 """Exploratory CUDA cost of capture options on matched Elemental training.
 
 One job runs fresh training processes sequentially on one host, rotating seven
-arms through three repeats. Each arm uses the same seed and four real updates;
+arms through five repeats. Each arm uses the same seed and four real updates;
 measurements include the first update and all capture writes inside collection.
 No artificial load, concurrent training or playing-strength claim is involved.
 The driver retains receipts and streams cell progress to its launcher log.
@@ -32,6 +32,8 @@ from manabot.verify.store import VerifyStore
 ROOT = Path(__file__).resolve().parents[1]
 SEED = 80161
 UPDATES = 4
+REPEATS = 5
+EXPERIMENT = "recording_cost"
 ARMS: dict[str, RunSettings] = {
     "off": RunSettings(diagnostics="off"),
     "statistics": RunSettings(diagnostics="off", statistics=True),
@@ -68,6 +70,7 @@ def cell(arm: str, output: Path) -> None:
             store,
             backend=resolve("torch"),
             settings=ARMS[arm],
+            experiment=EXPERIMENT,
         )
     (output / "receipt.json").write_text(result.model_dump_json(indent=2))
     if (
@@ -82,7 +85,7 @@ def run(probe: Probe) -> None:
     output = Path(os.environ["ETUDE_OUTPUT_DIR"])
     names = list(ARMS)
     rows: list[dict[str, object]] = []
-    for repeat in range(3):
+    for repeat in range(REPEATS):
         order = names[repeat:] + names[:repeat]
         for arm in order:
             destination = output / f"repeat-{repeat}" / arm
@@ -100,6 +103,8 @@ def run(probe: Probe) -> None:
             )
             receipt = json.loads((destination / "receipt.json").read_text())
             stage = receipt["stages"][0]
+            if stage["updates"] != UPDATES:
+                raise RuntimeError(f"cell {arm}: expected {UPDATES} updates")
             row = {
                 "repeat": repeat,
                 "arm": arm,
@@ -112,6 +117,7 @@ def run(probe: Probe) -> None:
                 )
                 / stage["updates"],
                 "host": receipt["host"],
+                "game_errors": receipt.get("game_errors"),
             }
             rows.append(row)
             (output / "measurements.json").write_text(json.dumps(rows, indent=2))
@@ -145,6 +151,7 @@ def training_jobs(revision: str) -> list[Run]:
         config=Probe(source_bundle=bundle_at(ROOT, revision)).model_dump_json(),
         repo=str(ROOT),
         revision=revision,
+        experiment=EXPERIMENT,
         max_hours=3,
         max_usd=Decimal("5"),
         max_attempts=1,

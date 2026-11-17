@@ -227,7 +227,7 @@ def watch(
 def replay(
     ctx: typer.Context,
     source: str = typer.Argument(
-        help="A game file (an evaluation trace or exported training game) or a recording id from Games"
+        help="A file or directory of recorded games, an evaluation trace, or a recording id from Games"
     ),
     game: str | None = typer.Option(
         None,

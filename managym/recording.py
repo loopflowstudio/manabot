@@ -545,6 +545,8 @@ class _Capture:
         self._boundary: NativeBoundary | None = None
         self._call_evidence: GameRecord | None = None
         self._game_journal = _GameJournal(journal_path) if journal_path else None
+        self._automatic_journal = False
+        self._journal_retained = False
         self.frozen_context: dict[str, object] | None = None
         self._pending_journal_path: Path | None = None
         self._profiler_requested = False
@@ -584,7 +586,8 @@ class _Capture:
     @property
     def _recording(self) -> bool:
         return self.record_fraction > 0 and (
-            self.games_path is not None or self._game_journal is not None
+            self.games_path is not None
+            or (self._game_journal is not None and not self._automatic_journal)
         )
 
     def _selected(self, game: GameInputs) -> bool:
@@ -818,10 +821,20 @@ class _Capture:
             retained.error = str(error)
             retained.traceback = "".join(traceback.format_exception(error))
             self._raised = retained
-            path = self._retain(retained)
-            error.add_note(f"Private native failure evidence: {path}")
-            if self._game_journal is not None and self._boundary is not None:
+            if self._automatic_journal:
+                assert self._game_journal is not None and self._boundary is not None
                 self._publish(retained, self._boundary.phase)
+                path = self._game_journal.writer.path
+                # A failure is immutable evidence, no longer a live cursor that
+                # a later reset or close may compact over.
+                self._game_journal = None
+                self._automatic_journal = False
+                self._journal_retained = False
+            else:
+                path = self._retain(retained)
+                if self._game_journal is not None and self._boundary is not None:
+                    self._publish(retained, self._boundary.phase)
+            error.add_note(f"Private native failure evidence: {path}")
         except Exception as capture_error:
             error.add_note(f"Failure evidence could not be retained: {capture_error}")
 
@@ -977,8 +990,14 @@ class ScalarCapture(_Capture):
         """Retain and execute one action-aligned native Command.
 
         The native executor rejects a Command with answers; a rejected or stale
-        Command leaves no row, digest or reducer callback.
+        Command leaves no committed decision or reducer callback. Pending input
+        is durable even without an explicitly configured journal.
         """
+        self._activate_journal(env)
+        if self._game_journal is None:
+            path = self.failure_directory / f"{uuid4().hex}.jsonl"
+            self._game_journal = _GameJournal(path)
+            self._automatic_journal = True
         execute = (
             env.execute_semantic_command_json
             if transition_only
@@ -1004,6 +1023,10 @@ class ScalarCapture(_Capture):
             self._begin_boundary(
                 self._snapshot(), operation, actions=[chosen], active=[True]
             )
+            if self._automatic_journal and not self._journal_retained:
+                if self.on_retained is not None:
+                    self.on_retained(self._game_journal.writer.path)
+                self._journal_retained = True
         inputs = self.inputs
         retained = (
             None

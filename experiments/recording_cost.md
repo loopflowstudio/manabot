@@ -116,3 +116,14 @@ windows, not bills or confirmed rentals.
   **$0.020903, estimated**, not a reconciled provider invoice.
 
 </details>
+
+## Continuation authorized 2026-11-17
+
+Jack Heart: "run some measurement probably. what are the highest risk parts of the chagne".
+The next comparison aligns both the launched Job and `execute_regime` on
+`recording_cost`, uses five rotating repeats (35 cells), and retains receipt
+error counters. It measures the current software including the QA repairs,
+with a fresh prospective source commit; earlier attempts above are unchanged.
+The $5 job cap and $25 total experiment cap remain. No rate is claimed before
+successful CUDA receipts. The expected report is the incremental collection
+and update cost of each option relative to off, with median and full range.

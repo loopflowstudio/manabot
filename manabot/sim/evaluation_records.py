@@ -126,6 +126,12 @@ def audit_view(data: dict[str, Any], *, digest: str | None = None) -> dict[str, 
         else:
             game["pending_decision"] = decision
     game["decisions"] = decisions
+    if "pending_decision" in game and game.get("failure") is None:
+        game["failure"] = (
+            f"{data['error_class']}: {data['error']}"
+            if data.get("error_class") is not None
+            else "execution_outcome_unknown"
+        )
     game["record"] = data
     if digest is not None:
         game["game_trace_sha256"] = digest

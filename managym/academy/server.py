@@ -82,6 +82,7 @@ from .advice import (
     request_versioned_fixture_advice,
 )
 from .attempts import (
+    CLOSED_RECORD_ENDINGS,
     AttemptStore,
     RecordedPlayer,
     decode_cursor,
@@ -4098,7 +4099,7 @@ async def get_trace_decision(
     watch_mode = bool(payload["config"].get("watch_players"))
     if (
         watch_mode
-        and payload["end_reason"] not in {"record_interrupted", "record_diverged"}
+        and payload["end_reason"] not in CLOSED_RECORD_ENDINGS
         and not (
             payload["end_reason"] == "game_over"
             and payload["final_observation"]["game_over"]

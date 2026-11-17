@@ -101,7 +101,10 @@ class RecordWalker:
             record.identities.get("card_digest") is not None
             and record.identities["card_digest"] != current["card_digest"]
         ):
-            raise ValueError(f"record world or cards differ: {self.builds}")
+            raise ValueError(
+                f"record world or cards differ: {self.builds}. Open it with managym "
+                f"{record.identities.get('managym_version', 'unknown')}."
+            )
         self.build_differs = any(
             record.identities.get(key) != current[key]
             for key in ("engine_recording_source_sha256", "engine_extension_sha256")
@@ -393,7 +396,11 @@ def replay_failure_inputs(
             boundary_phase=boundary.phase,
             native_returned=boundary.returned,
             setup_known=boundary.setup_known,
-            original_outcome="execution_outcome_unknown",
+            original_outcome=(
+                "failed"
+                if evidence.mode != "vector" and evidence.execution_outcome == "failed"
+                else "execution_outcome_unknown"
+            ),
             diagnostic="Replay cannot settle the original interrupted call's outcome",
         )
         if not bound_step:
@@ -450,10 +457,15 @@ def _replay_game_inputs(
     reached: managym.Observation | None = None
     try:
         agreement.at_retained_failure = retained_phase == "reset"
+        # Invalid reset setups are retained verbatim for reproduction. Normal
+        # replay admission still requires a complete two-seat setup.
+        setup = (
+            [] if evidence.operation == "reset" and not game.players else game.setup()
+        )
         if evidence.mode == "vector":
-            reached = env.reset_all(game.setup())[0][0]
+            reached = env.reset_all(setup)[0][0]
         else:
-            reached = env.reset(game.setup())[0]
+            reached = env.reset(setup)[0]
         phase = "prefix"
         for index, action in enumerate(game.actions):
             if (
@@ -576,7 +588,10 @@ def main() -> None:
     if not evidence.needs_reproduction:
         results = []
         for record in read_records(args.path):
-            replay = walk(record, capture_cards=args.statistics)
+            try:
+                replay = walk(record, capture_cards=args.statistics)
+            except ValueError as error:
+                parser.error(f"cannot replay {args.path}: {error}")
             for _ in replay:
                 pass
             assert replay.stop is not None

@@ -72,8 +72,12 @@ class Diagnostics:
             self._register_capture(capture)
         self._lock = threading.RLock()
         self._stop = threading.Event()
-        self._operations: list[tuple[str, float]] = []
+        # Open operation names, innermost last.
+        self._operations: list[str] = []
         self._sequence = 0
+        # A stall is measured from the last recorded transition, so a long
+        # collection whose per-step markers keep returning is not stalled.
+        self._marked_at = clock()
         self._rate: float | None = None
         self._progress_at = clock()
         self._stalled_sequence: int | None = None
@@ -125,6 +129,7 @@ class Diagnostics:
 
     def _mark(self, name: str, state: str) -> None:
         self._sequence += 1
+        self._marked_at = self._clock()
         atomic_private_json(
             self.directory / "operation.json",
             {
@@ -143,7 +148,7 @@ class Diagnostics:
             yield operation
             return
         with self._lock:
-            self._operations.append((name, self._clock()))
+            self._operations.append(name)
             self._mark(name, "pending")
         try:
             yield operation
@@ -156,7 +161,7 @@ class Diagnostics:
                 self._operations.pop()
                 self._mark(name, "returned")
                 if self._operations:
-                    self._mark(self._operations[-1][0], "pending")
+                    self._mark(self._operations[-1], "pending")
 
     def progress(self, decisions: int) -> None:
         """Report progress since the preceding report outside a phase context."""
@@ -184,7 +189,7 @@ class Diagnostics:
                 {
                     "reason": reason,
                     "timestamp": time.time(),
-                    "operation": self._operations[-1][0] if self._operations else None,
+                    "operation": self._operations[-1] if self._operations else None,
                 },
                 create=not (self.directory / "escalations.jsonl").exists(),
             )
@@ -207,7 +212,7 @@ class Diagnostics:
         with self._lock:
             if (
                 self._operations
-                and self._clock() - self._operations[-1][1] >= self.stall_seconds
+                and self._clock() - self._marked_at >= self.stall_seconds
             ):
                 if self._stalled_sequence != self._sequence:
                     self._stalled_sequence = self._sequence

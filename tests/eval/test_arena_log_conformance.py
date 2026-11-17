@@ -15,8 +15,8 @@ import pytest
 from manabot.eval.card_evaluation import verification_spec
 from manabot.eval.card_metrics import reduce_cards
 from manabot.infra.config import MatchConfig
-from manabot.infra.identity import canonical_sha256
 from manabot.sim.card_evidence import GameTrace, capture_verified_game
+from manabot.sim.evaluation_records import finalize_game, stored_game
 from manabot.sim.match import play_game
 from managym.export_arena import ArenaPrinting, CardMapping, export_capture
 from tests.eval.test_card_evaluation import card_fixture
@@ -156,8 +156,8 @@ def test_native_game_replay_exports_both_viewers(tmp_path: Path) -> None:
     )
     trace = play_game(data, list(players), {}, 1000, 30, tmp_path / "native.jsonl")
     assert trace["terminated"] and trace["failure"] is None
-    trace["game_trace_sha256"] = canonical_sha256(trace)
-    game = capture_verified_game(GameTrace(data=trace))
+    finalize_game(trace)
+    game = capture_verified_game(GameTrace(data=stored_game(trace)))
     assert game.replay["passed"]
     assert game.cards.turn == 12
     assert [row.gih_copies for row in reduce_cards(game, game.seat_players)] == [12, 12]

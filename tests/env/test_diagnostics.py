@@ -48,6 +48,29 @@ def test_injected_slow_rate_escalates(tmp_path: Path) -> None:
         )
 
 
+def test_returning_steps_inside_a_long_operation_are_not_a_stall(
+    tmp_path: Path,
+) -> None:
+    now = [0.0]
+    with Diagnostics(
+        tmp_path, level="detailed", stall_seconds=10, clock=lambda: now[0]
+    ) as diagnostics:
+        with diagnostics.operation("collection"):
+            for _ in range(5):
+                with diagnostics.operation("inference", per_step=True):
+                    now[0] += 6
+                diagnostics.check()
+            now[0] += 10
+            diagnostics.check()
+            diagnostics.check()
+    escalations = [
+        json.loads(line)
+        for line in (tmp_path / "escalations.jsonl").read_text().splitlines()
+    ]
+    stalls = [e["operation"] for e in escalations if "not returned" in e["reason"]]
+    assert stalls == ["collection"]
+
+
 def test_off_does_not_create_output(tmp_path: Path) -> None:
     path = tmp_path / "off"
     with Diagnostics(path, level="off") as diagnostics:
@@ -164,10 +187,10 @@ with Diagnostics(path, stall_seconds=600) as diagnostics:
             assert time.monotonic() < deadline, "signal fixture did not start"
             time.sleep(0.01)
         os.kill(process.pid, signal.SIGUSR1)
-        while not (tmp_path / "stacks.txt").read_text():
+        # The dump is written thread by thread; wait for the blocked main thread.
+        while 'File "<string>"' not in (tmp_path / "stacks.txt").read_text():
             assert time.monotonic() < deadline, "signal did not dump blocked stacks"
             time.sleep(0.01)
-        assert 'File "<string>"' in (tmp_path / "stacks.txt").read_text()
         assert (
             json.loads((tmp_path / "operation.json").read_text())["operation"]
             == "scalar_step"

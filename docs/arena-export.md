@@ -17,7 +17,8 @@ World `w17`, card digest
 `b9344ef332cc07e1475e6a8860907ea84401ea427cec04a5cd23781e78c5818c`:
 470 definition rows, 460 authored Scryfall printings, 355 mapped definition rows
 and 115 unmapped rows. This is printing-specific coverage; another printing of
-an unmapped card may exist on Arena. Tokens, back faces without a printing
+an unmapped card may exist on Arena: every TLA card maps, but the five basic
+lands are authored as Alpha printings and export as `0`. Tokens, back faces without a printing
 identity and cards without an Arena id use `0`. Their movements remain present,
 but an outside card database cannot identify them from that placeholder.
 

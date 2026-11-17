@@ -270,7 +270,7 @@ content is refused, and the message names the recorded and the running
 managym version, world and engine digest, so you know which build to install:
 
 ```text
-games.jsonl was recorded by managym 0.3.2 in world w17 (cards 5be01c9a2f31); this is managym 0.3.4 in world w18 (cards e07a44d1c8b2). Open it with managym 0.3.2.
+record world or cards differ: recorded managym 0.3.2 world w17 cards 5be01c9a2f31… engine 9c0e…; running managym 0.3.4 world w18 cards e07a44d1c8b2… engine 42da…. Open it with managym 0.3.2.
 ```
 
 The same world on a different engine build (another platform, or a patch that
@@ -292,6 +292,12 @@ former names of `GameRecord` and `read_record`; they warn and are removed in
 
 A journal is the same record written earlier: before and after every native
 call instead of once at game end. It is for a call that may never return.
+`ScalarCapture.command` creates a diagnostic journal under its
+`failure_directory` when none was supplied, so a pending Command is durable
+before execution. This automatic journal does not enable game sampling or
+digest reads. A failed call freezes that automatic journal as failure evidence;
+later resets cannot overwrite it. An explicitly configured journal stays a live
+cursor and also retains a separate immutable failure snapshot.
 
 ```python
 capture = ScalarCapture(
@@ -359,10 +365,15 @@ print(behaviour)
 ```
 
 ```text
-CardRow(card='tla.fire_nation_raider', games=212, opening_hand=61, drawn=74, gih_win_rate=0.563, not_seen_win_rate=0.471)
+CardRow(seat=0, card='b9344ef3…:153', name='Fire Sages', games=1, wins=1, opening_hand=4, opening_won=4, drawn=0, drawn_won=0, gih=4, gih_won=4, not_seen=0, not_seen_won=0)
 …
-[BehaviourRow(seat=0, land_played_when_able=0.94, attacked_when_able=0.71), …]
+[BehaviourRow(seat=0, land_opportunities=15, lands_played=13, attack_opportunities=12, attacks=12), …]
 ```
+
+Rows hold counts, so tables from different files add up; `row.gih_win_rate`
+and `row.not_seen_win_rate` give the rates (`None` without games). `card` is
+the card content digest and definition, unique within a world; `name` is for
+reading.
 
 `reduce` re-executes each record once and feeds every reducer the same
 verified decisions. Two reducers are built in:
@@ -441,17 +452,20 @@ record = next(read_records(Path("games.jsonl")))
 Path("game-seat0.log").write_text(export_log(record, viewer=0))
 ```
 
-The export re-executes the game once and writes what seat 0 saw, as Arena's
-client would have logged it: the connection message with both seats, the deck,
-a `GREMessageType_GameStateMessage` for each card movement with its turn,
-phase, step and active player, mulligans, and the match result. Each line
-carries a marker that the log is synthetic. The pinned 17Lands client parses
-it into the opening hand, drawn cards, turns and result.
+The export re-executes the game once and writes what seat 0 saw, in the shape
+Arena's client logs: the connection message with the viewer's deck, a
+`GREMessageType_GameStateMessage` for each card movement with its turn number
+(the first also names phase, step and active player), and the match result.
+Its first line marks the log as synthetic. The pinned 17Lands client parses it
+into the opening hand, drawn cards, turns and result; no mulligan is recorded,
+so that client reports its count as unavailable
+([reader and limits](arena-export.md#reader-and-limits)).
 
-Cards carry their Arena ids from a table shipped with managym.
-`managym.export_arena.coverage()` reports, for the running world, how many
-cards have an id; tokens and cards with no Arena printing are written with id
-`0` and counted there.
+Cards carry the Arena id of their recorded printing, from a table shipped with
+managym. `managym.export_arena.coverage()` reports, for the running world, how
+many cards have one; tokens and printings with no Arena id are written with id
+`0` and counted there. The basic lands are among them: their recorded printing
+is Alpha's, which Arena never had.
 
 The log is a lossy, one-seat projection. Against the record it does not hold:
 

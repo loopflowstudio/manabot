@@ -528,7 +528,7 @@ carries them. Tests load the INT-6 fixture's key and anchors through
 `tests/eval/arena_fixture.py`.
 
 Ordinary evaluation games are retained as canonical managym records in
-`games/<cell-id>.jsonl`, with finalized per-deal shards beside them. Evaluation
+`games/<cell-id>.jsonl`, with finalized per-deal shards in `games/deals/`. Evaluation
 setup, participant and runtime identities stay in private record context;
 viewer-frame hashes, player ordinals, policy seeds, latencies, inference ids and
 local-update receipts stay in decision annotations. Card eligibility and Etude

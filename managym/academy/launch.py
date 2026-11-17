@@ -1,9 +1,9 @@
 """Start Academy and prepare browser addresses for games and retained replays.
 
 `serve` owns the one process-local server. `Academy` prepares configurations
-through the server's admission path and imports game files (evaluation traces
-and exported training games) through the optional bot extension; neither
-operation chooses a game action.
+through the server's admission path and imports game files: managym game
+records by re-execution, and retained Command traces through the optional bot
+extension; neither operation chooses a game action.
 """
 
 from __future__ import annotations

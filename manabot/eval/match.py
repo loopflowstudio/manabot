@@ -95,7 +95,8 @@ def play_cell(
 
     Each game's capture journal under `out_dir/failures/` is kept only when the
     game fails, unless `keep_game_logs`; `games/<cell-id>.jsonl` keeps every
-    settled canonical record. Block shards preserve finalized progress.
+    settled canonical record. Block shards under `games/deals/` preserve
+    finalized progress.
 
     `legs` selects a subset of the mode's legs for every deal, for designs that
     assign one seat and deck pair per game instead of playing whole deals.
@@ -312,7 +313,12 @@ def play_cell(
             block_rows = sorted(
                 (r for r in rows if r["deal_block"] == block), key=lambda r: r["leg"]
             )
-            relative = Path("games") / f"{cell_id}.{block_games[0]['deal_seed']}.jsonl"
+            # Shards sit below games/ so reading that directory yields each game once.
+            relative = (
+                Path("games")
+                / "deals"
+                / f"{cell_id}.{block_games[0]['deal_seed']}.jsonl"
+            )
             shard = write_trace(out_dir / relative, block_games)
             started = time.perf_counter()
             outcome = replay_retained(

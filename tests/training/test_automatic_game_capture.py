@@ -36,7 +36,7 @@ from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.verify.store import VerifyStore
 import managym
 from managym.decision import Command
-from managym.recording import read_record
+from managym.recording import ScalarCapture, read_record
 
 
 def _model() -> ActorCritic:
@@ -355,12 +355,16 @@ def test_semantic_training_retains_rejected_command_and_offer_frame(
     assert evidence.games[0].frame
     assert json.loads(evidence.games[0].frame)["offers"]
     assert len(evidence.games[0].actions) == 1
-    rows = [json.loads(line) for line in scope.paths[0].read_text().splitlines()]
-    assert "pending" in rows[1] and "error" in rows[2]
+    assert evidence.boundary is not None
+    assert evidence.boundary.phase == "executing"
+    assert evidence.boundary.pending_actions == evidence.games[0].actions
+    assert evidence.games[0].committed == 0
     assert _bounded(scope.paths[0])["results"][0]["matches_error"]
     interrupted = tmp_path / "interrupted.jsonl"
     interrupted.touch(mode=0o600)
-    interrupted.write_text("\n".join(json.dumps(row) for row in rows[:2]) + "\n")
+    evidence.error_class = evidence.error = evidence.traceback = None
+    evidence.execution_outcome = "execution_outcome_unknown"
+    interrupted.write_text(evidence.model_dump_json(by_alias=True) + "\n")
     replay = _bounded(interrupted)
     assert replay["original_outcome"] == "execution_outcome_unknown"
     result = replay["results"][0]
@@ -497,10 +501,17 @@ def test_sharded_failure_names_global_stream(tmp_path: Path) -> None:
     assert _bounded(scope.paths[0])["results"][0]["stream"] == 1
 
 
-def test_command_is_durable_before_native_execution(tmp_path: Path) -> None:
+@pytest.mark.parametrize("standalone", [False, True])
+def test_command_is_durable_before_native_execution(
+    tmp_path: Path, standalone: bool
+) -> None:
     scope = CaptureScope(tmp_path)
     with capture_scope(scope):
         env = _env()
+        if standalone:
+            env._capture = ScalarCapture(
+                seed=24, failure_directory=tmp_path, on_retained=scope.paths.append
+            )
         env.reset()
         frame = json.loads(env._engine.semantic_decision_frame_json())
         command = Command("pending", frame["revision"], frame["offers"][0]["id"])
@@ -517,6 +528,7 @@ def test_command_is_durable_before_native_execution(tmp_path: Path) -> None:
                 # Read independently while the failing native call is entered.
                 evidence = read_record(scope.paths[0])
                 assert evidence.games[0].actions == [value]
+                assert not evidence.games[0].digests
                 assert evidence.execution_outcome == "execution_outcome_unknown"
                 assert scope.paths[0].stat().st_mode & 0o777 == 0o600
                 raise original
@@ -525,6 +537,11 @@ def test_command_is_durable_before_native_execution(tmp_path: Path) -> None:
             env._capture.command(NativeFailure(), command.to_json())
         assert failure.value is original
     assert read_record(scope.paths[0]).execution_outcome == "failed"
+    before = scope.paths[0].read_bytes()
+    env.reset()
+    env.close()
+    assert scope.paths[0].read_bytes() == before
+    assert len(scope.paths) == 1
 
 
 def test_strict_uniform_capture_replays_actual_sampled_root(tmp_path: Path) -> None:

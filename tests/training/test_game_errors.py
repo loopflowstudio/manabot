@@ -28,6 +28,7 @@ from manabot.infra.config import (
 )
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.sim import match as simulation
+from manabot.sim.evaluation_records import stored_game
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import read_game_journal, write_trace
 from manabot.training.regime import BatchClosure, Learning
@@ -733,17 +734,29 @@ def test_arena_payment_failure_is_durable_and_replays_boundedly(
     assert failed["runtime_identities"]["engine_extension_sha256"]
     assert failed["failure_trace"] and failed["error_class"]
     reconstructed = read_game_journal(journal)
-    failed["game_trace_sha256"] = canonical_sha256(failed)
-    assert reconstructed == failed
+    assert reconstructed == {k: v for k, v in failed.items() if k != "capture_path"}
+    assert reconstructed["game_trace_sha256"] == read_record(journal).sha256
     trace = tmp_path / "failure.jsonl.gz"
-    write_trace(trace, [failed])
+    write_trace(trace, [stored_game(failed)])
     original = trace.read_bytes(), journal.read_bytes()
     # Install the same deterministic payment fixture in a fresh interpreter;
     # --worker runs the CLI's worker body under this outer hard process bound.
     reproduced = _bounded_fixture_replay("manabot.sim.replay", trace, "--game", 1)
     assert reproduced["matches_binding"] and reproduced["matches_error"]
     assert reproduced["at_retained_failure"]
-    assert reproduced["original_outcome"] == failed["failure"]
+    assert reproduced["original_outcome"] == "failed"
+    assert (trace.read_bytes(), journal.read_bytes()) == original
+    # Retained Command traces remain readable too. Construct historical bytes
+    # from the audit view; production writes only the canonical record above.
+    failed = {
+        k: v
+        for k, v in failed.items()
+        if k not in {"record", "capture_path", "game_trace_sha256"}
+    }
+    failed["game_trace_sha256"] = canonical_sha256(failed)
+    trace = tmp_path / "retained-failure.jsonl.gz"
+    write_trace(trace, [failed])
+    original = trace.read_bytes(), journal.read_bytes()
     for variant in ("different_error", "missing", "interrupted", "prefix"):
         diagnostic = tmp_path / f"{variant}.jsonl.gz"
         modified = deepcopy(failed)
@@ -758,13 +771,10 @@ def test_arena_payment_failure_is_durable_and_replays_boundedly(
             modified["decisions"].append(deepcopy(modified["pending_decision"]))
         else:
             diagnostic = tmp_path / "interrupted.jsonl"
+            modified.pop("game_trace_sha256")
+            modified.pop("error_class", None)
             diagnostic.write_text(
-                "\n".join(
-                    line
-                    for line in journal.read_text().splitlines()
-                    if json.loads(line)[0] not in {"result", "settled"}
-                )
-                + "\n"
+                json.dumps(["game", {**modified, "failure": None}]) + "\n"
             )
         if variant != "interrupted":
             modified.pop("game_trace_sha256")
@@ -852,16 +862,13 @@ def test_arena_lost_worker_retains_acknowledged_command(
     assert retained["pending_decision"] == result["pending_decision"]
     assert not retained["terminated"] and retained["winner"] is None
     # A journal also remains useful when the parent disappears before settlement.
-    unobserved = tmp_path / "unobserved.jsonl"
-    lines = journal.read_text().splitlines()
-    unobserved.write_text(
-        "\n".join(line for line in lines if json.loads(line)[0] != "settled") + "\n"
-    )
+    unobserved = journal.with_suffix(".pending.jsonl")
     unknown = read_game_journal(unobserved)
     assert unknown["failure"] == "execution_outcome_unknown"
     original = unobserved.read_bytes()
     replay = _bounded_fixture_replay("manabot.sim.replay", unobserved, "--game", 1)
     assert replay["status"] == "advanced"
+    assert replay["matches_binding"] and replay["at_retained_failure"]
     assert replay["original_outcome"] == "execution_outcome_unknown"
     assert replay["matches_error"] is None
     assert unobserved.read_bytes() == original
