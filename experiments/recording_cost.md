@@ -6,6 +6,22 @@ What CUDA collection and update cost does each recording, statistics and
 diagnostics option add to Elemental training, and what should stay on or be
 sampled? This is exploratory, with no playing-strength claim.
 
+## Current verdict (2026-11-17)
+
+**Inconclusive: incremental option overhead is not measured.** A CUDA baseline
+completed, but the next cell exposed a shared tracking identity in the driver.
+That driver defect is repaired and locally admitted with distinct declarations.
+Two subsequent A6000 creates were refused; complete provider inventory confirmed
+both pods absent and the launcher reconciled both requests. L4 availability
+reported no stock. There is no live measurement rental and no paired result.
+
+The one completed baseline at `978cec8bc2` ran on an RTX A6000 / AMD EPYC 7543:
+213,509 decisions, four updates and 1,029 completed games, zero crashes or
+abandoned games. Collection: **1,790.827 decisions/s** (119.224 seconds total).
+Collection plus learning: **43.239 seconds/update**. This is n=1, no range,
+and no option-cost estimate. The repaired comparison at `a5afe273f3` must run
+fresh matched baselines on its eventual host; do not reuse this one across hosts.
+
 ## Method
 
 The frozen driver is `experiments/recording_cost.py` at
@@ -31,7 +47,7 @@ The final admission pass permits at most three further creates on RunPod
 A6000/A40/L4, each under a fresh run ID after verified settlement of its
 predecessor. A non-400 refusal or unknown state ends the pass. No Lium rental.
 
-## Outcome and limits
+## Earlier outcome and limits (2026-11-16)
 
 **Not measured.** The final pass admitted an A6000, but the first `off` cell
 failed before its first update: the recipe requested tracking experiment
@@ -146,3 +162,23 @@ inventory confirmed the pod absent after termination. A prospective repair
 gives each cell a distinct tracking identity inside the one rental. A local
 tracking-only admission creates both off and statistics declarations with
 separate configs successfully; no training ran in that check.
+
+Launcher cost for `recording_cost/measure-20261117-978cec8`:
+**$0.05451162035, estimated**, rental ended. The repaired driver is frozen at
+`a5afe273f3cd23c50dbf83a0a68e4e0033134303`. Launch `a01162215daa`, requested
+run `recording_cost/measure-20261117-scoped`, was refused with HTTP 400;
+complete provider inventory showed no `etude-c3b57f356fd2` pod, termination
+reconciled the request, and launch status is failed with no recorded run.
+A fresh request `recording_cost/measure-20261117-scoped2` uses the same source
+and caps after availability again reported A6000 stock. No concurrent rental.
+
+Launch `a02bdee53a41` (`recording_cost/measure-20261117-scoped2`) also received
+HTTP 400 before a worker started. Complete inventory confirmed no
+`etude-1e8800a0beab` pod; termination reconciled
+`mtg338-a6000-1e8800a0beab`. At 2026-11-17 02:59:06 UTC,
+`mtg338-l4` reported no stock. No further create was attempted. Both scoped
+requests started no worker and produced no timings. The admitted run's
+receipt and narrowed local logs are under `.runs/recording-cost-evidence/`
+and `.runs/recording-cost-live.log`; launcher-retained artifacts are the durable
+source. Comparison is blocked on rental capacity, with the repaired driver
+frozen for the next attempt.
