@@ -64,6 +64,9 @@ class PilotStage:
 TRUNK = PilotStage(3_300_000, 90, 3.5, Decimal("2.40"))
 BRANCH = PilotStage(4_400_000, 120, 5.0, Decimal("3.30"))
 MILESTONES = (20, 40, 60)
+# Trunk launch label. "trunk" names the 2026-11-17 runs that overflowed the
+# 16,384-detail layout; their failed records stay as evidence.
+TRUNK_NAME = "trunk-2"
 ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENT = Path(__file__).stem
 
@@ -75,15 +78,15 @@ def training_jobs(revision: str, trunks: str = "") -> list[RunRequest]:
     optimizer and learner-decision schedule start fresh at the branch point.
     """
     if not trunks:
-        return _job(revision, TRUNK, "trunk").runs(*SEEDS)
+        return _job(revision, TRUNK, TRUNK_NAME).runs(*SEEDS)
     storage = storage_from_uri(trunks)
     state = observe(storage, EXPERIMENT)
     parents: dict[int, PretrainedInitialization] = {}
     for seed in SEEDS:
-        runs = _runs(state, "trunk", seed)
+        runs = _runs(state, TRUNK_NAME, seed)
         if len(runs) != 1:
             raise ValueError(
-                f"seed {seed}: expected one decision-memory-trunk run in {trunks}, "
+                f"seed {seed}: expected one decision-memory-{TRUNK_NAME} run in {trunks}, "
                 f"found {len(runs)}; launch and finish the trunks first"
             )
         if runs[0].state != "finished":
@@ -360,10 +363,10 @@ def pilot_recipe(limits: PilotStage) -> TrainingRegime:
     # Reserve twenty minutes of the job for setup and publishing artifacts.
     wall_seconds = limits.max_hours * 3600 - 1200
     observation = ObservationConfig(
-        max_decision_records=512,
-        max_decision_reference_details=16384,
-        max_decision_references=256,
-        max_decision_members=8192,
+        max_decision_records=1024,
+        max_decision_reference_details=65536,
+        max_decision_references=512,
+        max_decision_members=32768,
     )
     recipe = sampled_self_play(
         id="decision-memory-control",

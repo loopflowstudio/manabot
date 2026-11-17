@@ -307,8 +307,8 @@ def test_pilot_requires_completed_trunk_for_every_seed(
             TrainingRunSummary(
                 name="trunk",
                 experiment="opponent_memory",
-                job="decision-memory-trunk",
-                launch="decision-memory-trunk",
+                job="decision-memory-trunk-2",
+                launch="decision-memory-trunk-2",
                 line="trunk",
                 state=state,
                 seed=39101,
@@ -359,8 +359,8 @@ def test_pilot_branches_from_three_published_ema_trunks(
             TrainingRunSummary(
                 name=name,
                 experiment="opponent_memory",
-                job="decision-memory-trunk",
-                launch="decision-memory-trunk",
+                job="decision-memory-trunk-2",
+                launch="decision-memory-trunk-2",
                 line=name,
                 state="finished",
                 checkpoints=Checkpoints(),
@@ -402,7 +402,7 @@ def test_pilot_branches_from_three_published_ema_trunks(
         opponent_memory._published_trunk(storage, "trunk-39101", 39102)
     runs.pop()
     with pytest.raises(
-        ValueError, match="seed 39103: expected one decision-memory-trunk run"
+        ValueError, match="seed 39103: expected one decision-memory-trunk-2 run"
     ):
         opponent_memory.training_jobs("HEAD", trunks=str(storage.root))
 

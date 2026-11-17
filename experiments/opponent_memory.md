@@ -2564,3 +2564,20 @@ Against the prior record-cache collection, all 54,650 GRU sampled actions/reward
 This closes per-record host preparation across collection and learning. Changed raw chunks still undergo whole-chunk admission and hashing. Rust, model shape, capacities, coalescing and the calibration-job name are unchanged. No paid launch, pilot, PR or Task completion follows. History-off/main and native benchmark evidence above remain applicable; CUDA cost and peak neural-cache memory for these cuts, matched training and paired strength remain unmeasured.
 
 Evidence: `experiments/data/opponent-memory/20261117-record-assembly`; raw receipts/profiles, numeric proof, runner, final source/diff, baseline host source and test logs are size/SHA256-verified and published. Earlier evidence is unchanged.
+
+### Trunk overflow and capacity revision — 2026-11-17
+
+Launch of `decision-memory-trunk` at `93a2ebf3ec` (quote USD2.21 planned per
+trunk, job budget USD7.20): seeds 39101 and 39103 **failed on a memory-table
+capacity error** under the strict rule, at 791,535 and 928,014 learner
+decisions (`decision_reference_details 16626 > 16384` and `17880 > 16384`);
+seed 39102 was lost to a provider capacity refusal at USD0.00. Launcher
+estimates USD0.32 and USD0.28; no pods remain. Learned games outgrew the
+heuristic census (maximum 14,787 details) within a quarter of the trunk.
+
+Prospective revision for every arm, the Task session's choice: capacities
+**1,024 / 65,536 / 512 / 32,768** (records / details / references / members),
+four times the detail bound and twice the others. Strict failure stays. The
+failed runs keep the label `decision-memory-trunk` as incomplete evidence; the
+relaunch is `decision-memory-trunk-2`. Throughput at the larger layout is
+unmeasured; the first trunk serves as its admission.

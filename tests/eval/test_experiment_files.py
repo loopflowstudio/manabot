@@ -270,7 +270,7 @@ def test_opponent_memory_discovery_declares_trunks_and_empty_evaluation() -> Non
     runs = experiment.training(revision="HEAD")
     assert [run.seed for run in runs] == [39101, 39102, 39103]
     for run in runs:
-        assert run.job.name == "decision-memory-trunk"
+        assert run.job.name == "decision-memory-trunk-2"
         spec = TrainingJob.model_validate_json(run.job.config or "")
         stage = spec.regime.stages[0]
         assert isinstance(stage, TrainSelfPlay)
@@ -280,7 +280,7 @@ def test_opponent_memory_discovery_declares_trunks_and_empty_evaluation() -> Non
         assert stage.learning.decision_schedule.transitions == 3_300_000
         assert stage.execution.collection_rows == 128
         assert spec.regime.agent.decision_memory == "none"
-        assert spec.regime.observation.max_decision_records == 512
+        assert spec.regime.observation.max_decision_records == 1024
     assert experiment.eval(ExperimentState(experiment="opponent_memory")) == []
 
 
