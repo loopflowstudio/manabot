@@ -634,3 +634,14 @@ retired codes 5, 6 and 7 keep their historical meanings.
 `SuspendedResolution::continuation` walks retained frames and decisions root first;
 observation projection and hidden-world sampling share that chain for caller
 ancestry and inspection permissions.
+
+### Manual mana sources
+
+A pending cast or activation payment offers useful fixed-source taps beside
+`PayCost`, which completes payment automatically from the resources left.
+A tap must make progress and preserve the announced costs and every saved
+payment; funded payments and payments needing every available source retain
+native trivial-decision skipping. These ordinary choices are on by default
+for every consumer. Source taps use the existing `TapForCost` policy action
+with the source as focus; the native Command verb is `tap_for_mana`, distinct
+from waterbend. They do not expose free-form production at priority or undo.

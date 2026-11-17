@@ -226,7 +226,7 @@ fn recipe(name: &str, size: usize) -> Recipe {
     }
 }
 fn build(recipe: &Recipe) -> Env {
-    let players = recipe
+    let players: Vec<_> = recipe
         .seats
         .iter()
         .enumerate()

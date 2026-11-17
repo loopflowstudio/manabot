@@ -18,7 +18,7 @@ from manabot.infra.config import ObservationConfig
 from manabot.training.rollout.producers import ShardedVectorEnv
 import managym
 from managym.recording import GameInputs, read_failure
-from tests.retained_decision import assert_retained_frame
+from tests.retained_decision import assert_retained_frame, source_payment_tape
 
 
 def _vector_buffers(
@@ -104,12 +104,15 @@ def test_retained_airship_growth_preserves_every_permanent(capacity: int) -> Non
     vector.set_buffers(buffers, "first-legal")
     scalar.reset(players)
     vector.reset_all_into_buffers(players)
-    for action in game.actions[:-1]:
-        assert isinstance(action, int)
+    expanded = []
+    for action in source_payment_tape(scalar, [int(a) for a in game.actions[:-1]]):
+        expanded.append(action)
         scalar.step(action)
         vector.step_into_buffers([action])
     frame = scalar.semantic_decision_frame_json()
-    assert_retained_frame(frame, game.frame)
+    assert_retained_frame(
+        frame, game.frame, added_payments=len(expanded) - len(game.actions[:-1])
+    )
     assert vector.semantic_decision_frames_json()[0] == frame
     last = game.actions[-1]
     assert isinstance(last, int)
@@ -158,10 +161,19 @@ def test_retained_airship_overflow_isolates_only_its_stream(workers: int) -> Non
         buffers = _vector_buffers(encoder, num_envs=2)
         vector.set_buffers(buffers, "first-legal")
         vector.reset_each_into_buffers([game.setup(), _players()])
-        for action in game.actions[:-1]:
+        scalar = managym.Env(seed=game.seed, skip_trivial=True)
+        scalar.reset(game.setup())
+        expanded = []
+        for action in source_payment_tape(scalar, [int(a) for a in game.actions[:-1]]):
+            expanded.append(action)
+            scalar.step(action)
             vector.step_into_buffers([action, 0], [True, False])
         if isinstance(vector, CapturedVector):
-            assert_retained_frame(vector.semantic_decision_frames_json()[0], game.frame)
+            assert_retained_frame(
+                vector.semantic_decision_frames_json()[0],
+                game.frame,
+                added_payments=len(expanded) - len(game.actions[:-1]),
+            )
         control = managym.Env(seed=game.seed + 1, skip_trivial=True)
         control.reset(_players())
         obs, *_ = control.step(0)
@@ -172,7 +184,11 @@ def test_retained_airship_overflow_isolates_only_its_stream(workers: int) -> Non
             failed["game_error"]
             == "observation capacity exceeded: agent_permanents 41 > 40"
         )
-        assert_retained_frame(failed["game_error_frame"], game.frame)
+        assert_retained_frame(
+            failed["game_error_frame"],
+            game.frame,
+            added_payments=len(expanded) - len(game.actions[:-1]),
+        )
         assert "game_error" not in healthy
         assert not buffers["terminated"].any() and not buffers["truncated"].any()
         assert not buffers["rewards"].any()
@@ -266,13 +282,16 @@ def test_repaired_retained_prefix_has_scalar_vector_python_parity(
     )
     scalar.reset(players)
     vector.reset_all(players)
-    for action in game.actions[:-1]:
-        assert isinstance(action, int)
+    expanded = []
+    for action in source_payment_tape(scalar, [int(a) for a in game.actions[:-1]]):
+        expanded.append(action)
         scalar.step(action)
         vector.step([action])
     frame = scalar.semantic_decision_frame_json()
     assert vector.semantic_decision_frames_json()[0] == frame
-    assert_retained_frame(frame, game.frame)
+    assert_retained_frame(
+        frame, game.frame, added_payments=len(expanded) - len(game.actions[:-1])
+    )
     last = game.actions[-1]
     assert isinstance(last, int)
     obs, *_ = scalar.step(last)
