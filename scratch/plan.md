@@ -78,8 +78,8 @@ regression, host facts: 9 passed). Not shown: CUDA batching, real Rust panic or 
 injection, launched/provider runs, browser proof, full suite, automatic
 policy→sampler scheduling. LLM experiments stay blocked on EXP-70/frozen
 checkpoints; their declarations share Agents but are not a runnable adoption
-proof. The branch's merge base is origin/main 3afd92d8f3 (checked 2026-11-17;
-no newer main commits); the CPU learning comparison used that main.
+proof. The branch's merge base is origin/main 3afd92d8f3 (rechecked at the
+second 2026-11-17 realign; no newer main commits); the CPU learning comparison used that main.
 
 QA retry fix: each Elemental callback invocation writes its own
 `arena/<match-key>/attempt-*` (`elemental_play.evidence_directory`), so failed
@@ -135,12 +135,16 @@ Etude's failed match. Nothing further to change; no new open choice.
   this attempt within the USD 10 total cap (its launcher's estimate is in the
   report); cap a subsequent rental at USD 9 to leave margin. The two-update
   CPU stop/resume harness and 16 replayed preflight games passed. No queued
-  launcher-delivery proof follows from a direct SSH measurement.
+  launcher-delivery proof follows from a direct SSH measurement. Outside
+  AGENTS.md and the harness/report, HEAD 773ee9a135 equals the archived
+  branch ee370d9757, so a repeat may archive HEAD; the setup script and
+  archives in /tmp/mtg329-gpu are temporary and may be rebuilt.
 - Gate and publication are the caller's steps. The full nightly baseline
   (`.github/workflows/baseline.yml`, workflow_dispatch: `etude train` then
   `evaluate`) has not run since the corpus fix; dispatch it on the PR branch
-  as the gate's proof of that path. PR #500 head is d38c45464e; its CI
-  preflight was pending at realign (2026-11-17), no result yet.
+  as the gate's proof of that path. PR #500 (open, not draft) head is
+  773ee9a135; `gh pr checks 500` reported no checks at realign
+  (2026-11-17).
 
 ## Built since the 2026-11-17 steers
 
