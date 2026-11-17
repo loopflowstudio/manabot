@@ -45,5 +45,5 @@ proof. Earlier transcripts: 4de3a76ba0 and 382c653ec8:scratch/.
 
 After main sync (3cb2aacbb5): rebuilt native cp313 extension; 233 distinct focused
 collection/journal/disclosure/recipe and adjacent checks pass after fixing journal
-read ordering and stale standalone worker fixtures. Lint/format/diff checks pass;
+read ordering and stale standalone worker fixtures. Rerun at be4c9397b8: 233 passed. Lint/format/diff checks pass;
 commands and results in implementation.md. Gate/publication remain caller steps.
