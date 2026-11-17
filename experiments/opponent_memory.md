@@ -1642,3 +1642,74 @@ member hash rechecked. All eight live receipts match their sealed SDK bytes.
 Fifteen added manifest entries publish that bundle, individual receipts, source
 and attempt records and confirmed deletion. The artifact guard passed; no
 fresh archive-fetch round trip from the artifact store is claimed.
+
+### CPU host baseline after the throughput steer — 2026-11-17
+
+No further rental is launched. The already-running refs256 job stays on source
+`857fa4517996`; live code now stops paid declarations and selects control/GRU-K1.
+Observation retention and its nested Memory capture have profiler tracks. A
+log-enabled timer-on/off fixture and the ordinary fixture retain identical
+collected actions, log probabilities, rewards, dones and values; the branch
+builder now declares only control and GRU (3 focused checks passed).
+
+Replayed all 200 frozen heuristic census games, 56,682 original action indices,
+with native trivial skipping and the original disclosure/seed/decks. Every game
+finished and both terminal table-count records matched. Retained a fixed 256-row
+fixture of real nonterminal viewer prefixes, selected evenly across the largest-
+detail prefix per viewer. Selected maxima: 338/14,787/94/5,127; declared bounds
+512/16,384/256/8,192. The replay took 109.03 s: native encode 29.47 s, MemoryStore
+capture 67.40 s, stepping 6.76 s. This isolates the capture cost on heuristic
+trajectories; it is not the CUDA worker's missing-time measurement.
+
+The CPU matrix uses fresh processes for incumbent/control/GRU at each common
+execution bound 32, 128 and 256, one Torch thread, 256 logical rows, three
+collection + actual damped-update samples per process. GRU gates are fixed
+open initially (0.5 parameters), so encoder gradients are exercised. Controlled
+rewards are numerical-update fixtures, not outcomes or learning evidence. Native
+inputs, harness/native/source hashes, output/gradient/final-state hashes and raw
+phase times are frozen before the host cut. First-sample warmup and a contended
+host make these ranges descriptive; no independent-process confidence interval.
+
+| Rows | Incumbent collection s | Control collection s | GRU collection s | Incumbent update s | Control update s | GRU update s |
+| ---: | --- | --- | --- | --- | --- | --- |
+| 32 | 0.427–1.946 | 0.713–1.182 | 2.075–3.069 | 4.213–9.357 | 5.604–6.942 | 10.478–13.857 |
+| 128 | 0.344–0.480 | 1.011–1.119 | 1.817–2.740 | 2.161–3.605 | 3.195–4.859 | 8.577–9.081 |
+| 256 | 0.304–0.414 | 0.778–0.882 | 1.046–2.307 | 1.930–2.945 | 2.383–3.635 | 4.105–8.332 |
+
+At matched row bounds, median control/incumbent decision-rate ratios are
+0.725/0.435/0.467; GRU/incumbent ratios are 0.238/0.180/0.191 for
+32/128/256 respectively. These exclude corpus capture and are **policy fixture**
+rates, not end-to-end worker decisions/s. The true incumbent omits all four
+memory inputs and their vocabulary. Existing CPU/code/native evidence remains
+separate from the A40 measurements.
+
+First host change removes per-reference Python program expansion in
+`prepare_memory`: immutable native program rows are cached once, and offset/
+count routes combine catalog and explicit details in original reference order.
+Unused definitions receive no policy-vocabulary lookup. Prepared arrays match
+the frozen implementation exactly at 1/32/128/256 rows; four focused tests cover
+shortcut/full equivalence, unknown programs, group routes and GRU gradients.
+A separate matrix measures this change before chunk admission/preparation work.
+
+The first before/after matrices had a host confound: incumbent/control also
+became much faster despite never calling the changed featurizer. Do not
+attribute those across-window speedups to vectorization. A follow-up alternates
+only `manabot.policy.prepare.prepare_memory` between its frozen original function
+and the vectorized function in fresh processes, forward then reverse order.
+Admission, capture, model, update and input bytes stay current and identical;
+source/selector identities are retained. Two processes per variant/arm/bound,
+three samples each; the ranges below are six samples, not confidence intervals.
+
+| Rows | Old GRU preparation s | Vectorized preparation s | Old collection median s | Vectorized median s |
+| ---: | --- | --- | ---: | ---: |
+| 128 | 0.384–0.476 | 0.280–0.375 | 1.008 | 0.809 |
+| 256 | 0.463–1.163 | 0.318–0.368 | 1.323 | 0.962 |
+
+GRU preparation ranges separate. Whole-collection ranges overlap at 128 rows;
+medians correspond to 1.246×/1.376× fixture throughput, not a whole-worker
+claim. Incumbent median old/new factors are 1.020/0.992 and control factors
+1.007/0.938 at 128/256 rows. All 36 additional output/gradient/final-state hash
+comparisons are identical (63 total with the first matrix); prepared fields
+also match exactly at all four tested row sizes. Keep vectorization, while
+reporting the remaining large cost against the true incumbent. Chunk admission
+and feature caching remain the next cut; no rental is authorized by this result.

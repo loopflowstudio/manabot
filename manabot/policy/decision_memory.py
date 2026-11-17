@@ -12,7 +12,11 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from manabot.env.decision_memory import MEMORY_FIELDS, MEMORY_WIDTHS, integer_words
-from managym.decision_memory import decision_name_values, definition_programs
+from managym.decision_memory import (
+    DefinitionProgram,
+    decision_name_values,
+    definition_programs,
+)
 
 if TYPE_CHECKING:
     from manabot.env.observation import ObservationBuffers
@@ -257,6 +261,78 @@ def _scaled(values: np.ndarray) -> np.ndarray:
     return (np.sign(values) * np.log1p(np.abs(values)) / 10).astype(np.float32)
 
 
+@dataclass(frozen=True)
+class _ProgramRows:
+    source: tuple[DefinitionProgram, ...]
+    rows: np.ndarray
+    starts: np.ndarray
+    counts: np.ndarray
+
+
+_program_rows: _ProgramRows | None = None
+
+
+def _catalog_program_rows() -> _ProgramRows:
+    """Expand immutable native definitions once, without a policy-token lookup.
+
+    Lookup admission still sees only definitions used by the supplied prefixes.
+    Native catalog cache replacement invalidates this derived cache by identity.
+    """
+    global _program_rows
+    source = definition_programs()
+    if _program_rows is None or _program_rows.source is not source:
+        counts = np.array([len(program.tokens) for program in source], np.int64)
+        rows = np.array(
+            [
+                [0, kind, *integer_words(value), ordinal, 1]
+                for program in source
+                for ordinal, (kind, value) in enumerate(program.tokens)
+            ],
+            np.float32,
+        ).reshape(-1, 6)
+        _program_rows = _ProgramRows(source, rows, counts.cumsum() - counts, counts)
+    return _program_rows
+
+
+def _expand_details(
+    references: np.ndarray, details: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Route catalog and explicit detail rows in reference order, without a loop.
+
+    Catalog programs precede each reference's explicit mana rows. Empty slices
+    keep their reference index, so unknown snapshots and repeated joins retain
+    exactly the same ownership as the native transport.
+    """
+    counts = references[:, 11].astype(np.int64)
+    shortcut_counts = np.zeros(len(references), np.int64)
+    shortcut_starts = np.zeros(len(references), np.int64)
+    shortcuts = references[:, 13] == 1
+    programs = None
+    if shortcuts.any():
+        programs = _catalog_program_rows()
+        definitions = references[shortcuts, 1].astype(np.int64) - 1
+        shortcut_counts[shortcuts] = programs.counts[definitions]
+        shortcut_starts[shortcuts] = programs.starts[definitions]
+    expanded_counts = counts + shortcut_counts
+    owners = np.repeat(np.arange(len(references), dtype=np.int64), expanded_counts)
+    positions = np.arange(len(owners)) - np.repeat(
+        expanded_counts.cumsum() - expanded_counts, expanded_counts
+    )
+    catalog = positions < shortcut_counts[owners]
+    expanded = np.empty((len(owners), 6), np.float32)
+    if programs is not None:
+        expanded[catalog] = programs.rows[
+            shortcut_starts[owners[catalog]] + positions[catalog]
+        ]
+    explicit = ~catalog
+    expanded[explicit] = details[
+        references[owners[explicit], 10].astype(np.int64)
+        + positions[explicit]
+        - shortcut_counts[owners[explicit]]
+    ]
+    return expanded, owners
+
+
 def prepare_memory(
     obs: "ObservationBuffers", tables: "Tables"
 ) -> MemoryRows[np.ndarray] | None:
@@ -311,21 +387,9 @@ def prepare_memory(
         references = obs[_FIELDS[2]][batch, :reference_count]
         references_list.append(references)
         raw_details = obs[_FIELDS[1]][batch, :detail_count]
-        for index, reference in enumerate(references):
-            start, count = map(int, reference[10:12])
-            part = raw_details[start : start + count]
-            if reference[13]:
-                program = definition_programs()[int(reference[1]) - 1].tokens
-                expanded = np.array(
-                    [
-                        [0, kind, *integer_words(value), ordinal, 1]
-                        for ordinal, (kind, value) in enumerate(program)
-                    ],
-                    np.float32,
-                ).reshape(-1, 6)
-                part = np.concatenate((expanded, part))
-            details_list.append(part)
-            detail_routes.append(np.full(len(part), reference_base + index, np.int64))
+        expanded, owners = _expand_details(references, raw_details)
+        details_list.append(expanded)
+        detail_routes.append(owners + reference_base)
         members = obs[_FIELDS[3]][batch, :member_count]
         member_routes.append(members[:, 0].astype(np.int64) - 1 + reference_base)
         counts = headers[batch, :length, 15:18].astype(np.int64).ravel()
