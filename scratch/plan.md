@@ -38,8 +38,11 @@ benchmark.play_deal (monitor and duel callbacks), supervision.verify_game and
 is_game_error (in-process and child replay).
 
 Cooperative seconds/Command caps and durable pending journals stay. Native
-AgentError/PanicException is invalid, score null, with remaining games played.
-Other Python errors propagate from play/replay. Elemental rejects a group
+AgentError/PanicException is invalid, score null, with remaining games played
+(`supervision.is_game_error`, 05bdc978da; QA's broad-`Exception` finding
+predates it). Other Python errors propagate from managed in-process play/replay;
+the standalone child replay (`replay_retained`, `eval/match.py`) records them
+as `replay_passed: false` plus a replay error, never a pass. Elemental rejects a group
 with no valid replayed games after retaining its evidence, so an all-invalid
 smoke cannot pass. Removed the now-redundant RetryRequested exception override.
 Etude Task 2d1933 owns hard per-match deadlines/dead processes; until it lands,
@@ -77,6 +80,10 @@ The evaluation guide uses the local recipe's actual final EMA policy path.
 Serialized keys and frozen records are unchanged. Focused import/outcome/timing
 and resume/recipe/retained-reader checks: 25 passed; local recipe completed
 two updates. Commands and evidence: implementation.md.
+
+Fifth concept review (928ee3f4bc): the QA fixes settle as built — an invalid
+game row means a native failure only, and an all-invalid Elemental group is
+Etude's failed match. Nothing further to change; no new open choice.
 
 ## Remaining
 

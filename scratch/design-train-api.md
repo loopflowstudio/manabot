@@ -677,3 +677,42 @@ One idea noticed and not made a direction (questions.md): `job_labels` in
 Open product choices: the two Etude questions above (same-seed policy→sampler
 pairing in one command; whether `Agents(build=)` builds every seat) are still
 unanswered by anyone, belong to Etude, and do not block this Task. No new one.
+
+## Concept review of the implemented change — 2026-11-16 (928ee3f4bc)
+
+Read against the code and `docs/evaluation.md`, not run. Since the review
+above only the two QA fixes landed (05bdc978da, 928ee3f4bc). Both make the
+model smaller and are settled as they stand:
+
+- **One meaning for an invalid game.** `supervision.is_game_error` is now
+  "a native failure" (`managym.AgentError` or PyO3 `PanicException`), not "any
+  `Exception`". A game row with `valid: false` therefore always means the
+  engine failed, never that Manabot's Python did; everything else fails the
+  match. `execute_game` lost its `propagate_errors` argument and `eval/game.py`
+  its `RetryRequested` special case: transport retry is just one more error
+  that is not a game outcome.
+- **An all-invalid Elemental group is Etude's failed match.** Checked at
+  d9a6bc8 (`etude/eval/records.py`): a callback that raises leaves a `failed`
+  match record, other matches continue, and a later `done` record replaces it.
+  So the new check adds no state of its own; a deterministic native failure
+  leaves a failed match naming its retained `attempt-*` directory, and never a
+  forfeit or a silent pass.
+- `snapshot_report` opens its source before creating the output: a refusal
+  leaves nothing to clean up.
+
+Walked failure and recovery through the guide's Failure paragraph: native
+failure in one game → score-null row, later games play; Python error → failed
+match, evidence kept, retry writes a new attempt; every game invalid → failed
+match. The text matches the code. Nothing to change in this Task.
+
+Noticed and not made a direction (questions.md): "no valid game" is refused in
+three places by three rules. Elemental refuses in its callback; Duel's reader
+demands 200 valid rows (`eval/duel.py:154`); the shared deal callback
+(`benchmark.play_deal`, monitor and Duel) returns an all-invalid deal as
+score-null rows. Each is defensible where it sits; they are one fact only if
+Etude lets a job declare how many valid results a match must return.
+
+Open product choices: unchanged. The two Etude questions (same-seed
+policy→sampler pairing in one command; whether `Agents(build=)` builds every
+seat) are still unanswered by anyone, belong to Etude, and do not block this
+Task. No new one.

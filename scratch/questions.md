@@ -64,3 +64,9 @@ partly played game. Existing flat match evidence stays untouched.
 `(word, TrainingRegime)` but reads only `regime.agent` (width, layers). Taking
 a `ModelConfig` would let a recipe-only experiment label its jobs and drop the
 module's saved-regime import; one caller (`experiments/tla_frontier.py`).
+
+2026-11-16 idea, not planned: an evaluation with no valid game is refused by
+three rules (Elemental's callback; Duel's 200-valid reader; the shared deal
+callback returns score-null rows). At Etude d9a6bc8 a raising callback is a
+`failed` match record that a later `done` replaces, so Elemental's rule needs
+no state. A declared minimum of valid results per match would be Etude's.
