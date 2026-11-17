@@ -17,6 +17,7 @@
 // bounded exact queries (PaymentCache); debug builds recompute every hit.
 
 mod autotapper;
+pub mod controls;
 
 use std::{cell::RefCell, collections::VecDeque, num::NonZeroUsize, sync::Arc};
 

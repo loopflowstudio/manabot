@@ -1,3 +1,4 @@
+use crate::flow::mana::controls::{ControlFrame, ManaControls};
 #[cfg(feature = "python")]
 use crate::search_state::{identity, SearchStateIdentity};
 use crate::{
@@ -161,6 +162,7 @@ impl serde::Serialize for NativeActionTrace {
 #[derive(Debug)]
 pub struct Env {
     game: Option<Game>,
+    mana_controls: Option<ManaControls>,
     pub(crate) heuristics: [Option<Box<Heuristic>>; 2],
     player_policies: [PlayerPolicy; 2],
     // Observation::for_player deliberately omits events. Built-in index stepping
@@ -258,6 +260,7 @@ impl Env {
     ) -> Self {
         Self {
             game: None,
+            mana_controls: None,
             heuristics: [None, None],
             heuristic_events: Vec::new(),
             player_policies: [PlayerPolicy::Agent; 2],
@@ -349,6 +352,9 @@ impl Env {
         self.capture_generation = GAME_GENERATION.fetch_add(1, Ordering::Relaxed);
         self.reset_seed = self.seed;
         self.game = Some(game);
+        if let Some(controls) = &mut self.mana_controls {
+            *controls = ManaControls::default();
+        }
         self.heuristics = [None, None];
         drop(_scope);
         self.remember_heuristic_events(&observation);
@@ -1110,6 +1116,45 @@ impl Env {
         ))
     }
 
+    pub fn enable_mana_controls(&mut self) {
+        self.mana_controls.get_or_insert_with(Default::default);
+    }
+
+    pub fn mana_controls(&self, viewer: usize) -> Result<ControlFrame, AgentError> {
+        let controls = self
+            .mana_controls
+            .as_ref()
+            .ok_or_else(|| AgentError("mana controls disabled".into()))?;
+        let game = self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("mana controls require a game".into()))?;
+        if viewer >= game.state.players.len() {
+            return Err(AgentError("viewer out of bounds".into()));
+        }
+        Ok(controls.frame(game, PlayerId(viewer)))
+    }
+
+    pub fn execute_mana_control(
+        &mut self,
+        command: &SemanticCommand,
+    ) -> Result<SemanticTransition, AgentError> {
+        self.require_external_chooser()?;
+        let controls = self
+            .mana_controls
+            .as_mut()
+            .ok_or_else(|| AgentError("mana controls disabled".into()))?;
+        let game = self
+            .game
+            .as_mut()
+            .ok_or_else(|| AgentError("mana controls require a game".into()))?;
+        let (transition, observation) = controls
+            .execute(game, command)
+            .map_err(|e| AgentError(e.to_string()))?;
+        self.remember_heuristic_events(&observation);
+        Ok(transition)
+    }
+
     pub fn semantic_event_cursor(&self) -> Result<u64, AgentError> {
         self.game
             .as_ref()
@@ -1129,16 +1174,7 @@ impl Env {
             .game
             .as_ref()
             .ok_or_else(|| AgentError("env.state_digest called before reset".to_string()))?;
-        let semantic_surface = (
-            game.state.deterministic_hash_value(),
-            &game.current_action_space,
-            &game.pending_choice,
-            game.skip_trivial,
-            game.skip_trivial_count,
-        );
-        let canonical = serde_json::to_vec(&semantic_surface)
-            .expect("semantic differential surface serializes");
-        Ok(blake3::hash(&canonical).to_hex().to_string())
+        Ok(game.semantic_state_digest())
     }
 
     pub fn info(&self) -> InfoDict {

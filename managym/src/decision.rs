@@ -439,6 +439,18 @@ impl Game {
         let atomic = offers
             .decode(&submission)
             .map_err(|error| SemanticError::IllegalCommand(error.to_string()))?;
+        self.validate_object_preconditions(command)?;
+
+        let done = self
+            .apply_atomic_command(&atomic)
+            .map_err(|error| SemanticError::IllegalCommand(error.to_string()))?;
+        self.command_transition(command, actor, public_commitment, done)
+    }
+
+    pub(crate) fn validate_object_preconditions(
+        &self,
+        command: &Command,
+    ) -> Result<(), SemanticError> {
         for address in &command.object_preconditions {
             let object_ref = self
                 .semantic_object_candidates
@@ -457,10 +469,17 @@ impl Game {
             }
         }
 
-        let before_revision = self.decision_epoch;
-        let done = self
-            .apply_atomic_command(&atomic)
-            .map_err(|error| SemanticError::IllegalCommand(error.to_string()))?;
+        Ok(())
+    }
+
+    pub(crate) fn command_transition(
+        &mut self,
+        command: &Command,
+        actor: PlayerId,
+        public_commitment: Option<PublicCommitment>,
+        done: bool,
+    ) -> Result<(SemanticTransition, AgentObservation, bool), SemanticError> {
+        let before_revision = command.expected_revision;
         let after_revision = self.decision_epoch;
 
         let events = self.take_observation_events();
@@ -493,6 +512,19 @@ impl Game {
             observation,
         };
         Ok((transition, agent_observation, done))
+    }
+
+    pub(crate) fn semantic_state_digest(&self) -> String {
+        let semantic_surface = (
+            self.state.deterministic_hash_value(),
+            &self.current_action_space,
+            &self.pending_choice,
+            self.skip_trivial,
+            self.skip_trivial_count,
+        );
+        let canonical = serde_json::to_vec(&semantic_surface)
+            .expect("semantic differential surface serializes");
+        blake3::hash(&canonical).to_hex().to_string()
     }
 
     /// Read-only cursor over committed rules events. Rejected Commands must

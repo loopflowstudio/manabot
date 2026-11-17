@@ -4692,6 +4692,37 @@ impl PyEnv {
         })
     }
 
+    fn enable_mana_controls(&self) -> PyResult<()> {
+        self.reject_guarded_mutation("Env.enable_mana_controls")?;
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .enable_mana_controls();
+        Ok(())
+    }
+
+    fn mana_controls_json(&self, viewer: usize) -> PyResult<String> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        serde_json::to_string(&env.mana_controls(viewer).map_err(map_agent_err)?)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    fn execute_mana_control_json(&self, command_json: &str) -> PyResult<String> {
+        self.reject_guarded_mutation("Env.execute_mana_control_json")?;
+        let command: SemanticCommand = serde_json::from_str(command_json)
+            .map_err(|error| PyAgentError::new_err(format!("invalid semantic command: {error}")))?;
+        let mut env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let transition = env.execute_mana_control(&command).map_err(map_agent_err)?;
+        serde_json::to_string(&transition)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
     /// Validate and atomically apply one revision-bound semantic Command
     /// (`{"command_id","expected_revision","offer_id","answers"}`), returning
     /// canonical JSON of `{"receipt","observation"}`. Fails closed without
