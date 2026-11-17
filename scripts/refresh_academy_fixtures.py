@@ -12,7 +12,7 @@ Run from the repository root after rebuilding the extension:
 
 Refreshes `managym/academy/fixtures/learn-demo-w17-token-cards.json`,
 `{precision,precision-mana}-demo-w17-manual-payment.json`,
-`choice-navigation-w17-manual-payment.json` and `trigger-order-w17-token-cards.json`. The conformance and
+`choice-navigation-w17-smart-payment.json` and `trigger-order-w17-token-cards.json`. The conformance and
 parity receipts have their own writers (see `conformance/README.md`).
 """
 
@@ -102,7 +102,7 @@ def refresh_demo(name: str, trace_dir: Path) -> None:
 
 
 def refresh_navigation(trace_dir: Path) -> None:
-    path = FIXTURES / "choice-navigation-w17-manual-payment.json"
+    path = FIXTURES / "choice-navigation-w17-smart-payment.json"
     fixture = json.loads(path.read_text())
     for family, position in fixture["positions"].items():
         session, frame, _ = _replay(position["config"], position["prefix"], trace_dir)

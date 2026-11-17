@@ -427,8 +427,10 @@ witnesses from `flow/mana.rs`. A mana source is reserved while its printed
 upfront cost is pending; `Decision::ManaUpfront` retains the parent decision
 and frame. Only after that obligation finishes do its tap/life/sacrifice costs
 commit and its output become a visible color decision. Mana abilities do not
-create stack objects. Fixed production keeps source order; a nested automatic
-prefix considers concrete pool remainders and the parent's completion.
+create stack objects. The initial fixed-source witness keeps source order;
+[automatic source preference](#automatic-source-preference) selects the taps.
+A nested automatic prefix considers concrete pool remainders and the parent's
+completion.
 The announced activation's own tap, sacrifice and unpaid life fee remain
 reserved throughout waterbend and nested mana decisions, including a saved
 spending caller. A nested mana ability cannot consume those resources and
@@ -459,8 +461,8 @@ The direct answer is exact or it is not used. Modal lands, filters, mana
 abilities with other costs, counted taps, nested activations and the automatic
 prefix of a nested activation go to the search described below, which stays
 the one definition of a legal payment: debug builds run it beside every direct
-answer and assert the same affordability and the same first witness, so
-automatic tapping order cannot differ between the two. Adding a kind of mana
+answer and assert the same affordability and the same first witness. Automatic
+source preference starts from that shared witness. Adding a kind of mana
 source needs no change here unless it should join the direct class, which
 requires a test comparing both paths on that source.
 
@@ -634,6 +636,28 @@ retired codes 5, 6 and 7 keep their historical meanings.
 `SuspendedResolution::continuation` walks retained frames and decisions root first;
 observation projection and hidden-world sampling share that chain for caller
 ancestry and inspection permissions.
+
+### Automatic source preference
+
+Pay `{1}{G}` with an empty mana pool and two untapped Mountains and a Forest:
+automatic payment taps one Mountain and the Forest. With equal follow-up
+scores, it uses a basic Forest before a green mana creature to pay `{G}`.
+
+Automatic payment removes unnecessary fixed-source taps and uses a bounded
+mana-cost heuristic to prefer the remaining sources (`flow/mana/autotapper.rs`).
+It prefers, in order: more affordable follow-up costs, more hand costs, then
+more instant-timing hand costs. It considers at most 64 distinct hand-cost and
+ability records. Targets and other costs are only partially checked, and
+different follow-ups may need incompatible spending remainders: the score is
+not a count of playable cards or a global optimum. Single-use abilities with
+the paid cost are excluded, including another source's equal-cost ability.
+
+Further ties prefer basic lands, other lands, lands with activated abilities,
+other permanents, then creatures; within those tiers, colorless output is
+preferred. The class search stops after 1024 arithmetic checks and keeps a
+payable candidate. Payments with saved obligations only receive surplus
+pruning. Activated mana abilities remain deliberate actions; native spending
+choices determine the exact mana receipt. Source preference has no setting.
 
 ### Manual mana sources
 

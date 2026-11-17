@@ -16,6 +16,8 @@
 // Pool and spend-purpose restrictions belong to state/mana.rs. Game also retains
 // bounded exact queries (PaymentCache); debug builds recompute every hit.
 
+mod autotapper;
+
 use std::{cell::RefCell, collections::VecDeque, num::NonZeroUsize, sync::Arc};
 
 use crate::{
@@ -31,11 +33,12 @@ use crate::{
     state::{
         ability::Effect,
         card::{
-            ActivatedAbilityDefinition, ReplacementEffect, TriggeredManaAbility,
+            ActivatedAbilityDefinition, ActivationZone, ReplacementEffect, TriggeredManaAbility,
             TriggeredManaOutput,
         },
         game_object::{ObjectId, PermanentId, PlayerId},
-        mana::{Color, Mana, ManaCost, ManaSpendChoice, ManaSpent},
+        mana::{Color, Mana, ManaCost, ManaSpendChoice, ManaSpent, SpellSnapshot, SpendingContext},
+        zone::ZoneType,
     },
 };
 
@@ -1157,6 +1160,27 @@ impl PaymentModel<'_> {
         path
     }
 
+    /// The over-tap criterion, asked of the board after the payment's taps:
+    /// without one source's complete `output` (triggered bonuses included),
+    /// `pool` still holds `cost` and the saved callers in `tail` stay payable.
+    /// Callers first check that the pool exceeds the cost at all.
+    fn is_surplus(&self, pool: &Mana, output: &Mana, cost: &ManaCost, tail: &[Obligation]) -> bool {
+        let mut remaining = pool.clone();
+        remaining.spend(output, &cost.purpose);
+        if !remaining.can_pay(cost) {
+            return false;
+        }
+        if tail.is_empty() {
+            return true;
+        }
+        let mut obligations = vec![Obligation::Pay {
+            cost: cost.clone(),
+            waterbend: false,
+        }];
+        obligations.extend_from_slice(tail);
+        self.payable(remaining, obligations, SourcePolicy::All)
+    }
+
     fn cached_plan(
         &self,
         pool: Mana,
@@ -1175,7 +1199,11 @@ impl PaymentModel<'_> {
         }
         let uncached = || match tap {
             Some(permanent) => self.search_after_tap(pool.clone(), obligations.clone(), permanent),
-            None => self.search(pool.clone(), obligations.clone(), policy),
+            None => {
+                #[cfg(test)]
+                tests::SEARCHED.with(|searched| searched.set(searched.get() + 1));
+                self.search(pool.clone(), obligations.clone(), policy)
+            }
         };
         let Some(cache) = self.cache else {
             return uncached();
@@ -2594,8 +2622,8 @@ impl Game {
         player: PlayerId,
         cost: &ManaCost,
     ) -> Result<(), AgentError> {
-        let path = self
-            .payment_model(player, None)
+        let model = self.payment_model(player, None);
+        let path = model
             .plan(
                 self.pooled_mana(player),
                 vec![Obligation::Pay {
@@ -2605,13 +2633,188 @@ impl Game {
                 SourcePolicy::FixedOnly,
             )
             .ok_or_else(|| AgentError("not enough automatic mana".into()))?;
-        for step in path {
-            if let PaymentStep::Fixed(source) = step {
-                self.tap_fixed_mana_source(player, source);
-            }
+        // The witness proved the cost payable; the choice selects
+        // which fixed sources pay it. Only the payer's own hand and
+        // permanents are read.
+        let choice = model.choose_taps(
+            &self.pooled_mana(player),
+            cost,
+            &self.saved_obligations(player),
+            &path,
+            || self.source_reluctance(&model),
+            || self.payment_followups(player, cost, &model),
+        );
+        let sources = model.sources.clone();
+        for index in choice.taps {
+            self.tap_fixed_mana_source(player, sources[index].permanent);
         }
 
         Ok(())
+    }
+
+    /// Costs of the callers suspended behind the payment now being made.
+    fn saved_obligations(&self, player: PlayerId) -> Vec<Obligation> {
+        self.payment_obligations(player)
+            .into_iter()
+            .skip(1)
+            .collect()
+    }
+
+    /// How reluctantly the smart payer taps each of `model`'s sources, read
+    /// from the layered view: a creature (a land that is currently one
+    /// included), then any other nonland permanent, then a land with an
+    /// activated ability on the battlefield, mana abilities with a choice or
+    /// a cost among them, then a land without the basic supertype, then a
+    /// basic land. Static and triggered abilities do not count: tapping the
+    /// land for mana gives none of them up.
+    fn source_reluctance(&self, model: &PaymentModel) -> Vec<autotapper::Reluctance> {
+        use autotapper::Reluctance;
+        let _scan = self.board_scan();
+        self.characteristics_many(model.sources.iter().map(|source| source.permanent))
+            .zip(model.sources.iter())
+            .map(|((id, view), source)| {
+                debug_assert_eq!(id, source.permanent);
+                let basic = || {
+                    self.state[source.object]
+                        .supertypes
+                        .iter()
+                        .any(|supertype| supertype.eq_ignore_ascii_case("basic"))
+                };
+                if view.is_creature() {
+                    Reluctance::Creature
+                } else if !view.is_land() {
+                    Reluctance::Permanent
+                } else if view
+                    .activated_abilities
+                    .iter()
+                    .any(|ability| ability.zone == ActivationZone::Battlefield)
+                {
+                    Reluctance::UtilityLand
+                } else if basic() {
+                    Reluctance::BasicLand
+                } else {
+                    Reluctance::Land
+                }
+            })
+            .collect()
+    }
+
+    /// Bounded mana-cost options for automatic source preference. Hand costs
+    /// are deduplicated; this is not a count of playable cards. Each other
+    /// castable card in the payer's hand at its cost with default cast
+    /// choices, less one copy of the spell being paid for, which is still in
+    /// hand at this boundary. Then each non-mana battlefield ability of a
+    /// permanent the payer controls with a positive mana cost as charged now.
+    ///
+    /// An ability is listed when its source's activations are not prohibited,
+    /// its use limit is not spent, its turn restriction and life cost hold
+    /// and, for a {T} cost, its source can tap; `tapping` then names that
+    /// source, which neither pays for the ability nor survives a payment
+    /// that taps it. Timing within the turn, targets and the other costs
+    /// (sacrifice, counted taps, crew, discard, waterbend taps) are not
+    /// checked, as for hand cards. Single-use abilities matching the paid
+    /// cost are excluded by cost equality, not activation identity; this
+    /// can also exclude another source with the same cost.
+    fn payment_followups(
+        &self,
+        player: PlayerId,
+        cost: &ManaCost,
+        model: &PaymentModel,
+    ) -> autotapper::PaymentProbe {
+        let mut paying = match &cost.purpose {
+            SpendingContext::Cast(spell) => Some(spell.clone()),
+            _ => None,
+        };
+        let mut probe = autotapper::PaymentProbe::default();
+        let mut instant = Vec::new();
+        for card in self.state.zone_cards(ZoneType::Hand, player) {
+            let object_id = self.state.object_of(card);
+            let object = &self.state[object_id];
+            if !object.types.is_castable() {
+                continue;
+            }
+            let Some(followup) =
+                self.effective_spell_cost(player, object_id, Default::default(), None)
+            else {
+                continue;
+            };
+            if paying.as_ref() == Some(&SpellSnapshot(object.copiable_definition())) {
+                paying = None;
+                continue;
+            }
+            if followup.mana_value == 0 {
+                continue;
+            }
+            let timing = self.has_instant_timing(player, object_id);
+            match probe.followups.iter().position(|known| *known == followup) {
+                Some(index) => instant[index] |= timing,
+                None => {
+                    probe.followups.push(followup);
+                    instant.push(timing);
+                }
+            }
+        }
+        probe.followups.truncate(autotapper::FOLLOWUPS);
+        probe.instant = instant
+            .iter()
+            .take(autotapper::FOLLOWUPS)
+            .enumerate()
+            .fold(0, |set, (i, timing)| set | u64::from(*timing) << i);
+        probe.hand = match probe.followups.len() {
+            autotapper::FOLLOWUPS => u64::MAX,
+            cards => (1 << cards) - 1,
+        };
+        probe.tapping = vec![None; probe.followups.len()];
+        // One validated board for every view; a permanent with no activated
+        // ability (a basic land's mana ability is not one) costs nothing more.
+        let _scan = self.board_scan();
+        let life = self.payable_life(player);
+        let views = self.characteristics_many(model.sources.iter().map(|source| source.permanent));
+        for (index, (id, view)) in views.enumerate() {
+            if view.activated_abilities.is_empty() {
+                continue;
+            }
+            let source = &model.sources[index];
+            debug_assert_eq!(id, source.permanent);
+            let Some(permanent) = self.state.permanents[source.permanent].as_ref() else {
+                continue;
+            };
+            if self.activations_prohibited(source.permanent) {
+                continue;
+            }
+            for (ability_index, ability) in view.activated_abilities.iter().enumerate() {
+                if probe.followups.len() == autotapper::FOLLOWUPS {
+                    return probe;
+                }
+                let single_use = ability.tap_source
+                    || ability.sacrifice_source
+                    || ability.once_each_turn
+                    || ability.exhaust;
+                if ability.zone != ActivationZone::Battlefield
+                    || ability.mana_cost.mana_value == 0
+                    || ability.mana_choices().is_some()
+                    || permanent.activation_used(ability_index, ability)
+                    || (ability.own_turn_only && self.active_player() != player)
+                    || life < ability.life_cost as i32
+                    || (ability.tap_source && !self.permanent_can_tap(source.permanent))
+                    || (single_use && ability.mana_cost == *cost)
+                {
+                    continue;
+                }
+                let tapping = ability.tap_source.then_some(index);
+                let known = probe
+                    .followups
+                    .iter()
+                    .zip(&probe.tapping)
+                    .skip(probe.hand.count_ones() as usize)
+                    .any(|(known, tap)| *known == ability.mana_cost && *tap == tapping);
+                if !known {
+                    probe.followups.push(ability.mana_cost.clone());
+                    probe.tapping.push(tapping);
+                }
+            }
+        }
+        probe
     }
 
     /// Commit precisely the selected unit, retaining its expiry identity.
@@ -3126,7 +3329,218 @@ mod tests {
         );
     }
 
-    fn tapping_ability(outputs: Vec<Mana>) -> ManaActivation {
+    #[test]
+    fn smart_tap_prunes_surplus_and_preserves_mana_options() {
+        use crate::flow::game::Game;
+        use crate::state::{game_object::PlayerId, player::PlayerConfig};
+        use std::collections::BTreeMap;
+
+        let player = PlayerId(0);
+        let board = |lands: &[&str], creature: Option<&str>, hand: Option<&str>| {
+            let deck = BTreeMap::from([
+                ("Mountain".into(), 8),
+                ("Forest".into(), 8),
+                ("Lightning Bolt".into(), 4),
+                ("Llanowar Elves".into(), 4),
+                ("Shivan Dragon".into(), 4),
+            ]);
+            let mut game = Game::new(
+                vec![
+                    PlayerConfig::new("p0", deck.clone()),
+                    PlayerConfig::new("p1", deck),
+                ],
+                347,
+                true,
+            );
+            game.scenario_clear_hand(player);
+            let lands: Vec<PermanentId> = lands
+                .iter()
+                .map(|land| game.scenario_force_battlefield(player, land, true).unwrap())
+                .collect();
+            if let Some(creature) = creature {
+                game.scenario_force_battlefield(player, creature, true)
+                    .unwrap();
+            }
+            if let Some(card) = hand {
+                game.scenario_force_card_in_hand(player, card).unwrap();
+            }
+            (game, lands)
+        };
+        // The lands tapped by paying `cost`, by position.
+        let tapped = |game: &Game, lands: &[PermanentId], cost: &str| {
+            let mut game = game.clone();
+            game.produce_mana(player, &ManaCost::parse(cost)).unwrap();
+            let tapped: Vec<usize> = (0..lands.len())
+                .filter(|index| {
+                    game.state.permanents[lands[*index]]
+                        .as_ref()
+                        .unwrap()
+                        .tapped
+                })
+                .collect();
+            tapped
+        };
+
+        // The first witness remains in source order.
+        let (game, lands) = board(
+            &["Forest", "Mountain", "Forest"],
+            None,
+            Some("Lightning Bolt"),
+        );
+        let model = game.payment_model(player, None);
+        let witness = model
+            .plan(Mana::default(), vec![pay("1G")], SourcePolicy::FixedOnly)
+            .unwrap();
+        assert_eq!(
+            witness,
+            [
+                PaymentStep::Fixed(lands[0]),
+                PaymentStep::Fixed(lands[1]),
+                PaymentStep::Spend
+            ]
+        );
+        // The chosen payment keeps the Mountain for Lightning Bolt.
+        assert_eq!(tapped(&game, &lands, "1G"), vec![0, 2]);
+        let probe = game.payment_followups(player, &ManaCost::parse("1G"), &model);
+        assert_eq!(
+            (probe.followups.len(), probe.hand, probe.instant),
+            (1, 1, 1)
+        );
+
+        // Mountain, Mountain, Forest for {1}{G}: two taps instead of three.
+        let (game, lands) = board(&["Mountain", "Mountain", "Forest"], None, None);
+        assert_eq!(tapped(&game, &lands, "1G"), vec![0, 2]);
+
+        // Shivan Dragon's {R} ability is a follow-up like a card in hand.
+        let (game, lands) = board(
+            &["Forest", "Mountain", "Forest"],
+            Some("Shivan Dragon"),
+            None,
+        );
+        let model = game.payment_model(player, None);
+        let probe = game.payment_followups(player, &ManaCost::parse("1G"), &model);
+        assert_eq!((probe.followups.len(), probe.hand), (1, 0));
+        assert_eq!(probe.tapping, [None]);
+        assert_eq!(tapped(&game, &lands, "1G"), [0, 2]);
+
+        // One of each kept either way: the card in hand beats the ability.
+        let (game, lands) = board(
+            &["Forest", "Mountain"],
+            Some("Shivan Dragon"),
+            Some("Llanowar Elves"),
+        );
+        assert_eq!(tapped(&game, &lands, "1"), [1]);
+    }
+
+    /// The kind of a source breaks ties among payments that keep the same
+    /// follow-ups: a basic land pays before Treetop Village or Llanowar
+    /// Elves, which pay when that keeps a card in hand castable.
+    #[test]
+    fn smart_tap_prefers_basic_lands_until_a_follow_up_needs_them() {
+        use super::autotapper::Reluctance;
+        use crate::flow::game::Game;
+        use crate::state::{game_object::PlayerId, player::PlayerConfig};
+        use std::collections::BTreeMap;
+
+        let player = PlayerId(0);
+        let board = |sources: &[&str], hand: Option<&str>| {
+            let deck = BTreeMap::from([
+                ("Mountain".into(), 8),
+                ("Forest".into(), 8),
+                ("Lightning Bolt".into(), 4),
+                ("Llanowar Elves".into(), 4),
+                ("Treetop Village".into(), 4),
+                ("Sol Ring".into(), 4),
+                ("Secret Tunnel".into(), 4),
+            ]);
+            let mut game = Game::new(
+                vec![
+                    PlayerConfig::new("p0", deck.clone()),
+                    PlayerConfig::new("p1", deck),
+                ],
+                347,
+                true,
+            );
+            game.scenario_clear_hand(player);
+            let sources: Vec<PermanentId> = sources
+                .iter()
+                .map(|name| game.scenario_force_battlefield(player, name, true).unwrap())
+                .collect();
+            if let Some(card) = hand {
+                game.scenario_force_card_in_hand(player, card).unwrap();
+            }
+            (game, sources)
+        };
+        // The sources tapped by paying `cost`, by position.
+        let tapped = |game: &Game, sources: &[PermanentId], cost: &str| {
+            let mut game = game.clone();
+            game.produce_mana(player, &ManaCost::parse(cost)).unwrap();
+            (0..sources.len())
+                .filter(|index| {
+                    game.state.permanents[sources[*index]]
+                        .as_ref()
+                        .unwrap()
+                        .tapped
+                })
+                .collect::<Vec<usize>>()
+        };
+
+        let (game, sources) = board(
+            &[
+                "Llanowar Elves",
+                "Sol Ring",
+                "Treetop Village",
+                "Secret Tunnel",
+                "Forest",
+            ],
+            None,
+        );
+        let model = game.payment_model(player, None);
+        assert_eq!(
+            game.source_reluctance(&model),
+            [
+                Reluctance::Creature,
+                Reluctance::Permanent,
+                Reluctance::UtilityLand,
+                Reluctance::UtilityLand,
+                Reluctance::BasicLand,
+            ]
+        );
+        // Tap the Forest first, then the
+        // colorless Secret Tunnel ahead of the green Treetop Village.
+        assert_eq!(tapped(&game, &sources, "1"), [4]);
+        assert_eq!(tapped(&game, &sources, "2"), [3, 4]);
+        assert_eq!(tapped(&game, &sources, "3"), [2, 3, 4]);
+
+        // A generic pip with nothing in hand: the Mountain. With Lightning
+        // Bolt in hand the Mountain stays for it and the other source pays.
+        for other in ["Treetop Village", "Llanowar Elves"] {
+            for order in [[other, "Mountain"], ["Mountain", other]] {
+                let mountain = usize::from(order[1] == "Mountain");
+                let (game, sources) = board(&order, None);
+                assert_eq!(tapped(&game, &sources, "1"), [mountain]);
+                let (game, sources) = board(&order, Some("Lightning Bolt"));
+                assert_eq!(tapped(&game, &sources, "1"), [1 - mountain]);
+            }
+        }
+
+        // Mana floating in the pool is spent before a source is tapped.
+        let (mut game, sources) = board(&["Forest", "Forest", "Forest"], None);
+        game.state.mana_pool_mut(player).add(&Mana::parse("G"));
+        assert_eq!(tapped(&game, &sources, "1G"), [0]);
+        assert_eq!(tapped(&game, &sources, "G"), Vec::<usize>::new());
+        game.state.mana_pool_mut(player).add(&Mana::parse("G"));
+        assert_eq!(tapped(&game, &sources, "1G"), Vec::<usize>::new());
+    }
+
+    thread_local! {
+        /// Questions this thread answered by searching rather than directly;
+        /// the debug parity searches beside direct answers are not counted.
+        pub(in crate::flow::mana) static SEARCHED: std::cell::Cell<usize> =
+            const { std::cell::Cell::new(0) };
+    }
+
+    pub(in crate::flow::mana) fn tapping_ability(outputs: Vec<Mana>) -> ManaActivation {
         ManaActivation {
             tap_source: true,
             tap_count: 0,
@@ -3149,7 +3563,11 @@ mod tests {
         OBJECTS[index]
     }
 
-    fn source(index: usize, fixed: Option<&str>, abilities: Vec<ManaActivation>) -> ManaSource {
+    pub(in crate::flow::mana) fn source(
+        index: usize,
+        fixed: Option<&str>,
+        abilities: Vec<ManaActivation>,
+    ) -> ManaSource {
         ManaSource {
             permanent: PermanentId(index),
             object: payment_object(index),

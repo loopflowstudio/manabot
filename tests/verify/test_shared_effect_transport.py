@@ -1,10 +1,8 @@
-"""Retained failures cross the prospective gate through real native buffers."""
+"""Controlled Drill games cross the pilot capacity boundaries through native buffers."""
 
 import json
-from pathlib import Path
 
 import numpy as np
-from pydantic import BaseModel
 import pytest
 
 from manabot.env.observation import ObservationEncoder
@@ -17,47 +15,19 @@ from manabot.verify.representation import (
     source_effect_root,
 )
 import managym
-from managym.recording import GameInputs
-from tests.retained_decision import assert_retained_frame, source_payment_tape
-
-
-class RetainedPosition(BaseModel):
-    source: str
-    sha256: str
-    source_commit: str | None
-    game: GameInputs
-    skip_trivial: bool
-    seed_stride: int
-    fragments: int
-    payloads: int
-    memberships: int
+from tests.current_capacity import capacity_position
 
 
 @pytest.mark.parametrize("fragments", (140, 270))
 @pytest.mark.parametrize("closed", (False, True))
-def test_retained_drill_prefix_admits_shared_effects(
+def test_controlled_drill_prefix_admits_shared_effects(
     fragments: int, closed: bool
 ) -> None:
-    receipt = RetainedPosition.model_validate_json(
-        (
-            Path(__file__).parents[1]
-            / "fixtures"
-            / "shared_effects"
-            / f"drill-{fragments}.json"
-        ).read_bytes()
-    )
-    game = receipt.game
-    if closed:
-        game = game.model_copy(
-            update={
-                "players": [
-                    player.model_copy(update={"disclosure": "closed"})
-                    for player in game.players
-                ]
-            }
-        )
-    players = game.setup()
-    scalar = managym.Env(seed=game.seed, skip_trivial=receipt.skip_trivial)
+    game = capacity_position("drill140" if fragments == 140 else "drill270")
+    payloads = 7 if fragments == 140 else 9
+    memberships = fragments // 2
+    players = game.setup(closed=closed)
+    scalar = managym.Env(seed=game.seed, skip_trivial=True)
     scalar_obs, _ = scalar.reset(players)
     assert scalar_obs.decklists_closed is closed
     encoder = ObservationEncoder(ObservationConfig())
@@ -70,8 +40,7 @@ def test_retained_drill_prefix_admits_shared_effects(
     vector = managym.VectorEnv(
         num_envs=1,
         seed=game.seed,
-        seed_stride=receipt.seed_stride,
-        skip_trivial=receipt.skip_trivial,
+        skip_trivial=True,
     )
     vector.set_buffers(buffers)
     ((vector_obs, _),) = vector.reset_all(players)
@@ -81,22 +50,15 @@ def test_retained_drill_prefix_admits_shared_effects(
     assert vector.current_player_configs()[0].decklists == (
         "closed" if closed else "open"
     )
-    assert all(isinstance(action, int) for action in game.actions)
-    original = [int(action) for action in game.actions]
-    expanded = []
-    for action in source_payment_tape(scalar, original[:-1]):
-        expanded.append(action)
+    for action in game.actions[:-1]:
         scalar.step(action)
         vector.step_into_buffers([action])
-    if not closed:
-        current_json = scalar.semantic_decision_frame_json()
-        assert vector.semantic_decision_frames_json()[0] == current_json
-        assert_retained_frame(
-            current_json, game.frame, added_payments=len(expanded) - len(original[:-1])
-        )
-    for action in source_payment_tape(scalar, original[-1:]):
-        acting_observation, *_ = scalar.step(action)
-        vector.step_into_buffers([action])
+    assert (
+        vector.semantic_decision_frames_json()[0]
+        == scalar.semantic_decision_frame_json()
+    )
+    acting_observation, *_ = scalar.step(game.actions[-1])
+    vector.step_into_buffers([game.actions[-1]])
     actor = scalar.current_agent_index()
     assert actor is not None
     for viewer in (0, 1):
@@ -107,11 +69,8 @@ def test_retained_drill_prefix_admits_shared_effects(
         )
         assert obs.decklists_closed is closed
         assert obs.shared_effects is not None
-        assert len(obs.shared_effects) == receipt.payloads
-        assert (
-            sum(len(record.members) for record in obs.shared_effects)
-            == receipt.memberships
-        )
+        assert len(obs.shared_effects) == payloads
+        assert sum(len(record.members) for record in obs.shared_effects) == memberships
         assert all(len(record.effect.keywords) == 2 for record in obs.shared_effects)
         reference = encoder.encode(obs)
         if closed:
@@ -127,8 +86,8 @@ def test_retained_drill_prefix_admits_shared_effects(
                 np.testing.assert_array_equal(
                     reference[key], buffers[key][0], err_msg=key
                 )
-        assert np.count_nonzero(native["effects"][:, -1]) == receipt.payloads
-        assert np.count_nonzero(native["effect_members"][:, 0]) == receipt.memberships
+        assert np.count_nonzero(native["effects"][:, -1]) == payloads
+        assert np.count_nonzero(native["effect_members"][:, 0]) == memberships
         assert not (native["facts"][:, 1] == 6).any()
 
 
