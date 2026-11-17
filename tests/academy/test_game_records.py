@@ -10,6 +10,7 @@ from managym.academy import server, trace
 from managym.academy.launch import read_games
 from managym.academy.watch import import_game, inspect_watch
 from managym.recording import ScalarCapture, runtime_identities
+from tests.fixtures.recorded_commands import record_until_object_candidate
 
 
 @pytest.mark.parametrize("vector", [False, True])
@@ -65,7 +66,14 @@ def test_interrupted_record_import_is_closed_and_readable(
     ]
     path = tmp_path / "game.jsonl"
     env = managym.Env(seed=7)
-    capture = ScalarCapture(seed=7, games_path=path)
+    capture = ScalarCapture(
+        seed=7,
+        games_path=path,
+        context={
+            "source_kind": "training",
+            "players": ["private-label-0", "private-label-1"],
+        },
+    )
     capture.reset(env, players)
     capture.step(env, 0, annotation={"value": 0.31})
     capture.close()
@@ -80,6 +88,8 @@ def test_interrupted_record_import_is_closed_and_readable(
     assert imported["id"] not in server.SESSION_REGISTRY
     shown = inspect_watch(imported["id"], 0, imported["token"])
     assert shown["count"] == 1
+    assert shown["players"] == ["0", "1"]
+    assert shown["source_kind"] == "training"
     assert shown["outputs"]["value"] == 0.31
     assert shown["winner"] is None
     assert not server.SESSION_REGISTRY
@@ -88,6 +98,8 @@ def test_interrupted_record_import_is_closed_and_readable(
 
     anonymous = TestClient(server.app).get(f"/api/traces/{imported['id']}/recording")
     assert anonymous.status_code == 200, anonymous.text
+    assert "private-label" not in anonymous.text
+    assert "private-label" not in json.dumps(shown)
 
 
 def test_retained_exposure_receipt_opens_without_export(
@@ -155,37 +167,14 @@ def test_original_command_import_and_stale_rejection(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from managym.academy.watch import import_record
-    from managym.decision import Command, DecisionFrame
+    from managym.decision import Command
     from managym.recording import read_record
 
     monkeypatch.setattr(trace, "TRACES_DIR", tmp_path / "traces")
     path = tmp_path / "commands.jsonl"
     env = managym.Env(seed=23)
     capture = ScalarCapture(seed=23, games_path=path)
-    deck = {"Mountain": 10, "Gray Ogre": 20, "Lightning Bolt": 4}
-    capture.reset(env, [managym.PlayerConfig(str(seat), deck) for seat in (0, 1)])
-    for _ in range(15):
-        actions = env.observation_for_player(
-            env.current_agent_index() or 0
-        ).action_space.actions
-        chosen = next(
-            (
-                i
-                for i, action in enumerate(actions)
-                if action.action_type == managym.ActionEnum.PRIORITY_PLAY_LAND
-            ),
-            next(
-                (
-                    i
-                    for i, action in enumerate(actions)
-                    if action.action_type == managym.ActionEnum.PRIORITY_CAST_SPELL
-                ),
-                0,
-            ),
-        )
-        capture.step(env, chosen)
-    frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
-    assert frame.object_candidates
+    frame, ordinal = record_until_object_candidate(env, capture)
     command = Command(
         "original-command",
         frame.revision,
@@ -197,12 +186,12 @@ def test_original_command_import_and_stale_rejection(
     record = read_record(path)
     imported = import_record(record)
     assert imported["stop"] == "interrupted"
-    shown = inspect_watch(imported["id"], 15, imported["token"])
-    assert shown["count"] == 16
+    shown = inspect_watch(imported["id"], ordinal, imported["token"])
+    assert shown["count"] == ordinal + 1
     assert shown["outputs"]["value"] == 0.5
     retained = server.trace_store.load_trace(imported["id"])
     assert (
-        retained["canonical_replay"]["decisions"][15]["native_command"]
+        retained["canonical_replay"]["decisions"][ordinal]["native_command"]
         == command.to_json()
     )
 
@@ -217,7 +206,7 @@ def test_original_command_import_and_stale_rejection(
                 "decisions"
             ]
         )
-        == 15
+        == ordinal
     )
     assert rejected["id"] not in server.SESSION_REGISTRY
 

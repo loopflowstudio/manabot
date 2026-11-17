@@ -11,6 +11,7 @@ from managym.decision import Command, DecisionFrame
 from managym.recording import PlayerSetup, ScalarCapture, read_record, read_records
 from managym.replay import RecordedDecision, ReplayStop, walk
 from managym.statistics import Behaviour, CardPerformance, Reducer, reduce
+from tests.fixtures.recorded_commands import record_until_object_candidate
 
 
 class Choices(Reducer[int]):
@@ -70,30 +71,7 @@ def test_original_command_and_preconditions_survive_live_and_replayed_reducers(
         journal_path=tmp_path / "journal.jsonl",
         reducers=[Behaviour(), Choices()],
     )
-    deck = {"Mountain": 10, "Gray Ogre": 20, "Lightning Bolt": 4}
-    capture.reset(env, [managym.PlayerConfig(str(seat), deck) for seat in (0, 1)])
-    for _ in range(15):
-        actions = env.observation_for_player(
-            env.current_agent_index() or 0
-        ).action_space.actions
-        chosen = next(
-            (
-                i
-                for i, action in enumerate(actions)
-                if action.action_type == managym.ActionEnum.PRIORITY_PLAY_LAND
-            ),
-            next(
-                (
-                    i
-                    for i, action in enumerate(actions)
-                    if action.action_type == managym.ActionEnum.PRIORITY_CAST_SPELL
-                ),
-                0,
-            ),
-        )
-        capture.step(env, chosen)
-    frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
-    assert frame.object_candidates
+    frame, ordinal = record_until_object_candidate(env, capture)
     command = Command(
         "exact-native-command",
         frame.revision,
@@ -107,7 +85,7 @@ def test_original_command_and_preconditions_survive_live_and_replayed_reducers(
     journal = read_record(tmp_path / "journal.jsonl")
     assert journal.games[0].command_frame_hashes == record.games[0].command_frame_hashes
     assert len(record.games[0].command_frame_hashes[-1]) == 64
-    assert len(list(walk(journal))) == 16
+    assert len(list(walk(journal))) == ordinal + 1
     replay = walk(record)
     decisions = list(replay)
     assert replay.stop is not None and replay.stop.status == "interrupted"
@@ -120,7 +98,7 @@ def test_original_command_and_preconditions_survive_live_and_replayed_reducers(
     edited = record.model_copy(deep=True)
     edited.games[0].command_frame_hashes[-1] = "0" * 64
     mismatched = walk(edited)
-    assert len(list(mismatched)) == 15
+    assert len(list(mismatched)) == ordinal
     assert mismatched.stop is not None and mismatched.stop.status == "diverged"
     assert "legal semantic frame differs" in mismatched.stop.reason
 
@@ -138,12 +116,12 @@ def test_original_command_and_preconditions_survive_live_and_replayed_reducers(
     stale["expected_revision"] -= 1
     record.games[0].actions[-1] = json.dumps(stale)
     replay = walk(record)
-    assert len(list(replay)) == 15
+    assert len(list(replay)) == ordinal
     assert replay.stop is not None and replay.stop.status == "diverged"
     assert "stale" in replay.stop.reason
     record.games[0].actions[-1] = json.dumps({"offer_id": 0})
     malformed = walk(record)
-    assert len(list(malformed)) == 15
+    assert len(list(malformed)) == ordinal
     assert malformed.stop is not None and malformed.stop.status == "diverged"
 
 

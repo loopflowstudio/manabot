@@ -290,8 +290,17 @@ def test_arena_uses_exact_range_lifecycle_and_replays(
         assert game.get("terminated"), game.get("failure")
         assert any("local_update_receipt" in decision for decision in game["decisions"])
         finalize_game(game)
-        assert audit_view(stored_game(game))["decisions"] == game["decisions"]
-        games.append(game)
+        record = stored_game(game)
+        projected = audit_view(record)["decisions"]
+        assert [
+            {
+                k: v
+                for k, v in row.items()
+                if k not in {"pre_state_digest", "post_state_digest"}
+            }
+            for row in projected
+        ] == game["decisions"]
+        games.append(record)
     assert replay_games(games).passed
 
 

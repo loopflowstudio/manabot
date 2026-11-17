@@ -28,7 +28,6 @@ def main() -> None:
     with capture_scope(
         CaptureScope(
             training_run / "failures",
-            context=lambda: {"players": ["learner", "learner"]},
             settings=RunSettings(record_games=1),
         )
     ):

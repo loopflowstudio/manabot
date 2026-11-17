@@ -34,6 +34,8 @@ class Interrupted:
         return game.current_agent_index()
     def semantic_decision_frame_json(self) -> str:
         return game.semantic_decision_frame_json()
+    def state_digest(self) -> str:
+        return game.state_digest()
     def step(self, action: int) -> None:
         os._exit(73)
 
