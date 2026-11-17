@@ -1,37 +1,37 @@
 {
   "tolerance": 0.1,
   "reference": {
-    "commit": "f62b5201e60fb87aa1ea8132326ae92c93eaf963",
+    "commit": "d35d1a421d6c11f66bb30c7f3c60276d9276460f",
     "date": "2026-11-17",
-    "run": "https://github.com/loopflowstudio/manabot/actions/runs/44120472876",
-    "runner": "GitHub-hosted ubuntu-24.04, AMD EPYC 9V74 80-Core Processor (4 vCPU), release",
-    "reason": "PR524 deliberately changes automatic source selection and removes redundant taps, changing search and step digests. Current-head same-runner run44120472876 passes every timing threshold (search105.067s vs99.537s; worst2.370s vs2.767s; steps19581.9/s vs18980.4/s). Adopt its gameplay reference without changing the10%tolerance."
+    "run": "https://github.com/loopflowstudio/manabot/actions/runs/44134904565",
+    "runner": "GitHub-hosted ubuntu-24.04, AMD EPYC 9V45 96-Core Processor (4 vCPU), release",
+    "reason": "Default manual mana-source choices (MTG-382, PR #554) change all search and step digests and add payment decisions (127974 vs 102209 steps). Accepted manual-choice cost: same-runner total search +13.5%, worst reply +26.1%, faster stepping; correctness checks pass. Keep the 10% tolerance."
   },
   "bench_search": {
-    "worst_s": 2.370093444,
-    "total_s": 105.067,
+    "worst_s": 2.8927750485,
+    "total_s": 94.262,
     "seeds": {
       "1": {
-        "worst_s": 2.370093444,
-        "total_s": 42.55203934200001,
-        "digest": 8473985135635542497
+        "worst_s": 2.8927750485,
+        "total_s": 27.184132903,
+        "digest": 4051366041796879401
       },
       "2": {
-        "worst_s": 1.780498035,
-        "total_s": 31.292355961,
-        "digest": 4051899434388603763
+        "worst_s": 1.5113576245,
+        "total_s": 35.9778166965,
+        "digest": 9472986584244995320
       },
       "3": {
-        "worst_s": 1.7768688075,
-        "total_s": 31.222847101999996,
-        "digest": 16744826618325011459
+        "worst_s": 1.7220414265,
+        "total_s": 31.100387613499993,
+        "digest": 9803279045364310380
       }
     }
   },
   "bench_steps": {
-    "steps_per_s": 19581.888567904953,
-    "steps": 99928,
+    "steps_per_s": 26401.45282965269,
+    "steps": 127974,
     "games": 512,
-    "digest": 5751033950544965762
+    "digest": 9071483575535938828
   }
 }

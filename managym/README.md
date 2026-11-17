@@ -658,3 +658,14 @@ preferred. The class search stops after 1024 arithmetic checks and keeps a
 payable candidate. Payments with saved obligations only receive surplus
 pruning. Activated mana abilities remain deliberate actions; native spending
 choices determine the exact mana receipt. Source preference has no setting.
+
+### Manual mana sources
+
+A pending cast or activation payment offers useful fixed-source taps beside
+`PayCost`, which completes payment automatically from the resources left.
+A tap must make progress and preserve the announced costs and every saved
+payment; funded payments and payments needing every available source retain
+native trivial-decision skipping. These ordinary choices are on by default
+for every consumer. Source taps use the existing `TapForCost` policy action
+with the source as focus; the native Command verb is `tap_for_mana`, distinct
+from waterbend. They do not expose free-form production at priority or undo.

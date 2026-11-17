@@ -194,7 +194,7 @@ fn prism_payment_offers_execute_and_restore_without_mutating_sibling_forks() {
         }
         assert!(
             depth > 0,
-            "payment must complete within its three decisions"
+            "payment must complete within its mana-ability and fixed-source decisions"
         );
         let root = witness(game);
         let actions = game.action_space().unwrap().actions.clone();
@@ -230,7 +230,8 @@ fn prism_payment_offers_execute_and_restore_without_mutating_sibling_forks() {
         );
         let root = witness(s.game());
         let mut branch = s.game().clone();
-        complete_every_offer(&mut branch, professor, 3);
+        // Three original mana-ability decisions plus at most one tap per land.
+        complete_every_offer(&mut branch, professor, 3 + forests + 3);
         assert_eq!(witness(s.game()), root);
         assert_eq!(witness(&branch), root);
     }

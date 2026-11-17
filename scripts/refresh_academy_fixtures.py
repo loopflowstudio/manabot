@@ -10,8 +10,9 @@ Run from the repository root after rebuilding the extension:
 
     uv run --extra dev python scripts/refresh_academy_fixtures.py
 
-Refreshes `managym/academy/fixtures/{learn,precision,precision-mana}-demo-w17-token-cards.json`,
-`choice-navigation-w17-token-cards.json` and `trigger-order-w17-token-cards.json`. The conformance and
+Refreshes `managym/academy/fixtures/learn-demo-w17-token-cards.json`,
+`{precision,precision-mana}-demo-w17-manual-payment.json`,
+`choice-navigation-w17-manual-payment.json` and `trigger-order-w17-token-cards.json`. The conformance and
 parity receipts have their own writers (see `conformance/README.md`).
 """
 
@@ -30,8 +31,8 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "managym" / "academy" / "fixtures"
 DEMOS = {
     "learn": "learn-demo-w17-token-cards.json",
-    "precision": "precision-demo-w17-token-cards.json",
-    "precision-mana": "precision-mana-demo-w17-token-cards.json",
+    "precision": "precision-demo-w17-manual-payment.json",
+    "precision-mana": "precision-mana-demo-w17-manual-payment.json",
 }
 
 
@@ -101,7 +102,7 @@ def refresh_demo(name: str, trace_dir: Path) -> None:
 
 
 def refresh_navigation(trace_dir: Path) -> None:
-    path = FIXTURES / "choice-navigation-w17-token-cards.json"
+    path = FIXTURES / "choice-navigation-w17-manual-payment.json"
     fixture = json.loads(path.read_text())
     for family, position in fixture["positions"].items():
         session, frame, _ = _replay(position["config"], position["prefix"], trace_dir)

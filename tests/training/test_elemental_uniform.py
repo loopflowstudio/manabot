@@ -51,6 +51,7 @@ def _collector(
     recovery: str,
     streams: int = 4,
     learning_seats: Literal["one", "both"] = "one",
+    complete_games: bool = False,
 ) -> SeatRoutedCollector:
     return SeatRoutedCollector(
         ObservationSpace(),
@@ -60,7 +61,11 @@ def _collector(
         seed=17402,
         opponent_mode="self",
         learning_seats=learning_seats,
-        batch_closure="exact-quota" if learning_seats == "one" else "complete-games",
+        batch_closure=(
+            "exact-quota"
+            if learning_seats == "one" and not complete_games
+            else "complete-games"
+        ),
         matchup_curriculum="elemental-uniform",
         recovery_max_microsteps=200000 if recovery == "exact" else None,
         recovery_max_game_microsteps=200000 if recovery == "current" else None,
@@ -78,7 +83,9 @@ def test_uniform_collector_recovers_changed_terminal_roots(
         ObservationSpace(),
         ModelConfig(hidden_dim=8, num_attention_heads=2, world=PACK),
     )
-    first = _collector(recovery, learning_seats=learning_seats)
+    # This recovery test needs changed terminal roots, so use game closure
+    # rather than assuming a transition quota happens to finish a game.
+    first = _collector(recovery, learning_seats=learning_seats, complete_games=True)
     initial_pairs = first._env.current_matchup_indices()
     batch = first.collect(agent, 128)
     assert first.stats.games > 0
@@ -97,7 +104,7 @@ def test_uniform_collector_recovers_changed_terminal_roots(
         sum(c["learner_transitions"] for c in exposure.values()) == batch.actions.size
     )
     if learning_seats == "one":
-        assert batch.actions.size == 4 * 128
+        assert batch.actions.size >= 4 * 128
     else:
         assert batch.actions.size == first.stats.micro_steps
         assert int(batch.dones.sum()) == first.stats.games * 2
@@ -114,7 +121,9 @@ def test_uniform_collector_recovers_changed_terminal_roots(
     if recovery == "exact":
         # Independent action-journal audit: count decisions against the actual
         # native pair BEFORE auto-reset, not the pair in the returned observation.
-        replay = _collector(recovery, learning_seats=learning_seats)
+        replay = _collector(
+            recovery, learning_seats=learning_seats, complete_games=True
+        )
         expected: dict[str, dict[str, int]] = {}
         identities = [p.deck.identity for p in elemental_roster(_match())]
 
@@ -155,7 +164,7 @@ def test_uniform_collector_recovers_changed_terminal_roots(
                         "game_roots",
                     )
         assert expected == first.stats.exposure
-    restored = _collector(recovery, learning_seats=learning_seats)
+    restored = _collector(recovery, learning_seats=learning_seats, complete_games=True)
     restored.restore(first.snapshot(), lambda: None)
     assert all(m.config.decklists == "closed" for m in restored.stream_matches)
     assert all(
