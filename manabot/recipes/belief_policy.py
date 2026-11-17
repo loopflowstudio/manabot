@@ -6,12 +6,12 @@ from etude.train.tracking import track
 from pydantic import Field
 
 from manabot.infra.config import MatchConfig
-from manabot.infra.run_settings import Instrumentation
+from manabot.infra.run_settings import RunSettings
 from manabot.recipes.builders import gray_ogre_match, gray_ogre_self_play
 from manabot.training.loops.self_play import CLOCKS, self_play
 
 
-class PolicyConfig(Instrumentation):
+class PolicyConfig(RunSettings):
     updates: int = Field(default=1, ge=1)
     device: Literal["cpu", "mps", "cuda"] = "cpu"
 

@@ -12,7 +12,7 @@ from etude.train.tracking import track
 from pydantic import Field
 
 from manabot.experiment.numerics import NumericsReceipt, check_numerics
-from manabot.infra.run_settings import Instrumentation
+from manabot.infra.run_settings import RunSettings
 from manabot.recipes.builders import elemental_self_play
 from manabot.training.loops.self_play import CLOCKS, self_play
 
@@ -20,7 +20,7 @@ from manabot.training.loops.self_play import CLOCKS, self_play
 NUMERICS_SECONDS = 1800
 
 
-class ElementalConfig(Instrumentation):
+class ElementalConfig(RunSettings):
     updates: int = Field(default=3200, ge=1)
     device: Literal["cpu", "mps", "cuda"] = "cpu"
     # Run the CUDA numerics gate before the first update; refuse to train on failure.

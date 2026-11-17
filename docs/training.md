@@ -238,20 +238,23 @@ whose body shows what runs. It opens its run with Etude's `track` and calls a
 loop. Nothing wraps it; `etude train` and a launched job both simply call it.
 The config holds only what varies between runs of the recipe, and never the
 seed. Everything else is code in the function. This is the Elemental recipe
-(abridged: its optional CUDA numerics gate, `validate_numerics`, is left out):
+(abridged: its optional CUDA numerics gate, `validate_numerics`, is left out).
+Subclassing `RunSettings` adds the instrumentation keys (`record_games`,
+`statistics`, `diagnostics`, `stall_seconds`):
 
 ```python
 # manabot/recipes/elemental.py
 from typing import Literal
 
 from etude.train.tracking import track
-from pydantic import BaseModel, Field
+from pydantic import Field
 
+from manabot.infra.run_settings import RunSettings
 from manabot.recipes.builders import elemental_self_play
 from manabot.training.loops.self_play import CLOCKS, self_play
 
 
-class ElementalConfig(BaseModel):
+class ElementalConfig(RunSettings):
     updates: int = Field(default=3200, ge=1)
     device: Literal["cpu", "mps", "cuda"] = "cpu"
     streams: int = Field(default=256, ge=2)
@@ -259,7 +262,11 @@ class ElementalConfig(BaseModel):
 
 def train(config: ElementalConfig) -> None:
     settings = elemental_self_play().model_copy(
-        update={"device": config.device, "streams": config.streams}
+        update={
+            "device": config.device,
+            "streams": config.streams,
+            "run_settings": config.run_settings,
+        }
     )
     with track(clocks=CLOCKS, config=config) as run:
         self_play(settings, run, updates=config.updates)

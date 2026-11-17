@@ -8,10 +8,10 @@ from pathlib import Path
 from typing import Literal
 
 from etude.train.tracking import track
-from pydantic import ConfigDict, Field
+from pydantic import Field
 
 from manabot.infra.config import ModelConfig
-from manabot.infra.run_settings import Instrumentation
+from manabot.infra.run_settings import RunSettings
 from manabot.recipes.builders import PACK
 from manabot.sim.matchup import selected_match
 from manabot.training.learning import DampedPolicyLearning, IterationSchedule
@@ -22,9 +22,7 @@ BASELINE_STEPS = 128
 BASELINE_DEALS = tuple(range(1_915_100_000, 1_915_100_024))
 
 
-class BaselineConfig(Instrumentation):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
+class BaselineConfig(RunSettings):
     updates: int = Field(default=BASELINE_STEPS, ge=1)
     device: Literal["cpu", "mps", "cuda"] = "cuda"
     learning_seats: Literal["one", "both"] = "both"

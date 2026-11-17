@@ -82,7 +82,9 @@ No stall on a throttled disk was confirmed, so no Etude fsync Task was filed.
 The timed arms predate 5826f7502e and the sync onto main dcee96ccd1 (merged
 at c7fd53704a; choices in questions.md); neither was re-timed.
 
-All shipped self-play recipes now accept the four flat instrumentation keys.
+All shipped self-play recipe configs subclass `RunSettings` (frozen, extra keys
+forbidden), so the four instrumentation keys are flat config keys and
+`config.run_settings` passes the plain value to SelfPlay.
 Focused check: `uv run pytest -q tests/training/test_recipe_etude.py::test_elemental_records_games_for_one_update tests/training/test_training_game_journals.py::test_recipe_forwards_runtime_flag` — 3 passed, including a one-update CPU Elemental run that wrote game records.
 
 ## Remaining
