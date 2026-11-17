@@ -256,3 +256,14 @@ def test_memory_pretrained_requires_log_enabled_control() -> None:
             arm.model_copy(update={"decision_memory": "transformer"}),
             ObservationConfig(),
         )
+
+
+def test_producer_layout_refusal_names_observation_fields(
+    tmp_path: Path,
+    memory_trunk: TrainingRun,
+) -> None:
+    """Offering a trunk over another layout names the observation fields."""
+    configuration = fork(memory_trunk, tmp_path / "memory-trunk/run.json", updates=1)
+    configuration.observation.max_decision_records *= 2
+    with pytest.raises(ValueError, match=r"observation\.max_decision_records"):
+        run(configuration, tmp_path, "rejected-layout", 198)

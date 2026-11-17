@@ -818,9 +818,9 @@ Set the stage's `pretrained` to a `PretrainedPolicy` with the producer's exporte
 artifact reference pins its path, SHA256 and byte count; the checkpoint must be
 the corresponding artifact of a completed producer self-play stage. Choose the
 memory encoder, summary count and gate scale in the new regime's `agent`.
-The control branch uses the producer's identical model settings. Remote
-`TrainingJob` does not yet bind pretrained inputs; this is the executor path
-described in [training](training.md#reuse-a-published-policy).
+The control branch uses the producer's identical model settings. Remote jobs
+bind the same inputs through `TrainingJob.pretrained`; see
+[training](training.md#reuse-a-published-policy).
 
 Admission verifies the producer receipt, artifact bytes, world and observation
 configuration. It permits a model change only from a control to a memory encoder,

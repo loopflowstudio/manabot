@@ -157,8 +157,20 @@ def main() -> None:
         run_census(args.out)
         return
     if args.operation == "probe":
-        from manabot.backends.torch.decision_memory_probe import run_probe
+        from manabot.backends.torch.decision_memory_probe import (
+            MAX_WALL_SECONDS,
+            MIN_GAMES,
+            run_probe,
+        )
 
+        if args.epochs < 1:
+            probe_parser.error("--epochs must be at least 1")
+        if args.max_games < MIN_GAMES:
+            probe_parser.error(f"--max-games must be at least {MIN_GAMES}")
+        if not 0 < args.wall_seconds <= MAX_WALL_SECONDS:
+            probe_parser.error(f"--wall-seconds must be in (0, {MAX_WALL_SECONDS:g}]")
+        if args.out.exists():
+            probe_parser.error(f"--out {args.out} exists; choose a fresh directory")
         run_probe(
             args.out,
             epochs=args.epochs,

@@ -40,6 +40,8 @@ import managym
 
 Encoder = Literal["none", "transformer", "gru"]
 FIT_SEEDS = (39101, 39102, 39103)
+MIN_GAMES = 60
+MAX_WALL_SECONDS = 7200.0
 
 
 class HandProbe(nn.Module):
@@ -220,9 +222,10 @@ def run_probe(
     A 20-game smoke plus one transformer epoch sizes all fits conservatively.
     An insufficient budget fails explicitly instead of silently omitting arms.
     """
-    if epochs < 1 or max_games < 60 or not 0 < wall_seconds <= 7200:
+    if epochs < 1 or max_games < MIN_GAMES or not 0 < wall_seconds <= MAX_WALL_SECONDS:
         raise ValueError(
-            "probe needs epochs >=1, max_games >=60, and 0<wall_seconds<=7200"
+            f"probe needs epochs >=1, max_games >={MIN_GAMES}, and "
+            f"0<wall_seconds<={MAX_WALL_SECONDS:g}"
         )
     out.mkdir(parents=True, exist_ok=False)
     root = Path(__file__).resolve().parents[3]

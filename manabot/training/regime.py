@@ -365,8 +365,8 @@ class PretrainedPolicy(Strict):
 
     The producer fixes what the weights mean, so its world, ActorCritic architecture
     and observation encoding must equal this regime's. One exception: a
-    history-disabled control may seed a decision-memory arm over the same
-    layout, differing only in the encoder, summary count and gate scale
+    log-enabled control (`decision_memory="none"`) may seed a decision-memory
+    arm over the same layout, differing only in the encoder, summary count and gate scale
     (`pretrained_memory_branch`); the new memory weights start at their
     initialization with zero gates. How learning proceeds is
     this run's own choice: the learning rule and its schedules, streams,

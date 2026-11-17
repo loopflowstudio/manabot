@@ -128,13 +128,29 @@ def admit_policy(
         published.get(key) != stage.checkpoint[key] for key in ("sha256", "bytes")
     ):
         raise ValueError("published checkpoint does not match producer weight artifact")
-    if (
-        source.regime.world != regime.world
-        or (not pretrained and source.regime.agent != regime.agent)
-        or source.regime.observation != regime.observation
-    ):
+    differing = [
+        name
+        for name, differs in (
+            ("world", source.regime.world != regime.world),
+            ("model", not pretrained and source.regime.agent != regime.agent),
+            ("observation", source.regime.observation != regime.observation),
+        )
+        if differs
+    ]
+    if "observation" in differing:
+        # Name the fields so a wrong producer (e.g. a history-disabled
+        # incumbent offered as a memory trunk) is identifiable from the error.
+        producer_observation = source.regime.observation.model_dump()
+        regime_observation = regime.observation.model_dump()
+        differing += [
+            f"observation.{key}"
+            for key in sorted(producer_observation.keys() | regime_observation.keys())
+            if producer_observation.get(key) != regime_observation.get(key)
+        ]
+    if differing:
         raise ValueError(
-            "published producer model/observation/world differs from regime"
+            "published producer model/observation/world differs from regime: "
+            + ", ".join(differing)
         )
     if pretrained:
         pretrained_memory_branch(source.regime.agent, regime.agent, regime.observation)
