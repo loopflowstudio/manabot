@@ -135,28 +135,47 @@ def test_standalone_command_journal_and_statistics(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("vector", [False, True])
+@pytest.mark.parametrize(
+    "enabled,include_own", [(False, False), (True, False), (False, True)]
+)
 def test_decision_memory_option_survives_journal_reset_and_replay(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, vector: bool
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    vector: bool,
+    enabled: bool,
+    include_own: bool,
 ) -> None:
     path = tmp_path / "memory.jsonl"
     players = [managym.PlayerConfig(n, {"Mountain": 20}) for n in ("a", "b")]
     if vector:
         capture = CapturedVector(
-            num_envs=1, seed=17, decision_memory_include_own=True, journal_path=path
+            num_envs=1,
+            seed=17,
+            decision_memory=enabled,
+            decision_memory_include_own=include_own,
+            journal_path=path,
         )
         capture.reset_all(players)
         capture.step([0])
         capture.reset_all(players)
         capture.step([0])
     else:
-        game = managym.Env(seed=17, decision_memory_include_own=True)
-        scalar = ScalarCapture(17, decision_memory_include_own=True, journal_path=path)
+        game = managym.Env(
+            seed=17, decision_memory=enabled, decision_memory_include_own=include_own
+        )
+        scalar = ScalarCapture(
+            17,
+            decision_memory=enabled,
+            decision_memory_include_own=include_own,
+            journal_path=path,
+        )
         scalar.reset(game, players)
         scalar.step(game, 0)
         scalar.reset(game, players)
         scalar.step(game, 0)
     evidence = read_failure(path)
-    assert evidence.games[0].decision_memory_include_own
+    assert evidence.games[0].decision_memory_include_own is include_own
+    assert evidence.games[0].decision_memory is (enabled or include_own)
     assert evidence.games[0].actions == [0]
     # Replay must configure native memory, not merely preserve the receipt bit.
     scalar_constructor, vector_constructor = managym.Env, managym.VectorEnv
@@ -165,24 +184,28 @@ def test_decision_memory_option_survives_journal_reset_and_replay(
         *,
         seed: int,
         skip_trivial: bool,
+        decision_memory: bool,
         decision_memory_include_own: bool,
         num_envs: int = 1,
         seed_stride: int = 1,
         player_policies: tuple[str, str] = ("agent", "agent"),
     ) -> managym.Env | managym.VectorEnv:
-        assert decision_memory_include_own is True
+        assert decision_memory_include_own is include_own
+        assert decision_memory is (enabled or include_own)
         if vector:
             return vector_constructor(
                 num_envs=num_envs,
                 seed=seed,
                 seed_stride=seed_stride,
                 skip_trivial=skip_trivial,
+                decision_memory=decision_memory,
                 decision_memory_include_own=decision_memory_include_own,
                 player_policies=player_policies,
             )
         return scalar_constructor(
             seed=seed,
             skip_trivial=skip_trivial,
+            decision_memory=decision_memory,
             decision_memory_include_own=decision_memory_include_own,
         )
 
@@ -190,3 +213,17 @@ def test_decision_memory_option_survives_journal_reset_and_replay(
     assert replay_failure_inputs(evidence)[0]["status"] == "advanced"
     if vector:
         capture.close()
+
+
+def test_legacy_decision_capture_setting_keeps_its_replay_meaning() -> None:
+    from managym.recording import GameInputs
+
+    legacy = {"seed": 17, "players": []}
+    inputs = GameInputs.model_validate(legacy)
+    assert inputs.decision_memory
+    assert "decision_memory" not in inputs.model_dump(mode="json")
+    disabled = inputs.model_copy(update={"decision_memory": False})
+    assert (
+        GameInputs.model_validate(disabled.model_dump(mode="json")).decision_memory
+        is False
+    )

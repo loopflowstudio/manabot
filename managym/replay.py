@@ -214,6 +214,7 @@ def _replay_game_inputs(
             num_envs=1,
             seed=game.seed,
             seed_stride=evidence.seed_stride,
+            decision_memory=game.decision_memory,
             decision_memory_include_own=game.decision_memory_include_own,
             skip_trivial=evidence.skip_trivial,
             player_policies=evidence.resolved_player_policies,
@@ -222,6 +223,7 @@ def _replay_game_inputs(
         else managym.Env(
             seed=game.seed,
             skip_trivial=evidence.skip_trivial,
+            decision_memory=game.decision_memory,
             decision_memory_include_own=game.decision_memory_include_own,
         )
     )

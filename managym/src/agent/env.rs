@@ -128,6 +128,7 @@ struct NativeActionTrace {
     seed: u64,
     /// Fixed at reset; forks share it rather than copying the decklists.
     player_configs: Arc<[PlayerConfig]>,
+    decision_memory_enabled: bool,
     decision_memory_include_own: bool,
     disclosure: DecklistDisclosure,
     actions: Vec<usize>,
@@ -155,13 +156,13 @@ impl serde::Serialize for NativeActionTrace {
             .collect();
         let mut record = serializer.serialize_struct(
             "NativeActionTrace",
-            if self.decision_memory_include_own {
-                3
-            } else {
-                2
-            },
+            2 + usize::from(self.decision_memory_include_own)
+                + usize::from(!self.decision_memory_enabled),
         )?;
         record.serialize_field("player_configs", &players)?;
+        if !self.decision_memory_enabled {
+            record.serialize_field("decision_memory", &false)?;
+        }
         if self.decision_memory_include_own {
             record.serialize_field("decision_memory_include_own", &true)?;
         }
@@ -186,6 +187,7 @@ pub struct Env {
     capture_exposure: bool,
     retained_exposure: Vec<String>,
     skip_trivial: bool,
+    decision_memory_enabled: bool,
     decision_memory_include_own: bool,
     /// Configured seed for the next reset.
     seed: u64,
@@ -283,6 +285,7 @@ impl Env {
             capture_exposure: false,
             retained_exposure: Vec::new(),
             skip_trivial,
+            decision_memory_enabled: false,
             decision_memory_include_own: false,
             seed,
             reset_seed: seed,
@@ -313,6 +316,7 @@ impl Env {
             heuristic_events: self.heuristic_events.clone(),
             player_policies: self.player_policies,
             reset_seed: self.reset_seed,
+            decision_memory_enabled: self.decision_memory_enabled,
             decision_memory_include_own: self.decision_memory_include_own,
             capture_generation: GAME_GENERATION.fetch_add(1, Ordering::Relaxed),
             ..Self::new(self.seed, self.skip_trivial, false, false)
@@ -346,6 +350,8 @@ impl Env {
             seed: self.seed,
             disclosure: player_configs.decklists.resolve(self.seed),
             player_configs: Arc::from(player_configs.players.clone()),
+            decision_memory_enabled: self.decision_memory_enabled
+                || self.decision_memory_include_own,
             decision_memory_include_own: self.decision_memory_include_own,
             actions: Vec::new(),
         });
@@ -356,6 +362,8 @@ impl Env {
             self.capture_cards,
             self.collect_statistics,
         );
+        game.decision_memory_enabled =
+            self.decision_memory_enabled || self.decision_memory_include_own;
         game.decision_memory_include_own = self.decision_memory_include_own;
         if self.capture_exposure {
             game.card_capture
@@ -515,7 +523,16 @@ impl Env {
         }).to_string()
     }
 
-    /// Set chooser policies without changing game configuration or world identity.
+    /// Opt in to viewer-safe decision capture before constructing a game.
+    pub fn with_decision_memory(mut self, enabled: bool) -> Self {
+        assert!(
+            self.game.is_none(),
+            "decision history must be configured before reset"
+        );
+        self.decision_memory_enabled = enabled;
+        self
+    }
+
     pub fn with_decision_memory_include_own(mut self, enabled: bool) -> Self {
         assert!(
             self.game.is_none(),
@@ -525,6 +542,7 @@ impl Env {
         self
     }
 
+    /// Set chooser policies without changing game configuration or world identity.
     pub fn with_player_policies(mut self, policies: [PlayerPolicy; 2]) -> Self {
         self.player_policies = policies;
         self

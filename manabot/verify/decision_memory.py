@@ -112,7 +112,7 @@ def _configs(disclosure: Literal["open", "closed"]) -> managym.GameSetup:
 
 
 def _root(disclosure: Literal["open", "closed"]) -> managym.Env:
-    env = managym.Env(seed=23)
+    env = managym.Env(seed=23, decision_memory=True)
     env.reset(_configs(disclosure))
     for _ in range(20):
         contract = SemanticDecisionContract.from_env(env)
@@ -171,10 +171,9 @@ def _native_proof(out: Path, disclosure: Literal["open", "closed"]) -> Proof:
     assert parent == [
         proof.env.observation_for_player(v).decision_memory_json() for v in range(2)
     ]
-    assert any(
-        parent[v] != branch.observation_for_player(v).decision_memory_json()
-        for v in range(2)
-    )
+    assert parent == [
+        branch.observation_for_player(v).decision_memory_json() for v in range(2)
+    ]
     proof.choose("cast", "Accumulate Wisdom")
     _advance(proof, "select_card", "Mountain")
     # Private selection is unavailable to the opponent even with open decklists.

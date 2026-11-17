@@ -99,6 +99,7 @@ pub struct VectorEnv {
     seed_stride: u64,
     uniform_roster: RootRoster,
     skip_trivial: bool,
+    decision_memory_enabled: bool,
     decision_memory_include_own: bool,
     fresh_roots: Vec<bool>,
 }
@@ -157,9 +158,20 @@ impl VectorEnv {
             seed_stride: num_envs.max(1) as u64,
             uniform_roster: RootRoster::default(),
             skip_trivial,
+            decision_memory_enabled: false,
             decision_memory_include_own: false,
             fresh_roots: vec![false; num_envs],
         }
+    }
+
+    pub fn with_decision_memory(mut self, enabled: bool) -> Self {
+        self.decision_memory_enabled = enabled;
+        self.envs = self
+            .envs
+            .into_iter()
+            .map(|env| env.with_decision_memory(enabled))
+            .collect();
+        self
     }
 
     pub fn with_decision_memory_include_own(mut self, enabled: bool) -> Self {
@@ -645,6 +657,7 @@ impl VectorEnv {
                     }
                 }
                 let mut env = Env::new(self.envs[index].seed(), self.skip_trivial, false, false)
+                    .with_decision_memory(self.decision_memory_enabled)
                     .with_decision_memory_include_own(self.decision_memory_include_own);
                 let (obs, info) = env.reset(setup.clone())?;
                 validate(index, &obs)?;
@@ -809,12 +822,14 @@ impl VectorEnv {
         let stride = self.seed_stride;
         let skip_trivial = self.skip_trivial;
         let include_own = self.decision_memory_include_own;
+        let memory_enabled = self.decision_memory_enabled;
         self.for_each_env(|index, env, next_seed, configs, roster, fresh| {
             if !failed[index] {
                 return Ok(InfoDict::new());
             }
             *env = Env::new(*next_seed, skip_trivial, false, false)
                 .with_player_policies(policy)
+                .with_decision_memory(memory_enabled)
                 .with_decision_memory_include_own(include_own);
             *fresh = true;
             let (obs, info) = Self::reset_env_on_env(roster, env, next_seed, stride, configs)?;

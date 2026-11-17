@@ -41982,6 +41982,18 @@
    "sha256": "65d3ee831ff404c7bbe495274a507e1b8d03d3833aedcec6d07c13a7403b1422",
    "bytes": 285
   },
+  "experiments/data/opponent-memory/20261117-history-off-main/comparison-command.txt": {
+   "sha256": "3d5eb5aa7103e4085d89c61091ab4369e92821ff75c094610ff7f4ee1a48b461",
+   "bytes": 411
+  },
+  "experiments/data/opponent-memory/20261117-history-off-main/evidence.tar.gz": {
+   "sha256": "dad814790ce766627b00534a34acfed66861eff3ec3aa18bdf84ea9ef3237db4",
+   "bytes": 29303250
+  },
+  "experiments/data/opponent-memory/20261117-history-off-main/members.json": {
+   "sha256": "f3724aaddaa75301a552a7780aa946871f1bc65985cd8fc28083ae80a3b95fa9",
+   "bytes": 14065
+  },
   "experiments/data/opponent-memory/20261117-host-cost/stage1-members.json": {
    "sha256": "03f3a4cc4153f7c49e98356eca14460913f930d776af4bc7eae7609d4168a6a6",
    "bytes": 16492

@@ -4046,7 +4046,7 @@ impl PySelectedBranchRuntime {
 #[pymethods]
 impl PyEnv {
     #[new]
-    #[pyo3(signature = (seed=0, skip_trivial=true, enable_profiler=false, enable_behavior_tracking=false, *, player_policies=None, decision_memory_include_own=false))]
+    #[pyo3(signature = (seed=0, skip_trivial=true, enable_profiler=false, enable_behavior_tracking=false, *, player_policies=None, decision_memory_include_own=false, decision_memory=false))]
     fn new(
         seed: u64,
         skip_trivial: bool,
@@ -4054,6 +4054,7 @@ impl PyEnv {
         enable_behavior_tracking: bool,
         player_policies: Option<Vec<String>>,
         decision_memory_include_own: bool,
+        decision_memory: bool,
     ) -> PyResult<Self> {
         let policies =
             crate::python::vector_env_bindings::parse_player_policies(player_policies, None)?;
@@ -4066,6 +4067,7 @@ impl PyEnv {
                     enable_behavior_tracking,
                 )
                 .with_player_policies(policies)
+                .with_decision_memory(decision_memory)
                 .with_decision_memory_include_own(decision_memory_include_own),
             )),
             selected_guard: false,

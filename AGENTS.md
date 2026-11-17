@@ -171,6 +171,12 @@ one sampling call per original row group. A prefetch generator must release its
 previous Prepared input and completed Future before submitting another chunk;
 the completed Future also owns the host result.
 
+Decision-memory capture is opt-in from positive record capacity or include-own;
+search clones never append hypothetical records, while rollback snapshots preserve
+capture. Raw prefix chunks can be interned across streams with identical early
+content: a growing serving segment belongs to its native stream, never that shared
+chunk. Historical diagnostic inputs without the capture setting mean enabled.
+
 Profile observation retention separately from policy preparation: `_retain_obs_rows`
 runs before the preparation track and includes MemoryStore capture. Capture is
 nested under retention; do not add both as disjoint collection costs.

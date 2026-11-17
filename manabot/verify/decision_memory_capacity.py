@@ -61,8 +61,10 @@ def run_census(out: Path, max_decisions: int = 2000) -> None:
         seed = 58100 + number
         pair = (keys[(number // 2) % 10], keys[(number // 20) % 10])
         disclosure: Literal["open", "closed"] = "open" if number % 2 == 0 else "closed"
-        env = managym.Env(seed=seed)
-        capture = ScalarCapture(seed, failure_directory=out / "failures")
+        env = managym.Env(seed=seed, decision_memory=True)
+        capture = ScalarCapture(
+            seed, decision_memory=True, failure_directory=out / "failures"
+        )
         obs, _ = capture.reset(
             env,
             managym.GameSetup(

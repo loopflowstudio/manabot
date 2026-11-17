@@ -411,7 +411,9 @@ def test_native_live_suffix_counts_and_viewers_match_dense_capture() -> None:
         terminated=np.zeros(1, np.uint8),
         truncated=np.zeros(1, np.uint8),
     )
-    env = managym.VectorEnv(1, seed=11, player_policies=("agent", "agent"))
+    env = managym.VectorEnv(
+        1, seed=11, decision_memory=True, player_policies=("agent", "agent")
+    )
     env.set_buffers(buffers)
     env.reset_all_into_buffers(Match().to_rust())
     dense_buffers = space.encoder.allocate(1)
@@ -456,7 +458,7 @@ def test_sharded_native_suffix_metadata_tracks_each_stream() -> None:
         terminated=np.zeros(2, np.uint8),
         truncated=np.zeros(2, np.uint8),
     )
-    env = ShardedVectorEnv(2, 11, workers=2)
+    env = ShardedVectorEnv(2, 11, workers=2, decision_memory=True)
     try:
         env.set_buffers(buffers)
         env.reset_all_into_buffers(Match().to_rust())

@@ -2413,3 +2413,34 @@ Run `opponent_memory/cuda-calibration-suffix@39100`, source `5c644ef19e`, A40 `m
 The incumbent median is 305.053 s; its two measurements agree within 0.5%. Control is 1.105× and GRU 1.201× incumbent time. The previous additive run was 1.049×/1.265× with about 8% incumbent spread. These are exploratory cost receipts, not learning or strength evidence. Capture is nested under retention, never added as another cost. Repeated open-tail work remains a candidate; unchanged-stream skipping alone cannot remove it in opponent-only self-play, where nearly every viewer log changes at nearly every step.
 
 Evidence: `experiments/data/opponent-memory/20261117-cuda-optimized-retry/suffix-output.tar.gz` and adjacent member/launcher records. Matched training and paired strength comparison remain unrun. No paid launch, pilot, PR, model-shape change or calibration-job rename follows.
+
+### History off against main — 2026-11-17
+
+Native decision capture is now opt-in. Training composition roots enable it only for positive observation record capacity or include-own. A disabled game keeps empty logs and returns before capture work; Game search clones never capture, and transactional rollback preserves the setting. Native scalar/vector resets and vector replacement/recovery retain it. New disabled diagnostic inputs serialize `decision_memory: false`; older omitted settings retain their historical enabled replay meaning. The census/probe/demo explicitly opt in, and the calibration job name is unchanged.
+
+CPU comparison uses actual main source `3afd92d8f3bf48b87d873693580f0d5f8ccf3612`, separately built for CPython 3.13. Both sides use history off, 32 complete-game streams, one worker/Torch thread, identical seeded width-64 model and mixed deck disclosure, one real update, and logical minibatches of 256. Execution-row limits are unset on both: main predates that API, and bounded history execution is unnecessary with history disabled. Cases run branch/main/main/branch in fresh processes. Imported source paths and extension hashes are in every receipt.
+
+| Source | Order | Decisions | Collection s | Update s | Total s | Decisions/s |
+|---|---:|---:|---:|---:|---:|---:|
+| branch | 0 | 6858 | 4.586 | 20.122 | 24.708 | 277.56 |
+| branch | 3 | 6858 | 4.676 | 20.065 | 24.741 | 277.19 |
+| main | 1 | 6858 | 4.574 | 20.051 | 24.625 | 278.50 |
+| main | 2 | 6858 | 4.499 | 20.108 | 24.607 | 278.70 |
+
+Median total branch/main is **1.0044×** (24.725/24.616 s). All 6,858 decisions, rollout outputs, final gradients and updated model/buffer hashes are exact across all four cases. This bounded CPU fixture supports approximately unchanged history-off cost; two cases per side are not a confidence bound or a CUDA claim.
+
+
+Release engine benchmarks use the committed `managym/perf/baseline.json` reference `1ad670d8fdbb763ec28f1392f8dbdb623a5ccaa3`, built and measured on this same local host. The standard sample runs branch/reference/reference/branch; actual main is also built and run twice. No comparison uses the historical CI wall time.
+
+| Source | Steps/s | Search total s | Search worst s |
+|---|---:|---:|---:|
+| branch | 36724.3 | 52.715 | 1.449 |
+| baseline reference | 35583.0 | 55.082 | 1.510 |
+| actual main median | 35649.8 | 54.045 | 1.489 |
+
+Branch/main step-duration ratio is 0.9707×; search-total ratio is 0.9754×. Engine Budget passes against the committed same-host reference with unchanged step/search/score digests; the baseline file is not moved. Raw per-seed rows and scheduling samples remain in the archive.
+
+
+Validation: 12 targeted native debug checks; the 63 memory/storage/collection/learner/execution cases (the demo was corrected for search forks retaining history without appending); 30 recording/collection/probe checks; five interruption and game-error recovery cases. Final cache snapshot/lifetime checks and artifact tracking validation are retained with the evidence. No CUDA launch, pilot, PR or Task completion. Matched learning and paired strength remain unrun.
+
+Evidence: `experiments/data/opponent-memory/20261117-history-off-main`. The comparison preserves main and benchmark-reference source revisions, build/measurement commands, source diffs, raw receipts, arrays, benchmark binaries/digests and test logs.

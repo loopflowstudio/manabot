@@ -67,6 +67,7 @@ class Env(gym.Env):
         self.seed = seed
         self._capture = ScalarCapture(
             seed,
+            decision_memory=obs_space.encoder.config.max_decision_records > 0,
             decision_memory_include_own=obs_space.encoder.config.decision_memory_include_own,
         )
         self.skip_trivial = True
@@ -78,6 +79,7 @@ class Env(gym.Env):
         )
         self._engine = managym.Env(
             seed=self.seed,
+            decision_memory=obs_space.encoder.config.max_decision_records > 0,
             decision_memory_include_own=obs_space.encoder.config.decision_memory_include_own,
             skip_trivial=self.skip_trivial,
             enable_profiler=self.enable_profiler,

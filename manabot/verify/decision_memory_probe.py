@@ -167,8 +167,10 @@ def collect_games(
             managym.authored_deck_setup("elemental-world-v2", keys[int(i)])
             for i in pair
         ]
-        env = managym.Env(seed=seed)
-        capture = ScalarCapture(seed, failure_directory=out / "failures")
+        env = managym.Env(seed=seed, decision_memory=True)
+        capture = ScalarCapture(
+            seed, decision_memory=True, failure_directory=out / "failures"
+        )
         obs, _ = capture.reset(env, managym.GameSetup(players, decklists=disclosure))
         # The heuristic retains per-turn plans and private card references.
         # Each native seat owns its own selector, even when their code is equal.

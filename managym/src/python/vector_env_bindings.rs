@@ -137,7 +137,7 @@ impl PyVectorEnv {
     }
 
     #[new]
-    #[pyo3(signature = (num_envs, seed=0, skip_trivial=true, opponent_policy=None, seed_stride=None, *, player_policies=None, decision_memory_include_own=false))]
+    #[pyo3(signature = (num_envs, seed=0, skip_trivial=true, opponent_policy=None, seed_stride=None, *, player_policies=None, decision_memory_include_own=false, decision_memory=false))]
     fn new(
         num_envs: usize,
         seed: u64,
@@ -146,9 +146,11 @@ impl PyVectorEnv {
         seed_stride: Option<u64>,
         player_policies: Option<Vec<String>>,
         decision_memory_include_own: bool,
+        decision_memory: bool,
     ) -> PyResult<Self> {
         let policies = parse_player_policies(player_policies, opponent_policy)?;
         let mut inner = VectorEnv::new(num_envs, seed, skip_trivial, policies)
+            .with_decision_memory(decision_memory)
             .with_decision_memory_include_own(decision_memory_include_own);
         if let Some(stride) = seed_stride {
             inner = inner.with_seed_stride(stride).map_err(map_agent_err)?;

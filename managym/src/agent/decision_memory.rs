@@ -837,7 +837,7 @@ pub(crate) fn capture(
     space: &ActionSpace,
     action: &Action,
 ) -> Option<PendingDecision> {
-    if space.actions.len() <= 1 {
+    if !game.decision_memory_enabled || space.actions.len() <= 1 {
         return None;
     }
     let chooser = space.player?;
@@ -1099,6 +1099,7 @@ mod tests {
             })
             .collect();
         let mut game = Game::new(players, 111, true);
+        game.decision_memory_enabled = true;
         let land = game
             .state
             .latest_objects()
@@ -1125,6 +1126,26 @@ mod tests {
                 player: PlayerId(0),
             },
         )
+    }
+
+    #[test]
+    fn decision_memory_disabled_and_search_clones_do_not_capture() {
+        let mut game = game();
+        assert!(pending_pass(&game).is_some());
+        let search = game.clone();
+        assert!(pending_pass(&search).is_none());
+        assert!(pending_pass(&game.rollback_snapshot()).is_some());
+        game.decision_memory_enabled = false;
+        let pass = game
+            .current_action_space
+            .as_ref()
+            .unwrap()
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::PassPriority { .. }))
+            .unwrap();
+        game.step(pass).unwrap();
+        assert!(game.decision_memory.iter().all(DecisionLog::is_empty));
     }
 
     #[test]
@@ -1197,6 +1218,7 @@ mod tests {
         commit(&mut game, pending.clone());
         let old = Observation::for_player(&game, PlayerId(1));
         let mut fork = game.clone();
+        fork.decision_memory_enabled = true;
         assert!(Arc::ptr_eq(
             game.decision_memory[1].tail.as_ref().unwrap(),
             fork.decision_memory[1].tail.as_ref().unwrap()
@@ -1385,6 +1407,7 @@ mod tests {
         assert_eq!(game.decision_memory[1].len(), 2);
         let issued = Observation::for_player(&game, PlayerId(0));
         let mut fork = game.clone();
+        fork.decision_memory_enabled = true;
         commit(&mut fork, pending_pass(&game));
         assert_eq!(issued.decision_memory.len(), 1);
         assert_eq!(game.decision_memory[0].iter().next().unwrap().count, 1);

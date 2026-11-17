@@ -217,6 +217,9 @@ def replay_attempt(attempt: GameAttempt) -> dict[str, object]:
     env = managym.Env(
         seed=attempt.seed,
         skip_trivial=True,
+        decision_memory=bool(
+            attempt.observation and attempt.observation.max_decision_records > 0
+        ),
         decision_memory_include_own=bool(
             attempt.observation and attempt.observation.decision_memory_include_own
         ),

@@ -48,6 +48,7 @@ class ShardedVectorEnv:
         workers: int,
         *,
         decision_memory_include_own: bool = False,
+        decision_memory: bool = False,
     ) -> None:
         if workers not in (2, 4) or workers > num_envs:
             raise ValueError(
@@ -69,6 +70,7 @@ class ShardedVectorEnv:
                     seed_stride=num_envs,
                     stream_offset=index * num_envs // workers,
                     skip_trivial=True,
+                    decision_memory=decision_memory,
                     decision_memory_include_own=decision_memory_include_own,
                     player_policies=("agent", "agent"),
                 ),

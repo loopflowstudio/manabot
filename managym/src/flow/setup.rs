@@ -159,6 +159,7 @@ impl Game {
             }),
             policy_history: Default::default(),
             decision_memory: Default::default(),
+            decision_memory_enabled: false,
             decision_memory_include_own: false,
             skip_trivial,
             current_action_space: None,

@@ -155,6 +155,7 @@ class Env:
         enable_behavior_tracking: bool = False,
         *,
         decision_memory_include_own: bool = False,
+        decision_memory: bool = False,
         player_policies: tuple[
             Literal["agent", "random", "heuristic"],
             Literal["agent", "random", "heuristic"],
@@ -352,6 +353,7 @@ class VectorEnv:
         seed_stride: int | None = None,
         *,
         decision_memory_include_own: bool = False,
+        decision_memory: bool = False,
         player_policies: tuple[
             Literal["agent", "random", "heuristic"],
             Literal["agent", "random", "heuristic"],

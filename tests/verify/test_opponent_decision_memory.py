@@ -16,7 +16,7 @@ from managym.decision_memory import read_records
 
 
 def _root(disclosure: Literal["open", "closed"] = "open") -> managym.Env:
-    env = managym.Env(seed=111)
+    env = managym.Env(seed=111, decision_memory=True)
     configs = Match().to_rust()
     env.reset(managym.GameSetup(configs, decklists=disclosure))
     return env
@@ -169,8 +169,12 @@ def test_decision_memory_buffered_vector_and_builtin_choices_match_scalar() -> N
         )
     )
     configs = Match().to_rust()
-    reference = managym.VectorEnv(2, seed=111, player_policies=("agent", "heuristic"))
-    hot = managym.VectorEnv(2, seed=111, player_policies=("agent", "heuristic"))
+    reference = managym.VectorEnv(
+        2, seed=111, decision_memory=True, player_policies=("agent", "heuristic")
+    )
+    hot = managym.VectorEnv(
+        2, seed=111, decision_memory=True, player_policies=("agent", "heuristic")
+    )
     buffers = space.encoder.allocate(2)
     buffers.update(
         rewards=np.zeros(2, np.float64),
@@ -224,7 +228,7 @@ def test_headless_decision_memory_demo(tmp_path: Path) -> None:
 def test_own_seat_option_is_default_off_and_rebases_opposing_view_only(
     disclosure: Literal["open", "closed"],
 ) -> None:
-    default = managym.Env(seed=111)
+    default = managym.Env(seed=111, decision_memory=True)
     own = managym.Env(seed=111, decision_memory_include_own=True)
     configs = managym.GameSetup(Match().to_rust(), decklists=disclosure)
     default.reset(configs)
@@ -300,3 +304,33 @@ def test_own_seat_option_is_default_off_and_rebases_opposing_view_only(
         record.actor == 1
         for record in read_records(own.observation_for_player(0).decision_memory_json())
     )
+
+
+@pytest.mark.parametrize("include_own", [False, True])
+def test_native_history_is_opt_in_and_search_forks_do_not_append(
+    include_own: bool,
+) -> None:
+    off = managym.Env(seed=111)
+    on = managym.Env(
+        seed=111,
+        decision_memory=not include_own,
+        decision_memory_include_own=include_own,
+    )
+    setup = Match().to_rust()
+    off.reset(setup)
+    on.reset(setup)
+    for _ in range(12):
+        off.step(0)
+        on.step(0)
+    assert _observations(off) == ["[]", "[]"]
+    assert any(read_records(value) for value in _observations(on))
+    assert off.state_digest() == on.state_digest()
+    fork = on.clone_env()
+    retained = _observations(fork)
+    for _ in range(5):
+        fork.step(0)
+    assert _observations(fork) == retained
+    on.reset(setup)
+    for _ in range(12):
+        on.step(0)
+    assert any(read_records(value) for value in _observations(on))

@@ -576,17 +576,22 @@ class SeatRoutedCollector:
         self._journal: list[tuple[list[int], list[bool]]] = []
 
         if root is None:
+            capture_decisions = (
+                observation_space.encoder.config.max_decision_records > 0
+            )
             self._env = (
                 ShardedVectorEnv(
                     num_envs,
                     seed,
                     workers,
+                    decision_memory=capture_decisions,
                     decision_memory_include_own=observation_space.encoder.config.decision_memory_include_own,
                 )
                 if workers > 1
                 else CapturedVector(
                     num_envs=num_envs,
                     seed=seed,
+                    decision_memory=capture_decisions,
                     decision_memory_include_own=observation_space.encoder.config.decision_memory_include_own,
                     skip_trivial=True,
                     player_policies=("agent", "agent"),

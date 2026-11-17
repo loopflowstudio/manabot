@@ -77,6 +77,8 @@ def _retain_players(players: managym.GameSetup, seed: int) -> list[PlayerSetup]:
 
 class GameInputs(BaseModel):
     stream: int = 0
+    # Older evidence always captured; new disabled captures serialize False.
+    decision_memory: bool = Field(default=True, exclude_if=lambda value: value)
     decision_memory_include_own: bool = Field(
         default=False, exclude_if=lambda value: not value
     )
@@ -579,6 +581,7 @@ class ScalarCapture(_Capture):
         skip_trivial: bool = True,
         *,
         decision_memory_include_own: bool = False,
+        decision_memory: bool = False,
         **recording: Unpack[RecordingOptions],
     ) -> None:
         super().__init__(**recording)
@@ -587,6 +590,7 @@ class ScalarCapture(_Capture):
         self.inputs = GameInputs(
             seed=seed,
             players=[],
+            decision_memory=decision_memory or decision_memory_include_own,
             decision_memory_include_own=decision_memory_include_own,
         )
         self.journal: Path | None = None
@@ -605,6 +609,7 @@ class ScalarCapture(_Capture):
         self.inputs = GameInputs(
             seed=self.seed,
             players=_retain_players(players, self.seed),
+            decision_memory=self.inputs.decision_memory,
             decision_memory_include_own=self.inputs.decision_memory_include_own,
         )
         self.journal = None
@@ -780,6 +785,7 @@ class CapturedVector(_Capture):
         seed_stride: int | None = None,
         stream_offset: int = 0,
         decision_memory_include_own: bool = False,
+        decision_memory: bool = False,
         **recording: Unpack[RecordingOptions],
     ) -> None:
         super().__init__(**recording)
@@ -788,6 +794,7 @@ class CapturedVector(_Capture):
         self.player_policies = resolve_player_policies(opponent_policy, player_policies)
         self.native = managym.VectorEnv(
             num_envs=num_envs,
+            decision_memory=decision_memory or decision_memory_include_own,
             decision_memory_include_own=decision_memory_include_own,
             seed=seed,
             skip_trivial=skip_trivial,
@@ -800,6 +807,7 @@ class CapturedVector(_Capture):
                 stream=stream_offset + i,
                 seed=min(seed + i, 2**64 - 1),
                 players=[],
+                decision_memory=decision_memory or decision_memory_include_own,
                 decision_memory_include_own=decision_memory_include_own,
             )
             for i in range(num_envs)
