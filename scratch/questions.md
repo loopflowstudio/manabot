@@ -21,7 +21,8 @@ Reversible choices in use:
 
 Etude questions, not Manabot blockers: same-seed dependent jobs in one command;
 whether Agents(build=) builds every seat; command/track job and kind metadata
-(then delete the text-label stopgap). Belief's completed-checkpoint two-pass,
+(then delete the text-label stopgap); launch options outside config identity,
+so instrumentation (record_games, diagnostics) can change on resume. Belief's completed-checkpoint two-pass,
 one-seed form is tested; no automatic scheduling claim.
 
 Known limits: cooperative match deadlines cannot interrupt native calls;

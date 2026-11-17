@@ -497,3 +497,45 @@ commands; automatic same-seed dependency scheduling remains an Etude question.
 Remaining acceptance is the GPU comparison and resume calibration in plan.md;
 method/results are experiments/reports/etude-execution.md. Hard match deadlines
 are Etude Task 2d1933; Lium lifecycle is Task 73e1a9. No new product decision.
+
+## Concept review, 2026-11-17 (after the sync onto dcee96ccd1)
+
+One mismatch, introduced by the sync's reversible choice to put the four
+instrumentation fields flat on `BaselineConfig` only.
+
+Before (main): any training job records games, collects statistics or raises
+diagnostics (`TrainingJob(record_games=0.25)`, or `execute_regime(settings=
+RunSettings(...))`), and `RunSettings` is "separate from learning identity and
+resume admission". After (branch): only `local` and `baseline` configs accept
+`record_games`, `statistics`, `diagnostics`, `stall_seconds`. Elemental (the
+current recipe) and the belief policy cannot record a game or run detailed
+diagnostics without a code edit, and `{"record_games": 0.25}` on them is a
+config validation error. The fields are declared twice (RunSettings,
+BaselineConfig) and joined by a hand-written property.
+
+Next implement direction (settled by the design: recipes are `train(config)`,
+one owner per fact, preserve what main's users could do):
+
+1. Every shipped self-play recipe config (`ElementalConfig`, `PolicyConfig`,
+   `BaselineConfig`/`LocalConfig`) accepts the same four flat keys, declared
+   once in `manabot.infra.run_settings` and passed to `SelfPlay.run_settings`.
+   Keep the flat JSON keys the training guide teaches. Suggested form: the
+   recipe configs take the fields from `RunSettings` by inheritance and build
+   the value with one shared function; delete `BaselineConfig.run_settings`'s
+   field-by-field copy. Experiment files stay as they are (Python callers set
+   `SelfPlay.run_settings`). Belief sampler is not self-play; unchanged.
+2. Rewrite the `run_settings.py` header: `TrainingJob` there named Manabot's
+   deleted job type and now reads as Etude's; "separate from resume admission"
+   is no longer true (see the Etude question below). Update the guide's
+   sentence "The local and baseline recipe configs carry…".
+3. `no_operation` yields `None`, so `step` guards `if collection is not None`.
+   Yield a no-op operation instead and drop the guard.
+4. Test what people would notice: an Elemental local run with
+   `{"record_games": 1}` at one update writes `out/games/*.jsonl`.
+
+Etude question, not a Manabot blocker: instrumentation lives in the recipe
+config, so Etude's resume comparison treats it as run identity. A stalled run
+cannot be resumed with `diagnostics: "detailed"`, and a recorded run is a
+different run from the same learner unrecorded. Runtime escalation
+(`diagnostics.request`) still works. The clearer model is a launch-time option
+channel outside config identity; that belongs to Etude, no Manabot workaround.

@@ -84,6 +84,11 @@ at c7fd53704a; choices in questions.md); neither was re-timed.
 
 ## Remaining
 
+Implement next (design-train-api.md, concept review 2026-11-17): every shipped
+self-play recipe config accepts the four instrumentation keys, declared once;
+fix the stale run_settings header and guide sentence; no-op operation instead
+of the None guard; one Elemental recording test.
+
 Gate and publication are the caller's steps, including updating PR #500
 with the completed GPU measurement and checking CI on the new commit.
 
