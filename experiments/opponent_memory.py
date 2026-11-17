@@ -101,13 +101,18 @@ EXPERIMENT = Path(__file__).stem
 
 
 def training_jobs(
-    revision: str, trunks: str = "", size: str = "small"
+    revision: str, trunks: str = "", size: str = "small", seeds: str = ""
 ) -> list[RunRequest]:
     """Declare trunks, or branch both arms from every completed published trunk.
 
     Each seed's two arms share one producer receipt and EMA export. Their
     optimizer and learner-decision schedule start fresh at the branch point.
+    `seeds` (comma-separated) branches only those seed labels, so finished
+    trunks need not wait for one still looking for a machine.
     """
+    chosen = tuple(int(seed) for seed in seeds.split(",")) if seeds else SEEDS
+    if not set(chosen) <= set(SEEDS):
+        raise ValueError(f"unknown seeds {seeds!r}; expected a subset of {SEEDS}")
     if size not in SIZES:
         raise ValueError(f"unknown size {size!r}; expected small or wide")
     model = SIZES[size]
@@ -116,12 +121,13 @@ def training_jobs(
         return [
             request
             for seed, name in names.items()
+            if seed in chosen
             for request in _job(revision, model, model.trunk, name).runs(seed)
         ]
     storage = storage_from_uri(trunks)
     state = observe(storage, EXPERIMENT)
     parents: dict[int, PretrainedInitialization] = {}
-    for seed in SEEDS:
+    for seed in chosen:
         runs = _runs(state, names[seed], seed)
         if len(runs) != 1:
             raise ValueError(
