@@ -27,6 +27,7 @@ from manabot.infra.identity import file_sha256
 from manabot.policy.prepare import Prepared
 from manabot.sim.matchup import AuthoredMatchup
 import managym
+from tests.fixtures.evaluation_callbacks import PanicException
 
 
 @pytest.mark.parametrize("game_seat", [0, 1])
@@ -62,12 +63,22 @@ def test_game_rows_mirror_each_game_for_both_players(game_seat: Literal[0, 1]) -
 
 
 @pytest.mark.parametrize("launched", [False, True])
-@pytest.mark.parametrize("failure", ["game", "retry"])
+@pytest.mark.parametrize(
+    "error_type",
+    [
+        managym.AgentError,
+        PanicException,
+        RetryRequested,
+        RuntimeError,
+        ValueError,
+        KeyError,
+    ],
+)
 def test_match_retry_preserves_failure_journal(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     launched: bool,
-    failure: str,
+    error_type: type[BaseException],
 ) -> None:
     torch.set_num_threads(1)
     space = ObservationSpace()
@@ -111,24 +122,23 @@ def test_match_retry_preserves_failure_journal(
     opponent = build(match.players[1], {})
 
     def failed_forward(rows: list[Prepared]) -> list[np.ndarray]:
-        if failure == "retry":
-            raise RetryRequested("controlled transport failure")
-        raise managym.AgentError("controlled game failure")
+        raise error_type("controlled failure")
 
     def forward(rows: list[Prepared]) -> list[np.ndarray]:
         return [np.zeros(row.legal.shape[1], dtype=np.float32) for row in rows]
 
-    if failure == "retry":
-        with pytest.raises(RetryRequested, match="controlled transport failure"):
-            elemental_play.play(match, [failed_forward, opponent])
-    else:
-        result = elemental_play.play(match, [failed_forward, opponent])
-        assert all(
-            not row["valid"] and row["score"] is None for row in result.tables["games"]
-        )
+    native = error_type in (managym.AgentError, PanicException)
+    with pytest.raises(
+        ValueError if native else error_type,
+        match="no valid replayed games" if native else "controlled failure",
+    ):
+        elemental_play.play(match, [failed_forward, opponent])
     root = elemental_play.evidence_directory() / match.key
     retained = {p: p.read_bytes() for p in root.rglob("failures/*.jsonl")}
     assert len(retained) == 1
+    if native:
+        assert error_type.__name__ in next(iter(retained.values())).decode()
+        assert list(root.rglob("rows.json"))
 
     result = elemental_play.play(match, [forward, opponent])
     assert len(result.tables["games"]) == 2

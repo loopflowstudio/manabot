@@ -23,6 +23,7 @@ from manabot.sim.child import ChildProcess
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import apply_game_event, replay_games
+from managym import AgentError
 from managym.journal import DurableJournal
 
 
@@ -44,9 +45,11 @@ def failure_record(
 def is_game_error(error: BaseException) -> bool:
     """Whether an error invalidates one game instead of ending the process.
 
-    A native panic arrives as PyO3's `PanicException`, a `BaseException`.
+    Only native failures are game outcomes. Policy, configuration and Python
+    programming errors must reach the caller. A native panic arrives as
+    PyO3's `PanicException`, a `BaseException`.
     """
-    return isinstance(error, Exception) or type(error).__name__ == "PanicException"
+    return isinstance(error, AgentError) or type(error).__name__ == "PanicException"
 
 
 def supervise_game(

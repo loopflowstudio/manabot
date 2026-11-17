@@ -16,9 +16,36 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.eval.agent_loader import load
 from manabot.eval.agents import Sampler, build, game_players
+import manabot.eval.game as game
 from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.infra.identity import file_sha256
 from manabot.policy.prepare import prepare
+from manabot.sim.card_evidence import EvidenceRef
+import managym
+from tests.fixtures.evaluation_callbacks import PanicException
+
+
+@pytest.mark.parametrize(
+    "error_type",
+    [managym.AgentError, PanicException, RuntimeError, ValueError, KeyError],
+)
+def test_replay_only_retains_native_failures(
+    monkeypatch: pytest.MonkeyPatch, error_type: type[BaseException]
+) -> None:
+    def failed_replay(
+        trace: dict[str, object], directory: Path | None
+    ) -> tuple[dict[str, object], EvidenceRef | None]:
+        raise error_type("controlled replay failure")
+
+    monkeypatch.setattr(game, "verify_game", failed_replay)
+    if error_type in (managym.AgentError, PanicException):
+        outcome = game.replay_in_process([{}], None)
+        assert outcome.error == f"{error_type.__name__}: controlled replay failure"
+        assert outcome.receipts is not None
+        assert outcome.receipts[0]["passed"] is False
+    else:
+        with pytest.raises(error_type, match="controlled replay failure"):
+            game.replay_in_process([{}], None)
 
 
 def test_loader_batches_prepared_rows_without_sampling(tmp_path: Path) -> None:

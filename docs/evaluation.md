@@ -235,6 +235,9 @@ play through bounded local children.
 `AgentError` and PyO3 `PanicException` produce invalid, score-null rows and retain
 the journal; later games in the group still run. Replay verifies Commands,
 not cross-device policy equivalence. Invalid rows never become forfeits.
+Other Python exceptions fail the match. Elemental also fails a match with no
+valid replayed games, preserving its evidence, so an all-invalid smoke cannot
+report success.
 
 Cooperative clock checks cannot interrupt a stuck native call. At the pinned
 Etude revision, a true hang or process exit retries the grouped evaluation job;

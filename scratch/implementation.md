@@ -1,5 +1,12 @@
 # MTG-329 evidence
 
+## Evaluation errors — 2026-11-16
+
+- `uv run --extra dev --extra artifacts pytest tests/eval/test_elemental_play.py tests/eval/test_etude_agents.py::test_native_failures_remain_rows_across_etudes_game_process tests/eval/test_etude_agents.py::test_replay_only_retains_native_failures -q`: 24 passed (37.31s). Injected native AgentError/PyO3-shaped panic retain score-null games and continue the group through Etude's real game process; Python RuntimeError/ValueError/KeyError propagate from play and replay. All-invalid Elemental callbacks fail with retained rows/journals, and successful retries preserve earlier evidence, for local and launched-style output paths.
+- Removed the redundant RetryRequested override: transport retry now follows
+  the same propagation path as other non-native errors. No real Rust panic,
+  paid run or CLI smoke was injected in this slice. Nightly remains for gate.
+
 Prior commands and evidence: bf18f7c3e9:scratch/implementation.md, including
 retired-loop bitwise parity, stop/resume, native-error retry journals, installed
 3.12/3.13 wheels, isolated integration checks, world/monitor checks and the
@@ -39,3 +46,8 @@ choice-corpus fix. No paid/provider/service run or landing.
 Not shown: CUDA, real Rust panic or native hang injection, launched/provider
 runs, browser proof, full suite, automatic policy→sampler scheduling. The full
 nightly baseline remains a gate obligation; publication stays with the caller.
+
+- QA fourth pass, 2026-11-16 (scratch/qa.html): the evaluation, training and
+  workflows guides run as written on a fresh ETUDE_HOME. Fixed snapshot
+  stranding an empty output on a wrong source (opens the source first);
+  `pytest tests/training/test_learning_dashboard.py -q -k snapshot`: 1 passed.

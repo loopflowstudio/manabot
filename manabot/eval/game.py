@@ -12,8 +12,6 @@ from pathlib import Path
 import time
 from typing import Any
 
-from etude.errors import RetryRequested
-
 from manabot.sim.agent import GamePlayer
 from manabot.sim.card_evidence import EvidenceRef
 from manabot.sim.native_game import execute_game
@@ -52,7 +50,6 @@ def play_game(
             send,
             agents=agents,
             deadline=started + game_seconds,
-            propagate_errors=(RetryRequested,),
         )
         game["execution_seconds"] = time.monotonic() - started
         send(("settled", game))

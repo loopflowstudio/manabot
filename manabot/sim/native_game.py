@@ -103,13 +103,12 @@ def execute_game(
     backend_factory: Callable[[], Backend] | None = None,
     agents: Mapping[str, GamePlayer] | None = None,
     deadline: float | None = None,
-    propagate_errors: tuple[type[BaseException], ...] = (),
 ) -> None:
     """Play one game, sending phase, pending and decision events, then its result.
 
     Supplied agents own policy preparation/choice; standalone scalar players
-    are built in-process. Transport failures named by the caller propagate to
-    its retry owner instead of becoming invalid game rows.
+    are built in-process. Only native AgentError/PanicException failures become
+    invalid game rows; other errors propagate to the caller.
     """
     responsible = None
     env = None
@@ -287,12 +286,10 @@ def execute_game(
                 break
         else:
             failure_record(game, "command_cap", "game exceeded its Command cap", None)
-    except propagate_errors:
-        if env is not None:
-            env.close()
-        raise
     except BaseException as exc:
         if not is_game_error(exc):
+            if env is not None:
+                env.close()
             raise
         game["failure_trace"] = traceback.format_exc()
         game["error_class"] = type(exc).__name__

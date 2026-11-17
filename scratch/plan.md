@@ -39,6 +39,9 @@ is_game_error (in-process and child replay).
 
 Cooperative seconds/Command caps and durable pending journals stay. Native
 AgentError/PanicException is invalid, score null, with remaining games played.
+Other Python errors propagate from play/replay. Elemental rejects a group
+with no valid replayed games after retaining its evidence, so an all-invalid
+smoke cannot pass. Removed the now-redundant RetryRequested exception override.
 Etude Task 2d1933 owns hard per-match deadlines/dead processes; until it lands,
 true hangs/exits retry the grouped job. No nested-process workaround.
 
@@ -76,6 +79,10 @@ and resume/recipe/retained-reader checks: 25 passed; local recipe completed
 two updates. Commands and evidence: implementation.md.
 
 ## Remaining
+
+QA error handling checks: 24 passed (37.31s); command and limits in
+implementation.md. The all-invalid callback regression and native continuation
+checks pass; no nightly baseline run in this slice.
 
 - Gate and publication are the caller's steps. The full nightly baseline
   (`.github/workflows/baseline.yml`, workflow_dispatch: `etude train` then

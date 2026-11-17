@@ -226,6 +226,10 @@ def play(match: Match[Conditions], agents: Sequence[object]) -> Result:
             )
             for r in played
         ]
+        if not any(game.valid for game in games):
+            raise ValueError(
+                f"Elemental match has no valid replayed games; evidence retained: {output}"
+            )
         return Result(
             tables={"games": game_rows(games, conditions.kind), **found.tables},
             blobs=found.blobs,

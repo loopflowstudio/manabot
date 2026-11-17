@@ -1,5 +1,11 @@
 # MTG-329 live limits and decisions
 
+2026-11-16 QA fix choice: reject an Elemental callback with zero valid games
+after playing its whole group and retaining evidence. The callback is Etude's
+success boundary, so an all-invalid group fails even in a larger evaluation;
+mixed groups still return native failures as score-null rows. Ordinary Python
+errors propagate from play and replay. No cached/frozen results are rewritten.
+
 Jack Heart, 2026-11-16: "the whole point is the adoption" and
 "These should be done/mainatined in this task". Full direction:
 .lf/prompts/20261116-151510-YzKGdb-steer.md,
