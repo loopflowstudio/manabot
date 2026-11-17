@@ -535,6 +535,7 @@ class ActorCritic(nn.Module):
             live_tokens=self.live_tokens and self.config.attention_on,
             value_token=self.value_token is not None,
             memory_summaries=self.memory_summaries,
+            memory_fold=not inference and self.config.decision_memory == "gru",
             binding=spec.binding,
             action_capacity=capacity,
             select_programs=not inference and not self.bucketed_shapes,

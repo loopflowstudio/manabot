@@ -1714,3 +1714,107 @@ claimed. Next: the
 execution-chunk learner fold and its stateless-reference output/gradient proof,
 then the separately measured parameter-versioned collection fold. No paid
 admission, pilot or matched training/evaluation was launched.
+
+## Execution-chunk learner fold — 2026-11-17
+
+**Keep the learner fold; the CPU gate is still unmet.** Attribution did not
+trigger the seventh review's stop condition. The GRU update now prepares and
+embeds each distinct selected chain node once, and advances the recurrent state
+from its exact predecessor. Policy rows read their own tails, preserving order,
+duplicates, actor/critic denominators and one clip/Adam step per logical
+minibatch. There is no neural state beyond the execution chunk's autograd graph.
+Collection/bootstrap and transformer encoding remain stateless; a collection
+fold is still a separate, unimplemented step.
+
+First, run the existing suffix-capture whole-game harness at 32 execution rows
+on source `a275e27ff086`, with injected CPU wall timers inside DecisionMemory
+and its GRU only. Tensor hooks on hidden output and packed input gradients bound
+recurrent backward; semantic-card GRUs are excluded. The same two streams,
+556 learner decisions and one actual update take 5.315 s update time. Memory
+forward is 0.585 s, including 0.044 s recurrence; recurrent backward is 0.183 s.
+Thus recurrence forward + backward is **0.227 s**, below the design's 0.98 s
+stop condition. This is the measured batch-width recurrence, not a prediction
+of folded recurrence speed. Instrumentation preserves exact collection output,
+prefix, final gradient and updated-state hashes against the later stateless
+32-row case.
+
+A separate Torch autograd profiler run on that same workload attributes CPU
+self time by each forward operation's autograd sequence number and its matching
+backward evaluate-function range. Sum self time once, avoiding nested ranges:
+
+| Memory-local work | Forward (s) | Backward (s) |
+|---|---:|---:|
+| Detail/reference/member/record embedding and summary projection/normalization | 0.556 | 0.897 |
+| GRU recurrence | 0.056 | 0.182 |
+
+The profiler's update takes 5.789 s; its overhead is not a throughput result.
+Local embedding/summary work dominates recurrence (1.453 versus 0.238 s).
+The earlier 2.78 s GRU-over-control update excess is not wholly attributed by
+these scopes: shared definition encoding/gradients, extra gated board attention,
+preparation, optimizer and other work remain outside. Do not subtract profiler
+self times from an unprofiled wall-time difference and present the residual as
+another measured phase. The wall timers and profiler agree that recurrence
+alone does not trigger the stop, permitting this fold.
+
+Host preparation now builds a temporary node tree from the selected immutable
+prefixes, routes both newly introduced and predecessor-owned references into
+one feature table, and prepares packed GRU calls by tree depth. Each node's
+predecessor state is an ordinary differentiable tensor; repeated descendants'
+gradients add through it. Dense inputs and stateless retained preparation remain
+the behavioral reference and the inference path. The fold owns only prepared
+arrays, not native prefixes or a learned cache. There is no sampling change,
+row reordering, truncated history, new model parameter or checkpoint migration.
+
+Measure the implementation with 36 fresh sequential CPU processes: three
+repeats at each of 32/128/256 execution rows, incumbent, log-enabled control,
+stateless GRU and folded GRU. Alternate case order on the middle repeat. Only
+stateless GRU substitutes `_prepare_retained` for `_prepare_fold`; every other
+production path and the harness are identical. No build, tests or induced load
+ran concurrently. Medians [min, max], seconds:
+
+| Rows | Arm | Collection | Update | Total |
+|---|---|---|---|---|
+| 32 | incumbent | 1.460 [1.419, 1.474] | 2.596 [2.583, 2.938] | 4.057 [4.015, 4.398] |
+| 32 | control | 1.620 [1.542, 1.685] | 2.617 [2.587, 3.111] | 4.207 [4.158, 4.796] |
+| 32 | stateless GRU | 2.886 [2.691, 2.910] | 5.330 [5.310, 5.350] | 8.196 [8.021, 8.261] |
+| 32 | folded GRU | 2.879 [2.832, 2.969] | 3.827 [3.813, 3.886] | 6.765 [6.645, 6.796] |
+| 128 | incumbent | 1.353 [1.301, 1.481] | 2.031 [1.938, 2.060] | 3.413 [3.332, 3.419] |
+| 128 | control | 1.464 [1.449, 1.644] | 2.028 [1.963, 2.062] | 3.526 [3.478, 3.607] |
+| 128 | stateless GRU | 2.933 [2.734, 2.973] | 4.851 [4.826, 4.959] | 7.759 [7.693, 7.825] |
+| 128 | folded GRU | 2.897 [2.855, 2.910] | 3.203 [3.178, 3.237] | 6.100 [6.033, 6.147] |
+| 256 | incumbent | 1.365 [1.315, 1.506] | 1.992 [1.924, 2.004] | 3.357 [3.319, 3.429] |
+| 256 | control | 1.561 [1.431, 1.647] | 2.006 [1.952, 2.009] | 3.570 [3.437, 3.599] |
+| 256 | stateless GRU | 2.977 [2.969, 3.933] | 5.038 [4.954, 8.324] | 8.015 [7.923, 12.257] |
+| 256 | folded GRU | 2.788 [2.749, 3.999] | 3.255 [3.171, 4.636] | 6.043 [5.920, 8.635] |
+
+Update medians improve 1.393/1.515/1.548×, with separated ranges at every row
+limit. Total medians improve 1.212/1.272/1.326×; total ranges overlap at 256
+rows, and collection is unchanged by this implementation. Folded total rates
+are **0.600/0.559/0.556× incumbent**, outside the session's 1.3× time gate.
+All cases retain 556 learner decisions. Stateless/folded GRU collection outputs
+and prefix hashes match exactly at each limit; prefixes are not assumed
+byte-identical across different arms. Counts remain 272/5,688/82/3,592.
+The release extension stays `94bb1e63…`; complete identities, host/load records
+and per-phase profiles are in the receipts. These are two-stream random-policy
+software measurements, not wider-stream host fit, CUDA, learning or strength.
+
+Validation: focused tests compare action/value outputs and every parameter
+gradient against dense stateless encoding, at tolerances 2e-6/2e-5 for outputs
+and 2e-5/2e-4 for gradients (absolute/relative). They cover uneven depths,
+repeated/shuffled rows with unequal loss weights, a reference introduced after
+the first chunk, backwards reference joins, changed roots, fork/coalesced tails,
+K1/K4, live/padded attention and a parameter update. Prepared arrays retain no
+native nodes; empty history is exactly zero and transformer stays stateless.
+The selected execution checks preserve sampling, bootstrap and Adam. Final
+focused run: 17 passed, plus the earlier real-prefix/checkpoint/cache run
+(9 passed). Ruff, whitespace and the experiment-data tracking guard pass.
+Native code/admission were unchanged; no native rebuild or full suite rerun.
+
+Evidence: five manifest entries published under
+`experiments/data/opponent-memory/20261117-learner-fold`, with all 93 archive
+members verified locally. No fresh remote fetch is claimed. Raw measurements
+and source are retained in `.runs/decision-memory-attribution/` and
+`.runs/decision-memory-learner-fold/`; they contain the exact pre-fold source.
+No paid work, pilot or matched training/paired evaluation was launched. The
+Task's scientific comparison remains unrun. Next is the separately measured
+collection fold; paid admission and decision 1 remain unresolved.

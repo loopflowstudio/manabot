@@ -1,4 +1,4 @@
-"""Stateless full-prefix memory encoders and their shared record featurizer.
+"""Decision memory encoders and their shared record featurizer.
 
 Policy/value gradients flow through the J1 board summaries into both the record
 featurizer and temporal encoder. Every call starts from the supplied prefix;
@@ -57,6 +57,13 @@ class DecisionMemory(nn.Module):
             torch.randn(1, summaries, board_width) / board_width**0.5
         )
 
+    def _summaries(self, hidden: torch.Tensor) -> torch.Tensor:
+        """Map a final recurrent state to the shared board-token contract."""
+        return self.join_norm(
+            self.output(hidden).reshape(-1, self.summaries, self.memory_type.shape[-1])
+            + self.memory_type
+        )
+
     def forward(
         self,
         rows: MemoryRows[torch.Tensor],
@@ -68,7 +75,7 @@ class DecisionMemory(nn.Module):
         board_width = self.memory_type.shape[-1]
         # Empty histories bypass recurrence/attention and produce exactly zero,
         # including the type embedding, in both encoders.
-        if not rows.schedule.sizes:
+        if not rows.schedule.sizes and (rows.fold is None or not rows.fold.node_count):
             return self.memory_type.new_zeros((batch, self.summaries, board_width))
         details = self.detail_map(
             torch.cat(
@@ -123,17 +130,28 @@ class DecisionMemory(nn.Module):
             )
         )
         if self.gru is not None:
+            if rows.fold is not None:
+                # A predecessor is evaluated once per execution chunk. Shared
+                # descendants contribute gradients to that same state; no state
+                # survives the forward/backward or a parameter update.
+                states = records.new_zeros((rows.fold.node_count + 1, 64))
+                for level in rows.fold.levels:
+                    packed = PackedSequence(
+                        records[level.records], torch.tensor(level.schedule.sizes)
+                    )
+                    _, hidden = self.gru(packed, states[level.parents][None])
+                    states = states.index_copy(
+                        0, level.nodes, hidden[-1][level.schedule.restore]
+                    )
+                summaries = self._summaries(states[rows.fold.tails])
+                return summaries * (rows.fold.tails != 0)[:, None, None]
             packed = PackedSequence(
                 records[rows.schedule.gather], torch.tensor(rows.schedule.sizes)
             )
             _, hidden = self.gru(packed)
-            summaries = self.output(hidden[-1][rows.schedule.restore]).reshape(
-                -1, self.summaries, board_width
-            )
+            summaries = self._summaries(hidden[-1][rows.schedule.restore])
             result = records.new_zeros((batch, self.summaries, board_width))
-            return result.index_copy(
-                0, rows.nonempty_batches, self.join_norm(summaries + self.memory_type)
-            )
+            return result.index_copy(0, rows.nonempty_batches, summaries)
         assert self.transformer is not None and self.queries is not None
         lengths = records.new_tensor(rows.lengths)
         recency = (lengths[rows.record_batches] - 1 - rows.record_slots)[:, None] / 128

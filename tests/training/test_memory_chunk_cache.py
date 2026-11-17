@@ -51,8 +51,8 @@ def test_chunk_cache_preserves_dense_features_outputs_and_gradients() -> None:
     dense = {key: np.repeat(value, 2, axis=0) for key, value in raw.items()}
     selected = PrefixObservation(dense, [prefix, prefix], capacities)
     model = policy(space, "gru", 1, bucketed=True)
-    expected = model.prepare(dense)
-    actual = model.prepare(selected)
+    expected = model.prepare(dense, inference=True)
+    actual = model.prepare(selected, inference=True)
     for name, values in array_fields(expected, np.ndarray).items():
         np.testing.assert_array_equal(
             array_fields(actual, np.ndarray)[name], values, err_msg=name
@@ -79,7 +79,7 @@ def test_chunk_cache_preserves_dense_features_outputs_and_gradients() -> None:
             gradients[0][name], gradients[1][name], atol=0, rtol=0
         )
     # Cache warmup preserves results; a different vocabulary must be admitted.
-    warm = model.prepare(selected)
+    warm = model.prepare(selected, inference=True)
     for name, values in array_fields(actual, np.ndarray).items():
         np.testing.assert_array_equal(array_fields(warm, np.ndarray)[name], values)
     tables = model._admission_spec().tables
@@ -176,7 +176,9 @@ def test_record_features_do_not_depend_on_selected_prefix_length(
     later = store.capture(raw, 0, identity)
     assert earlier.tail is later.tail.previous.previous
     for prefix, dense in ((earlier, before), (later, after)):
-        retained = model.prepare(PrefixObservation(raw, [prefix], capacities)).memory
+        retained = model.prepare(
+            PrefixObservation(raw, [prefix], capacities), inference=True
+        ).memory
         assert retained is not None
         for name, expected in array_fields(dense, np.ndarray).items():
             np.testing.assert_array_equal(

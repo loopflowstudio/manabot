@@ -47,6 +47,25 @@ class MemoryFeatures[A]:
 
 
 @dataclass(frozen=True)
+class MemoryLevel[A]:
+    """Independent chain nodes at one depth, packed for a single GRU call."""
+
+    records: A
+    parents: A
+    nodes: A
+    schedule: Packed[A]
+
+
+@dataclass(frozen=True)
+class MemoryFold[A]:
+    """An execution chunk's node tree; index zero is the zero initial state."""
+
+    levels: tuple[MemoryLevel[A], ...]
+    tails: A
+    node_count: int
+
+
+@dataclass(frozen=True)
 class MemoryRows[A](MemoryFeatures[A]):
     """Features and sequence coordinates for selected policy rows."""
 
@@ -56,6 +75,7 @@ class MemoryRows[A](MemoryFeatures[A]):
     schedule: Packed[A]
     lengths: tuple[int, ...]
     width: int
+    fold: MemoryFold[A] | None = None
 
 
 def memory_lengths(obs: "ObservationBuffers", row: int) -> tuple[int, int, int, int]:
@@ -502,6 +522,39 @@ def validate_retained_memory(
             node.features.admission = binding
 
 
+def _chunk_features(node: Tail, tables: Tables) -> MemoryFeatures[np.ndarray]:
+    """Read the vocabulary-bound immutable feature owner shared by both encodes."""
+    cached = node.features.prepared
+    if cached is None or cached[0] != tables.memory_binding:
+        prepared = _prepare_dense_memory(chunk_observation(node), tables)
+        assert prepared is not None
+        fragment = MemoryFeatures(
+            **{f.name: getattr(prepared, f.name) for f in fields(MemoryFeatures)}
+        )
+        # All feature arrays are immutable, bounded by this chunk's life.
+        for f in fields(fragment):
+            value = getattr(fragment, f.name)
+            if isinstance(value, np.ndarray):
+                value.setflags(write=False)
+        node.features.prepared = (tables.memory_binding, fragment)
+    else:
+        fragment = cached[1]
+    return fragment
+
+
+def _empty_memory(tables: Tables) -> MemoryRows[np.ndarray]:
+    """The dense encoder owns the canonical empty shapes and dtypes."""
+    empty = _prepare_dense_memory(
+        {
+            key: np.zeros((0, 0, width), np.float32)
+            for key, width in zip(_FIELDS, _WIDTHS, strict=True)
+        },
+        tables,
+    )
+    assert empty is not None
+    return empty
+
+
 def _prepare_retained(
     obs: "PrefixObservation", tables: "Tables"
 ) -> MemoryRows[np.ndarray]:
@@ -514,24 +567,7 @@ def _prepare_retained(
     reference_base = record_base = 0
     for batch, prefix in enumerate(obs.prefixes):
         for node in prefix.tail.chunks() if prefix.tail else ():
-            cached = node.features.prepared
-            if cached is None or cached[0] != tables.memory_binding:
-                prepared = _prepare_dense_memory(chunk_observation(node), tables)
-                assert prepared is not None
-                fragment = MemoryFeatures(
-                    **{
-                        f.name: getattr(prepared, f.name)
-                        for f in fields(MemoryFeatures)
-                    }
-                )
-                # All feature arrays are immutable, bounded by this chunk's life.
-                for f in fields(fragment):
-                    value = getattr(fragment, f.name)
-                    if isinstance(value, np.ndarray):
-                        value.setflags(write=False)
-                node.features.prepared = (tables.memory_binding, fragment)
-            else:
-                fragment = cached[1]
+            fragment = _chunk_features(node, tables)
             cursor = node.previous.cursor if node.previous else MemoryCursor()
             for name in arrays:
                 value = getattr(fragment, name)
@@ -546,15 +582,7 @@ def _prepare_retained(
         slots.append(np.arange(prefix.record_count, dtype=np.int64))
         reference_base += prefix.counts[2]
         record_base += prefix.record_count
-    # The dense empty path owns the single canonical shape/dtype declaration.
-    empty = _prepare_dense_memory(
-        {
-            key: np.zeros((0, 0, width), np.float32)
-            for key, width in zip(_FIELDS, _WIDTHS, strict=True)
-        },
-        tables,
-    )
-    assert empty is not None
+    empty = _empty_memory(tables)
     values = {
         name: np.concatenate(parts) if parts else getattr(empty, name)
         for name, parts in arrays.items()
@@ -572,12 +600,103 @@ def _prepare_retained(
     )
 
 
+def _prepare_fold(obs: PrefixObservation, tables: Tables) -> MemoryRows[np.ndarray]:
+    """Embed each selected node once, with exact joins to predecessor references.
+
+    No neural tensors or raw prefix owners escape preparation. The tree and its
+    autograd state belong to this execution chunk, never to the rollout cache.
+    """
+    from manabot.policy.prepare import pack
+
+    nodes: list[Tail] = []
+    indexes: dict[str, int] = {}
+    depths: list[int] = []
+    references: list[np.ndarray] = [np.empty(0, np.int64)]
+    record_starts: list[int] = []
+    arrays: dict[str, list[np.ndarray]] = {f.name: [] for f in fields(MemoryFeatures)}
+    reference_base = record_base = 0
+    parents: list[int] = []
+    for prefix in obs.prefixes:
+        for node in prefix.tail.chunks() if prefix.tail else ():
+            if node.key in indexes:
+                continue
+            parent = indexes[node.previous.key] if node.previous else 0
+            fragment = _chunk_features(node, tables)
+            count = len(fragment.reference_numbers)
+            joined = np.concatenate(
+                (references[parent], np.arange(reference_base, reference_base + count))
+            )
+            # Fragment member joins are relative to the newly introduced rows;
+            # negative values name a reference owned by a predecessor chunk.
+            cursor = node.previous.cursor if node.previous else MemoryCursor()
+            for name in arrays:
+                value = getattr(fragment, name)
+                if name == "detail_references":
+                    value = value + reference_base
+                elif name == "member_references":
+                    value = joined[value + cursor.references]
+                elif name == "member_groups":
+                    value = value + record_base * 3
+                arrays[name].append(value)
+            record_starts.append(record_base)
+            reference_base += count
+            record_base += len(fragment.numbers)
+            nodes.append(node)
+            indexes[node.key] = len(nodes)
+            references.append(joined)
+            parents.append(parent)
+            depths.append(depths[parent - 1] + 1 if parent else 0)
+    # Sequence lengths retain original policy row order; the fold owns routes.
+    empty = _empty_memory(tables)
+    levels: list[MemoryLevel[np.ndarray]] = []
+    for depth in range(max(depths, default=-1) + 1):
+        selected = [i for i, value in enumerate(depths) if value == depth]
+        lengths = np.array([len(nodes[i].chunk.rows[0]) for i in selected], np.int64)
+        schedule = pack(lengths)
+        records = np.concatenate(
+            [
+                np.arange(record_starts[i], record_starts[i] + length)
+                for i, length in zip(selected, lengths, strict=True)
+            ]
+        )
+        levels.append(
+            MemoryLevel(
+                records[schedule.gather],
+                np.array([parents[i] for i in selected], np.int64)[
+                    np.argsort(schedule.restore)
+                ],
+                np.array(selected, np.int64) + 1,
+                schedule,
+            )
+        )
+    lengths = tuple(p.record_count for p in obs.prefixes)
+    return replace(
+        empty,
+        **{
+            name: np.concatenate(parts) if parts else getattr(empty, name)
+            for name, parts in arrays.items()
+        },
+        lengths=lengths,
+        fold=MemoryFold(
+            tuple(levels),
+            np.array(
+                [indexes[p.tail.key] if p.tail else 0 for p in obs.prefixes], np.int64
+            ),
+            len(nodes),
+        ),
+    )
+
+
 def prepare_memory(
-    obs: "ObservationBuffers", tables: "Tables"
+    obs: "ObservationBuffers", tables: "Tables", *, fold: bool = False
 ) -> MemoryRows[np.ndarray] | None:
     retained = retained_memory(obs)
     return (
-        _prepare_retained(retained, tables)
+        (
+            _prepare_fold(retained, tables)
+            if fold
+            else _prepare_retained(retained, tables)
+        )
         if retained is not None
         else _prepare_dense_memory(obs, tables)
     )

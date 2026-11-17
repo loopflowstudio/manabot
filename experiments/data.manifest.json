@@ -41826,6 +41826,26 @@
    "sha256": "295af228b5ddb97d6648e3251bfcda034e95be045a327a99416476d3c305b8f8",
    "bytes": 2674809
   },
+  "experiments/data/opponent-memory/20261117-learner-fold/measurement-files.json": {
+   "sha256": "f4e3922dec07014c18760f2f114d70d128f62be9b1ad7e2eed017f0f05b293ad",
+   "bytes": 12987
+  },
+  "experiments/data/opponent-memory/20261117-learner-fold/measurement.tar.gz": {
+   "sha256": "7407b93122217ebb8a3d4cef3d015ba651ad6c16825c1d1ef45dbbac28e47528",
+   "bytes": 99255
+  },
+  "experiments/data/opponent-memory/20261117-learner-fold/source-files.json": {
+   "sha256": "6dfd89cdbb8feb234750803dec57272be346fab6665ded014675eff05b4c0547",
+   "bytes": 2753
+  },
+  "experiments/data/opponent-memory/20261117-learner-fold/source.tar.gz": {
+   "sha256": "3640fccee075f3cfad6e2de79d57bc49e80024bc02d11571f212e5e5239cd228",
+   "bytes": 102483
+  },
+  "experiments/data/opponent-memory/20261117-learner-fold/verification.json": {
+   "sha256": "12c1e47f0ff31f78534b64a53098eaef2efc6317106d29f506c79d66a10e19af",
+   "bytes": 185
+  },
   "experiments/data/opponent-memory/20261117-sharing-recency/measurement-files.json": {
    "sha256": "1fb55e29dcbd0b63086e55c580e122963f6163a5610703c653bf09c7e26d2221",
    "bytes": 8047

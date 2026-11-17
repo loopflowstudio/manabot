@@ -756,6 +756,17 @@ chunk directly from admitted fragments. Feature caches expire with unreachable
 chunks and hold no learned embeddings or recurrent state. Sampling still uses one
 RNG call in the original group order.
 
+For GRU learning, each execution chunk prepares the distinct record chunks in
+its selected prefixes once. The backend embeds each node once, advances its GRU
+from the predecessor state and reads each policy row at its own tail. Repeated
+prefixes share gradient paths: their loss contributions still add with the
+logical actor and critic denominators. Rows keep their selected order; sampling
+and optimizer boundaries are unchanged. This temporary tree and its neural
+states expire with that execution chunk's backward graph. Collection and
+bootstrap still encode each full prefix; there is no learned cache across
+calls or parameter updates. Dense inputs and the transformer retain the
+stateless full-prefix encoder.
+
 A memory-enabled training stage (including a control retaining the
 same logs) requires explicit positive `Execution.collection_rows`,
 `Execution.bootstrap_rows` and `Execution.learner_rows` limits. For example,
