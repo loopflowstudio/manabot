@@ -1,8 +1,8 @@
 """Exploratory whole-game opponent-memory pilot (Task 3dca91).
 
 The report (`opponent_memory.md`) owns the design, evidence and open decisions.
-`training_jobs` stops paid work pending CPU host-cost reductions and GRU-only
-repricing. Frozen CUDA runs retain their original source and transformer workers;
+`training_jobs(..., calibration=True)` declares one capped optimized CUDA
+admission. Pilot training remains stopped pending its result and GRU-only pricing. Frozen CUDA runs retain their original source and transformer workers;
 `branch_jobs` freezes control and GRU from each published trunk.
 `census` and `probe` are the USD0 commands. Nothing runs on import.
 """
@@ -47,7 +47,30 @@ MAX_USD = 50
 
 
 def training_jobs(revision: str, calibration: bool = False) -> list[RunRequest]:
-    """No further paid work until CPU host-cost reductions have been measured."""
+    """Declare the session's one capped admission; keep pilot training stopped."""
+    if calibration:
+        from etude.jobs import TrainingJob as PythonJob
+
+        from experiments.opponent_memory import Calibration, calibrate
+        from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
+        from manabot.infra.source import bundle_at
+
+        root = Path(__file__).resolve().parents[1]
+        job = PythonJob(
+            name="cuda-calibration-optimized",
+            train=calibrate,
+            config=Calibration(source_bundle=bundle_at(root, revision)),
+            repo=str(root),
+            revision=revision,
+            setup=machine_setup(" --extra artifacts --extra dev"),
+            extras=("artifacts", "dev"),
+            max_hours=1.25,
+            max_usd=Decimal("1.00"),
+            max_attempts=1,
+        ).plain()
+        return job.model_copy(
+            update={"command": f"{TOOLCHAIN_ENV}\n{job.command}"}
+        ).runs(39100)
     raise RuntimeError(
         "Paid calibration and pilot launches are stopped pending CPU host-cost "
         "reductions and matched-row measurements against the true incumbent. "
