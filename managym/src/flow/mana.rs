@@ -1936,7 +1936,7 @@ impl Game {
             .into_iter()
             .skip(1)
             .collect();
-        let mut offered_units = 0;
+        let mut offered_units = 0_u16;
         let actions: Vec<Action> = model
             .sources
             .iter()
@@ -1966,7 +1966,7 @@ impl Game {
                 if !after.payable(tapped, obligations, SourcePolicy::All) {
                     return None;
                 }
-                offered_units += output.total();
+                offered_units = offered_units.saturating_add(output.total());
                 Some(Action::TapForMana {
                     player,
                     permanent: source.permanent,

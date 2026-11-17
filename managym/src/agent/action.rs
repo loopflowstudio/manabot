@@ -27,7 +27,7 @@ pub enum ActionType {
     PayCost = 11,
     /// Choose a mode of a modal effect.
     ChooseMode = 12,
-    /// Tap a permanent to pay {1} of a waterbend cost.
+    /// Tap a permanent for a waterbend cost or produce mana for a pending payment.
     TapForCost = 13,
     LearnTakeLesson = 14,
     LearnDiscard = 15,
