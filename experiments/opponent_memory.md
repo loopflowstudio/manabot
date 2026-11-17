@@ -1622,3 +1622,12 @@ state updated. The global wait was stopped; the launcher's existing per-supply
 collection and termination helpers were invoked under its normal lock for
 `mtg252-a40` only. They retained the failed outcome, 230-output manifest and
 confirmed rental deletion. No unrelated supply or SDK source was changed.
+
+The expanded-layout quote was admitted at USD1.18 planned, USD1.20 job cap,
+with USD1.47 already committed under the cumulative USD3 limit. Source
+`857fa4517996` freezes the six-worker workload before launch. The original
+230 SDK-verified outputs (342,991,544 bytes) were packaged and every archived
+member hash rechecked. All eight live receipts match their sealed SDK bytes.
+Fifteen added manifest entries publish that bundle, individual receipts, source
+and attempt records and confirmed deletion. The artifact guard passed; no
+fresh archive-fetch round trip from the artifact store is claimed.
