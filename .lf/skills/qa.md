@@ -422,9 +422,9 @@ publish, land or choose the next Graph step from here.
   on real decisions: logits and value must be exactly equal. Read gates from the
   checkpoint keys containing `memory_gate`. A history-disabled producer must be
   refused naming the `observation.max_decision_*` fields. For the remote path,
-  `PretrainedInitialization.from_storage(DirectoryStorage(<dir>), ...)` feeds
-  `experiments.opponent_memory.branch_jobs` (trunk seed must be a declared
-  label, e.g. 39101); to run a built job, commit first, copy the inputs under
+  `experiments.opponent_memory.training_jobs(revision, trunks=...)` reads the
+  published trunks (each seed must be a declared label, e.g. 39101). To run a
+  built job, commit first, copy the inputs under
   `spec.pretrained.files()` names, set the `ETUDE_*` variables `_run_worker`
   reads and call `run_worker()`. It writes `.manabot-source.json` into the
   checkout: delete it after each run or the next refuses. Two of seven
