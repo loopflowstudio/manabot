@@ -134,7 +134,19 @@ passed). Commands and limits: implementation.md.
   .lf/prompts/20261117-065016-7oIWNJ-steer.md). Jack Heart: "i also would
   have expected this pr to involve more deletion of the executor and training
   regime code, no?"; offered keep / thin reader / delete, he answered "3".
-  Not started; comes after the L4 measurement, which stays pending, not abandoned.
+  First independent deletion slice is built (below); the GPU measurement stays
+  pending, not abandoned.
+  - Built 2026-11-17: deleted `experiment/config.py` and `attacks.py`, their
+    exclusive tests and `tests/training/wdl_baseline.py`; removed only builder
+    assertions from mixed history/closure tests. No live source callers existed.
+    Updated the integration inventory. `training.report` survives because current
+    Etude experiment reports use its panels; `job_labels` now takes ModelConfig,
+    and tla_frontier passes its models. Production deletion: 583 lines; total
+    code/test/workflow diff: 1,140 lines deleted, 17 added (before scratch).
+    Remaining reader deletion below is unbuilt; current tla_frontier still reads
+    regime JSON. Its settings migration must precede deleting regime.py.
+    Focused history, collector, panel and import-boundary checks: 13 passed.
+    Integration workflow collection: see implementation.md.
   - Delete the retained regime/stage records and code that exists only to read
     them: `manabot/training/regime.py` (928 lines: TrainingRegime,
     TrainSelfPlay, other Stages, Execution, RecoveryPolicy, CheckpointCadence,

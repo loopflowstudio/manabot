@@ -4,7 +4,7 @@ An experiment's `report()` composes these into an Etude `Report`, beside
 `panels.PERF` and `panels.ML`, and adds only what is specific to it. Each helper
 returns an ordinary Etude record, so a report mixes them with its own panels:
 
-- `job_labels`: `Report.labels`, a display name per job from its regime's model;
+- `job_labels`: `Report.labels`, a display name per job from its model;
 - `against_earlier_self`, `against_fixed`: eval `Curve`s with a line per job;
 - `head_to_head`: an eval `Curve` of named pairs, one line for the first seat;
 
@@ -17,24 +17,23 @@ from collections.abc import Mapping, Sequence
 
 from etude.report import Curve, Matches
 
-from manabot.training.regime import TrainingRegime
+from manabot.infra.config import ModelConfig
 
 # -- Names ---------------------------------------------------------------------
 
 
-def job_labels(jobs: Mapping[str, tuple[str, TrainingRegime]]) -> dict[str, str]:
+def job_labels(jobs: Mapping[str, tuple[str, ModelConfig]]) -> dict[str, str]:
     """`Report.labels`: each job's size word, then its model's width and depth.
 
     `jobs` maps a job's Etude name to the word a reader knows it by and its
-    regime. Attention layers are named only for a job whose depth differs from
+    model. Attention layers are named only for a job whose depth differs from
     the first job's, so "Small (width 64)" and "Large (width 160, 8 layers)".
     """
     if not jobs:
         return {}
-    first = next(iter(jobs.values()))[1].agent.attention_layers
+    first = next(iter(jobs.values()))[1].attention_layers
     labels: dict[str, str] = {}
-    for name, (word, regime) in jobs.items():
-        model = regime.agent
+    for name, (word, model) in jobs.items():
         parts = [f"width {model.hidden_dim}"]
         if model.attention_layers != first:
             layers = model.attention_layers

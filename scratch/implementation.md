@@ -60,3 +60,36 @@ nightly baseline remains a gate obligation; publication stays with the caller.
 - `ETUDE_HOME=/tmp/mtg329-performance-etude doppler run --project etude --config prd -- doppler run --project manabot --config prd -- uv run --extra artifacts etude availability mtg329-speed-l4`: 2026-11-17 14:45:49 UTC, NVIDIA L4, at least 6 vCPUs/48 GB, $0.69/hour, ceiling $0.70, none available. Equivalent Vast/Lium queries at 14:46:08/09 UTC also returned none available (their $0 placeholders are not prices). No capacity at the queried providers; no total-run cost measured.
 - No rent/launch command issued, no spend or rented machine to terminate. `ETUDE_HOME=/tmp/mtg329-performance-etude uv run etude machines` shows only the owned local machine. Recheck capacity before preparing/running the comparison; do not increase the USD 3 cap or substitute hardware. Current `origin/main` is 3afd92d8f3; no cross-revision measurement was taken.
 - Recheck, same command, 2026-11-17 14:50:07 UTC: NVIDIA L4 still none available at $0.69/hour; nothing rented.
+
+## Regime deletion, independent first slice — 2026-11-17
+
+- Deleted `manabot.experiment.config` (479 lines) and `attacks` (104 lines),
+  their exclusive tests and the WDL baseline fixture. No live Python caller
+  remains; frozen protocols and reports keep their bytes. Mixed native history
+  and closure tests retain their model/collector assertions. Removed the dead
+  test path from the integration workflow.
+- Kept `manabot.training.report`: tla_frontier uses its Etude panels. Its
+  `job_labels` now receives `ModelConfig`, as the docs already specify; the
+  experiment passes its models and the helper test constructs ModelConfig
+  directly. The fresh-import boundary also covers this report helper.
+- `uv run --extra dev --extra artifacts pytest tests/model/test_recent_events.py
+  -q -k 'history_off or short_window'`: 2 passed (2.64s).
+- `uv run --extra dev --extra artifacts pytest tests/training/test_batch_closure.py
+  -q -k 'collector_rejects_exact_quota or exact_quota_pauses or one_seat_complete_games'`:
+  5 passed (0.73s).
+- `uv run --extra dev --extra artifacts pytest tests/training/test_report_helpers.py
+  -q`: 5 passed (0.33s), existing legacy-input warnings from tla_frontier.
+- Full reader removal is unfinished: tla_frontier still loads a regime record;
+  the rest of experiment/records, training/regime and the saved-record report
+  graph remain for the next cut. No GPU comparison, publication or landing.
+- `uv run --extra dev --extra artifacts pytest tests/test_package_boundaries.py::test_live_training_and_evaluation_without_saved_regime_readers -q`:
+  1 passed (0.94s); imports include training.report.
+- Collected every test path from `.github/workflows/manabot-integration.yml`
+  using `uv run --extra dev --extra play --extra notebook --extra artifacts
+  --extra reports --extra llm --extra evaluation python` to invoke
+  `pytest --collect-only -q` through the same interpreter: 1,714 tests collected
+  (5.90s). An initial invocation without CI's llm extra failed on missing
+  huggingface_hub; the invocation with CI's declared extras passed.
+- Ruff check, format check and `git diff --check` pass. Before scratch edits,
+  code/test/workflow diff removes 1,140 lines and adds 17. `lf context` reports
+  the unchanged default 16k-token/131072-byte targets and no usage entries.

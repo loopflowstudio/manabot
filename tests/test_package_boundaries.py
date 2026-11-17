@@ -748,6 +748,7 @@ class RefuseSavedRegimes(importlib.abc.MetaPathFinder):
 sys.meta_path.insert(0, RefuseSavedRegimes())
 for module in (
     'manabot.training.loops.self_play',
+    'manabot.training.report',
     'manabot.backends.torch.collection',
     'manabot.backends.torch.runtime',
     'manabot.eval.duel',

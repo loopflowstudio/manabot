@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 import numpy as np
 from pydantic import ValidationError
@@ -12,7 +12,6 @@ from manabot.backends.torch.collection import (
     CollectionSession as TorchCollectionSession,
 )
 from manabot.env.match import Match, Reward
-from manabot.experiment.attacks import AttackPlan, AttackTarget
 from manabot.infra.config import MatchConfig, RewardConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.training.learning import BatchClosure
@@ -226,42 +225,6 @@ def test_one_seat_complete_games_end_every_trajectory_at_a_result() -> None:
     assert collector.stats.games >= 2
     # Stream 1's shorter game leaves it idle while stream 0 finishes.
     assert collector.stats.idle_stream_steps > 0
-
-
-def _attack(schema_version: Literal[1, 2]) -> AttackPlan:
-    return AttackPlan(
-        id="attack-proof",
-        schema_version=schema_version,
-        targets=(AttackTarget(id="target-a", policy=OPPONENT, producer_seeds=(17,)),),
-        attacker_seeds=(101, 201),
-        cumulative_updates=(2, 5),
-        final_deal_seeds=(950001,),
-        template=TrainingRegime(
-            id="attacker",
-            world=managym.WORLD_VERSION,
-            match=MatchConfig(),
-            wall_seconds=30,
-            stages=[_stage()],
-        ),
-        total_seconds=1000,
-        evaluation_seconds=10,
-        prediction="closure",
-    )
-
-
-@pytest.mark.parametrize(
-    ("schema_version", "closure"), [(1, "exact-quota"), (2, "complete-games")]
-)
-def test_attack_plans_keep_saved_closure_and_default_new_ones(
-    schema_version: Literal[1, 2], closure: BatchClosure
-) -> None:
-    plan = _attack(schema_version)
-    regime = plan.regime_for(plan.targets[0])
-    assert {
-        stage.batch_closure
-        for stage in regime.stages
-        if isinstance(stage, TrainSelfPlay)
-    } == {closure}
 
 
 @pytest.mark.parametrize(

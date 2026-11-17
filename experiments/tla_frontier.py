@@ -1122,7 +1122,7 @@ def report() -> Report:
     equal-update or endpoint pair is played once, under that tag.
     """
     regimes, _ = frozen()
-    jobs = {_regime_id(label): regimes[label] for label in SIZES}
+    jobs = {_regime_id(label): regimes[label].agent for label in SIZES}
     small, large = jobs
     return Report(
         score=Score(table="games", value="score", reference=0.5, unit="games"),

@@ -1,12 +1,10 @@
 """Report helpers name jobs, ask one question per chart."""
 
-from pathlib import Path
-
 from etude.report import Curve, Matches, Report, Score, Series
 import pytest
 
 from experiments.tla_frontier import report
-from manabot.training.regime import TrainingRegime
+from manabot.infra.config import ModelConfig
 from manabot.training.report import (
     against_earlier_self,
     against_fixed,
@@ -14,32 +12,20 @@ from manabot.training.report import (
     job_labels,
 )
 
-REGIME = (
-    Path(__file__).resolve().parents[2]
-    / "experiments/regimes/tla-frontier-c5fba4-w64.json"
-)
 
-
-def _regime(*, width: int = 64, layers: int | None = None) -> TrainingRegime:
-    regime = TrainingRegime.model_validate_json(REGIME.read_bytes())
-    agent = regime.agent.model_copy(
-        update={
-            "hidden_dim": width,
-            "attention_layers": layers or regime.agent.attention_layers,
-        }
-    )
-    return regime.model_copy(update={"agent": agent})
+def _model(*, width: int = 64, layers: int = 2) -> ModelConfig:
+    return ModelConfig(hidden_dim=width, attention_layers=layers)
 
 
 def test_labels_name_width_and_only_a_differing_depth() -> None:
-    small = _regime()
-    large = _regime(width=160, layers=8)
+    small = _model()
+    large = _model(width=160, layers=8)
 
     assert job_labels({"w64": ("Small", small), "w160l8": ("Large", large)}) == {
         "w64": "Small (width 64)",
         "w160l8": "Large (width 160, 8 layers)",
     }
-    assert job_labels({"a": ("Wide", _regime(width=128))}) == {"a": "Wide (width 128)"}
+    assert job_labels({"a": ("Wide", _model(width=128))}) == {"a": "Wide (width 128)"}
 
 
 def test_comparisons_draw_one_chart_per_question_across_jobs() -> None:
