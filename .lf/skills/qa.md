@@ -78,10 +78,11 @@ publish, land or choose the next Graph step from here.
   `PYTHONPATH` (print `managym.__file__` to confirm which loaded). Per game,
   hash `obs.toJSON()` at every decision and step `rng.randrange(len(
   obs.action_space.actions))`; equal digests mean equal offers, taps and
-  events. Use the authored setups (`managym.authored_deck_keys`) plus the TLA
-  pool corpus human builds (`experiments/data/mtg282/pools-v2/corpus.json`,
-  in the artifact store: fetch it with `manabot.data fetch` when a checkout
-  lacks it; `PlayerConfig(name, pool["human_build"])`), which bring waterbend, Treasure
+  events. Use the authored setups (`managym.authored_deck_keys` of
+  `elemental-world-v2` and `ur-lessons-vs-gw-allies`; pack directory names are
+  refused) plus the TLA pool corpus human builds
+  (`experiments/data/mtg282/pools-v2/corpus.json`, fetched with `manabot.data
+  fetch` when absent; `PlayerConfig(name, pool["human_build"])`), which bring waterbend, Treasure
   and any-color sources the curated benchmark decks lack; 2,400 games took
   about two minutes per engine. A few games end in `PyAgentError` on `main`
   too; the error must match, not be absent. `maturin build` without
@@ -91,6 +92,19 @@ publish, land or choose the next Graph step from here.
   (buttons are disabled while a Command is in flight, and `Pass Turn (F6)` in
   the panel is not an offer). Tapped lands show only in a `fullPage`
   screenshot, not in the board's text.
+- Academy policy/session recovery: build the static SPA before browser servers
+  (`ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build`). Then use
+  `npm --prefix academy/ui run test:e2e -- --config playwright.policy.config.ts`
+  for policy refusal, both Watch seats, original-Command reload and backend
+  restart; `--config playwright.search.config.ts` covers explicit Search retry
+  and saved evidence. Ports are scoped by `ACADEMY_POLICY_PORT` and
+  `ACADEMY_SEARCH_PORT`. The release config covers unified replay, session
+  continuation and laptop navigation. Keep generation/builds finished while
+  browser proofs run; rebuilding replaces chunks under a preview server.
+  Combat remains ordinary per-creature offers, including nonparticipation.
+  A swapped human is native seat 1; check player-target role labels against
+  actual native seats. Floating mana has its own disclosure outside player
+  status; status retains full policy identity and provenance.
 - Configured launch (`managym academy play|replay`, `managym.academy.launch.serve`):
   from a checkout first build the static SPA with
   `ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build`, then set
@@ -104,14 +118,14 @@ publish, land or choose the next Graph step from here.
   SIGINT is ignored and the server looks hung.
 - Academy table: `./scripts/play --port <unused> --frontend-port <unused>`; wait
   for the `ACADEMY_PLAY_READY` line (it names Python, native ABI and module
-  path), open the frontend URL, press New Game, play a land and Pass Turn.
+  path), open the frontend URL, press Start game, play a land and Pass Turn.
   Stop with SIGINT to the `scripts/play.py` Python process (`pgrep -f
   'scripts/play.py'`); SIGINT to the `./scripts/play` shell wrapper's PID
   leaves both servers running. To play specific cards, open "Import decklist
   files", check "Use imported decks for the next game", set both files
   (`setInputFiles` with counted lines such as `4 Heartbeat of Spring`), press
   "Check decklists", wait for `Ready —`, pick the `passive` opponent and press
-  New Game; imported decks take any number of copies.
+  Start game; imported decks take any number of copies.
   Under heavy host load the first frontend probe in `scripts/play.py` keeps a
   fixed 30-second deadline whatever `--ready-timeout` says, so the launch
   fails with `ready.timeout`. Then start the two servers as it does: from the
@@ -120,17 +134,23 @@ publish, land or choose the next Graph step from here.
   `ACADEMY_API_PORT=<api> npm run dev -- --host 127.0.0.1 --port <ui>
   --strictPort`; poll `/` and `/api/traces` until both return 200. Demos:
   open `/?demo=learn|precision|precision-mana`, wait a second after the
-  `connected` badge, then press New Game (an immediate click can leave "No
+  `connected` badge, then press Start game (an immediate click can leave "No
   game in progress").
   Without a connected browser, run a Node Playwright script from `academy/ui`
   (its `playwright` package and cached Chromium resolve there; delete the
   script afterwards). Click only `[data-testid=action-panel] button` offers:
-  other buttons open the deck picker or start a New Game. Triggered abilities
+  other buttons open the deck picker or start a game. Triggered abilities
   appear under "Stack · top first" as `Card — <trigger>: <effects> ·
   triggered ability · Seat N`; read that text while the stack is non-empty.
-  Detect the end by a visible "Play Again" button (the page holds hidden
-  "game over" text); after clicking it, wait for the button to hide before
-  reading offers again.
+  The session strip always shows **Rematch** (mid-game it asks to stop the
+  game), so detect the end by a second Rematch button, in the "Game Over"
+  dialog (`getByRole('button', {name: 'Rematch', exact: true}).count() >= 2`),
+  and bound play loops by time, since the bot can win first. Live bot work
+  ("Searching · Seat 2") shows in the table masthead. Opening `/games?session=`
+  needs the owner credential from the same browser profile; a fresh browser
+  context gets 403. Games-page Replay links are labelled `Replay game <id>`;
+  select them with `locator('a', {hasText: /^Replay$/})`. The game-over
+  dialog moves focus and scrolls the table, so screenshot it as it is.
   To play specific cards, open **Import decklist files**, check "Use imported
   decks for the next game" (the `#hero-deck-source`/`#villain-deck-source`
   textareas appear only then), fill both, press Check decklists, then New
@@ -157,11 +177,18 @@ publish, land or choose the next Graph step from here.
   there; it builds cold, runs the browser proof and writes
   `.cache/clean-machine/proof.json` (`launch.elapsed_to_playable_ms`). Shared
   uv/Cargo/npm download caches stay warm locally, unlike the CI reference.
+- Native Command QA: use an ordinary seeded game and its current semantic frame;
+  submit one legal Command, then another command id with the old revision and
+  an absent offer id with the current revision. Native rejection raises
+  `managym.AgentError` (not only `ValueError`). Compare both `state_digest()`
+  and `semantic_decision_frame_json()` before/after each rejection.
 - Engine cost on large boards (`docs/development.md#stress-states`): build
   once with `cargo build --release --features benchmark --example bench_states
   --manifest-path managym/Cargo.toml`, then call
   `managym/target/release/examples/bench_states` directly (all 17 states ran
-  in about 11 s on an M-series laptop). Compare two commits by building the
+  in about 11 s on an M-series laptop). Forks carry the payment cache, so
+  check that a layer's `work` (`calls`, `cache_hits`) still shows the search
+  it claims to time rather than a hit warmed by preparation. Compare two commits by building the
   other one in a `/private/tmp` worktree with its own `CARGO_TARGET_DIR` and
   diffing each row's `work` field; the closing digest also moves whenever
   cards are added, so it is not a behavior check across a merge from main.
@@ -240,6 +267,13 @@ publish, land or choose the next Graph step from here.
   (wheel paths plus `--find-links`
   and the CPU Torch index), since uv's one-step upgrade hides file-ownership
   problems that pip's install order exposes.
+- Release installed-Academy proof (`scripts/release/academy_smoke.py`, the
+  Release packages job): `./scripts/verify-installed-academy` builds the staged
+  sdist, its wheel, a no-build-tools venv, the smoke and the wheel Playwright
+  spec (about 10 minutes under load). It deletes its directory on exit; to rerun
+  an older smoke against the same wheel, copy the script into `.runs/` with the
+  `trap` line replaced by `echo $proof_dir`. Socket readers must skip
+  `work_status` and early accepted `command_outcome` receipts.
 - Installed Academy (`managym[academy]` wheel): build as above, then in a fresh
   `/tmp` directory `uv venv --python 3.13 --seed` (without `--seed` there is
   no `pip`) and
@@ -262,7 +296,7 @@ publish, land or choose the next Graph step from here.
   before launch. Read `/api/opponents` for its digest, then open
   `/?hero=ur_lessons&villain=gw_allies&opponent=<digest>` for the local recipe's
   bound decks (Elemental UR/GW are different lists and correctly refuse it).
-  Click New Game, then the legal Play Island offer and Pass Turn. Wait until
+  Click Start game, then the legal Play Island offer and Pass Turn. Wait until
   an action offer is enabled and automation has settled before recording
   `main[data-frame-revision]`; reload must restore that revision. A merely
   visible offer can still belong to an automated pending transition.
@@ -274,7 +308,7 @@ publish, land or choose the next Graph step from here.
   card ids to pick a card. Read `observation_for_player(p).agent_cards`
   (`zone`, `is_token`) at every decision. A token in the graveyard during a
   mana ability's color choice is correct: SBAs wait for priority. Academy's
-  game end is a "Game Over" dialog with "Play Again".
+  game end is a "Game Over" dialog with "Rematch".
   Battlefield permanents are `agent_permanents`, with their own ids (the ones
   activation offers focus) and an integer `registry_key`; join them to a name
   through `agent_cards` rows that have the same `registry_key`.
@@ -363,18 +397,22 @@ publish, land or choose the next Graph step from here.
   `gh run view <id> --job <job-id> --log`. Compare install time with peers in
   the same run and inspect dependency logs for unexpected downloads.
   See `docs/development.md` (Job time) for the budget.
+- Training game journals (`--training-game-logs`): run `manabot train --recipe local --steps 200 --training-game-logs` from a supervised `Popen(start_new_session=True)`, poll `game-journals/operation.json` and `os.killpg(..., SIGKILL)` while `collection` is pending after update 1; copy `vector-N.jsonl` and replay it with `manabot.training.state.game_errors --attempt 1`. Kills land at `ready` boundaries; a pending native step is reachable only through the `os._exit` child fixtures. Compare on/off runs by safetensors tensor bytes (metadata differs by `run_id`); `execution.workers=2` in a `local_smoke` regime gives sharded files.
+- Standalone statistics/recording: stage and install an engine-only wheel into a
+  fresh venv, then run the two Python examples in `docs/engine-python.md` outside
+  the checkout. Play the same seeded authored game with neither option, statistics
+  only, recording only and both; compare observation digests and summary counts.
+  Exclude `generation` from cross-Env summary comparison: it intentionally names
+  each distinct game. Check terminal drain-once and replaced partial summaries.
+  Copy a journal and run `uv run --no-project --python <venv>/bin/python python -m
+  managym.replay <copy> --seconds 30 --statistics`; confirm source bytes remain
+  unchanged. Empty/missing/corrupt inputs must fail, and a torn final append must
+  warn while recovering the last complete boundary. `scripts/release/engine_smoke.py`
+  additionally checks that manabot, Torch and Etude are absent.
 - Ctrl-C a run: start it with `subprocess.Popen(..., start_new_session=True,
   preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))` and
   `os.killpg(pid, SIGINT)`. A job started with `&` from a non-interactive shell
-  ignores SIGINT, so `pkill -INT` appears to hang. When the child is `uv run`,
-  `killpg` delivers SIGINT twice (uv forwards it) and the server prints an
-  ignored `KeyboardInterrupt` at exit; signal only the Python child for a
-  clean shutdown.
-- Scripted Play against a searched opponent: one human Command runs the whole
-  opponent turn, so a 2×2 Mirror reply took 49 s (ten searched decisions) and
-  the waiting badge reached 170 s+. Do not treat a long badge as a hang; set
-  stall detectors above a full opponent turn, and confirm with the trace's
-  `events[].bot_decision.mirror.seconds` in the attempts table.
+  ignores SIGINT, so `pkill -INT` appears to hang.
 - Experiment reports and figures: arrive as a new reader with
   `MANABOT_DATA_CACHE` set to an empty directory, then `doppler run --project
   manabot --config prd -- uv run --extra artifacts python -m manabot.data fetch
@@ -454,22 +492,3 @@ publish, land or choose the next Graph step from here.
   have no resumed game. Initial automatic history may precede a launch's received
   tail; compare that tail exactly to the saved source and the full saved prefix
   to Replay, retaining explicit unavailable-prefix labels.
-- Registered policies (`managym.policy`, Play/Watch pickers): for a no-manabot
-  user, `uv run --no-sync --extra play maturin build --release -i .venv/bin/python
-  -m managym/Cargo.toml -o .runs/<dir>` takes seconds when the Rust is cached;
-  `uv pip install '<wheel>[academy]'` into a fresh `/tmp` venv, confirm
-  `find_spec('manabot')` is None, set `ACADEMY_FRONTEND_BUILD`, and install a
-  tiny third-party provider package written from `docs/academy.md` (its
-  `managym.bots` entry point names a provider instance). Drive `--policy
-  <spec.json>`, `serve(policies={...})` with direct factories, and a factory whose
-  session returns a stale binding: Play must end with the named reason and not
-  redeal its launch; Watch must answer 422 and keep the pending decision. Reopen
-  replays after uninstalling the provider. Ambient manabot discovery registers
-  `.runs` checkpoints first and the registry keeps the first factory per Policy
-  ID, so a live artifact-swap check needs `MANABOT_RUNS_DIR` pointed at an
-  empty directory. Watch setup persists only on **Start watching**; for a real
-  runner-change check, start a Watch in a persistent Playwright profile, append a
-  comment to any `manabot/*.py`, restart, expect **Reselect**, then restore the
-  file. A checkpoint bound to other decks is refused at Start, not disabled, and
-  mixing an Elemental roster deck with the default `ur_lessons`/`gw_allies`
-  fails before any policy admission.

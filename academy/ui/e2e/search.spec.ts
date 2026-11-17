@@ -30,11 +30,11 @@ for (const theme of ['light', 'dark'] as const) {
     await page.screenshot({ path: fileURLToPath(new URL(`../test-results/search/play-${theme}.png`, import.meta.url)) });
 
     await page.goto(addresses.watch);
-    await expect(page.getByRole('combobox', { name: 'Seat 1 search', exact: true })).toHaveValue('search');
-    await page.getByRole('combobox', { name: 'Seat 1 search', exact: true }).selectOption('none');
-    await page.getByRole('combobox', { name: 'Seat 1 search', exact: true }).selectOption('search');
-    await expect(page.getByRole('spinbutton', { name: 'Seat 1 search worlds', exact: true })).toHaveValue('1');
-    await expect(page.getByRole('spinbutton', { name: 'Seat 1 search depth', exact: true })).toHaveValue('1');
+    await expect(page.getByRole('combobox', { name: 'Seat 1 bot search', exact: true })).toHaveValue('search');
+    await page.getByRole('combobox', { name: 'Seat 1 bot search', exact: true }).selectOption('none');
+    await page.getByRole('combobox', { name: 'Seat 1 bot search', exact: true }).selectOption('search');
+    await expect(page.getByRole('spinbutton', { name: 'Seat 1 bot search worlds', exact: true })).toHaveValue('1');
+    await expect(page.getByRole('spinbutton', { name: 'Seat 1 bot search depth', exact: true })).toHaveValue('1');
     await page.getByRole('button', { name: 'Start watching' }).click();
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(page.getByRole('columnheader', { name: 'Raw policy', exact: true })).toBeVisible();
@@ -134,30 +134,40 @@ test('Watch reload retains timeout and exact position while history stays naviga
 test('the waiting line remains legible while a real response awaits delivery', async ({ page }) => {
   const addresses = JSON.parse(readFileSync(proof, 'utf8')) as Addresses;
   const held: (() => void)[] = [];
-  let holdNext = true;
+  let armed = false;
+  let holding = false;
   // Hold delivery, not server execution: no extra compute or resource pressure
   // is needed to inspect the actual waiting state and elapsed-time indicator.
   await page.routeWebSocket('**/ws/play', socket => {
     const server = socket.connectToServer();
     server.onMessage(message => {
       const value = JSON.parse(String(message));
-      if (holdNext && value.type === 'command_outcome' && value.status === 'accepted') {
-        holdNext = false;
+      // Deliver the real search start, then retain every following message in
+      // order so a quick completion cannot replace the state under inspection.
+      if (holding) {
         held.push(() => socket.send(message));
-      } else socket.send(message);
+      } else {
+        socket.send(message);
+        if (armed && value.type === 'work_status' && value.work.kind === 'search' && value.work.state === 'running') holding = true;
+      }
     });
   });
   try {
     await page.goto(addresses.play);
     await expect(page.getByTestId('action-option').first()).toBeEnabled();
+    armed = true;
     await page.getByTestId('action-option').first().click();
-    await expect.poll(() => held.length).toBe(1);
-    await expect(page.getByTestId('search-thinking')).toContainText('Search 1×1');
-    await expect(page.getByTestId('search-thinking')).toContainText(/\d+\.\d s/);
+    await expect.poll(() => holding).toBe(true);
+    await expect(page.getByTestId('work-status')).toContainText('Searching · Seat 2');
+    await expect(page.getByTestId('work-status')).toContainText(/\d+ s elapsed/);
     await page.screenshot({ path: fileURLToPath(new URL('../test-results/search/thinking.png', import.meta.url)) });
-    held.shift()?.();
-    await expect(page.getByTestId('search-thinking')).toHaveCount(0);
+    armed = false;
+    holding = false;
+    held.splice(0).forEach(send => send());
+    await expect(page.getByTestId('work-status')).toHaveCount(0);
   } finally {
+    armed = false;
+    holding = false;
     held.splice(0).forEach(send => send());
   }
 });

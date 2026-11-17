@@ -50,11 +50,13 @@ async function track(page: Page): Promise<void> {
 async function choose(page: Page, id: number): Promise<void> {
   const revision = await page.evaluate(() => window.__surface.frame!.revision);
   const button = page.locator(`[data-testid="action-option"][data-offer-id="${id}"]`);
+  await expect(button).toBeEnabled();
   await button.focus();
   await page.keyboard.press('Enter');
   await expect.poll(() => page.evaluate(() => window.__surface.frame?.revision)).toBeGreaterThan(revision);
   const next = await page.evaluate(() => window.__surface.frame!.revision);
-  await expect(page.getByTestId('decision-surface')).toHaveAttribute('data-revision', String(next));
+  // A choice can reach a combat declaration, which the composer presents.
+  await expect(page.locator('[data-testid="decision-surface"]')).toHaveAttribute('data-revision', String(next));
 }
 
 for (const width of [390, 1500]) {
@@ -64,7 +66,7 @@ for (const width of [390, 1500]) {
     await track(page);
     await page.goto('/?demo=precision');
     await expect(page.getByTestId('connection-badge')).toHaveText('connected', { timeout: 30_000 });
-    const start = page.getByRole('button', { name: 'New Game', exact: true });
+    const start = page.getByRole('button', { name: 'Start game', exact: true });
     await expect(start).toHaveCount(1);
     await start.click();
     await expect(page.getByRole('button', { name: 'Preparing game…', exact: true })).toBeDisabled();
@@ -131,7 +133,7 @@ test('Precision exposes the shared four-mana alternative', async ({ page }) => {
   await track(page);
   await page.goto('/?demo=precision-mana');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', { timeout: 30_000 });
-  await page.getByRole('button', { name: 'New Game', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
   await expect(page.getByTestId('decision-surface')).toBeVisible({ timeout: 120_000 });
   await choose(page, await page.evaluate(() => window.__surface.frame!.offers.find(offer => offer.label === 'Cast Deadly Precision')!.id));
   await choose(page, await page.evaluate(() => window.__surface.frame!.offers.find(offer => offer.action_type === 'CHOOSE_TARGET')!.id));

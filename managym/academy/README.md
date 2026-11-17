@@ -101,7 +101,7 @@ fetching, and artist credits are in the footer. See
 
 The Learn demo opens `/?demo=learn`: choose **Take a Lesson**, **Discard and
 draw**, or **Decline Learn**. The first two modes show card previews and a
-Back control; only choosing its explicit offer commits the choice. **New Game** repeats
+Back control; only choosing its explicit offer commits the choice. **Start game** repeats
 the same prefix. The demo fixes UR Lessons in seat 0 against Random GW Allies;
 its [evidence and remaining integration work](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/learn-lesson.md)
 are separate from complete-game replay certification.
@@ -119,14 +119,14 @@ is displayed while a card or text filter narrows navigation; **Show all** and
 **Clear filter** restore the full set. In live play at laptop widths and heights,
 the board sits beside independently scrolling offers; instruction, legal count
 and filter navigation stay available. Long instructions have their own scroll
-area. **History and settings** opens decision details, consequences, advice and
+area. **History and settings** opens decision details, consequences and
 stop configuration while the pending decision stays available. **Edit stops**
 beside the choices opens **Your turn** / **Opponent turn** settings; changing
 them may immediately advance priority. See
 [priority stops](../../docs/academy.md#choosing-priority-stops) for defaults,
 stack responses and F6. Narrow or short windows stack
-the board above choices, with links between them. History, advice and table
-tools can be opened separately; **Compare advice** opens and focuses Advice. Native card
+the board above choices, with links between them. History and table tools remain contextual. Recorded policy/search evidence is
+attached to the decision it describes; the live table has no example Advice panel. Native card
 types group creatures, lands, other
 permanents and artifact tokens into bounded battlefield lanes; dense lanes
 compact their cards, then offer explicit paging beside their headings. Occupied
@@ -148,7 +148,7 @@ incarnation and board display ID. These read-only projections introduce no legal
 actions or editable payment transaction. Other viewers receive only public
 ownership/kind and committed facts. Retained frames omit these optional fields.
 
-For Precision, click **New Game**, inspect **Deadly Precision**, then explicitly
+For Precision, click **Start game**, inspect **Deadly Precision**, then explicitly
 choose its cast offer and an Inspector target. In the Treasure demo, reserve that
 Inspector as sacrifice, activate Treasure, explicitly choose **Add {B}**, then
 finish payment. The context distinguishes the unpaid reservation from the already
@@ -159,7 +159,7 @@ prefixes use normal Commands from seeded custom stress decks, without scenario
 injection. Attempts are marked `automated_validation`, including any later human
 continuation, so the authored prefix cannot be counted as human play. They are
 runtime fixtures, not curated-deck admission or human usability
-evidence. New Game repeats the selected prefix.
+evidence. Start game repeats the selected prefix.
 
 Replay labels recorded actions and automated passes separately. Live, Watch,
 Replay and Study use the same decision renderer. Study executes the exact semantic
@@ -216,12 +216,13 @@ framework-free `managym.search` owner in Play, Watch and launch APIs
 ([Search](../../docs/academy.md#search)). Its initial budget is one
 world at depth one, with a 30-second ceiling; explicit larger budgets are retained.
 Native physical-deal sampling and bound Commands remain authoritative; the two-KL numerical update
-has one implementation in `managym.mirror`. Full legal probabilities, compatible
+lives beside it in `managym.search`. Full legal probabilities, compatible
 signed values and isolated current-view forks are mandatory. Deadline failure
 retains the live decision for an explicit, match/revision-bound pilot retry.
 Budget checks bracket synchronous provider calls; an in-flight call returns
 before its overdue result is rejected, and no overdue action is accepted.
-`BotDecision.mirror` retains prior probabilities, budget, timing, hexadecimal seed
+The searched decision, a `BotDecision` subclass in `managym.search`, carries a
+`SearchSummary` with prior probabilities, budget, timing, hexadecimal seed
 and receipt digest; model outputs stay out of an opponent's live/viewer export.
 Completed Play games expose retained actor-view evidence through Replay's
 **Inspect bot search** link without loading a provider.
@@ -263,7 +264,7 @@ perspective, reload and recovery. Watch credentials stay in the tab's
 Opening card details or reading earlier history pauses replay. Close the details
 when ready, then press **Play** to resume. Returning to **Latest** does not start
 playback. A live decision already being produced may finish saving while you read;
-your selected board stays put. A pending mirror-search timeout is
+your selected board stays put. A pending Search timeout is
 retained across reload and shown with its message. At the live edge, **Retry
 search** explicitly retries that decision; browsing saved positions never retries
 it. The exact selected position remains selected after reload.
@@ -314,7 +315,7 @@ The shared deck browser assigns either seat from all ten exact Elemental setups
 in the additive `elemental-world-v2` pack, including mirrors. Browse the main
 lists and Lesson pools, click card artwork for a printed preview, then
 use the assignment buttons to choose each seat. During play, **Choose decks**
-prepares the next matchup; only **New Game** replaces the current attempt.
+prepares the next matchup; only **Start game** replaces the current attempt.
 The [local MTG-183 launcher](../../docs/academy.md#playing-a-trained-challenger)
 pins the latest published checkpoint for CPU play.
 The decks' 40-card main lists, Lesson pools, local treatments and retained card-identity
@@ -351,6 +352,9 @@ a separate `ACADEMY_TRACES_DIR`, and
 `ACADEMY_PLAY_RECORD_ORIGIN=automated_validation`. Keep existing human-play
 stores and sibling servers untouched. Shared-history proofs use separate
 browser identities and cover private unfinished replays and participant feedback.
+For release-config proofs, set an absolute `ACADEMY_RELEASE_PROOF_DIR` per
+subprocess; both browser artifacts and its trace store live below that directory.
+Finish frontend generation and builds before starting the proof servers.
 
 Changes to persistence or Study addresses require presentation, Study runtime,
 and protocol checks as well as attempt-store checks. SQLite is the trace

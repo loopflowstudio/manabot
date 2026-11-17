@@ -83,6 +83,13 @@ class ShardedVectorEnv:
     def _run[T](self, calls: Sequence[Callable[[], T]]) -> list[T]:
         self._check()
         try:
+            # Freeze owner coordinates before dispatch; ContextVars do not cross threads.
+            for shard in self._shards:
+                if (
+                    shard.native.scope is not None
+                    and shard.native.scope.training_game_logs
+                ):
+                    shard.native.frozen_context = shard.native.scope.context().copy()
             futures = [self._pool.submit(call) for call in calls]
             # Settle every writer before propagating failure or exposing buffers.
             wait(futures)
@@ -135,7 +142,8 @@ class ShardedVectorEnv:
         for shard in self._shards:
             shard.native.set_training_decks(decks, digest, sampling)
 
-    def current_player_configs(self) -> list[list[managym.PlayerConfig]]:
+    def current_player_configs(self) -> list[managym.GameSetup]:
+        """Return each current game with resolved open/closed disclosure."""
         self._check()
         return [
             players
@@ -151,7 +159,7 @@ class ShardedVectorEnv:
             for pair in shard.native.current_matchup_indices()
         ]
 
-    def reset_all_into_buffers(self, players: list[managym.PlayerConfig]) -> None:
+    def reset_all_into_buffers(self, players: managym.GameSetup) -> None:
         self._run(
             [
                 partial(shard.native.reset_all_into_buffers, players)
@@ -159,9 +167,7 @@ class ShardedVectorEnv:
             ]
         )
 
-    def reset_each_into_buffers(
-        self, players: list[list[managym.PlayerConfig]]
-    ) -> None:
+    def reset_each_into_buffers(self, players: list[managym.GameSetup]) -> None:
         self._rows(len(players))
         self._run(
             [

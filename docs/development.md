@@ -41,43 +41,34 @@ atomically.
   `--no-frontend`, `--demo learn`.
 - `uv run etude train manabot/recipes/local.py` runs a training smoke.
 
-The `manabot` public dependency requirements are `etude-sdk>=0.4.0` (also for
-its `eval` and `s3` extras) and `torch>=2.15.0`. All extras, including `llm`, inherit the core
-requirements. A downstream project resolves those with its own dependencies. The repository's
-`uv.lock` records exact versions, and its dedicated training and play runtime
-groups retain exact Torch/backend choices. Those development pins are not
-constraints exported to consumers.
+The `manabot` public dependency requirements are `etude-sdk>=0.4.0,<0.5`
+(also for its `eval` and `s3` extras) and `torch>=2.15.0`. The repository and
+release checks use the Git source in `[tool.uv.sources]`, currently
+`d9a6bc8f06b20948601d540be80e285d46010465`. PyPI's 0.4.0 predates the
+experiment-file and Agents APIs (`etude.controller.declarations`,
+`etude.eval.result`, `play(match, agents)` and assigned training runs).
+A downstream project needs the same source override until a registry release
+contains these APIs. Raise the public minimum to that release before publishing
+Manabot, then remove the Git source. The repository's `uv.lock` records the exact
+source; dedicated training and play runtime groups retain their backend choices.
 
-The repository itself resolves Etude from a pinned commit
-(`[tool.uv.sources]` in `pyproject.toml`), because the experiment files, their
-tests and the nightly baseline use the experiment-file API
-(`training_jobs`, `eval_jobs`, `etude.controller.declarations`) that no Etude
-release carries yet. That commit still reports version 0.4.0, but it is not
-0.4.0: Etude's main has moved and removed names without aliases
-(`etude.eval.result.Tables`, `CheckpointSlot`, `play(match, agents)`,
-`track` without a standalone identity), and the `manabot` package follows
-main. The public requirement lines stay version requirements, so a `manabot`
-release waits for the Etude release that carries these names; at that release
-remove the source and raise the minimum to it. After the pin moves, run
-`uv run etude database upgrade` once before launching
-([launcher database](experiments.md#what-an-experiment-is)).
-
-For an ordinary released Etude update without raising the public minimum, once
-no source pin is present:
+Install the pinned client and inspect its database:
 
 ```bash
-uv lock --upgrade-package etude-sdk
 uv sync --locked --python 3.13 --extra dev --extra artifacts
+uv run etude database status
 ```
 
-Commit the lock change before preparing a new experiment. When raising a public
-minimum, update every requirement for that dependency, including consumer
-install commands in `.github/workflows/release.yml`, and commit the metadata
-with the lock. After moving the locked Etude revision, inspect
-`uv run etude database status` and explicitly run `uv run etude database upgrade`
-before launching against a home that needs migration. The launcher keeps
-`~/.etude/launcher.sqlite`; upgrade backs it up and no command migrates it
-implicitly. See [experiments](experiments.md#what-an-experiment-is).
+When changing the source, update `[tool.uv.sources]`, run `uv lock`, and commit
+both metadata and lock before preparing an experiment. Keep consumer install
+commands in `.github/workflows/release.yml` on the same source. Etude uses one
+`~/.etude/launcher.sqlite` across experiments and compatible branches. Installing
+a client does not migrate data: explicitly run `uv run etude database upgrade`
+when status reports pending migrations. Upgrades keep recovery backups and
+never launch or stop a worker. Recovery snapshots are not operational databases.
+This machine's historical files have already been consolidated; keep older
+clients in isolated homes so they cannot split the live ledger.
+See [experiments](experiments.md#what-an-experiment-is).
 Training setup uses `uv sync --locked`; it never resolves a fresh branch head.
 Retained experiments keep their original source and lock, including the v7
 representation study's historical Git source pin. Never downgrade the current
@@ -294,7 +285,7 @@ PR revision cancels its obsolete run; main and manual runs do not cancel.
 | Integration | `manabot-integration.yml` (one runner per matrix group; Perf report proof and training smoke in `evaluation`) |
 | Academy Integration | `academy-integration.yml` (world bindings, Elemental admission and play) |
 | Protocol v1 Conformance | Rust, Python and TypeScript experience protocol; launcher contracts |
-| Semantic Kernel Conformance | bounded valid-action fuzzing only, over `semantic-kernel-w17-v3` |
+| Semantic Kernel Conformance | bounded valid-action fuzzing only, over `semantic-kernel-w17-v4` |
 | Academy UI | `npm test`, `npm run check`, `npm run test:e2e:release` |
 | Clean-machine Play | `./scripts/verify-clean-machine` |
 | Engine Budget | `engine-budget.yml` (release `bench_search` and `bench_steps`, candidate against the reference commit of `managym/perf/baseline.json` on one runner) |
@@ -340,8 +331,9 @@ When a job passes 8 minutes, in order of preference:
 
 Never skip, deselect or delete a test to fit, and never raise the five-minute
 single-test limit ([TESTING.md](../TESTING.md)). Groups select directories,
-files and individual tests. If a new file is not covered by a directory
-selection, add it to the group with the most room.
+files and individual tests. Before publishing, check that every new or changed
+test file is covered by a directory or explicit file selection; add missing
+files to the group with the most room.
 Engine Budget is the exception: it builds and measures the change and its
 reference on one runner and keeps that shape, whatever it takes. The macOS
 nightly reuses the same groups without this limit.
@@ -603,7 +595,7 @@ naming through rules actions; it is outside the measured region.
 
 | Layer | Measures | Work reported |
 |---|---|---|
-| `actions` | computing the legal action space at priority | payment plans, calls, states; actions offered |
+| `actions` | computing the legal action space at priority, with cached payment answers cleared | payment plans, calls, states; actions offered |
 | `step:cast`, `step:activate`, `step:attack`, `step:block`, `step:damage`, `step:choice` | one representative action of each kind, to the next decision | the same, plus trigger sources and matches |
 | `characteristics` | cold `Game::characteristics` for one permanent then `characteristics_many` for the board | board rebuilds, views, dependency probes |
 | `triggers` | matching one controlled entry event against the indexed trigger sources | sources examined, triggers found |
@@ -626,6 +618,12 @@ which hash the serialized game, card definition ids included, so adding cards or
 changing a rules type moves every state's digest without changing behavior;
 across such a change, compare the rows' `work` (witness digests included)
 instead.
+
+Use `--allocations` with the same state, size and layer arguments for a separate
+allocation diagnostic. It runs each operation once and reports `allocations`
+and `allocated_bytes` instead of `ms`; setup and root forks stay outside the
+counted region. These are allocation requests and traffic, not live heap size.
+Keep counting disabled for timing comparisons.
 
 The Python-side layers read the same states (the Rust harness prints their
 recipes with `--recipes`) and report time only:
@@ -769,7 +767,7 @@ The platform-specific `managym` wheels contain the compiled engine; its sdist
 needs Rust and a C linker (`--only-binary :all:` refuses source builds).
 `manabot` is a pure-Python wheel and gets the engine through its exact dependency.
 The engine's runtime requirements are NumPy and Pydantic. `manabot` retains its
-training requirements, including `torch>=2.15.0` and `etude-sdk>=0.4.0`.
+training requirements, including `torch>=2.15.0` and `etude-sdk>=0.4.0,<0.5`.
 These minimums allow newer versions to resolve; they do not certify every future
 dependency release. Keep your project's lockfile for reproducibility. If
 resolution fails, check for an incompatible Python version, an older exact
@@ -864,7 +862,8 @@ uv run --no-project --python /tmp/manabot-release-venv/bin/python manabot-releas
 
 The training smoke checks one shared engine behind both import paths, catalog
 binding, gradients, a CPU update on the native lethal-target fixture, and the
-installed Academy bot entry point and checkpoint catalog. This bounded fixture
+installed historical Academy extension, policy provider registration and compatible
+discovery of the checkpoint just trained. This bounded fixture
 does not certify the default training recipe's completion time. Repeat in a separate environment with
 3.12 and its wheel. `release.yml` covers both interpreters on Linux and macOS,
 then installs and imports the optional extras. Consumer checks run outside the

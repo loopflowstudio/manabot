@@ -103,7 +103,7 @@ def test_full_roster_checkpoint_admits_every_pair_and_rejects_drift() -> None:
             validate_checkpoint_world({"world_binding": binding}, space, configs)
             == binding
         )
-    bad = pair.to_rust()
+    bad = list(pair.to_rust())
     bad[0] = managym.PlayerConfig("wrong pool", bad[0].decklist, {})
     with pytest.raises(ValueError, match="outside checkpoint"):
         validate_agent_setup(agent, bad)

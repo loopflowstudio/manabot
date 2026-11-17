@@ -3,14 +3,15 @@
 import numpy as np
 import pytest
 
-from manabot.env.failures import CapturedVector, FailureEvidence, GameInputs
+from manabot.env.failures import CapturedVector
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.env.opponents import RandomPolicy, build_opponent_policy
-from manabot.env.replay import replay_failure_inputs
 from manabot.env.vector_env import VectorEnv
 from manabot.infra.config import RewardConfig
 import managym
+from managym.recording import FailureEvidence, GameInputs
+from managym.replay import replay_failure_inputs
 
 
 def test_random_policy_picks_only_valid_actions() -> None:

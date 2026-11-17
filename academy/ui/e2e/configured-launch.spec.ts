@@ -11,8 +11,8 @@ test('starting and reopening an unfinished bot game keeps its live replay positi
   const continuation = page.getByRole('button', { name: 'Continue', exact: true });
   await page.goto('/replay?watch=1');
   await expect(start).toBeEnabled();
-  await page.getByRole('combobox', { name: 'Seat 1', exact: true }).selectOption('random');
-  await page.getByRole('combobox', { name: 'Seat 2', exact: true }).selectOption('random');
+  await page.getByRole('combobox', { name: 'Seat 1 bot', exact: true }).selectOption('random');
+  await page.getByRole('combobox', { name: 'Seat 2 bot', exact: true }).selectOption('random');
   await start.click();
   await expect(position).toHaveText('Position 1 / 1');
   await expect(status).toHaveText('Waiting at the live edge');
@@ -27,7 +27,7 @@ test('starting and reopening an unfinished bot game keeps its live replay positi
   await expect(continuation).toBeEnabled();
   expect(new URL(page.url()).searchParams.get('trace')).toBe(recording);
   await expect(heading).toBeVisible();
-  await expect(page.getByRole('banner').getByRole('link', { name: 'Replay', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('banner').getByRole('link', { name: 'Current game', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(start).toBeHidden();
   await page.getByText('Watch another matchup', { exact: true }).click();
   await expect(start).toBeVisible();
@@ -46,7 +46,7 @@ test('launch replaces unrelated resume, reloads pending game and opens selected 
   await page.goto('/');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByTestId('opponent-select').selectOption('passive');
-  await page.getByRole('button', { name: 'New Game', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
   await expect(page.getByTestId('action-option').first()).toBeEnabled();
   const unrelated = frames.at(-1)!.match_id;
   await page.goto(addresses.game);
@@ -63,11 +63,11 @@ test('launch replaces unrelated resume, reloads pending game and opens selected 
   await second.goto(addresses.game);
   await expect(second.getByTestId('action-option').first()).toBeEnabled();
   await second.close();
-  await page.getByRole('button', { name: 'New Game', exact: true }).first().click();
+  await page.getByRole('link', {name:'New game',exact:true}).first().click();
   await expect(page.getByTestId('opponent-select')).toHaveValue('passive');
-  await expect(page.getByTestId('selected-deck-hero')).toHaveAttribute('data-deck-id', 'gw_allies_jeong');
-  await expect(page.getByText('Choose your next matchup.', { exact: false })).toBeVisible();
-  await page.getByRole('button', { name: 'New Game', exact: true }).first().click();
+  await expect(page.getByRole('combobox',{name:'Seat 1 deck',exact:true})).toHaveValue('gw_allies_jeong');
+  page.on('dialog',dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
   await expect(page.getByTestId('action-option').first()).toBeEnabled();
   expect(page.url()).not.toContain('launch=');
   await expect.poll(() => frames.at(-1)?.match_id).not.toBe(launched.match_id);
@@ -79,7 +79,7 @@ test('launch replaces unrelated resume, reloads pending game and opens selected 
   await expect(page.getByRole('heading', { name: 'Replay', exact: true })).toBeVisible();
   await expect(page.getByTestId('game-board')).toContainText('first-legal-a');
   await expect(page.getByTestId('game-board')).toContainText('first-legal-b');
-  await expect(page.getByRole('banner').getByRole('link', { name: 'Replay', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('banner').getByRole('link', { name: 'Current game', exact: true })).toHaveAttribute('href', '/');
   await expect(page.getByRole('button', { name: 'Start watching' })).toBeHidden();
   await expect(page.getByTestId('deck-browser')).toBeHidden();
   await expect(page.getByTestId('game-board')).toBeVisible();
@@ -98,7 +98,8 @@ test('imported launch setup shows selected sources and switches back to bundled 
   const addresses = JSON.parse(readFileSync(proof, 'utf8')) as { imported_game: string };
   await page.goto(addresses.imported_game);
   await expect(page.getByTestId('action-option').first()).toBeEnabled();
-  await page.getByRole('button', { name: 'New Game', exact: true }).first().click();
+  await page.getByRole('link',{name:'New game',exact:true}).first().click();
+  page.on('dialog',dialog => dialog.accept());
   const imports = page.getByRole('checkbox', { name: 'Use imported decks for the next game' });
   await expect(imports).toBeVisible();
   await expect(imports).toBeChecked();
@@ -108,11 +109,12 @@ test('imported launch setup shows selected sources and switches back to bundled 
   await expect(page.getByText('Selected source: my-deck.txt', { exact: true })).toBeVisible();
   await page.screenshot({ path: 'test-results/launch/imported-setup.png', fullPage: true });
   await imports.uncheck();
+  await page.getByText('Browse decks and cards',{exact:true}).click();
   await expect(page.getByTestId('deck-browser')).toBeVisible();
   await imports.check();
   await expect(page.getByTestId('deck-browser')).toHaveCount(0);
   await expect(page.getByLabel('Opponent deck source', { exact: true })).toHaveValue('20 Mountain\n');
-  await page.getByRole('button', { name: 'New Game', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
   await expect(page.getByTestId('action-option').first()).toBeEnabled();
   expect(page.url()).not.toContain('launch=');
   await expect(page.getByTestId('deck-names')).toContainText('Imported deck');

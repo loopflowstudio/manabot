@@ -28,6 +28,7 @@ class BaselineConfig(BaseModel):
     device: Literal["cpu", "mps", "cuda"] = "cuda"
     learning_seats: Literal["one", "both"] = "both"
     padded_shapes: bool = False
+    training_game_logs: bool = Field(default=False, exclude_if=lambda value: not value)
 
 
 def settings(config: BaselineConfig) -> SelfPlay:
@@ -46,6 +47,7 @@ def settings(config: BaselineConfig) -> SelfPlay:
         streams=4,
         transitions=64,
         learning_seats=config.learning_seats,
+        training_game_logs=config.training_game_logs,
         learning=DampedPolicyLearning(
             gradient="damped_policy",
             iteration_schedule=IterationSchedule(steps=config.updates),

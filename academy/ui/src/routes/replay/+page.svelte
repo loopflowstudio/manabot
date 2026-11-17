@@ -1,16 +1,17 @@
 <script lang="ts">
+  import { currentGame, rememberCurrentGame } from '$lib/current-game.svelte';
   import { goto, replaceState } from '$app/navigation';
   import { page } from '$app/state';
   import { tick, untrack } from 'svelte';
   import { offerFocus } from '$lib/offer-map';
   import { recordFetch } from '$lib/records';
-  import SearchThinking from '$lib/components/SearchThinking.svelte';
+  import WorkStatus from '$lib/components/WorkStatus.svelte';
   import WatchSetup from '$lib/components/WatchSetup.svelte';
   import Feedback from '$lib/components/Feedback.svelte';
   import GameBoard from '$lib/components/GameBoard.svelte';
   import PresentationHistory from '$lib/components/PresentationHistory.svelte';
   import DecisionSurface from '$lib/components/DecisionSurface.svelte';
-  import DecisionAdvice from '$lib/components/DecisionAdvice.svelte';
+  import RecordedDecisionEvidence from '$lib/components/RecordedDecisionEvidence.svelte';
   import DecisionContext from '$lib/components/DecisionContext.svelte';
   import StudyPanel from '$lib/components/StudyPanel.svelte';
   import Timeline from '$lib/components/Timeline.svelte';
@@ -42,6 +43,7 @@
   const current = $derived(replayStore.current);
   const index = $derived(replayStore.index);
   const selectedKey = $derived(index?.positions[replayStore.selected]?.key ?? current?.key ?? '');
+  const retrySearch = $derived(!!index?.mirror_retry && (index.mirror_retry.code.startsWith('search_') || index.mirror_retry.code.startsWith('mirror_')));
   const atLiveEdge = $derived(replayStore.selected === (index?.positions.length ?? 0) - 1 && current?.key === selectedKey);
   const inStudy = $derived(studyStore.phase !== 'score');
   const informationBoard = $derived(studyStore.preview?.projection ?? studyStore.branchObservation ?? (inStudy ? studyStore.restored?.frame.projection : null) ?? current?.observation ?? null);
@@ -104,6 +106,8 @@
     replayStore.reveal = (params.get('view') ?? (saved.reveal ? 'spectator' : 'acting')) === 'spectator';
     try { notes = JSON.parse(localStorage.getItem(`etude.score.notes.${id}`) ?? '{}'); } catch { notes = {}; }
     await replayStore.open(id, params.get('position') ?? saved.key);
+    if (!params.has('near') && saved.near === undefined) replayStore.nearSeat = replayStore.index?.players.find(player => player.kind === 'human')?.seat === 1 ? 1 : 0;
+    if (!currentGame.href || replayStore.index?.can_produce) rememberCurrentGame(`/replay?trace=${encodeURIComponent(id)}`);
   }
   function selectRecording(id: string): void { void goto(`/replay?trace=${encodeURIComponent(id)}`); }
 
@@ -134,7 +138,7 @@
   // The transport owns both semantic beats and position advance. Stage timers
   // are disabled for recorded playback; Study keeps its isolated narration.
   $effect(() => {
-    if (!replayStore.playing || replayStore.busy || replayStore.producing || inStudy) return;
+    if (!replayStore.playing || replayStore.busy || (replayStore.producing && atLiveEdge) || inStudy) return;
     const event = presentationPlayer.currentEvent;
     const duration = event ? Math.max(80, event.suggested_ms / replayStore.speed) : 1000 / replayStore.speed;
     const timer = setTimeout(() => {
@@ -343,7 +347,7 @@
 {#snippet watchSetup()}
   <details open={!page.url.searchParams.has('trace')} class="mb-4 rounded border border-line bg-panel p-4">
     <summary class="type-label cursor-pointer">{index ? 'Watch another matchup' : 'Choose a bot matchup'}</summary>
-    <WatchSetup disabled={inStudy || studyStore.busy || replayStore.producing} onOpen={selectRecording} />
+    {#key index?.id}<WatchSetup setup={index?.private_setup} disabled={inStudy || studyStore.busy} onOpen={selectRecording} />{/key}
   </details>
 {/snippet}
 
@@ -352,23 +356,29 @@
     <h1 class="type-title text-display">Replay</h1>
     <a class="underline type-caption" href={page.url.searchParams.get('from')?.startsWith('/games?') ? page.url.searchParams.get('from')! : '/games'}>Back to games</a>
     {#if summaries.length}
-      <label>Recording <select data-testid="trace-select" class="max-w-64 rounded border border-line bg-field p-2" value={index?.id ?? ''} disabled={inStudy || studyStore.busy || replayStore.producing} onchange={event => selectRecording(event.currentTarget.value)}>
+      <label>Recording <select data-testid="trace-select" class="max-w-64 rounded border border-line bg-field p-2" value={index?.id ?? ''} disabled={inStudy || studyStore.busy} onchange={event => selectRecording(event.currentTarget.value)}>
         <option value="" disabled>Select a recording…</option>
         {#each summaries as summary}<option value={summary.id}>{summary.timestamp ? new Date(summary.timestamp).toLocaleString() : summary.id}</option>{/each}
       </select></label>
     {/if}
-    <button class="btn btn-secondary" disabled={inStudy || studyStore.busy || replayStore.producing} onclick={() => { if (index) void replayStore.open(index.id, selectedKey); else void loadList(); }}>Refresh saved head</button>
+    <button class="btn btn-secondary" disabled={inStudy || studyStore.busy} onclick={() => { if (replayStore.headUncertain) void replayStore.refreshHead(); else if (index) void replayStore.open(index.id, selectedKey); else void loadList(); }}>Refresh saved head</button>
     {#if index}
       <div class="recording-heading flex flex-wrap items-baseline gap-x-3">
         <h2 class="type-title">The Score{index.source_kind ? ` · ${index.source_kind === 'play' ? 'Recorded Play game' : index.source_kind === 'training' ? 'Training game' : 'Evaluation game'}` : ''}</h2>
-        <p role="status">{replayStore.producing ? 'Producing a decision…' : replayStore.busy ? 'Reading saved recording…' : index.status === 'finished' ? `Finished · ${index.winner === null ? 'Draw' : `Seat ${index.winner + 1} wins`}` : index.status === 'waiting' ? index.watch ? atLiveEdge ? 'Waiting at the live edge' : 'Live Watch · reading saved recording' : 'Live game · saved recording only' : 'Interrupted · saved recording only'}</p>
+        <p role="status">{replayStore.busy ? 'Reading saved recording…' : index.status === 'finished' ? `Finished · ${index.winner === null ? 'Draw' : `Seat ${index.winner + 1} wins`}` : index.status === 'waiting' ? index.watch ? atLiveEdge ? 'Waiting at the live edge' : 'Live Watch · reading saved recording' : 'Live game · saved recording only' : 'Interrupted · saved recording only'}</p>
       </div>
     {/if}
     {#if index?.source_kind === 'play'}
       <button class="btn btn-secondary" disabled={inStudy || studyStore.busy} onclick={() => seek(index!.positions.findIndex(position => position.kind === 'choice' && position.actor === 1))}>Inspect bot search</button>
     {/if}
     {#if listError}<p role="alert">{listError}</p>{/if}
-    <SearchThinking active={replayStore.producing && !!index?.mirror?.some(spec => spec !== null)} budget={index?.mirror?.map((spec, seat) => spec ? `Seat ${seat + 1} search ${spec.worlds}×${spec.depth}` : '').filter(Boolean).join(' · ') ?? ''} />
+    {#if replayStore.producing && index}
+      <section aria-label="Live frontier work" class="border-b border-line py-2">
+        <p class="type-caption">Live frontier · revision {index.revision}. {atLiveEdge ? 'Producing the next decision.' : 'Reading a saved position; bot work belongs to the frontier.'}</p>
+        {#if replayStore.workDisconnected}<p role="status" class="type-caption">Connection unavailable; checking the same live frontier. No retry has been sent.</p>{/if}
+        <WorkStatus work={replayStore.work} connected={!replayStore.workDisconnected} />
+      </section>
+    {/if}
     {#if index?.mirror_retry && !replayStore.error}<p role="alert">{index.mirror_retry.message}</p>{/if}
     {#if replayStore.error}<p role="alert">{replayStore.error}</p>{/if}
     {#if studyStore.errorMessage}<p role="alert">{studyStore.errorMessage}</p>{/if}
@@ -388,7 +398,7 @@
             </section>
           {/if}
           <label class="type-caption">Turn and phase
-            <select class="mt-1 w-full rounded border border-line bg-field p-2" aria-label="Jump to turn and phase" disabled={inStudy || studyStore.busy || replayStore.producing} value={markerKey} onchange={event => seek(index!.positions.findIndex(position => position.key === event.currentTarget.value))}>
+            <select class="mt-1 w-full rounded border border-line bg-field p-2" aria-label="Jump to turn and phase" disabled={inStudy || studyStore.busy} value={markerKey} onchange={event => seek(index!.positions.findIndex(position => position.key === event.currentTarget.value))}>
               <option value="" disabled>Choose a passage</option>
               {#each markers as marker}<option value={marker.key}>Turn {marker.turn ?? '?'} · {marker.phase ? turnStageLabel(marker.phase, marker.step ?? '') : 'Unknown'}</option>{/each}
             </select>
@@ -399,7 +409,7 @@
           </div>
           <ol bind:this={scoreList} data-testid="study-score" class="max-h-[25vh] space-y-1 overflow-y-auto" aria-label="Score lines">
             {#each score as position, offset}
-              <li><button data-testid={position.kind === 'choice' ? 'study-decision' : undefined} class="w-full rounded border border-line px-2 py-2 text-left type-caption" aria-current={selectedKey === position.key ? 'true' : undefined} disabled={inStudy || studyStore.busy || replayStore.producing} onclick={() => seek(scoreStart + offset)}>
+              <li><button data-testid={position.kind === 'choice' ? 'study-decision' : undefined} class="w-full rounded border border-line px-2 py-2 text-left type-caption" aria-current={selectedKey === position.key ? 'true' : undefined} disabled={inStudy || studyStore.busy} onclick={() => seek(scoreStart + offset)}>
                 {scoreStart + offset + 1}. {position.kind === 'state' ? index.status === 'finished' ? 'Result' : 'Latest state' : position.kind === 'choice' ? 'Choice' : position.automatic ? 'Automation consequences' : 'Consequences'} · Turn {position.turn ?? '?'}
                 {#if position.actor !== null}<span class="block">Chooser: seat {position.actor + 1}</span>{/if}
               </button></li>
@@ -420,7 +430,7 @@
                 onRetry={offer => void retryStudyOffer(offer)} onReveal={() => void revealStudy()} onReturn={() => void returnToScore()} onPreview={plan => void previewStudyPlan(plan)} onFocusPlan={plan => focusedPlan = plan} />
             {:else if current.decision}
               <DecisionSurface frame={current.decision.frame} readOnly chosenOffer={current.decision.offer_id} />
-              <DecisionAdvice mode="watch" frame={current.decision.frame} offers={current.decision.frame.offers} recorded={current.outputs} chosenOffer={current.decision.offer_id} scenarios={[]} selectedScenarioId="" evidence={null} deltas={null} status="ok" reason={null} advisorId="" computeId="" onSelectScenario={() => {}} />
+              <RecordedDecisionEvidence offers={current.decision.frame.offers} recorded={current.outputs} chosenOffer={current.decision.offer_id} />
               <button class="btn btn-secondary mt-3" disabled={!index.can_study || studyStore.busy || replayStore.busy || !!index.mirror_retry} onclick={event => void openStudyDecision(event.currentTarget)} bind:this={studyButton}>Try another line</button>
               {#if !index.can_study}<p class="type-caption">Study requires retained rules state and this game's participant credential.</p>{/if}
             {:else}<p class="type-caption mt-3">{current.kind === 'choice' ? 'Legal offers and Study not recorded.' : 'No decision at this position. Select a choice to inspect its offers and evidence.'}</p>{/if}
@@ -428,8 +438,8 @@
 
         </aside>
         <section class="recording-viewer min-w-0" aria-label="Recording viewer">
-          <div class="replay-transport mb-2 border-b border-line bg-panel pb-2"><Timeline selected={replayStore.selected} total={index.positions.length} playing={replayStore.playing} speed={replayStore.speed} disabled={inStudy || studyStore.busy} producing={replayStore.producing} busy={replayStore.busy} canProduce={index.can_produce} retrySearch={index.mirror_retry?.code === 'mirror_deadline_exceeded'}
-            onPrevious={() => seek(Math.max(0, replayStore.selected - 1))} onNext={() => { replayStore.pause(); void replayStore.next(); }} onTogglePlaying={() => { if (replayStore.playing) replayStore.pause(); else replayStore.playing = true; }} onScrub={seek} onSpeedChange={speed => replayStore.speed = speed} /></div>
+          <div class="replay-transport mb-2 border-b border-line bg-panel pb-2"><Timeline selected={replayStore.selected} total={index.positions.length} playing={replayStore.playing} speed={replayStore.speed} disabled={inStudy || studyStore.busy} producing={replayStore.producing} busy={replayStore.busy} canProduce={index.can_produce && !replayStore.headUncertain} {retrySearch} retryBot={!!index.mirror_retry && !retrySearch}
+            onPrevious={() => seek(Math.max(0, replayStore.selected - 1))} onNext={() => { replayStore.pause(); if (atLiveEdge && index?.mirror_retry) void replayStore.produce(true); else void replayStore.next(); }} onTogglePlaying={() => { if (replayStore.playing) replayStore.pause(); else replayStore.playing = true; }} onScrub={seek} onSpeedChange={speed => replayStore.speed = speed} /></div>
           {#if current}
             {#if current.description}<p class="type-annotation mb-2">{current.description}</p>{/if}
             {#if board}<GameBoard onInspect={inStudy ? undefined : () => replayStore.pause()} workspace observation={board} {focusedIds} heroIdentity={identity(replayStore.nearSeat)} villainIdentity={identity(1 - replayStore.nearSeat)} winner={board.game_over ? index.winner : undefined} {presentationPlayer} />{/if}

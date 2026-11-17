@@ -90,21 +90,13 @@ uv run etude status
 ```
 
 Until then a command that needs the database refuses and names the upgrade.
-Machines already running keep running through an upgrade. The files earlier
-clients wrote (`launcher-17.db` of 0.3.2, the unversioned `launcher.db` of
-0.2.x) stay where they are and are never opened, so an older client still
-works from the same home:
-
-```sh
-uv run --with "etude-sdk[s3,eval]==0.2.15" etude status    # launcher.db
-```
-
-A run stays with the client that launched it, so follow or stop it with that
-version, and keep the older file while its runs are still referenced, since it
-is the only record of how they ended. `etude report` and
-`etude launch --quote` rent nothing; a report reads the job store and needs no
-launcher database. To leave `~/.etude` untouched altogether, give a command
-its own home: `ETUDE_HOME=$(mktemp -d) uv run etude ...`.
+Machines already running keep running through an upgrade. This machine's
+historical launcher files have already been consolidated. Keep older clients
+confined to isolated homes; their different files would split the live ledger.
+Recovery snapshots remain evidence, not operational databases.
+`etude report` and `etude launch --quote` rent nothing; a report reads the job
+store and needs no launcher database. To leave `~/.etude` untouched, give a
+fixture command its own home: `ETUDE_HOME=$(mktemp -d) uv run etude ...`.
 
 When a provider declines to make a machine, a launch fails with the provider's
 words and records no run. A queued run keeps the reason in `etude status` and

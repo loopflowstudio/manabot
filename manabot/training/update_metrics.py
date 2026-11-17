@@ -181,8 +181,8 @@ def updates_from_run(data: RunData) -> Updates:
                     resumed = update
                 if values:
                     rows.setdefault(int(update), {}).update(_integral(values))
-        # A later attempt replaces history beyond its resume point, including
-        # when it has no rows. Within an attempt each metric's latest write wins.
+        # Current writers supersede from their first row, inclusive. Historical
+        # writers explicitly resumed after a coordinate. Silent retries keep history.
         if resumed is not None:
             # Current writers replace the first logged coordinate itself;
             # historical checkpoint cuts retain it.

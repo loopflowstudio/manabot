@@ -21,6 +21,7 @@ from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.registration import PlayerRegistration
 import managym
 from managym.academy.extensions import bot_extension
+from managym.policy import PolicyRegistry, PolicySource, PolicySpec
 
 
 def check_heuristic_registration() -> str:
@@ -111,10 +112,10 @@ def main() -> None:
     assert extension is not None and extension.name == "manabot", (
         "Installed Academy bot entry point is missing"
     )
-    from managym.policy import PolicyRegistry, PolicySource
-
     registry = PolicyRegistry()
-    assert "manabot" in registry.providers and "qwen" in registry.providers
+    for kind in ("greedy", "heuristic"):
+        key = registry.register(PolicySpec("manabot", config={"kind": kind}))
+        assert registry.descriptor(key).alias == kind
     registry.discover(
         [
             PolicySource(
@@ -126,14 +127,16 @@ def main() -> None:
             )
         ]
     )
-    # Ambient reference players coexist with the explicitly discovered artifact.
-    [descriptor] = [
+    assert not registry.discovery_errors, registry.discovery_errors
+    checkpoint_sha256 = file_sha256(checkpoint_path)
+    checkpoints = [
         descriptor
         for descriptor in registry.descriptors()
-        if descriptor.artifacts.get("actor") == file_sha256(checkpoint_path)
+        if descriptor.provider == "manabot"
+        and descriptor.artifacts.get("actor") == checkpoint_sha256
     ]
-    assert descriptor.incompatibility is None
-    assert descriptor.artifacts["actor"]
+    assert len(checkpoints) == 1, checkpoints
+    assert checkpoints[0].incompatibility is None, checkpoints[0]
     print(
         f"release smoke passed: Python {sys.version.split()[0]}, manabot {version('manabot')}, "
         f"torch {torch.__version__}, etude-sdk {version('etude-sdk')}, Academy bot extension"

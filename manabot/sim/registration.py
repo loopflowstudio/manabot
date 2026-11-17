@@ -10,6 +10,7 @@ from pydantic import Field, model_validator
 from manabot.infra.identity import SHA256_PATTERN, StrictModel, canonical_sha256
 from manabot.sim.execution import EvalCompute, EvalComputeV1
 from manabot.sim.search.branch import branch_backend
+from managym.disclosure import DecklistDisclosure
 
 # How a checkpoint served by Etude is registered: Etude chooses the device, and
 # the game process samples float32 logits with a seeded NumPy generator.
@@ -373,7 +374,7 @@ OBSERVATION_ONLY_KINDS = frozenset(
 
 
 def require_open_decklists(
-    decklists: Literal["open", "closed"], registrations: list[PlayerRegistration]
+    decklists: DecklistDisclosure, registrations: list[PlayerRegistration]
 ) -> None:
     """Refuse search players in a closed-decklist match before any game starts.
 

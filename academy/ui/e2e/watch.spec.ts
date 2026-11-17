@@ -6,7 +6,7 @@ test('watch reads choices and consequences in the shared viewer, then returns fr
   await expect(page.getByRole('button', {name: 'Continue', exact: true})).toBeVisible();
   await page.getByRole('button', {name: 'Continue', exact: true}).click();
   await expect(page.getByTestId('position-counter')).toHaveText('Position 1 / 3');
-  await expect(page.getByTestId('decision-advice')).toContainText('Recorded at this decision');
+  await expect(page.getByTestId('recorded-decision-evidence')).toContainText('Recorded at this decision');
   await page.getByRole('checkbox', {name: 'Show both hands'}).check();
   await expect(page.getByTestId('replay-perspective')).toContainText('Both hands · spectator view');
   await page.getByRole('button', {name: 'Next', exact: true}).click();
@@ -32,8 +32,8 @@ test('opens formatted arena JSON as one game', async ({ page }) => {
     imported = route.request().postDataJSON();
     await route.fulfill({ status: 400, json: { detail: 'arena_import_invalid' } });
   });
-  await page.goto('/replay?watch=1');
-  await expect(page.getByRole('button', { name: 'Start watching' })).toBeEnabled();
+  await page.goto('/games');
+  await page.getByText('Open a recorded game file',{exact:true}).click();
   await expect(page.getByLabel('Open a game file')).toHaveAccessibleDescription('An exported training game or an evaluation trace');
   await page.getByLabel('Open a game file').setInputFiles({
     name: 'game.json',
@@ -49,7 +49,7 @@ test('loads replay history when navigating from Watch to Replay', async ({ page 
   await page.goto('/replay?watch=1');
   await expect(page.getByRole('button', { name: 'Start watching' })).toBeEnabled();
   const history = page.waitForResponse(response => new URL(response.url()).pathname === '/api/traces');
-  await page.getByRole('banner').getByRole('link', { name: 'Replay', exact: true }).click();
+  await page.getByRole('banner').getByRole('link', { name: 'Games', exact: true }).click();
   expect((await history).ok()).toBe(true);
-  await expect(page.getByRole('heading', { name: 'Replay', exact: true })).toBeAttached();
+  await expect(page.getByRole('heading', { name: 'Games', exact: true })).toBeAttached();
 });

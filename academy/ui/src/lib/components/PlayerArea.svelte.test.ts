@@ -42,8 +42,8 @@ it('shows pooled amounts before qualifiers without repeating combat expiry', () 
       }),
     },
   });
-  expect(body).toContain('— including 2 {R}, expiring at end of combat');
-  expect(body).toContain('; 1 {G} only for creature spells that puts a +1/+1 counter on a non-Human creature spell it casts, expiring at step end');
+  expect(body).toContain('2 {R}, normally expires at end of combat');
+  expect(body).toContain('1 {G} only for creature spells that puts a +1/+1 counter on a non-Human creature spell it casts, normally expires at step end');
   expect(body.match(/at end of combat/g)).toHaveLength(1);
   expect(body).not.toContain('undefined');
 });
@@ -108,4 +108,15 @@ it('labels runtime identity as Policy ID and retains artifact roles', () => {
   expect(body).toContain('Policy ID: ' + runtime.id);
   expect(body).toContain('actor: ' + 'b'.repeat(64));
   expect(body).not.toContain('SHA-256:');
+});
+
+it('lists known library positions from the top in numeric order', () => {
+  const { body } = render(PlayerArea, {
+    props: {
+      identity: playerIdentity({ name: 'You' }), tablePermanents: [], definitionNames: names,
+      player: player({ known_library: { '10': 4, '0': 9 } }),
+    },
+  });
+  expect(body).toContain('Known in library:');
+  expect(body.indexOf('Accumulate Wisdom (1 from top)')).toBeLessThan(body.indexOf('Island (11 from top)'));
 });

@@ -12,10 +12,16 @@ import managym
 from managym import search
 from managym.academy import server
 from managym.academy.opponent import set_policy_registry
-from managym.academy.trace import load_trace, prepare_trace_payload
+from managym.academy.trace import GameConfig, load_trace, prepare_trace_payload
 from managym.academy.watch import WatchRequest, create_watch, inspect_watch, step_watch
 from managym.bots import passive_policy
-from managym.policy import PolicyDecision, PolicyDescriptor, PolicyRegistry, PolicyView
+from managym.policy import (
+    PolicyDecision,
+    PolicyDescriptor,
+    PolicyRegistry,
+    PolicyRunner,
+    PolicyView,
+)
 from managym.search import SearchConfig
 from tests.academy.test_policy_runtime import IndependentFactory
 from tests.semantic.test_policy_search import Clock, IndependentSession, _runner
@@ -111,7 +117,7 @@ def test_independent_adapter_search_plays_watches_and_retains_private_evidence(
             if event.get("bot_decision")
         )
         assert outputs["mirror"]["worlds"] == 1
-        assert outputs["belief"]["model"] == "managym.determinize/physical-deal/v1"
+        assert outputs["belief"]["model"] == "managym.determinize/physical-deal/v2"
         assert sum(outputs["probabilities"]) == pytest.approx(1)
         assert outputs["probabilities"][outputs["action"]] > 0
         assert all(
@@ -168,7 +174,12 @@ def test_play_search_timeout_survives_reconnect_and_stop_changes(
     runner = _runner(live, 1)
     runner.configure_search(SearchConfig(worlds=1, depth=1), seed=3)
     monkeypatch.setattr(search, "time", clock)
-    monkeypatch.setattr(server, "build_villain_policy", lambda _config: runner)
+
+    def selected_policy(config: GameConfig, *, seat: int = 1) -> PolicyRunner:
+        assert seat == 1 - config.human_seat
+        return runner
+
+    monkeypatch.setattr(server, "build_villain_policy", selected_policy)
     game = server.GameSession(trace_dir=tmp_path)
     try:
         game.new_game(
@@ -311,7 +322,7 @@ def test_first_watch_search_timeout_survives_inspection_and_retries_same_choice(
         assert game.env.state_digest() == original
         assert game.trace is not None and len(game.trace.events) == 0
         factory.sessions[0].clock = None
-        result = step_watch(created["id"], created["token"], 0)
+        result = step_watch(created["id"], created["token"], 0, retry=True)
         assert result["revision"] == 1
         assert game.mirror_retry is None
     finally:
@@ -377,7 +388,9 @@ def test_watch_latest_reconnect_preserves_timeout_history_and_explicit_retry(
         assert stale.status_code == 409
         assert game.env.state_digest() == original
         factory.sessions[seat].clock = None
-        response = client.post(f"{url}/step", headers=headers, json={"revision": 3})
+        response = client.post(
+            f"{url}/step", headers=headers, json={"revision": 3, "retry": True}
+        )
         assert response.status_code == 200
         assert response.json()["revision"] == 4
         recovered = client.get(f"{url}/decisions/-1", headers=headers).json()

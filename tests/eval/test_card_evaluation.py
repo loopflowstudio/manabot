@@ -19,7 +19,6 @@ import torch
 
 from manabot.backends.torch.checkpoint import save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
-from manabot.env.card_capture import CapturedCards
 from manabot.env.match import Match as EnvMatch
 from manabot.env.observation import ObservationSpace
 from manabot.eval import card_evaluation as evaluation, cards as cards_cli
@@ -62,6 +61,7 @@ from manabot.sim.card_evidence import (
 from manabot.sim.matchup import selected_decks
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import ReplayReceipt
+from managym.card_capture import CapturedCards
 from tests.fixtures.evaluation_callbacks import bridge_callbacks
 
 

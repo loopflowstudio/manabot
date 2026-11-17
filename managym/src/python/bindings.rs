@@ -354,6 +354,17 @@ fn encoded_to_dict<'py>(
             &[2, config.max_cards_per_player],
         )?,
     )?;
+    if config.known_library_len() > 0 {
+        dict.set_item(
+            "known_library",
+            to_numpy_array_f32(
+                py,
+                &np,
+                &encoded.known_library,
+                &[2, crate::state::knowledge::KNOWN_LIBRARY_ROWS, 2],
+            )?,
+        )?;
+    }
     dict.set_item(
         "known_hand",
         to_numpy_array_f32(
@@ -1085,7 +1096,7 @@ pub struct PyPlayerConfig {
     pub submitted: bool,
     /// `"open"` (default) or `"closed"`: whether the opponent knows this
     /// player's main deck and sideboard.
-    pub disclosure: DecklistDisclosure,
+    pub legacy_disclosure: Option<DecklistDisclosure>,
 }
 
 /// `PlayerConfig.world` names only the world; authored content packs are retired.
@@ -1117,19 +1128,23 @@ fn parse_disclosure(value: &str) -> PyResult<DecklistDisclosure> {
 #[pymethods]
 impl PyPlayerConfig {
     #[new]
-    #[pyo3(signature = (name, decklist, sideboard=None, world=None, disclosure="open"))]
+    #[pyo3(signature = (name, decklist, sideboard=None, world=None, disclosure=None))]
     fn new(
+        py: Python<'_>,
         name: String,
         decklist: BTreeMap<String, usize>,
         sideboard: Option<BTreeMap<String, usize>>,
         world: Option<&str>,
-        disclosure: &str,
+        disclosure: Option<&str>,
     ) -> PyResult<Self> {
+        if disclosure.is_some() {
+            warn_disclosure(py)?;
+        }
         Ok(Self {
             name,
             deck: Deck::new(decklist, sideboard.unwrap_or_default()),
             submitted: submission(world)?,
-            disclosure: parse_disclosure(disclosure)?,
+            legacy_disclosure: disclosure.map(parse_disclosure).transpose()?,
         })
     }
 
@@ -1155,16 +1170,15 @@ impl PyPlayerConfig {
     }
 
     #[getter]
-    fn disclosure(&self) -> &'static str {
-        match self.disclosure {
-            DecklistDisclosure::Open => "open",
-            DecklistDisclosure::Closed => "closed",
-        }
+    fn disclosure(&self, py: Python<'_>) -> PyResult<&'static str> {
+        warn_disclosure(py)?;
+        Ok(disclosure_name(self.legacy_disclosure.unwrap_or_default()))
     }
 
     #[setter]
-    fn set_disclosure(&mut self, value: &str) -> PyResult<()> {
-        self.disclosure = parse_disclosure(value)?;
+    fn set_disclosure(&mut self, py: Python<'_>, value: &str) -> PyResult<()> {
+        warn_disclosure(py)?;
+        self.legacy_disclosure = Some(parse_disclosure(value)?);
         Ok(())
     }
 }
@@ -1176,7 +1190,6 @@ impl From<PyPlayerConfig> for PlayerConfig {
             name: value.name,
             deck: value.deck,
             submitted: value.submitted,
-            disclosure: value.disclosure,
         }
     }
 }
@@ -1188,7 +1201,7 @@ impl From<PlayerConfig> for PyPlayerConfig {
             name: value.name,
             deck: value.deck,
             submitted: value.submitted,
-            disclosure: value.disclosure,
+            legacy_disclosure: None,
         }
     }
 }
@@ -1213,6 +1226,8 @@ pub struct PyPlayer {
     pub graveyard_lessons: i32,
     #[pyo3(get)]
     pub known_hand: BTreeMap<u32, u32>,
+    #[pyo3(get)]
+    pub known_library: BTreeMap<u32, u32>,
     /// Decklist counts by definition; `None` when the opponent's decklist is
     /// closed to this observation's viewer.
     #[pyo3(get)]
@@ -1539,6 +1554,7 @@ impl From<PlayerData> for PyPlayer {
             zone_counts: value.zone_counts.to_vec(),
             graveyard_lessons: value.graveyard_lessons,
             known_hand: value.known_hand,
+            known_library: value.known_library,
             main_counts: value.main_counts,
             unseen_counts: value.unseen_counts,
             sideboard_counts: value.sideboard_counts,
@@ -1581,6 +1597,7 @@ impl From<PyPlayer> for PlayerData {
             zone_counts,
             graveyard_lessons: value.graveyard_lessons,
             known_hand: value.known_hand,
+            known_library: value.known_library,
             main_counts: value.main_counts,
             unseen_counts: value.unseen_counts,
             sideboard_counts: value.sideboard_counts,
@@ -2118,6 +2135,7 @@ impl PyCard {
         self.data.x = value;
     }
     #[getter]
+    #[allow(clippy::wrong_self_convention)]
     fn from_battlefield_this_turn(&self) -> bool {
         self.data.from_battlefield_this_turn
     }
@@ -3085,6 +3103,8 @@ impl PySharedEffect {
 #[pyclass(name = "Observation")]
 #[derive(Clone)]
 pub struct PyObservation {
+    #[pyo3(get, set)]
+    pub decklists_closed: bool,
     #[pyo3(get)]
     pub shared_effects: Option<Vec<PySharedEffect>>,
     #[pyo3(get)]
@@ -3128,6 +3148,7 @@ impl From<Observation> for PyObservation {
                     .map(|inner| PySharedEffect { inner })
                     .collect()
             }),
+            decklists_closed: value.decklists_closed,
             game_over: value.game_over,
             won: value.won,
             turn: value.turn.into(),
@@ -3174,6 +3195,7 @@ impl From<PyObservation> for Observation {
             shared_effects: value
                 .shared_effects
                 .map(|records| records.into_iter().map(|record| record.inner).collect()),
+            decklists_closed: value.decklists_closed,
             game_over: value.game_over,
             won: value.won,
             turn: value.turn.into(),
@@ -3995,18 +4017,46 @@ impl PyEnv {
     fn reset(
         &self,
         py: Python<'_>,
-        player_configs: Vec<PyPlayerConfig>,
+        player_configs: Bound<'_, PyAny>,
     ) -> PyResult<(PyObservation, PyObject)> {
         let mut env = self
             .inner
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
 
-        let configs = player_configs.into_iter().map(PlayerConfig::from).collect();
+        let configs = game_setup(&player_configs)?;
         let (obs, info) = env.reset(configs).map_err(map_agent_err)?;
 
         let py_dict = info_dict_to_pydict(py, &info);
         Ok((PyObservation::from(obs), py_dict.into_any().unbind()))
+    }
+
+    fn enable_statistics(&self) -> PyResult<()> {
+        self.reject_guarded_mutation("Env.enable_statistics")?;
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .enable_statistics()
+            .map_err(map_agent_err)
+    }
+
+    fn statistics(&self, py: Python<'_>) -> PyResult<PyObject> {
+        let summary = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .statistics();
+        statistics_object(py, &summary, "summary")
+    }
+
+    fn take_statistics(&self, py: Python<'_>) -> PyResult<PyObject> {
+        self.reject_guarded_mutation("Env.take_statistics")?;
+        let summaries = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .take_statistics();
+        statistics_object(py, &summaries, "summaries")
     }
 
     fn enable_card_capture(&self) -> PyResult<()> {
@@ -5333,6 +5383,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<EventEntityKindEnum>()?;
 
     m.add_class::<PyPlayerConfig>()?;
+    m.add_function(wrap_pyfunction!(resolve_decklists, m)?)?;
     m.add_function(wrap_pyfunction!(authored_deck_setup, m)?)?;
     super::deck_bindings::register(py, m)?;
     m.add_function(wrap_pyfunction!(authored_deck_keys, m)?)?;
@@ -5343,6 +5394,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(naming_catalog, m)?)?;
     m.add_class::<crate::cards::names::NameCandidate>()?;
     m.add_function(wrap_pyfunction!(card_definitions_json, m)?)?;
+    m.add_function(wrap_pyfunction!(reduce_card_capture_json, m)?)?;
     m.add_function(wrap_pyfunction!(catalog_token_value, m)?)?;
     m.add_function(wrap_pyfunction!(record_vocabulary, m)?)?;
     crate::python::layout_bindings::register(m)?;
@@ -5391,4 +5443,105 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<ObservationRead>()?;
     crate::python::vector_env_bindings::register_vector_env_bindings(m)?;
     Ok(())
+}
+
+#[cfg(feature = "python")]
+pub(crate) fn disclosure_name(value: DecklistDisclosure) -> &'static str {
+    match value {
+        DecklistDisclosure::Open => "open",
+        DecklistDisclosure::Closed => "closed",
+    }
+}
+
+#[cfg(feature = "python")]
+fn warn_disclosure(py: Python<'_>) -> PyResult<()> {
+    pyo3::PyErr::warn_bound(
+        py,
+        &py.get_type_bound::<pyo3::exceptions::PyDeprecationWarning>(),
+        "PlayerConfig.disclosure is deprecated; use GameSetup(decklists=...). Removed in 0.4.0.",
+        2,
+    )
+}
+
+/// Read the game value directly; the deprecated seat hints are checked only at
+/// this boundary, never installed on a native player or roster.
+#[cfg(feature = "python")]
+pub(crate) fn game_setup(value: &Bound<'_, PyAny>) -> PyResult<crate::state::player::GameSetup> {
+    use crate::state::player::{DecklistMode, GameSetup};
+    let players: Vec<PyPlayerConfig> = value.extract()?;
+    let mut hints = players
+        .iter()
+        .filter_map(|player| player.legacy_disclosure)
+        .map(DecklistMode::from);
+    let setup_type = value.py().import_bound("managym")?.getattr("GameSetup")?;
+    let (decklists, conflict) = if value.is_instance(&setup_type)? {
+        let name: String = value.getattr("decklists")?.extract()?;
+        let decklists = match name.as_str() {
+            "mixed" => DecklistMode::Mixed,
+            fixed => parse_disclosure(fixed)?.into(),
+        };
+        (
+            decklists,
+            "deprecated per-seat disclosure conflicts with GameSetup.decklists",
+        )
+    } else {
+        // A bare seat list takes its game value from the first hint, if any.
+        (
+            hints.clone().next().unwrap_or_default(),
+            "deprecated per-seat disclosure values disagree",
+        )
+    };
+    if hints.any(|hint| hint != decklists) {
+        return Err(PyValueError::new_err(conflict));
+    }
+    Ok(GameSetup {
+        players: players.into_iter().map(PlayerConfig::from).collect(),
+        decklists,
+    })
+}
+
+#[cfg(feature = "python")]
+pub(crate) fn python_game_setup(
+    py: Python<'_>,
+    players: Vec<PlayerConfig>,
+    disclosure: DecklistDisclosure,
+) -> PyResult<PyObject> {
+    let players: Vec<PyPlayerConfig> = players.into_iter().map(PyPlayerConfig::from).collect();
+    let kwargs = pyo3::types::PyDict::new_bound(py);
+    kwargs.set_item("decklists", disclosure_name(disclosure))?;
+    Ok(py
+        .import_bound("managym")?
+        .getattr("GameSetup")?
+        .call((players,), Some(&kwargs))?
+        .unbind())
+}
+
+#[cfg(feature = "python")]
+pub(crate) fn statistics_object(
+    py: Python<'_>,
+    value: &impl serde::Serialize,
+    parser: &str,
+) -> PyResult<PyObject> {
+    let raw = serde_json::to_string(value).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    Ok(py
+        .import_bound("managym.statistics")?
+        .getattr(parser)?
+        .call1((raw,))?
+        .unbind())
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+fn resolve_decklists(player_configs: Bound<'_, PyAny>, seed: u64) -> PyResult<&'static str> {
+    Ok(disclosure_name(
+        game_setup(&player_configs)?.decklists.resolve(seed),
+    ))
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+fn reduce_card_capture_json(raw: &str) -> PyResult<String> {
+    let rows = crate::flow::statistics::reduce_capture(raw)
+        .map_err(|e| PyValueError::new_err(e.to_string()))?;
+    serde_json::to_string(&rows).map_err(|e| PyValueError::new_err(e.to_string()))
 }

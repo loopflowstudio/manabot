@@ -98,7 +98,7 @@ def coverage_sweep(
     """Play `games` seeded random games and embed every decision through a
     catalog policy; raises `ValueError` naming the game on an unknown id."""
     backend.seed(seed)
-    space = ObservationSpace(ObservationConfig(policy_input_version=10))
+    space = ObservationSpace(ObservationConfig())
     model = backend.runtime.create_policy(
         space,
         ModelConfig(hidden_dim=8, num_attention_heads=2, world=managym.WORLD_SETUP),

@@ -166,6 +166,8 @@ export interface PlayerState {
   inspected?: CardState[];
   sideboard?: SideboardCard[];
   known_hand?: Record<string, number>;
+  /** Zero-based position from the top to definition, as this viewer knows it. */
+  known_library?: Record<string, number>;
   /** Decklist counts, present only when the viewer knows this player's
    *  decklist (its own, or an open opponent's). Absent means closed. */
   main_counts?: Record<string, number>;
@@ -614,6 +616,9 @@ export interface GameSummary extends TraceSummary {
   revision: number | null;
   mine: boolean;
   replay_available: boolean;
+  play_session_id?: string | null;
+  game_number?: number | null;
+  feedback_truncated?: boolean;
   feedback: { note: string; created_at: string; author_id: string | null; decision_address: string | null }[];
 }
 
@@ -745,7 +750,31 @@ export interface StopsConfig {
   auto_pass: boolean;
 }
 
+export type WorkStatus = {
+  operation_id: string;
+  sequence: number;
+  kind: 'load' | 'choose' | 'search' | 'advance';
+  started_at: number;
+  state: 'running' | 'complete' | 'failed';
+} & ({
+  scope: 'setup';
+  setup_id: string;
+  loading_seat: number | null;
+  match_id: null;
+  revision: null;
+  chooser: null;
+} | {
+  scope: 'match';
+  setup_id: null;
+  loading_seat: null;
+  match_id: string;
+  revision: number;
+  chooser: number | null;
+});
+
 export type ServerMessage = (
+  | { type: 'work_status'; session_id: string; work: WorkStatus }
+
   | {
       type: 'observation';
       data: Observation;
@@ -790,6 +819,7 @@ export type ServerMessage = (
     ))
   | { type: 'error'; message: string; session_ended?: boolean }
 ) & {
+  work?: WorkStatus | null;
   mirror_retry?: import('./search').PendingSearch | null;
   mirror?: import('./search').SearchConfig | null;
   table?: import('./shared-table-protocol').TableSnapshot;

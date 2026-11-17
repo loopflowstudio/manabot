@@ -15,7 +15,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 import json
 from pathlib import Path
-from typing import Literal
 
 from pydantic import TypeAdapter
 import typer
@@ -28,6 +27,7 @@ from managym.academy.launch import (
     _path_or_name,
     serve,
 )
+from managym.disclosure import DecklistDisclosure
 from managym.policy import PolicySpec
 from managym.search import SearchConfig
 
@@ -94,16 +94,6 @@ def _earlier(ctx: typer.Context) -> _Shared:
     return ctx.obj if isinstance(ctx.obj, _Shared) else _Shared()
 
 
-def _search_json(search: str | None, mirror: str | None) -> str | None:
-    """Resolve the legacy option before either command starts serving."""
-    if mirror is None:
-        return search
-    typer.echo("--mirror is deprecated; use --search (removed in 0.4.0)", err=True)
-    if search is not None:
-        raise typer.BadParameter("Pass --search only; do not combine it with --mirror.")
-    return mirror
-
-
 @academy_app.callback()
 def _academy(
     ctx: typer.Context,
@@ -132,15 +122,14 @@ def play(
         "search",
         help="search, random, passive, registered policy name or ID",
     ),
-    sims: int = typer.Option(64, help="Simulated playouts per decision for search"),
+    sims: int = typer.Option(64, help="Random playouts per legal action for search"),
     seed: int | None = typer.Option(
         None,
         help="Deal seed; the same seed and decks give the same deal (default random)",
     ),
-    decklists: Literal["open", "closed"] = typer.Option(
+    decklists: DecklistDisclosure = typer.Option(
         "open", help="Whether each player knows the other's list"
     ),
-    mirror_json: str | None = typer.Option(None, "--mirror", hidden=True),
     search_json: str | None = typer.Option(
         None,
         "--search",
@@ -153,8 +142,6 @@ def play(
     policies: list[Path] | None = _POLICIES,
 ) -> None:
     from managym.academy import server
-
-    search_json = _search_json(search_json, mirror_json)
 
     def prepare(running: Academy) -> str:
         try:
@@ -193,7 +180,6 @@ def watch(
         "--player",
         help="Seat player (exactly twice): random, search-N or registered policy",
     ),
-    mirror_json: str | None = typer.Option(None, "--mirror", hidden=True),
     search_json: str | None = typer.Option(
         None,
         "--search",
@@ -205,7 +191,6 @@ def watch(
     no_open: bool | None = _NO_OPEN,
     policies: list[Path] | None = _POLICIES,
 ) -> None:
-    search_json = _search_json(search_json, mirror_json)
     if len(player) != 2:
         _report(
             AcademyLaunchError(

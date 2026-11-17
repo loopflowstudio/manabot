@@ -10,8 +10,8 @@ use s + 10000 + u, sampling s + u, and minibatches s + 20000 + u. A fresh
 run preserves the retired executor's offsets; resume starts fresh streams.
 """
 
-from collections.abc import Iterator
-from contextlib import contextmanager
+from collections.abc import Callable, Iterator
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from copy import deepcopy
 import os
 from pathlib import Path
@@ -130,6 +130,7 @@ class SelfPlay(BaseModel):
         "fixed", "cross-balanced", "mirrors-balanced", "elemental-uniform"
     ] = "fixed"
     game_errors: GameErrorPolicy | None = None
+    training_game_logs: bool = Field(default=False, exclude_if=lambda value: not value)
     device: Literal["cpu", "mps", "cuda"] = "cpu"
     precision: Precision = "float32"
     workers: Literal[1, 2, 4] = 1
@@ -222,7 +223,9 @@ def root_match(settings: SelfPlay) -> MatchConfig:
 def learner_digest(settings: SelfPlay) -> str:
     """Identity of the learner `settings` train; machine fields excluded."""
     return canonical_sha256(
-        settings.model_dump(mode="json", exclude={"device", "workers", "threads"})
+        settings.model_dump(
+            mode="json", exclude={"device", "workers", "threads", "training_game_logs"}
+        )
     )
 
 
@@ -239,6 +242,9 @@ def self_play_collector(
     seed: int,
     start: int,
     record_attempt: RecordAttempt | None = None,
+    operation: Callable[[str], AbstractContextManager[None]] = lambda name: (
+        nullcontext()
+    ),
 ) -> Collector:
     """Native streams seeded from the run seed and the update they start at.
 
@@ -257,6 +263,7 @@ def self_play_collector(
         games_per_stream=settings.games_per_stream,
         game_errors=settings.game_errors,
         record_attempt=record_attempt,
+        operation=operation,
         matchup_curriculum=settings.matchup_curriculum,
         deck_source=settings.deck_source,
         workers=settings.workers,
@@ -497,11 +504,12 @@ def step(
     before = phase_seconds(collector.profiler, learner.profiler)
     batch: RolloutBatch | None = None
     try:
-        batch = collect(
-            collector, behavior(settings, learner, ema), settings.transitions
-        )
+        with collector._operation("collection"):
+            batch = collect(
+                collector, behavior(settings, learner, ema), settings.transitions
+            )
         synchronize(device)
-        with learner.profiler.track("Learning"):
+        with collector._operation("learning"), learner.profiler.track("Learning"):
             metrics = learn(settings, learner, ema, counts, batch, rng)
             synchronize(device)
     except NumericalError as error:
@@ -624,6 +632,7 @@ def self_play_games(
     failures = CaptureScope(
         run.out / "failures",
         lambda: {"seed": run.seed, "update": counts.updates, "out": str(run.out)},
+        training_game_logs=settings.training_game_logs,
     )
     record_attempt: RecordAttempt | None = None
     errors = GameErrorState()
@@ -635,16 +644,20 @@ def self_play_games(
         ) -> GameErrorState:
             return append_attempt(ledger, errors, attempt, failures.context())
 
-    collector = self_play_collector(
-        settings, seed=run.seed, start=counts.updates, record_attempt=record_attempt
-    )
-    collector.game_error_state = errors
-    seed_random(run.seed + counts.updates)
-    try:
-        with capture_scope(failures):
+    with capture_scope(failures):
+        collector = self_play_collector(
+            settings,
+            seed=run.seed,
+            start=counts.updates,
+            record_attempt=record_attempt,
+            operation=failures.operation,
+        )
+        collector.game_error_state = errors
+        seed_random(run.seed + counts.updates)
+        try:
             yield collector
-    finally:
-        close_collector(collector)
+        finally:
+            close_collector(collector)
 
 
 def self_play(settings: SelfPlay, run: TrainingRun, *, updates: int) -> Path:

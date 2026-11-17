@@ -139,7 +139,7 @@ class TrainingBackend(SamplerBackend, Protocol):
         obs_space: ObservationSpace,
         path: str | Path,
         *,
-        player_configs: list[PlayerConfig] | None,
+        player_configs: Sequence[PlayerConfig] | None,
         extra: dict[str, Any] | None = None,
         belief_schema: "BeliefEncodingSchema | None" = None,
     ) -> None: ...

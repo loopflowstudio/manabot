@@ -8,3 +8,5 @@ pub use managym_state::*;
 pub mod deck;
 pub mod hash;
 pub mod player;
+
+pub mod knowledge;

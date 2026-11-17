@@ -4,6 +4,16 @@ import json
 import math
 import random
 
+import pytest
+
+from manabot.belief.encoding import belief_schema_from_engine
+from manabot.belief.likelihood import _matching_offer_indexes
+from manabot.belief.population import BeliefTrainingExample, pack_belief_examples
+from manabot.belief.range import BeliefState
+from manabot.belief.state import ViewerHistory
+from manabot.belief.tracker import BeliefTracker
+from manabot.semantic.decision_contract import SemanticDecisionContract
+import managym
 from managym.decision import (
     SEMANTIC_DECISION_VERSION,
     Observation,
@@ -15,16 +25,6 @@ from managym.possible_worlds import (
     PossibleWorldSpace,
     WorldQuery,
 )
-import pytest
-
-from manabot.belief.encoding import belief_schema_from_engine
-from manabot.belief.likelihood import _matching_offer_indexes
-from manabot.belief.population import BeliefTrainingExample, pack_belief_examples
-from manabot.belief.range import BeliefState
-from manabot.belief.state import ViewerHistory
-from manabot.belief.tracker import BeliefTracker
-from manabot.semantic.decision_contract import SemanticDecisionContract
-import managym
 
 
 @pytest.fixture(scope="module")
@@ -102,7 +102,7 @@ def test_retrieval_transports_belief_into_reveal_constrained_native_space(learn_
         acting=contract.frame.actor,
     )
     assert after.known_hand == ((lesson, 1),)
-    assert after.world_schema_identity == "managym.possible-world-space/v3"
+    assert after.world_schema_identity == "managym.possible-world-space/v4"
     assert after.total_weight == math.comb(
         sum(dict(after.pool).values()) - 1, after.hand_size - 1
     )

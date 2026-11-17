@@ -145,6 +145,7 @@
   onclickcapture={onHandClickCapture} onpointerdown={onHandPointerDown} onpointermove={onHandPointerMove} onpointerup={onHandPointerUp}
   onpointercancel={onHandPointerCancel} onlostpointercapture={onHandPointerCancel}>
   {#if playMode}
+    <div class="play-controls">
     <div class="play-drop-area type-caption border-b border-line py-1" class:dragging={gestureActive} data-testid="play-drop-area" aria-live="polite">
       {gestureActive && dragLabel ? `Release to ${dragLabel}` : 'Play area · select a card, then choose its labeled action; drag a single hand play here.'}
       {#if selectedId !== null && selectedId !== observation.agent.id && selectedId !== observation.opponent.id}<button class="btn btn-ghost btn-sm" onclick={() => inspectTarget(selectedId!)}>Inspect card</button>{/if}
@@ -153,6 +154,7 @@
       {#each [{ player: observation.agent, label: heroIdentity.text }, { player: observation.opponent, label: villainIdentity.text }] as seat}
         {#if clickableTargets?.has(seat.player.id)}<button class="btn btn-secondary btn-sm" onclick={() => selectTarget(seat.player.id)}>Target {seat.label}</button>{/if}
       {/each}
+    </div>
     </div>
   {/if}
 
@@ -332,6 +334,7 @@
     [aria-label="Inspected card"], [aria-label="Private inspection"], [aria-label="The stack"] { max-height: 130px; overflow-y: auto; flex-shrink: 0; }
   }
 
+  .play-controls { display: contents; }
   .play-drop-area { flex-shrink: 0; min-height: 32px; }
   .play-drop-area.dragging { outline: 2px dashed var(--accent); background: var(--bg-field); }
   .tempo[data-narrated] { background: var(--bg-field); }

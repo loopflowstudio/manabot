@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { currentGame } from '$lib/current-game.svelte';
+  import GameFileImport from '$lib/components/GameFileImport.svelte';
+  import type { SessionResult } from '$lib/play-session';
   import { playerIdentity, recordedIdentity, shortHash } from '$lib/player-identity';
   import PlayerName from '$lib/components/PlayerName.svelte';
   import { onMount } from 'svelte';
@@ -7,16 +10,21 @@
   import { recordFetch } from '$lib/records';
   import type { GameSummary } from '$lib/types';
 
+  let sessionResults = $state<SessionResult[]>([]);
+  let sessionTotals = $state<{origin:string; status:string; count:number}[]>([]);
+  let nextResultOffset = $state<number | null>(null);
+  let moreResultsPending = $state(false);
   let games = $state<GameSummary[]>([]);
   let loading = $state(false);
   let error = $state('');
+  let sessionAccessDenied = $state(false);
   let nextCursor = $state<string | null>(null);
   let mounted = $state(false);
   let name = $state('');
   let profileStatus = $state('');
   let requestSequence = 0;
-  const fields = ['q', 'scope', 'player', 'other', 'pairing', 'version', 'deck', 'status', 'result', 'after', 'before'] as const;
-  const labels: Record<string, string> = { q: 'Search', scope: 'Scope', player: 'Player', other: 'Opponent', pairing: 'Players', version: 'Bot version', deck: 'Deck', status: 'Status', result: 'Result', after: 'From', before: 'Through' };
+  const fields = ['q', 'scope', 'player', 'other', 'pairing', 'version', 'deck', 'status', 'result', 'after', 'before', 'session'] as const;
+  const labels: Record<string, string> = { session: 'Session', q: 'Search', scope: 'Scope', player: 'Player', other: 'Opponent', pairing: 'Players', version: 'Bot version', deck: 'Deck', status: 'Status', result: 'Result', after: 'From', before: 'Through' };
   const selected = $derived(fields.filter((key) => page.url.searchParams.has(key) && !(key === 'scope' && page.url.searchParams.get(key) === 'all')));
   const participantOptions = $derived([...new Map(games.flatMap((game) => game.players).map((p) => [p.player_id, p])).values()]);
 
@@ -37,9 +45,21 @@
     const sequence = ++requestSequence;
     loading = true;
     error = '';
+    sessionAccessDenied = false;
+    sessionResults = [];
+    sessionTotals = [];
+    nextResultOffset = null;
+    moreResultsPending = false;
     try {
       const params = new URLSearchParams(search);
       if (!params.has('scope')) params.set('scope', 'all');
+      const session = params.get('session');
+      if (session) {
+        const summary = await recordFetch(`/api/play-sessions/${encodeURIComponent(session)}`);
+        checkSessionResponse(summary, sequence);
+        const data = await summary.json();
+        if (sequence === requestSequence) { sessionResults = data.results; sessionTotals = data.totals; nextResultOffset = data.next_result_offset; }
+      }
       const response = await recordFetch(`/api/traces?${params}`);
       if (!response.ok) {
         const payload = await response.json();
@@ -56,6 +76,35 @@
     }
   }
 
+  function checkSessionResponse(response: Response, sequence: number): void {
+    if (response.ok) return;
+    const denied = response.status === 403;
+    if (sequence === requestSequence) sessionAccessDenied = denied;
+    throw new Error(denied
+      ? 'This browser cannot access this session history. Open it in the browser and address (including port) where you played. Copying the link does not copy access; if that browser’s stored credentials were cleared, access cannot be recovered from the link.'
+      : 'Session history could not be loaded.');
+  }
+
+  async function moreResults(): Promise<void> {
+    const session = page.url.searchParams.get('session');
+    if (!session || nextResultOffset === null || moreResultsPending) return;
+    const sequence = requestSequence;
+    moreResultsPending = true;
+    try {
+      const response = await recordFetch(`/api/play-sessions/${encodeURIComponent(session)}?result_offset=${nextResultOffset}`);
+      checkSessionResponse(response, sequence);
+      const data = await response.json();
+      if (sequence !== requestSequence) return;
+      sessionResults = [...sessionResults, ...data.results];
+      nextResultOffset = data.next_result_offset;
+    } catch (e) { if (sequence === requestSequence) error = e instanceof Error ? e.message : 'More results could not be loaded.'; }
+    finally { if (sequence === requestSequence) moreResultsPending = false; }
+  }
+
+  function count(amount: number, singular: string, plural = `${singular}s`): string {
+    return `${amount} ${amount === 1 ? singular : plural}`;
+  }
+
   function filterUrl(key: string, value: string | null): string {
     const params = new URLSearchParams(page.url.search);
     params.delete('cursor');
@@ -68,6 +117,7 @@
     event.preventDefault();
     const data = new FormData(event.currentTarget as HTMLFormElement);
     const params = new URLSearchParams();
+    if (page.url.searchParams.has('session')) params.set('session', page.url.searchParams.get('session')!);
     for (const key of fields) {
       const value = String(data.get(key) ?? '').trim();
       if (value) params.set(key, value);
@@ -110,6 +160,26 @@
     <a href="/" class="btn btn-primary">Play a game</a>
   </header>
 
+  <GameFileImport onOpen={id => void goto(`/replay?trace=${encodeURIComponent(id)}&from=${encodeURIComponent(page.url.pathname + page.url.search)}`)} />
+  {#if page.url.searchParams.has('session') && !(error && !sessionTotals.length && !sessionResults.length)}
+    <section aria-label="Session results" class="mb-5 border-y border-line py-3">
+      <h2 class="type-title text-xl">Session results</h2>
+      <p class="text-sm text-ink-2">Each configuration counts every matching game across history pages. Counts describe recordings, not playing strength. Origins stay separate.</p>
+      <p class="mt-2 text-sm">{sessionTotals.map(row => `${row.origin}: ${row.count} ${row.status}`).join(' · ')}</p>
+      {#each sessionResults as result}
+        <details class="mt-3 border-t border-line pt-2">
+          <summary class="cursor-pointer">vs <PlayerName identity={recordedIdentity({name:result.opponent_name, player_id:result.opponent_id, kind:'bot', version:result.version})} /> · {result.origin} · {result.human_seat === 0 ? 'Play first' : 'Draw first'} · {count(result.wins, 'win')} / {count(result.draws, 'draw')} / {count(result.losses, 'loss', 'losses')} out of {result.completed} completed · {result.active} active · {result.stopped} stopped · {result.interrupted} interrupted</summary>
+          <p>{result.human_deck} vs {result.opponent_deck} · {result.decklists} decklists</p>
+          <p>Wall elapsed: {result.wall_elapsed_seconds == null ? 'unavailable' : `${Math.round(result.wall_elapsed_seconds)} seconds including pauses`} ({result.elapsed_samples} recorded). Response measurements unavailable.</p>
+          <pre class="max-h-48 overflow-auto whitespace-pre-wrap break-all text-xs">{result.version}
+{result.inference_json}
+{result.matchup_json}</pre>
+        </details>
+      {/each}
+      {#if nextResultOffset !== null && !sessionAccessDenied}<button class="btn btn-secondary mt-2" disabled={moreResultsPending} onclick={moreResults}>More result configurations</button>{/if}
+      {#if currentGame.href}<a href={currentGame.href} class="mt-2 inline-block underline">Return to current game</a>{/if}
+    </section>
+  {/if}
   <details class="mb-5 rounded border border-line bg-panel p-3">
     <summary class="cursor-pointer">Your player name</summary>
     <form onsubmit={saveName} class="mt-3 flex flex-wrap items-end gap-3">
@@ -171,8 +241,11 @@
     <button type="button" onclick={() => void load(page.url.search)} disabled={loading} class="btn btn-secondary ml-auto">Refresh</button>
   </div>
 
-  {#if error}<p role="alert" class="rounded border border-mountain p-4">{error} <button class="underline" onclick={() => void load(page.url.search)}>Try again</button></p>{/if}
-  <p role="status" class="mb-3 text-ink-2">{loading ? 'Loading games…' : `${games.length} ${games.length === 1 ? 'game' : 'games'} on this page`}</p>
+  {#if error}<p role="alert" class="rounded border border-mountain p-4">{error}
+    {#if sessionAccessDenied}<a class="underline" href={filterUrl('session', null)}>Browse games outside this session</a>
+    {:else}<button class="underline" onclick={() => void load(page.url.search)}>Try again</button>{/if}
+  </p>{/if}
+  <p role="status" class="mb-3 text-ink-2">{loading ? 'Loading games…' : `${count(games.length, 'game')} on this page`}</p>
   {#if !loading && !error && !games.length}<p class="rounded border border-line bg-panel p-8 text-center">No games match these filters. Try another player or clear the filters.</p>{/if}
   {#if games.length}
     <div class="overflow-x-auto rounded border border-line bg-panel" aria-busy={loading}>
@@ -183,7 +256,7 @@
         <tbody>
           {#each games as game (game.id)}
             <tr class="border-b border-line align-top" data-testid="game-history-row">
-              <td class="p-4"><time datetime={game.timestamp ?? undefined}>{game.timestamp ? new Date(game.timestamp).toLocaleString() : 'Unknown date'}</time><div class="mt-1 text-xs text-ink-2">{game.origin.replaceAll('_', ' ')}</div></td>
+              <td class="p-4">{#if game.game_number}<span class="type-label">Game {game.game_number}</span><br />{/if}<time datetime={game.timestamp ?? undefined}>{game.timestamp ? new Date(game.timestamp).toLocaleString() : 'Unknown date'}</time><div class="mt-1 text-xs text-ink-2">{game.origin.replaceAll('_', ' ')}</div></td>
               {#each [0, 1] as seat}
                 {@const player = game.players.find((p) => p.seat === seat)}
                 <td class="p-4">
@@ -197,6 +270,7 @@
               {/each}
               <td class="p-4"><span class="font-semibold">{resultLabel(game)}</span>{#if game.status !== 'completed' && game.end_reason !== 'active'}<div class="text-sm text-ink-2">{game.end_reason?.replaceAll('_', ' ')}</div>{/if}<div class="mt-1 text-xs text-ink-2">{game.num_events} recorded steps</div></td>
               <td class="p-4">{#if game.replay_available}<a href={replayUrl(game.id)} class="underline" aria-label={`Replay game ${game.id}`}>Replay</a>{:else}<span class="text-sm text-ink-2">Replay private until completed</span>{/if}
+                {#if game.feedback_truncated}<p class="text-xs text-ink-2">Showing the latest 100 notes.</p>{/if}
                 {#each game.feedback as note}<blockquote class="mt-2 max-w-64 break-words text-sm italic">{note.note}</blockquote>{/each}
               </td>
             </tr>

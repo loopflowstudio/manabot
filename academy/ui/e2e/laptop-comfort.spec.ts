@@ -1,3 +1,4 @@
+import { tableSnapshot } from './fixtures/table';
 import { writeFile } from 'node:fs/promises';
 import { finishBoardNarration } from './presentation-readiness';
 import { expect, test, type Locator, type Page } from '@playwright/test';
@@ -79,7 +80,7 @@ async function installTable(page: Page, options: TableOptions = {}): Promise<{
       const message = JSON.parse(String(raw));
       if (message.type === 'new_game' || message.type === 'resume') {
         socket.send(JSON.stringify({ type: 'observation', data: frame.projection, actions: [],
-          session_id: 'laptop', resume_token: 'laptop', recovery: recover() }));
+          table: tableSnapshot(), session_id: 'laptop', resume_token: 'laptop', recovery: recover() }));
       } else if (message.type === 'set_stops') {
         frame.stops = { ...message.stops, auto_pass: message.auto_pass, stop_on_stack: message.stop_on_stack };
         publish();
@@ -100,7 +101,7 @@ async function installTable(page: Page, options: TableOptions = {}): Promise<{
   await page.route('**/api/card-art/**', route => route.fulfill({ status: 404 }));
   await page.goto('/');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-  await page.getByRole('button', { name: 'New Game', exact: true }).click();
+  await page.getByRole('button', { name: 'Start game', exact: true }).click();
   await expect(page.getByTestId('action-option')).toHaveCount(frame.offers.length);
   return { commands, frame, rejectPending: () => rejectPending(), publish: (advance = true) => publish(advance), control: message => control(message), closeSocket: () => closeSocket() };
 }
@@ -356,15 +357,22 @@ for (const [seed, viewport] of [
     const observed = new Map<number, PresentationEvent>();
     let matchId = '';
     let liveFrame: ExperienceFrame | null = null;
+    let pendingFrame: { match: string; revision: number; resolve: () => void } | null = null;
+    let working = false;
     const submitted: Command[] = [];
     let reloadedTarget = false;
     let selectedSources = 0;
     await page.routeWebSocket('**/ws/play', socket => {
       const server = socket.connectToServer();
       server.onMessage(raw => {
-        const message = JSON.parse(String(raw)) as { recovery?: RecoveryEnvelope; update?: FrameUpdate };
+        const message = JSON.parse(String(raw)) as { recovery?: RecoveryEnvelope; update?: FrameUpdate; work?: {state: string} | null };
+        if ('work' in message) working = message.work?.state === 'running';
         const frame = message.recovery?.frame ?? message.update?.frame;
         if (frame) { matchId = frame.match_id; liveFrame = frame; }
+        if (frame && pendingFrame && frame.match_id === pendingFrame.match && frame.revision > pendingFrame.revision) {
+          pendingFrame.resolve();
+          pendingFrame = null;
+        }
         for (const event of message.recovery?.presentation_tail ?? message.update?.presentation ?? []) observed.set(event.seq, event);
         socket.send(raw);
       });
@@ -378,7 +386,7 @@ for (const [seed, viewport] of [
     await page.goto('/');
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
     await page.getByTestId('opponent-select').selectOption('random');
-    await page.getByRole('button', { name: 'New Game', exact: true }).click();
+    await page.getByRole('button', { name: 'Start game', exact: true }).click();
     await page.getByRole('group', { name: 'Table interaction mode' }).getByRole('button', { name: 'Play', exact: true }).click();
     const receipts: { kind: string | null; label: string | null; scroll: number }[] = [];
     try {
@@ -386,6 +394,10 @@ for (const [seed, viewport] of [
         const options = page.getByTestId('action-option');
         const result = page.getByTestId('game-result');
         await expect(page.locator('[data-testid="action-option"], [data-testid="learn-mode"]:not(:disabled), [data-testid="game-result"]').first()).toBeVisible();
+        // An early immutable receipt can precede bot/automation frames. Bind
+        // inspection and the next input to the settled, enabled authority.
+        await expect.poll(() => !working).toBe(true);
+        await expect(page.locator('main')).toHaveAttribute('data-frame-revision', String(liveFrame!.revision));
         if (await result.isVisible()) {
           expect(selectedSources).toBeGreaterThan(0);
           expect(reloadedTarget).toBe(true);
@@ -437,9 +449,11 @@ for (const [seed, viewport] of [
           continue;
         }
         expect(await page.evaluate(() => scrollY)).toBe(0);
-        const before = await page.getByTestId('decision-surface').getAttribute('data-revision');
         const labels = await options.allTextContents();
         let pick = labels.findIndex(label => /Play (Island|Mountain)|Cast /.test(label));
+        // This is a workflow proof: commit attacks and decline blocks so an
+        // arbitrary input-index cycle cannot prolong a stalled battlefield.
+        if (pick < 0) pick = labels.findIndex(label => /Attack with |do not block/.test(label));
         if (pick < 0) pick = input % labels.length;
         const chosen = options.nth(pick);
         receipts.push({ kind: await page.getByTestId('action-panel').getAttribute('data-action-space-kind'),
@@ -465,6 +479,11 @@ for (const [seed, viewport] of [
         await expect(page.getByTestId('legal-choice-count')).toContainText(`of ${authority!.offers.length} legal choices`);
         await modes.getByRole('button', { name: 'Play', exact: true }).click();
         expect(submitted).toHaveLength(count);
+        // Synchronize with the authoritative receipt, under the existing test
+        // deadline, rather than racing server work against a five-second poll.
+        const advanced = new Promise<void>(resolve => {
+          pendingFrame = { match: authority!.match_id, revision: authority!.revision, resolve };
+        });
         const source = offer!.subjects?.find(subject => subject.role === 'source')?.object.subject ?? offer!.source;
         const playerTarget = offer!.subjects?.find(subject => subject.role === 'target' && subject.object.subject.kind === 'player')?.object.subject;
         if (source?.kind === 'object' && authority!.projection.agent.hand.some(card => card.id === source.id.entity)) {
@@ -477,10 +496,14 @@ for (const [seed, viewport] of [
           expect(submitted).toHaveLength(count);
           await page.locator(`[data-testid="action-option"][data-offer-id="${offer!.id}"]`).click();
         } else {
-          await chosen.focus();
-          await chosen.press('Enter');
+          // Reload and mode changes can rebuild the list. Keep the recovered
+          // authority's identity rather than its earlier position in the list.
+          const commit = page.locator(`[data-testid="action-option"][data-offer-id="${offer!.id}"]`);
+          await commit.focus();
+          await expect(commit).toBeFocused();
+          await commit.press('Enter');
         }
-        await expect.poll(() => page.getByTestId('decision-surface').getAttribute('data-revision')).not.toBe(before);
+        await advanced;
         expect(submitted).toHaveLength(count + 1);
         expect(submitted.at(-1)).toMatchObject({ match_id: authority!.match_id, expected_revision: authority!.revision,
           prompt_id: authority!.prompt!.id, offer_id: offer!.id });

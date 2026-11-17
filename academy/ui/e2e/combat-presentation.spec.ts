@@ -1,3 +1,4 @@
+import { tableSnapshot } from './fixtures/table';
 import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Browser, type Page } from '@playwright/test';
@@ -167,7 +168,7 @@ async function installCombatAuthority(
           frame.offers = [];
         }
         socket.send(JSON.stringify({
-          type: 'observation',
+          type: 'observation', table: tableSnapshot(),
           data: frame.projection,
           actions: [],
           session_id: 'combat-session',
@@ -272,7 +273,7 @@ async function runPromptProof(
   await installCombatAuthority(page, commands);
   await page.goto('/');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-  await page.getByRole('button', { name: 'New Game' }).first().click();
+  await page.getByRole('button', { name: 'Start game' }).first().click();
 
   await assertPrompt(page, 'DECLARE_ATTACKER', [
     'Attack with Otter-Penguin',
@@ -304,7 +305,7 @@ test('a taller decision sidebar does not stretch the board', async ({ page }) =>
   await installCombatAuthority(page, [], combatSequence.events as PresentationEvent[]);
   await page.goto('/');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-  await page.getByRole('button', { name: 'New Game' }).first().click();
+  await page.getByRole('button', { name: 'Start game' }).first().click();
   const board = page.getByTestId('game-board');
   await expect(board).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
@@ -325,7 +326,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
     await page.clock.install({ time: 0 });
     await page.clock.pauseAt(10_000);
-    await page.getByRole('button', { name: 'New Game' }).first().click();
+    await page.getByRole('button', { name: 'Start game' }).first().click();
     const history = page.getByTestId('presentation-history');
     await page.getByText('History and settings', { exact: true }).click();
     await history.locator('summary').click();
@@ -342,7 +343,10 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await expect(history).toContainText('Otter-Penguin, Badgermole Cub die.');
     await expect(history).toContainText("Hero's turn begins.");
 
-    await page.getByRole('button', { name: 'New Game' }).first().click();
+    await page.getByRole('banner').getByRole('link', { name: 'New game', exact: true }).click();
+    await page.clock.runFor(32); // Flush the navigation's animation frame while narration time is controlled.
+    page.once('dialog', dialog => dialog.accept());
+    await page.getByRole('button', { name: 'Start game', exact: true }).click();
     await expect(stage).toBeVisible();
     await page.getByRole('button', { name: 'Skip beat' }).click();
     await page.getByRole('button', { name: 'Fast-forward' }).click();
@@ -362,7 +366,7 @@ test('terminal capture finishes JavaScript narration and retains consequences', 
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.clock.install({ time: 0 });
   await page.clock.pauseAt(10_000);
-  await page.getByRole('button', { name: 'New Game' }).first().click();
+  await page.getByRole('button', { name: 'Start game' }).first().click();
   const board = page.getByTestId('game-board');
   const stage = page.getByTestId('presentation-stage');
   const resultAction = page.getByTestId('game-result-action');
@@ -411,7 +415,7 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 800
           if (message.type === 'command') { commands.push(message.command); return; }
           if (message.type !== 'new_game') return;
           const frame = frameAt('attack');
-          socket.send(JSON.stringify({ type: 'observation', data: frame.projection, actions: [],
+          socket.send(JSON.stringify({ type: 'observation', table: tableSnapshot(), data: frame.projection, actions: [],
             session_id: 'history', resume_token: 'history', recovery: {
               ...structuredClone(boltFixture.recovery), frame,
               presentation_tail: history, presentation_cursor: 0,
@@ -431,7 +435,7 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 800
       await expect(page.getByTestId('connection-badge')).toHaveText('connected');
       await page.clock.install({ time: 0 });
       await page.clock.pauseAt(10000);
-      await page.getByRole('button', { name: 'New Game', exact: true }).click();
+      await page.getByRole('button', { name: 'Start game', exact: true }).click();
       await page.getByText('History and settings', { exact: true }).click();
       const panel = page.getByTestId('presentation-history');
       await panel.locator('summary').click();
@@ -547,7 +551,7 @@ test('player damage emphasizes its exact subject while choices stay focused', as
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.clock.install({ time: 0 });
   await page.clock.pauseAt(10000);
-  await page.getByRole('button', { name: 'New Game', exact: true }).click();
+  await page.getByRole('button', { name: 'Start game', exact: true }).click();
   await expect(page.locator('[data-player-id="0"]')).toHaveAttribute('data-narrated-seq', '0');
   await expect(page.locator('[data-player-id="0"]')).toHaveCSS('outline-style', 'solid');
   await expect(page.locator('[data-player-id="1"]')).not.toHaveAttribute('data-narrated-seq');
@@ -569,7 +573,7 @@ test('partial history recovery preserves event pixels, focus and recovered unrea
       const frame = frameAt('attack');
       frame.match_id = match;
       if (match === 'different-viewer-scope') frame.projection.opponent.battlefield[0].name = 'Scope-only name';
-      socket.send(JSON.stringify({ type: 'observation', data: frame.projection, actions: [],
+      socket.send(JSON.stringify({ type: 'observation', table: tableSnapshot(), data: frame.projection, actions: [],
         session_id: 'partial-history', resume_token: 'partial-history', recovery: {
           ...structuredClone(boltFixture.recovery), frame, presentation_tail: tail, presentation_cursor: tail[0]?.seq ?? 0,
         },
@@ -589,14 +593,19 @@ test('partial history recovery preserves event pixels, focus and recovered unrea
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.clock.install({ time: 0 });
   await page.clock.pauseAt(10000);
-  await page.getByRole('button', { name: 'New Game', exact: true }).click();
+  await page.getByRole('button', { name: 'Start game', exact: true }).click();
   await page.getByText('History and settings', { exact: true }).click();
   const panel = page.getByTestId('presentation-history');
   await panel.locator('summary').click();
   const region = panel.getByRole('list', { name: 'Recorded game events' });
   await expect(panel).toContainText('Events 950–950 unavailable');
   await expect(region.getByRole('heading').first()).toHaveText('Turn unknown');
-  await region.evaluate(element => { element.scrollTop = 200; });
+  await region.evaluate(element => {
+    element.scrollTop = 200;
+    // The clock is paused, so deliver the reader's scroll before recovery can
+    // arrive and mark the recovered events as read while still following.
+    element.dispatchEvent(new Event('scroll'));
+  });
   const anchor = await region.evaluate(element => {
     const row = Array.from(element.querySelectorAll<HTMLElement>('[data-presentation-seq]'))
       .find(row => row.getBoundingClientRect().bottom > element.getBoundingClientRect().top)!;

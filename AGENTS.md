@@ -73,6 +73,9 @@ reconnect, replay/fork identity and accessibility. Cancellation or undo needs an
 explicit shared action and cannot erase committed costs or revealed information.
 Configured priority-stop automation must remain identifiable as automation,
 separate from deliberate human decisions.
+Play's retained `hero_*`/`villain_*` setup fields name human/opponent roles;
+`GameConfig.human_seat` orders them at the native boundary. Record and project
+actual native seats; Watch keeps its two-seat acting-view contract.
 Academy resume credentials and the started-launch marker live in browser
 `sessionStorage`. Keep them scoped together; a launch must not resume another
 tab's or another launch's game.
@@ -94,6 +97,9 @@ checkpoints or experiment evidence.
   Compose builtin graphs; use narrowly named forks for domain review placement.
   Validate changes with `uv run python scripts/check_loopflow_workflows.py`.
   See [work boundaries](docs/workflows.md).
+  `lf pr publish` stages tracked edits, including edits left after a path-scoped
+  commit. Temporarily preserve unrelated edits outside the checkout and restore
+  them after publication.
 
 ### Experiments
 
@@ -147,7 +153,7 @@ checkpoints or experiment evidence.
 - Library code receives a framework backend (the module for an update, a
   `BackendPolicy` for simulation and evaluation) and never imports
   `manabot.backends.*`. Only composition roots choose one: `experiments/`,
-  `scripts/`, recipe entry points, the CLI and child-process entry points, `manabot/sim/policy_provider.py` and the
+  `scripts/`, recipe entry points, the CLI and child-process entry points, `manabot/sim/table_bots.py`, `manabot/sim/policy_provider.py` and the
   backends' tests, by import or `manabot.backends.resolve("torch")`.
   `tests/test_package_boundaries.py` enforces roots and named entry-point scopes
   in mixed CLI/library modules ([who chooses a backend](manabot/backends/README.md#who-chooses-a-backend)).
@@ -284,8 +290,8 @@ change already touches it; do not rewrite a module only for style. Rust in
   `managym/cards/tests/cards/observability.rs` names each `Observation` field's
   tensor columns or fact kind and fails to compile when a field is unlisted.
 - Decklist disclosure (open by default, or closed) lives on native
-  `PlayerConfig.disclosure`, written by `MatchConfig.decklists` and Academy
-  `GameConfig.decklists`. Observations, search and possible worlds read it
+  `GameSetup.decklists` and the resolved `GameState.disclosure`, written by
+  `MatchConfig.decklists` and Academy `GameConfig.decklists`. Observations, search and possible worlds read it
   through `Game::decklist_known`/`require_open_decklist`; never filter decklist
   information in an encoder or the browser. The policy input encodes the lists in
   the `decklists` block (2 seats × max cards × 5); a closed opponent's rows are zero.
@@ -356,6 +362,11 @@ selector input. Parity fixtures replay decisions to retain the live projection.
 the last live projection's events so combat history survives scalar calls and
 exact forks. Player policies belong to Env/VectorEnv chooser seats, separate
 from rules/deck PlayerConfig and world identity.
+
+Optional statistics and private recording share native setup, movement and
+committed-choice facts. Search clones omit those sinks and their copy provenance;
+transactional rollback snapshots must restore them. Training supplies recorder
+paths and phase markers; engine recording never discovers training scope.
 
 ## Forced decisions
 
@@ -519,7 +530,12 @@ not block previously playable cards from play; track those defects as bug
 Tasks. Playable does not mean bug-free. A test about one card goes in
 `managym/cards/tests/cards/<set>.rs`, the set file of that card; engine rules
 stay in `managym/tests/rules/`, and shared scenario helpers live in
-`managym/tests/support/`. Keep decklists separate from behavior. Keep long printed text in
+`managym/tests/support/`. Keep decklists separate from behavior. Constructed
+position helpers discard facts their injections can invalidate: direct library
+reorders clear positional knowledge, and removing hand cards clears hand
+minima. Ordinary rules moves update facts through the engine hooks. Viewer-knowledge writes use
+`TrackedState`'s narrow accessors: they do not invalidate layered-characteristic
+or mana caches. Keep long printed text in
 a local `text_box` binding so rustfmt can format the definition.
 The default pack registers every definition in name order (`cards/content_pack.rs`).
 Card tests mirror the set files: `managym/cards/tests/cards/<set>.rs`, one module
@@ -741,3 +757,12 @@ Etude launched source is an extracted commit without `.git`. Read its revision
 through `etude.eval.source.source_commit`; direct `git rev-parse` in a training
 loop cannot identify it. Local `--seconds` passes an ISO-8601 `ETUDE_DEADLINE`;
 continuation targets use `ETUDE_UNTIL_CLOCK` and `ETUDE_UNTIL_VALUE`.
+
+The repository pins Etude's merged migration build through `tool.uv.sources`;
+PyPI's 0.4.0 does not contain that API. Etude's shared records, storage and
+errors live in `etude.records`, `etude.storage` and `etude.errors`, and training
+uses `etude.train.tracking`. Experiment entry points are `training_jobs()` and
+`eval_jobs(state)`; discovery is in `etude.controller.declarations`, state in `etude.jobs`.
+A resumed tracker uses `resume=True`; its first logged row sets the supersession
+coordinate, and an attempt that logs nothing supersedes nothing. Retained
+nested tracker declarations still decode through Etude's `RunRecord`.

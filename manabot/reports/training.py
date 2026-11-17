@@ -270,7 +270,7 @@ def publish_dashboard(
                 {
                     "projection/summary_json": json.dumps(
                         dashboard.summary, sort_keys=True
-                    )
+                    ),
                 },
                 # Summary-only retries must not supersede the last settled row.
                 observation=len(rows),

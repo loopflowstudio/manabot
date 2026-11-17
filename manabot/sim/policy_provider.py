@@ -166,7 +166,7 @@ class BaselineFactory:
         ):
             bound = " vs ".join(_deck_name(deck) for deck in summary.setups)
             raise ValueError(
-                f"{summary.label} was trained on {bound}; choose those decks "
+                f"Checkpoint setup differs: {summary.label} was trained on {bound}; choose those decks "
                 "or another policy."
             )
 

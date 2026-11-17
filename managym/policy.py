@@ -18,7 +18,6 @@ import math
 from pathlib import Path
 from typing import Protocol, TypeAlias
 import uuid
-import warnings
 
 import managym
 from managym.bots import BotDecision
@@ -292,17 +291,7 @@ class PolicyRegistry:
         seat: int,
         seed: int,
         search: SearchConfig | None = None,
-        mirror: SearchConfig | None = None,
     ) -> PolicyRunner:
-        if mirror is not None:
-            warnings.warn(
-                "mirror= is deprecated; use search= (removed in 0.4.0)",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            if search is not None:
-                raise ValueError("Pass search= only; do not combine it with mirror=.")
-            search = mirror
         descriptor = self.admit(key, setup)
         factory = self._factories[descriptor.id]
         session = factory.load(seat=seat, seed=seed)
@@ -374,35 +363,6 @@ class PolicyRunner:
             self.search_runtime = None
         self.search = search
         self._search_seed = seed
-
-    def configure_mirror(self, mirror: SearchConfig | None, *, seed: int) -> None:
-        """Deprecated spelling of configure_search, removed in 0.4.0."""
-        warnings.warn(
-            "configure_mirror is deprecated; use configure_search (removed in 0.4.0)",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        self.configure_search(mirror, seed=seed)
-
-    @property
-    def mirror(self) -> SearchConfig | None:
-        """Deprecated spelling of search, removed in 0.4.0."""
-        warnings.warn(
-            "mirror is deprecated; use search (removed in 0.4.0)",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.search
-
-    @property
-    def mirror_runtime(self) -> str | None:
-        """Deprecated spelling of search_runtime, removed in 0.4.0."""
-        warnings.warn(
-            "mirror_runtime is deprecated; use search_runtime (removed in 0.4.0)",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.search_runtime
 
     def observe(self, observation: managym.Observation) -> None:
         self._started = True

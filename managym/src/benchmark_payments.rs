@@ -5,6 +5,8 @@
 //! counted. A call is one `PaymentModel::witness` entry; a state is a call
 //! that passed the bounds and was new to its plan's memo, so it expanded
 //! successors. Counts are per-thread and deterministic for a fixed workload.
+//! Cache hits reuse a witness without search calls in release builds; debug
+//! builds count the invariant check's uncached search as well.
 
 use std::cell::RefCell;
 
@@ -13,6 +15,8 @@ pub struct Metrics {
     /// Ordered first witnesses, including failed plans (FNV-1a over JSON).
     pub witness_digest: u64,
     pub plans: u64,
+    pub cache_hits: u64,
+    pub cache_misses: u64,
     pub calls: u64,
     pub states: u64,
     /// Most witness calls spent by a single plan.
@@ -28,6 +32,12 @@ thread_local! {
 
 pub fn reset() {
     METRICS.with(|m| *m.borrow_mut() = (Metrics::default(), 0));
+}
+
+/// Forget a game's cached payment answers so its next questions search, as
+/// at a decision the game has not reached before.
+pub fn clear_cache(game: &crate::Game) {
+    game.payment_cache.borrow_mut().clear();
 }
 
 pub fn snapshot() -> Metrics {
@@ -62,4 +72,12 @@ pub(crate) fn call() {
 
 pub(crate) fn state() {
     METRICS.with(|m| m.borrow_mut().0.states += 1);
+}
+
+pub(crate) fn cache(hit: bool) {
+    METRICS.with(|m| {
+        let metrics = &mut m.borrow_mut().0;
+        metrics.cache_hits += u64::from(hit);
+        metrics.cache_misses += u64::from(!hit);
+    });
 }

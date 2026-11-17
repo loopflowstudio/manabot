@@ -23,14 +23,88 @@ from pydantic import ConfigDict, Field
 from pydantic.dataclasses import dataclass as validated_dataclass
 
 import managym
-from managym.bots import BeliefSummary, BotDecision, SearchSummary
+from managym.bots import BeliefSummary, BotDecision
 from managym.decision import DecisionFrame
-from managym.mirror import regularized_update
 
 if TYPE_CHECKING:
     from managym.policy import PolicyDescriptor, PolicyRunner, SearchPolicySession
 
-NATIVE_PHYSICAL_BELIEF = "managym.determinize/physical-deal/v1"
+FloatArray = NDArray[np.float64]
+
+
+def regularized_update(
+    base: FloatArray,
+    values: FloatArray,
+    reference: FloatArray,
+    *,
+    alpha: float,
+    beta: float,
+) -> FloatArray:
+    """Maximize p·Q - alpha KL(p||reference) - beta KL(p||base).
+
+    All vectors have shape [legal_actions]. Base zeros restrict the feasible
+    simplex; values outside its support may be NaN and are never consulted.
+    The reference remains strictly positive. Values are signed expected outcomes;
+    beta is the inverse step scale. This is one detached local simplex update,
+    not a gradient through a determinized game or an argmax improvement claim.
+    """
+    if not np.isfinite([alpha, beta]).all() or alpha < 0 or beta <= 0:
+        raise ValueError("local update requires finite alpha >= 0 and beta > 0")
+    arrays = [np.asarray(item, dtype=np.float64) for item in (base, values, reference)]
+    base, values, reference = arrays
+    if base.ndim != 1 or not base.size or any(a.shape != base.shape for a in arrays):
+        raise ValueError("local update vectors must align with legal offers")
+    support = base > 0
+    if not np.isfinite(values[support]).all() or any(
+        not np.isfinite(a).all() for a in (base, reference)
+    ):
+        raise ValueError("local update vectors must be finite")
+    for probabilities in (base, reference):
+        if np.any(probabilities < 0) or not np.isclose(probabilities.sum(), 1):
+            raise ValueError(
+                "base and reference require normalized nonnegative support"
+            )
+    if np.any(reference <= 0):
+        raise ValueError("reference requires positive support")
+    # beta > 0 restricts the feasible simplex to the base support. Missing Q
+    # outside it is deliberately unused, never treated as a zero-valued rollout.
+    logits = (
+        values[support]
+        + alpha * np.log(reference[support])
+        + beta * np.log(base[support])
+    ) / (alpha + beta)
+    if not np.isfinite(logits).all():
+        raise ValueError("local update logits are nonfinite")
+    target = np.exp(logits - logits.max())
+    target /= target.sum()
+    if np.any(target == 0):
+        raise ValueError("local update numerically lost mixed support")
+    aligned = np.zeros_like(base)
+    aligned[support] = target
+    return aligned
+
+
+@dataclass(frozen=True)
+class SearchSummary:
+    algorithm: str
+    worlds: int
+    depth: int
+    alpha: float
+    beta: float
+    rollouts: int
+    decision_seconds: float
+    seconds: float
+    seed: str  # Hexadecimal so browser JSON preserves all 64 bits.
+    prior: list[float]
+    receipt_sha256: str
+
+
+@dataclass(frozen=True)
+class SearchDecision(BotDecision):
+    mirror: SearchSummary | None = None
+
+
+NATIVE_PHYSICAL_BELIEF = "managym.determinize/physical-deal/v2"
 MIRROR_METHOD = "regularized-local-update"
 
 
@@ -109,7 +183,7 @@ def search_source_identity() -> str:
     directory = Path(__file__).parent
     files = {
         name: hashlib.sha256((directory / name).read_bytes()).hexdigest()
-        for name in ("search.py", "mirror.py", "policy.py")
+        for name in ("search.py", "policy.py")
     }
     with Path(managym._managym.__file__).open("rb") as extension:
         files["native_extension"] = hashlib.file_digest(extension, "sha256").hexdigest()
@@ -365,7 +439,7 @@ def search_decision(
     action = int(rng.choice(len(target), p=target))
     receipt_sha256 = _digest(receipt)
     check()
-    return BotDecision(
+    return SearchDecision(
         action=action,
         probabilities=target.tolist(),
         value=root_value,

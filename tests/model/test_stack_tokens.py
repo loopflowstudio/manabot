@@ -11,6 +11,7 @@ import torch
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import STACK_DEFINITION_INDEX
 from manabot.training.rollout.collection import collect
+from manabot.verify.text_observation import priority_root
 from tests.model.prepared_routes import device_input
 from tests.model.test_inference import PolicyFixture, _policy
 
@@ -43,7 +44,17 @@ def _variants(case: PolicyFixture) -> list[ActorCritic]:
 def test_bucketed_and_live_forwards_match_plain(input_version: int) -> None:
     torch.manual_seed(344)
     case = _policy(input_version=input_version)
-    obs = _decisions(case, 48)
+    if input_version == 9:
+        # Legacy compatibility uses a representable board. Full games may
+        # acquire positional library facts that this frozen layout cannot hold.
+        env = priority_root(("Lightning Bolt",), ("Mountain", "Gray Ogre"))
+        observation = env.observation_for_player(env.current_agent_index())
+        obs = {
+            key: torch.from_numpy(value[None]).float()
+            for key, value in case.agent.observation_space.encode(observation).items()
+        }
+    else:
+        obs = _decisions(case, 48)
     if input_version == 11:
         assert case.agent.stack_tokens
         assert obs["stack_valid"].any(), "fixture should put a spell on the stack"

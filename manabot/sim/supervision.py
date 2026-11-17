@@ -8,12 +8,10 @@ or a model server. A child is always terminated and reaped on block exit.
 from __future__ import annotations
 
 from dataclasses import dataclass
-import json
 from multiprocessing.connection import Connection
-import os
 from pathlib import Path
 import time
-from typing import IO, Any
+from typing import Any
 
 from manabot.sim.card_evidence import (
     EvidenceRef,
@@ -25,6 +23,7 @@ from manabot.sim.child import ChildProcess
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import apply_game_event, replay_games
+from managym.journal import DurableJournal
 
 
 def failure_record(
@@ -74,13 +73,11 @@ def supervise_game(
         str(game.get("match_id", "game")), game.get("instrumentation", True)
     )
 
-    journal: IO[str] | None = None
+    journal: DurableJournal | None = None
 
     def retain(kind: str, value: Any) -> None:
         if journal is not None:
-            journal.write(json.dumps([kind, value], allow_nan=False) + "\n")
-            journal.flush()
-            os.fsync(journal.fileno())
+            journal.append([kind, value])
 
     game["execution_limits"] = {"commands": max_commands, "seconds": game_seconds}
     game["registrations"] = [
@@ -91,10 +88,8 @@ def supervise_game(
     deadline = started + seconds
     deadline_unix = time.time() + seconds
     if evidence_path is not None:
-        evidence_path.parent.mkdir(parents=True, exist_ok=True)
-        evidence_path.touch(mode=0o600, exist_ok=False)
-        journal = evidence_path.open("a")
-        retain("game", game)
+        journal = DurableJournal(evidence_path)
+        journal.append(["game", game], create=True)
     process: ChildProcess | None = None
     responsible = None
     try:
@@ -151,8 +146,6 @@ def supervise_game(
         perf.record("worker_wall", started, request=game.get("match_id"))
         game["supervision_performance"] = perf.snapshot()
         retain("settled", game)
-        if journal is not None:
-            journal.close()
         if evidence_path is not None and game["failure"] is None and not keep_completed:
             evidence_path.unlink()
 

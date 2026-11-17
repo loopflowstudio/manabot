@@ -26,7 +26,7 @@ Collection never updates model weights; the calling loop owns learning.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from copy import deepcopy
 from dataclasses import dataclass, field
 import time
@@ -51,7 +51,7 @@ from manabot.sim.rollout import (
     RandomBatchController,
     allocate_buffers,
 )
-from manabot.training.decks import UniformDecks, pair_match
+from manabot.training.decks import UniformDecks
 from manabot.training.learning import BatchClosure
 from manabot.training.rollout.actions import ACTION_FIELDS, ActionRows, PackedActions
 from manabot.training.rollout.adaptive import (
@@ -80,7 +80,7 @@ from manabot.training.state.game_errors import (
     GameOutcome,
     RecordAttempt,
 )
-from managym import WORLD_SETUP, Deck
+from managym import WORLD_SETUP, Deck, GameSetup
 
 OPPONENT_MODES = ("random", "frozen", "self", "learning")
 
@@ -379,6 +379,9 @@ class Collector:
     _game_actions: list[list[int]]
     _self_play_decks: list[tuple[str, str]]
     # RandomBatchController or BatchedSampler; None when the live model plays both seats.
+    _operation: Callable[[str], AbstractContextManager[None]] = lambda name: (
+        nullcontext()
+    )
     _opponent: Any = None
     _sampler: AdaptiveSampler | None = None
     _assignments: list[Assignment] = field(default_factory=list)
@@ -432,6 +435,9 @@ def open_collector(
     game_errors: GameErrorPolicy | None = None,
     record_attempt: RecordAttempt | None = None,
     adaptive: AdaptiveConfig | None = None,
+    operation: Callable[[str], AbstractContextManager[None]] = lambda name: (
+        nullcontext()
+    ),
 ) -> Collector:
     """Start `num_envs` native streams at their first roots.
 
@@ -464,6 +470,15 @@ def open_collector(
             raise ValueError("a deck source cannot be combined with a curriculum")
         if match.config.world != WORLD_SETUP:
             raise ValueError("deck-source games play in the world")
+        if (
+            deck_source.decklists != "mixed"
+            and match.config.decklists != deck_source.decklists
+        ):
+            raise ValueError(
+                "the deck source's disclosure decides every game: match has "
+                f"decklists={match.config.decklists!r}, deck source has "
+                f"decklists={deck_source.decklists!r}"
+            )
         uniform_roster = deck_source.players()
     elif matchup_curriculum == "elemental-uniform":
         uniform_roster = elemental_roster(match)
@@ -560,6 +575,7 @@ def open_collector(
             _game_started=[time.perf_counter()] * num_envs,
             _game_actions=[[] for _ in range(num_envs)],
             _self_play_decks=[("", "")] * num_envs,
+            _operation=operation,
             _sampler=sampler,
             _assignments=assignments,
             _ordinals=[0] * num_envs,
@@ -585,7 +601,10 @@ def open_collector(
             ]
             env.reset_each_into_buffers([m.to_rust() for m in collector.stream_matches])
         elif matchup_curriculum in ("fixed", "elemental-uniform"):
-            env.reset_all_into_buffers(match.to_rust())
+            setup = match.to_rust()
+            if deck_source is not None:
+                setup = GameSetup(setup, decklists=deck_source.decklists)
+            env.reset_all_into_buffers(setup)
         else:
             env.reset_each_into_buffers([m.to_rust() for m in collector.stream_matches])
 
@@ -636,7 +655,9 @@ def _refresh_roots(collector: Collector, rows: np.ndarray) -> None:
         # the run submitted, even one outside the supply it began with.
         setups = collector._env.current_player_configs()
         for row in rows:
-            collector.stream_matches[row] = Match(pair_match(*setups[row]))
+            collector.stream_matches[row] = Match(
+                MatchConfig.from_players(*setups[row], decklists=setups[row].decklists)
+            )
     for row in rows:
         match = collector.stream_matches[row]
         collector._self_play_decks[row] = (
@@ -676,9 +697,10 @@ def _expose(collector: Collector, row: int, kind: ExposureKind, count: int = 1) 
 def _opponent_actions(
     collector: Collector, rows: np.ndarray, inference: CollectionScope
 ) -> np.ndarray:
-    if collector.opponent_mode == "self":
-        return inference.opponent_actions(_slice_obs_rows(collector, rows))
-    return collector._opponent.select(collector._buffers, rows)
+    with collector._operation("opponent_inference"):
+        if collector.opponent_mode == "self":
+            return inference.opponent_actions(_slice_obs_rows(collector, rows))
+        return collector._opponent.select(collector._buffers, rows)
 
 
 def _slice_obs_rows(collector: Collector, rows: np.ndarray) -> ObservationBuffers:
@@ -889,6 +911,7 @@ def _collect(
                         opp_rows,
                         acting,
                         opponent_inference,
+                        "opponent_inference",
                     )
                 else:
                     opp_acts = _opponent_actions(collector, opp_rows, inference)
@@ -1324,8 +1347,10 @@ def _sample_learning_rows(
     rows: np.ndarray,
     acting: np.ndarray,
     inference: CollectionScope,
+    operation: str = "learner_inference",
 ) -> np.ndarray:
-    sampled = inference.sample(_slice_obs_rows(collector, rows), collector.profiler)
+    with collector._operation(operation):
+        sampled = inference.sample(_slice_obs_rows(collector, rows), collector.profiler)
     acts, logprobs, values = sampled.actions, sampled.logprobs, sampled.values
     outcomes, needs = sampled.outcomes, sampled.needs
     with collector.profiler.track("Rollout recording"):

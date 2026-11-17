@@ -603,6 +603,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "mana": "mana pool",
         "lesson_mana": "Restricted mana",
         "known_hand": "known hand",
+        "known_library": "Known library position N from top",
         "main_counts": "Main deck, or Decklist: closed",
         "unseen_counts": "Unseen cards",
         "sideboard_counts": "Initial sideboard",

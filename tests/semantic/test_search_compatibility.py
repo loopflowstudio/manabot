@@ -1,44 +1,20 @@
-"""Published search spellings retain one implementation during deprecation."""
+"""Academy Search preserves the arena numerical update without changing its source."""
 
-import importlib
-
+import numpy as np
 import pytest
 
-from managym.bots import SearchSummary
-from managym.search import SearchConfig, SearchError, search_decision
-from tests.semantic.test_policy_search import IndependentSession, _runner
+from manabot.sim.search.local_update_receipt import regularized_update as arena_update
+from managym.search import regularized_update
 
 
-def test_published_module_names_warn_and_resolve_to_search() -> None:
-    old = importlib.import_module("managym.mirror_search")
-    for name, replacement in (
-        ("MirrorSearch", SearchConfig),
-        ("MirrorSearchError", SearchError),
-        ("mirror_decision", search_decision),
-    ):
-        with pytest.warns(DeprecationWarning, match="removed in 0.4.0"):
-            assert getattr(old, name) is replacement
-    with pytest.warns(DeprecationWarning, match="removed in 0.4.0"):
-        assert (
-            getattr(importlib.import_module("managym.bots"), "MirrorSummary")
-            is SearchSummary
-        )
-
-
-def test_runner_legacy_configuration_keeps_search_identity() -> None:
-    runner = _runner(IndependentSession(), 0)
-    spec = SearchConfig()
-    try:
-        with pytest.warns(DeprecationWarning, match="removed in 0.4.0"):
-            runner.configure_mirror(spec, seed=7)
-        legacy_identity = runner.descriptor.id
-        assert runner.search == spec
-        assert "+ search 1×1" in runner.descriptor.name
-        runner.configure_search(spec, seed=7)
-        assert runner.descriptor.id == legacy_identity
-        with pytest.warns(DeprecationWarning, match="removed in 0.4.0"):
-            assert runner.mirror == spec
-        with pytest.warns(DeprecationWarning, match="removed in 0.4.0"):
-            assert runner.mirror_runtime == runner.search_runtime
-    finally:
-        runner.close()
+@pytest.mark.parametrize(
+    "base,values", [([0.25, 0.75], [0.8, -0.2]), ([1.0, 0.0], [-0.3, float("nan")])]
+)
+def test_academy_update_matches_arena(base: list[float], values: list[float]) -> None:
+    prior = np.array(base)
+    scores = np.array(values)
+    reference = np.full(len(base), 1 / len(base))
+    expected = arena_update(prior, scores, reference, alpha=0.02, beta=1.0)
+    np.testing.assert_array_equal(
+        regularized_update(prior, scores, reference, alpha=0.02, beta=1.0), expected
+    )

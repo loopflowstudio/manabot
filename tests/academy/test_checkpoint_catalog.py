@@ -15,6 +15,7 @@ from managym.academy import server, trace as trace_store
 from managym.academy.opponent import Opponent, opponent_catalog, policy_registry
 from managym.academy.server import app
 from managym.policy import PolicyRegistry, PolicySpec
+from tests.academy.socket_messages import settled_message
 from tests.academy.test_play_modes import _recorded_traces, _write_tiny_checkpoint
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
@@ -48,7 +49,7 @@ def _id(path: Path) -> str:
 def _new_game_error(client: TestClient, config: dict) -> str:
     with client.websocket_connect("/ws/play") as websocket:
         websocket.send_json({"type": "new_game", "config": config})
-        payload = websocket.receive_json()
+        payload = settled_message(websocket)
     assert payload["type"] == "error", payload
     return payload["message"]
 
@@ -148,7 +149,7 @@ def test_chosen_checkpoint_plays_either_deck_and_is_recorded(
                     },
                 }
             )
-            payload = websocket.receive_json()
+            payload = settled_message(websocket)
             # Enough hero decisions for the bot to act from its own seat.
             for _ in range(40):
                 if payload["type"] == "game_over":
@@ -157,7 +158,7 @@ def test_chosen_checkpoint_plays_either_deck_and_is_recorded(
                 actions = payload["actions"]
                 choice = actions[rng.randrange(len(actions))]
                 websocket.send_json({"type": "action", "index": choice["index"]})
-                payload = websocket.receive_json()
+                payload = settled_message(websocket)
     assert payload["table"]["opponent"]["sha256"] == sha256
 
     [(_, trace)] = _recorded_traces(trace_store.TRACES_DIR)
@@ -226,7 +227,7 @@ def test_imported_decks_play_world_checkpoints_and_refuse_setup_bindings(
                     },
                 }
             )
-            payload = websocket.receive_json()
+            payload = settled_message(websocket)
             for _ in range(40):
                 if payload["type"] == "game_over":
                     break
@@ -234,7 +235,7 @@ def test_imported_decks_play_world_checkpoints_and_refuse_setup_bindings(
                 actions = payload["actions"]
                 choice = actions[rng.randrange(len(actions))]
                 websocket.send_json({"type": "action", "index": choice["index"]})
-                payload = websocket.receive_json()
+                payload = settled_message(websocket)
     [(_, trace)] = _recorded_traces(trace_store.TRACES_DIR)
     assert trace["config"]["opponent"]["sha256"] == _id(world)
     villain_turns = [
@@ -378,3 +379,15 @@ def test_setup_preview_names_bound_decks_without_loading(runs: Path) -> None:
             "compatible": True,
             "reason": None,
         }
+
+
+def test_retained_checkpoint_loader_accepts_omitted_setup(runs: Path) -> None:
+    from manabot.sim.table_bots import CheckpointVillain
+
+    with pytest.warns(DeprecationWarning, match="removed in 0.4.0"):
+        policy = CheckpointVillain(str(runs / "self-play" / "step_0.pt"))
+    try:
+        assert policy.agent is not None
+        assert policy.obs_space is not None
+    finally:
+        policy.close()

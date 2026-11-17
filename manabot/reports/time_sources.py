@@ -143,6 +143,7 @@ def _etude_run(run: "RunData", training_clock: str) -> tuple[CohortRun, str | No
     intervals = []
     for index, writer in enumerate(writers):
         attempt = attempts.get(writer)
+        blocks = [b for b in run.blocks if b.header.writer == writer]
         end = (
             _clock_endpoint(run, writer, training_clock) if active is not None else None
         )
@@ -164,14 +165,32 @@ def _etude_run(run: "RunData", training_clock: str) -> tuple[CohortRun, str | No
             and declared.continues.clock == training_clock
         ):
             baseline = declared.continues.value
-        if baseline is None and index == 0 and parent is None:
+        if index == 0 and (attempt is None or attempt.first_row):
+            # New writers record their first row, not the point they resumed from.
+            # The initial writer starts at zero; a child starts at its lineage clock.
+            baseline = (
+                declared.continues.value
+                if declared.continues is not None
+                and declared.continues.clock == training_clock
+                else 0.0
+                if parent is None
+                else None
+            )
+        elif baseline is None and index == 0 and parent is None:
             baseline = 0.0
+        if (
+            index > 0
+            and attempt is not None
+            and attempt.first_row
+            and sum(block.header.rows for block in blocks) < 2
+        ):
+            # A retry's one observed coordinate establishes no elapsed interval.
+            baseline = None
         if active is not None:
             if end is None or baseline is None or end < baseline:
                 active = None
             else:
                 active += end - baseline
-        blocks = [b for b in run.blocks if b.header.writer == writer]
         if blocks:
             start_ms = (
                 attempt.started_ms

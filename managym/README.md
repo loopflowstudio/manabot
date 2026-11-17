@@ -11,6 +11,22 @@ each native seat can use an external agent, random play or the built-in
 heuristic, without installing `manabot`. See
 [per-seat players](https://github.com/loopflowstudio/manabot/blob/main/docs/engine.md#per-seat-players).
 
+## Statistics and private recording
+
+Call `game.enable_statistics()` before `game.reset(players)`, play normally,
+then read `game.statistics()` for per-game card counts and completion state.
+Drain completed/replaced summaries with `game.take_statistics()`. Statistics
+need no detailed logs, replay or disk writes; both statistics and recording
+default off.
+
+For durable diagnostic inputs, use `managym.recording.ScalarCapture` or
+`CapturedVector` with an explicit journal path before reset. These retain
+pending native calls even if the engine never returns. They work without
+manabot, Torch or Etude. Private journals contain hidden information and must
+not be used as Academy viewer exports. See the
+[standalone examples and recovery guide](https://github.com/loopflowstudio/manabot/blob/main/docs/engine-python.md#collect-in-game-statistics)
+for independent options, costs, partial counts and replay.
+
 ## Play in the browser
 
 The distribution includes Academy, a browser table for playing a game against
@@ -49,17 +65,26 @@ with the reason before anything opens.
 Bundled names take precedence over same-named files; use `./ur_lessons` to
 select a file named `ur_lessons`.
 
-The same choices are in the browser. Open **Choose decks**. Browse a bundled deck and
-select **Use for me** or **Use for opponent** to assign each seat, choose an
-opponent such as **Search 64**, then click **New Game**.
+The same choices are in the browser. Open **New game**, expand **Browse decks
+and cards**, and assign a bundled deck to each native seat. Choose an opponent
+such as **Search 64**, then click **Start game**.
 
 For your own lists, expand **Import decklist files** and check **Use imported
 decks for the next game**. Upload or paste both decks, one `count card name`
 per line, with optional `Main` and `Sideboard` headings. Click **Check decklists**,
-fix any reported issues, and select **New Game**. Imported decks use the
+fix any reported issues, and select **Start game**. Imported decks use the
 development format and supported cards. Registered policies check the complete
 setup, including imported lists, against their own admission requirements. See the
 [play guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#play-a-game).
+
+For several games against a model, **Rematch**, **Swap sides** and **Change
+opponent** retain unrelated setup and group recordings in one session. See
+[playing a series](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#playing-a-series-against-a-model)
+for deal modes, results and recovery. **Edit next game** opens the session draft:
+**Save next setup** retains it, and **Start next game** starts a continuation.
+Global **New game** opens a separate session setup; **Cancel** discards edits.
+Changing both controllers to bots in the session editor offers **Start new
+watched game**, preserving the Play session.
 
 ### Watch a replay from an evaluation
 
@@ -258,7 +283,11 @@ frequency (column 28: 1 once, 2 each match); column 48 keeps its expiry meaning.
 Missing historical frequency is unknown.
 
 Public hand knowledge is a minimum multiset of `CardDefId` counts on `Player`,
-not a set of revealed physical cards. Search forks by full clone: clone the
+not a set of revealed physical cards. Exact library positions are retained
+per viewer in `Player.known_library`, and projected as `PlayerData.known_library`
+([library knowledge](../docs/engine.md#remembered-library-positions)).
+Private moves discard uncertain locations; both world samplers preserve the
+remaining facts. Search forks by full clone: clone the
 `Game` before a normal Command `apply` and compare `search_state::witness` to
 check that the source is unchanged. Exercise nested choices through Commands,
 not by direct calls to resolution helpers.
@@ -400,6 +429,11 @@ and frame. Only after that obligation finishes do its tap/life/sacrifice costs
 commit and its output become a visible color decision. Mana abilities do not
 create stack objects. Fixed production keeps source order; a nested automatic
 prefix considers concrete pool remainders and the parent's completion.
+The announced activation's own tap, sacrifice and unpaid life fee remain
+reserved throughout waterbend and nested mana decisions, including a saved
+spending caller. A nested mana ability cannot consume those resources and
+leave the announcement without a complete payment. Its own upfront life fee
+is counted once, on that ability's output obligation.
 
 Most payment questions never reach the search. With four untapped Islands and
 an empty pool, "can this player pay `{2}{U}`?" is answered by adding: the pool
@@ -430,8 +464,8 @@ automatic tapping order cannot differ between the two. Adding a kind of mana
 source needs no change here unless it should join the direct class, which
 requires a test comparing both paths on that source.
 
-Payment search tracks an object's untapped resource, presence and limited
-ability uses separately. Counted tap costs select distinct untapped matching
+Payment search tracks an object's untapped resource, presence and used limited
+abilities separately. Counted tap costs select distinct untapped matching
 permanents through ordinary SelectCard decisions; The Cabbage Merchant can
 activate twice by tapping four distinct Foods without tapping itself. Each
 selected tap commits before the next selection and is unavailable to nested
@@ -444,11 +478,23 @@ an identity-preserving witness with explicit tap choices. Every saved counted-ta
 cost must retain enough present, untapped candidates throughout the search;
 production and spending cannot restore a consumed resource. The whole-payment
 bound counts only outputs a pending cost could spend and takes the maximum of
-competing uses of one tap; the color-set bound applies the same supply to every
-set of owed colors, so one "U or R" source cannot cover `{U}{R}`. Search
+competing uses of one tap. A separate conservation bound counts every mana
+class and the net gain after future activation fees; saved outputs stay gross
+supply beside their explicit unpaid costs. Restricted mana can therefore seed
+a filter without being mistaken for mana the parent can spend. The color-set
+bound applies the same supply to every set of owed colors, so one "U or R"
+source cannot cover `{U}{R}`. Search
 memoization shares feasibility across interchangeable sources (including
 membership in every counted-tap set), while retaining source order and exact
-identities in the first witness. Repeated lands therefore contribute resource
+identities in the first witness. An immutable branch state also serves as its
+memo key; canonical permutations copy only when resource order changes.
+The per-cost optimistic pool projects allowed classes onto color counts after
+taking each class's output-mode maxima, without copying restriction metadata.
+Concrete pools retain their exact classes throughout execution and search.
+Spending alternatives are explored only after the pool covers the whole current
+cost; a partial spend cannot interleave production, and its remaining pool must
+cover the unpaid pips before saved callers are checked.
+Repeated lands therefore contribute resource
 counts instead of all identity subsets. A search checks the color-set bound at
 its root and keeps identity keys until it has expanded 16 states; only then
 does it classify the sources and apply both to every state, so ordinary small
@@ -459,6 +505,20 @@ large-board work limit or truncation of legal payments. The
 [stress states](../docs/development.md#stress-states) measure payment and every
 other engine layer on large duplicative and large diverse boards; run them when
 changing this search.
+
+Each Game caches at most 64 searched queries in FIFO order, retaining negative
+answers and complete first witnesses. Exact keys include ordered source
+identities and capabilities, tap resources, pool classes, payable life, ordered
+caller obligations, source policy and the selected counted tap. Forks own
+independent FIFOs but share immutable entries, source lists, output alternatives
+and tap-candidate lists. Reservations detach source lists on writes. The cache
+stays outside hashes and observations; debug builds recompute every hit.
+
+Automatic-prefix searches start at the fewest taps whose largest fixed outputs
+or waterbend contributions could cover the pool shortfall, conservatively
+ignoring colors and tap competition. The cache and lower bound preserve complete
+choices and first witnesses; neither substitutes a fallback for an infeasible
+payment.
 
 Spending restrictions (CR 106.6) are typed: `ManaRestriction::Only` holds
 `SpendPredicate`s naming any subtype a spell must have or an activation's

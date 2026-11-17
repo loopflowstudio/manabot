@@ -174,7 +174,9 @@ def checkpoint_search_incompatibility(checkpoint: Mapping[str, object]) -> str |
     metadata = checkpoint.get("bc")
     semantic = metadata.get("value_semantic") if isinstance(metadata, Mapping) else None
     if agent.get("value_kind") != "categorical_wdl" and semantic != "signed_outcome":
-        return "Search requires a W/D/L value head or a scalar declared as signed_outcome."
+        return (
+            "Search requires a W/D/L value head or a scalar declared as signed_outcome."
+        )
     if agent.get("recent_events"):
         return "Search requires evaluation from the current view alone, without policy history."
     if agent.get("belief_count_buckets"):

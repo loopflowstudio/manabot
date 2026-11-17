@@ -33,3 +33,10 @@ other notes are condensed. Never increase context limits. Budget conflict: those
 kept files alone are about 12k tokens, so scratch stays over its 12k target
 (see `lf context`) until that steer is lifted. Earlier exact remarks
 and findings: 4de3a76ba0:scratch/questions.md and 382c653ec8:scratch/questions.md.
+
+2026-11-16 main sync: preserve the Etude d9 pin and retired execution/experiment
+deletions; combine main's native recording and disclosure with function-based
+collectors. Private training journals use the Etude recipe's `training_game_logs`
+config field; old CLI/TrainingJob forwarding tests become recipe/loop checks.
+Exact native snapshot/restore assertions remain retired; preserve auto-reset,
+resolved-disclosure and export/replay checks. No launcher database was touched.

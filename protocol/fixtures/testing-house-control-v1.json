@@ -50,9 +50,9 @@
     },
     {
       "type": "retry_mirror",
-      "grant_revision": 1,
-      "match_id": "table-match",
-      "expected_revision": 0
+      "match_id": "match.example",
+      "expected_revision": 12,
+      "grant_revision": 1
     },
     {
       "type": "set_stops",
