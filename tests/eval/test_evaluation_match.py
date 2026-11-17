@@ -551,7 +551,7 @@ def test_player_crash_is_an_interrupted_record(monkeypatch: pytest.MonkeyPatch) 
 
     class BrokenPlayer:
         def act(self, env: object, obs: object) -> int:
-            raise RuntimeError("private policy detail")
+            raise AgentError("private policy detail")
 
     monkeypatch.setattr(
         "manabot.sim.native_game.build_code_player", lambda *a, **kw: BrokenPlayer()
