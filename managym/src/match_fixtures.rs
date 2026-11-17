@@ -80,10 +80,7 @@ pub fn build_fixture(id: &str) -> Result<Game, String> {
             .map_err(|error| format!("fixture {id} failed at decision {decision}: {error}"))?;
         // Keep these clone/witness positions stable by deliberately choosing
         // automatic completion at newly exposed fixed-source decisions.
-        loop {
-            let Some(space) = game.action_space() else {
-                break;
-            };
+        while let Some(space) = game.action_space() {
             let automatic = space
                 .actions
                 .iter()
