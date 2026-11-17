@@ -156,15 +156,15 @@ def test_launched_runs_track_under_the_file_stem(tmp_path: Path) -> None:
     assert sorted(run.seed for run in runs) == sorted([64001, 64002, 64003, 64004] * 2)
 
 
-def _finished_run(tmp_path: Path, updates: range) -> TrainingRun:
+def _finished_run(tmp_path: Path, updates: range, name: str = "seed-1") -> TrainingRun:
     saved = []
     for ordinal, update in enumerate(updates, start=1):
         path = tmp_path / f"updates-{update}.pt"
         path.write_bytes(str(update).encode())
         saved.append(
             Checkpoint(
-                run="seed-1",
-                line="seed-1",
+                run=name,
+                line=name,
                 experiment="elemental",
                 ordinal=ordinal,
                 artifact=ArtifactRef(uri=path.as_uri(), sha256="0" * 64, size_bytes=1),
@@ -172,11 +172,11 @@ def _finished_run(tmp_path: Path, updates: range) -> TrainingRun:
             )
         )
     return TrainingRun(
-        name="seed-1",
+        name=name,
         experiment="elemental",
-        job="seed-1",
-        launch="seed-1",
-        line="seed-1",
+        job=name,
+        launch=name,
+        line=name,
         state="finished",
         checkpoints=Checkpoints(saved),
     )
@@ -267,24 +267,38 @@ def test_opponent_memory_discovery_declares_trunks_and_empty_evaluation() -> Non
 
     experiment = read_experiment(EXPERIMENTS / "opponent_memory.py")
     assert experiment.training is not None and experiment.eval is not None
-    runs = experiment.training(revision="HEAD")
-    assert [run.seed for run in runs] == [39101, 39102, 39103]
-    for run in runs:
-        assert run.job.name == (
-            "decision-memory-trunk-3"
-            if run.seed == 39103
-            else "decision-memory-trunk-2"
+    for wide in (False, True):
+        runs = read_training_jobs(
+            EXPERIMENTS / "opponent_memory.py",
+            ["--revision", "HEAD", *(["--size", "wide"] if wide else [])],
         )
-        spec = TrainingJob.model_validate_json(run.job.config or "")
-        stage = spec.regime.stages[0]
-        assert isinstance(stage, TrainSelfPlay)
-        assert stage.target_learner_transitions == 3_300_000
-        assert stage.updates == 90
-        assert stage.execution.wall_seconds == run.job.max_hours * 3600 - 1200
-        assert stage.learning.decision_schedule.transitions == 3_300_000
-        assert stage.execution.collection_rows == 128
-        assert spec.regime.agent.decision_memory == "none"
-        assert spec.regime.observation.max_decision_records == 1024
+        assert [run.seed for run in runs] == [39101, 39102, 39103]
+        for run in runs:
+            assert run.job.name == (
+                "decision-memory-wide-trunk"
+                if wide
+                else (
+                    "decision-memory-trunk-3"
+                    if run.seed == 39103
+                    else "decision-memory-trunk-2"
+                )
+            )
+            spec = TrainingJob.model_validate_json(run.job.config or "")
+            assert (
+                spec.regime.agent.hidden_dim,
+                spec.regime.agent.attention_layers,
+                spec.regime.agent.num_attention_heads,
+            ) == ((128, 3, 4) if wide else (64, 2, 4))
+            assert run.job.max_attempts == 3
+            stage = spec.regime.stages[0]
+            assert isinstance(stage, TrainSelfPlay)
+            assert stage.target_learner_transitions == 3_300_000
+            assert stage.updates == 90
+            assert stage.execution.wall_seconds == run.job.max_hours * 3600 - 1200
+            assert stage.learning.decision_schedule.transitions == 3_300_000
+            assert stage.execution.collection_rows == 128
+            assert spec.regime.agent.decision_memory == "none"
+            assert spec.regime.observation.max_decision_records == 1024
     assert experiment.eval(ExperimentState(experiment="opponent_memory")) == []
 
 
@@ -294,38 +308,42 @@ def test_opponent_memory_evaluation_draws_every_declared_seating(
 
     runs = tuple(
         replace(
-            _finished_run(tmp_path, range(0, final + 1, 20)),
-            name=f"{arm}-{seed}",
+            _finished_run(tmp_path, range(0, final + 1, 40), f"{prefix}{arm}-{seed}"),
             experiment="opponent_memory",
             seed=seed,
-            job=f"decision-memory-{arm}",
-            launch=f"decision-memory-{arm}",
+            job=f"decision-memory-{prefix}{arm}",
+            launch=f"decision-memory-{prefix}{arm}",
         )
         for seed in opponent_memory.SEEDS
-        for arm, final in (("control", 80), ("gru-k1", 100))
+        for prefix in ("", "wide-")
+        for arm, final in (("control", 160), ("gru-k1", 200))
     )
     jobs = opponent_memory.eval_jobs(
         ExperimentState(experiment="opponent_memory", runs=runs)
     )
     assert len(jobs) == 1
     seatings = jobs[0].tournament.seatings
-    assert len(seatings) == 30
+    assert len(seatings) == 60
+    assert jobs[0].max_hours == 2 and jobs[0].max_usd == 4
     curves = [
         panel for panel in opponent_memory.report().evals if isinstance(panel, Curve)
     ]
     # Each seed must remain visible; Etude unions a panel's selections by job.
-    for seed, curve in zip(opponent_memory.SEEDS, curves[:3], strict=True):
-        assert str(seed) in curve.title
-        assert isinstance(curve.matches, tuple)
-        assert {selection.seating for selection in curve.matches} == {
-            opponent_memory.seating_name(seed, disclosure, "control", point)
-            for disclosure in opponent_memory.DISCLOSURES
-            for point in (*opponent_memory.MILESTONES, "final")
-        }
-    ranking = next(
-        panel for panel in opponent_memory.report().evals if isinstance(panel, Ranking)
-    )
-    assert ranking.matches == Matches(tag="control")
+    for size in ("small", "wide"):
+        for seed in opponent_memory.SEEDS:
+            curve = next(c for c in curves if size in c.title and str(seed) in c.title)
+            assert isinstance(curve.matches, tuple)
+            assert {selection.seating for selection in curve.matches} == {
+                opponent_memory.seating_name(size, seed, disclosure, "control", point)
+                for disclosure in opponent_memory.DISCLOSURES
+                for point in (40, 80, 120, "final")
+            }
+        ranking = next(
+            panel
+            for panel in opponent_memory.report().evals
+            if isinstance(panel, Ranking) and size in panel.title
+        )
+        assert ranking.matches == Matches(tag=f"{size}-control")
     drawn = {
         selection.seating
         for panel in curves
@@ -336,13 +354,19 @@ def test_opponent_memory_evaluation_draws_every_declared_seating(
     }
     assert {seating.name for seating in seatings} == drawn
     games = sum(len(seating.configs) * seating.games for seating in seatings)
-    assert games == 9600
+    assert games == 19200
     for seating in seatings:
         assert seating.fixed and seating.seeds == "one"
+        size, _, seed, *_ = seating.name.split("-")
+        prefix = "wide-" if size == "wide" else ""
+        first, second = seating.players
+        assert first.checkpoint.line == f"{prefix}gru-k1-{seed}"
+        opponent = "gru-k1" if "reliance" in seating.tags else "control"
+        assert second.checkpoint.line == f"{prefix}{opponent}-{seed}"
         if "control-final" in seating.name:
             assert [player.checkpoint.at["updates"] for player in seating.players] == [
-                100,
-                80,
+                200,
+                160,
             ]
         if "reliance" in seating.tags:
             first, blanked = seating.players
@@ -354,5 +378,5 @@ def test_opponent_memory_evaluation_draws_every_declared_seating(
     interiors = opponent_memory.evaluation_matchups(
         ExperimentState(experiment="opponent_memory", runs=running)
     )
-    assert len(interiors) == 18
+    assert len(interiors) == 36
     assert all("final" not in seating.name for seating in interiors)

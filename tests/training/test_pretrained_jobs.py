@@ -328,16 +328,24 @@ def test_pilot_requires_completed_trunk_for_every_seed(
         opponent_memory.training_jobs("HEAD", trunks=str(tmp_path))
 
 
+@pytest.mark.parametrize("size", ["small", "wide"])
 @pytest.mark.parametrize("retried", [False, True])
 def test_pilot_branches_from_three_published_ema_trunks(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     memory_trunk: TrainingRun,
     retried: bool,
+    size: str,
 ) -> None:
 
     storage = DirectoryStorage(tmp_path / "pilot")
     runs: list[TrainingRunSummary] = []
+    prefix = "wide-" if size == "wide" else ""
+    names = (
+        dict.fromkeys(opponent_memory.SEEDS, "wide-trunk")
+        if prefix
+        else opponent_memory.TRUNK_NAMES
+    )
     for seed in opponent_memory.SEEDS:
         name = f"trunk-{seed}"
         parent = memory_trunk.model_copy(deep=True)
@@ -359,8 +367,8 @@ def test_pilot_branches_from_three_published_ema_trunks(
             TrainingRunSummary(
                 name=name,
                 experiment="opponent_memory",
-                job=f"decision-memory-{opponent_memory.TRUNK_NAMES[seed]}",
-                launch=f"decision-memory-{opponent_memory.TRUNK_NAMES[seed]}",
+                job=f"decision-memory-{names[seed]}",
+                launch=f"decision-memory-{names[seed]}",
                 line=name,
                 state="finished",
                 checkpoints=Checkpoints(),
@@ -372,7 +380,9 @@ def test_pilot_branches_from_three_published_ema_trunks(
         return ExperimentState(experiment=experiment, runs=tuple(runs))
 
     monkeypatch.setattr(opponent_memory, "observe", observe)
-    requests = opponent_memory.training_jobs("HEAD", trunks=str(storage.root))
+    requests = opponent_memory.training_jobs(
+        "HEAD", trunks=str(storage.root), size=size
+    )
     assert len(requests) == 6
     for seed in opponent_memory.SEEDS:
         specs = [
@@ -389,11 +399,21 @@ def test_pilot_branches_from_three_published_ema_trunks(
         assert specs[0].pretrained.checkpoint.key.endswith(
             f"attempts/one/training/{artifact.name}"
         )
+        assert [spec.regime.id for spec in specs] == [
+            f"decision-memory-{prefix}{arm}" for arm in ("control", "gru-k1")
+        ]
+        assert f"trunk-{seed}/" in specs[0].pretrained.source_run.key
         for spec in specs:
+            assert (
+                spec.regime.agent.hidden_dim,
+                spec.regime.agent.attention_layers,
+            ) == ((128, 3) if prefix else (64, 2))
             stage = spec.regime.stages[0]
             assert isinstance(stage, TrainSelfPlay)
-            assert stage.target_learner_transitions == 4_400_000
-            assert spec.milestones == (20, 40, 60)
+            assert stage.target_learner_transitions == 8_800_000
+            assert stage.learning.decision_schedule.transitions == 8_800_000
+            assert stage.updates == 240
+            assert spec.milestones == (40, 80, 120)
             assert spec.experiment == "opponent_memory"
         assert [spec.regime.agent.decision_memory for spec in specs] == ["none", "gru"]
         assert specs[1].regime.agent.decision_memory_gate_scale == 2.0
@@ -402,9 +422,9 @@ def test_pilot_branches_from_three_published_ema_trunks(
         opponent_memory._published_trunk(storage, "trunk-39101", 39102)
     runs.pop()
     with pytest.raises(
-        ValueError, match="seed 39103: expected one decision-memory-trunk-3 run"
+        ValueError, match=f"seed 39103: expected one decision-memory-{names[39103]} run"
     ):
-        opponent_memory.training_jobs("HEAD", trunks=str(storage.root))
+        opponent_memory.training_jobs("HEAD", trunks=str(storage.root), size=size)
 
 
 @pytest.mark.parametrize("completed", [0, 2])

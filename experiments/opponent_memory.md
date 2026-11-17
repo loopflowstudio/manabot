@@ -11,8 +11,9 @@ Elemental 10v10. The history-disabled incumbent is the throughput reference only
 
 ## Answer so far
 
-**The learning comparison has not run.** No trunk, branch or evaluation game of
-the pilot exists; the design below is what will be launched.
+On 2026-11-17 the Task session reported two small trunks running at about
+780 learner decisions/s on an A40, or roughly USD0.70 of compute per trunk.
+Seed 39103 was waiting for A40 supply. Branch learning and strength are unmeasured.
 
 What is measured is cost. On one A40 (`cuda-calibration-suffix@39100`, two
 updates per worker, 32 execution rows) the incumbent trained at 346 learner
@@ -24,36 +25,37 @@ nothing about playing strength. Each of these has a dated entry in the appendix.
 
 ## Method
 
-Committed 2026-11-17, before any pilot run. The launch commit and the Etude run
-IDs freeze it.
+The pilot compares memory within two model sizes. Small has 64 hidden units
+and two attention layers. Wide has 128 hidden units and three attention layers.
+Both use four heads. Each size trains three control trunks (seeds 39101–39103)
+to 3.3M learner decisions. Within each size and seed, control and GRU-K1 start
+from the same trunk EMA with fresh Adam and a fresh 8.8M-decision schedule.
+Zero gates give GRU the control policy at initialization. The gate scale stays
+at 2.0. The panels record each layer’s gate during training.
 
-Three training seeds (39101–39103) each train one control trunk for 3,300,000
-learner decisions. Both arms then branch from that trunk's EMA weights with
-fresh Adam and train 4,400,000 further learner decisions, so a seed's two
-branches share everything up to the branch point and differ only in the encoder.
-The GRU branch starts as exactly the control: its gates are zero. Gate scale is
-2.0 for every GRU branch, because at 1.0 the gate could reach at most 0.73 over
-this horizon; `decision_memory/gate_<layer>` in the training panels shows
-whether it opened.
+Both sizes use 256 streams, four producers, complete-game collection, float32,
+128 execution rows and record/detail/reference/member capacities of
+1,024/65,536/512/32,768. Each game draws open or closed decklists with equal
+probability. Overflow fails the run. Complete-game collection can overshoot the
+decision target by one update. The branch update ceiling is 240. Compare raw
+checkpoints at equal interior updates and each arm’s own final update, retaining
+actual learner clocks.
 
-Every run uses 256 streams, 4 producers, complete-game collection, float32, a
-64 × 2 model, 128 execution rows and record/detail/reference/member capacities
-of 512/16,384/256/8,192. Each game draws open or closed decklists with equal
-probability. A game that overflows a capacity fails its run; history is never
-truncated.
+Each pairing plays four games over both seats and decks. Each size uses the
+same held-out deals, separately for each seed and disclosure.
 
-Branches stop on a learner-decision target. Complete-game collection overshoots
-it by under one update (about 1.2%), so checkpoints are compared at equal update
-index and the report shows each side's actual learner decisions.
-
-Evaluation plays raw checkpoints on paired deals, both seats and both decks per
-pairing, separately with open and closed decklists:
-
-| Line | Checkpoints | Pairings per seed and disclosure | Games |
+| Readout | Checkpoints | Pairings per seed and disclosure | Games per size |
 |---|---|---:|---:|
-| GRU against control, final | last update of each branch | 200 | 4,800 |
-| GRU against control, curve | updates 20, 40 and 60 | 50 | 3,600 |
-| GRU against its blanked self | last update | 50 | 1,200 |
+| GRU against control | final | 200 | 4,800 |
+| GRU against control | updates 40, 80 and 120 | 50 per update | 3,600 |
+| Intact against blanked GRU | final | 50 | 1,200 |
+| Total | | | 9,600 |
+
+The full design plays 19,200 games. Within each size the final head-to-head
+has a nominal 95% margin of ±1.4 percentage points near a 50% score, ±2.0 per
+disclosure or ±3.5 per seed and disclosure. Those margins assume independent
+games. Paired legs share deals, and generalization across training runs rests
+on three seeds. The curves show each seed separately.
 
 A blanked player is the same checkpoint with its four memory tables zeroed
 before every decision; the board, legal actions and native game are untouched.
@@ -63,75 +65,84 @@ The report gives each training seed its own head-to-head panel, split by
 decklist disclosure. The play/draw ranking counts head-to-head games against
 control only.
 
-**What this can resolve.** Treating games as independent, which is slightly
-optimistic because a pairing's legs share a deal, the final head-to-head is
-±1.4 points at 95% pooled, ±2.0 per disclosure and ±3.5 per seed and disclosure;
-blanked-memory reliance is ±2.8 pooled; each curve point is ±6.9. Those intervals
-describe these six checkpoint pairs. A statement about the method rests on
-three training seeds, so only a difference that all three seeds show is read as
-the method's. No verdict threshold is set in advance.
-
-**Confounds.** Branches restart the learning-rate schedule and Adam, both arms
-alike. The control branch is about 9% faster per decision, so it finishes
-earlier in wall time, not in decisions. The gate scale was chosen from two
-updates of gate data, not a comparison of scales. Opponents are self-play; no
-arm trains against decks chosen to make past decisions matter.
-
 ### Running it
 
-Each command rents nothing with `--quote` and launches without it.
+Use the committed revision and the same store that holds the producer receipts.
+Each training selection below is independent. Run the small branches first
+once their three trunks finish. The wide commands describe the full design for
+the launching session after the budget decision.
 
 ```sh
-# 1. Three trunks.
-uv run etude launch experiments/opponent_memory.py \
-  --source r2://manabot/jobs/opponent_memory --job decision-memory-trunk \
-  --revision COMMIT --rent mtg252-a40 --max-usd 10.20 --quote
+pilot=experiments/opponent_memory.py
+store=r2://manabot/jobs/opponent_memory
+revision=$(git rev-parse HEAD)
+train() {
+  uv run etude launch "$pilot" --source "$store" --revision "$revision" \
+    --rent mtg252-a40 --max-usd 29.95 "$@"
+}
 
-# 2. Six branches, once the trunks have finished.
-uv run etude launch experiments/opponent_memory.py \
-  --source r2://manabot/jobs/opponent_memory \
-  --trunks r2://manabot/jobs/opponent_memory \
-  --revision COMMIT --rent mtg252-a40 --max-usd 30.00 --quote
+# Small branches
+for arm in control gru-k1; do
+  train --size small --trunks "$store" --job "decision-memory-$arm"
+done
 
-# 3. Play whatever stored checkpoints have not met yet, then draw it.
-uv run etude eval experiments/opponent_memory.py --source r2://manabot/jobs/opponent_memory
-uv run etude report experiments/opponent_memory.py --source r2://manabot/jobs/opponent_memory --open
+# Wide trunks
+train --size wide --job decision-memory-wide-trunk
+
+# Wide branches, once all three wide trunks finish
+for arm in control gru-k1; do
+  train --size wide --trunks "$store" --job "decision-memory-wide-$arm"
+done
+
+# Remote evaluation after the three small trunk addresses already exist.
+# Set eval_ceiling to current committed USD plus the remaining eval allowance.
+uv run etude launch "$pilot" --source "$store" --revision "$revision" \
+  --rent mtg252-a40 --max-usd "${eval_ceiling:?set cumulative evaluation ceiling}"
+
+uv run etude report "$pilot" --source "$store" --open
 ```
 
-The launcher's `--max-usd` is cumulative for the experiment, including previous
-calibration spending. The command ceilings include that spending: USD10.20
-through trunks and USD30 through branches. Individual job caps remain USD2.40
-per trunk and USD3.30 per branch (USD27 total training). Read the retained
-commitment before launching; these ceilings are not additional allowances.
-
-Step 2 refuses a seed whose trunk is missing or unfinished, naming the seed.
-If a trunk was retried, it uses the sole completed attempt's EMA export;
-zero or several completed attempt records refuse before branching.
-Step 3 plays nothing while no branch has a checkpoint, and can be repeated as
-milestones arrive: an evaluation pass that reaches its cap keeps its finished
-matches and the next pass plays the rest.
+Etude counts prior experiment commitments and may admit only part of a cohort.
+USD29.95 covers calibration plus the USD27 training allocation, including failed
+trunks. The session should inspect admission for each arm. Training commands
+filter by job so they skip evaluation. For a remote evaluation pass, the default
+declaration resolves the three known small trunks and evaluates available
+checkpoint pairs from both sizes. Limit all passes together to USD12 and the
+experiment to USD50. Finished matches are retained between passes.
 
 ## Cost
 
-Planned dollars, A40 at the last observed USD0.59/h with a 0.25 h startup
-allowance per run. The quote replaces both assumptions.
-
-| Stage | Runs | Planned USD | Cap USD |
+| Stage | Runs | Planned USD | Sum of job caps USD |
 |---|---:|---:|---:|
-| Calibration (spent) | | ≈2.97 | |
-| Trunks, 3.5 h each | 3 | 6.64 | 7.20 |
-| Branches, 5.0 h each | 6 | 18.59 | 19.80 |
-| Evaluation | up to 3 passes | up to 12.00 | 12.00 |
-| Total | | ≈40.20 | 41.97 of 50 |
+| Calibration, prior spend | | 2.95 | |
+| Failed first trunks, prior spend | | 0.60 | |
+| Small trunks | 3 | 2.52 | 7.20 |
+| Small control branches | 3 | 5.99 | 7.65 |
+| Small GRU branches | 3 | 7.38 | 9.45 |
+| Wide trunks | 3 | 4.60 | 13.05 |
+| Wide control branches | 3 | 11.54 | 14.85 |
+| Wide GRU branches | 3 | 14.31 | 18.45 |
+| Pilot training subtotal, successful runs | 18 | 46.34 | 70.65 |
+| Evaluation | up to 3 passes | up to 12.00 | 4.00 per pass |
+| Inclusive total with full evaluation allowance | | 61.89 | |
 
-Calibration is the launcher's number for each run in the dated entries below.
-The evaluation rate is unpriced: the nearest receipt is a USD2 cap on a
-4,800-game Elemental pass, which is a cap and not a cost.
+The projection uses USD0.59/h, 0.25 h startup per successful job and 780 small
+control decisions/s. It assumes GRU takes 1.25× control time and wide takes 2×
+small time. A wide trunk is projected at 2.35 compute hours. Its 7 h wall cap
+doubles the existing small trunk cap. Control/GRU branch wall caps are 4/5 h
+small and 8/10 h wide, including setup and publishing time. The hourly rate,
+GRU cost and wide cost need confirmation by the launching session. Evaluation
+throughput is unmeasured. Each pass has a two-hour wall cap.
+
+The full schedule exceeds USD27 training and USD50 inclusive. Preserve the
+three small-seed comparisons first and defer the wide cohort if those budgets
+stand. Small projects to USD16.49 training including the failed trunks. The
+declarations retain the full wide design pending a funding or scope decision.
 
 ### Trunk quote — 2026-11-17
 
 Source `2144305471` declares the three trunks and the branch/evaluation wiring.
-The quote-only command above, with that revision, selected all three seeds
+The original trunk quote, with that revision, selected all three seeds
 39101–39103 and refused:
 
 > cannot launch on mtg252-a40: provider reports no available machines; etude queue would wait

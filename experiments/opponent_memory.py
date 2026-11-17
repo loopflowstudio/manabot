@@ -1,7 +1,7 @@
 """Exploratory whole-game opponent-memory pilot (Task 3dca91).
 
 The report (`opponent_memory.md`) owns the design, evidence and open decisions.
-`training_jobs` declares three trunks, or six EMA branches with `trunks`;
+`training_jobs` declares one model size at a time: three trunks, or six EMA branches with `trunks`;
 each `PilotStage` owns its stage's horizon and caps.
 Frozen calibration runs retain their original source commits and receipts.
 `census` and `probe` are the USD0 commands. Nothing runs on import.
@@ -62,8 +62,34 @@ class PilotStage:
 
 
 TRUNK = PilotStage(3_300_000, 90, 3.5, Decimal("2.40"))
-BRANCH = PilotStage(4_400_000, 120, 5.0, Decimal("3.30"))
-MILESTONES = (20, 40, 60)
+MILESTONES = (40, 80, 120)
+
+
+@dataclass(frozen=True)
+class PilotSize:
+    hidden_dim: int
+    layers: int
+    prefix: str
+    trunk: PilotStage
+    control: PilotStage
+    gru: PilotStage
+
+
+def _branch(hours: float, dollars: str) -> PilotStage:
+    return PilotStage(8_800_000, 240, hours, Decimal(dollars))
+
+
+SIZES = {
+    "small": PilotSize(64, 2, "", TRUNK, _branch(4, "2.55"), _branch(5, "3.15")),
+    "wide": PilotSize(
+        128,
+        3,
+        "wide-",
+        PilotStage(3_300_000, 90, 7.0, Decimal("4.35")),
+        _branch(8, "4.95"),
+        _branch(10, "6.15"),
+    ),
+}
 # Trunk launch label. "trunk" names the 2026-11-17 runs that overflowed the
 # 16,384-detail layout; their failed records stay as evidence.
 TRUNK_NAME = "trunk-2"
@@ -74,26 +100,32 @@ ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENT = Path(__file__).stem
 
 
-def training_jobs(revision: str, trunks: str = "") -> list[RunRequest]:
+def training_jobs(
+    revision: str, trunks: str = "", size: str = "small"
+) -> list[RunRequest]:
     """Declare trunks, or branch both arms from every completed published trunk.
 
     Each seed's two arms share one producer receipt and EMA export. Their
     optimizer and learner-decision schedule start fresh at the branch point.
     """
+    if size not in SIZES:
+        raise ValueError(f"unknown size {size!r}; expected small or wide")
+    model = SIZES[size]
+    names = TRUNK_NAMES if size == "small" else dict.fromkeys(SEEDS, "wide-trunk")
     if not trunks:
         return [
             request
-            for seed, name in TRUNK_NAMES.items()
-            for request in _job(revision, TRUNK, name).runs(seed)
+            for seed, name in names.items()
+            for request in _job(revision, model, model.trunk, name).runs(seed)
         ]
     storage = storage_from_uri(trunks)
     state = observe(storage, EXPERIMENT)
     parents: dict[int, PretrainedInitialization] = {}
     for seed in SEEDS:
-        runs = _runs(state, TRUNK_NAMES[seed], seed)
+        runs = _runs(state, names[seed], seed)
         if len(runs) != 1:
             raise ValueError(
-                f"seed {seed}: expected one decision-memory-{TRUNK_NAMES[seed]} run in {trunks}, "
+                f"seed {seed}: expected one decision-memory-{names[seed]} run in {trunks}, "
                 f"found {len(runs)}; launch and finish the trunks first"
             )
         if runs[0].state != "finished":
@@ -102,20 +134,21 @@ def training_jobs(revision: str, trunks: str = "") -> list[RunRequest]:
     return [
         request
         for seed, trunk in parents.items()
-        for arm in ARMS
-        for request in _job(revision, BRANCH, arm, trunk).runs(seed)
+        for arm, limits in (("control", model.control), ("gru-k1", model.gru))
+        for request in _job(revision, model, limits, arm, trunk).runs(seed)
     ]
 
 
 def _job(
     revision: str,
+    model: PilotSize,
     limits: PilotStage,
     name: str,
     trunk: PretrainedInitialization | None = None,
 ) -> Job:
     """One capped Etude job: a trunk, or an arm started from a trunk's EMA."""
-    recipe = pilot_recipe(limits)
-    recipe.id = f"decision-memory-{name}"
+    recipe = pilot_recipe(limits, model)
+    recipe.id = f"decision-memory-{model.prefix if trunk is not None else ''}{name}"
     if trunk is not None:
         recipe.agent.decision_memory = ARMS[name]
         if ARMS[name] != "none":
@@ -200,8 +233,10 @@ class Conditions(BaseModel):
     decklists: DecklistDisclosure
 
 
-def seating_name(seed: int, disclosure: str, tag: str, point: int | str) -> str:
-    return f"seed-{seed}-{disclosure}-{tag}-{point}"
+def seating_name(
+    size: str, seed: int, disclosure: str, tag: str, point: int | str
+) -> str:
+    return f"{size}-seed-{seed}-{disclosure}-{tag}-{point}"
 
 
 def evaluation_matchups(state: ExperimentState) -> tuple[Seating, ...]:
@@ -210,55 +245,56 @@ def evaluation_matchups(state: ExperimentState) -> tuple[Seating, ...]:
     intact = Inference(source=source)
     blanked = Inference(source=source, config={"blank_decision_memory": True})
     found: list[Seating] = []
-    for seed in SEEDS:
-        branches: list[TrainingRunSummary] = []
-        for arm in ARMS:
-            runs = _runs(state, arm, seed)
-            if len(runs) > 1:
-                raise ValueError(f"seed {seed}: multiple {arm} branches")
-            branches += runs
-        if len(branches) != len(ARMS):
-            continue
-        control, gru = branches
-        # (point, tag, checkpoint, opposing checkpoint, opposing inference, deals)
-        lines = [
-            (
-                update,
-                "control",
-                gru.checkpoints.at("updates", update).last,
-                control.checkpoints.at("updates", update).last,
-                intact,
-                50,
-            )
-            for update in MILESTONES
-        ]
-        lines += [
-            ("final", "control", gru.final, control.final, intact, 200),
-            ("final", "reliance", gru.final, gru.final, blanked, 50),
-        ]
-        for point, tag, first, second, inference, deals in lines:
-            if first is None or second is None:
+    for size, model in SIZES.items():
+        for seed in SEEDS:
+            branches: list[TrainingRunSummary] = []
+            for arm in ARMS:
+                runs = _runs(state, model.prefix + arm, seed)
+                if len(runs) > 1:
+                    raise ValueError(f"seed {seed}: multiple {arm} branches")
+                branches += runs
+            if len(branches) != len(ARMS):
                 continue
-            for disclosure in DISCLOSURES:
-                found.append(
-                    Seating(
-                        name=seating_name(seed, disclosure, tag, point),
-                        players=(first.player(intact), second.player(inference)),
-                        configs=tuple(
-                            Conditions(
-                                design=DESIGN.name,
-                                decklists=disclosure,
-                                **pairing.model_dump(),
-                            ).model_dump()
-                            for pairing in DESIGN.pairings[:deals]
-                        ),
-                        games=DESIGN.legs,
-                        tags=(tag,),
-                        # Fixed checkpoint pair: report this seed independently
-                        # of the other runs grouped under the same job.
-                        seeds="one",
-                    )
+            control, gru = branches
+            # (point, tag, checkpoint, opposing checkpoint, opposing inference, deals)
+            lines = [
+                (
+                    update,
+                    "control",
+                    gru.checkpoints.at("updates", update).last,
+                    control.checkpoints.at("updates", update).last,
+                    intact,
+                    50,
                 )
+                for update in MILESTONES
+            ]
+            lines += [
+                ("final", "control", gru.final, control.final, intact, 200),
+                ("final", "reliance", gru.final, gru.final, blanked, 50),
+            ]
+            for point, tag, first, second, inference, deals in lines:
+                if first is None or second is None:
+                    continue
+                for disclosure in DISCLOSURES:
+                    found.append(
+                        Seating(
+                            name=seating_name(size, seed, disclosure, tag, point),
+                            players=(first.player(intact), second.player(inference)),
+                            configs=tuple(
+                                Conditions(
+                                    design=DESIGN.name,
+                                    decklists=disclosure,
+                                    **pairing.model_dump(),
+                                ).model_dump()
+                                for pairing in DESIGN.pairings[:deals]
+                            ),
+                            games=DESIGN.legs,
+                            tags=(tag, f"{size}-{tag}"),
+                            # Fixed checkpoint pair: report this seed independently
+                            # of the other runs grouped under the same job.
+                            seeds="one",
+                        )
+                    )
     return tuple(found)
 
 
@@ -329,48 +365,58 @@ def report() -> Report:
     return Report(
         score=Score(table="plays", value="score", reference=0.5),
         clock="learner_transitions",
-        evals=(
-            *(
+        evals=tuple(
+            panel
+            for size in SIZES
+            for panel in (
+                *(
+                    Curve(
+                        title=f"Head-to-head against control — {size}, seed {seed}",
+                        matches=tuple(
+                            Matches(
+                                seating=seating_name(
+                                    size, seed, disclosure, "control", point
+                                )
+                            )
+                            for disclosure in DISCLOSURES
+                            for point in (*MILESTONES, "final")
+                        ),
+                        split="decklists",
+                    )
+                    for seed in SEEDS
+                ),
                 Curve(
-                    title=f"Head-to-head against control — seed {seed}",
+                    title=f"Intact memory against blanked memory — {size}",
                     matches=tuple(
                         Matches(
-                            seating=seating_name(seed, disclosure, "control", point)
+                            seating=seating_name(
+                                size, seed, disclosure, "reliance", "final"
+                            )
                         )
+                        for seed in SEEDS
                         for disclosure in DISCLOSURES
-                        for point in (*MILESTONES, "final")
                     ),
                     split="decklists",
-                )
-                for seed in SEEDS
-            ),
-            Curve(
-                title="Intact memory against blanked memory",
-                matches=tuple(
-                    Matches(seating=seating_name(seed, disclosure, "reliance", "final"))
-                    for seed in SEEDS
-                    for disclosure in DISCLOSURES
                 ),
-                split="decklists",
-            ),
-            Matrix(
-                title="Descriptive arm versus control matchups",
-                rows="opponent_deck",
-                columns="deck",
-                matches=Matches(tag="control"),
-            ),
-            Ranking(
-                title="On the play or the draw",
-                by="on_play",
-                matches=Matches(tag="control"),
-            ),
+                Matrix(
+                    title=f"Descriptive arm versus control matchups — {size}",
+                    rows="opponent_deck",
+                    columns="deck",
+                    matches=Matches(tag=f"{size}-control"),
+                ),
+                Ranking(
+                    title=f"On the play or the draw — {size}",
+                    by="on_play",
+                    matches=Matches(tag=f"{size}-control"),
+                ),
+            )
         ),
         perf=PERF,
         ml=ML,
     )
 
 
-def pilot_recipe(limits: PilotStage) -> TrainingRegime:
+def pilot_recipe(limits: PilotStage, model: PilotSize) -> TrainingRegime:
     """Shared control recipe, bounded by the stage's horizon and job wall."""
     # Reserve twenty minutes of the job for setup and publishing artifacts.
     wall_seconds = limits.max_hours * 3600 - 1200
@@ -385,8 +431,8 @@ def pilot_recipe(limits: PilotStage) -> TrainingRegime:
         world=managym.WORLD_VERSION,
         agent=ModelConfig(
             world=managym.WORLD_SETUP,
-            hidden_dim=64,
-            attention_layers=2,
+            hidden_dim=model.hidden_dim,
+            attention_layers=model.layers,
             num_attention_heads=4,
             value_aggregation="masked_mean",
             policy_film=True,
