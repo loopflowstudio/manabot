@@ -41838,6 +41838,34 @@
    "sha256": "7742e7387627504efd2a6838c4a27db9bc079b0f877cb11449f353465e3ee0bd",
    "bytes": 184
   },
+  "experiments/data/opponent-memory/20261117-cuda-optimized-unavailable/availability.log": {
+   "sha256": "a9fbb7b48a573a696c1ba79781d9fa265bc3dffd04c624e3d7579e1d3fc92b17",
+   "bytes": 162
+  },
+  "experiments/data/opponent-memory/20261117-cuda-optimized-unavailable/cleanup.json": {
+   "sha256": "0c4d9ca37d4919993c8ef706a7284bb4b297f2dcd8ff12d3456fbf1c8d73170a",
+   "bytes": 3162
+  },
+  "experiments/data/opponent-memory/20261117-cuda-optimized-unavailable/control-recipe.json": {
+   "sha256": "850f8f50a317c6b15eb4f7032b68c961a5344e907cfaed353db8119412a9818e",
+   "bytes": 10832
+  },
+  "experiments/data/opponent-memory/20261117-cuda-optimized-unavailable/declaration.json": {
+   "sha256": "238ac686d5c375b2ee8e65d1db27d63653272024e705a2f3314eca32120dee04",
+   "bytes": 200826
+  },
+  "experiments/data/opponent-memory/20261117-cuda-optimized-unavailable/gru-k1-recipe.json": {
+   "sha256": "891720eb80da31a43cddae41693e06329e998156afba6bef7ed62c56f8d7ab65",
+   "bytes": 10861
+  },
+  "experiments/data/opponent-memory/20261117-cuda-optimized-unavailable/incumbent-recipe.json": {
+   "sha256": "3e462e7647b868041ed31b5401c57f4a85e079e1a2a07a584fb7a8d9557522c4",
+   "bytes": 10686
+  },
+  "experiments/data/opponent-memory/20261117-cuda-optimized-unavailable/quote.log": {
+   "sha256": "65d3ee831ff404c7bbe495274a507e1b8d03d3833aedcec6d07c13a7403b1422",
+   "bytes": 285
+  },
   "experiments/data/opponent-memory/20261117-host-cost/stage1-members.json": {
    "sha256": "03f3a4cc4153f7c49e98356eca14460913f930d776af4bc7eae7609d4168a6a6",
    "bytes": 16492

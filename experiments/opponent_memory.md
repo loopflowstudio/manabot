@@ -1921,3 +1921,63 @@ passed all nine exact original-result comparisons; 3,555 diagnostic forward
 comparisons passed inside the measurements. Only evidence/docs changed; native
 rebuild and model test reruns are unnecessary. `uv run --no-sync --extra dev pytest tests/infra/test_experiment_data_untracked.py -q`
 passed (1 test); `git diff --check` passed. No background work remains.
+
+### Optimized-source CUDA admission: supply unavailable — 2026-11-17
+
+The Task session `session_c8789f79209f4b03bb0c28923fa63e81` chose open
+decision 1 option b and waived the session's 1.3× CPU gate for one admission.
+This is the session choice, not a new quotation from a person. The allowance
+is at most USD1.00 for this job and USD3 cumulative calibration; pilot training,
+evaluation, model shape, coalescing and capacities remain unchanged.
+
+Source **`6cfc8cf530`** commits the optimized implementation and its bounded
+`--calibration` declaration. It retains refs256's launcher setup, source binding,
+CUDA preflight and ordinary fresh-worker / producer-EMA admission. The existing
+sequence is fresh control producer, incumbent, pretrained control, folded
+GRU-K1, incumbent, two updates each: mixed-disclosure Elemental, float32,
+256 streams, four producers, 32-row collection/bootstrap/learning execution,
+512/16,384/256/8,192 memory layout. No transformer worker is declared.
+The job permits one attempt, 1.25 hours and USD1.00. Optional separately labelled
+256-row workers were not added after the supply stop.
+
+**Stop: no A40 supply.** At 2026-11-17 09:52:56 UTC the existing `mtg252-a40`
+on-demand returned USD0.59/hour (USD0.60/hour ceiling), none available, zero of
+nine in use, not rentable now. The formal whole-rental quote, including the
+launcher's startup allowance, then refused:
+
+> cannot launch on mtg252-a40: provider reports no available machines; etude queue would wait
+
+Consequently there is **no admitted whole-rental dollar quote**; the hourly
+offer is not a rental quote or a capacity guarantee. Nothing was queued or
+launched, and there was no provider retry or alternative supply. The quote-only
+command used the existing scoped source `r2://manabot/jobs/opponent_memory`,
+`--job cuda-calibration-optimized --calibration --revision 6cfc8cf530`,
+`--rent mtg252-a40 --max-usd 3.00 --quote` to retain the cumulative check.
+No launch command was issued; the requested launch ceiling of `--max-usd 1.00`
+was never exercised. The job itself is capped at USD1.00.
+
+The launcher's retained prior total is **USD1.944746355308370234114244420**,
+so the full USD1 job allowance would keep the cumulative commitment below USD3.
+All five prior calibration statuses still confirm `rental_ended=true`, and
+there is no `cuda-calibration-optimized` run or new rental to terminate.
+No wait/fetch/termination call is appropriate without a run or rental; no
+worker outputs exist for SDK digest checks. No cost for a new run is reported.
+
+Rows, stage/collection/learning seconds, decisions/s, incumbent-median ratios,
+phase split and CUDA/host peaks are **unmeasured on the optimized CUDA source**.
+In particular, this attempt cannot identify which CUDA phase holds the remaining
+GRU cost. The CPU attribution and old refs256 results remain separate evidence;
+they do not substitute for this missing measurement. Admission is incomplete,
+and no pilot training, evaluation or PR publication follows.
+
+Evidence: `experiments/data/opponent-memory/20261117-cuda-optimized-unavailable`
+retains the exact formal refusal, observed availability, source-bound declaration,
+three recipes and launcher cleanup/status observation. Declaration assertions
+checked one attempt, dollar/time bounds, two updates, 256 streams, 32-row
+execution, float32 and strict game errors. No production/native arithmetic changed.
+
+Publication/validation: all seven evidence files published to the artifact store
+and their manifest entries retained; no fresh artifact-store fetch is claimed.
+Experiment discovery passed (5 tests), the shared-input branch declaration check
+passed (1 test), and the artifact-tracking guard passed (1 test). Ruff, format
+and `git diff --check` passed. No background work remains.
