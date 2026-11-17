@@ -1,7 +1,8 @@
-- step: {name: coverage-decomposition, id: coverage-scalable}
-- step: {name: implement, id: implement-scalable}
-- compress
-- graph: refresh
-- concept-review
-- coverage-decomposition-review
-- loop: implement-scalable
+- coverage-decomposition
+- loop:
+    - implement
+    - compress
+    - graph: refresh
+    - concept-review
+    - coverage-decomposition-review
+    - loop-or-next
