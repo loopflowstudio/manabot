@@ -1,100 +1,63 @@
 <!doctype html>
 <meta charset="utf-8">
-<title>MTG-329 QA — third pass</title>
-<style>body{font:15px/1.5 system-ui;max-width:960px;margin:2em auto;padding:0 1em;color:#222}pre{background:#f5f2ea;padding:.6em;overflow:auto;font-size:13px}h2{margin-top:2em}img{max-width:100%;border:1px solid #ccc}</style>
-<h1>MTG-329 QA, third pass: training, evaluation and play after the move to Etude</h1>
-<p>Revision b150feb2bf plus the fixes below, 2026-11-16, laptop. Etude d9a6bc8 (pinned). Native extension built after the last Rust change.
-Training used <code>ETUDE_HOME=.runs/qa3/home</code> so nothing went into <code>~/.etude</code>. The earlier passes are at f577362135:scratch/qa.html.</p>
+<title>MTG-329 QA — fourth pass</title>
+<style>body{font:15px/1.5 system-ui;max-width:960px;margin:2em auto;padding:0 1em;color:#222}pre{background:#f5f2ea;padding:.6em;overflow:auto;font-size:13px}h2{margin-top:2em}</style>
+<h1>MTG-329 QA, fourth pass: the guides after the concept follow-up</h1>
+<p>Revision 30cbca02ff plus the fix below, 2026-11-16, laptop (load average 64–84 from other sessions throughout). Etude d9a6bc8 (pinned).
+Fresh <code>ETUDE_HOME=/tmp/qa4-etude.P54L</code>. This pass follows the guide text changed since bf18f7c3e9; the third pass
+(retired command, resume, Ctrl-C, managed smoke, Academy) is at 30cbca02ff:scratch/qa.html and its code paths are unchanged since.</p>
 
-<h2>1. Retired command</h2>
-<pre>$ uv run manabot train
-manabot train is removed. Use: uv run etude train FILE (for example, manabot/recipes/local.py). Resume an unfinished run with --resume.   (exit 2)</pre>
+<h2>1. Train, then evaluate, as docs/evaluation.md "Quick local evaluation" says</h2>
+<pre>$ uv run etude train manabot/recipes/local.py           → prints "local", 12.5 s
+  track/local/out/policies/0000000{0,1,2}-{raw,ema}.safetensors, checkpoints/updates-{0,1,2}.json
+$ uv run python -m manabot.eval.local --checkpoint $ETUDE_HOME/track/local/out/policies/00000002-ema.safetensors \
+    --opponent heuristic --deal-seed 101 --out .runs/qa4-local-check --seconds 300
+completed: 1/1 complete deals; 4/4 games; evidence: .runs/qa4-local-check/panel
+score: 0.000 (1 deal block; uncertainty unavailable from a single deal); local-check-not-admission     (24 s)</pre>
+<p>The guide's checkpoint path is the file that exists. A two-update policy losing all four games to the heuristic is what you'd expect.</p>
 
-<h2>2. Train, rerun, resume, extend (docs/training.md as written)</h2>
-<pre>$ uv run etude train manabot/recipes/local.py            → "local", exit 0, 5.2 s
-  track/local/out/state/current.json → save-00000001 {state.json, learner.pt, optimizer.pt, ema.pt}
-  out/policies/0000000{0,1,2}-{raw,ema}.safetensors; checkpoints/updates-{0,1,2}.json; outcome finished
-$ … again                                               → run_name_taken: local; use --resume …   (exit 1)
-$ … --resume                                            → run_already_finished … give --until      (exit 1)
-$ … --resume --until updates=4                          → exit 0; policies 3–4 added; save-00000002 replaces 00000001</pre>
+<h2>2. Train again: the guide's "--experiment NAME"</h2>
+<pre>$ uv run etude train manabot/recipes/local.py                    → etude: run_name_taken: local; use --resume; …
+$ uv run etude train manabot/recipes/local.py --experiment second → "second"; track/second/out/policies/00000002-ema.safetensors</pre>
+<p>Matches the guide: swapping in the new name gives the right path.</p>
 
-<h2>3. Ctrl-C and resume</h2>
-<p>In a real terminal (pty, ^C typed into it) during <code>uv run etude train … --experiment intr3 --until updates=30</code>:</p>
-<pre>^C   → exit 75; outcome "stopped"; current.json → save at updates=4
-$ … --experiment intr3 --resume --until updates=8   → exit 0, finished; every earlier policy byte-identical (shasum -c)</pre>
-<p>Without a terminal (a script sending SIGINT to the process group), uv 0.9.22 forwards the signal too, so Etude sees two SIGINTs,
-treats the second as a hard interrupt, and the run ends <code>failed</code> with no save (exit 130). Sending SIGINT to <code>etude</code> alone gives the
-same clean exit 75 as the terminal. Only scripted drivers are affected. After ^C the command prints just the run name, not that it stopped or how to resume.</p>
+<h2>3. Reading self-play outcome tables (docs/training.md snippet)</h2>
+<pre>history = read($ETUDE_HOME/track, "local", "local")
+for table in history.read_table("self_play_outcomes", "updates"): print(table.x, table.rows)
+1.0 ({'deck': '7d663f0e…', 'opponent_deck': 'fc948195…', 'position': 'draw', 'wins': 2, 'losses': 0, 'draws': 0}, …)   2 rows
+2.0 (…)                                                                                                                    2 rows</pre>
+<p>Same shape as the guide's sample output. <code>manabot.reports.update_metrics.read_updates</code> imports from its new home. It takes
+saved <code>RegimeRun</code> records (it reads <code>metrics_run</code>), as the guide says ("for existing reports"), so it isn't an entry point for a fresh run.</p>
 
-<h2>4. Evaluate the trained policy locally</h2>
-<pre>$ uv run python -m manabot.eval.local --checkpoint …/intr3/out/policies/00000008-ema.safetensors --opponent heuristic --deal-seed 101 --out .runs/qa3/eval-local --seconds 300
-completed: 1/1 complete deals; 4/4 games; … score: 0.000   (exit 0, 10 s)</pre>
+<h2>4. Training-update benchmark (docs/workflows.md)</h2>
+<pre>$ uv run python scripts/bench_training_update.py --streams 4 --updates 1 --device cpu --json .runs/qa4-bench/rows.json
+exit 0; rows.json keys: recipe_settings, seed, rows, summary
+seconds_per_update 134.2; decisions_per_update 644; games_per_update 4; backward_and_gradient_clipping 201,783 µs/decision</pre>
+<p>It works with the smaller declared workload the guide suggests. Wall time was 17 minutes at load average ~80, and backward took 98% of the update.
+These numbers come from a contended host and are not a performance reading.</p>
 
-<h2>5. Managed evaluation: <code>etude smoke experiments/elemental.py</code></h2>
-<p>First run (train, eval, report), unchanged branch:</p>
-<pre>smoke train elemental: passed in 176.1 s (2 checkpoints)
-etude: smoke eval: failed after 1.4 s (KeyError: 'ETUDE_OUTPUT_DIR'); nothing was submitted   (exit 1)</pre>
-<p><b>Fix 1.</b> On main, <code>elemental_long_eval.evidence_directory</code> fell back to <code>.runs/elemental/arena</code> when Etude gives no output
-directory (local <code>etude eval</code>/<code>smoke</code>). The branch's <code>experiments/elemental_play.py</code> dropped it. Restored the fallback there.</p>
-<p>The rerun printed “passed” for every step and the report rendered, but it read “Nothing recorded” everywhere. The eval database showed why:</p>
-<pre>games: 22,000 rows, valid = false, decisions = 0, failure = "AttributeError: '_LocalForward' object has no attribute 'admit'"</pre>
-<p><b>Fix 2.</b> Etude gives a <code>CheckpointPlayer</code> with no config its bare forward instead of calling <code>Agents(build=)</code>
-(<code>etude.eval.composition.build_agents</code>, intended). Elemental's <code>CheckpointSlot</code> and <code>checkpoint_player</code> seats, and
-<code>tla_frontier</code>'s, have no config, so every checkpoint game failed in <code>admit</code>. New <code>manabot.eval.agents.game_players</code> builds
-those seats' samplers the same way <code>build</code> does. Both callbacks use it. Monitor, duel and card evaluation give a registration config, so <code>build</code> runs and they were never affected.
-<code>tests/eval/test_etude_agents.py</code> now checks that a bare forward becomes the same sampler.</p>
-<p>Before fix 2, the report said “2 of 2 evaluated”, but every chart read “Nothing recorded”:</p>
-<img src="qa3-report-full.png" alt="Smoke report before fix 2: every chart empty">
-<p>With both fixes, <code>--step eval --step report</code> against the kept smoke training took 1,782 s and played real games:</p>
-<pre>pair  2,000 rows: 2,000 valid, 2,000 terminated, 0 truncated, mean 203 decisions, no failure column (all null)
-full 20,000 rows: 20,000 valid, 20,000 terminated, 0 truncated, mean 201 decisions</pre>
-<p><code>etude report experiments/elemental.py</code>, run over those eval runs together with the smoke's training run, draws the score against the heuristic
-(about 0.07 for a one-update policy), the consecutive-checkpoint curve and the model-deck × heuristic-deck matrix:</p>
-<img src="qa3-report-merged.png" alt="Elemental report with heuristic score, pair curve and deck matrix">
-<p>An eval-only smoke report (<code>--step eval --step report</code> with no training runs) warns “no seating has tag 'heuristic'” and leaves the heuristic panels
-empty, because <code>eval_jobs(state)</code> declares no checkpoint grid without runs. The full smoke does not show this warning.</p>
-
-<h2>6. Play the trained policy in Academy</h2>
-<p>Academy (<code>./scripts/play</code>) looked for checkpoints only in <code>MANABOT_RUNS_DIR</code> (default <code>./.runs</code>) and <code>ACADEMY_PLAY_CHECKPOINTS</code>.
-<code>etude train</code> now writes to <code>~/.etude/track</code>, so a policy someone has just trained does not appear unless they set an environment variable.
-Before this change, <code>manabot train --out .runs/…</code> made it appear automatically.</p>
-<p><b>Fix 3.</b> When nothing is configured, discovery also searches Etude's local root (<code>etude.storage.default_root()</code>, so <code>ETUDE_HOME</code> is respected).
-docs/academy.md now says so. New test <code>test_catalog_lists_policies_etude_trained_here</code> fails without the change and passes with it.</p>
-<p>Proof with <code>ETUDE_HOME=/tmp/qa3-etude</code> (holding the intr3 run) and an empty <code>MANABOT_RUNS_DIR</code>: <code>/api/opponents</code> lists Heuristic, Greedy and
-<code>intr3/out/policies/0000000{0..8}-{ema,raw}</code>, all available. In the browser: Seat 2 → Registered policy → 00000008-ema, then Start game. I played
-Islands and passed turns, and the bot played GW Allies lands back to turn 4 (life 16).</p>
-<img src="qa3-academy-game.png" alt="Academy game against the Etude-trained policy">
-
-<h2>7. Repeated smoke</h2>
-<p>I deleted <code>.runs/elemental/arena</code> (failure journals from my pre-fix runs) and ran the same smoke eval again. It passed 57 matches without a collision, and I stopped it.
-Retained failure journals do block a replay of the same match key: <code>FileExistsError … failures/heuristic__model…jsonl</code> appeared when journals from the failed runs were left behind.
-That happens only when the same smoke is repeated after failed games. A launched attempt gets its own <code>ETUDE_OUTPUT_DIR</code>.</p>
-<p><b>Retry fix, 2026-11-16.</b> Each callback now retains its evidence in an atomically allocated
-<code>arena/&lt;match-key&gt;/attempt-*</code> directory. Earlier journals and traces stay in place, including old flat match directories.
-The focused regression reproduced the original collision, then passed for failed games and interrupted games (<code>RetryRequested</code>)
-using both local and launched-style output paths. Retrying the identical match finishes valid native games with replay checks,
-and the original journal remains byte-for-byte unchanged.
-<code>uv run --extra dev --extra artifacts pytest tests/eval/test_elemental_play.py -q</code>: 6 passed (2.80 s).</p>
-
-<h2>Checks run</h2>
-<pre>uv run --extra dev --extra artifacts pytest tests/eval/test_elemental_play.py tests/eval/test_elemental_grid.py tests/eval/test_etude_agents.py tests/test_package_boundaries.py -q   → 52 passed (74 s)
-uv run --extra dev --extra play pytest tests/academy/test_checkpoint_catalog.py -q   → 16 passed (30 s)
-ruff check/format clean on changed files</pre>
+<h2>5. Portable snapshot (docs/experiment-metrics.md) — fixed</h2>
+<p>A new user is likely to point the command at an Etude home, which has no <code>experiment.sqlite</code>:</p>
+<pre>$ uv run python -m manabot.reports.snapshot $ETUDE_HOME/track /tmp/qa4-snap
+sqlite3.OperationalError: unable to open database file
+$ ls -d /tmp/qa4-snap   → exists (empty), so the corrected retry would fail with FileExistsError</pre>
+<p>Fix: <code>manabot/reports/snapshot.py</code> now opens the source before it creates the output. The same wrong command now leaves no directory.
+<code>tests/training/test_learning_dashboard.py::test_snapshot_reads_wal_consistently_and_preserves_payloads</code> now makes a wrong-source call
+first and then snapshots into the same output, so it fails under the old order. 1 passed. ruff clean. There is no local saved-regime store
+to run the CLI on, so the happy path was checked only through that test's real WAL store.</p>
 
 <h2>What works now</h2>
-<p>Local train, refusal of a taken name, resume and extension with earlier bytes unchanged, terminal Ctrl-C → saved stop → resume, local
-heuristic evaluation, Elemental smoke train → eval → report with games actually played, and Academy listing and playing a policy trained by <code>etude train</code>.</p>
+<p>Following the guides as written: train the local recipe, train a second named run, evaluate the final EMA policy against the heuristic,
+read the outcome tables through Etude, run the update benchmark, and see a snapshot refusal that leaves nothing to clean up.</p>
 
 <h2>Not reached</h2>
-<p>Launched or provider runs, CUDA, the full Elemental grid (5,000 games per checkpoint, which should not run on a laptop), <code>etude eval --source r2://…</code>
-(needs credentials and real checkpoints), and tla_frontier's play on real checkpoints (its fix is shared code, checked only through the agents test).</p>
+<p>Same as the third pass: launched or provider runs, CUDA, the full Elemental grid, <code>etude eval --source r2://…</code>, and the nightly baseline
+workflow (a gate step). No reliable timing on this host.</p>
 
 <h2>Still wrong, worst first</h2>
 <ol>
-<li>Any Python exception in a game becomes an invalid, score-null row (<code>manabot.sim.supervision.is_game_error</code> admits every <code>Exception</code>), and
-Etude smoke reports “passed”. A total failure like fix 2's (100% of games invalid) reads as success unless someone queries the rows. The deciding policy belongs to manabot (which errors count as game errors) and Etude (whether smoke should judge validity). This change does not decide it.</li>
-<li>Elemental smoke eval is slow on a laptop: real games between a two-update policy and the heuristic took about 30 minutes for 600 one-game matches across 16 processes.</li>
-<li>The smoke report warns “A Curve panel names tag 'endpoint', which no seating has” when a run has fewer rated checkpoints than an endpoint pair needs.</li>
-<li>The Python action encoder logged “Invalid focus object ID 81 for action 12” 172 times during the smoke. <code>manabot/env/observation.py</code> is unchanged from main, and the games were valid. This looks like the card/permanent focus alias already fixed in the choice corpus. It is outside this change and is not filed.</li>
-<li>Scripted SIGINT to <code>uv run etude train</code>'s process group discards progress (section 3). This is in Etude's or uv's area, and terminal use is fine.</li>
+<li>Fixed after this pass (05bdc978da): only native AgentError/PanicException make a score-null invalid row; other Python exceptions fail the match, and an Elemental match with no valid replayed games fails with its evidence retained.</li>
+<li>The snapshot error is a raw sqlite traceback that doesn't name the missing <code>experiment.sqlite</code>. Snapshot is a reader for saved-regime
+experiments only; the guide's "actively written experiment" doesn't say that new Etude runs are out of scope.</li>
+<li>Carried over: slow Elemental smoke eval on a laptop, the endpoint-tag warning in the smoke report, Python-encoder focus warnings, and scripted SIGINT through uv.</li>
 </ol>

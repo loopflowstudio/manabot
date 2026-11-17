@@ -152,6 +152,9 @@ def test_snapshot_reads_wal_consistently_and_preserves_payloads(tmp_path: Path) 
     run = load_evidence(DEMO).runs[0]
     con = sqlite3.connect(source / "experiment.sqlite")
     con.execute("PRAGMA journal_mode=WAL")
+    # A wrong source refuses without leaving an output that blocks the retry.
+    with pytest.raises(sqlite3.OperationalError):
+        snapshot_report(tmp_path, tmp_path / "snapshot")
     con.executescript(
         "CREATE TABLE training_runs (id TEXT, payload TEXT); CREATE TABLE training_stages (run_id TEXT, stage_id TEXT, payload TEXT); CREATE TABLE experiment_runs (id TEXT, payload TEXT);"
     )

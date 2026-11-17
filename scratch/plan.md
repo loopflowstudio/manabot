@@ -80,9 +80,9 @@ two updates. Commands and evidence: implementation.md.
 
 ## Remaining
 
-QA error handling checks: 24 passed (37.31s); command and limits in
-implementation.md. The all-invalid callback regression and native continuation
-checks pass; no nightly baseline run in this slice.
+QA fixes are built: evaluation error handling (24 passed, 37.31s) and snapshot
+retry (`reports/snapshot.py` opens the source before creating the output; 1
+passed). Commands and limits: implementation.md.
 
 - Gate and publication are the caller's steps. The full nightly baseline
   (`.github/workflows/baseline.yml`, workflow_dispatch: `etude train` then

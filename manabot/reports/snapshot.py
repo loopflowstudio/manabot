@@ -56,12 +56,14 @@ def _directory_key(value: str) -> str:
 
 def snapshot_report(source: Path, output: Path) -> Path:
     """Create once; never mutate source or overwrite an earlier snapshot."""
-    output.mkdir(parents=True, exist_ok=False)
     started = datetime.now(timezone.utc).isoformat(timespec="seconds")
     database = output / "source.sqlite"
+    # Open the source before creating the output, so a wrong source leaves
+    # no empty snapshot directory behind to refuse the corrected retry.
     with sqlite3.connect(
         f"{(source / 'experiment.sqlite').resolve().as_uri()}?mode=ro", uri=True
     ) as live:
+        output.mkdir(parents=True, exist_ok=False)
         with sqlite3.connect(database) as backup:
             live.backup(backup, pages=128, sleep=0.05)
     export_database(database, output)
