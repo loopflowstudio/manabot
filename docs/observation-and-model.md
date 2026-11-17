@@ -589,8 +589,8 @@ precede the record-cache and native opt-in cuts below. Transformer probe and
 earlier calibration evidence remain separate.
 
 Collection retains native table cursors and reuses unchanged prefix versions.
-The learner folds shared complete chunks. Collection featurizes individual
-appended records and caches detached recurrent states after every record except
+The learner folds shared chunks assembled from the same cached per-record host
+features. Collection featurizes individual appended records and caches detached recurrent states after every record except
 the current last one. That last record is recomputed so coalesced passes keep
 their multiplicity. Each native stream owns its open serving segment; earlier
 issued prefixes retain their exact version. Unbranched new suffixes run in one

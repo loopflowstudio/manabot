@@ -3,6 +3,8 @@
 Record-aligned chunks share unchanged prefixes, including coalesced versions.
 Selected execution rows assemble cached immutable features without dense history;
 explicit exports and archives retain exact bytes. Dense imports check padding.
+Per-stream record views share host features with learner chunk assembly; raw
+chunk certificates remain the authority and no neural state enters these views.
 """
 
 from collections.abc import Iterator, Mapping, Sequence
@@ -189,17 +191,36 @@ def record_tail(prefix: Prefix) -> RecordNode | None:
     if segment.parent is not None:
         parent = record_tail(segment.parent)
     else:
-        pending: list[Tail] = []
-        node = prefix.tail.previous
-        while node is not None and node.features.record_tail is None:
-            pending.append(node)
-            node = node.previous
-        parent = node.features.record_tail if node else None
-        for node in reversed(pending):
-            parent = _record_chunk(node, parent, RecordSegment())
-            node.features.record_tail = parent
+        parent = _chunk_record_tail(prefix.tail.previous)
     prefix.serving.tail = _record_chunk(prefix.tail, parent, segment)
+    # The raw content key may share immutable record views, never the growing
+    # stream segment. Learner preparation can consume these same host fragments.
+    prefix.tail.features.record_tail = prefix.serving.tail
     return prefix.serving.tail
+
+
+def chunk_records(tail: Tail) -> list[RecordNode]:
+    """This raw chunk's admitted records, sharing collected host fragments."""
+    records = []
+    record = _chunk_record_tail(tail)
+    for _ in range(len(tail.chunk.rows[0])):
+        assert record is not None
+        records.append(record)
+        record = record.previous
+    return list(reversed(records))
+
+
+def _chunk_record_tail(tail: Tail | None) -> RecordNode | None:
+    pending: list[Tail] = []
+    node = tail
+    while node is not None and node.features.record_tail is None:
+        pending.append(node)
+        node = node.previous
+    parent = node.features.record_tail if node else None
+    for node in reversed(pending):
+        parent = _record_chunk(node, parent, RecordSegment())
+        node.features.record_tail = parent
+    return parent
 
 
 def _record_chunk(
@@ -219,13 +240,13 @@ def _record_chunk(
     base = node.previous.cursor if node.previous else MemoryCursor()
     for index in range(start, len(records)):
         header = records[index : index + 1]
-        member_end = member_start + int(header[0, 15:18].sum())
+        member_end = member_start + int(header[0, 15:18].sum(dtype=np.float64))
         joins = members[member_start - base.members : member_end - base.members]
         reference_end = int(joins[:, 0].max(initial=reference_start))
         snapshots = references[
             reference_start - base.references : reference_end - base.references
         ]
-        detail_end = detail_start + int(snapshots[:, 11].sum())
+        detail_end = detail_start + int(snapshots[:, 11].sum(dtype=np.float64))
         blocks = (
             header,
             details[detail_start - base.details : detail_end - base.details],

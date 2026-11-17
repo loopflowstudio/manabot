@@ -571,6 +571,58 @@ def validate_retained_memory(
 
 
 def _prepare_chunk_features(nodes: list[Tail | RecordNode], tables: Tables) -> None:
+    """Featurize each record once; raw learner chunks only assemble its fragments."""
+    from manabot.env.memory_store import RecordNode, chunk_records
+
+    pending = [
+        node
+        for node in nodes
+        if node.features.prepared is None
+        or node.features.prepared[0] != tables.memory_binding
+    ]
+    if not pending:
+        return
+    chunks = {
+        node: chunk_records(node)
+        for node in pending
+        if not isinstance(node, RecordNode)
+    }
+    records = {
+        record.key: record
+        for node in pending
+        for record in ([node] if isinstance(node, RecordNode) else chunks[node])
+    }
+    _featurize_records(list(records.values()), tables)
+    for chunk, selected in chunks.items():
+        cursor = chunk.previous.cursor if chunk.previous else MemoryCursor()
+        fragments = []
+        reference_offsets = []
+        for record in selected:
+            cached = record.features.prepared
+            assert cached is not None and cached[0] == tables.memory_binding
+            fragments.append(cached[1])
+            previous = record.previous.cursor if record.previous else MemoryCursor()
+            reference_offsets.append(previous.references - cursor.references)
+        values = {
+            f.name: np.concatenate(
+                [getattr(fragment, f.name) for fragment in fragments]
+            )
+            for f in fields(MemoryFeatures)
+        }
+        # Offset joins in bulk, rather than allocating three arrays per record.
+        members = [len(fragment.member_references) for fragment in fragments]
+        values["detail_references"] += np.repeat(
+            reference_offsets,
+            [len(fragment.detail_references) for fragment in fragments],
+        )
+        values["member_references"] += np.repeat(reference_offsets, members)
+        values["member_groups"] += np.repeat(np.arange(len(selected)) * 3, members)
+        for value in values.values():
+            value.setflags(write=False)
+        chunk.features.prepared = (tables.memory_binding, MemoryFeatures(**values))
+
+
+def _featurize_records(nodes: list[RecordNode], tables: Tables) -> None:
     """Featurize new nodes together; cached fragments contribute no raw features.
 
     Concatenated records are only a host arithmetic batch, never a GRU sequence.
@@ -633,23 +685,13 @@ def _prepare_chunk_features(nodes: list[Tail | RecordNode], tables: Tables) -> N
 def _chunk_features(
     node: Tail | RecordNode, tables: Tables
 ) -> MemoryFeatures[np.ndarray]:
-    """Read the vocabulary-bound immutable feature owner shared by both encodes."""
+    """Read one immutable record fragment or its assembled learner chunk."""
     cached = node.features.prepared
     if cached is None or cached[0] != tables.memory_binding:
-        prepared = _prepare_dense_memory(chunk_observation(node), tables)
-        assert prepared is not None
-        fragment = MemoryFeatures(
-            **{f.name: getattr(prepared, f.name) for f in fields(MemoryFeatures)}
-        )
-        # All feature arrays are immutable, bounded by this chunk's life.
-        for f in fields(fragment):
-            value = getattr(fragment, f.name)
-            if isinstance(value, np.ndarray):
-                value.setflags(write=False)
-        node.features.prepared = (tables.memory_binding, fragment)
-    else:
-        fragment = cached[1]
-    return fragment
+        _prepare_chunk_features([node], tables)
+        cached = node.features.prepared
+    assert cached is not None
+    return cached[1]
 
 
 def _empty_memory(tables: Tables) -> MemoryRows[np.ndarray]:
@@ -668,6 +710,7 @@ def _empty_memory(tables: Tables) -> MemoryRows[np.ndarray]:
 def _prepare_retained(
     obs: "PrefixObservation", tables: "Tables"
 ) -> MemoryRows[np.ndarray]:
+    from manabot.env.memory_store import record_tail
     from manabot.policy.prepare import pack
 
     lengths = tuple(p.record_count for p in obs.prefixes)
@@ -676,6 +719,7 @@ def _prepare_retained(
     slots: list[np.ndarray] = []
     reference_base = record_base = 0
     for batch, prefix in enumerate(obs.prefixes):
+        record_tail(prefix)
         for node in prefix.tail.chunks() if prefix.tail else ():
             fragment = _chunk_features(node, tables)
             cursor = node.previous.cursor if node.previous else MemoryCursor()
@@ -722,6 +766,9 @@ def _prepare_fold(
     from manabot.policy.prepare import pack
 
     collection = roots is not None
+    if not collection:
+        for prefix in obs.prefixes:
+            record_tail(prefix)
     tails = [record_tail(p) if collection else p.tail for p in obs.prefixes]
     roots = roots or {}
     selected_nodes: dict[str, Tail | RecordNode] = {}

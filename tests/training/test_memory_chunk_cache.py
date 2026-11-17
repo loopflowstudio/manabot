@@ -10,6 +10,7 @@ import pytest
 import torch
 
 from manabot.backends.torch.arrays import array_fields, on_device
+from manabot.backends.torch.policy import PolicyInference
 from manabot.env.decision_memory import MEMORY_FIELDS, integer_words
 from manabot.env.memory_store import (
     MemoryStore,
@@ -21,7 +22,9 @@ from manabot.env.memory_store import (
     select_rows,
 )
 from manabot.env.observation import ObservationSpace
+import manabot.policy.decision_memory as memory
 from manabot.policy.decision_memory import MemoryFeatures, validate_retained_memory
+from manabot.policy.prepare import Tables
 from tests.model.test_decision_memory import _two_reference_input, policy
 
 
@@ -222,3 +225,54 @@ def test_changed_native_chunk_still_rejects_invalid_integer_categories(
         raw[field][0, 0, column] = invalid
         with pytest.raises(ValueError):
             store.capture_live(raw, 0, identity, epoch=1, counts=counts, tail_version=2)
+
+
+def test_learner_assembles_collected_record_features_without_featurizing_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    space, raw = chunk_input()
+    capacities = tuple(space.encoder.shapes[key][0] for key in MEMORY_FIELDS)
+    store = MemoryStore(capacities)
+    identity = PrefixIdentity("game", 0, "root")
+    details = int((raw[MEMORY_FIELDS[1]][0, :, 5] == 1).sum())
+    prefix = store.capture_live(
+        raw, 0, identity, epoch=1, counts=(65, details, 2, 260), tail_version=65
+    )
+    obs = PrefixObservation(raw, [prefix], capacities)
+    model = policy(space, "gru", 1)
+    with PolicyInference(model, cache_catalog=False) as scope, torch.no_grad():
+        collected = model.encode_decision_memory(scope.prepare(obs))
+    original = memory._prepare_dense_memory
+
+    def require_cached_records(
+        buffers: dict[str, np.ndarray], tables: Tables
+    ) -> memory.MemoryRows[np.ndarray] | None:
+        assert buffers["decision_records"].shape[1] == 0
+        return original(buffers, tables)
+
+    monkeypatch.setattr(memory, "_prepare_dense_memory", require_cached_records)
+    learned = model.encode_decision_memory(on_device(model.prepare(obs), "cpu"))
+    torch.testing.assert_close(learned, collected, atol=2e-6, rtol=2e-5)
+    assert learned.requires_grad
+
+    # A bootstrap prefix can grow without being passed through collection.
+    # Learning must featurize only that new record, not its partial raw chunk.
+    raw["decision_records"][0, 65] = raw["decision_records"][0, 64]
+    for column in (0, 6, 8):
+        raw["decision_records"][0, 65, column : column + 2] = integer_words(65)
+    raw["decision_records"][0, 65, 14] = 260
+    raw["decision_members"][0, 260:264] = raw["decision_members"][0, 256:260]
+    appended = store.capture_live(
+        raw, 0, identity, epoch=1, counts=(66, details, 2, 264), tail_version=66
+    )
+    seen: list[int] = []
+
+    def count_new_records(
+        buffers: dict[str, np.ndarray], tables: Tables
+    ) -> memory.MemoryRows[np.ndarray] | None:
+        seen.append(buffers["decision_records"].shape[1])
+        return original(buffers, tables)
+
+    monkeypatch.setattr(memory, "_prepare_dense_memory", count_new_records)
+    model.prepare(PrefixObservation(raw, [appended], capacities))
+    assert sum(seen) == 1

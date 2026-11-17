@@ -2485,3 +2485,36 @@ Evidence: `experiments/data/opponent-memory/20261117-record-cache`. Source, runn
 The separate 256-stream numeric proof retains all 54,650 sampled actions, rewards and dones exactly. Maximum absolute logprob/value differences are 2.38e-7/3.58e-7, within the existing 2e-6 absolute / 2e-5 relative fold tolerances. Its additional baseline replay is a numeric proof only; the original baseline timing/profile receipts were restored and remain the table inputs.
 
 At 256 streams, retained raw bytes stay 193.44 MB and feature caches fall 484.23 → 212.87 MB, while Python metadata rises 20.26 → 84.64 MB for 84,866 record views. At 32 streams after the update, feature caches rise 61.58 → 87.08 MB because learner chunk fragments and collection record fragments coexist. These measured owners include raw view backings and host feature caches; detached neural cache state is scope-bound and is not included in these store counts. The existing incident/state limits are unchanged.
+
+### Shared record preparation through learning — 2026-11-17
+
+The final review found a remaining duplicate: collection used cached record fragments, but learner chunk preparation still independently featurized each partial raw snapshot. The surviving featurizer now accepts records only. Learner chunks assemble those same vocabulary-bound fragments, with bulk offsets for detail/reference/member joins; the neural learner fold, sampling, denominators and optimizer boundary remain unchanged. Unprepared bootstrap prefixes first resolve their stream segment, so only appended records require new host features. Immutable raw content keys can share record views, but never a growing stream segment. Raw admission, hashing and recovery stay on the permitted store fallback.
+
+A regression warms collection, requires no nonempty featurization during learner preparation, then appends an unprepared bootstrap record and requires exactly one new featurized row. Fifty-five focused chunk/learner/collection/execution checks pass, including gradient, coalescing, mixed lifetimes and collector recovery.
+
+CPU harness is unchanged: 32 complete-game streams, execution rows 32, one worker/Torch thread, mixed disclosure, open gates and one real update. Baseline is `394496a4e8` host preparation on the shared rebuilt engine. One fresh process per case; no confidence range. The final GRU case follows the bulk join-offset cut; its initial scalar-assembly draft is retained separately as diagnostic evidence.
+
+| Implementation | Arm | Retention s | Preparation s | Inference s | Collection s | Update s | Total s | Decisions/s |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| before | incumbent | 0.051 | 0.821 | 3.143 | 4.803 | 25.909 | 30.712 | 223.30 |
+| before | control | 0.354 | 0.813 | 2.849 | 4.929 | 24.822 | 29.751 | 218.58 |
+| before | gru-k1 | 0.362 | 1.608 | 3.533 | 6.492 | 27.680 | 34.172 | 190.63 |
+| after | incumbent | 0.051 | 0.826 | 3.109 | 4.792 | 25.895 | 30.687 | 223.48 |
+| after | control | 0.344 | 0.799 | 2.815 | 4.850 | 24.512 | 29.361 | 221.48 |
+| after | gru-k1 | 0.346 | 1.597 | 3.416 | 6.351 | 26.795 | 33.146 | 196.52 |
+
+All four hashes are exact in every whole-game pair. Completed decisions remain incumbent 6,858, control 6,503 and GRU 6,514. The final GRU total is 1.080× incumbent time and its decision rate is 0.879× incumbent; the unequal totals and single cases do not establish a general throughput claim.
+
+Final 256-stream collection-only profiles (no learning, one case per arm):
+
+| Arm | Decisions | Retention s | Preparation s | Inference s | Collection s |
+|---|---:|---:|---:|---:|---:|
+| incumbent | 55010 | 0.373 | 8.109 | 24.815 | 39.746 |
+| control | 53658 | 2.744 | 8.927 | 24.077 | 43.629 |
+| gru-k1 | 54650 | 2.777 | 18.439 | 27.492 | 56.520 |
+
+Against the prior record-cache collection, all 54,650 GRU sampled actions/rewards/dones and raw prefix digests remain exact. Floating hashes differ: maximum logprob/value differences are 2.38e-07/2.68e-07, within the existing 2e-6 absolute / 2e-5 relative fold tolerances. The extra numeric-only replay is not substituted for timing receipts. Capture remains nested in retention. Receipt limitation strings inherit the previously documented two-stream wording; executed source uses 32/256 streams and the latter omits learning.
+
+This closes per-record host preparation across collection and learning. Changed raw chunks still undergo whole-chunk admission and hashing. Rust, model shape, capacities, coalescing and the calibration-job name are unchanged. No paid launch, pilot, PR or Task completion follows. History-off/main and native benchmark evidence above remain applicable; CUDA cost and peak neural-cache memory for these cuts, matched training and paired strength remain unmeasured.
+
+Evidence: `experiments/data/opponent-memory/20261117-record-assembly`; raw receipts/profiles, numeric proof, runner, final source/diff, baseline host source and test logs are size/SHA256-verified and published. Earlier evidence is unchanged.
