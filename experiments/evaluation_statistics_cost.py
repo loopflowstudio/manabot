@@ -52,6 +52,18 @@ class Measurement(BaseModel):
     custom_sha256: str | None
 
 
+class ReplayMeasurement(BaseModel):
+    repeat: int
+    arm: str
+    revision: str
+    games: int
+    decisions: int
+    cpu_seconds: float
+    seconds: float
+    cards_sha256: str | None
+    custom_sha256: str | None
+
+
 def _digest(value: object) -> str:
     return hashlib.sha256(
         json.dumps(
@@ -329,6 +341,115 @@ def run(before: Path, main_source: Path, output: Path, repeats: int = 5) -> None
     print(json.dumps(summary, indent=2), flush=True)
 
 
+def replay_cell(arm: str, records_path: Path, output: Path, repeat: int) -> None:
+    """CPU-work panel: the real replay worker body, without process startup/I/O."""
+    from pydantic import TypeAdapter
+
+    from manabot.eval.card_metrics import reduce_cards
+    from manabot.infra.source import source_commit
+    from manabot.sim.card_evidence import GameTrace, capture_verified_game
+    from manabot.sim.replay import replay_game
+    from managym.recording import read_records
+    from managym.statistics import reduce
+
+    records = list(read_records(records_path))
+    traces = [
+        GameTrace(data=record.model_dump(mode="json", by_alias=True))
+        for record in records
+    ]
+    questions = _reducers() if arm in {"split", "unified"} else {}
+    reduction = None
+    if arm == "unified":
+        from managym.statistics import Reduction
+
+        reduction = Reduction(tuple(questions.values()))
+    card_rows = []
+    tables = None
+    decisions = 0
+    started = time.perf_counter()
+    cpu_started = time.process_time()
+    for trace in traces:
+        if arm == "off":
+            receipt, _ = replay_game(trace.data)
+            if not receipt.passed:
+                raise RuntimeError("replay failed")
+            decisions += receipt.decisions
+        else:
+            evidence = (
+                capture_verified_game(trace, reduction=reduction)
+                if reduction is not None
+                else capture_verified_game(trace)
+            )
+            if not evidence.replay["passed"] or evidence.outcome != "win_loss":
+                raise RuntimeError("card replay failed")
+            decisions += evidence.replay["decisions"]
+            card_rows.extend(
+                row.model_dump(mode="json")
+                for row in reduce_cards(evidence, evidence.seat_players)
+            )
+    if questions:
+        result = (
+            reduction.finish()
+            if reduction is not None
+            else reduce(records, list(questions.values()))
+        )
+        tables = TypeAdapter(dict[str, list[Any]]).dump_python(
+            dict(zip(questions, result, strict=True)), mode="json"
+        )
+    cpu_seconds = time.process_time() - cpu_started
+    seconds = time.perf_counter() - started
+    row = ReplayMeasurement(
+        repeat=repeat,
+        arm=arm,
+        revision=source_commit(),
+        games=len(records),
+        decisions=decisions,
+        cpu_seconds=cpu_seconds,
+        seconds=seconds,
+        cards_sha256=_digest(card_rows) if arm != "off" else None,
+        custom_sha256=_digest(tables) if questions else None,
+    )
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(row.model_dump_json(indent=2))
+    print(row.model_dump_json(), flush=True)
+
+
+def replay_run(before: Path, records: Path, output: Path) -> None:
+    output.mkdir(parents=True, exist_ok=False)
+    arms = ("off", "cards", "split", "unified")
+    rows: list[ReplayMeasurement] = []
+    for repeat in range(5):
+        rotation = repeat % len(arms)
+        for arm in arms[rotation:] + arms[:rotation]:
+            source = before if arm == "split" else ROOT
+            destination = output / f"{repeat}-{arm}.json"
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(Path(__file__).resolve()),
+                    "replay-cell",
+                    arm,
+                    str(records),
+                    str(destination),
+                    str(repeat),
+                ],
+                cwd=source,
+                env={**os.environ, "PYTHONPATH": str(source)},
+                check=True,
+                timeout=120,
+            )
+            rows.append(ReplayMeasurement.model_validate_json(destination.read_text()))
+    if len({row.cards_sha256 for row in rows if row.cards_sha256 is not None}) != 1:
+        raise RuntimeError("card tables differ")
+    if len({row.custom_sha256 for row in rows if row.custom_sha256 is not None}) != 1:
+        raise RuntimeError("custom tables differ")
+    if len({(row.games, row.decisions) for row in rows}) != 1:
+        raise RuntimeError("replay workload differs")
+    (output / "measurements.json").write_text(
+        json.dumps([row.model_dump() for row in rows], indent=2)
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -340,11 +461,24 @@ def main() -> None:
     all_cells.add_argument("--before", type=Path, required=True)
     all_cells.add_argument("--main", type=Path, required=True)
     all_cells.add_argument("--output", type=Path, required=True)
+    replay = sub.add_parser("replay-cell")
+    replay.add_argument("arm", choices=("off", "cards", "split", "unified"))
+    replay.add_argument("records", type=Path)
+    replay.add_argument("output", type=Path)
+    replay.add_argument("repeat", type=int)
+    replays = sub.add_parser("replay-run")
+    replays.add_argument("--before", type=Path, required=True)
+    replays.add_argument("--records", type=Path, required=True)
+    replays.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "cell":
         cell(args.arm, args.output, args.repeat)
-    else:
+    elif args.command == "run":
         run(args.before.resolve(), args.main.resolve(), args.output.resolve())
+    elif args.command == "replay-cell":
+        replay_cell(args.arm, args.records, args.output, args.repeat)
+    else:
+        replay_run(args.before.resolve(), args.records.resolve(), args.output.resolve())
 
 
 if __name__ == "__main__":

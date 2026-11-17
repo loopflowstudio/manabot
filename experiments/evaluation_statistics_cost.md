@@ -59,3 +59,19 @@ policy timing from those checks is a reported measurement.
 ## Results
 
 Pending the frozen, repeated comparison. No performance claim yet.
+
+## CPU-work panel
+
+The completed wall-time panel is retained unchanged: its ranges overlap too
+widely to establish a throughput effect. A second, separately frozen panel
+runs the same four already-recorded games through the real verification body,
+measuring `time.process_time()` and elapsed seconds. Five rotating repetitions
+compare edited verification only, edited verification plus audited card counts,
+kept split-pass card/custom analysis, and edited unified card/custom analysis.
+It excludes worker startup, durable output writes and reducer transport, which
+remain included in the first panel. Imports, source binding and record parsing
+are outside this timing region; validation/replay/capture, count reduction,
+custom callbacks/final aggregation and table conversion are inside. It checks
+equal verified decisions, audited card rows and custom tables. CPU seconds
+measure scheduled work, not games/second or GPU cost. This panel cannot replace
+the noisy end-to-end result.
