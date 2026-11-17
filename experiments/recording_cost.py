@@ -67,7 +67,7 @@ def _settings(arm: str) -> RunSettings:
     # Imported only for edited cells: the unchanged baseline predates this API.
     from manabot.infra.run_settings import RunSettings
 
-    if arm == "marker":
+    if arm in {"marker", "edited"}:
         return RunSettings()
     if arm == "journals":
         return RunSettings(diagnostics="detailed")
@@ -203,7 +203,7 @@ def run(probe: Probe) -> None:
     output = Path(os.environ["ETUDE_OUTPUT_DIR"])
     baseline, baseline_config = _baseline_source(probe, output)
     names = (
-        ["baseline", "marker"] if probe.comparison == "revisions" else list(OPTION_ARMS)
+        ["baseline", "edited"] if probe.comparison == "revisions" else list(OPTION_ARMS)
     )
     reference = "baseline" if probe.comparison == "revisions" else "off"
     recipe = output / "comparison-recipe.json"
