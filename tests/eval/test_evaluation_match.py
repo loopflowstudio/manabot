@@ -278,7 +278,19 @@ def test_native_worker_crash_and_timeout_are_retained(
             return ready
 
         monkeypatch.setattr(Connection, "poll", poll_before_worker_exit)
-    crashed = match.play_game(deepcopy(game), players, {}, 10000, 20)
+    # A frozen supervisor clock: the crash, not child startup, ends the game.
+    frozen = time.monotonic()
+
+    class _Clock:
+        time = staticmethod(time.time)
+
+        @staticmethod
+        def monotonic() -> float:
+            return frozen
+
+    with monkeypatch.context() as clock:
+        clock.setattr("manabot.sim.supervision.time", _Clock)
+        crashed = match.play_game(deepcopy(game), players, {}, 10000, 20)
     assert crashed["termination_reason"] == "crash", crashed
     assert crashed["failed_player_id"] == players[0].player_id, crashed
     assert crashed["winner"] is None
