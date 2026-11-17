@@ -1903,6 +1903,106 @@ impl Game {
             .collect()
     }
 
+    /// Fixed sources the payer may tap deliberately
+    /// for the pending cast or activation payment, beside `PayCost`, which
+    /// finishes automatically from what remains. A source is offered when
+    /// its output lets the pool spend more of the cost and the payment and
+    /// its saved callers stay payable afterwards, so a tap is never surplus.
+    /// Empty when the pool already covers the cost, or
+    /// every offered source is needed anyway: then nothing is chosen.
+    pub(crate) fn fixed_tap_actions(&self, player: PlayerId) -> Vec<Action> {
+        let Some(PendingChoice::ManaPayment {
+            player: payer,
+            payment,
+            sacrifice,
+            alternative,
+        }) = &self.pending_choice
+        else {
+            return Vec::new();
+        };
+        if *payer != player {
+            return Vec::new();
+        }
+        let cost = self.payment_mana_cost(player, payment, alternative.as_ref());
+        let pool = self.pooled_mana(player);
+        let spendable = pool.spendable_units(&cost);
+        let missing = u16::from(cost.mana_value).saturating_sub(spendable);
+        if missing == 0 {
+            return Vec::new();
+        }
+        let model = self.payment_model(player, *sacrifice);
+        let tail: Vec<_> = self
+            .payment_obligations(player)
+            .into_iter()
+            .skip(1)
+            .collect();
+        let mut offered_units = 0;
+        let actions: Vec<Action> = model
+            .sources
+            .iter()
+            .filter(|source| source.untapped)
+            .filter_map(|source| {
+                let output = source.fixed.as_ref()?;
+                let mut tapped = pool.clone();
+                tapped.add(output);
+                if tapped.spendable_units(&cost) <= spendable {
+                    return None;
+                }
+                let mut after = PaymentModel {
+                    cache: None,
+                    sources: model.sources.clone(),
+                    life: model.life,
+                };
+                after.reserve(SourceReservation {
+                    permanent: source.permanent,
+                    tap: true,
+                    sacrifice: false,
+                });
+                let mut obligations = vec![Obligation::Pay {
+                    cost: cost.clone(),
+                    waterbend: false,
+                }];
+                obligations.extend_from_slice(&tail);
+                if !after.payable(tapped, obligations, SourcePolicy::All) {
+                    return None;
+                }
+                offered_units += output.total();
+                Some(Action::TapForMana {
+                    player,
+                    permanent: source.permanent,
+                })
+            })
+            .collect();
+        if offered_units <= missing {
+            return Vec::new();
+        }
+        actions
+    }
+
+    /// Tap one offered fixed source, then finish automatically once no
+    /// source or mana-ability choice remains.
+    pub(crate) fn tap_for_mana_action(
+        &mut self,
+        player: PlayerId,
+        permanent: PermanentId,
+    ) -> Result<(), AgentError> {
+        let offered = Action::TapForMana { player, permanent };
+        if !self.fixed_tap_actions(player).contains(&offered) {
+            return Err(AgentError("source is not offered for this payment".into()));
+        }
+        let Some(PendingChoice::ManaPayment { sacrifice, .. }) = &self.pending_choice else {
+            unreachable!("fixed taps are offered only at a mana payment");
+        };
+        let sacrifice = *sacrifice;
+        self.tap_fixed_mana_source(player, permanent);
+        if self.fixed_tap_actions(player).is_empty()
+            && self.mana_ability_actions(player, sacrifice).is_empty()
+        {
+            return self.finish_mana_payment(player);
+        }
+        Ok(())
+    }
+
     pub(crate) fn can_pay_with_mana_abilities(
         &self,
         player: PlayerId,

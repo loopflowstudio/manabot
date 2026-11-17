@@ -1348,3 +1348,28 @@ def test_shared_mill_selection_reaches_text_commands_and_both_encoders() -> None
             submit_response(branch, captured, action.reference)
     assert len(outcomes) >= 2
     assert env.state_digest() == before
+
+
+def test_manual_mana_sources_reach_text_commands_and_both_encoders() -> None:
+    env = priority_root(
+        ("Gray Ogre",), ("Mountain", "Mountain", "Mountain", "Forest")
+    )
+    priority = capture_text_decision(env)
+    cast = next(action for action in priority.actions if "Cast" in action.description)
+    submit_response(env, priority, cast.reference)
+    payment = capture_text_decision(env)
+    source = next(
+        action
+        for action in payment.actions
+        if "Tap for mana" in action.description and "Forest" in action.description
+    )
+    assert any("Pay the offered cost" in action.description for action in payment.actions)
+    assert len(payment.actions) == 5
+    _assert_native_observation_parity(env, payment)
+    submit_response(env, payment, source.reference)
+    following = capture_text_decision(env)
+    assert "Tap for mana" in following.text
+    before = env.state_digest()
+    with pytest.raises(SemanticContractError):
+        submit_response(env, payment, source.reference)
+    assert env.state_digest() == before
