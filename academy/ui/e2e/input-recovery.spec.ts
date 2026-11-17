@@ -250,10 +250,11 @@ for (const theme of ['light', 'dark'] as const) {
     await page.setViewportSize(theme === 'light' ? {width: 1280, height: 800} : {width: 1440, height: 900});
     await page.emulateMedia({colorScheme: theme, reducedMotion: 'reduce'});
     await page.addInitScript(theme => localStorage.setItem('etude.theme', theme), theme);
-    // Exercise a real terminal recording without a long Random mirror: the
-    // creature deck plays against a passive opponent on one fixed deal.
+    // Eight-card land-only decks end by native deck-out, independently of
+    // random combat choices and automatic mana-payment preferences.
     const response = await page.request.post(`${origin}/api/watch`, {data: {
-      players: ['random', 'passive'], hero_deck: 'gw_allies', villain_deck: 'ur_lessons', seed: 368,
+      players: ['random', 'passive'], seed: 368,
+      deck_import: {hero: {source: '8 Island'}, villain: {source: '8 Mountain'}},
     }});
     expect(response.ok()).toBe(true);
     const created = await response.json() as {id: string; token: string};

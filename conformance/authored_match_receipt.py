@@ -30,11 +30,18 @@ class UnsupportedAuthorityPrompt(RuntimeError):
 
 
 class DeterministicServerOfferPolicy:
-    """Choose uniformly from server-built offers without inspecting card text."""
+    """Choose uniform server offers, optionally completing fixed-source payments."""
 
-    def __init__(self, seed: int, max_commands: int | None = None):
+    def __init__(
+        self,
+        seed: int,
+        max_commands: int | None = None,
+        *,
+        automatic_source_payments: bool = False,
+    ) -> None:
         self._rng = Random(seed)
         self.max_commands = max_commands
+        self.automatic_source_payments = automatic_source_payments
 
     def choose(
         self,
@@ -55,6 +62,21 @@ class DeterministicServerOfferPolicy:
             InteractionOffer.model_validate(offer).model_dump(mode="json")
             for offer in offers
         ]
+        # The terminal authority proof exercises the automatic payer. Keep
+        # source selection out of its strategic random stream; the separate
+        # directed source-payment proofs exercise deliberate manual taps.
+        if (
+            self.automatic_source_payments
+            and any(offer["action_type"] == "PAY_COST" for offer in validated)
+            and any(offer["action_type"] == "TAP_FOR_COST" for offer in validated)
+            and all(
+                offer["action_type"] in ("TAP_FOR_COST", "PAY_COST")
+                for offer in validated
+            )
+        ):
+            return next(
+                offer for offer in validated if offer["action_type"] == "PAY_COST"
+            )
         offer = validated[self._rng.randrange(len(validated))]
         if offer["choices"]:
             raise UnsupportedAuthorityPrompt(
@@ -183,11 +205,16 @@ def play_fixed_authored_match(
     reverse: bool = False,
     max_commands: int | None = None,
     session: GameSession | None = None,
+    automatic_source_payments: bool = False,
 ) -> tuple[GameSession, dict[str, Any]]:
     """Return the deterministic authored Game session with retained Study roots."""
 
-    hero_policy = DeterministicServerOfferPolicy(seed, max_commands)
-    villain_policy = DeterministicServerOfferPolicy(seed, max_commands)
+    hero_policy = DeterministicServerOfferPolicy(
+        seed, max_commands, automatic_source_payments=automatic_source_payments
+    )
+    villain_policy = DeterministicServerOfferPolicy(
+        seed, max_commands, automatic_source_payments=automatic_source_payments
+    )
     if session is None:
         temporary = TemporaryDirectory()
         session = GameSession(
@@ -337,7 +364,7 @@ def _ledger(
 
 def generate_authored_match_receipt() -> dict[str, Any]:
     programs_by_definition, programs_by_key = _program_index()
-    session, terminal_frame = play_fixed_authored_match()
+    session, terminal_frame = play_fixed_authored_match(automatic_source_payments=True)
     if session.env is None:
         raise RuntimeError("authored authority environment is unavailable")
     manifest = session.env.content_pack_manifest()
@@ -375,8 +402,8 @@ def generate_authored_match_receipt() -> dict[str, Any]:
             "seed": MATCH_SEED,
             "generated_at": FIXED_TIME,
             "policy": {
-                "hero": "uniform-server-offer-v1",
-                "villain": "uniform-server-offer-v1",
+                "hero": "uniform-server-offer-auto-source-payment-v1",
+                "villain": "uniform-server-offer-auto-source-payment-v1",
                 "hero_seed": POLICY_SEED,
                 "villain_seed": POLICY_SEED,
             },

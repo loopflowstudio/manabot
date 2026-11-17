@@ -773,6 +773,49 @@ impl Mana {
             .sum()
     }
 
+    /// The most units of this pool one payment of `cost` can spend: a maximum
+    /// assignment of units to pips, over the classes the purpose allows. A
+    /// colored pip takes its own color first, which never costs a unit a
+    /// hybrid or generic pip could have used instead.
+    pub fn spendable_units(&self, cost: &ManaCost) -> u16 {
+        fn hybrids(mut available: [u8; 6], pips: &[[Color; 2]], generic: u8) -> u16 {
+            let Some((pip, rest)) = pips.split_first() else {
+                return available
+                    .iter()
+                    .map(|n| u16::from(*n))
+                    .sum::<u16>()
+                    .min(u16::from(generic));
+            };
+            let mut best = hybrids(available, rest, generic);
+            for color in pip {
+                let slot = *color as usize;
+                if available[slot] > 0 {
+                    available[slot] -= 1;
+                    best = best.max(1 + hybrids(available, rest, generic));
+                    available[slot] += 1;
+                }
+            }
+            best
+        }
+        let mut available = self.mana;
+        for (_, amounts) in self
+            .classes()
+            .iter()
+            .filter(|(class, _)| class.allows(&cost.purpose))
+        {
+            for (total, amount) in available.iter_mut().zip(amounts) {
+                *total = total.saturating_add(*amount);
+            }
+        }
+        let mut spent = 0;
+        for (amount, required) in available.iter_mut().zip(cost.cost) {
+            let used = (*amount).min(required);
+            *amount -= used;
+            spent += u16::from(used);
+        }
+        spent + hybrids(available, &cost.hybrid, cost.generic())
+    }
+
     /// Color feasibility only; this never chooses which class is spent.
     pub fn can_pay(&self, cost: &ManaCost) -> bool {
         fn hybrids(mut available: [u8; 6], pips: &[[Color; 2]], generic: u8) -> bool {
@@ -949,6 +992,22 @@ impl Mana {
 mod tests {
     use super::{Mana, ManaCost, ManaRestriction, SpendingContext};
     use crate::card::CardType;
+
+    #[test]
+    fn spendable_units_count_a_maximum_assignment_to_pips() {
+        let cost = ManaCost::parse("1G");
+        assert_eq!(Mana::parse("G").spendable_units(&cost), 1);
+        assert_eq!(Mana::parse("R").spendable_units(&cost), 1);
+        // Only one red unit fits: the other pip needs green.
+        assert_eq!(Mana::parse("RR").spendable_units(&cost), 1);
+        assert_eq!(Mana::parse("RG").spendable_units(&cost), 2);
+        assert_eq!(Mana::parse("GGG").spendable_units(&cost), 2);
+        // A hybrid pip takes either colour and may be left for a source.
+        let hybrid = ManaCost::parse("{U/R}{R}");
+        assert_eq!(Mana::parse("U").spendable_units(&hybrid), 1);
+        assert_eq!(Mana::parse("RR").spendable_units(&hybrid), 2);
+        assert_eq!(Mana::parse("G").spendable_units(&hybrid), 0);
+    }
 
     #[test]
     fn hybrid_feasibility_backtracks_and_preserves_required_colors() {

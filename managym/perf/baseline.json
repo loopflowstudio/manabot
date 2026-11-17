@@ -1,37 +1,37 @@
 {
   "tolerance": 0.1,
   "reference": {
-    "commit": "1ad670d8fdbb763ec28f1392f8dbdb623a5ccaa3",
-    "date": "2026-11-16",
-    "run": "https://github.com/loopflowstudio/manabot/actions/runs/43793436703",
-    "runner": "GitHub-hosted ubuntu-24.04, Intel(R) Xeon(R) 6975P-C (4 vCPU), release",
-    "reason": "Viewer-known library positions (PR #550) change which hidden worlds search samples: search seeds 1 and 2 move their digests and run 3.3% more simulations; about 4.5% added cost per simulation, accepted"
+    "commit": "657deddd8f20b2b47ab15742c56acba65d3e5cc6",
+    "date": "2026-11-17",
+    "run": "https://github.com/loopflowstudio/manabot/actions/runs/44140856590",
+    "runner": "GitHub-hosted ubuntu-24.04, INTEL(R) XEON(R) PLATINUM 8573C (4 vCPU), release",
+    "reason": "Smarter automatic source selection combined with default manual payments changes all search and step digests (124687 vs 127974 steps). This PR head passes every same-runner timing limit; retain the 10% tolerance."
   },
   "bench_search": {
-    "worst_s": 2.9672699725,
-    "total_s": 107.724,
+    "worst_s": 4.7568773905,
+    "total_s": 164.071,
     "seeds": {
       "1": {
-        "worst_s": 2.66291051,
-        "total_s": 46.0430213315,
-        "digest": 16908096509945091352
+        "worst_s": 4.3592151470000005,
+        "total_s": 65.81617575550001,
+        "digest": 12973536517339955137
       },
       "2": {
-        "worst_s": 2.9672699725,
-        "total_s": 33.394061825,
-        "digest": 3370922912939536192
+        "worst_s": 4.7568773905,
+        "total_s": 52.577839800999996,
+        "digest": 15798565271346578031
       },
       "3": {
-        "worst_s": 2.1075808665,
-        "total_s": 28.2867909065,
-        "digest": 18315821755026080079
+        "worst_s": 2.5637301470000002,
+        "total_s": 45.6773221415,
+        "digest": 5569117671639805731
       }
     }
   },
   "bench_steps": {
-    "steps_per_s": 18939.229656851097,
-    "steps": 102209,
+    "steps_per_s": 16214.137997983244,
+    "steps": 124687,
     "games": 512,
-    "digest": 17459788495858550277
+    "digest": 3471185654390571689
   }
 }
