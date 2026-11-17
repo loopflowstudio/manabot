@@ -1525,3 +1525,12 @@ All 65 archived output files, totaling 50,808,576 original bytes, were fetched
 with SDK digest checks and reverified member-by-member, including exact archive
 membership. Cleanup snapshots confirm all three rentals ended. The artifact
 tracking guard passed. The full run at `469339f508` remains separate evidence.
+
+### Planned paid-run overflow handling — 2026-11-16
+
+Headless implementation choice: every pilot trunk and branch will use
+`game_errors=None`, as calibration does. A memory-table capacity error ends the
+run with retained diagnostics; the comparison will not discard an overflowing
+game and continue learning. This supersedes the earlier open overflow choice.
+No pilot has launched. An overflow requires a prospective capacity revision
+across the comparison, with the failed run retained as incomplete evidence.

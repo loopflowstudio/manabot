@@ -858,10 +858,19 @@ Training logs `decision_memory/gate_<layer>`, the value of
 `tanh(scale * gate)` for each board layer. A gate that stays near zero means
 the run still computes its board-only control, whatever its configuration says; read
 that metric before comparing a memory run with its control. A gate moves about
-one learning rate per update, so a short run can end before it opens. Raise
+one learning rate per Adam optimizer step, rather than per collection iteration,
+so a short run can end before it opens. Raise
 `decision_memory_gate_scale` for the whole comparison in that case, never for
 one run. The second attention pass adds to forward cost in memory policies
 only.
+
+For an endpoint reliance comparison, a checkpoint evaluation registration may
+explicitly set `player_spec.blank_decision_memory=True`. Scalar and shared
+inference zero all four memory tables before ordinary input admission and
+preparation. The checkpoint, table shapes, current board, legal actions and
+native game history stay intact. The intervention has a distinct registration
+and serving key; omitting it retains intact memory. This measures use of the
+retained history, not the incremental value of every fact already on the board.
 
 Overflow or mismatched companion shapes raise a typed Capacity error with the
 required counts. Keep the failed game's evidence, increase the relevant

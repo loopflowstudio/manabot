@@ -56,6 +56,7 @@ class PolicyKey:
     dtype: str
     deterministic: bool
     implementation: str = "policy-inference-cpu-row-sampling-v1"
+    blank_decision_memory: bool = False
 
     @classmethod
     def from_registration(
@@ -73,6 +74,9 @@ class PolicyKey:
             execution.device,
             execution.dtype,
             bool(player.player_spec["deterministic"]),
+            blank_decision_memory=player.player_spec.get(
+                "blank_decision_memory", False
+            ),
         )
 
 

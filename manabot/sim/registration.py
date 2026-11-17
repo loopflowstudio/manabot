@@ -127,6 +127,10 @@ class PlayerRegistration(StrictModel):
                     if self.player_spec["allow_deck_repetition"] is not True:
                         raise ValueError("deck repetition must be explicitly enabled")
                     expected_checkpoint_spec["allow_deck_repetition"] = True
+                if "blank_decision_memory" in self.player_spec:
+                    if self.player_spec["blank_decision_memory"] is not True:
+                        raise ValueError("memory blanking must be explicitly enabled")
+                    expected_checkpoint_spec["blank_decision_memory"] = True
                 if (
                     self.player_spec != expected_checkpoint_spec
                     or type(self.player_spec.get("deterministic")) is not bool

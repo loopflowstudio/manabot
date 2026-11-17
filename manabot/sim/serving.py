@@ -28,6 +28,7 @@ import psutil
 import torch
 
 from manabot.backends import resolve
+from manabot.env.decision_memory import blank_memory
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ObservationConfig
@@ -209,6 +210,8 @@ def infer_requests(
             raise ValueError("request observation shape differs from admitted ABI")
         size = sum(t.size * t.dtype.itemsize for t in buffers.values())
         perf.count("input_bytes", size)
+    if requests[0].policy.blank_decision_memory:
+        buffers = blank_memory(buffers)
     result = policy.scope.infer(buffers, span=lambda name: perf.span(name, batch=batch))
     logits = result.logits
     if store.execution.device == "cuda":
