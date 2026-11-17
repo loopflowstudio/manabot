@@ -403,6 +403,49 @@ class EventRows[A]:
 
 
 @dataclass(frozen=True)
+class MemoryJoin[A]:
+    """Host-owned board/summary partitions for the gated attention join."""
+
+    board: A
+    summaries: A
+    packed_board: A
+    packed_summaries: A
+    control_index: A
+    control_offsets: A
+    control_slots: int
+
+
+def _memory_join(
+    present: Array, columns: Array | None, count: int, value_token: bool
+) -> MemoryJoin[Array]:
+    """Partition once before device transfer; both attention layouts read it."""
+    slots = present.shape[1]
+    start = slots - count - int(value_token)
+    board_slots = np.concatenate((np.arange(start), np.arange(start + count, slots)))
+    packed = np.flatnonzero(present)
+    summary_mask = (packed % slots >= start) & (packed % slots < start + count)
+    packed_board = np.flatnonzero(~summary_mask)
+    control = present[:, board_slots]
+    compact_start = start if columns is None else len(columns)
+    return MemoryJoin(
+        board=np.concatenate(
+            (
+                np.arange(compact_start),
+                np.arange(
+                    compact_start + count, compact_start + count + int(value_token)
+                ),
+            )
+        ),
+        summaries=np.arange(compact_start, compact_start + count),
+        packed_board=packed_board,
+        packed_summaries=np.flatnonzero(summary_mask),
+        control_index=np.flatnonzero(control),
+        control_offsets=np.concatenate(([0], control.sum(1).cumsum())),
+        control_slots=control.shape[1],
+    )
+
+
+@dataclass(frozen=True)
 class Prepared[A]:
     """One admitted observation batch, ready for a backend policy."""
 
@@ -457,6 +500,7 @@ class Prepared[A]:
     belief: BeliefRows[A] | None = None
     events: EventRows[A] | None = None
     memory: MemoryRows[A] | None = None
+    memory_join: MemoryJoin[A] | None = None
     live_index: A | None = None  # flat valid slots, including memory/value tokens
     live_offsets: A | None = None  # [B+1] cumulative live-token counts
     legal_support: bool = True  # every observation has a legal action
@@ -687,6 +731,9 @@ def prepare(
         belief=belief,
         events=_events(obs, tables, objects),
         memory=prepare_memory(obs, tables) if memory_summaries else None,
+        memory_join=_memory_join(present, columns, memory_summaries, value_token)
+        if memory_summaries
+        else None,
         live_index=np.flatnonzero(present) if live_tokens else None,
         live_offsets=np.concatenate(([0], present.sum(1).cumsum()))
         if live_tokens

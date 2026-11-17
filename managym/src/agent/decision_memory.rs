@@ -1162,7 +1162,7 @@ mod tests {
         let config = ObservationEncoderConfig {
             max_decision_records: memory.records.len(),
             max_decision_references: memory.references.len(),
-            max_decision_details: memory.details.len(),
+            max_decision_reference_details: memory.details.len(),
             max_decision_members: memory.members.len(),
             ..Default::default()
         };
@@ -1177,7 +1177,7 @@ mod tests {
             match field {
                 "decision_records" => small.max_decision_records -= 1,
                 "decision_references" => small.max_decision_references -= 1,
-                "decision_reference_details" => small.max_decision_details -= 1,
+                "decision_reference_details" => small.max_decision_reference_details -= 1,
                 "decision_members" => small.max_decision_members -= 1,
                 _ => unreachable!(),
             }

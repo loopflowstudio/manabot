@@ -114,7 +114,7 @@ class ObservationConfig(BaseConfig):
     max_decision_records: int = Field(
         default=0, ge=0, exclude_if=lambda value: value == 0
     )
-    max_decision_details: int = Field(
+    max_decision_reference_details: int = Field(
         default=0, ge=0, exclude_if=lambda value: value == 0
     )
     max_decision_references: int = Field(
@@ -331,7 +331,10 @@ class ModelConfig(BaseConfig):
         default="none", exclude_if=lambda value: value == "none"
     )
     decision_memory_summaries: Literal[1, 4] = Field(
-        default=4, exclude_if=lambda value: value == 4
+        default=1, exclude_if=lambda value: value == 1
+    )
+    decision_memory_gate_scale: float = Field(
+        default=1.0, gt=0, allow_inf_nan=False, exclude_if=lambda value: value == 1.0
     )
     # Public identity/history v1; false preserves historical receipt bytes.
     recent_events: bool = Field(default=False, exclude_if=lambda value: not value)

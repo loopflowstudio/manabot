@@ -230,7 +230,7 @@ def test_memory_chunked_collector_restore_keeps_sampling(include_own: bool) -> N
         ObservationConfig(
             max_decision_records=64,
             decision_memory_include_own=include_own,
-            max_decision_details=65536,
+            max_decision_reference_details=65536,
             max_decision_references=1024,
             max_decision_members=16384,
         )

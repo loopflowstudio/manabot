@@ -27,13 +27,11 @@ class Arm:
     summaries: int
 
 
-# CPU/probe candidates only; K selection precedes the three paid arms.
+# K=1 selected by the corrected supervised probe; three pilot arms.
 ARMS = (
     Arm("no-history", "none", 0),
     Arm("transformer-k1", "transformer", 1),
-    Arm("transformer-k4", "transformer", 4),
     Arm("gru-k1", "gru", 1),
-    Arm("gru-k4", "gru", 4),
 )
 SEEDS = (39101, 39102, 39103)
 DISCLOSURES = ("open", "closed")
@@ -243,13 +241,22 @@ def main() -> None:
     import json
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=("census", "probe"))
+    parser.add_argument("operation", choices=("census", "probe", "capacity-census"))
     parser.add_argument("source", type=Path, nargs="?")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--epochs", type=int, default=8)
     parser.add_argument("--max-games", type=int, default=120)
     parser.add_argument("--wall-seconds", type=float, default=7200)
     args = parser.parse_args()
+    if args.operation == "capacity-census":
+        if args.source is not None:
+            parser.error(
+                "capacity-census collects fresh native games; it takes no source"
+            )
+        from manabot.verify.decision_memory_capacity import run_census
+
+        run_census(args.out, games=args.max_games)
+        return
     if args.operation == "probe":
         if args.source is not None:
             parser.error("probe takes no source path; it collects fresh native games")

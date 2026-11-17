@@ -8,7 +8,7 @@ credit, filter, update, repeat. [How a manabot learns](../docs/learning.md)
 explains it, [training.md](../docs/training.md) covers running it, and
 [training loops](../docs/training-loop.md) lists the updates we maintain,
 their pieces and a loop to copy. The network guide covers the intended
-[whole-game opponent memory](../docs/observation-and-model.md#whole-game-decision-memory)
+[whole-game decision memory](../docs/observation-and-model.md#whole-game-decision-memory)
 interface, including encoder selection, replay and checkpoint compatibility.
 
 ## Quickstart

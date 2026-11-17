@@ -42,7 +42,7 @@ fn observation_layout(
     if decision_memory {
         if legacy {
             return Err(pyo3::exceptions::PyValueError::new_err(
-                "opponent memory requires v11",
+                "decision memory requires v11",
             ));
         }
         arrays.extend(native_layout::decision_memory_layout());

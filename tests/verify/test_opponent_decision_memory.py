@@ -58,7 +58,7 @@ def test_decision_memory_metadata_and_legacy_admission() -> None:
             ObservationConfig(
                 policy_input_version=9,
                 max_decision_records=1,
-                max_decision_details=1,
+                max_decision_reference_details=1,
                 max_decision_references=1024,
                 max_decision_members=16384,
             )
@@ -72,7 +72,7 @@ def test_decision_memory_live_native_python_replay_fork_and_roundtrip(
     space = ObservationSpace(
         ObservationConfig(
             max_decision_records=32,
-            max_decision_details=32768,
+            max_decision_reference_details=32768,
             max_decision_references=1024,
             max_decision_members=16384,
         )
@@ -144,7 +144,7 @@ def test_decision_memory_scalar_overflow_and_companion_validation() -> None:
     space = ObservationSpace(
         ObservationConfig(
             max_decision_records=1,
-            max_decision_details=1,
+            max_decision_reference_details=1,
             max_decision_references=1024,
             max_decision_members=16384,
         )
@@ -163,7 +163,7 @@ def test_decision_memory_buffered_vector_and_builtin_choices_match_scalar() -> N
     space = ObservationSpace(
         ObservationConfig(
             max_decision_records=32,
-            max_decision_details=32768,
+            max_decision_reference_details=32768,
             max_decision_references=1024,
             max_decision_members=16384,
         )
@@ -236,7 +236,7 @@ def test_own_seat_option_is_default_off_and_rebases_opposing_view_only(
     space = ObservationSpace(
         ObservationConfig(
             max_decision_records=64,
-            max_decision_details=65536,
+            max_decision_reference_details=65536,
             max_decision_references=1024,
             max_decision_members=16384,
             decision_memory_include_own=True,

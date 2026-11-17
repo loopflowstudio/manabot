@@ -54,7 +54,7 @@ from manabot.model.architecture import ArchitectureReceipt, architecture_receipt
 from manabot.policy import admission
 from manabot.policy.buckets import row_needs, sizes_of, trim_observation
 from manabot.policy.checkpoint import layout
-from manabot.policy.prepare import BeliefRows, Prepared, Tables, prepare
+from manabot.policy.prepare import BeliefRows, MemoryJoin, Prepared, Tables, prepare
 from manabot.policy.protocol import InferenceResult
 import managym
 
@@ -130,6 +130,7 @@ class ActorCritic(nn.Module):
         live_tokens: bool = False,
     ) -> None:
         super().__init__()
+        self.trunk_source: dict[str, object] | None = None
         self.belief_binding: BeliefCheckpointBinding | None = None
         self.observation_space = observation_space
         self.config = config
@@ -178,12 +179,14 @@ class ActorCritic(nn.Module):
         self.semantic_cards = None
         self.card_definitions: nn.Embedding | None = None
         if config.world is not None:
+            # Log-enabled controls reserve the branches' exact catalog rows,
+            # so trunk copying never remaps a shared embedding or lookup.
             self.semantic_cards = SemanticCardEncoder(
                 config.world,
                 embed_dim,
                 decklists=True,
                 records=config.catalog_records(),
-                decision_memory=config.decision_memory != "none",
+                decision_memory=bool(enc.config.max_decision_records),
                 library=enc.one_token,
             )
         else:
@@ -308,6 +311,10 @@ class ActorCritic(nn.Module):
             if config.decision_memory != "none"
             else None
         )
+        if self.decision_memory is not None:
+            for layer in (self.attention, *self.extra_attention):
+                layer.memory_gate = nn.Parameter(torch.zeros(()))
+                layer.memory_gate_scale = config.decision_memory_gate_scale
         self.memory_summaries = (
             config.decision_memory_summaries if self.decision_memory is not None else 0
         )
@@ -741,6 +748,7 @@ class ActorCritic(nn.Module):
             obs.attention_columns,
             live,
             summaries,
+            obs.memory_join,
         )
         # The optional trailing token is a critic input, never an action focus.
         post_attention_objects = encoded[:, : state.validity.shape[1]]
@@ -803,6 +811,16 @@ class ActorCritic(nn.Module):
             },
         )
 
+    def training_metrics(self) -> dict[str, float]:
+        """Effective memory gates, read only at update reporting boundaries."""
+        return {
+            f"gate_{index}": float(
+                torch.tanh(layer.memory_gate_scale * layer.memory_gate).detach()
+            )
+            for index, layer in enumerate((self.attention, *self.extra_attention))
+            if layer.memory_gate is not None
+        }
+
     def object_trimming(self) -> bool:
         """Whether buckets may trim object axes: padding objects must be inert."""
         return (
@@ -818,11 +836,12 @@ class ActorCritic(nn.Module):
         columns: torch.Tensor | None = None,
         live: LiveTokens | None = None,
         summaries: torch.Tensor | None = None,
+        join: MemoryJoin[torch.Tensor] | None = None,
     ) -> torch.Tensor:
         """Attend using host-prepared columns or live-token coordinates."""
         if self.live_tokens and self.config.attention_on:
             assert live is not None
-            return self._attend_live(objects, is_agent, live, summaries)
+            return self._attend_live(objects, is_agent, live, summaries, join)
         original_slots = objects.shape[1]
         if not self.config.attention_on:
             columns = None
@@ -851,10 +870,10 @@ class ActorCritic(nn.Module):
             )
         if self.config.attention_on:
             objects = self.attention(
-                objects, is_agent, key_padding_mask=key_padding_mask
+                objects, is_agent, key_padding_mask=key_padding_mask, join=join
             )
             for layer in self.extra_attention:
-                objects = layer(objects, is_agent, key_padding_mask)
+                objects = layer(objects, is_agent, key_padding_mask, join=join)
         if columns is not None:
             # Restore the optional neutral value token in the same scatter,
             # at the slot immediately after the original object coordinates.
@@ -882,6 +901,7 @@ class ActorCritic(nn.Module):
         is_agent: torch.Tensor,
         tokens: LiveTokens,
         summaries: torch.Tensor | None = None,
+        join: MemoryJoin[torch.Tensor] | None = None,
     ) -> torch.Tensor:
         """`_attend_objects` over valid objects, summaries and optional value token.
 
@@ -905,9 +925,9 @@ class ActorCritic(nn.Module):
             owner = torch.cat((owner, owner.new_zeros((batch, 1))), dim=1)
         packed = tokens.gather(objects)
         owners = tokens.gather(owner)
-        packed = self.attention.forward_live(packed, owners, tokens)
+        packed = self.attention.forward_live(packed, owners, tokens, join)
         for layer in self.extra_attention:
-            packed = layer.forward_live(packed, owners, tokens)
+            packed = layer.forward_live(packed, owners, tokens, join)
         return tokens.scatter(packed)
 
     def _value_from_objects(
@@ -1323,6 +1343,8 @@ class GameObjectAttention(nn.Module):
         feedforward_dim: int | None = None,
     ) -> None:
         super().__init__()
+        self.memory_gate: nn.Parameter | None = None
+        self.memory_gate_scale = 1.0
         self.embedding_dim = embedding_dim
         self.logger = getLogger(__name__).getChild("attention")
         self.logger.info(f"Creating perspective vector of size {embedding_dim}")
@@ -1352,6 +1374,7 @@ class GameObjectAttention(nn.Module):
         objects: torch.Tensor,
         is_agent: torch.Tensor,
         key_padding_mask: torch.BoolTensor,
+        join: MemoryJoin[torch.Tensor] | None = None,
     ) -> torch.Tensor:
         owned_objects = objects
         if self.perspective is not None:
@@ -1377,6 +1400,39 @@ class GameObjectAttention(nn.Module):
             need_weights=False,
         )
 
+        if self.memory_gate is not None:
+            # Summaries precede the optional value token. Control uses exactly
+            # the trunk's sequence, including its padding and value position.
+            assert join is not None
+            indexes = join.board
+            board = owned_objects.index_select(1, indexes)
+            control, _ = self.mha(
+                board,
+                board,
+                board,
+                key_padding_mask=key_padding_mask.index_select(1, indexes),
+                need_weights=False,
+            )
+            joint = attn_out.index_select(1, indexes)
+            blended = control + torch.tanh(
+                self.memory_gate_scale * self.memory_gate
+            ) * (joint - control)
+            # Preserve the trunk's row count through GEMMs as well: extra
+            # summary rows can otherwise change floating-point kernel tiling.
+            board_x = self.norm1(board + blended)
+            board_output = self.norm2(board_x + self.mlp(board_x))
+            summary_indexes = join.summaries
+            summary_x = self.norm1(
+                (owned_objects + attn_out).index_select(1, summary_indexes)
+            )
+            summary_output = self.norm2(summary_x + self.mlp(summary_x))
+            output = (
+                torch.zeros_like(objects)
+                .index_copy(1, indexes, board_output)
+                .index_copy(1, summary_indexes, summary_output)
+            )
+            return output * (~key_padding_mask).unsqueeze(-1).float()
+
         x = self.norm1(owned_objects + attn_out)
         mlp_out = self.mlp(x)
         post_norm = self.norm2(x + mlp_out)
@@ -1385,14 +1441,46 @@ class GameObjectAttention(nn.Module):
         return post_norm * mask
 
     def forward_live(
-        self, packed: torch.Tensor, owners: torch.Tensor, tokens: LiveTokens
+        self,
+        packed: torch.Tensor,
+        owners: torch.Tensor,
+        tokens: LiveTokens,
+        join: MemoryJoin[torch.Tensor] | None = None,
     ) -> torch.Tensor:
         """`forward` over packed live tokens [L,D]; `owners` [L] is +1 for the
         acting viewer's objects, -1 for the opponent's and 0 for a value token."""
         if self.perspective is not None:
             packed = packed + owners.unsqueeze(-1) * self.perspective
-        x = self.norm1(packed + tokens.self_attention(self.mha, packed))
-        return self.norm2(x + self.mlp(x))
+        attended = tokens.self_attention(self.mha, packed)
+        if self.memory_gate is not None:
+            assert join is not None
+            selected = join.packed_board
+            control_tokens = LiveTokens(
+                join.control_index,
+                join.control_offsets,
+                tokens.batch,
+                join.control_slots,
+            )
+            control = control_tokens.self_attention(
+                self.mha, packed.index_select(0, selected)
+            )
+            joint = attended.index_select(0, selected)
+            blended = control + torch.tanh(
+                self.memory_gate_scale * self.memory_gate
+            ) * (joint - control)
+            board_x = self.norm1(packed.index_select(0, selected) + blended)
+            board_output = self.norm2(board_x + self.mlp(board_x))
+            summary_indexes = join.packed_summaries
+            summary_x = self.norm1((packed + attended).index_select(0, summary_indexes))
+            summary_output = self.norm2(summary_x + self.mlp(summary_x))
+            return (
+                torch.zeros_like(packed)
+                .index_copy(0, selected, board_output)
+                .index_copy(0, summary_indexes, summary_output)
+            )
+        x = self.norm1(packed + attended)
+        output = self.norm2(x + self.mlp(x))
+        return output
 
 
 def layer_init(

@@ -33,7 +33,7 @@ def memory_input() -> tuple[ObservationSpace, dict[str, np.ndarray]]:
     space = ObservationSpace(
         ObservationConfig(
             max_decision_records=4,
-            max_decision_details=1024,
+            max_decision_reference_details=1024,
             max_decision_references=1024,
             max_decision_members=16384,
         )
@@ -105,6 +105,9 @@ def policy(
     assert model.policy_film is not None
     with torch.no_grad():
         model.policy_film.weight.normal_(0, 0.1)
+        for layer in (model.attention, *model.extra_attention):
+            assert layer.memory_gate is not None
+            layer.memory_gate.fill_(0.5)
     return model
 
 
@@ -250,12 +253,16 @@ def test_decision_memory_collects_bootstraps_and_learns_from_real_prefixes(
     space = ObservationSpace(
         ObservationConfig(
             max_decision_records=64,
-            max_decision_details=65536,
+            max_decision_reference_details=65536,
             max_decision_references=1024,
             max_decision_members=16384,
         )
     )
-    model = policy(space, encoder, 4)
+    model = policy(space, encoder, 1)
+    with torch.no_grad():
+        for layer in (model.attention, *model.extra_attention):
+            assert layer.memory_gate is not None
+            layer.memory_gate.zero_()
     collector = SeatRoutedCollector(
         space,
         Match(),
@@ -278,7 +285,7 @@ def test_decision_memory_collects_bootstraps_and_learns_from_real_prefixes(
             name: parameter.detach().clone()
             for name, parameter in model.decision_memory.named_parameters()
         }
-        learner = Learner(model, "cpu", minibatch_rows=4)
+        learner = Learner(model, "cpu", minibatch_rows=16)
         diagnostics = update_damped_iteration(
             torch_backend,
             learner,
@@ -292,6 +299,23 @@ def test_decision_memory_collects_bootstraps_and_learns_from_real_prefixes(
             1,
         )
         assert diagnostics["optimizer_exposures"] == 16
+        assert all(
+            torch.equal(before[name], parameter)
+            for name, parameter in model.decision_memory.named_parameters()
+        )
+        assert any(value != 0 for value in model.training_metrics().values())
+        update_damped_iteration(
+            torch_backend,
+            learner,
+            batch,
+            DampedPolicyLearning(
+                gradient="damped_policy",
+                filter_scope="actor",
+                advantage_quantile=0,
+                min_advantage=0,
+            ),
+            2,
+        )
         assert any(
             not torch.equal(before[name], parameter)
             for name, parameter in model.decision_memory.named_parameters()
@@ -314,26 +338,9 @@ def test_no_history_control_retains_logs_without_using_them(tmp_path: Path) -> N
         forward(model, obs), forward(model, blank), strict=True
     ):
         torch.testing.assert_close(actual, expected, atol=0, rtol=0)
-    # Retaining the shared native input must not grow the incumbent's vocabulary
-    # or parameters, or change its current-state predictions.
-    ordinary = {
-        k: v
-        for k, v in obs.items()
-        if k
-        not in (
-            "decision_records",
-            "decision_reference_details",
-            "decision_references",
-            "decision_members",
-        )
-    }
-    torch.manual_seed(23)
-    incumbent = ActorCritic(ObservationSpace(), config).eval()
-    assert list(model.state_dict()) == list(incumbent.state_dict())
-    for actual, expected in zip(
-        forward(model, obs), forward(incumbent, ordinary), strict=True
-    ):
-        torch.testing.assert_close(actual, expected, atol=0, rtol=0)
+    # A log-enabled trunk reserves the exact vocabulary read by its branches.
+    # The true history-disabled incumbent remains a separate throughput control.
+    ordinary = {k: v for k, v in obs.items() if not k.startswith("decision_")}
     path = tmp_path / "control.safetensors"
     save_checkpoint(model, space, path, player_configs=Match().to_rust())
     restored, restored_space = load_checkpoint(str(path))
@@ -636,7 +643,6 @@ def test_definition_shortcut_rejects_ineligible_registered_rows_before_lookup() 
 
 
 def test_no_head_selected_programs_ignore_admitted_historical_definitions() -> None:
-    from manabot.env.decision_memory import MEMORY_FIELDS
     from managym.decision_memory import definition_programs
 
     space, obs = _shared_reference_input()
@@ -647,14 +653,11 @@ def test_no_head_selected_programs_ignore_admitted_historical_definitions() -> N
     config = ModelConfig(world=managym.WORLD_SETUP, hidden_dim=16)
     torch.manual_seed(223)
     control = ActorCritic(space, config).eval()
-    torch.manual_seed(223)
-    incumbent = ActorCritic(ObservationSpace(), config).eval()
-    ordinary = {key: value for key, value in obs.items() if key not in MEMORY_FIELDS}
     actual = control.forward_distribution(
         on_device(control.prepare(obs, inference=True), "cpu")
     )
-    expected = incumbent.forward_distribution(
-        on_device(incumbent.prepare(ordinary, inference=True), "cpu")
+    expected = control.forward_distribution(
+        on_device(control.prepare(blank_memory(obs), inference=True), "cpu")
     )
     for a, b in zip(actual, expected, strict=True):
         torch.testing.assert_close(a, b, atol=0, rtol=0)

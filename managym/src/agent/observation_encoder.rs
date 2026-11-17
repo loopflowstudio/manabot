@@ -169,7 +169,7 @@ pub struct ObservationEncoderConfig {
     pub max_focus_objects: usize,
     pub max_events: usize,
     pub max_decision_records: usize,
-    pub max_decision_details: usize,
+    pub max_decision_reference_details: usize,
     pub max_decision_references: usize,
     pub max_decision_members: usize,
     pub policy_history: bool,
@@ -190,7 +190,7 @@ impl Default for ObservationEncoderConfig {
             max_focus_objects: 2,
             max_events: 32,
             max_decision_records: 0,
-            max_decision_details: 0,
+            max_decision_reference_details: 0,
             max_decision_references: 0,
             max_decision_members: 0,
             policy_history: false,
@@ -523,7 +523,7 @@ pub fn encode(
         ],
         decision_reference_details: vec![
             0.0;
-            config.max_decision_details
+            config.max_decision_reference_details
                 * super::decision_memory::DETAIL_DIM
         ],
         decision_references: vec![
@@ -649,7 +649,7 @@ pub fn encode_into(
     validate_buffer_len(
         "decision_reference_details",
         out.decision_reference_details.len(),
-        config.max_decision_details * super::decision_memory::DETAIL_DIM,
+        config.max_decision_reference_details * super::decision_memory::DETAIL_DIM,
     )?;
     validate_buffer_len(
         "decision_references",
@@ -662,21 +662,21 @@ pub fn encode_into(
         config.max_decision_members * super::decision_memory::MEMBER_DIM,
     )?;
     let memory = if config.max_decision_records != 0
-        || config.max_decision_details != 0
+        || config.max_decision_reference_details != 0
         || config.max_decision_references != 0
         || config.max_decision_members != 0
     {
         if config.layout != InputLayout::OneToken
             || [
                 config.max_decision_records,
-                config.max_decision_details,
+                config.max_decision_reference_details,
                 config.max_decision_references,
                 config.max_decision_members,
             ]
             .contains(&0)
         {
             return Err(ObservationEncodeError::InvalidShared(
-                "opponent memory requires v11 and all companion capacities",
+                "decision memory requires v11 and all companion capacities",
             ));
         }
         let memory = super::decision_memory::encode(&obs.decision_memory);
@@ -694,7 +694,7 @@ pub fn encode_into(
             (
                 "decision_reference_details",
                 memory.details.len(),
-                config.max_decision_details,
+                config.max_decision_reference_details,
             ),
             (
                 "decision_members",
@@ -2483,7 +2483,7 @@ mod tests {
             max_focus_objects: 2,
             max_events: 2,
             max_decision_records: 0,
-            max_decision_details: 0,
+            max_decision_reference_details: 0,
             max_decision_references: 0,
             max_decision_members: 0,
             policy_history: false,
@@ -2725,7 +2725,7 @@ mod tests {
             max_focus_objects: 2,
             max_events: 1,
             max_decision_records: 0,
-            max_decision_details: 0,
+            max_decision_reference_details: 0,
             max_decision_references: 0,
             max_decision_members: 0,
             policy_history: false,

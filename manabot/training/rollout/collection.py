@@ -152,7 +152,7 @@ class ObservationRows:
         of the store; return the first store row."""
         if self.memory_capacities is not None:
             if len(prefixes) != len(rows):
-                raise ValueError("missing opponent-memory prefix references")
+                raise ValueError("missing decision-memory prefix references")
             self.memory.extend(prefixes)
         start, stop = self.rows, self.rows + len(rows)
         if stop > self.capacity:
@@ -279,7 +279,7 @@ class RolloutBatch:
         """
         if indexes is None and self.recorded.memory_capacities is not None:
             raise ValueError(
-                "opponent memory requires explicit selected rollout indexes"
+                "decision memory requires explicit selected rollout indexes"
             )
         trajectory_shape = self.actions.shape if indexes is None else None
         if indexes is None:
@@ -814,7 +814,7 @@ class SeatRoutedCollector:
                     expected_prefixes, actual_prefixes, strict=True
                 )
             ):
-                raise ValueError("collector replay diverged: opponent memory")
+                raise ValueError("collector replay diverged: decision memory")
         elif state.memory is not None:
             raise ValueError("unexpected collector memory archive")
         self._journal = deepcopy(state.journal)
@@ -888,7 +888,9 @@ class SeatRoutedCollector:
                 )
             if self.opponent_mode == "random":
                 return self._opponent.select(self._buffers, rows)
-            return self._opponent.select(self._retain_obs_rows(rows), np.arange(len(rows)))
+            return self._opponent.select(
+                self._retain_obs_rows(rows), np.arange(len(rows))
+            )
 
     def _capture_memory(self, rows: np.ndarray) -> tuple[Prefix, ...]:
         if self._memory_store is None:

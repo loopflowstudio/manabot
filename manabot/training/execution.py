@@ -1541,6 +1541,7 @@ def _execute_regime(
                     record.learner_transitions = (
                         collector.stats.learner_transitions - before.learner_transitions
                     )
+                    diagnostic["decision_memory"] = learner.agent.training_metrics()
                     diagnostic["coordinates"] = coordinates()
                     spent = phase_seconds(record)
                     # Etude holds update rows; the record keeps only counters.

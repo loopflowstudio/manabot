@@ -81,6 +81,10 @@ class InferenceScope(Protocol):
 
 
 class BackendPolicy(Protocol):
+    def training_metrics(self) -> dict[str, float]:
+        """Effective decision-memory gates at an update boundary."""
+        ...
+
     observation_space: ObservationSpace
     belief_count_buckets: int
     value_semantic: Literal["signed_outcome", "win_logit"] | None

@@ -153,6 +153,58 @@ def load_checkpoint(
     return agent, obs_space
 
 
+def branch_from_trunk(
+    path: str | StoredArtifact,
+    config: ModelConfig,
+    *,
+    bucketed_shapes: bool = False,
+    live_tokens: bool = False,
+) -> tuple[ActorCritic, ObservationSpace]:
+    """Copy an admitted same-world no-history trunk; initialize only memory/gates.
+
+    Catalog vocabulary is selected by the shared observation space. All other
+    architecture settings must match. No checkpoint rebinding is performed.
+    """
+    trunk, space = load_checkpoint(
+        path, bucketed_shapes=bucketed_shapes, live_tokens=live_tokens
+    )
+    if trunk.config.decision_memory != "none" or config.decision_memory == "none":
+        raise ValueError("branch requires a no-history trunk and a memory arm")
+    if not space.encoder.config.max_decision_records:
+        raise ValueError(
+            "trunk requires positive decision-memory observation capacities"
+        )
+    excluded = {
+        "decision_memory",
+        "decision_memory_summaries",
+        "decision_memory_gate_scale",
+    }
+    if trunk.config.model_dump(exclude=excluded) != config.model_dump(exclude=excluded):
+        raise ValueError("trunk model settings differ from requested arm")
+    arm = ActorCritic(
+        space, config, bucketed_shapes=bucketed_shapes, live_tokens=live_tokens
+    )
+    source, target = trunk.state_dict(), arm.state_dict()
+    allowed = {
+        name
+        for name in target
+        if name.startswith("decision_memory.") or name.endswith(".memory_gate")
+    }
+    if set(target) - set(source) != allowed or set(source) - set(target):
+        raise ValueError(
+            "trunk copy would leave non-memory parameters unused or uninitialized"
+        )
+    # A strict load checks every shared buffer and parameter shape as well.
+    arm.load_state_dict({**target, **source}, strict=True)
+    arm.world_binding = trunk.world_binding
+    arm.value_semantic = trunk.value_semantic
+    arm.belief_binding = trunk.belief_binding
+    arm.trunk_source = load_metadata(
+        path if isinstance(path, str) else str(materialize_artifact(path))
+    )["source"]
+    return arm.eval(), space
+
+
 def load_metadata(path: str | Path) -> dict[str, Any]:
     """Metadata from either policy format; containers read only their header."""
     path = Path(path)
@@ -178,6 +230,7 @@ def _restore_metadata(
     checkpoint: Mapping[str, Any],
     world_binding: dict[str, Any],
 ) -> BeliefCheckpointBinding | None:
+    agent.trunk_source = checkpoint.get("trunk_source")
     value_semantic = checkpoint.get("bc", {}).get("value_semantic")
     if value_semantic is not None:
         if value_semantic not in ("signed_outcome", "win_logit"):
@@ -285,6 +338,8 @@ def save_checkpoint(
         },
         "bc": extra or {},
     }
+    if agent.trunk_source is not None:
+        checkpoint["trunk_source"] = agent.trunk_source
     validate_policy_input(agent, checkpoint["world_binding"])
     checkpoint.update(
         belief_checkpoint_fields(

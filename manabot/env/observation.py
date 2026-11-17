@@ -334,14 +334,14 @@ class ObservationEncoder:
         self.turn_state = config.policy_input_version in (10, 11)
         capacities = (
             config.max_decision_records,
-            config.max_decision_details,
+            config.max_decision_reference_details,
             config.max_decision_references,
             config.max_decision_members,
         )
         if any(capacities) and not all(capacities):
-            raise ValueError("opponent memory requires all companion capacities")
+            raise ValueError("decision memory requires all companion capacities")
         if config.max_decision_records and not self.one_token:
-            raise ValueError("opponent memory requires policy input v11")
+            raise ValueError("decision memory requires policy input v11")
 
         # Preserve attack/decline independently of action family and focus.
         self.action_dim = (
@@ -365,7 +365,7 @@ class ObservationEncoder:
                         ("decision_references", self.config.max_decision_references),
                         (
                             "decision_reference_details",
-                            self.config.max_decision_details,
+                            self.config.max_decision_reference_details,
                         ),
                         ("decision_members", self.config.max_decision_members),
                     )
@@ -687,7 +687,7 @@ class ObservationEncoder:
                 encode_records(
                     read_records(obs.decision_memory_json()),
                     self.config.max_decision_records,
-                    self.config.max_decision_details,
+                    self.config.max_decision_reference_details,
                     self.config.max_decision_references,
                     self.config.max_decision_members,
                 )

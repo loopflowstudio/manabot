@@ -41186,6 +41186,22 @@
    "sha256": "39f00cb819302b65281fe1f646376fe431c710d120d67e216dfb04cebe3ef01a",
    "bytes": 14191
   },
+  "experiments/data/opponent-memory/20261116-elemental-capacity/census-source.py": {
+   "sha256": "6781570a3a44d4df6250a44e4794c27df8096fea15f927fd70fcbc693e664824",
+   "bytes": 5061
+  },
+  "experiments/data/opponent-memory/20261116-elemental-capacity/games.jsonl": {
+   "sha256": "e9d6a218a3a5cd51dc5877884783bd40abd5e6f54e65ff6e77ea47827591078f",
+   "bytes": 248753
+  },
+  "experiments/data/opponent-memory/20261116-elemental-capacity/provenance.json": {
+   "sha256": "6cca4e0f8550f3b91d503e8bdfad0cf41e54625a479e9a68a4a99d342cb1c9a1",
+   "bytes": 534
+  },
+  "experiments/data/opponent-memory/20261116-elemental-capacity/summary.json": {
+   "sha256": "cd4d08214cd254d9a8c687647a1699e8e1e0a4fcc337ca434a304c72a585822f",
+   "bytes": 38601
+  },
   "experiments/data/opponent-memory/20261116-execution-final/receipt.json": {
    "sha256": "449ca7150e12e0ceabc7c547923cb940620e987096bd7c5f0d45cadbd91eac3f",
    "bytes": 15172

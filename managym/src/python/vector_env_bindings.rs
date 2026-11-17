@@ -548,7 +548,7 @@ pub(super) fn input_buffer_config(
     if present.iter().any(|&value| value) {
         if !present.iter().all(|&value| value) {
             return Err(PyValueError::new_err(
-                "opponent memory requires all companion buffers",
+                "decision memory requires all companion buffers",
             ));
         }
         for (field, width) in memory_fields.into_iter().zip([
@@ -560,13 +560,13 @@ pub(super) fn input_buffer_config(
             let [capacity, actual] = shape(field)?;
             if capacity == 0 || actual != width {
                 return Err(PyValueError::new_err(
-                    "invalid opponent-memory companion widths",
+                    "invalid decision-memory companion widths",
                 ));
             }
             match field {
                 "decision_records" => config.max_decision_records = capacity,
                 "decision_references" => config.max_decision_references = capacity,
-                "decision_reference_details" => config.max_decision_details = capacity,
+                "decision_reference_details" => config.max_decision_reference_details = capacity,
                 "decision_members" => config.max_decision_members = capacity,
                 _ => unreachable!(),
             }
@@ -864,12 +864,12 @@ fn read_observation_buffers(
         } else {
             None
         },
-        decision_reference_details: if c.max_decision_details > 0 {
+        decision_reference_details: if c.max_decision_reference_details > 0 {
             required(
                 "decision_reference_details",
                 &[
                     n,
-                    c.max_decision_details,
+                    c.max_decision_reference_details,
                     crate::agent::decision_memory::DETAIL_DIM,
                 ],
             )?
@@ -1442,9 +1442,11 @@ impl SendObservationFieldSlices {
                     slice::from_raw_parts_mut(
                         buffer.row_ptr(
                             env_index,
-                            config.max_decision_details * crate::agent::decision_memory::DETAIL_DIM,
+                            config.max_decision_reference_details
+                                * crate::agent::decision_memory::DETAIL_DIM,
                         )?,
-                        config.max_decision_details * crate::agent::decision_memory::DETAIL_DIM,
+                        config.max_decision_reference_details
+                            * crate::agent::decision_memory::DETAIL_DIM,
                     )
                 }
             } else {

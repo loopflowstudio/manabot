@@ -42,7 +42,7 @@ def probe_space() -> ObservationSpace:
     return ObservationSpace(
         ObservationConfig(
             max_decision_records=CAPACITIES[0],
-            max_decision_details=CAPACITIES[1],
+            max_decision_reference_details=CAPACITIES[1],
             max_decision_references=CAPACITIES[2],
             max_decision_members=CAPACITIES[3],
         )

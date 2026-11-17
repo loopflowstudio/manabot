@@ -293,7 +293,7 @@ fn encoded_to_dict<'py>(
                 &np,
                 &encoded.decision_reference_details,
                 &[
-                    config.max_decision_details,
+                    config.max_decision_reference_details,
                     crate::agent::decision_memory::DETAIL_DIM,
                 ],
             )?,
@@ -3309,7 +3309,7 @@ impl PyObservation {
     }
 
     fn decision_memory_json(&self) -> String {
-        serde_json::to_string(&self.decision_memory).expect("opponent memory serializes")
+        serde_json::to_string(&self.decision_memory).expect("decision memory serializes")
     }
 
     fn continuation_json(&self) -> String {

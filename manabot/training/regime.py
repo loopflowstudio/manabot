@@ -942,7 +942,7 @@ class TrainingRegime(Strict):
         if self.agent.decision_memory != "none" and not (
             self.observation.policy_input_version == 11
             and self.observation.max_decision_records
-            and self.observation.max_decision_details
+            and self.observation.max_decision_reference_details
             and self.observation.max_decision_references
             and self.observation.max_decision_members
         ):

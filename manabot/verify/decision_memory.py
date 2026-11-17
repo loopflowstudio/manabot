@@ -149,7 +149,7 @@ def _native_proof(out: Path, disclosure: Literal["open", "closed"]) -> Proof:
         ObservationSpace(
             ObservationConfig(
                 max_decision_records=128,
-                max_decision_details=131072,
+                max_decision_reference_details=131072,
                 max_decision_references=1024,
                 max_decision_members=16384,
             )

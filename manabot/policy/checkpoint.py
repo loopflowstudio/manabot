@@ -64,6 +64,7 @@ _ATTENTION_LEAVES = {
 # Checkpoint fields carried, JSON-encoded, in the container metadata.
 _METADATA_KEYS = ("hypers", "world_binding", "architecture", "source")
 _OPTIONAL_METADATA_KEYS = (
+    "trunk_source",
     "bc",
     "global_step",
     "belief_schema_identity",

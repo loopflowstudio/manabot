@@ -150,6 +150,7 @@ def value_scale(
 class UpdateDiagnostics(TypedDict, total=False):
     """Per-iteration measurements, logged once as the update's Etude metrics."""
 
+    decision_memory: dict[str, float]
     adaptive: AdaptiveDiagnostics
 
     numerical: NumericalHealth

@@ -118,11 +118,11 @@ that retains the log isolates encoder/join cost, but cannot establish the total
 cost of adding memory. Report native capture, encoding and host transport
 separately; the shared engine still captures decisions with history input disabled.
 
-### Common-trunk initialization (planned, unimplemented)
+### Common-trunk initialization (software implemented; pilot pending)
 
 Each seed label trains one no-history trunk on the memory-enabled observation
 space, then branches three arms from its checkpoint: no history, transformer-K
-and GRU-K. The arms do not start as unrelated randomly initialized agents. The
+and GRU-K. The log-enabled trunk reserves the same memory catalog vocabulary as both branches, so shared embedding weights copy without remapping. The history-disabled throughput incumbent retains its smaller vocabulary. The arms do not start as unrelated randomly initialized agents. The
 three seed labels 39101–39103 provide independent learning units; the three
 branches within each label form a blocked comparison. Older-world checkpoints
 cannot be rebound or admitted by bypassing world/shape checks.
@@ -1180,3 +1180,70 @@ The ordinary world-admission/monitoring checks passed. These are software and
 probe checks; gate still owns full CI. Gated J1/trunk copy, current-world CUDA
 cost/resource/update/reload admission and the three-arm pilot remain outstanding.
 B1/B2 stay deferred until calibration shows what fits the same USD 50 total.
+
+## Gated join and Elemental capacity census — 2026-11-16
+
+The three pilot arms are now no history, transformer-K1 and GRU-K1. All memory
+policies use the zero-initialized per-layer J1 gate; there is no ungated policy
+path. `branch_from_trunk` admits a compatible no-history checkpoint, checks the
+non-memory configuration and copies shared tensors strictly, initializing only
+the memory module and gates. Exports retain `trunk_source` alongside their own
+source. Update metrics report `decision_memory/gate_<layer>`.
+
+One prerequisite changed after inspection: memory adds catalog embedding rows,
+so the old log-enabled control could not supply identical shared tensors. The
+common trunk now reserves the memory vocabulary whenever its observation space
+enables decision records. The history-disabled throughput incumbent still omits
+that vocabulary. This supersedes the earlier same-parameter-incumbent claim for
+the log-enabled control; previous cost receipts keep their measured identities.
+Live attention also keeps the trunk's board row count through projection and
+feedforward operations: processing extra summary rows in the same matrix
+multiplication otherwise produced a 4.66e-10 logit difference on CPU.
+
+A free heuristic census covered every ordered Elemental 10v10 pair once in each
+disclosure mode: **200 completed games, zero capacity failures or decision caps**.
+It retained both viewers' complete terminal tables and exact action journals,
+with one heuristic instance per native seat and own-seat inclusion false.
+Raised census bounds were 4,096 records, 131,072 reference-detail rows, 4,096
+references and 131,072 members. The measured maxima and next powers of two are:
+
+| Table | Maximum | Capacity for CUDA admission/calibration |
+|---|---:|---:|
+| decision_records | 338 | 512 |
+| decision_reference_details | 14,787 | 16,384 |
+| decision_references | 98 | 128 |
+| decision_members | 5,127 | 8,192 |
+
+The detail maximum came from open Elemental UG versus UG. Every matchup and
+viewer count is retained under the manifest-backed prefix
+`experiments/data/opponent-memory/20261116-elemental-capacity` (four artifacts:
+source, action/count journals, summary and provenance). Runtime was 87.43 seconds;
+launcher cost **USD0**. This is capacity sizing on heuristic terminal prefixes,
+not learned-game-tail or CUDA/resource admission. The published supervised probe
+keeps its original 8,192 detail bound and exclusions; it was not rerun.
+
+Reproduce the census with:
+
+```sh
+uv run python -m experiments.opponent_memory capacity-census --max-games 200 \
+  --out .runs/decision-memory-capacity
+```
+
+The release extension was rebuilt and installed atomically for CPython 3.13:
+`466492569adec10fe609c24240edddd97123bed1877d6d07a5276d31fe855d15`.
+CUDA admission, horizon/gate-scale calibration, Etude job wiring and paid pilot
+remain outstanding. Paid-run overflow handling remains an open pre-launch
+choice; no rental or paid run was started. Opponent-only is still the default,
+own-seat inclusion remains optional/default false, and the inclusive cap is USD50.
+
+Validation: focused gate/model, backend protocol, update, Prepared, storage,
+replay/demo, package-boundary and artifact checks: **288 passed, 7 skipped**
+(230.31 s). The gate matrix covers both encoders, K1/K4, padded/live and compact
+layouts, mixed empty/128-record batches, with gradients enabled and inference
+mode, at zero output tolerance. Real-prefix damped updates prove zero encoder
+displacement after the gate-opening update and encoder learning on the next
+update. Native debug decision-memory checks: **10 passed**. Ruff and
+`git diff --check` passed. No CUDA, MLX-memory or playing-strength claim follows.
+The model CI invocation collected **1,215 tests**, including the new gate file.
+The first collection lacked the local LLM extra; installing the declared locked
+extra resolved those import errors. This was collection only, not a full CI run.

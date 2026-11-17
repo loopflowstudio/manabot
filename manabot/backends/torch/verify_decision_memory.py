@@ -1,4 +1,4 @@
-"""Torch-specific headless opponent-memory policy and update proofs.
+"""Torch-specific headless decision-memory policy and update proofs.
 
 The CLI selects this backend; native replay and text verification stay in
 manabot.verify.decision_memory. Controlled FiLM weights test connectivity,
@@ -62,6 +62,9 @@ def prove_policies(
             assert model.policy_film is not None
             with torch.no_grad():
                 model.policy_film.weight.normal_(0, 0.1)
+                for layer in (model.attention, *model.extra_attention):
+                    assert layer.memory_gate is not None
+                    layer.memory_gate.fill_(0.5)
             logits, value = model.forward_distribution(
                 on_device(model.prepare(obs), "cpu")
             )
@@ -118,7 +121,7 @@ def ordinary_update(out: Path) -> dict[str, object]:
     regime.agent.decision_memory_summaries = 1
     regime.observation = ObservationConfig(
         max_decision_records=1024,
-        max_decision_details=8192,
+        max_decision_reference_details=8192,
         max_decision_references=256,
         max_decision_members=16384,
     )

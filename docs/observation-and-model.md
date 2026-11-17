@@ -592,9 +592,9 @@ for its scope. Host residency of the new snapshot layout has not been measured;
 on the recorded CPU world before #547/#550 integration, log-control collection
 costs 1.73× the history-disabled median
 ([report](../experiments/opponent_memory.md#final-post-sync-admission-measurement--2026-11-16)).
-The gated join, [branching from a trunk](#starting-from-a-no-history-trunk),
-CUDA worker admission and the three-arm pilot remain outstanding; the intended
-interface follows. The [completed supervised probe](../experiments/opponent_memory.md#supervised-probe-result--2026-11-16)
+The gated join and [branching from a trunk](#starting-from-a-no-history-trunk)
+are implemented. CUDA worker admission and the three-arm pilot remain
+outstanding. The [completed supervised probe](../experiments/opponent_memory.md#supervised-probe-result--2026-11-16)
 selected one summary token for both pilot encoders.
 The combined disclosure/library layout needs fresh cost and CUDA admission;
 those earlier timings do not measure it.
@@ -607,7 +607,7 @@ from manabot.infra.config import ModelConfig
 
 model = ModelConfig(
     decision_memory="transformer",
-    decision_memory_summaries=4,
+    decision_memory_summaries=1,
     attention_on=True,
     attention_layers=2,
     policy_film=True,
@@ -623,10 +623,10 @@ the missing fields:
 from manabot.infra.config import ObservationConfig
 
 observation = ObservationConfig(
-    max_decision_records=1024,
-    max_decision_details=8192,
-    max_decision_references=256,
-    max_decision_members=16_384,
+    max_decision_records=512,
+    max_decision_reference_details=16_384,
+    max_decision_references=128,
+    max_decision_members=8192,
     decision_memory_include_own=False,
 )
 # On each self-play stage:
@@ -648,7 +648,7 @@ a no-history control, after supervised probes select one shared summary count.
 | Setting | Choices and behavior |
 | --- | --- |
 | `decision_memory` | `"none"` (default), `"transformer"` or `"gru"`. Memory is opt-in. |
-| `decision_memory_summaries` | 1 or 4 for either encoder; default 4. Ignored when memory is `"none"`. |
+| `decision_memory_summaries` | 1 or 4 for either encoder; default 1. Ignored when memory is `"none"`. |
 | `attention_on`, `policy_film` | Both must be `True` for memory. FiLM carries board context to actions without focus objects. |
 | `recent_events` | Must be `False` when decision memory is enabled. The bounded event encoder remains a separate option. |
 | `decision_memory_gate_scale` | Positive float, default 1.0. Multiplies each board layer's learned gate parameter inside `tanh`; a larger scale opens the join in fewer updates. Ignored when memory is `"none"`. |
@@ -766,10 +766,12 @@ measurement covers its recorded cohort and one logical execution minibatch.
 Recipes without memory retain their historical execution when row limits are
 omitted.
 
-Record, snapshot, program-detail and member capacities belong to the supplied
+Record, reference (an object's snapshot at the choice), reference-detail and
+member capacities belong to the supplied
 observation space: `max_decision_records`, `max_decision_references`,
-`max_decision_details` and `max_decision_members`. All default to zero (disabled)
-and must be positive together for v11 memory. The example uses the repeated seeded census
+`max_decision_reference_details` and `max_decision_members`. All default to zero (disabled)
+and must be positive together for v11 memory. The example uses the 200-game
+Elemental heuristic census
 maxima rounded upward; it does not admit learned-game tails.
 
 The native viewer log interns exact immutable reference snapshots. Records own
@@ -828,11 +830,13 @@ On any input, including long and empty histories, the returned policy gives the
 trunk's action probabilities and value bit for bit. Its checkpoints record the
 trunk's `checkpoint_source` beside their own.
 
-The trunk is an ordinary `decision_memory="none"` policy whose
+The trunk reserves the memory catalog vocabulary without encoding the log. It
+is a `decision_memory="none"` policy whose
 `ObservationConfig` declares the same positive decision capacities as the
 branch, so the two share one world binding. `branch_from_trunk` copies every
-trunk parameter and initializes only the memory encoder and the join gates. It
-raises, without returning a policy, when
+trunk parameter and initializes only the memory encoder and the join gates. A
+log-enabled control therefore has a larger catalog embedding than the
+history-disabled throughput incumbent. It raises, without returning a policy, when
 
 - the trunk's observation space differs in any buffer shape (the usual world
   binding error, naming the trunk's revision and the differing buffers);
@@ -871,8 +875,9 @@ only.
 Overflow or mismatched companion shapes raise a typed Capacity error with the
 required counts. Keep the failed game's evidence, increase the relevant
 capacities in a fresh configuration and start a compatible run. The log never
-drops old choices, truncates details or retries without memory. Disable capacity
-recovery for the pilot so long-game failures remain visible.
+drops old choices, truncates details or retries without memory. Paid-run
+overflow handling remains a pre-launch decision; retain and count every failed
+game.
 
 The changed v11 buffer layout uses normal world binding. Older checkpoints are
 refused with their source revision and differing buffer names; run them from

@@ -320,7 +320,7 @@ def independent_measure(
     space = ObservationSpace(
         ObservationConfig(
             max_decision_records=capacities[0],
-            max_decision_details=capacities[1],
+            max_decision_reference_details=capacities[1],
             max_decision_references=capacities[2],
             max_decision_members=capacities[3],
         )

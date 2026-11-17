@@ -141,7 +141,7 @@ def test_memory_collector_recovery_retains_old_batches_and_incident_budget(
     space = ObservationSpace(
         ObservationConfig(
             max_decision_records=64,
-            max_decision_details=65536,
+            max_decision_reference_details=65536,
             max_decision_references=1024,
             max_decision_members=16384,
         )
@@ -313,7 +313,7 @@ def test_memory_frozen_opponent_uses_the_compact_raw_contract() -> None:
     space = ObservationSpace(
         ObservationConfig(
             max_decision_records=64,
-            max_decision_details=65536,
+            max_decision_reference_details=65536,
             max_decision_references=1024,
             max_decision_members=16384,
         )
