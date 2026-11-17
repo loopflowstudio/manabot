@@ -57,7 +57,7 @@ def training_jobs(revision: str, calibration: bool = False) -> list[RunRequest]:
 
         root = Path(__file__).resolve().parents[1]
         job = PythonJob(
-            name="cuda-calibration-fold",
+            name="cuda-calibration-fold-2",
             train=calibrate,
             config=Calibration(source_bundle=bundle_at(root, revision)),
             repo=str(root),
