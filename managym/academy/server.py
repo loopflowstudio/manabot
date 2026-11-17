@@ -31,7 +31,7 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.responses import FileResponse, JSONResponse, Response
-from pydantic import TypeAdapter, ValidationError
+from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 from starlette.websockets import WebSocketState
 
 import managym
@@ -39,6 +39,7 @@ from managym.academy.card_art import card_art
 from managym.bots import BotDecision, BotPolicy, FlatSearchPolicy, choose_bot
 from managym.decision import (
     Command as SemanticCommand,
+    DecisionFrame as SemanticDecisionFrame,
     SemanticTransition,
     TransitionReceipt,
 )
@@ -66,6 +67,7 @@ from managym.experience_projection import (
     redact_observation,
     serialize_observation,
 )
+from managym.payment import preview_payment
 from managym.policy import PolicyRunner
 from managym.search import (
     SearchConfig,
@@ -3898,12 +3900,12 @@ def _live_record_for_attempt(attempt_id: str) -> SessionRecord:
     return record
 
 
-def _rest_study_owner(
+def _rest_participant(
     record: SessionRecord,
     participant_token: str | None,
-) -> str | None:
+) -> ParticipantLease:
     """Authorize one exact participant, including single-player tables."""
-    if participant_token is None:
+    if not participant_token or not participant_token.isascii():
         raise HTTPException(status_code=403, detail="participant_credential_required")
     matches = [
         participant
@@ -3912,9 +3914,14 @@ def _rest_study_owner(
     ]
     if len(matches) != 1:
         raise HTTPException(status_code=403, detail="participant_credential_invalid")
-    if TableCapability.EXPLORE_STUDY not in ROLE_CAPABILITIES[matches[0].role]:
+    return matches[0]
+
+
+def _rest_study_owner(record: SessionRecord, participant_token: str | None) -> str:
+    participant = _rest_participant(record, participant_token)
+    if TableCapability.EXPLORE_STUDY not in ROLE_CAPABILITIES[participant.role]:
         raise HTTPException(status_code=403, detail="participant_forbidden")
-    return matches[0].viewer_id
+    return participant.viewer_id
 
 
 def _recording_read(trace_id: str) -> tuple["Recording", dict[str, Any]]:
@@ -4367,3 +4374,69 @@ def validate_decklists(payload: DeckImportInput) -> dict[str, Any]:
         "world_version": world["world_version"],
         "card_digest": world["card_digest"],
     }
+
+
+class PaymentPreviewRequest(BaseModel):
+    """One current offer, with every Academy authority coordinate."""
+
+    model_config = ConfigDict(extra="forbid")
+    match_id: str
+    revision: int
+    prompt_id: int
+    frame_hash: str
+    offer_id: int
+    request_id: str
+
+
+@app.post("/api/sessions/{session_id}/payment-preview")
+async def get_payment_preview(
+    session_id: str,
+    payload: PaymentPreviewRequest,
+    x_etude_participant_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    record = SESSION_REGISTRY.get(session_id)
+    if record is None:
+        raise HTTPException(404, "session_not_found")
+    async with record.lock:
+        participant = _rest_participant(record, x_etude_participant_token)
+        if (
+            TableCapability.SUBMIT_LIVE_COMMAND
+            not in ROLE_CAPABILITIES[participant.role]
+        ):
+            raise HTTPException(403, "payment_preview_forbidden")
+        game = record.game
+        context = game.published_prompt
+        pending = game._pending_decision
+        if context is None or pending is None or game.env is None:
+            raise HTTPException(409, "payment_preview_stale")
+        frame = pending.frame
+        if context.viewer != game.human_seat:
+            raise HTTPException(403, "payment_preview_forbidden")
+        if (
+            game.match_id != payload.match_id
+            or frame.revision != payload.revision
+            or frame.prompt is None
+            or frame.prompt.id != payload.prompt_id
+            or frame.frame_hash != payload.frame_hash
+            or frame.frame_hash != context.frame["frame_hash"]
+            or payload.offer_id not in context.action_by_offer
+        ):
+            raise HTTPException(409, "payment_preview_stale")
+        native = SemanticDecisionFrame.from_json(
+            pending.root.semantic_decision_frame_json()
+        )
+        try:
+            preview = preview_payment(
+                game.env,
+                viewer=context.viewer,
+                revision=native.revision,
+                fingerprint=native.fingerprint,
+                action_index=context.action_by_offer[payload.offer_id],
+            )
+        except managym.AgentError as exc:
+            raise HTTPException(409, "payment_preview_stale") from exc
+        return {
+            **payload.model_dump(),
+            "viewer": context.viewer,
+            "preview": preview.model_dump(mode="json"),
+        }

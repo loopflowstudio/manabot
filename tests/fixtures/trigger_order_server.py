@@ -33,6 +33,40 @@ def new_game(
 ) -> dict[str, Any]:
     # Only the dedicated browser proof opts in; other release cases use the
     # ordinary server unchanged. Any is confined to the existing JSON boundary.
+    if isinstance(raw_config, dict) and raw_config.get("payment_fixture") is True:
+        _new_game(
+            self,
+            {
+                "hero_deck": {
+                    "Lightning Strike": 4,
+                    "White Lotus Hideout": 4,
+                    "Mountain": 20,
+                    "Island": 12,
+                    "Prophetic Prism": 4,
+                },
+                "villain_deck": {"Plains": 40},
+                "villain_type": "passive",
+                "seed": 165,
+                "auto_pass": False,
+            },
+        )
+        assert self.env is not None
+        self.env.scenario_set_life(1, 3)
+        self.env.scenario_clear_hand(0)
+        self.env.scenario_force_card_in_hand(0, "Lightning Strike")
+        for name in (
+            "Island",
+            "Mountain",
+            "Mountain",
+            "Island",
+            "Prophetic Prism",
+            "White Lotus Hideout",
+        ):
+            self.env.scenario_force_battlefield(0, name, ready=True)
+        self.obs = self.env.scenario_refresh()
+        self.published_prompt = None
+        self.presentation.reset()
+        return self._wire_message()
     fixture = (
         isinstance(raw_config, dict) and raw_config.get("trigger_order_fixture") is True
     )

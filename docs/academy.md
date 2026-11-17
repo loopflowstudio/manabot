@@ -680,8 +680,8 @@ Left over  nothing floating
 ```
 
 The same Mountain and Forest carry a proposal mark on the board. Nothing has
-happened yet: hovering and focusing send no action. Cast the spell and those
-two lands are the ones that tap.
+happened yet. Hovering and focusing send no action. Cast the spell and
+choose **Pay cost** to tap the proposed lands.
 
 The preview is the automatic payer's own plan for the position in front of
 you. Academy asks the game for it; the browser never works one out. What it
