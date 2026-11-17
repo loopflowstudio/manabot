@@ -718,6 +718,7 @@ _VECTOR_READS = frozenset(
         "current_exposure",
         "current_game_generations",
         "decision_memory_counts",
+        "decision_memory_cursors",
         "current_game_seeds",
         "current_matchup_indices",
         "current_player_configs",

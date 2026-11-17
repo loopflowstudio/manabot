@@ -560,6 +560,28 @@ pub fn encode_into(
     config: &ObservationEncoderConfig,
     out: EncodedObservationMut<'_>,
 ) -> Result<(), ObservationEncodeError> {
+    encode_into_memory(obs, config, out, None)
+}
+
+pub fn encode_into_incremental(
+    obs: &Observation,
+    config: &ObservationEncoderConfig,
+    out: EncodedObservationMut<'_>,
+    cursor: &mut super::decision_memory::MemoryEncoding,
+) -> Result<(), ObservationEncodeError> {
+    let result = encode_into_memory(obs, config, out, Some(cursor));
+    if result.is_err() {
+        *cursor = Default::default();
+    }
+    result
+}
+
+fn encode_into_memory(
+    obs: &Observation,
+    config: &ObservationEncoderConfig,
+    out: EncodedObservationMut<'_>,
+    cursor: Option<&mut super::decision_memory::MemoryEncoding>,
+) -> Result<(), ObservationEncodeError> {
     // Deprecated v9/v10 rows read the card lists they were trained on.
     let legacy;
     let obs = match config.layout {
@@ -679,26 +701,29 @@ pub fn encode_into(
                 "decision memory requires v11 and all companion capacities",
             ));
         }
-        let memory = super::decision_memory::encode(&obs.decision_memory);
+        let (starts, memory) = match cursor {
+            Some(cursor) => super::decision_memory::encode_suffix(&obs.decision_memory, cursor),
+            None => ([0; 4], super::decision_memory::encode(&obs.decision_memory)),
+        };
         for (field, actual, capacity) in [
             (
                 "decision_records",
-                memory.records.len(),
+                starts[0] + memory.records.len(),
                 config.max_decision_records,
             ),
             (
                 "decision_references",
-                memory.references.len(),
+                starts[2] + memory.references.len(),
                 config.max_decision_references,
             ),
             (
                 "decision_reference_details",
-                memory.details.len(),
+                starts[1] + memory.details.len(),
                 config.max_decision_reference_details,
             ),
             (
                 "decision_members",
-                memory.members.len(),
+                starts[3] + memory.members.len(),
                 config.max_decision_members,
             ),
         ] {
@@ -710,7 +735,7 @@ pub fn encode_into(
                 });
             }
         }
-        Some(memory)
+        Some((starts, memory))
     } else {
         None
     };
@@ -855,32 +880,58 @@ pub fn encode_into(
     out.actions.fill(0.0);
     out.name_candidates.fill(0.0);
     out.events.fill(0.0);
-    out.decision_records.fill(0.);
-    out.decision_references.fill(0.);
-    out.decision_reference_details.fill(0.);
-    out.decision_members.fill(0.);
-    if let Some(memory) = memory {
+    if let Some((starts, memory)) = memory {
+        for (target, start, width) in [
+            (
+                &mut *out.decision_records,
+                starts[0],
+                super::decision_memory::RECORD_DIM,
+            ),
+            (
+                &mut *out.decision_reference_details,
+                starts[1],
+                super::decision_memory::DETAIL_DIM,
+            ),
+            (
+                &mut *out.decision_references,
+                starts[2],
+                super::decision_memory::REFERENCE_DIM,
+            ),
+            (
+                &mut *out.decision_members,
+                starts[3],
+                super::decision_memory::MEMBER_DIM,
+            ),
+        ] {
+            if memory.reset {
+                target[start * width..].fill(0.);
+            }
+        }
         for (source, target) in memory.records.iter().zip(
             out.decision_records
-                .chunks_mut(super::decision_memory::RECORD_DIM),
-        ) {
-            target.copy_from_slice(source);
-        }
-        for (source, target) in memory.references.iter().zip(
-            out.decision_references
-                .chunks_mut(super::decision_memory::REFERENCE_DIM),
+                .chunks_mut(super::decision_memory::RECORD_DIM)
+                .skip(starts[0]),
         ) {
             target.copy_from_slice(source);
         }
         for (source, target) in memory.details.iter().zip(
             out.decision_reference_details
-                .chunks_mut(super::decision_memory::DETAIL_DIM),
+                .chunks_mut(super::decision_memory::DETAIL_DIM)
+                .skip(starts[1]),
+        ) {
+            target.copy_from_slice(source);
+        }
+        for (source, target) in memory.references.iter().zip(
+            out.decision_references
+                .chunks_mut(super::decision_memory::REFERENCE_DIM)
+                .skip(starts[2]),
         ) {
             target.copy_from_slice(source);
         }
         for (source, target) in memory.members.iter().zip(
             out.decision_members
-                .chunks_mut(super::decision_memory::MEMBER_DIM),
+                .chunks_mut(super::decision_memory::MEMBER_DIM)
+                .skip(starts[3]),
         ) {
             target.copy_from_slice(source);
         }

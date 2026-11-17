@@ -19,6 +19,9 @@ const CHUNK: usize = 32;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct DecisionLog {
+    // Transport lineage only: Arc equality compares (), not allocation identity.
+    // Serialization remains the record sequence; decoding starts a fresh lineage.
+    origin: Arc<()>,
     tail: Option<Arc<Chunk>>,
     len: usize,
     snapshots: Option<Arc<SnapshotChunk>>,
@@ -52,6 +55,13 @@ impl DecisionLog {
     pub fn len(&self) -> usize {
         self.len
     }
+    /// Transport revision: every committed decision, including a coalesced pass.
+    pub fn tail_version(&self) -> u64 {
+        self.tail.as_ref().map_or(0, |tail| {
+            u64::from(tail.rows.last().unwrap().last_position) + 1
+        })
+    }
+
     pub fn is_empty(&self) -> bool {
         self.len == 0
     }
@@ -68,23 +78,43 @@ impl DecisionLog {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &DecisionRecord> {
+        self.records_since(0)
+    }
+
+    fn records_since(&self, start: usize) -> impl Iterator<Item = &DecisionRecord> {
         let mut chunks = Vec::new();
         let mut next = self.tail.as_deref();
+        let mut end = self.len;
         while let Some(chunk) = next {
-            chunks.push(chunk);
+            let begin = end - chunk.rows.len();
+            if end <= start {
+                break;
+            }
+            chunks.push(&chunk.rows[start.saturating_sub(begin)..]);
+            end = begin;
             next = chunk.previous.as_deref();
         }
-        chunks.into_iter().rev().flat_map(|chunk| chunk.rows.iter())
+        chunks.into_iter().rev().flatten()
     }
 
     fn snapshots(&self) -> impl Iterator<Item = &Arc<DecisionReference>> {
+        self.snapshots_since(0)
+    }
+
+    fn snapshots_since(&self, start: usize) -> impl Iterator<Item = &Arc<DecisionReference>> {
         let mut chunks = Vec::new();
         let mut next = self.snapshots.as_deref();
+        let mut end = self.snapshot_count;
         while let Some(chunk) = next {
-            chunks.push(chunk);
+            let begin = end - chunk.rows.len();
+            if end <= start {
+                break;
+            }
+            chunks.push(&chunk.rows[start.saturating_sub(begin)..]);
+            end = begin;
             next = chunk.previous.as_deref();
         }
-        chunks.into_iter().rev().flat_map(|chunk| chunk.rows.iter())
+        chunks.into_iter().rev().flatten()
     }
 
     fn intern(&mut self, reference: Arc<DecisionReference>) -> Arc<DecisionReference> {
@@ -554,18 +584,79 @@ fn definition_only(reference: &DecisionReference) -> bool {
 /// One viewer prefix, with disjoint record members and shared exact snapshots.
 #[derive(Default)]
 pub struct EncodedMemory {
+    pub reset: bool,
     pub records: Vec<[f32; RECORD_DIM]>,
     pub references: Vec<[f32; REFERENCE_DIM]>,
     pub details: Vec<[f32; DETAIL_DIM]>,
     pub members: Vec<[f32; MEMBER_DIM]>,
 }
 
+/// Caller-owned native transport state, never serialized with game facts.
+#[derive(Default)]
+pub struct MemoryEncoding {
+    origin: Option<Arc<()>>,
+    counts: [usize; 4],
+    version: u64,
+    indexes: std::collections::HashMap<usize, usize>,
+    // Keep pointer-indexed snapshots alive until this buffer changes games.
+    log: Option<DecisionLog>,
+}
+
 pub fn encode(log: &DecisionLog) -> EncodedMemory {
+    encode_suffix(log, &mut MemoryEncoding::default()).1
+}
+
+pub fn encode_suffix(
+    log: &DecisionLog,
+    cursor: &mut MemoryEncoding,
+) -> ([usize; 4], EncodedMemory) {
+    let reset = cursor
+        .origin
+        .as_ref()
+        .is_none_or(|origin| !Arc::ptr_eq(origin, &log.origin));
+    if reset {
+        *cursor = MemoryEncoding::default();
+        cursor.origin = Some(log.origin.clone());
+    }
+    let mut starts = cursor.counts;
+    if starts[0] > 0 && cursor.version != log.tail_version() {
+        starts[0] -= 1;
+        let last = cursor
+            .log
+            .as_ref()
+            .unwrap()
+            .tail
+            .as_ref()
+            .unwrap()
+            .rows
+            .last()
+            .unwrap();
+        starts[3] -=
+            last.context.mana_sources.len() + last.response.len() + last.choice.references.len();
+    }
+    let mut out = encode_from(log, starts, &mut cursor.indexes);
+    out.reset = reset;
+    cursor.counts = [
+        log.len(),
+        log.detail_count(),
+        log.reference_count(),
+        log.member_count(),
+    ];
+    cursor.version = log.tail_version();
+    cursor.log = Some(log.clone());
+    (starts, out)
+}
+
+fn encode_from(
+    log: &DecisionLog,
+    starts: [usize; 4],
+    indexes: &mut std::collections::HashMap<usize, usize>,
+) -> EncodedMemory {
     use crate::cards::tokens::name_value;
     let mut out = EncodedMemory::default();
-    let mut indexes = std::collections::HashMap::new();
-    for (index, reference) in log.snapshots().enumerate() {
-        indexes.insert(Arc::as_ptr(reference), index + 1);
+    for (offset, reference) in log.snapshots_since(starts[2]).enumerate() {
+        let index = starts[2] + offset;
+        indexes.insert(Arc::as_ptr(reference) as usize, index + 1);
         let mut header = [0.; REFERENCE_DIM];
         header[0] = reference.role as f32;
         header[1] = reference.definition.map_or(0., |id| (id + 1) as f32);
@@ -575,7 +666,7 @@ pub fn encode(log: &DecisionLog) -> EncodedMemory {
         header[7] = f32::from(reference.ready);
         header[8] = f32::from(reference.attacking);
         header[9] = f32::from(reference.blocking);
-        header[10] = out.details.len() as f32;
+        header[10] = (starts[1] + out.details.len()) as f32;
         header[13] = f32::from(definition_only(reference));
         for (ordinal, &(kind, value)) in reference
             .program
@@ -600,11 +691,11 @@ pub fn encode(log: &DecisionLog) -> EncodedMemory {
                 ]);
             }
         }
-        header[11] = (out.details.len() - header[10] as usize) as f32;
+        header[11] = (starts[1] + out.details.len() - header[10] as usize) as f32;
         header[12] = 1.;
         out.references.push(header);
     }
-    for record in log.iter() {
+    for record in log.records_since(starts[0]) {
         let mut header = [0.0; RECORD_DIM];
         for (offset, value) in [
             (0, record.ordinal),
@@ -621,7 +712,7 @@ pub fn encode(log: &DecisionLog) -> EncodedMemory {
             "DecisionMemory::{}",
             record.kind
         ))));
-        header[14] = out.members.len() as f32;
+        header[14] = (starts[3] + out.members.len()) as f32;
         for (group, references) in [
             &record.context.mana_sources,
             &record.response,
@@ -632,8 +723,10 @@ pub fn encode(log: &DecisionLog) -> EncodedMemory {
         {
             header[15 + group] = references.len() as f32;
             for (ordinal, reference) in references.iter().enumerate() {
-                out.members
-                    .push([indexes[&Arc::as_ptr(reference)] as f32, ordinal as f32]);
+                out.members.push([
+                    indexes[&(Arc::as_ptr(reference) as usize)] as f32,
+                    ordinal as f32,
+                ]);
             }
         }
         header[18] = record.actor as f32;
@@ -1056,6 +1149,45 @@ mod tests {
         let observation = Observation::for_player(&first, PlayerId(1));
         let decoded = crate::agent::observation_json::parse(&observation.to_json()).unwrap();
         assert_eq!(decoded.decision_memory, observation.decision_memory);
+    }
+
+    #[test]
+    fn suffix_encoding_matches_dense_through_chunks_coalescing_and_reset() {
+        let mut game = game();
+        let pending = pending_pass(&game).unwrap();
+        let mut cursor = MemoryEncoding::default();
+        let mut retained = EncodedMemory::default();
+        for step in 0..100 {
+            let mut row = pending.clone();
+            row.record.context.turn = step / 2; // each second pass coalesces
+            commit(&mut game, Some(row));
+            let log = &game.decision_memory[1];
+            for _ in 0..2 {
+                // unchanged reads write no rows
+                let (starts, suffix) = encode_suffix(log, &mut cursor);
+                if suffix.reset {
+                    retained = EncodedMemory::default();
+                }
+                retained.records.truncate(starts[0]);
+                retained.details.truncate(starts[1]);
+                retained.references.truncate(starts[2]);
+                retained.members.truncate(starts[3]);
+                retained.records.extend(suffix.records);
+                retained.details.extend(suffix.details);
+                retained.references.extend(suffix.references);
+                retained.members.extend(suffix.members);
+                let dense = encode(log);
+                assert_eq!(retained.records, dense.records);
+                assert_eq!(retained.details, dense.details);
+                assert_eq!(retained.references, dense.references);
+                assert_eq!(retained.members, dense.members);
+            }
+        }
+        let restored: DecisionLog =
+            serde_json::from_str(&serde_json::to_string(&game.decision_memory[1]).unwrap())
+                .unwrap();
+        assert!(encode_suffix(&restored, &mut cursor).1.reset);
+        assert!(encode_suffix(&DecisionLog::default(), &mut cursor).1.reset);
     }
 
     #[test]

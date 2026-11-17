@@ -2,7 +2,7 @@
 #![allow(unexpected_cfgs)]
 
 #[cfg(feature = "python")]
-use std::{cell::Cell, slice, time::Instant};
+use std::{cell::Cell, slice, sync::Mutex, time::Instant};
 
 #[cfg(feature = "python")]
 use pyo3::{
@@ -19,7 +19,8 @@ use crate::{
         env::HandSnapshot,
         observation::Observation,
         observation_encoder::{
-            encode, encode_into, EncodedObservationMut, ObservationEncoderConfig, ACTION_DIM,
+            encode, encode_into, encode_into_incremental, EncodedObservationMut,
+            ObservationEncoderConfig, ACTION_DIM,
         },
         rollout_pool::RolloutPool,
         vector_env::{ObservationRead, ObservationWriteError, VectorEnv},
@@ -94,6 +95,7 @@ pub struct PyVectorEnv {
     buffers: Option<ObservationBuffers>,
     last_info: Vec<InfoDict>,
     timings: BufferedCallTimings,
+    memory_encoding: Vec<Mutex<crate::agent::decision_memory::MemoryEncoding>>,
 }
 
 /// Cumulative wall time inside buffered calls: every step or reset, split into
@@ -156,6 +158,7 @@ impl PyVectorEnv {
             inner,
             config: ObservationEncoderConfig::default(),
             num_envs,
+            memory_encoding: (0..num_envs).map(|_| Mutex::default()).collect(),
             buffers: None,
             last_info: Vec::new(),
             timings: BufferedCallTimings::default(),
@@ -205,6 +208,7 @@ impl PyVectorEnv {
         config.action_overflow = action_overflow.parse().map_err(PyValueError::new_err)?;
         let buffers = read_observation_buffers(&buffers, self.num_envs, &config, true)?;
         self.config = config;
+        self.memory_encoding = (0..self.num_envs).map(|_| Mutex::default()).collect();
         self.buffers = Some(buffers);
         Ok(())
     }
@@ -266,6 +270,7 @@ impl PyVectorEnv {
                     .transpose()
             })
             .collect::<PyResult<Vec<_>>>()?;
+        self.memory_encoding = (0..self.num_envs).map(|_| Mutex::default()).collect();
         self.run_into_buffers(py, move |inner, buffers, config| {
             inner.reassign_roots_into(
                 configs,
@@ -360,6 +365,10 @@ impl PyVectorEnv {
 
     fn current_game_seeds(&self) -> Vec<u64> {
         self.inner.current_game_seeds()
+    }
+
+    fn decision_memory_cursors(&self) -> PyResult<Vec<[[u64; 5]; 2]>> {
+        self.inner.decision_memory_cursors().map_err(map_agent_err)
     }
 
     fn decision_memory_counts(&self) -> PyResult<Vec<[[usize; 4]; 2]>> {
@@ -994,12 +1003,22 @@ impl PyVectorEnv {
             .ok_or_else(|| PyRuntimeError::new_err("set_buffers() must be called first"))?;
         let config = self.config;
         let inner = &mut self.inner;
+        let memory_encoding = &self.memory_encoding;
 
         let started = Instant::now();
         ENCODING_NANOS.set(0);
         let result = with_send_write_buffers(py, &buffers, |write_buffers| {
-            py.allow_threads(|| run(inner, write_buffers, config))
-                .map_err(map_agent_err)
+            py.allow_threads(|| {
+                run(
+                    inner,
+                    SendWriteBuffers {
+                        memory_encoding: Some(memory_encoding),
+                        ..write_buffers
+                    },
+                    config,
+                )
+            })
+            .map_err(map_agent_err)
         });
         let encoding = ENCODING_NANOS.get();
         self.timings.encoding_nanos += encoding;
@@ -1696,7 +1715,8 @@ impl SendObservationFieldSlices {
 
 #[cfg(feature = "python")]
 #[derive(Clone, Copy)]
-struct SendWriteBuffers {
+struct SendWriteBuffers<'a> {
+    memory_encoding: Option<&'a [Mutex<crate::agent::decision_memory::MemoryEncoding>]>,
     fields: SendObservationFieldSlices,
     rewards: SendSlice<f64>,
     terminated: SendSlice<u8>,
@@ -1704,7 +1724,7 @@ struct SendWriteBuffers {
 }
 
 #[cfg(feature = "python")]
-impl SendWriteBuffers {
+impl SendWriteBuffers<'_> {
     fn encode_observation(
         &self,
         env_index: usize,
@@ -1712,7 +1732,14 @@ impl SendWriteBuffers {
         config: &ObservationEncoderConfig,
     ) -> Result<(), ObservationWriteError> {
         let out = self.fields.encoded_row_mut(env_index, config)?;
-        encode_into(observation, config, out).map_err(ObservationWriteError::from)
+        match self.memory_encoding {
+            Some(cursors) => {
+                let mut cursor = cursors[env_index].lock().expect("exclusive buffer row");
+                encode_into_incremental(observation, config, out, &mut cursor)
+            }
+            None => encode_into(observation, config, out),
+        }
+        .map_err(ObservationWriteError::from)
     }
 
     fn write_step_state(
@@ -1768,6 +1795,7 @@ fn with_send_write_buffers<R>(
     let truncated_buffer = typed_numpy_buffer::<u8>(py, &step_state.truncated, "truncated")?;
     with_observation_field_slices(py, buffers, |fields| {
         f(SendWriteBuffers {
+            memory_encoding: None,
             fields,
             rewards: send_slice_from_buffer(py, &rewards_buffer, "rewards")?,
             terminated: send_slice_from_buffer(py, &terminated_buffer, "terminated")?,

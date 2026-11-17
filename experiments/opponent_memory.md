@@ -2008,3 +2008,25 @@ Launcher estimate USD0.2958674063638888861128685272; rental ended. The earlier `
 Control is 1.143× incumbent time and GRU-K1 1.548× (rates 0.875× and 0.646× using stage seconds); earlier refs256 rates were 0.537× and 0.356×. Worker decision counts differ, so time ratios and decisions/s are both shown. Retention plus native observation encoding remains about 37 s in the GRU; GRU preparation and inference each add about 37 s over control. The CUDA split supersedes the earlier CPU collection stop for the two authorized host cuts. Model shape, capacities, coalescing and transformer evidence stay fixed.
 
 Evidence: `experiments/data/opponent-memory/20261117-cuda-optimized-retry`: all 134 outputs fetched with SDK digest checks (182,529,894 bytes), archived and each archive member verified against the retained SHA256/size manifest; launcher status, attempt and record plus lost-attempt status retained. No new rental, pilot, evaluation or PR. Optimization continues with native suffix transport and a parameter-versioned collection fold.
+
+### Native cursor and suffix transport — 2026-11-17
+
+Per-stream native cursors expose four table counts and a tail revision derived from the last committed decision position, including coalesced passes. Unchanged captures return the issued prefix directly; changed captures re-admit the open chunk. Registered native vector buffers retain a caller-owned snapshot index and write only new table rows plus the potentially coalesced last record. A viewer switch starts a full projection because that row now belongs to another log; reset/import/recovery start a fresh lineage. Scalar encodes, explicit viewer reads and archives retain full-table encoding/admission. No model, capacity or coalescing change.
+
+Existing whole-game harness, two streams, one real update, 556 decisions in every case; 27 sequential fresh processes, three per arm/row limit. All collection, prefix, final-gradient and updated-state hashes match the retained learner-fold receipts exactly. Times are medians [min, max], seconds. Ratios use the fresh true incumbent at each row limit.
+
+| Rows | Arm | Collection s | Update s | Total s | Total / incumbent |
+|---|---|---:|---:|---:|---:|
+| 32 | incumbent | 1.412 [1.400, 1.421] | 2.589 [2.584, 2.602] | 4.001 [3.985, 4.022] | 1.000 |
+| 32 | control | 1.502 [1.480, 1.512] | 2.581 [2.578, 2.588] | 4.080 [4.062, 4.099] | 1.020 |
+| 32 | gru-k1 | 2.794 [2.769, 2.822] | 3.821 [3.817, 3.822] | 6.615 [6.590, 6.639] | 1.653 |
+| 128 | incumbent | 1.418 [1.409, 1.421] | 2.007 [2.005, 2.046] | 3.425 [3.414, 3.467] | 1.000 |
+| 128 | control | 1.535 [1.494, 1.538] | 2.017 [2.003, 2.026] | 3.552 [3.497, 3.564] | 1.037 |
+| 128 | gru-k1 | 2.774 [2.758, 2.813] | 3.235 [3.215, 3.281] | 6.009 [5.973, 6.095] | 1.755 |
+| 256 | incumbent | 1.419 [1.417, 1.435] | 1.994 [1.975, 1.994] | 3.413 [3.392, 3.429] | 1.000 |
+| 256 | control | 1.474 [1.467, 1.508] | 2.003 [1.987, 2.013] | 3.470 [3.461, 3.521] | 1.017 |
+| 256 | gru-k1 | 2.781 [2.758, 2.787] | 3.197 [3.196, 3.205] | 5.978 [5.956, 5.992] | 1.751 |
+
+Control CPU time ratios are 1.020/1.037/1.017×; GRU 1.653/1.755/1.752×. The prior learner-fold medians were 1.04/1.03/1.06× control and 1.67/1.79/1.80× GRU. These small differences have overlapping ranges and do not establish a general speedup. The native projection must still be fully rewritten when the acting viewer changes; suffix transport alone cannot remove that cost with one shared output row. No new CUDA result follows.
+
+Validation: touched debug nextest tests passed (2); CPython 3.13 release extension rebuilt from the root and replaced atomically; prefix-storage tests passed (14), including recovery, with the strengthened 140-step native-buffer-versus-dense test passing afterward. Evidence archive retains source, harness, all 27 receipts/logs and member hashes. No paid launch or PR. Collection folding follows as a separate cut.

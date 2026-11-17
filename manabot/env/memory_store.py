@@ -245,6 +245,7 @@ def gather_memory(prefixes: Sequence[Prefix]) -> dict[str, np.ndarray]:
 @dataclass(frozen=True)
 class _StreamCapture:
     epoch: int
+    version: int | None
     prefix: Prefix
 
 
@@ -325,12 +326,14 @@ class MemoryStore:
         *,
         epoch: int,
         counts: Sequence[int],
+        tail_version: int | None = None,
     ) -> Prefix:
         """Extend a synchronous native stream read using its generation and counts.
 
         Only native caller-owned buffers qualify: arbitrary imports use capture.
         A generation changes on reset/fork/replacement, including repeated seeds.
-        Coalescing can rewrite only the last record, so always re-read its chunk.
+        A matching native tail revision reuses the issued prefix. Otherwise only
+        the open chunk is re-admitted; coalescing can rewrite its last record.
         The native read and buffer write must describe the same unstepped env.
         """
         if len(counts) != 4 or any(
@@ -352,6 +355,12 @@ class MemoryStore:
                 n < old for n, old in zip(counts, previous.prefix.counts, strict=True)
             ):
                 raise ValueError("decision-memory native stream regressed within epoch")
+            if (
+                tail_version is not None
+                and previous.version == tail_version
+                and tuple(counts) == previous.prefix.counts
+            ):
+                return previous.prefix
             if previous.prefix.tail is not None:
                 tail = previous.prefix.tail.previous
         cursor = tail.cursor if tail else MemoryCursor()
@@ -362,7 +371,9 @@ class MemoryStore:
         for blocks in record_chunks(rows, _CHUNK_ROWS, cursor):
             tail = self._append(tail, self._intern(blocks))
         prefix = Prefix(identity, tail)
-        self._streams[row, identity.viewer] = _StreamCapture(epoch, prefix)
+        self._streams[row, identity.viewer] = _StreamCapture(
+            epoch, tail_version, prefix
+        )
         return prefix
 
     def measure(self, prefixes: Sequence[Prefix]) -> dict[str, int]:

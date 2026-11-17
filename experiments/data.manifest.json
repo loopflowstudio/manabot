@@ -41918,6 +41918,14 @@
    "sha256": "12c1e47f0ff31f78534b64a53098eaef2efc6317106d29f506c79d66a10e19af",
    "bytes": 185
   },
+  "experiments/data/opponent-memory/20261117-native-cursor/evidence.tar.gz": {
+   "sha256": "02b83f03cb8eea2eee968d9f7867d909b4cae4e1998c21a1a5e7c51cb6dc0a6c",
+   "bytes": 238900
+  },
+  "experiments/data/opponent-memory/20261117-native-cursor/members.json": {
+   "sha256": "feca78680f905d9a21558154d016372d69f0e499218050fe2563c83266bb3469",
+   "bytes": 14520
+  },
   "experiments/data/opponent-memory/20261117-sharing-recency/measurement-files.json": {
    "sha256": "1fb55e29dcbd0b63086e55c580e122963f6163a5610703c653bf09c7e26d2221",
    "bytes": 8047

@@ -366,6 +366,10 @@ impl VectorEnv {
         self.envs.iter().map(|env| env.capture_generation).collect()
     }
 
+    pub fn decision_memory_cursors(&self) -> Result<Vec<[[u64; 5]; 2]>, AgentError> {
+        self.envs.iter().map(Env::decision_memory_cursors).collect()
+    }
+
     pub fn decision_memory_counts(&self) -> Result<Vec<[[usize; 4]; 2]>, AgentError> {
         self.envs.iter().map(Env::decision_memory_counts).collect()
     }

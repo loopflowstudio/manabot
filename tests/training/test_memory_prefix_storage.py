@@ -411,6 +411,7 @@ def test_native_live_suffix_counts_and_viewers_match_dense_capture() -> None:
     env = managym.VectorEnv(1, seed=11, player_policies=("agent", "agent"))
     env.set_buffers(buffers)
     env.reset_all_into_buffers(Match().to_rust())
+    dense_buffers = space.encoder.allocate(1)
     store, dense_store = MemoryStore(capacities), MemoryStore(capacities)
     rng = random.Random(19)
     observed: set[int] = set()
@@ -418,9 +419,15 @@ def test_native_live_suffix_counts_and_viewers_match_dense_capture() -> None:
         viewer = env.current_agent_indices()[0]
         observed.add(viewer)
         epoch = env.current_game_generations()[0]
-        counts = env.decision_memory_counts()[0][viewer]
+        cursor = env.decision_memory_cursors()[0][viewer]
+        counts = cursor[:4]
+        env.write_observations_for_players([viewer], dense_buffers)
+        for key in MEMORY_FIELDS:
+            np.testing.assert_array_equal(buffers[key], dense_buffers[key])
         identity = PrefixIdentity(str(env.current_game_seeds()[0]), viewer, "root")
-        prefix = store.capture_live(buffers, 0, identity, epoch=epoch, counts=counts)
+        prefix = store.capture_live(
+            buffers, 0, identity, epoch=epoch, counts=counts, tail_version=cursor[4]
+        )
         expected = dense_store.capture(buffers, 0, identity)
         assert prefix.counts == tuple(counts)
         assert (prefix.tail.key if prefix.tail else None) == (
@@ -473,3 +480,31 @@ def test_sharded_native_suffix_metadata_tracks_each_stream() -> None:
         assert not set(generations) & set(env.current_game_generations())
     finally:
         env.close()
+
+
+def test_native_cursor_reuses_unchanged_prefix_and_versions_coalescing() -> None:
+    _, sample = memory_input()
+    capacities = (128, 1024, 1024, 16384)
+    buffers = {
+        key: np.zeros((1, cap, sample[key].shape[-1]), np.float32)
+        for key, cap in zip(MEMORY_FIELDS, capacities, strict=True)
+    }
+    buffers["decision_records"][0, 0] = sample["decision_records"][0, 0]
+    store = MemoryStore(capacities)
+    identity = PrefixIdentity("seed", 0, "root")
+    first = store.capture_live(
+        buffers, 0, identity, epoch=1, counts=(1, 0, 0, 0), tail_version=1
+    )
+    unchanged = store.capture_live(
+        buffers, 0, identity, epoch=1, counts=(1, 0, 0, 0), tail_version=1
+    )
+    assert unchanged is first
+    buffers["decision_records"][0, 0, 3] = 2
+    buffers["decision_records"][0, 0, 9] = 1
+    changed = store.capture_live(
+        buffers, 0, identity, epoch=1, counts=(1, 0, 0, 0), tail_version=2
+    )
+    assert changed.tail is not first.tail
+    assert first.tail is not None and changed.tail is not None
+    assert first.tail.chunk.rows[0][0, 3] == 1
+    assert changed.tail.chunk.rows[0][0, 3] == 2

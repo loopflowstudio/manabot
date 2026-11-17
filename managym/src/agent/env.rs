@@ -1118,6 +1118,23 @@ impl Env {
 
     /// Transport-only counts for both viewer logs. Pair with capture_generation;
     /// neither seeds nor policy observations authorize append-only reuse.
+    pub fn decision_memory_cursors(&self) -> Result<[[u64; 5]; 2], AgentError> {
+        let game = self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("env.decision_memory_cursors called before reset".into()))?;
+        Ok(std::array::from_fn(|viewer| {
+            let log = &game.decision_memory[viewer];
+            [
+                log.len() as u64,
+                log.detail_count() as u64,
+                log.reference_count() as u64,
+                log.member_count() as u64,
+                log.tail_version(),
+            ]
+        }))
+    }
+
     pub fn decision_memory_counts(&self) -> Result<[[usize; 4]; 2], AgentError> {
         let game = self
             .game

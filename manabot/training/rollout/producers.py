@@ -268,6 +268,14 @@ class ShardedVectorEnv:
             for epoch in shard.native.current_game_generations()
         ]
 
+    def decision_memory_cursors(self) -> list[list[list[int]]]:
+        self._check()
+        return [
+            cursor
+            for shard in self._shards
+            for cursor in shard.native.decision_memory_cursors()
+        ]
+
     def decision_memory_counts(self) -> list[list[list[int]]]:
         self._check()
         return [
