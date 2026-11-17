@@ -849,14 +849,14 @@ board_only + tanh(scale * gate) * (joint - board_only)
 
 with one learned scalar `gate` per layer, initialized to zero. Summary rows take
 the joint output. At initialization every board row therefore equals the
-no-history computation; the gates receive gradient from the first update and
+board-only (control) computation; the gates receive gradient from the first update and
 the encoder from the second, once a gate has moved. A memory policy built
 without a trunk has the same zero gates and starts as its own board-only
 function. Every memory policy is gated; there is no ungated join.
 
 Training logs `decision_memory/gate_<layer>`, the value of
 `tanh(scale * gate)` for each board layer. A gate that stays near zero means
-the run is still a no-history policy, whatever its configuration says; read
+the run still computes its board-only control, whatever its configuration says; read
 that metric before comparing a memory run with its control. A gate moves about
 one learning rate per update, so a short run can end before it opens. Raise
 `decision_memory_gate_scale` for the whole comparison in that case, never for

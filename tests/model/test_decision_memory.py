@@ -325,7 +325,7 @@ def test_decision_memory_collects_bootstraps_and_learns_from_real_prefixes(
         collector.close()
 
 
-def test_no_history_control_retains_logs_without_using_them(tmp_path: Path) -> None:
+def test_control_retains_logs_without_using_them(tmp_path: Path) -> None:
     space, obs = memory_input()
     config = ModelConfig(world=managym.WORLD_SETUP, hidden_dim=16)
     torch.set_num_threads(1)
