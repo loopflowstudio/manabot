@@ -1,5 +1,14 @@
 # MTG-329 live limits and decisions
 
+2026-11-17 GPU measurement choices (mine, reversible): two alternating
+three-update Elemental runs per revision at the recipe's normal 256 streams;
+six-update baseline for resume, with an Etude stop-file request at update 3;
+16 paired eight-leg deals per endpoint (increased from the two-deal harness
+preflight before any remote scored run). This is an execution calibration,
+not evidence of strength equivalence. Use Etude rent's two-hour window under
+the approved USD 10 cap and direct SSH for both source archives; no queued
+training/launcher delivery claim follows from this measurement.
+
 2026-11-16 QA fix choice: reject an Elemental callback with zero valid games
 after playing its whole group and retaining evidence. The callback is Etude's
 success boundary, so an all-invalid group fails even in a larger evaluation;

@@ -178,3 +178,25 @@ measurement has run. Resume strength and CUDA speed/admission remain separate.
   131072 bytes), reports no usage entries; protected scratch notes untouched.
   Final isolated `etude machines` lists only owned local; no watcher/server
   was started. Gate, publication, CUDA/resume and nightly remain unrun.
+
+## GPU attempt — 2026-11-17
+
+- Prepared `experiments/etude_execution.py` and its report before remote scored
+  work: alternating main/branch Elemental runs, normal 256 streams, real save
+  timings, a six-update full/stopped/resumed baseline and managed evaluation
+  with actual device/batch logging. Main archive's resolved Elemental config
+  validated against its historical schema; this adds no live regime reader.
+- Harness preflight: actual `etude train` at seed 197, CPU, two updates,
+  stop-file request after update 1: exit 75; `--resume`: exit 0. Reader returns
+  updates [1, 2], final 1,012 decisions. Production managed callback on an
+  existing checkpoint: 2 deals, 16/16 valid/replayed games, 645 CPU forwards,
+  max batch 1. This is a harness check, not CUDA or main/branch performance.
+- Vast 4090 reached SSH, source upload and native compilation, then provider
+  status became offline. No scored GPU workload completed. Explicit termination
+  confirmed 15:53 UTC by Etude's deleted listing and Vast API absence. Fallback
+  RunPod A6000 query: no capacity. Method, machine id, exact events and the
+  launcher's single retained cost estimate: experiments/reports/etude-execution.md.
+- Ruff check/format and `git diff --check` pass. `lf context` keeps default
+  targets and no usage entries. No server/watcher or rented machine remains.
+  CUDA speed/batching and GPU resume-strength remain unmeasured; gate, nightly
+  and publication remain the caller's steps.

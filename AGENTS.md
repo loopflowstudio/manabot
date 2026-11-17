@@ -103,6 +103,9 @@ checkpoints or experiment evidence.
 
 ### Experiments
 
+- Etude serializes agent loaders and game callbacks by module name. A measurement
+  invoked with `uv run python -m ...` must pass functions from their canonical
+  importable module, not functions bound to `__main__`.
 - Most runs are exploratory: calibration, throughput, capacity, pilots and
   anything run to make later work possible. They need no prediction, protocol
   or review; the report ends them. A finding, a result that will be cited as a claim

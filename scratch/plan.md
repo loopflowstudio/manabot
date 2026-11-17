@@ -126,13 +126,16 @@ Etude's failed match. Nothing further to change; no new open choice.
   4090 or similar price; .lf/prompts/20261117-065639-rst6T1-steer.md,
   replacing the L4-only steer); the report names it. Lium rental is untested:
   confirm start and termination. Terminate every machine and confirm.
-  Seen 2026-11-17 14:45–14:50 UTC: no L4 at RunPod, Vast or Lium; nothing
-  rented, nothing spent (implementation.md). At 15:25 UTC the broader query
-  found a Vast 4090 available at $0.42702738444444444/hour (24 vCPUs/64 GB);
-  RunPod had no 4090 capacity at $0.89/hour, Lium returned invalid required
-  fields. Nothing rented. Next measurement must prepare the full same-machine
-  training/evaluation/resume workload, recheck availability, launch under the
-  USD 10 cap and confirm termination; availability alone is no CUDA proof.
+  Harness prepared in experiments/etude_execution.py; method and actual
+  attempt in experiments/reports/etude-execution.md. Vast 4090 rented and
+  reached SSH/native compilation, then the host went offline before a scored
+  workload. Termination confirmed in Etude and by absence from Vast's API at
+  15:53 UTC. RunPod A6000 had no capacity. No GPU timings, CUDA batches or
+  resume strength were observed; repeat on a functioning GPU. Account for
+  this attempt within the USD 10 total cap (its launcher's estimate is in the
+  report); cap a subsequent rental at USD 9 to leave margin. The two-update
+  CPU stop/resume harness and 16 replayed preflight games passed. No queued
+  launcher-delivery proof follows from a direct SSH measurement.
 - Gate and publication are the caller's steps. The full nightly baseline
   (`.github/workflows/baseline.yml`, workflow_dispatch: `etude train` then
   `evaluate`) has not run since the corpus fix; dispatch it on the PR branch
