@@ -41846,6 +41846,42 @@
    "sha256": "bd99fddeb3b5e61358165e0d3b6f3d7b0a2ee806649e0973d55ad00496b34e7b",
    "bytes": 22854
   },
+  "experiments/data/opponent-memory/20261117-cuda-fold-2/fetch.py": {
+   "sha256": "12f6354ab71717f1fdf5774cbf85dd02f020a15f5fe5035be3798fbad812558b",
+   "bytes": 2496
+  },
+  "experiments/data/opponent-memory/20261117-cuda-fold-2/fold-2-attempt.json": {
+   "sha256": "763889afdd0cc468c5ba1d654b8ecf5b8d6c2cd077aabc80bda842775683abbe",
+   "bytes": 28821
+  },
+  "experiments/data/opponent-memory/20261117-cuda-fold-2/fold-2-launcher-status.json": {
+   "sha256": "5f406bbb812339ce27dbaa69e49732f4ce48f3bd26860e9d2159ff76694574bb",
+   "bytes": 508
+  },
+  "experiments/data/opponent-memory/20261117-cuda-fold-2/fold-2-members.json": {
+   "sha256": "c73fe41c06b1b9c422695a878417c714c9fe6a9c4727f415fb4628036f120688",
+   "bytes": 26246
+  },
+  "experiments/data/opponent-memory/20261117-cuda-fold-2/fold-2-output.tar.gz": {
+   "sha256": "72e1c0d67e9a6d592727d8606069c67006a485cf43eb21ea3117ed9d7fb249a7",
+   "bytes": 75637767
+  },
+  "experiments/data/opponent-memory/20261117-cuda-fold-2/fold-2-record.json": {
+   "sha256": "fe76b630b369a527f8ac1399eabe57d17faccff9c43f46c59dd78aa2a9814104",
+   "bytes": 202066
+  },
+  "experiments/data/opponent-memory/20261117-cuda-fold-2/launch-512c2c6e3fcd.json": {
+   "sha256": "77dbfa74b9bdb32fbdb439cde9d4b7881f27837b65cb8f38cbf197d344b7fbec",
+   "bytes": 419
+  },
+  "experiments/data/opponent-memory/20261117-cuda-fold-2/launch-cdc1c3370199.json": {
+   "sha256": "9fd720d9b4d57d8249d333a97f760e00ac19f721bebbbf551ab8e53d172ace01",
+   "bytes": 384
+  },
+  "experiments/data/opponent-memory/20261117-cuda-fold-2/report.py": {
+   "sha256": "d9fb5236067360d174c85cdf4253ec81546c0ab8ca2393773da0b7561906ba75",
+   "bytes": 4234
+  },
   "experiments/data/opponent-memory/20261117-cuda-optimized-retry/lost-attempt.json": {
    "sha256": "90bd5c9bcf083b8f84d436228a913fd347309babb515b093b3d5b1b5dce93bc5",
    "bytes": 388

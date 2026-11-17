@@ -2056,3 +2056,30 @@ Numerical proof: six additional whole-game runs pair the unchanged stateless ret
 Validation: 30 tests passed in the four affected storage/fold files, including open-gate cold/warm, late references, K1/K4, live/padded, coalesced tails, reset/fork/resume lifetimes, parameter invalidation, shuffled/repeated/empty policy rows, all learner gradients and weak ownership even with a warm Prepared still alive. The shared model decision-memory tests passed (108). Ruff and whitespace checks passed. The native-cursor commit already supplied debug nextest and the rebuilt extension; this cut changes no Rust.
 
 Evidence: `experiments/data/opponent-memory/20261117-collection-fold` retains the implemented source, unchanged harness, runners, all 27 receipts/logs, six full-array proof runs and the current plan/design plus pre-cut design chronology. Every archive member is verified against its SHA256/size manifest. The current design closes decision 1 as the Task session taking option b; the two authorized optimization cuts are complete. Matched training/paired evaluation remain unrun pending the Task session’s next decision.
+
+### Collection-fold CUDA calibration — 2026-11-17
+
+Run `opponent_memory/cuda-calibration-fold-2@39100`, source `fc5bc66985`, A40 `mtg252-a40-126c56e020a3`. Five sequential fresh workers on the unchanged refs256 workload, two updates each. Raw and EMA reloads admitted. Incumbent reference is the two-worker median, 312.553 s. Exploratory cost evidence; matched training and paired strength evaluation remain unrun.
+
+| Worker | Decisions | Stage s | Collection s | Learning s | Time / incumbent | Decisions/s | Host tree peak GB | CUDA allocated peak GB |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0: control | 105938 | 360.619 | 217.098 | 141.053 | 1.154 | 293.77 | 15.909 | 0.181 |
+| 1: incumbent | 105609 | 311.666 | 175.281 | 134.551 | 0.997 | 338.85 | 15.610 | 0.177 |
+| 2: control | 106020 | 351.715 | 210.396 | 138.920 | 1.125 | 301.44 | 15.949 | 0.182 |
+| 3: gru-k1 | 105784 | 450.861 | 277.395 | 171.109 | 1.443 | 234.63 | 16.320 | 0.252 |
+| 4: incumbent | 106559 | 313.439 | 175.739 | 135.628 | 1.003 | 339.97 | 15.609 | 0.177 |
+
+| Phase s | Incumbent median | Pretrained control | GRU-K1 |
+|---|---:|---:|---:|
+| Retention (includes capture) | 3.792 | 24.630 | 22.546 |
+| Memory capture (nested) | 0.000 | 20.263 | 18.383 |
+| Native observation encoding | 1.856 | 3.493 | 3.492 |
+| Preparation | 55.130 | 65.886 | 102.784 |
+| Inference/action selection | 69.365 | 69.727 | 103.863 |
+| Learner forward/loss (includes backward/step) | 124.247 | 127.738 | 160.135 |
+
+Launcher estimate USD0.3188911458250000161266749881; rental terminated and the Task session confirmed the pod gone. The original `cuda-calibration-fold` launch was refused for no A40 stock (Task session observation; retained request `512c2c6e3fcd` is `failed`). Request `cdc1c3370199` remains stuck `admitting` after an interrupted `etude queue`; it rented nothing according to the Task session. The stuck request is not a successful run or a new charge. No retry, cancellation, paid launch or job rename was performed here.
+
+Verified ratios: control 1.125×, GRU-K1 1.443× incumbent time, versus 1.143× / 1.548× in the prior optimized CUDA run. Suffix transport reduced native encoding to about 3.5 s, but retention remains about 20 s over incumbent. GRU preparation and inference still each add about 35 s over control. The existing gated J1 layer runs joint and control attention separately; the next cut replaces that unmerged arithmetic with a single-pass gated additive summary. Frozen probe and CUDA bytes keep their original identities.
+
+Evidence: `experiments/data/opponent-memory/20261117-cuda-fold-2`. All 134 outputs (182,529,881 bytes) fetched through SDK digest checks; archive members verified against the retained SHA256/size manifest. Launcher status, attempt, record and both original launch requests retained. The launcher has no run record for the original fold job, so its cost is not independently reported here. No learning, strength or adoption claim.
