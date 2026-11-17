@@ -276,7 +276,8 @@ only the encoder, summary count and gate scale may change, with positive shared
 decision capacities. The learning rule, schedules, streams, transitions, updates,
 behavior, opponent, device and seed are free. Only the policy is inherited:
 Adam, EMA, streams and the schedule iteration start fresh, so choose a schedule
-meant for a trained policy. Remote jobs reject `pretrained`. To continue one recipe with its Adam
+meant for a trained policy. Remote jobs bind `TrainingJob.pretrained`
+(`PretrainedInitialization`) to this same admission path. To continue one recipe with its Adam
 and EMA, use [portable learner continuation](#portable-learner-continuation).
 
 `StageRecord.producer_cost` carries the producer's cumulative cost through
@@ -331,6 +332,15 @@ The committed dependency requirements and `uv.lock` select the same Etude SDK
 release for both the launcher and this setup.
 Refresh it only through the [explicit dependency update workflow](development.md#environment-and-commands)
 before freezing a new run; never upgrade dependencies inside a training attempt.
+
+`TrainingJob.pretrained` (`PretrainedInitialization`) stages the producer's
+`source_run` and selected `checkpoint` as `StagedExport` records (storage key,
+SHA256 and byte count), with `source_stage` and `weights="raw"` or `"ema"`.
+Etude delivers digest-checked inputs; the worker binds them into
+`TrainSelfPlay.pretrained` and checks the producer's published export and cost
+through normal policy admission. Keep the frozen regime's starting-state fields
+empty. Choose only one of `pretrained`, `initial_checkpoint` or `continuation`.
+Pretrained branches start at iteration 1 with fresh Adam and EMA.
 
 `TrainingJob.continuation` (`LearnerContinuation`) continues another run's
 learner from its published `run.json` and raw/EMA/Adam exports, bound as a

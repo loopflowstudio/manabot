@@ -9,13 +9,18 @@ recipes from manabot.recipes.builders and replay-checked evaluation jobs.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
+from decimal import Decimal
 from pathlib import Path
 from typing import Literal
 
 from etude.jobs import ExperimentState
 from etude.report import Curve, Matches, Matrix, Ranking, Report, Score
 from etude.spec import Job, RunRequest
+
+from manabot.experiment.job import PretrainedInitialization, TrainingJob
+from manabot.training.regime import TrainingRegime
 
 
 @dataclass(frozen=True)
@@ -47,6 +52,49 @@ def training_jobs(revision: str) -> list[RunRequest]:
         "decision horizon and wire jobs before allocating training. "
         "See experiments/opponent_memory.md."
     )
+
+
+def branch_jobs(
+    revision: str,
+    *,
+    regime: TrainingRegime,
+    trunks: Mapping[int, PretrainedInitialization],
+    max_hours: float,
+    max_usd: Decimal,
+) -> list[RunRequest]:
+    """Freeze matched branches from published trunk inputs without launching.
+
+    Calibration supplies the shared branch recipe, horizon, gate scale and caps.
+    Each seed maps to exactly one producer receipt and EMA export, reused by all
+    three arms. The ordinary training declaration stays stopped until CUDA
+    admission and calibration; this builder also serves their bounded worker proof.
+    """
+    if not trunks or any(seed not in SEEDS for seed in trunks):
+        raise ValueError("branches require declared pilot seed labels")
+    if regime.agent.decision_memory != "none":
+        raise ValueError("the shared branch recipe must describe the control")
+    if any(trunk.weights != "ema" for trunk in trunks.values()):
+        raise ValueError("all branches use the same EMA trunk role")
+    jobs: list[RunRequest] = []
+    for seed, trunk in sorted(trunks.items()):
+        for arm in ARMS:
+            configuration = regime.model_copy(deep=True)
+            configuration.id = f"decision-memory-{arm.name}"
+            configuration.agent.decision_memory = arm.encoder
+            if arm.summaries:
+                configuration.agent.decision_memory_summaries = arm.summaries
+            job = TrainingJob(
+                regime=configuration,
+                experiment=Path(__file__).stem,
+                pretrained=trunk,
+            ).job(
+                repo=Path(__file__).resolve().parents[1],
+                revision=revision,
+                max_hours=max_hours,
+                max_usd=max_usd,
+            )
+            jobs.extend(job.runs(seed))
+    return jobs
 
 
 def eval_jobs(state: ExperimentState) -> list[Job]:

@@ -1193,9 +1193,9 @@ the executor copies shared tensors strictly, initializing only memory and gates.
 Adam, EMA, streams and schedule start fresh. The run record retains
 `pretrained/source_run`, `pretrained/checkpoint` and `producer_cost`; checkpoint
 source continues to name the run that wrote it. Update metrics report
-`decision_memory/gate_<layer>`. The remote `TrainingJob` adapter still rejects
-pretrained stages; staging the producer run and selected checkpoint through
-its digest-checked inputs is a prerequisite to CUDA branch admission.
+`decision_memory/gate_<layer>`. The remote `TrainingJob` adapter binds the
+producer record and selected checkpoint through digest-checked inputs (see the
+pretrained job validation below); CUDA branch admission is still outstanding.
 
 One prerequisite changed after inspection: memory adds catalog embedding rows,
 so the old log-enabled control could not supply identical shared tensors. The
@@ -1274,3 +1274,41 @@ it; the failing integration and staged-gradient/scale selection then passed all
 9 cases. Ruff check/format and whitespace checks passed. These checks establish
 software wiring, not CUDA fit, throughput or learnability. No Rust changed, no
 probe/census was repeated and no rental or paid run was started.
+
+
+### Pretrained job binding — 2026-11-16
+
+`TrainingJob.pretrained` now carries a `PretrainedInitialization`: the
+producer's immutable TrainingRun record and selected raw/EMA checkpoint as
+`StagedExport` inputs, plus the source stage and weight role. Job construction
+validates the bound regime at `/inputs`; the worker binds delivered paths and
+uses ordinary digest, producer-metadata, world, observation and strict model
+admission. Producer cost uses the existing admission calculation. Pretrained,
+initial weights and learner continuation are exclusive, and the frozen regime
+cannot supply another starting state.
+
+The experiment's pure `branch_jobs` builder freezes all three arms from one
+published EMA export per seed label, taking the shared branch recipe, horizon,
+gate scale and caps from its caller. It makes ordinary Etude RunRequests with
+identical producer inputs within a seed. This supplies the software connection
+for calibration; `training_jobs` and `eval_jobs` still stop until CUDA admission
+and calibration fix their declarations. No calibrated recipe or paid launch is
+claimed here. EMA remains the recorded agent assumption for the branch role.
+
+Real local worker proofs start the control and GRU from an executor-published
+trunk record and EMA. Both exported initializations equal the trunk's shared
+weights and real nonempty-history action distributions/values at zero tolerance.
+The branches start at iteration 1 with fresh Adam, preserve `producer_cost` and
+retain the selected checkpoint digest. Corrupt record/checkpoint bytes, a wrong
+weight role, a changed non-memory model and competing starting states are refused
+before updates. The transformer job is frozen from the same inputs; its executor
+and exact initialization proofs remain those recorded above.
+
+Validation: `uv run --extra dev --extra artifacts pytest tests/training/test_pretrained_jobs.py -q`
+— **7 passed** (96.30 s). Existing worker, experiment discovery and workflow-path
+checks — **25 passed** (94.80 s). After simplifying job input selection,
+**6 focused rechecks passed** (17.51 s), covering pretrained/control branches,
+starting-state exclusivity, initial weights, continuation and job freezing.
+Ruff and whitespace checks passed. The new worker proof is included in the experiment CI group. This is USD0 software
+validation: no CUDA/resource, throughput, calibration, learnability or strength
+result; no Rust change, probe/census rerun, rental or background service.

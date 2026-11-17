@@ -109,6 +109,7 @@ jobs:
         run: |
           uv run pytest -n logical --durations=20 \
             tests/training/test_experiment_runner.py \
+            tests/training/test_pretrained_jobs.py \
             tests/training/test_monitor_evaluation.py \
             tests/training/test_rl_runtime.py \
             tests/verify/test_checkpoint_scenarios.py tests/verify/test_continuation_input.py \

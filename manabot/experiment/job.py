@@ -11,6 +11,11 @@ syncs once; the command reuses that toolchain if uv must rebuild. Etude unpacks
 the commit without `.git`, so the job also carries the commit's source bundle,
 which the worker verifies and binds before anything reads source identity.
 
+A job may start a fresh learner from a producer's published policy through
+PretrainedInitialization. Its record and checkpoint arrive as digest-checked
+inputs, bound to PretrainedPolicy; ordinary admission retains producer lineage
+and cost, while Adam, EMA and schedule iteration start fresh.
+
 A job may instead continue a parent TrainingRun's learner (LearnerContinuation):
 the parent's run record and final raw/EMA/Adam exports arrive as digest-checked
 Etude inputs, the worker binds them as the stage's LearningStateImport, and
@@ -41,6 +46,7 @@ from pathlib import Path
 import signal
 import time
 from types import FrameType
+from typing import Literal
 
 from etude.jobs import TrainingJob as EtudeTrainingJob
 from etude.launch.records import Input, Job
@@ -54,6 +60,7 @@ from manabot.training.execution import execute_regime, validate_regime
 from manabot.training.records import TrainingRun
 from manabot.training.regime import (
     LearningStateImport,
+    PretrainedPolicy,
     Strict,
     TrainingRegime,
     TrainSelfPlay,
@@ -133,6 +140,37 @@ class LearnerContinuation(Strict):
         )
 
 
+class PretrainedInitialization(Strict):
+    """Start a fresh learner from a completed producer's published policy.
+
+    Both the immutable TrainingRun record and its selected raw/EMA checkpoint
+    are staged. Normal PretrainedPolicy admission checks their provenance,
+    model/world contract and producer cost after the worker binds local paths.
+    """
+
+    source_stage: str
+    source_run: StagedExport
+    checkpoint: StagedExport
+    weights: Literal["raw", "ema"] = "raw"
+
+    def files(self) -> dict[str, tuple[str, StagedExport]]:
+        return {
+            "source_run": ("producer-run.json", self.source_run),
+            "checkpoint": ("producer-weights.pt", self.checkpoint),
+        }
+
+    def inputs(self) -> tuple[Input, ...]:
+        return tuple(
+            Input(
+                name=name,
+                key=export.key,
+                sha256=export.sha256,
+                size_bytes=export.bytes,
+            )
+            for name, export in self.files().values()
+        )
+
+
 RUST_TOOLCHAIN = "1.98.1"
 # Etude machine preparation shared by every job that runs repository code.
 TOOLCHAIN_ENV = (
@@ -198,6 +236,10 @@ class TrainingJob(Strict):
         default=None, exclude_if=lambda value: value is None
     )
 
+    pretrained: PretrainedInitialization | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+
     @model_validator(mode="after")
     def admit(self) -> "TrainingJob":
         if len(self.regime.stages) != 1:
@@ -215,10 +257,13 @@ class TrainingJob(Strict):
         ):
             raise ValueError(
                 "Etude training jobs require step-target self-play;"
-                " a learner continuation is bound from its inputs"
+                " starting state is bound from its inputs"
             )
-        if self.initial_checkpoint is not None and self.continuation is not None:
-            raise ValueError("choose fresh initialization or learner continuation")
+        starting_states = (self.initial_checkpoint, self.continuation, self.pretrained)
+        if sum(value is not None for value in starting_states) > 1:
+            raise ValueError(
+                "choose one starting state: initial weights, continuation or pretrained"
+            )
         start = 0 if self.continuation is None else self.continuation.from_update
         if start >= stage.updates:
             raise ValueError("continuation must start before the update target")
@@ -228,14 +273,29 @@ class TrainingJob(Strict):
             n <= start or n >= stage.updates for n in self.milestones
         ):
             raise ValueError("milestones must be unique increasing interior updates")
-        if self.continuation is not None:
-            # Regime admission of the bound import (EMA, damped absolute-step
-            # learning, one stage) happens here, before any job is frozen.
+        if self.continuation is not None or self.pretrained is not None:
+            # Validate the bound starting-state contract before freezing a job;
+            # byte/provenance admission runs after input delivery on the worker.
             self.bound_regime(Path("/inputs"))
         return self
 
     def bound_regime(self, inputs: Path) -> TrainingRegime:
-        """The regime with the continuation's staged files bound as its import."""
+        """Bind staged inputs to the regime's single starting state."""
+        if self.pretrained is not None:
+            serialized = self.regime.model_dump(mode="json")
+            serialized["stages"][0]["pretrained"] = PretrainedPolicy(
+                source_stage=self.pretrained.source_stage,
+                weights=self.pretrained.weights,
+                **{
+                    role: {
+                        "path": str(inputs / name),
+                        "sha256": export.sha256,
+                        "bytes": export.bytes,
+                    }
+                    for role, (name, export) in self.pretrained.files().items()
+                },
+            ).model_dump(mode="json")
+            return TrainingRegime.model_validate(serialized)
         if self.initial_checkpoint is not None:
             serialized = self.regime.model_dump(mode="json")
             serialized["stages"][0]["initial_weights"] = {
@@ -308,6 +368,21 @@ class TrainingJob(Strict):
             raise ValueError("job lifetime must cover regime and finalization reserve")
         # The numerics gate runs the frozen pytest suite from the job's own venv.
         extras = " --extra dev" if spec.validate_numerics else ""
+        if spec.pretrained is not None:
+            inputs = spec.pretrained.inputs()
+        elif spec.continuation is not None:
+            inputs = spec.continuation.inputs()
+        elif spec.initial_checkpoint is not None:
+            inputs = (
+                Input(
+                    name="initial-weights.pt",
+                    key=spec.initial_checkpoint.key,
+                    sha256=spec.initial_checkpoint.sha256,
+                    size_bytes=spec.initial_checkpoint.bytes,
+                ),
+            )
+        else:
+            inputs = ()
         job = EtudeTrainingJob(
             name=spec.regime.id,
             train=train,
@@ -320,18 +395,7 @@ class TrainingJob(Strict):
             max_hours=max_hours,
             max_usd=max_usd,
             max_attempts=1,
-            inputs=(
-                Input(
-                    name="initial-weights.pt",
-                    key=spec.initial_checkpoint.key,
-                    sha256=spec.initial_checkpoint.sha256,
-                    size_bytes=spec.initial_checkpoint.bytes,
-                ),
-            )
-            if spec.initial_checkpoint is not None
-            else ()
-            if spec.continuation is None
-            else spec.continuation.inputs(),
+            inputs=inputs,
         ).plain()
         return job.model_copy(update={"command": f"{TOOLCHAIN_ENV}\n{job.command}"})
 
@@ -382,7 +446,10 @@ def _run_worker(spec: TrainingJob, *, backend: Backend) -> TrainingRun:
     if remaining < spec.regime.wall_seconds + spec.finalization_seconds:
         raise ValueError("remaining allocation cannot cover the frozen regime")
     regime = spec.regime
-    if spec.continuation is not None or spec.initial_checkpoint is not None:
+    if any(
+        value is not None
+        for value in (spec.continuation, spec.initial_checkpoint, spec.pretrained)
+    ):
         directory = environment.get("ETUDE_INPUTS_DIR")
         inputs = Path(directory or "")
         if not directory or not inputs.is_dir():
