@@ -45,9 +45,12 @@ true hangs/exits retry the grouped job. No nested-process workaround.
 ## Validation and limits
 
 Evidence and commands: implementation.md. Focused native, card, world, monitor,
-report, recipe, journal and boundary checks pass at 852c0d866b before this
-follow-up; the report proof now also passes; isolated dependency integration and installed
-3.12/3.13 smoke pass. Not shown: CUDA batching, real Rust panic or native hang
+recipe, journal and boundary checks pass at 852c0d866b; isolated dependency
+integration and installed 3.12/3.13 smoke pass. At 57398243f6 the choice-corpus
+KeyError (permanent/stack alias of a focused card) is fixed in
+`manabot/verify/choice_corpus.py`, and the report test that shares
+`report_recipe` with the nightly baseline passes (choice corpus, learning
+regression, host facts: 9 passed). Not shown: CUDA batching, real Rust panic or native hang
 injection, launched/provider runs, browser proof, full suite, automatic
 policy→sampler scheduling. LLM experiments stay blocked on EXP-70/frozen
 checkpoints; their declarations share Agents but are not a runnable adoption
@@ -55,4 +58,7 @@ proof. origin/main equals the merge base (c035d5566a); no upstream sync needed.
 
 ## Remaining
 
-- Gate and publication are the caller's steps.
+- Gate and publication are the caller's steps. The full nightly baseline
+  (`.github/workflows/baseline.yml`, workflow_dispatch: `etude train` then
+  `evaluate`) has not run since the corpus fix; dispatch it on the PR branch
+  as the gate's proof of that path.
