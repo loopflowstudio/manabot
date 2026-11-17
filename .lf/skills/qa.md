@@ -116,6 +116,20 @@ publish, land or choose the next Graph step from here.
   `legs=(0, 1)` (six games took about 80 s under load). To test Ctrl-C, start the
   CLI with `start_new_session=True` and SIGINT restored, as below; with `nohup … &`
   SIGINT is ignored and the server looks hung.
+- Game records in Academy (`managym.recording`, `managym academy replay
+  <file|dir> --game N`): write records with the `docs/engine-python.md` Record
+  games example (a complete game, and one closed after a few steps for
+  interrupted), then open each from an engine-only wheel venv in a fresh
+  Playwright context: the launcher's `open` address carries no credential, so
+  a 403 there is a real failure. `[data-testid=recorded-decision-evidence]`
+  holds Value/Update/Policy or "not retained". `manabot train --recipe local
+  --record-games 0.25` prints the games command; `play_cell` with two legs
+  writes `games/<cell>.jsonl`. Count `read_records(<dir>)` against the games
+  played: duplicates mean a second file in that directory. A different-world
+  record can be made by editing `identities.world`/`card_digest` in a copy.
+  Stall checks: `--stall-seconds 0.3` on the local recipe and
+  `touch <out>/diagnostics.request` exercise the watchdog without load; read
+  `escalations.jsonl` for one line per real stall.
 - Academy table: `./scripts/play --port <unused> --frontend-port <unused>`; wait
   for the `ACADEMY_PLAY_READY` line (it names Python, native ABI and module
   path), open the frontend URL, press Start game, play a land and Pass Turn.
