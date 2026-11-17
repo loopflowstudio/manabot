@@ -106,3 +106,11 @@ reader was the deleted run record. The training-report page's flamegraph,
 phase table, notebook extra and plotting dependencies have since been deleted
 (c570177e5c); only deleting the whole `training-report` command still waits on
 the open question above.
+
+2026-11-17 GPU retry: Lium's inventory became valid and offered a 4090,
+but creation returned a timezone-naive `created_at`; Etude d9's `Pod` requires
+`AwareDatetime`. Paid pod creation succeeded before validation failed, so no
+receipt/provider id reached the launcher. Do not patch Manabot or add an SDK
+shim for this; terminate through Lium's authenticated API and confirm removal.
+The isolated launcher may retain an unresolved intent; keep it as evidence and
+do not start a server loop or rent again until Etude can reconcile it.

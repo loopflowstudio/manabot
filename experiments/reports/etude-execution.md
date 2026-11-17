@@ -74,3 +74,42 @@ planned workload on a functioning single GPU; confirm CUDA, retain training
 phase/save timings, score full/resumed endpoints and inspect actual managed
 batch sizes before making those claims. Gate, nightly dispatch and publication
 remain separate.
+
+## Retry — 2026-11-17, 16:00–16:03 UTC
+
+At branch `f962de12a174a17515692cd69a42a759feaa7b78`, fresh capacity checks
+reported no matching RunPod L4, 4090, A6000 or A5000 and no Vast 4090 or
+3090. Lowering Vast's minimum to four vCPUs and 24 GB did not find capacity.
+Lium's previously unreadable inventory now offered a 4090, 23 vCPUs and
+58 GB at an admitted USD 0.41/hour. Requested the same two-hour window,
+with the retry cap reduced to USD 9:
+
+```sh
+ETUDE_HOME=/tmp/mtg329-performance-etude doppler run --project etude --config prd -- doppler run --project manabot --config prd -- uv run --extra artifacts etude rent mtg329-speed-4090-lium --hours 2 --max-usd 9
+```
+
+Lium created pod `55297a92-fa2b-47dd-9c73-b327672e74ca`, named
+`etude-7b0c01e641d4`, at `2026-11-17T16:01:32.886331` (the provider's exact
+timezone-naive value). Etude's pinned `Pod.created_at: AwareDatetime` rejected
+that response (`timezone_aware`). Its next inventory read rejected the same
+field. The launcher therefore retained machine
+`mtg329-speed-4090-lium-7b0c01e641d4` as starting, with no provider id or
+receipt; a subsequent `tick()` could not reconcile it. No SSH address,
+bootstrap, uploaded source, CUDA check or scored workload was observed.
+No Manabot or SDK workaround was added.
+
+`etude terminate mtg329-speed-4090-lium-7b0c01e641d4` failed with
+`Lium create already attempted; awaiting reconciliation`. The authenticated
+Lium API accepted deletion of this exact pod. Its inventory then excluded
+the pod; its individual lookup briefly reported `DELETING`, then returned
+404/absent by 16:03 UTC. Termination is confirmed at the provider. The isolated
+launcher still has the unresolved intent and must not be treated as a live
+pod or a reconciled deletion. No launcher/server loop was left running.
+
+The launcher's retained estimate at 16:03 UTC was **~USD 0.01**, not a final
+settlement: it cannot reconcile this deleted pod with the pinned client.
+No bill was reconstructed. The earlier attempt's estimate stays above.
+The GPU throughput, CUDA batching and stop/resume comparison remain unmeasured.
+Retry needs a provider allocation whose lifecycle the client can read, or an
+Etude fix for the actual Lium timestamps and interrupted-creation recovery.
+Gate and publication remain later steps.

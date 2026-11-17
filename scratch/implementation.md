@@ -118,3 +118,21 @@ measurement has run. Resume strength and CUDA speed/admission remain separate.
   `etude train experiments/etude_execution.py --config
   '{"workload":"baseline","device":"cpu","updates":1}' --json`: finished, one
   timed save (0.034 s). No GPU was rented in this step.
+
+## GPU retry — 2026-11-17, 16:00–16:03 UTC
+
+- RunPod L4/4090/A6000/A5000 and Vast 4090/3090 had no matching capacity.
+  Lium offered a 4090 at USD 0.41/hour; `etude rent
+  mtg329-speed-4090-lium --hours 2 --max-usd 9` created a pod, but the pinned
+  SDK rejected its timezone-naive `created_at` before retaining a provider
+  receipt. A scheduler tick reproduced the failed reconciliation. No GPU
+  workload, SSH or source upload occurred.
+- `etude terminate` refused with `Lium create already attempted; awaiting
+  reconciliation`. Direct authenticated deletion of that exact pod succeeded;
+  inventory exclusion followed by individual 404/absence confirmed termination
+  by 16:03 UTC. The isolated launcher retains an unresolved intent, with a
+  ~USD 0.01 estimate, not a final settlement. No shared launcher change or
+  background server. Exact ids, method and limits: report's Retry section.
+- No code changed; no build/test rerun was needed. GPU acceptance remains
+  blocked on provider lifecycle compatibility/capacity. Gate and publication
+  remain later steps.

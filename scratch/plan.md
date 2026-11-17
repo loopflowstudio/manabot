@@ -139,6 +139,15 @@ Etude's failed match. Nothing further to change; no new open choice.
   AGENTS.md and the harness/report, HEAD 773ee9a135 equals the archived
   branch ee370d9757, so a repeat may archive HEAD; the setup script and
   archives in /tmp/mtg329-gpu are temporary and may be rebuilt.
+  Retry 2026-11-17 at 16:00–16:03 UTC: RunPod L4/4090/A6000/A5000 and
+  Vast 4090/3090 had no capacity. Lium created a 4090 under `--max-usd 9`,
+  but its timezone-naive `created_at` failed Etude's AwareDatetime validation
+  before a receipt was retained. No SSH or GPU work. Direct provider deletion
+  confirmed by individual 404/absence; `etude terminate` could not reconcile
+  the unreceipted intent. Isolated launcher still says starting (~USD 0.01
+  estimate); no actual pod or server remains. Report has exact ids and limits.
+  Retry requires a readable provider lifecycle or an Etude timestamp/recovery
+  fix; do not claim GPU acceptance or keep retrying this unresolved intent.
 - Gate and publication are the caller's steps. The full nightly baseline
   (`.github/workflows/baseline.yml`, workflow_dispatch: `etude train` then
   `evaluate`) has not run since the corpus fix; dispatch it on the PR branch
