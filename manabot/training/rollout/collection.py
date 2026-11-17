@@ -38,7 +38,6 @@ from manabot.env.memory_store import (
     MemoryArchive,
     MemoryStore,
     Prefix,
-    PrefixIdentity,
     PrefixObservation,
     archive_memory,
     restore_memory,
@@ -899,16 +898,8 @@ class SeatRoutedCollector:
             seats = self._env.current_agent_indices()
             epochs = self._env.current_game_generations()
             cursors = self._env.decision_memory_cursors()
-            return tuple(
-                self._memory_store.capture_live(
-                    self._buffers,
-                    int(row),
-                    PrefixIdentity(str(seeds[row]), int(seats[row]), str(seeds[row])),
-                    epoch=epochs[row],
-                    counts=cursors[row][int(seats[row])][:4],
-                    tail_version=cursors[row][int(seats[row])][4],
-                )
-                for row in rows
+            return self._memory_store.capture_live_rows(
+                self._buffers, rows, seeds, seats, epochs, cursors
             )
 
     def _retain_obs_rows(self, rows: np.ndarray) -> ObservationBuffers:

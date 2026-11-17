@@ -179,6 +179,16 @@ def test_warm_collection_prepares_only_the_open_tail() -> None:
             [prefix, replace(prefix, native_epoch=2)],
             capacities,
         )
+        # A mixed cache can hold the newer root for one lifetime and its
+        # predecessor for another. Rejecting the former must not expose the
+        # latter to the wrong lifetime through the global root map.
+        assert prefix.tail is not None and prefix.tail.previous is not None
+        older = prefix.tail.previous.previous
+        assert older is not None
+        scope.memory.nodes[older] = replace(
+            scope.memory.nodes[older], lifetime=(prefix.identity, 2)
+        )
+        assert not scope.memory.roots(mixed)
         actual = scope.prepare(mixed)
         expected = on_device(model.prepare(mixed.materialize(), inference=True), "cpu")
         torch.testing.assert_close(

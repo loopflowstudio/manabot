@@ -262,6 +262,10 @@ class MemoryStore:
         self._chunks: WeakValueDictionary[str, Chunk] = WeakValueDictionary()
         # At most two current prefixes per vector slot, never a game-wide index.
         self._streams: dict[tuple[int, int], _StreamCapture] = {}
+        # Vector transport metadata skips unchanged rows before scalar capture.
+        self._live_metadata = np.empty((0, 2, 7), np.uint64)
+        self._live_prefixes = np.empty((0, 2), object)
+        self._live_valid = np.zeros((0, 2), np.bool_)
 
     def _intern(self, rows: tuple[np.ndarray, ...]) -> Chunk:
         digest = sha256()
@@ -320,6 +324,74 @@ class MemoryStore:
             tail = self._append(tail, self._intern(blocks))
         return Prefix(identity, tail)
 
+    def capture_live_rows(
+        self,
+        buffers: Mapping[str, np.ndarray],
+        rows: np.ndarray,
+        seeds: Sequence[int],
+        seats: Sequence[int],
+        epochs: Sequence[int],
+        cursors: Sequence[Sequence[Sequence[int]]],
+    ) -> tuple[Prefix, ...]:
+        """Capture selected native streams; unchanged cursors do no row work.
+
+        Generation, chooser, counts and coalesced-tail revision are compared in
+        bulk. Only changed rows enter scalar capture and its full admission.
+        The seed is checked independently so an identity change within a native
+        generation still fails rather than reusing an unrelated issued prefix.
+        """
+        count = len(seeds)
+        if self._live_prefixes.shape != (count, 2):
+            self._live_prefixes = np.full((count, 2), None, object)
+            self._live_metadata = np.zeros((count, 2, 7), np.uint64)
+            self._live_valid = np.zeros((count, 2), np.bool_)
+        selected_seats = np.asarray(seats, dtype=np.int64)[rows]
+        selected_epochs = np.asarray(epochs, dtype=np.uint64)[rows]
+        selected_seeds = np.asarray(seeds, dtype=np.uint64)[rows]
+        selected_cursors = np.asarray(cursors, dtype=np.uint64)[rows, selected_seats]
+        metadata = np.column_stack((selected_epochs, selected_seeds, selected_cursors))
+        previous = self._live_prefixes[rows, selected_seats]
+        unchanged = self._live_valid[rows, selected_seats] & (
+            metadata == self._live_metadata[rows, selected_seats]
+        ).all(axis=1)
+        changed = np.flatnonzero(~unchanged)
+        if len(changed):
+            counts = selected_cursors[changed, :4]
+            if (counts > np.asarray(self.capacities)).any():
+                raise ValueError("decision-memory native counts exceed capacity")
+            for key, capacity in zip(MEMORY_FIELDS, self.capacities, strict=True):
+                if buffers[key].dtype != np.float32 or buffers[key].shape != (
+                    count,
+                    capacity,
+                    MEMORY_WIDTHS[key],
+                ):
+                    raise ValueError(
+                        "decision-memory capacity mismatch or non-float32 transport"
+                    )
+        for index in changed:
+            row, seat = int(rows[index]), int(selected_seats[index])
+            old = previous[index]
+            # A game's viewer identity is created once, even across changed tails.
+            identity = (
+                old.identity
+                if isinstance(old, Prefix)
+                and old.native_epoch == int(selected_epochs[index])
+                and selected_seeds[index] == self._live_metadata[row, seat, 1]
+                else PrefixIdentity(str(seeds[row]), seat, str(seeds[row]))
+            )
+            previous[index] = self._capture_live_admitted(
+                buffers,
+                row,
+                identity,
+                epoch=int(selected_epochs[index]),
+                counts=selected_cursors[index, :4],
+                tail_version=int(selected_cursors[index, 4]),
+            )
+        self._live_prefixes[rows, selected_seats] = previous
+        self._live_metadata[rows, selected_seats] = metadata
+        self._live_valid[rows, selected_seats] = True
+        return tuple(previous)
+
     def capture_live(
         self,
         buffers: Mapping[str, np.ndarray],
@@ -350,6 +422,26 @@ class MemoryStore:
                 raise ValueError(
                     "decision-memory capacity mismatch or non-float32 transport"
                 )
+        return self._capture_live_admitted(
+            buffers,
+            row,
+            identity,
+            epoch=epoch,
+            counts=counts,
+            tail_version=tail_version,
+        )
+
+    def _capture_live_admitted(
+        self,
+        buffers: Mapping[str, np.ndarray],
+        row: int,
+        identity: PrefixIdentity,
+        *,
+        epoch: int,
+        counts: Sequence[int],
+        tail_version: int | None,
+    ) -> Prefix:
+        """Native transport shape/count admission precedes this chunk admission."""
         previous = self._streams.get((row, identity.viewer))
         tail = None
         if previous is not None and previous.epoch == epoch:
@@ -423,7 +515,10 @@ class MemoryStore:
                 + sum(sys.getsizeof(ref) for ref in index.data.values())
                 for index in (self._tails, self._chunks)
             ),
-            "stream_capture_bytes": sys.getsizeof(self._streams)
+            "stream_capture_bytes": self._live_metadata.nbytes
+            + self._live_prefixes.nbytes
+            + self._live_valid.nbytes
+            + sys.getsizeof(self._streams)
             + sum(
                 sys.getsizeof(k) + sys.getsizeof(c) for k, c in self._streams.items()
             ),

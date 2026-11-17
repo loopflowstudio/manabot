@@ -1,5 +1,6 @@
 """Shared raw prefixes preserve sampled decisions through learning and recovery."""
 
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from io import BytesIO
 import random
@@ -510,3 +511,87 @@ def test_native_cursor_reuses_unchanged_prefix_and_versions_coalescing() -> None
     assert first.tail is not None and changed.tail is not None
     assert first.tail.chunk.rows[0][0, 3] == 1
     assert changed.tail.chunk.rows[0][0, 3] == 2
+
+
+def test_bulk_live_capture_skips_unchanged_rows_and_preserves_admission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, sample = memory_input()
+    buffers = {key: np.repeat(value, 3, axis=0) for key, value in sample.items()}
+    # Use the supplied transport's actual capacities, including ordinary fields.
+    capacities = tuple(buffers[key].shape[1] for key in MEMORY_FIELDS)
+    store = MemoryStore(capacities)
+    seeds, seats, epochs = [11, 12, 13], [0, 1, 0], [1, 1, 1]
+    counts = [
+        int(buffers["decision_records"][0, :, 19].sum()),
+        int(buffers["decision_reference_details"][0, :, 5].sum()),
+        int(buffers["decision_references"][0, :, 12].sum()),
+        int(buffers["decision_records"][0, :, 15:18].sum()),
+    ]
+    cursors = [[[*counts, 1], [*counts, 1]] for _ in seeds]
+    first = store.capture_live_rows(
+        buffers, np.arange(3), seeds, seats, epochs, cursors
+    )
+    for row, prefix in enumerate(first):
+        expected = MemoryStore(capacities).capture(buffers, row, prefix.identity)
+        assert prefix.tail is not None and expected.tail is not None
+        assert prefix.tail.key == expected.tail.key
+
+    def compare_prefix(self: Prefix, other: object) -> bool:
+        raise AssertionError("bulk cursor masking must not compare Python prefixes")
+
+    monkeypatch.setattr(Prefix, "__eq__", compare_prefix)
+    calls: list[int] = []
+    original = store._capture_live_admitted
+
+    def capture(
+        buffers: Mapping[str, np.ndarray],
+        row: int,
+        identity: PrefixIdentity,
+        *,
+        epoch: int,
+        counts: Sequence[int],
+        tail_version: int | None,
+    ) -> Prefix:
+        calls.append(row)
+        return original(
+            buffers,
+            row,
+            identity,
+            epoch=epoch,
+            counts=counts,
+            tail_version=tail_version,
+        )
+
+    monkeypatch.setattr(store, "_capture_live_admitted", capture)
+    repeated = store.capture_live_rows(
+        buffers, np.array([2, 0]), seeds, seats, epochs, cursors
+    )
+    assert repeated[0] is first[2] and repeated[1] is first[0]
+    assert not calls
+    # Only the coalesced tail changes. Its identity stays the same object.
+    cursors[1][1][4] += 1
+    buffers["decision_records"][1, 0, 3] += 1
+    buffers["decision_records"][1, 0, 9] += 1
+    changed = store.capture_live_rows(
+        buffers, np.arange(3), seeds, seats, epochs, cursors
+    )
+    assert calls == [1]
+    assert changed[1].identity is first[1].identity
+    assert changed[1].tail.key != first[1].tail.key
+    assert changed[0] is first[0] and changed[2] is first[2]
+    # Switching viewers must capture, and changing generation must re-admit.
+    seats[0] = 1
+    epochs[2] += 1
+    store.capture_live_rows(buffers, np.arange(3), seeds, seats, epochs, cursors)
+    assert calls == [1, 0, 2]
+    # A seed change inside the same generation is a regression, not a hit.
+    seeds[0] += 1
+    with pytest.raises(ValueError, match="regressed"):
+        store.capture_live_rows(buffers, np.array([0]), seeds, seats, epochs, cursors)
+    seeds[0] -= 1
+    # An actual changed row keeps integer and range admission.
+    cursors[0][1][4] += 1
+    buffers["decision_records"][0, 0, 10] = np.nan
+    with pytest.raises(ValueError):
+        store.capture_live_rows(buffers, np.array([0]), seeds, seats, epochs, cursors)

@@ -828,8 +828,12 @@ its input is admitted Prepared data, and it evaluates no action or value head.
 All three arms start a fresh `TrainSelfPlay` stage through `pretrained`.
 Collection retains record-aligned immutable chunks. Native transport counts and
 process-local game generations let each stream extend its previous viewer prefix:
-an unchanged tail revision reuses the issued prefix directly. After a commit,
-closed chunks are reused and the open chunk is re-read to preserve coalesced
+one bulk comparison of native generations and cursors reuses issued prefixes
+for unchanged rows before scalar capture. Changed rows reuse their game identity
+and pass transport shape/capacity checks in a batch; their immutable chunks still
+receive full admission. Vocabulary and definition admission batch only the new
+chunks, keeping temporal and partition checks on each exact predecessor chain.
+After a commit, closed chunks are reused and the open chunk is re-read to preserve coalesced
 passes. Reset, fork and replay restoration change the generation even when a
 seed repeats. These cursors are transport metadata, never policy features or
 replay identities. Dense imports and archives still validate the complete prefix.

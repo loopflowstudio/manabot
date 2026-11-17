@@ -518,28 +518,45 @@ def validate_retained_memory(
     binding = (tables.memory_binding, definition_count, include_own)
     lookup = tables.definition_rows
     size = definition_count if lookup is None else len(lookup)
+    pending: dict[str, Tail] = {}
     for prefix in obs.prefixes:
-        pending = []
         node = prefix.tail
-        while node is not None and node.features.admission != binding:
-            pending.append(node)
+        while (
+            node is not None
+            and node.features.admission != binding
+            and node.key not in pending
+        ):
+            pending[node.key] = node
             node = node.previous
-        for node in reversed(pending):
-            headers, details, references, _ = node.chunk.rows
-            if not include_own and (headers[:, 18] == 1).any():
-                raise ValueError("own-seat decision memory is disabled")
-            definition_ids(references[:, 1], size, lookup)
-            definition_ids(
-                record_word(details, 2)[(details[:, 0] == 0) & (details[:, 1] == 7)]
-                + 1,
-                size,
-                lookup,
+    if not pending:
+        return
+    # Chunk certificates already prove per-chain temporal/partition joins.
+    # Vocabulary, own-seat and definition checks are independent of those joins,
+    # so admit the new chunks across all selected rows in one arithmetic batch.
+    headers, details, references = (
+        np.concatenate([node.chunk.rows[index] for node in pending.values()])
+        for index in range(3)
+    )
+    if not include_own and (headers[:, 18] == 1).any():
+        raise ValueError("own-seat decision memory is disabled")
+    definition_ids(references[:, 1], size, lookup)
+    definition_ids(
+        record_word(details, 2)[(details[:, 0] == 0) & (details[:, 1] == 7)] + 1,
+        size,
+        lookup,
+    )
+    validate_memory_vocabulary(
+        dict(
+            zip(
+                _FIELDS[:3],
+                (a[None] for a in (headers, details, references)),
+                strict=True,
             )
-            validate_memory_vocabulary(
-                dict(zip(_FIELDS, (a[None] for a in node.chunk.rows), strict=True)),
-                tables,
-            )
-            node.features.admission = binding
+        ),
+        tables,
+    )
+    for node in pending.values():
+        node.features.admission = binding
 
 
 def _prepare_chunk_features(nodes: list[Tail], tables: Tables) -> None:

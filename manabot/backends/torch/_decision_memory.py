@@ -63,6 +63,26 @@ class CollectionMemory:
                 rejected.add(node.key)
                 roots.pop(node.key, None)
                 node = node.previous
+        # Rejecting one root can expose another prefix's deeper candidate.
+        # Recheck only the selected suffixes until every reachable root has the
+        # serving lifetime of every prefix that uses it. Normal batches stop at
+        # the same boundary; mixed fork/reset lifetimes may remove more roots.
+        changed = True
+        while changed and roots:
+            changed = False
+            for prefix in retained.prefixes:
+                node = prefix.tail
+                while node is not None:
+                    if node.key in roots:
+                        if self.nodes[node].lifetime != (
+                            prefix.identity,
+                            prefix.native_epoch,
+                        ):
+                            del roots[node.key]
+                            changed = True
+                        else:
+                            break
+                    node = node.previous
         return roots
 
     def bind(

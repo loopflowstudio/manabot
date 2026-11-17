@@ -41998,6 +41998,14 @@
    "sha256": "605083a320b5b8196439abca697cad4a206892120dc505d6d1f7843bef871451",
    "bytes": 11503
   },
+  "experiments/data/opponent-memory/20261117-many-stream-retention/evidence.tar.gz": {
+   "sha256": "c3dd07e607eece0048e81fe114047912295e6bbba24fdc7364ca07972dbaf369",
+   "bytes": 736087
+  },
+  "experiments/data/opponent-memory/20261117-many-stream-retention/members.json": {
+   "sha256": "b53394c163bdc79e921c15bbce8b385abeaf491bc31425413b64e2139987b844",
+   "bytes": 19561
+  },
   "experiments/data/opponent-memory/20261117-native-cursor/evidence.tar.gz": {
    "sha256": "02b83f03cb8eea2eee968d9f7867d909b4cae4e1998c21a1a5e7c51cb6dc0a6c",
    "bytes": 238900

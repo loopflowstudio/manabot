@@ -2302,3 +2302,98 @@ updates. The narrow collection/learner/chunk checks passed (32 cases); Ruff and
 whitespace checks passed. Evidence archive:
 `experiments/data/opponent-memory/20261117-many-stream-preparation`, with source,
 runner, before/after profiles, all 18 unprofiled receipts/logs and member digests.
+
+### Many-stream retention cut — 2026-11-17
+
+Whole-game CPU harness: 32 streams, one native worker, one Torch thread, one whole game per stream, mixed disclosure, open gates and one real damped-policy update. One sequential fresh process per arm/execution-row limit before and after the cut. These are bounded exploratory measurements, with no timing ranges or statistical speedup claim. Gates, sampling groups, capacities and model shapes are unchanged.
+
+| Rows | Arm | Decisions | Preparation before/after s | Retention before/after s | Nested capture before/after s | Collection s | Update s | Total s | Total / incumbent | Decisions/s |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 32 | incumbent | 6858 | 0.9137 / 0.9121 | 0.0540 / 0.0544 | 0.0000 / 0.0000 | 5.500 | 26.989 | 32.490 | 1.000 | 211.08 |
+| 32 | control | 6503 | 1.0040 / 0.8041 | 0.3955 / 0.3498 | 0.3365 / 0.2952 | 4.948 | 25.454 | 30.402 | 0.936 | 213.90 |
+| 32 | gru-k1 | 6514 | 1.8330 / 1.6045 | 0.4067 / 0.3716 | 0.3416 / 0.3102 | 7.753 | 27.814 | 35.567 | 1.095 | 183.15 |
+| 128 | incumbent | 6858 | 0.9055 / 0.8930 | 0.0549 / 0.0534 | 0.0000 / 0.0000 | 5.336 | 21.928 | 27.263 | 1.000 | 251.55 |
+| 128 | control | 6503 | 0.9994 / 0.8501 | 0.3954 / 0.3658 | 0.3365 / 0.3083 | 5.265 | 20.322 | 25.587 | 0.938 | 254.16 |
+| 128 | gru-k1 | 6514 | 1.8192 / 1.6233 | 0.4032 / 0.3808 | 0.3390 / 0.3179 | 7.965 | 22.054 | 30.019 | 1.101 | 217.00 |
+| 256 | incumbent | 6858 | 0.9059 / 0.9074 | 0.0538 / 0.0533 | 0.0000 / 0.0000 | 5.402 | 21.347 | 26.749 | 1.000 | 256.38 |
+| 256 | control | 6503 | 1.0024 / 0.8264 | 0.3905 / 0.3557 | 0.3317 / 0.2996 | 5.139 | 20.241 | 25.379 | 0.949 | 256.23 |
+| 256 | gru-k1 | 6514 | 1.8253 / 1.5961 | 0.3998 / 0.3728 | 0.3350 / 0.3112 | 7.741 | 21.322 | 29.063 | 1.087 | 224.13 |
+
+Capture is nested in retention. Each arm retains its original completed-game decision total (incumbent 6,858; control 6,503; GRU 6,514), so stage-time ratios and decisions/s are both shown. All nine cases preserve **exact rollout, prefix, final-gradient and updated-state hashes** against the prior implementation. Existing stateless/fold tolerances remain unchanged. CPU timings do not establish CUDA cost, matched learning or strength. No paid launch, pilot, PR, calibration-job rename or Task completion follows.
+
+256-stream collection-only profiles (one worker/thread, execution rows 32):
+
+| Implementation | Arm | Decisions | Preparation s | Retention s | Nested capture s | Collection s | Scalar capture calls |
+|---|---|---:|---:|---:|---:|---:|---:|
+| before | control | 53658 | 9.516 | 4.075 | 3.601 | 49.117 | 53659 |
+| before | gru-k1 | 54650 | 19.919 | 4.251 | 3.743 | 72.389 | 54651 |
+| preparation | control | 53658 | 9.511 | 4.138 | 3.664 | 48.594 | 53659 |
+| preparation | gru-k1 | 54650 | 16.133 | 4.199 | 3.722 | 68.179 | 54651 |
+| retention | control | 53658 | 9.036 | 3.629 | 3.166 | 46.607 | 10135 |
+| retention | gru-k1 | 54650 | 15.470 | 3.665 | 3.201 | 66.144 | 10418 |
+
+Both tracks are profiled, so these are attribution timings, not unprofiled throughput. All six runs keep exact rollout/prefix hashes and initial state hashes; **there is no learner update in these profiles**. The separate 32-stream matrix proves final gradients and updated state. These 256-stream profile variants freeze only the fold/root implementation and capture entry method; the imported batched vocabulary admission is common to all six. They isolate fold/capture cost rather than replaying every historical source line.
+
+Receipt description erratum: the 32-stream matrix inherited an old "Two-stream" limitation string. Executed source sets 32 streams. Both 256-stream before receipts inherited it too; executed source sets 256 streams and omits learning. Values and hashes were not rewritten; later profile descriptions are corrected.
+
+The final retention path compares a numeric validity mask plus native generation,
+seed identity, counts and tail revision for all selected streams before scalar
+capture. An unchanged stream contributes its previous Prefix object. Changed
+streams reuse their game/viewer identity, batch transport shape/capacity checks,
+and retain full immutable-chunk admission. Vocabulary, definition and own-seat
+admission batch the new chunks across rows; temporal, partition, reachability,
+integer and range checks stay on each exact chunk/predecessor. Numeric presence
+bits avoid object-array equality calling Python for every unchanged row; the
+regression test rejects any such Prefix comparison. Metadata bytes are counted.
+
+A final cache review also found and repaired a lifetime edge case: rejecting a
+newer root could expose a predecessor cached for a different generation through
+the shared root map. Final root selection checks each reachable boundary against
+its selected prefix's identity/epoch. A mixed-cache regression proves rejection;
+normal root walks still stop at the cached boundary. The final GRU update cases
+and 256-stream profile were rerun with this guard and the numeric presence mask.
+
+At 256 streams, calls average 26.0 control / 27.2 GRU rows, close to the CUDA
+calibration's roughly 26 rows/call. Before the fold cut, GRU's host fold assembly
+is 7.836 s, including 5.593 s in chunk-feature lookup/build; dense featurization
+runs 12,978 times (5.717 s). Root lookup/binding is only 0.296/0.315 s, and CPU
+conversion/bookkeeping is 2.044 s. Model cache updates run in forward, outside
+preparation. Final fold assembly is 4.483 s, dense calls 3,815 (2.613 s), root
+lookup/binding 0.155/0.195 s, and CPU conversion 1.709 s. These are nested
+attributions. Cached complete nodes provide a state/reference handle without
+raw features; required open tails and ordinary policy inputs still need work.
+The profiled CPU preparation premium per call over control falls about
+5.28 → 3.30 ms. This attributes the avoidable host work, not every millisecond
+of the A40's observed +10.589 ms/call; CUDA pin/copy/synchronization remain
+unmeasured for this source.
+
+Final GRU capture still performs **10,966 immutable-node admissions**, exactly
+as before, while scalar row entries fall 54,651 → 10,418. Its 3.201 s capture
+includes 2.204 s in full chunk admission. Control likewise keeps its 10,649
+node admissions while scalar entries fall 53,659 → 10,135. The avoided work is
+unchanged-row Python and repeated identities, not fewer admitted changed facts.
+This is a modest capture saving, not removal of the entire CUDA retention excess.
+
+The unprofiled 32-stream matrix reports GRU stage-time ratios
+1.095/1.101/1.087× incumbent at 32/128/256 execution rows. Because completed-game
+counts differ by arm, decision-rate ratios are **0.868/0.863/0.874×**, so the
+roughly 10% throughput-cost target is not established. Single cases and changing
+host timing do not support a general speedup claim. Collection in that matrix
+has at most 32 rows; the wider limits exercise learning. The 256-stream profiles
+supply the larger collection scale, with no learner update.
+
+Validation: storage (15), cache/collection (27) checks passed; the strengthened
+mixed-lifetime and no-Python-comparison regressions passed, with collection
+checks repeated after the lifetime guard. Ruff and whitespace checks passed.
+All nine final update cases retain exact rollout, prefix, gradient and updated
+state hashes. All six large collection cases retain exact rollout/prefix hashes.
+No Rust, model shape, capacity, coalescing, sample grouping, logical loss
+normalizer, prefetch lifetime or optimizer-step count changed.
+
+Evidence: `experiments/data/opponent-memory/20261117-many-stream-retention`.
+The size/SHA256-verified archive includes before/after receipts, all six large
+profiles and receipts, source, runners, current notes and the description
+erratum. Frozen CUDA bytes/source identities and the calibration job name remain
+unchanged. No paid launch, pilot, PR or Task completion. The Task session owns
+CUDA measurement of these host cuts; matched training and paired strength remain
+unrun.
