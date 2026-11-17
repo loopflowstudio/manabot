@@ -58,10 +58,9 @@ passed. The CPU uninterrupted comparison against main 3afd92d8f3 matched all
 1,421 decisions, 268 optimizer updates), including initial policy tensors.
 This settles only that short uninterrupted case; no strength claim follows.
 
-Current implement: CI 44136662771 confirmed exactly one failure (197 passed):
-experiment discovery omitted etude_execution. Expected membership now includes
-it; focused test passes (1 passed, 12 deselected, 8.54s). Other checks remain
-the caller's gate, including nightly baseline workflow_dispatch after the
+CI 44136662771's one failure (experiment discovery omitted etude_execution)
+is fixed; focused test passes (implementation.md). Other checks are the
+caller's gate, including nightly baseline workflow_dispatch after the
 choice-corpus alias fix. No full suite run in implement.
 
 ## Remaining — latest steers 54c7d853 / 7d745eb2
@@ -73,16 +72,13 @@ choice-corpus alias fix. No full suite run in implement.
    six-update branch baseline uninterrupted and stopped after update 3 then
    resumed; 16 paired eight-leg deals per endpoint. Calibration only, no
    strength equivalence claim. Direct SSH does not prove queued job delivery.
-   Total approved --max-usd 10, about USD 0.13 spent before this run. Lium
+   Total approved --max-usd 10. Lium
    excluded (Etude Task 73e1a9); RunPod or Vast only; retry a few times across
    this run on capacity failure/host death, terminate and confirm every machine.
-   Earlier Vast host died during compilation, Lium creation was unreadable;
-   both confirmed deleted. At 16:09 UTC eight templates had no capacity.
-   Latest retry: branch 3670249eb3, Vast 4090 instance 61113127. CUDA check
-   passed, but zero updates: repeated durable-write stalls (traceback at
-   Etude run.py:412 os.fsync). Terminated and provider-confirmed absent at
-   19:17:48 UTC; launcher estimate ~USD 0.14. Nine follow-up RunPod/Vast
-   capacity checks found no alternate host. No rental/server/watcher remains.
+   Three rentals produced no scored update (dead Vast host, unreadable Lium
+   pod, Vast 4090 durable-write stall at Etude run.py:412 os.fsync); all
+   terminated and confirmed absent, about USD 0.27 spent in total; no
+   capacity on later RunPod/Vast checks. Attempts: the experiment report.
    GPU acceptance is still unmet; a repeat needs working durable storage.
 2. CI expectation fixed above; leave CI rerun/publication to caller.
 3. PR #500 body corrected: saved-regime reports cannot be rebuilt from main;
