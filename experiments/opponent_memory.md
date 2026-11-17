@@ -5,7 +5,8 @@
 **Exploratory.** Can a learned memory of the opponent's past decisions become
 an affordable training basis without materially hurting throughput or early
 learning? Census and controlled storage measurements are retained below;
-GPU calibration, training and paired evaluation have not run. The USD 50 allocation is a
+CUDA admission has begun; no complete calibration, training pilot or paired
+evaluation result exists. The USD 50 allocation is a
 budget, not a measured cost. No playing-strength finding follows from this report.
 
 The incumbent has history disabled; the control retains and validates the log,
@@ -1436,3 +1437,46 @@ No table is truncated, game recovered or prior failed attempt relabelled.
 The script now reuses training's existing process-tree RSS reader; its four
 focused exit/zombie/permission/real-process tests passed. Pilot declarations
 remain stopped pending complete CUDA admission and calibration.
+
+### CUDA short-chunk backward repair — 2026-11-16
+
+Source `99b559e123`, run `opponent_memory/cuda-calibration-rows32@39100`, attempt
+`cf12074a0eef`: **failed admission**, with `RuntimeError: Invalid max_seqlen_k:234`
+in the first control update's backward pass. Collection completed in 212.159 s;
+learning ran for 26.052 s before failure. No update completed, no subsequent arm
+ran and no final-policy reload was available. These are partial phase timings,
+not an admitted training throughput. Both A40 rentals reported Xeon Gold 6342,
+but this rental exposed no CPU quota and used cgroup-v1; it is not a same-host
+causal comparison with the first attempt.
+
+Self-play prefix maxima were **432/13,623/113/5,196**, beside capacities
+**512/16,384/128/8,192**. No capacity overflow occurred in this completed
+collection. Sampled process-tree peak RSS was 15,856,558,080 bytes; CUDA
+allocated/reserved peaks were 186,126,336 / 257,949,696 bytes. These remain
+control measurements, not memory-arm admission. Preparation/inference occupied
+79.822/31.384 s over 2,281 calls; native step/encoding 21.301 s over 876 calls.
+Worker wall time was 243.051 s. All 18 outputs were fetched and hash-verified.
+The launcher confirms the rental `mtg252-a40-3b95659b1c93` ended; its retained
+cost is **USD0.05991, estimated**, without a settled bill.
+
+The error exposes an existing live-token attention bound: padded slots can
+exceed the entire packed sequence in a sparse final execution chunk. PyTorch's
+[memory-efficient backward check](https://github.com/pytorch/pytorch/blob/main/aten/src/ATen/native/transformers/cuda/attention_backward.cu)
+requires each maximum sequence bound to fit that packed total. `LiveTokens`
+now supplies `min(slots, packed_length)`, still a valid upper bound on every
+row, with no device-scalar read or attention/model change. The directed
+regression compares sparse one-/two-row chunks against padded attention through
+backward on CPU and CUDA when available.
+
+One repaired admission is bounded by **USD0.60 / 0.75 hours**, keeping the three
+job ceilings at exactly **USD3.00**. It retains 32-row execution and all other
+measurement settings; its name `cuda-calibration-bound32` identifies the
+repaired source. No pilot run is authorized by this failed admission. The
+repaired rental runs the directed CUDA backward regression before its workers.
+Local checking also found two fixture references to the deleted dense-row
+reader; both now use the surviving retained-row path, without restoring an API.
+`uv run --no-sync pytest tests/model/test_live_tokens.py -q`: **6 passed,
+2 CUDA-only cases skipped** (19.57 s); Ruff and whitespace passed. The initial
+file run exposed four stale-fixture failures before that consumer cut; the two
+new CPU gradient cases already passed. CUDA proof remains the rental's next
+admission step.

@@ -1,8 +1,11 @@
 """Live-token attention agrees with the padded path on admitted inputs."""
 
+from copy import deepcopy
+
 import pytest
 import torch
 
+from manabot.backends.torch.live_tokens import LiveTokens
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.policy.prepare import OBJECT_VALIDITY_KEYS
 from tests.model.prepared_routes import device_input, host_inputs
@@ -92,3 +95,55 @@ def test_padded_policy_measures_no_live_count() -> None:
     with torch.no_grad(), PolicyInference(case.agent) as scope:
         batch = scope.prepare(host_inputs(case.obs))
         assert batch is not None and batch.live_index is None
+
+
+@pytest.mark.parametrize("lengths", [(3,), (3, 5)])
+@pytest.mark.parametrize(
+    "device",
+    [
+        "cpu",
+        pytest.param(
+            "cuda",
+            marks=pytest.mark.skipif(
+                not torch.cuda.is_available(), reason="CUDA unavailable"
+            ),
+        ),
+    ],
+)
+def test_sparse_short_chunk_matches_padded_backward(
+    lengths: tuple[int, ...], device: str
+) -> None:
+    """A final chunk can have fewer live tokens than its 234 padded slots."""
+    torch.manual_seed(39100)
+    slots, width = 234, 16
+    reference = torch.nn.MultiheadAttention(width, 4, batch_first=True).to(device)
+    attention = deepcopy(reference)
+    padded = torch.randn(len(lengths), slots, width, device=device, requires_grad=True)
+    actual = padded.detach().clone().requires_grad_()
+    index = torch.tensor(
+        [row * slots + col for row, size in enumerate(lengths) for col in range(size)],
+        device=device,
+    )
+    offsets = torch.tensor(
+        [0, *torch.tensor(lengths).cumsum(0).tolist()], device=device
+    )
+    coordinates = LiveTokens(index, offsets, len(lengths), slots)
+    absent = (
+        torch.arange(slots, device=device)[None]
+        >= torch.tensor(lengths, device=device)[:, None]
+    )
+    expected, _ = reference(
+        padded, padded, padded, key_padding_mask=absent, need_weights=False
+    )
+    expected = coordinates.gather(expected)
+    # Float32 jagged attention on CUDA exercises the memory-efficient kernel's
+    # backward bound check; CPU retains the same output/gradient parity proof.
+    result = coordinates.self_attention(attention, coordinates.gather(actual))
+    torch.testing.assert_close(result, expected, atol=1e-5, rtol=1e-5)
+    result.square().sum().backward()
+    expected.square().sum().backward()
+    torch.testing.assert_close(actual.grad, padded.grad, atol=1e-5, rtol=1e-5)
+    for parameter, target in zip(
+        attention.parameters(), reference.parameters(), strict=True
+    ):
+        torch.testing.assert_close(parameter.grad, target.grad, atol=1e-5, rtol=1e-5)

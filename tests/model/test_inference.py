@@ -83,7 +83,7 @@ def _policy(
         recovery_max_microsteps=10000,
         numerics=TorchCollectionSession(device="cpu", seed=91, precision="float32"),
     )
-    return PolicyFixture(agent, collector, collector._slice_obs_rows(np.arange(2)))
+    return PolicyFixture(agent, collector, collector._retain_obs_rows(np.arange(2)))
 
 
 def test_half_precision_head_keeps_finite_public_logits() -> None:

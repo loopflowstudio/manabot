@@ -171,6 +171,10 @@ one sampling call per original row group. A prefetch generator must release its
 previous Prepared input and completed Future before submitting another chunk;
 the completed Future also owns the host result.
 
+Jagged CUDA attention's static sequence bound must not exceed the physical
+packed token total, even when a short execution chunk retains more padded
+slots. Bound it from host shape metadata; do not read a CUDA scalar for it.
+
 ### Python typing
 
 - Write fully typed Python: annotate parameters and return values on all

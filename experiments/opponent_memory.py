@@ -58,15 +58,15 @@ def training_jobs(revision: str, calibration: bool = False) -> list[RunRequest]:
 
         root = Path(__file__).resolve().parents[1]
         job = PythonJob(
-            name="cuda-calibration-rows32",
+            name="cuda-calibration-bound32",
             train=calibrate,
             config=Calibration(source_bundle=bundle_at(root, revision)),
             repo=str(root),
             revision=revision,
-            setup=machine_setup(" --extra artifacts"),
-            extras=("artifacts",),
-            max_hours=0.9,
-            max_usd=Decimal("1.20"),
+            setup=machine_setup(" --extra artifacts --extra dev"),
+            extras=("artifacts", "dev"),
+            max_hours=0.75,
+            max_usd=Decimal("0.60"),
             max_attempts=1,
         ).plain()
         return job.model_copy(
@@ -374,6 +374,7 @@ def calibrate(config: Calibration) -> None:
     """Interleave incumbent and memory workers within one bounded GPU rental."""
     import json
     import os
+    import subprocess
     import time
 
     import psutil
@@ -386,6 +387,28 @@ def calibrate(config: Calibration) -> None:
     out = Path(os.environ["ETUDE_OUTPUT_DIR"]).resolve()
     out.mkdir(parents=True, exist_ok=True)
     started = time.monotonic()
+    if not config.smoke:
+        import torch
+
+        if not torch.cuda.is_available():
+            raise RuntimeError("CUDA calibration requires an actual CUDA device")
+        # Run the directed CUDA backward regression before the real workers;
+        # the subprocess releases its allocator before any timed measurement.
+        with (out / "attention-proof.log").open("w") as proof:
+            subprocess.run(
+                [
+                    "uv",
+                    "run",
+                    "--no-sync",
+                    "pytest",
+                    "tests/model/test_live_tokens.py::test_sparse_short_chunk_matches_padded_backward",
+                    "-q",
+                ],
+                stdout=proof,
+                stderr=subprocess.STDOUT,
+                check=True,
+                timeout=180,
+            )
     sequence = ["incumbent", *(arm.name for arm in ARMS)]
     if not config.smoke:
         sequence += list(reversed(sequence))
