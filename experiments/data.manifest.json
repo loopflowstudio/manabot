@@ -41810,6 +41810,14 @@
    "sha256": "c2998cdeb774ef19c6b6f9a7d5b20cf2ae569cad31dce881cc5bbd4cee555b41",
    "bytes": 14533131
   },
+  "experiments/data/opponent-memory/20261117-additive/evidence.tar.gz": {
+   "sha256": "1a7db2c6d6887a451828bece5bbc28abca7c79fe65ed1948c6eef4c14890fa21",
+   "bytes": 212607
+  },
+  "experiments/data/opponent-memory/20261117-additive/members.json": {
+   "sha256": "7a005b44e6509bccb5dfefce0983e8d044bcd52781eed2606b466480c6f567bc",
+   "bytes": 12061
+  },
   "experiments/data/opponent-memory/20261117-chunk-cache/evidence.tar.gz": {
    "sha256": "cfe3c9eac1de8bbee378ece986f60fb41d6d0b5a007465eee2bae392ea73f5a3",
    "bytes": 588868

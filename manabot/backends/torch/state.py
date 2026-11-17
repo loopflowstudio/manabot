@@ -58,7 +58,8 @@ def restore_policy(
     allowed = {
         name
         for name in target
-        if name.startswith("decision_memory.") or name.endswith(".memory_gate")
+        if name.startswith("decision_memory.")
+        or name.endswith((".memory_gate", ".memory_projection.weight"))
     }
     if set(target) - set(state) != allowed or set(state) - set(target):
         raise ValueError(

@@ -2083,3 +2083,64 @@ Launcher estimate USD0.3188911458250000161266749881; rental terminated and the T
 Verified ratios: control 1.125×, GRU-K1 1.443× incumbent time, versus 1.143× / 1.548× in the prior optimized CUDA run. Suffix transport reduced native encoding to about 3.5 s, but retention remains about 20 s over incumbent. GRU preparation and inference still each add about 35 s over control. The existing gated J1 layer runs joint and control attention separately; the next cut replaces that unmerged arithmetic with a single-pass gated additive summary. Frozen probe and CUDA bytes keep their original identities.
 
 Evidence: `experiments/data/opponent-memory/20261117-cuda-fold-2`. All 134 outputs (182,529,881 bytes) fetched through SDK digest checks; archive members verified against the retained SHA256/size manifest. Launcher status, attempt, record and both original launch requests retained. The launcher has no run record for the original fold job, so its cost is not independently reported here. No learning, strength or adoption claim.
+
+### Single-pass gated additive join — 2026-11-17
+
+The Task session authorized replacing unmerged J1 token attention after the CUDA
+split showed persistent GRU preparation/inference cost. Each trunk layer now adds
+`tanh(scale * gate) * projection(mean(summaries))` to each real board input, then
+runs self-attention once and one unsplit feedforward block. Both owners receive
+the same addition. Padding and the optional value token receive none; the value
+token still attends the conditioned board. Projections are bias-free and
+initialized nonzero; gates start at zero. K1 remains the pilot, K4 works through
+mean pooling. MemoryJoin, host partitions, appended summary slots and second
+attention calls are deleted. This changes unmerged model arithmetic; frozen
+probe/CUDA bytes and their source identities are unchanged.
+
+Existing whole-game CPU harness: two streams, mixed disclosure, open gates,
+one real update, 556 decisions per process. Twenty-seven sequential fresh
+processes, three per arm/row limit. The initial repeat overlapped tests and was
+replaced in full before these results. Times are medians [min, max], seconds;
+ratios use fresh true incumbents at the matched row limit.
+
+| Rows | Arm | Decisions | Collection s | Update s | Total s | Total / incumbent |
+|---|---|---:|---:|---:|---:|---:|
+| 32 | incumbent | 556 | 1.398 [1.382, 1.437] | 2.573 [2.556, 2.583] | 3.971 [3.965, 3.993] | 1.000 |
+| 32 | control | 556 | 1.533 [1.475, 1.536] | 2.579 [2.546, 2.591] | 4.080 [4.054, 4.127] | 1.027 |
+| 32 | gru-k1 | 556 | 2.111 [2.073, 2.121] | 2.790 [2.778, 2.810] | 4.899 [4.863, 4.921] | 1.234 |
+| 128 | incumbent | 556 | 1.437 [1.412, 1.448] | 2.011 [1.993, 2.027] | 3.439 [3.430, 3.459] | 1.000 |
+| 128 | control | 556 | 1.525 [1.497, 1.560] | 2.031 [2.010, 2.056] | 3.556 [3.507, 3.617] | 1.034 |
+| 128 | gru-k1 | 556 | 2.125 [2.076, 2.129] | 2.163 [2.124, 2.187] | 4.263 [4.249, 4.291] | 1.240 |
+| 256 | incumbent | 556 | 1.395 [1.382, 1.398] | 2.090 [2.051, 2.108] | 3.485 [3.448, 3.490] | 1.000 |
+| 256 | control | 556 | 1.511 [1.489, 1.561] | 2.028 [2.015, 2.031] | 3.526 [3.516, 3.592] | 1.012 |
+| 256 | gru-k1 | 556 | 2.105 [2.088, 2.155] | 2.159 [2.105, 2.177] | 4.263 [4.260, 4.264] | 1.223 |
+
+Control ratios are **1.027/1.034/1.012×** at 32/128/256 rows; GRU-K1 is
+**1.234/1.240/1.223×**, versus the collection-fold cut's 1.529/1.586/1.606×.
+GRU update medians fall from 3.825/3.198/3.209 s to 2.790/2.163/2.159 s;
+collection falls from 2.239/2.238/2.263 s to 2.111/2.125/2.105 s. Different
+arithmetic can change behavior, so this is a cost comparison, not equivalence
+with J1 or evidence of equal learnability. The fixture's 556 decisions happen
+to remain equal. Incumbent/control rollout, prefix, gradient and updated-state
+hashes match the previous cut exactly; each new arm/row combination repeats
+its hashes exactly. No CUDA measurement, learning result or adoption follows.
+
+The gate tests retain exact initialized control identity for padded/live,
+compact/bucketed, empty/mixed/long rows and masked-mean/value-token critics.
+They also check empty history with an open gate, finite first gate gradients,
+zero initial projection/encoder gradients, later projection/encoder gradients,
+strict shared-trunk restoration and checkpoint output round trips using matched
+execution options. A directed attention-input test checks owner-neutral addition,
+unchanged padding/value inputs and exactly one attention call. The existing
+memory/fold checks passed; the first expanded checkpoint assertion compared
+unmatched execution options and was corrected to preserve those options.
+
+Evidence: `experiments/data/opponent-memory/20261117-additive`, exact source,
+harness, sequential runner, all 27 receipts/logs and member SHA256/size manifest.
+Every archive member verified locally. No paid launch, pilot, job rename or PR.
+Retention attribution is the next separate cut.
+
+Validation: memory-model and collection/learner-fold files passed (119 cases);
+after matching reload execution options, gate and Prepared-row tests passed
+(72 cases). Ruff and whitespace checks passed. Gate/CI retain the broader
+backend/recovery and active-training checks; no Rust changed in this cut.

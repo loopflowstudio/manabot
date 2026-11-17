@@ -599,7 +599,7 @@ reference, and arbitrary imported prefixes still undergo complete admission.
 The transformer keeps its full-sequence encoder.
 
 To let a Torch policy use the opponent's earlier choices, select an encoder and
-one or four summary tokens in its model configuration:
+one or four summaries in its model configuration:
 
 ```python
 from manabot.infra.config import ModelConfig
@@ -638,7 +638,7 @@ These are bounds selected from the seeded census; a game that exceeds them stops
 typed capacity error rather than dropping records. The policy receives the whole game's viewer-safe
 opponent decision records at each decision. For example, a pass with mana open
 and a card in hand remains available after later turns; a recent-event window
-can lose that context. The encoder produces summary tokens that join the board
+can lose that context. The encoder produces summaries that condition the board
 attention, allowing both legal-action probabilities and the value estimate to
 depend on the earlier choice. This does not establish a learning benefit; the
 [three-arm pilot](../experiments/opponent_memory.md) compares both encoders with
@@ -802,7 +802,7 @@ snapshots. Local table indexes and appearance identities are never numerical
 learning features. The nonlinear featurizer binds each detail's field, typed
 value and position before reference pooling, then pools the three member groups
 separately. Transformer records use pre-norm attention; summaries are normalized
-before the existing board-token join.
+before the gated additive board join.
 
 `decision_memory_include_own=True` additionally records your own public signals,
 using the opposing viewer's entitled projection **at emission**, rebased to your
@@ -854,7 +854,7 @@ with only `decision_memory`, `decision_memory_summaries` and
 `decision_memory_gate_scale` differing. The trunk must declare the same positive
 decision capacities as the branch. Executor restoration copies every shared
 tensor with strict shape checks and initializes only `decision_memory.*` and
-the per-layer gates; missing shared or unexpected keys fail. Identical models
+the per-layer memory projections and gates; missing shared or unexpected keys fail. Identical models
 and learning-state recovery still use ordinary strict restoration. A trunk from
 an older world or a different observation layout cannot be branched.
 
@@ -864,21 +864,28 @@ schedule start fresh at branch iteration one. The run record's
 `pretrained/source_run`, `pretrained/checkpoint` and `producer_cost` retain
 lineage and ancestor cost; checkpoints retain their own source identity.
 
-Summaries join the board as extra tokens. A token of zeros would still take
-attention weight and change every board row, so each board attention layer
-instead computes its output twice, over board and value tokens alone and over
-those plus the summaries, and gives each board and value row
+Each board attention layer adds a gated projection of the mean memory summary
+(K=1 in the pilot; K=4 remains supported) to every real board token before its
+single self-attention call:
 
 ```text
-board_only + tanh(scale * gate) * (joint - board_only)
+board_input + tanh(scale * gate) * projection(mean(summaries))
 ```
 
-with one learned scalar `gate` per layer, initialized to zero. Summary rows take
-the joint output. At initialization every board row therefore equals the
-board-only (control) computation; the gates receive gradient from the first update and
-the encoder from the second, once a gate has moved. A memory policy built
-without a trunk has the same zero gates and starts as its own board-only
-function. Every memory policy is gated; there is no ungated join.
+The addition is owner-neutral, skips padding and leaves the optional value token's
+input untouched. The value token still reads the conditioned board through
+attention. No summary tokens extend the sequence. Each layer has its own
+nonzero-initialized, bias-free projection and scalar `gate` initialized to zero.
+The gate receives a finite gradient on the first update; projection and encoder
+receive gradients once the gate opens. Empty histories yield zero summaries and
+therefore zero additions, even with open gates. At initialization, the branch
+uses exactly the control's sequence, attention and feedforward arithmetic.
+Every memory policy uses this gated join, including one built without a trunk.
+
+This replaces the unmerged J1 token join, which computed both joint and control
+attention at every layer and blended the results. Frozen probe and CUDA receipts
+retain that earlier arithmetic and their original source identities; they do not
+measure the additive join.
 
 Training logs `decision_memory/gate_<layer>`, the value of
 `tanh(scale * gate)` for each board layer. A gate that stays near zero means
