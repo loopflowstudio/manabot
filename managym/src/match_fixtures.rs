@@ -7,7 +7,11 @@ use std::{collections::BTreeMap, hint::black_box};
 
 use rand::Rng;
 
-use crate::{agent::observation::Observation, state::player::PlayerConfig, Game};
+use crate::{
+    agent::{action::Action, observation::Observation},
+    state::player::PlayerConfig,
+    Game,
+};
 
 const SETUP_SEED: u64 = 377;
 const HEAVY_ACTION_SEED: u64 = 0xc10e;
@@ -53,15 +57,52 @@ pub fn build_fixture(id: &str) -> Result<Game, String> {
         if game.is_game_over() {
             return Err(format!("fixture {id} terminated at decision {decision}"));
         }
-        let action_count = game.action_space().map_or(0, |space| space.actions.len());
+        let actions: Vec<usize> = game
+            .action_space()
+            .map(|space| {
+                space
+                    .actions
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, action)| !matches!(action, Action::TapForMana { .. }))
+                    .map(|(index, _)| index)
+                    .collect()
+            })
+            .unwrap_or_default();
+        let action_count = actions.len();
         if action_count == 0 {
             return Err(format!(
                 "fixture {id} has no legal action at decision {decision}"
             ));
         }
         let action = game.state.rng.gen_range(0..action_count);
-        game.step(action)
+        game.step(actions[action])
             .map_err(|error| format!("fixture {id} failed at decision {decision}: {error}"))?;
+        // Keep these clone/witness positions stable by deliberately choosing
+        // automatic completion at newly exposed fixed-source decisions.
+        loop {
+            let Some(space) = game.action_space() else {
+                break;
+            };
+            let automatic = space
+                .actions
+                .iter()
+                .position(|a| matches!(a, Action::PayCost { .. }));
+            if space
+                .actions
+                .iter()
+                .any(|a| matches!(a, Action::TapForMana { .. }))
+                && space
+                    .actions
+                    .iter()
+                    .all(|a| matches!(a, Action::TapForMana { .. } | Action::PayCost { .. }))
+            {
+                game.step(automatic.expect("automatic payment beside sources"))
+                    .map_err(|error| format!("fixture {id} payment: {error}"))?;
+            } else {
+                break;
+            }
+        }
         if drain_observations {
             let events = game.take_observation_events();
             black_box(Observation::new(&game, &events));

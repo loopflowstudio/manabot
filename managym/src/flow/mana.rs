@@ -1936,6 +1936,16 @@ impl Game {
             .into_iter()
             .skip(1)
             .collect();
+        // With one payment already covered by fixed sources, a tap just moves
+        // that source's output into the pool. The aggregate resources do not
+        // change, so every useful tap preserves affordability. Nested callers
+        // and payments needing activated sources still use the exact model.
+        let obligations = vec![Obligation::Pay {
+            cost: cost.clone(),
+            waterbend: false,
+        }];
+        let fixed_only = tail.is_empty()
+            && model.payable(pool.clone(), obligations.clone(), SourcePolicy::FixedOnly);
         let mut offered_units = 0_u16;
         let actions: Vec<Action> = model
             .sources
@@ -1948,22 +1958,24 @@ impl Game {
                 if tapped.spendable_units(&cost) <= spendable {
                     return None;
                 }
-                let mut after = PaymentModel {
-                    cache: None,
-                    sources: model.sources.clone(),
-                    life: model.life,
+                let payable = || {
+                    let mut after = PaymentModel {
+                        cache: None,
+                        sources: model.sources.clone(),
+                        life: model.life,
+                    };
+                    after.reserve(SourceReservation {
+                        permanent: source.permanent,
+                        tap: true,
+                        sacrifice: false,
+                    });
+                    let mut obligations = obligations.clone();
+                    obligations.extend_from_slice(&tail);
+                    after.payable(tapped, obligations, SourcePolicy::All)
                 };
-                after.reserve(SourceReservation {
-                    permanent: source.permanent,
-                    tap: true,
-                    sacrifice: false,
-                });
-                let mut obligations = vec![Obligation::Pay {
-                    cost: cost.clone(),
-                    waterbend: false,
-                }];
-                obligations.extend_from_slice(&tail);
-                if !after.payable(tapped, obligations, SourcePolicy::All) {
+                if fixed_only {
+                    debug_assert!(payable(), "a fixed tap changed aggregate affordability");
+                } else if !payable() {
                     return None;
                 }
                 offered_units = offered_units.saturating_add(output.total());

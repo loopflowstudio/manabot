@@ -18,7 +18,7 @@ from manabot.verify.representation import (
 )
 import managym
 from managym.recording import GameInputs
-from tests.retained_decision import assert_retained_frame
+from tests.retained_decision import assert_retained_frame, source_payment_tape
 
 
 class RetainedPosition(BaseModel):
@@ -81,12 +81,20 @@ def test_retained_drill_prefix_admits_shared_effects(
     assert vector.current_player_configs()[0].decklists == (
         "closed" if closed else "open"
     )
-    for index, action in enumerate(game.actions):
-        assert isinstance(action, int)
-        if index == len(game.actions) - 1 and not closed:
-            current_json = scalar.semantic_decision_frame_json()
-            assert vector.semantic_decision_frames_json()[0] == current_json
-            assert_retained_frame(current_json, game.frame)
+    assert all(isinstance(action, int) for action in game.actions)
+    original = [int(action) for action in game.actions]
+    expanded = []
+    for action in source_payment_tape(scalar, original[:-1]):
+        expanded.append(action)
+        scalar.step(action)
+        vector.step_into_buffers([action])
+    if not closed:
+        current_json = scalar.semantic_decision_frame_json()
+        assert vector.semantic_decision_frames_json()[0] == current_json
+        assert_retained_frame(
+            current_json, game.frame, added_payments=len(expanded) - len(original[:-1])
+        )
+    for action in source_payment_tape(scalar, original[-1:]):
         acting_observation, *_ = scalar.step(action)
         vector.step_into_buffers([action])
     actor = scalar.current_agent_index()

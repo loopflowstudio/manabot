@@ -6,12 +6,13 @@ use managym::{
     agent::action::{Action, ActionType},
     state::{
         game_object::{PermanentId, PlayerId},
+        mana::Mana,
         player::PlayerConfig,
     },
     Game,
 };
 
-fn game() -> Game {
+fn game(lands: &[&str]) -> Game {
     let deck: BTreeMap<String, usize> = [("Mountain", 20), ("Forest", 12), ("Gray Ogre", 8)]
         .into_iter()
         .map(|(name, count)| (name.to_string(), count))
@@ -28,7 +29,7 @@ fn game() -> Game {
     game.scenario_clear_hand(player);
     game.scenario_force_card_in_hand(player, "Gray Ogre")
         .unwrap();
-    for land in ["Mountain", "Mountain", "Mountain", "Forest"] {
+    for land in lands {
         game.scenario_force_battlefield(player, land, true).unwrap();
     }
     game.scenario_refresh_priority().unwrap();
@@ -83,7 +84,8 @@ fn untapped(game: &Game) -> Vec<String> {
 fn per_source_taps_choose_what_stays_untapped_and_pay_cost_finishes() {
     // {2}{R} from three Mountains and a Forest: every land can pay a pip and
     // one will be left, so all four are offered beside PayCost.
-    let mut by_hand = game();
+    let lands = ["Mountain", "Mountain", "Mountain", "Forest"];
+    let mut by_hand = game(&lands);
     cast(&mut by_hand);
     let offers = taps(&by_hand);
     assert_eq!(offers.len(), 4);
@@ -110,7 +112,7 @@ fn per_source_taps_choose_what_stays_untapped_and_pay_cost_finishes() {
     assert_eq!(untapped(&by_hand), ["Mountain"]);
 
     // PayCost at once is the automatic payer: Mountains first, in order.
-    let mut automatic = game();
+    let mut automatic = game(&lands);
     cast(&mut automatic);
     let pay = automatic
         .action_space()
@@ -121,4 +123,22 @@ fn per_source_taps_choose_what_stays_untapped_and_pay_cost_finishes() {
         .unwrap();
     automatic.step(pay).unwrap();
     assert_eq!(untapped(&automatic), ["Forest"]);
+}
+
+#[test]
+fn funded_and_all_sources_needed_payments_remain_trivial() {
+    let mut exact = game(&["Mountain", "Mountain", "Mountain"]);
+    cast(&mut exact);
+    assert!(exact.pending_choice.is_none());
+    assert!(untapped(&exact).is_empty());
+
+    let lands = ["Mountain", "Mountain", "Mountain", "Forest"];
+    let mut funded = game(&lands);
+    funded.state.players[0].mana_pool = Mana::parse("2R");
+    cast(&mut funded);
+    assert!(funded.pending_choice.is_none());
+    assert_eq!(
+        untapped(&funded),
+        ["Forest", "Mountain", "Mountain", "Mountain"]
+    );
 }
