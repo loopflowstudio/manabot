@@ -6,11 +6,13 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Literal
 
-from etude.storage import DirectoryStorage, S3Storage
+from etude.jobs import Checkpoints, ExperimentState, TrainingRunSummary
+from etude.storage import DirectoryStorage, S3Storage, run_prefix
 import numpy as np
 import pytest
 import torch
 
+from experiments import opponent_memory
 from experiments.opponent_memory import branch_jobs
 from manabot.backends.torch.arrays import on_device
 from manabot.backends.torch.checkpoint import load_checkpoint
@@ -342,3 +344,94 @@ def test_branch_builder_declares_shared_inputs_and_matching_seed_labels() -> Non
             max_hours=1,
             max_usd=Decimal("0.25"),
         )
+
+
+@pytest.mark.parametrize("state", ["missing", "running", "finished"])
+def test_pilot_requires_completed_trunk_for_every_seed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    state: Literal["missing", "running", "finished"],
+) -> None:
+
+    runs = (
+        ()
+        if state == "missing"
+        else (
+            TrainingRunSummary(
+                name="trunk",
+                experiment="opponent_memory",
+                job="decision-memory-trunk",
+                launch="decision-memory-trunk",
+                line="trunk",
+                state=state,
+                seed=39101,
+                checkpoints=Checkpoints(),
+            ),
+        )
+    )
+
+    def observe(source: object, experiment: str) -> ExperimentState:
+        return ExperimentState(experiment=experiment, runs=runs)
+
+    monkeypatch.setattr(opponent_memory, "observe", observe)
+    message = "seed 39101:.*" + (
+        "unfinished" if state == "running" else "expected one|attempt records"
+    )
+    with pytest.raises(ValueError, match=message):
+        opponent_memory.training_jobs("HEAD", trunks=str(tmp_path))
+
+
+def test_pilot_branches_from_three_published_ema_trunks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    memory_trunk: TrainingRun,
+) -> None:
+
+    storage = DirectoryStorage(tmp_path / "pilot")
+    runs: list[TrainingRunSummary] = []
+    for seed in opponent_memory.SEEDS:
+        name = f"trunk-{seed}"
+        parent = memory_trunk.model_copy(deep=True)
+        parent.seed = seed
+        parent.stages[0].id = "self-play"
+        folder = f"{run_prefix(name)}attempts/one/training/"
+        storage.put(folder + "run.json", parent.model_dump_json().encode())
+        artifact = Path(parent.stages[0].artifacts["ema"]["path"])
+        storage.put_file(folder + artifact.name, artifact)
+        runs.append(
+            TrainingRunSummary(
+                name=name,
+                experiment="opponent_memory",
+                job="decision-memory-trunk",
+                launch="decision-memory-trunk",
+                line=name,
+                state="finished",
+                checkpoints=Checkpoints(),
+                seed=seed,
+            )
+        )
+
+    def observe(source: object, experiment: str) -> ExperimentState:
+        return ExperimentState(experiment=experiment, runs=tuple(runs))
+
+    monkeypatch.setattr(opponent_memory, "observe", observe)
+    requests = opponent_memory.training_jobs("HEAD", trunks=str(storage.root))
+    assert len(requests) == 6
+    for seed in opponent_memory.SEEDS:
+        specs = [
+            TrainingJob.model_validate_json(request.job.config or "")
+            for request in requests
+            if request.seed == seed
+        ]
+        assert len(specs) == 2
+        assert specs[0].pretrained == specs[1].pretrained
+        assert specs[0].pretrained.source_seed == seed
+        for spec in specs:
+            stage = spec.regime.stages[0]
+            assert isinstance(stage, TrainSelfPlay)
+            assert stage.target_learner_transitions == 4_400_000
+            assert spec.milestones == (20, 40, 60)
+        assert specs[1].regime.agent.decision_memory_gate_scale == 2.0
+    runs.pop()
+    with pytest.raises(ValueError, match="seed 39103: expected one trunk"):
+        opponent_memory.training_jobs("HEAD", trunks=str(storage.root))

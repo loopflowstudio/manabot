@@ -10,17 +10,17 @@ from dataclasses import replace
 from pathlib import Path
 import sys
 
-from etude.declarations import read_training_jobs
+from etude.declarations import read_experiment, read_training_jobs
 from etude.errors import EtudeError
 from etude.eval.records import Match
 from etude.experiment import Checkpoint, TrainingRun
 from etude.jobs import Checkpoints, ExperimentState, evaluation_spec
 from etude.page import build, experiment_files
 from etude.records import ArtifactRef
-from etude.report import Counters, Series
+from etude.report import Counters, Curve, Matches, Series
 import pytest
 
-from experiments import elemental, tla_frontier
+from experiments import elemental, opponent_memory, tla_frontier
 from experiments.elemental_long_eval import (
     Checkpoint as FollowedCheckpoint,
     EvalState,
@@ -261,3 +261,78 @@ def test_frontier_keeps_its_recorded_lost_endpoint_without_a_launcher(
     unknown = replace(lost, name="unknown-run")
     with pytest.raises(EtudeError, match="unknown-run"):
         tla_frontier.with_launcher_ends(replace(state, runs=(unknown,)))
+
+
+def test_opponent_memory_discovery_declares_trunks_and_empty_evaluation() -> None:
+
+    experiment = read_experiment(EXPERIMENTS / "opponent_memory.py")
+    assert experiment.training is not None and experiment.eval is not None
+    runs = experiment.training(revision="HEAD")
+    assert [run.seed for run in runs] == [39101, 39102, 39103]
+    for run in runs:
+        assert run.job.name == "decision-memory-trunk"
+        spec = TrainingJob.model_validate_json(run.job.config or "")
+        stage = spec.regime.stages[0]
+        assert isinstance(stage, TrainSelfPlay)
+        assert stage.target_learner_transitions == 3_300_000
+        assert stage.learning.decision_schedule.transitions == 3_300_000
+        assert stage.execution.collection_rows == 128
+        assert spec.regime.agent.decision_memory == "none"
+        assert spec.regime.observation.max_decision_records == 512
+    assert experiment.eval(ExperimentState(experiment="opponent_memory")) == []
+
+
+def test_opponent_memory_evaluation_draws_every_declared_seating(
+    tmp_path: Path,
+) -> None:
+
+    runs = tuple(
+        replace(
+            _finished_run(tmp_path, range(0, final + 1, 20)),
+            name=f"{arm}-{seed}",
+            experiment="opponent_memory",
+            seed=seed,
+            job=f"decision-memory-{arm}",
+            launch=f"decision-memory-{arm}",
+        )
+        for seed in opponent_memory.SEEDS
+        for arm, final in (("control", 80), ("gru-k1", 100))
+    )
+    jobs = opponent_memory.eval_jobs(
+        ExperimentState(experiment="opponent_memory", runs=runs)
+    )
+    assert len(jobs) == 1
+    seatings = jobs[0].tournament.seatings
+    assert len(seatings) == 30
+    curves = [
+        panel for panel in opponent_memory.report().evals if isinstance(panel, Curve)
+    ]
+    drawn = {
+        selection.seating
+        for panel in curves
+        for selection in (
+            panel.matches if isinstance(panel.matches, tuple) else (panel.matches,)
+        )
+        if isinstance(selection, Matches)
+    }
+    assert {seating.name for seating in seatings} == drawn
+    games = sum(len(seating.configs) * seating.games for seating in seatings)
+    assert games == 9600
+    for seating in seatings:
+        if "control-final" in seating.name:
+            assert [player.checkpoint.at["updates"] for player in seating.players] == [
+                100,
+                80,
+            ]
+        if "reliance" in seating.tags:
+            first, blanked = seating.players
+            assert first.checkpoint == blanked.checkpoint
+            assert first.key != blanked.key
+            assert blanked.inference.config == {"blank_decision_memory": True}
+    # Stored milestones remain playable while final checkpoints are unavailable.
+    running = tuple(replace(run, state="running") for run in runs)
+    interiors = opponent_memory.evaluation_matchups(
+        ExperimentState(experiment="opponent_memory", runs=running)
+    )
+    assert len(interiors) == 18
+    assert all("final" not in seating.name for seating in interiors)

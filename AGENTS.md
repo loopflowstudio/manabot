@@ -103,6 +103,9 @@ checkpoints or experiment evidence.
 
 ### Experiments
 
+- Etude inference source identities hash tracked files. Stage new source files
+  before exercising experiment discovery that constructs `Inference(source=...)`.
+
 - Most runs are exploratory: calibration, throughput, capacity, pilots and
   anything run to make later work possible. They need no prediction, protocol
   or review; the report ends them. A finding, a result that will be cited as a claim

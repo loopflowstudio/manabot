@@ -1,9 +1,8 @@
 """Exploratory whole-game opponent-memory pilot (Task 3dca91).
 
 The report (`opponent_memory.md`) owns the design, evidence and open decisions.
-`training_jobs(..., calibration=True)` declares one capped optimized CUDA
-admission. Pilot training remains stopped pending its result and GRU-only pricing. Frozen CUDA runs retain their original source and transformer workers;
-`branch_jobs` freezes control and GRU from each published trunk.
+`training_jobs` declares three trunks, or six EMA branches with `trunks`.
+Frozen calibration runs retain their original source commits and receipts.
 `census` and `probe` are the USD0 commands. Nothing runs on import.
 """
 
@@ -12,18 +11,28 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal
-from multiprocessing.connection import Connection
+from itertools import combinations
 from pathlib import Path
+import random
 from typing import Literal
 
-from etude.jobs import ExperimentState
+from etude.eval.match import Tables
+from etude.eval.records import Benchmark, Environment, Inference, Match, Seating
+from etude.experiment import observe
+from etude.jobs import EvalJob, ExperimentState, TrainingRunSummary
 from etude.report import Curve, Matches, Matrix, Ranking, Report, Score
-from etude.spec import Job, RunRequest
+from etude.spec import RunRequest
+from etude.storage import Storage, run_prefix, storage_from_uri
 from pydantic import BaseModel, ConfigDict
 
-from manabot.experiment.job import PretrainedInitialization, TrainingJob
-from manabot.infra.source import SourceBundle
+from experiments.elemental_grid import DECKS, PACK
+from experiments.learning_signal import Design, Pairing
+from manabot.experiment.job import PretrainedInitialization, TrainingJob, machine_setup
+from manabot.infra.identity import canonical_sha256
+from manabot.sim.matchup import AuthoredMatchup
 from manabot.training.regime import TrainingRegime
+import managym
+from managym.disclosure import DecklistDisclosure
 
 
 @dataclass(frozen=True)
@@ -41,42 +50,81 @@ ARMS = (
     Arm("gru-k1", "gru", 1),
 )
 SEEDS = (39101, 39102, 39103)
-DISCLOSURES = ("open", "closed")
+DISCLOSURES: tuple[DecklistDisclosure, ...] = ("open", "closed")
 # Inclusive of calibration, training, evaluation, startup and failed attempts.
 MAX_USD = 50
 
 
-def training_jobs(revision: str, calibration: bool = False) -> list[RunRequest]:
-    """Declare the session's one capped admission; keep pilot training stopped."""
-    if calibration:
-        from etude.jobs import TrainingJob as PythonJob
+TRUNK_DECISIONS = 3_300_000
+BRANCH_DECISIONS = 4_400_000
+MILESTONES = (20, 40, 60)
+ROOT = Path(__file__).resolve().parents[1]
+EXPERIMENT = Path(__file__).stem
 
-        from experiments.opponent_memory import Calibration, calibrate
-        from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
-        from manabot.infra.source import bundle_at
 
-        root = Path(__file__).resolve().parents[1]
-        job = PythonJob(
-            name="cuda-calibration-suffix",
-            train=calibrate,
-            config=Calibration(source_bundle=bundle_at(root, revision)),
-            repo=str(root),
+def training_jobs(revision: str, trunks: str = "") -> list[RunRequest]:
+    """Declare trunks, or branch both arms from every completed published trunk."""
+    if trunks:
+        storage = storage_from_uri(trunks)
+        state = observe(storage, EXPERIMENT)
+        parents: dict[int, PretrainedInitialization] = {}
+        for seed in SEEDS:
+            runs = [
+                run
+                for run in state.runs
+                if run.launch == "decision-memory-trunk" and run.seed == seed
+            ]
+            if len(runs) != 1:
+                raise ValueError(f"seed {seed}: expected one trunk, found {len(runs)}")
+            run = runs[0]
+            if run.state != "finished":
+                raise ValueError(f"seed {seed}: trunk is unfinished ({run.state})")
+            parents[seed] = _published_trunk(storage, run.name, seed)
+        return branch_jobs(
+            revision,
+            regime=pilot_recipe(BRANCH_DECISIONS),
+            trunks=parents,
+            max_hours=5.0,
+            max_usd=Decimal("3.30"),
+        )
+    recipe = pilot_recipe(TRUNK_DECISIONS)
+    recipe.id = "decision-memory-trunk"
+    return (
+        TrainingJob(regime=recipe, experiment=EXPERIMENT)
+        .job(
+            repo=ROOT,
             revision=revision,
-            setup=machine_setup(" --extra artifacts --extra dev"),
-            extras=("artifacts", "dev"),
-            max_hours=1.25,
-            max_usd=Decimal("1.00"),
-            max_attempts=1,
-        ).plain()
-        return job.model_copy(
-            update={"command": f"{TOOLCHAIN_ENV}\n{job.command}"}
-        ).runs(39100)
-    raise RuntimeError(
-        "Paid calibration and pilot launches are stopped pending CPU host-cost "
-        "reductions and matched-row measurements against the true incumbent. "
-        "The next comparison is control and GRU-K1; frozen transformer evidence "
-        "is unchanged. See experiments/opponent_memory.md."
+            max_hours=3.5,
+            max_usd=Decimal("2.40"),
+        )
+        .runs(*SEEDS)
     )
+
+
+def _published_trunk(storage: Storage, run: str, seed: int) -> PretrainedInitialization:
+    """Resolve one attempt receipt; ordinary pretrained admission checks its bytes."""
+    folder = run_prefix(run)
+    records = [
+        key
+        for key in storage.keys(folder)
+        if key.startswith(f"{folder}attempts/") and key.endswith("/training/run.json")
+    ]
+    if len(records) != 1:
+        raise ValueError(
+            f"seed {seed}: trunk has {len(records)} attempt records, expected one"
+        )
+    try:
+        trunk = PretrainedInitialization.from_storage(
+            storage,
+            records[0],
+            source_stage="self-play",
+            weights="ema",
+        )
+    except ValueError as error:
+        raise ValueError(f"seed {seed}: {error}") from error
+    if trunk.source_seed != seed:
+        raise ValueError(f"seed {seed}: trunk receipt names seed {trunk.source_seed}")
+    return trunk
 
 
 def branch_jobs(
@@ -89,10 +137,8 @@ def branch_jobs(
 ) -> list[RunRequest]:
     """Freeze control/GRU branches from published trunk inputs without launching.
 
-    Calibration supplies the shared branch recipe, horizon, gate scale and caps.
-    Each seed maps to exactly one producer receipt and EMA export, reused by all
-    both arms. The ordinary training declaration stays stopped pending CPU
-    host-cost reductions and repricing.
+    Each seed's two arms share one producer receipt and EMA export. Their
+    optimizer and learner-decision schedule start fresh at the branch point.
     """
     if not trunks or any(seed not in SEEDS for seed in trunks):
         raise ValueError("branches require declared pilot seed labels")
@@ -110,10 +156,12 @@ def branch_jobs(
             configuration.agent.decision_memory = arm.encoder
             if arm.summaries:
                 configuration.agent.decision_memory_summaries = arm.summaries
+                configuration.agent.decision_memory_gate_scale = 2.0
             job = TrainingJob(
                 regime=configuration,
                 experiment=Path(__file__).stem,
                 pretrained=trunk,
+                milestones=MILESTONES if regime.stages[0].updates > 60 else (),
             ).job(
                 repo=Path(__file__).resolve().parents[1],
                 revision=revision,
@@ -124,12 +172,165 @@ def branch_jobs(
     return jobs
 
 
-def eval_jobs(state: ExperimentState) -> list[Job]:
-    """Keep evaluation stopped with the unlaunched, unpriced GRU-only pilot."""
-    raise RuntimeError(
-        "Pilot evaluation is stopped pending CPU host-cost reductions and "
-        "GRU-only repricing. Retain actual learner-decision checkpoint clocks; "
-        "see experiments/opponent_memory.md."
+def pilot_design() -> Design:
+    """Two hundred held-out deals; shorter readouts use the same first fifty."""
+    rng = random.Random(39100)
+    pairs = tuple(combinations(DECKS, 2))
+    return Design(
+        name="decision-memory-elemental-v1",
+        pack=PACK,
+        pairings=tuple(
+            Pairing(role_a=a, role_b=b, deal=3_910_000_000 + i)
+            for i, (a, b) in enumerate(rng.choices(pairs, k=200))
+        ),
+        matchup_mode="cross",
+        game_seconds=600,
+    )
+
+
+class Conditions(BaseModel):
+    """A pilot pairing and native decklist disclosure, fixed before scoring."""
+
+    model_config = ConfigDict(extra="forbid")
+    design: str
+    role_a: str
+    role_b: str
+    deal: int
+    decklists: DecklistDisclosure
+
+
+def seating_name(seed: int, disclosure: str, tag: str, point: int | str) -> str:
+    return f"seed-{seed}-{disclosure}-{tag}-{point}"
+
+
+def _branch(state: ExperimentState, seed: int, arm: str) -> TrainingRunSummary | None:
+    found = [
+        run
+        for run in state.runs
+        if run.launch == f"decision-memory-{arm}" and run.seed == seed
+    ]
+    if len(found) > 1:
+        raise ValueError(f"seed {seed}: multiple {arm} branches")
+    return found[0] if found else None
+
+
+def evaluation_matchups(state: ExperimentState) -> tuple[Seating, ...]:
+    """Equal-update interiors and each completed branch's own final checkpoint."""
+    design = pilot_design()
+    source = [*sorted((ROOT / "manabot").rglob("*.py")), Path(__file__)]
+    intact = Inference(source=source)
+    blanked = Inference(source=source, config={"blank_decision_memory": True})
+    found: list[Seating] = []
+    for seed in SEEDS:
+        control, gru = (_branch(state, seed, arm.name) for arm in ARMS)
+        if control is None or gru is None:
+            continue
+        points = [
+            (
+                update,
+                gru.checkpoints.at("updates", update).last,
+                control.checkpoints.at("updates", update).last,
+                "control",
+            )
+            for update in MILESTONES
+        ]
+        points += [
+            ("final", gru.final, control.final, "control"),
+            ("final", gru.final, gru.final, "reliance"),
+        ]
+        for point, first, second, tag in points:
+            if first is None or second is None:
+                continue
+            pairings = (
+                design.pairings
+                if point == "final" and tag == "control"
+                else design.pairings[:50]
+            )
+            for disclosure in DISCLOSURES:
+                conditions = tuple(
+                    Conditions(
+                        design=design.name,
+                        decklists=disclosure,
+                        **pairing.model_dump(),
+                    ).model_dump()
+                    for pairing in pairings
+                )
+                found.append(
+                    Seating(
+                        name=seating_name(seed, disclosure, tag, point),
+                        players=(
+                            first.player(intact),
+                            second.player(blanked if tag == "reliance" else intact),
+                        ),
+                        configs=conditions,
+                        games=design.legs,
+                        tags=(tag,),
+                    )
+                )
+    return tuple(found)
+
+
+def eval_jobs(state: ExperimentState) -> list[EvalJob]:
+    """Play stored branch exports; a capped pass retains matches for the next pass."""
+    seatings = evaluation_matchups(state)
+    if not seatings:
+        return []
+    design = pilot_design()
+    return [
+        EvalJob(
+            tournament=Benchmark(
+                name=design.name,
+                environment=Environment(
+                    name=design.name,
+                    files=canonical_sha256(
+                        {
+                            "world": managym.world_identity(),
+                            "design": design.record(),
+                            "disclosures": DISCLOSURES,
+                        }
+                    ),
+                    config={"purpose": "held-out-paired-deals"},
+                ),
+                seatings=seatings,
+            ),
+            play=play,
+            extras=("evaluation",),
+            workers=28,
+            max_hours=2.0,
+            max_usd=Decimal("4.00"),
+            setup=machine_setup(" --extra evaluation"),
+        )
+    ]
+
+
+def play(match: Match) -> Tables:
+    """Validate pilot conditions and delegate the paired deal to the shared arena."""
+    import torch
+
+    from manabot.backends.torch.checkpoint import BACKEND
+    from manabot.eval.pairing import play_pairing
+
+    torch.set_num_threads(1)
+    conditions = Conditions.model_validate(match.config)
+    design = pilot_design()
+    pairing = Pairing(
+        role_a=conditions.role_a, role_b=conditions.role_b, deal=conditions.deal
+    )
+    if conditions.design != design.name or pairing not in design.pairings:
+        raise ValueError("evaluation conditions differ from the frozen schedule")
+    return play_pairing(
+        match,
+        matchup=AuthoredMatchup(
+            pack_key=design.pack,
+            role_a=pairing.role_a,
+            role_b=pairing.role_b,
+            decklists=conditions.decklists,
+        ),
+        deal=pairing.deal,
+        matchup_mode=design.matchup_mode,
+        game_seconds=design.game_seconds,
+        arena=design.name,
+        backend=BACKEND,
     )
 
 
@@ -143,12 +344,21 @@ def report() -> Report:
         evals=(
             Curve(
                 title="Head-to-head against control",
-                matches=Matches(tag="control"),
+                matches=tuple(
+                    Matches(seating=seating_name(seed, disclosure, "control", point))
+                    for seed in SEEDS
+                    for disclosure in DISCLOSURES
+                    for point in (*MILESTONES, "final")
+                ),
                 split="decklists",
             ),
             Curve(
                 title="Intact memory against blanked memory",
-                matches=Matches(tag="reliance"),
+                matches=tuple(
+                    Matches(seating=seating_name(seed, disclosure, "reliance", "final"))
+                    for seed in SEEDS
+                    for disclosure in DISCLOSURES
+                ),
                 split="decklists",
             ),
             Matrix(
@@ -164,34 +374,30 @@ def report() -> Report:
     )
 
 
-class Calibration(BaseModel):
-    """Exploratory real-worker calibration, separate from pilot training."""
-
-    model_config = ConfigDict(extra="forbid")
-    source_bundle: SourceBundle | None = None
-    smoke: bool = False
-
-
-def calibration_recipe(name: str, *, smoke: bool) -> TrainingRegime:
-    """The ordinary Elemental workload with explicit memory execution bounds."""
+def pilot_recipe(decisions: int) -> TrainingRegime:
+    """Shared control recipe; the decision horizon sets its schedule and wall."""
     from manabot.infra.config import ModelConfig, ObservationConfig
     from manabot.recipes.builders import sampled_self_play
     from manabot.training.decks import UniformDecks
-    from manabot.training.regime import IterationSchedule, TrainSelfPlay
+    from manabot.training.regime import (
+        DampedPolicyLearning,
+        LearnerDecisionSchedule,
+        TrainSelfPlay,
+    )
     import managym
 
-    incumbent = name == "incumbent"
-    arm = next((arm for arm in ARMS if arm.name == name), ARMS[0])
-    if name not in {"incumbent", *(arm.name for arm in ARMS)}:
-        raise ValueError(f"unknown calibration arm {name}")
+    if decisions not in {TRUNK_DECISIONS, BRANCH_DECISIONS}:
+        raise ValueError("pilot horizon must be the trunk or branch decision target")
+    trunk = decisions == TRUNK_DECISIONS
+    wall_seconds = (3.5 if trunk else 5.0) * 3600 - 1200
     observation = ObservationConfig(
-        max_decision_records=0 if incumbent else 512,
-        max_decision_reference_details=0 if incumbent else 16384,
-        max_decision_references=0 if incumbent else 256,
-        max_decision_members=0 if incumbent else 8192,
+        max_decision_records=512,
+        max_decision_reference_details=16384,
+        max_decision_references=256,
+        max_decision_members=8192,
     )
     recipe = sampled_self_play(
-        id=f"decision-memory-calibration-{name}",
+        id="decision-memory-control",
         world=managym.WORLD_VERSION,
         agent=ModelConfig(
             world=managym.WORLD_SETUP,
@@ -202,6 +408,7 @@ def calibration_recipe(name: str, *, smoke: bool) -> TrainingRegime:
             policy_film=True,
             decision_memory_summaries=1,
         ),
+        # Bind the explicit execution limits before enabling memory capture.
         observation=ObservationConfig(),
         deck_source=UniformDecks(
             decks=tuple(
@@ -214,263 +421,25 @@ def calibration_recipe(name: str, *, smoke: bool) -> TrainingRegime:
         ),
         # A sampled deck source owns mixed disclosure and independent mirrors;
         # TrainingRegime forbids combining it with the older curriculum flag.
-        wall_seconds=600 if smoke else 1800,
+        wall_seconds=wall_seconds,
         seconds_per_update=60,
-        workers=1 if smoke else 4,
+        workers=4,
     )
     stage = recipe.stages[0]
     assert isinstance(stage, TrainSelfPlay)
-    stage.updates = 1 if smoke else 2
-    stage.streams = 2 if smoke else 256
-    stage.learning.iteration_schedule = IterationSchedule(steps=100)
+    stage.updates = 90 if trunk else 120
+    stage.target_learner_transitions = decisions
+    assert isinstance(stage.learning, DampedPolicyLearning)
+    stage.learning.iteration_schedule = None
+    stage.learning.decision_schedule = LearnerDecisionSchedule(transitions=decisions)
     # Capacity overflow fails the run: no truncation and no abort-and-continue.
     stage.game_errors = None
-    stage.execution.collection_rows = 2 if smoke else 32
-    stage.execution.bootstrap_rows = 2 if smoke else 32
-    stage.execution.learner_rows = 2 if smoke else 32
+    stage.execution.collection_rows = 128
+    stage.execution.bootstrap_rows = 128
+    stage.execution.learner_rows = 128
     stage.execution.precision = "float32"
     recipe.observation = observation
-    recipe.agent.decision_memory = arm.encoder
-    if smoke:
-        stage.learning_seats = "one"
-        stage.batch_closure = "exact-quota"
-        stage.transitions = 8
-        stage.execution.device = "cpu"
-        stage.execution.live_tokens = False
-        stage.execution.bucketed_shapes = False
     return TrainingRegime.model_validate(recipe.authored_dump())
-
-
-def calibration_child(
-    connection: "Connection",
-    name: str,
-    directory: str,
-    smoke: bool,
-    producer: str | None,
-) -> None:
-    """A fresh actual worker and allocator per repeat, including ordinary reload."""
-    from datetime import datetime, timedelta, timezone
-    import json
-    import os
-    import time
-
-    from etude.storage import DirectoryStorage
-    import numpy as np
-    import torch
-
-    from manabot.backends.torch.checkpoint import load_checkpoint
-    from manabot.env.memory_store import MemoryStore, Prefix, PrefixIdentity
-    from manabot.experiment.job import run_worker
-    from manabot.infra.host import host_facts
-    from manabot.training.records import TrainingRun
-    from scripts.verify_decision_memory_storage import HostPeak, residency
-
-    out = Path(directory)
-    out.mkdir(parents=True)
-    recipe = calibration_recipe(name, smoke=smoke)
-    spec = TrainingJob(regime=recipe, experiment="opponent_memory_calibration")
-    if producer is not None:
-        # Flatten only the two published inputs, as from_storage expects;
-        # ordinary worker binding still owns digest/model/world admission.
-        parent = TrainingRun.model_validate_json(Path(producer).read_bytes())
-        storage = DirectoryStorage(out / "published")
-        storage.put_file("run.json", Path(producer))
-        artifact = Path(parent.stages[0].artifacts["ema"]["path"])
-        storage.put_file(artifact.name, artifact)
-        spec.pretrained = PretrainedInitialization.from_storage(
-            storage, "run.json", source_stage=parent.stages[0].id, weights="ema"
-        )
-        inputs = out / "inputs"
-        inputs.mkdir()
-        for given in spec.pretrained.inputs():
-            (inputs / given.name).write_bytes(storage.get(given.key))
-    config = out / "worker.json"
-    config.write_text(spec.model_dump_json(indent=2))
-    # Nested workers have independent tracking identities; the launcher owns
-    # the outer calibration and carries every child's receipts as output.
-    for key in tuple(os.environ):
-        if key.startswith("ETUDE_"):
-            del os.environ[key]
-    os.environ.update(
-        ETUDE_RUN=out.name,
-        ETUDE_TRACK_DIR=str(out / "tracking"),
-        ETUDE_CONFIG=str(config),
-        ETUDE_OUTPUT_DIR=str(out / "output"),
-        ETUDE_STOP_FILE=str(out / "stop"),
-        ETUDE_SEED="39100",
-        ETUDE_UNTIL_CLOCK="updates",
-        ETUDE_UNTIL_VALUE=str(spec.updates),
-        ETUDE_DEADLINE=(
-            datetime.now(timezone.utc) + timedelta(seconds=recipe.wall_seconds + 90)
-        ).isoformat(),
-    )
-    if producer is not None:
-        os.environ["ETUDE_INPUTS_DIR"] = str(out / "inputs")
-    maxima = [0, 0, 0, 0]
-    original = MemoryStore.capture
-
-    def capture(
-        store: MemoryStore,
-        buffers: Mapping[str, np.ndarray],
-        row: int,
-        identity: PrefixIdentity,
-    ) -> Prefix:
-        prefix = original(store, buffers, row, identity)
-        for index, count in enumerate(prefix.counts):
-            maxima[index] = max(maxima[index], count)
-        return prefix
-
-    MemoryStore.capture = capture
-    device = torch.device("cpu" if smoke else "cuda")
-    if not smoke:
-        if not torch.cuda.is_available():
-            raise RuntimeError("CUDA calibration requires CUDA; no device fallback")
-        torch.cuda.reset_peak_memory_stats(device)
-    started = time.monotonic()
-    receipt: dict[str, object] = {"arm": name, "host": host_facts().model_dump()}
-    peak = HostPeak()
-    try:
-        with peak:
-            run = run_worker()
-            if run.status != "completed" or run.updates_through() != spec.updates:
-                raise RuntimeError("worker did not finish the declared updates")
-            stage = run.stages[0]
-            # All outputs load through ordinary world/shape admission. Move the
-            # final policy to CUDA and check every parameter after the transfer.
-            for role in ("raw", "ema"):
-                model, _ = load_checkpoint(stage.artifacts[role]["path"])
-                model.to(device)
-                if not all(torch.isfinite(p).all().item() for p in model.parameters()):
-                    raise RuntimeError(f"nonfinite {role} checkpoint after reload")
-                del model
-            receipt.update(
-                status="completed",
-                worker=stage.model_dump(mode="json"),
-                reload="raw and EMA admitted and finite on the selected device",
-                residency=residency(device),
-                gpu=None if smoke else torch.cuda.get_device_name(device),
-                cuda_total_bytes=None
-                if smoke
-                else torch.cuda.get_device_properties(device).total_memory,
-            )
-        receipt["sampled_host_tree_peak_bytes"] = peak.peak
-    except BaseException as error:
-        receipt.update(status="failed", error=f"{type(error).__name__}: {error}")
-        raise
-    finally:
-        receipt.update(
-            wall_seconds=time.monotonic() - started,
-            table_maxima=maxima,
-            sampled_host_tree_peak_bytes=peak.peak,
-            residency=residency(device),
-        )
-        (out / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
-        MemoryStore.capture = original
-        connection.close()
-
-
-def calibrate(config: Calibration) -> None:
-    """Interleave incumbent and memory workers within one bounded GPU rental."""
-    import json
-    import os
-    import subprocess
-    import time
-
-    import psutil
-
-    from manabot.infra.source import bind_etude_source
-    from manabot.sim.child import ChildProcess
-
-    if config.source_bundle is not None:
-        bind_etude_source()
-    out = Path(os.environ["ETUDE_OUTPUT_DIR"]).resolve()
-    out.mkdir(parents=True, exist_ok=True)
-    started = time.monotonic()
-    if not config.smoke:
-        import torch
-
-        if not torch.cuda.is_available():
-            raise RuntimeError("CUDA calibration requires an actual CUDA device")
-        # Run the directed CUDA backward regression before the real workers;
-        # the subprocess releases its allocator before any timed measurement.
-        with (out / "attention-proof.log").open("w") as proof:
-            print("calibration: CUDA backward preflight", flush=True)
-            subprocess.run(
-                [
-                    "uv",
-                    "run",
-                    "--no-sync",
-                    "pytest",
-                    "tests/model/test_live_tokens.py::test_sparse_short_chunk_matches_padded_backward",
-                    "-q",
-                ],
-                stdout=proof,
-                stderr=subprocess.STDOUT,
-                check=True,
-                timeout=180,
-            )
-        print("calibration: CUDA backward preflight passed", flush=True)
-    # The 128-reference measurement reached its bound. Re-admit the expanded
-    # layout and retain two same-host incumbent processes within the dollar cap.
-    sequence = ["control", "incumbent", *(arm.name for arm in ARMS)]
-    if not config.smoke:
-        sequence.append("incumbent")
-    receipts: list[str] = []
-    try:
-        for ordinal, name in enumerate(sequence):
-            remaining = (2400 if config.smoke else 9000) - (time.monotonic() - started)
-            worker_seconds = 690 if config.smoke else 1890
-            if remaining < worker_seconds:
-                raise RuntimeError("calibration wall cap reached before all repeats")
-            directory = out / f"{ordinal:02d}-{name}"
-            print(
-                f"calibration: {ordinal + 1}/{len(sequence)} {name} starting",
-                flush=True,
-            )
-            child = ChildProcess(
-                "experiments.opponent_memory:calibration_child",
-                (
-                    name,
-                    str(directory),
-                    config.smoke,
-                    str(out / "00-control/output/training/run.json")
-                    if ordinal and name != "incumbent"
-                    else None,
-                ),
-            )
-            try:
-                child.join(timeout=min(worker_seconds, remaining))
-                if child.exitcode != 0:
-                    raise RuntimeError(
-                        f"{name} worker failed or timed out; see {directory}"
-                    )
-            finally:
-                if child.is_alive():
-                    # A killed learner cannot run its producer cleanup. Reap
-                    # this measurement's descendants before closing its parent.
-                    descendants = psutil.Process(child.pid).children(recursive=True)
-                    for process in reversed(descendants):
-                        try:
-                            process.kill()
-                        except psutil.NoSuchProcess:
-                            pass
-                    psutil.wait_procs(descendants, timeout=10)
-                child.close()
-            receipts.append(str(directory.relative_to(out) / "receipt.json"))
-            print(f"calibration: {name} completed; {receipts[-1]}", flush=True)
-    finally:
-        (out / "calibration.json").write_text(
-            json.dumps(
-                {
-                    "receipts": receipts,
-                    "smoke": config.smoke,
-                    "wall_seconds": time.monotonic() - started,
-                    "complete": len(receipts) == len(sequence),
-                },
-                indent=2,
-            )
-            + "\n"
-        )
 
 
 def main() -> None:
