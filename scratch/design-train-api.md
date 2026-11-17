@@ -609,3 +609,38 @@ Open product choice: unchanged from the review above (a dependent job pairing
 with its same-seed parent in one command). Nobody has answered it; it is
 Etude's, and the two-pass, one-seed form stays the reversible choice in use.
 It does not block this Task. No new open choice.
+
+## Concept review of the implemented change — 2026-11-16 (97338108bc)
+
+Read against the code, not run. Since the review above only the QA fixes
+landed (retained `attempt-*` evidence, `game_players`, Academy finding
+`~/.etude/track`). The four directions of the review above are **not yet in
+the code** (checked: `docs/training.md:273,341` still say `Run`;
+`reports/records.py`, `training/validation.py`, `training/report.py:12`,
+`experiment/__init__.py` unchanged; `update_metrics.py` still imports
+`training.records`; `selection_data.py` still imports `regime.SelectionGameSpec`;
+`self_play.py:507,512` still read `collector._operation`). They remain the
+next implement direction, followed by one more:
+
+5. **The path from training to using the policy breaks in the docs.** Train
+   (`etude train manabot/recipes/local.py`) writes
+   `~/.etude/track/<experiment>/[<run>/]out/policies/<update>-ema.safetensors`;
+   Academy now finds it there unasked. But `docs/evaluation.md` "Quick local
+   evaluation" still passes `--checkpoint .runs/small/policy.safetensors`, a
+   file only the removed `manabot train --out .runs/small` wrote. Run the local
+   recipe once, read the path it actually wrote, and use that in the example
+   (and say it is the local recipe's policy). Check the other `.runs/...policy`
+   mentions the same way; `manabot/README.md:207` ("your existing compatible
+   checkpoint") is fine.
+
+Settled as it stands: `game_players` is the one owner of "a seat's agent as a
+game player", used by both callbacks; `evidence_directory` is the one owner of
+where Elemental evidence goes.
+
+For Etude, not this Task, and unanswered by anyone: at d9a6bc8 a callback
+receives two shapes for a checkpoint seat, the bare forward when the player
+has no config and the `build` result when it has one, so every callback whose
+game needs more than a forward must rebuild the first shape itself
+(`game_players`). Should `Agents(build=)` build every seat? It matters for any
+second adopter (Jace); it does not block this Task. The same-seed
+policy→sampler pairing question above is also still open and non-blocking.
